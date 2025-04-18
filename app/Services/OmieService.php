@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use DateTime;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -26,16 +27,15 @@ class OmieService
                 ]
             ]
         ];
-    
+
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
-        
+
 
             if ($response->status() === 200) {
                 return $response->object();
-               
             } else {
                 Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
                     'statusCode' => $response->status(),
@@ -52,48 +52,68 @@ class OmieService
         return new stdClass();
     }
 
-    public function getNotasFiscais(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
+    public function getNotasFiscais(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1):array
     {
-        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
-
-        $data = [
-            "call" => "ListarRecebimentos",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
-            "param" => [
-                [
-                    "nPagina" => $pagina,
-                    "nRegistrosPorPagina" => 50,
-                    "dtAltDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
-                    "dtAltAte" => Carbon::parse($dataFinal)->format('d/m/Y'),
-                    "hrAltDe" => "00:00:00",
-                    "hrAltAte" => "23:59:59",
-                ]
-            ]
-        ];
-     
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-           
-            if ($response->status() === 200) {
-                return $response->object();
-               
+        $recebimentos = [];
+        $response = $this->getNFes($dataInicio, $dataFinal, $pagina);
+        if (isset($response->recebimentos) && count($response->recebimentos) > 0) {
+            if ($response->nTotalPaginas == 1) {
+                $recebimentos = (array)$response->recebimentos;
             } else {
-                Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
+                $recebimentos = (array)$response->recebimentos;
+                for ($i = 2; $i <= $response->nTotalPaginas; $i++) {
+                    $recebimentos = array_merge($recebimentos, (array)$this->getNFes($dataInicio, $dataFinal, $i)->recebimentos);
+                }
+            }
+        }
+        return $recebimentos;
+    }
+
+    private function getNFes(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
+    {
+        $chave = "getNotasFiscais-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
+
+        return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
+            $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+
+            $data = [
+                "call" => "ListarRecebimentos",
+                "app_key" => config('omie.app_key'),
+                "app_secret" => config('omie.app_secret'),
+                "param" => [
+                    [
+                        "nPagina" => $pagina,
+                        "nRegistrosPorPagina" => 50,
+                        "dtAltDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
+                        "dtAltAte" => Carbon::parse($dataFinal)->format('d/m/Y'),
+                        "hrAltDe" => "00:00:00",
+                        "hrAltAte" => "23:59:59",
+                    ]
+                ]
+            ];
+
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
                 ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return new stdClass();
+            return new stdClass();
+        });
     }
 
 
@@ -204,7 +224,7 @@ class OmieService
                 'Content-Type' => 'application/json'
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
-            if (in_array($response->status(), [200,500])) {
+            if (in_array($response->status(), [200, 500])) {
                 return $response->object();
             } else {
                 Log::critical('OMIE - getCliente - Retorno inexperado', [
