@@ -12,9 +12,48 @@ class OmieService
 {
     private $urlBase = "https://app.omie.com.br/api/";
 
+    public function getNotaFiscalPorChave($chaveNfe): object
+    {
+        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+
+        $data = [
+            "call" => "ConsultarRecebimento",
+            "app_key" => config('omie.app_key'),
+            "app_secret" => config('omie.app_secret'),
+            "param" => [
+                [
+                    "cChaveNfe" => $chaveNfe
+                ]
+            ]
+        ];
+    
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+        
+
+            if ($response->status() === 200) {
+                return $response->object();
+               
+            } else {
+                Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
+    }
+
     public function getNotasFiscais(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
-
         $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
 
         $data = [
@@ -32,14 +71,15 @@ class OmieService
                 ]
             ]
         ];
-
+     
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
-
+           
             if ($response->status() === 200) {
                 return $response->object();
+               
             } else {
                 Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
                     'statusCode' => $response->status(),
@@ -55,6 +95,7 @@ class OmieService
         }
         return new stdClass();
     }
+
 
     public function getOS($os): object
     {

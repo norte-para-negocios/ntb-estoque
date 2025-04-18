@@ -6,3 +6,407 @@
 
 // Bootstrap
 @import 'bootstrap/scss/bootstrap';
+
+/* Estilos básicos */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Nunito', sans-serif;
+  }
+
+  body {
+    background-color: #f3f3f3;
+    color: #333333;
+    line-height: 1.6;
+  }
+
+
+  /* Container principal - Separar as Classes */
+
+/* Cabeçalho */
+.cabecalho {
+  display: flex;
+  background-color: white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  z-index: 2;
+  width: 100%;  
+}
+
+
+  .container {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+
+.navbar-brand {
+    margin: 10px !important;
+    padding: 2px !important;
+}
+
+/* Inicio da estilização da Barra do Menu */
+/* Sidebar - Barra do Menu */
+.sidebar {
+    width: 260px;
+    background-color: #4E4E56;
+    color: white;
+    padding: 20px 0;
+    transition: all 0.3s;
+    
+   
+    //flex-shrink: 0;
+    //margin-left: 0;
+ }
+
+  /* Cabeçalho da Barra do Menu */
+  .sidebar-header {
+    padding: 20px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .sidebar-header h1 {
+    font-size: 24px;
+    margin-bottom: 5px;
+    color: white;
+  }
+
+  .sidebar-header span {
+    font-size: 14px;
+    color: #2EC4B6;
+  }
+  
+  .sidebar-menu {
+    padding: 20px 0;
+  }
+
+  .menu-item {
+    padding: 15px 20px;
+    border-left: 4px solid transparent;
+    transition: all 0.3s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-left-color: #FF6B35;
+  }
+
+  .menu-item.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-left-color: #FF6B35;
+  }
+  
+  .menu-item i {
+    margin-right: 10px;
+    font-size: 18px;
+  }
+
+  .submenu {
+    padding-left: 25px;
+    display: none;
+  }
+  
+  .submenu.show {
+    display: block;
+  }
+
+  .submenu .menu-item {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  /* Final da estilização da Barra do Menu */
+
+  /* Main Content */
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .page-title h2 {
+    font-size: 24px;
+    font-weight: 500;
+    color: #333;
+  }
+
+  .user-actions {
+  display: flex;
+  align-items: center;
+}
+
+.user-actions .btn {
+    margin-left: 10px;
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+  }
+
+  .user-info img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    object-fit: cover;
+  }
+
+  .user-info .name {
+    font-weight: 500;
+  }
+
+  .user-info .role {
+    font-size: 12px;
+    color: #777;
+  }
+  
+
+/* Cards */
+
+.card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: none;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    background-color: transparent;
+  }
+  
+  .card-header h3 {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 0;
+    color: #333;
+  }
+
+  .card-body {
+    padding: 10px 0;
+  }
+  
+/* Forms */
+.form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .filter-row .form-control {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .filter-row .btn {
+    flex-shrink: 0;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+  }
+
+  .form-control:focus {
+    border-color: #FF6B35;
+    outline: none;
+    box-shadow: none;
+  }
+
+
+  /* Buttons */
+.btn {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #FF6B35;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .btn-primary {
+    background-color: $primary-color;
+  }
+  
+  .btn-secondary {
+    background-color: $secondary-color;
+  }
+  
+  .btn-accent {
+    background-color: $accent-color;
+  }
+  
+  .btn-danger {
+    background-color: $danger-color;
+  }
+
+  .btn:hover {
+    filter: brightness(110%);
+  }
+
+
+  /* Tables */
+.table-responsive {
+    overflow-x: auto;
+    max-height: 500px;
+    overflow-y: scroll;
+    margin-top: 1rem;
+  
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+
+  .table th {
+    background-color: #f8f8f8;
+    font-weight: 500;
+    text-align: center !important;
+ }
+
+  .table td {
+  padding: 5px 10px;
+  text-align: center;
+  border-bottom: 1px solid #ddd;
+}
+
+.table td[name="Valor"] {
+  text-align: right !important;
+  padding-right: 20px !important;
+}
+
+.table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.table .actions {
+   display: flex;
+   gap: 5px;
+ }
+
+ 
+  /* Badges */
+.badge {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: normal;
+    font-size: 12px;
+  }
+
+  .bg-success {
+    background-color: #4CAF50 !important;
+  }
+  
+  .bg-warning {
+    background-color: #FFCA3A !important;
+    color: #333333;
+  }
+
+  /* Pagination */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  .pagination {
+    margin-bottom: 0;
+  }
+
+  .pagination .page-link {
+    color: #FF6B35;
+    border-color: #ddd;
+  }
+
+  .pagination .page-item.active .page-link {
+    background-color: #FF6B35;
+    border-color: #FF6B35;
+  }
+
+/* Tab Content */
+.tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+      flex-direction: column;
+    }
+  
+    .sidebar {
+      width: 100%;
+      height: auto;
+    }
+  
+    .main-content {
+      padding: 15px;
+    }
+  
+    .top-bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  
+    .user-actions {
+      margin-top: 15px;
+    }
+  
+    .filter-row {
+      flex-direction: column;
+    }
+  }
