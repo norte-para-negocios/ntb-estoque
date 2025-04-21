@@ -120,15 +120,15 @@
                                 <div class="filter-row">
                                     <div>
                                         <label for="data_inicio">Data Início:</label>
-                                        <input type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ request('data_inicio', $dataInicio ?? '') }}">
+                                        <input title="Data criação omie" type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ request('data_inicio', $dataInicio ?? '') }}">
                                     </div>
                                     <div>
                                         <label for="data_final">Data Final:</label>
                                         <input type="date" id="data_final" name="data_final" class="form-control" value="{{ request('data_final', $dataFinal ?? '') }}">
                                     </div>
                                     <div>
-                                        <label for="chave_nfe">Nota Fiscal:</label>
-                                        <input type="text" id="chave_nfe" name="chave_nfe" class="form-control" value="{{ request('chave_nfe', $chaveNfe ?? '') }}">
+                                        <label for="num_nfe">Nota Fiscal:</label>
+                                        <input type="text" id="num_nfe" name="num_nfe" class="form-control" value="{{ request('num_nfe', $numNFe ?? '') }}">
                                     </div>
                                         <button type="submit" class="btn btn-secondary">Filtrar</button>
                                 </div>
@@ -141,30 +141,27 @@
                                 <thead>
                                     <tr>
                                         <th>Número</th>
-                                        <th>Data</th>
+                                        <th>Data Emissão</th>
                                         <th>Razão Social</th>
                                         <th>Valor</th>
-                                        <th>Etiqueta</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @dd($notasfiscais)
-                                    @if(isset($notasfiscais->recebimentos) && !empty($notasfiscais))
-                                        @foreach($notasfiscais->recebimentos as $nf)
+                                    {{-- @dd($notasfiscais) --}}
+                                    @if(isset($notasfiscais) && !empty($notasfiscais))
+                                        @foreach($notasfiscais as $nf)
                                         <tr>
                                             <td>{{ $nf->cabec->cNumeroNFe }}</td>
                                             <td>{{ $nf->cabec->dEmissaoNFe }}</td>
                                             <td>{{ $nf->cabec->cNome }}</td>
                                             {{-- <td>{{ $nf->cabec->nValorNFe }}</td> --}}
-                                            <td name="Valor">R$ {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') }}</td>
+                                            <td>R$ {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') }}</td>
                                             {{-- <td><span class="badge bg-{{ $nf->status == 'Recebida' ? 'success' : 'warning' }}">{{ $nf->status }}</span></td> --}}
                                             <td class="actions">
-                                                <button class="btn btn-accent btn-sm" onclick="showBarcodeModal({{ $nf->cabec->cNumeroNFe }})">
-                                                    <i class="fas fa-barcode"></i> Imprimir
-                                                </button>
-                                                {{-- <a href="{{ route('notafiscal.show', $nf->cabec->cNumeroNFe, [], false) }}" class="btn btn-secondary btn-sm">
+                                                <a href="{{ route('notafiscal.itens', $nf->cabec->nIdReceb, [], false) }}" class="btn btn-secondary btn-sm">
                                                     <i class="fas fa-eye"></i> Visualizar
-                                                </a> --}}
+                                                </a>
                                             </td>
                                         </tr>
                                         @endforeach
@@ -177,11 +174,11 @@
                             </table>
                         </div>
                         
-                        @if(isset($notasfiscais) && method_exists($notasfiscais, 'links'))
+                        {{-- @if(isset($notasfiscais) && method_exists($notasfiscais, 'links'))
                             <div class="pagination-container">
                                 {{ $notasfiscais->appends(request()->query())->links() }}
                             </div>
-                        @endif
+                        @endif --}}
                     </div>
                 </div>
             </div>

@@ -14,6 +14,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/notasfiscais', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.index');
 
-    Route::get('/notasfiscais/show', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.show');
+    Route::get('/notasfiscais/itens/{nIdReceb}', [App\Http\Controllers\NotafiscalController::class, 'itens'])->name('notafiscal.itens');
+
+    Route::get('/notasfiscais/itens/{nIdReceb}/imprimir', [App\Http\Controllers\NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
 
 });

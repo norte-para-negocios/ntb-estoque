@@ -5,39 +5,34 @@ namespace App\Http\Controllers;
 use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use PDF;
 
 class NotafiscalController extends Controller
 {
+    private $omie;
+
+    public function __construct()
+    {
+        $this->omie = new OmieService();
+    }
+
     public function index(Request $request)
     {
-        $omie = new OmieService();
 
         $dtInicio = Carbon::parse($request->get('data_inicio'));
         $dtFinal = Carbon::parse($request->get('data_final'));
-        $chaveNfe = $request->get('chave_nfe');
-
-        $notasfiscais = $omie->getNotasFiscais($dtInicio, $dtFinal);
-
-        dd($notasfiscais);
-
-        if (isset($ossRequest->registros) && $ossRequest->registros > 0) {
-            for ($i = 1; $i <= $ossRequest->total_de_paginas; $i++) {
-                if ($i == 1) {
-                    $this->setOSs($ossRequest);
-                } else {
-                    $this->setOSs($this->omie->getOSs($i));
+        $numNFe = $request->get('num_nfe');
+   
+         $notasfiscais = [];
+         $nfes=$this->omie->getNotasFiscais($dtInicio, $dtFinal);
+               
+        if ($request->filled("num_nfe")) {
+            foreach($nfes as $nfe){
+                if ((int)$nfe->cabec->cNumeroNFe==(int)$numNFe){
+                    array_push($notasfiscais, $nfe);
                 }
             }
-        }
-
-        // Pesquisar email de Maria
-        foreach ($notasfiscais as $pessoa) {
-            if ($pessoa->nome === 'Maria') {
-                echo $pessoa->contatos->email; // Output: maria@exemplo.com
-            }
-        }
-
-        if (is_null($chaveNfe)) {
             /**
              * 1. Pegar recebimento Filtrar na objeto $$notasfiscais por recebimentos->cabec->cNumeroNFe.
              * 2. Achei o recebimento 1 único recebimento então retornar para tela que detalhe o Recebimento listando os produtos do mesmo.
@@ -45,6 +40,22 @@ class NotafiscalController extends Controller
              **/
 
         }
+        else{
+            $notasfiscais = $nfes;
+        }
         return view('notafiscal.index', compact('notasfiscais'));
     }
+    
+    public function itens(Request $request, $nIdReceb){
+
+        $recebimento=$this->omie->getConsultarRecebimento($nIdReceb);
+        return view('notafiscal.itens', compact("recebimento"));
+    }
+
+    public function imprimir(Request $request, $nIdReceb){
+
+        $recebimento=$this->omie->getConsultarRecebimento($nIdReceb);
+        return view('notafiscal.imprimir', compact("recebimento"));
+    }
+
 }

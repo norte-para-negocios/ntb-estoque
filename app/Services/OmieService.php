@@ -13,7 +13,7 @@ class OmieService
 {
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function getNotaFiscalPorChave($chaveNfe): object
+    public function getConsultarRecebimento($nIdReceb): object
     {
         $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
 
@@ -23,11 +23,11 @@ class OmieService
             "app_secret" => config('omie.app_secret'),
             "param" => [
                 [
-                    "cChaveNfe" => $chaveNfe
+                    "nIdReceb" => $nIdReceb
                 ]
             ]
         ];
-
+        
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
@@ -67,8 +67,9 @@ class OmieService
             }
         }
         return $recebimentos;
+       
     }
-
+    
     private function getNFes(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
         $chave = "getNotasFiscais-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
@@ -84,6 +85,7 @@ class OmieService
                     [
                         "nPagina" => $pagina,
                         "nRegistrosPorPagina" => 50,
+                        "cExibirDetalhes" => "S",
                         "dtAltDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
                         "dtAltAte" => Carbon::parse($dataFinal)->format('d/m/Y'),
                         "hrAltDe" => "00:00:00",
@@ -91,7 +93,7 @@ class OmieService
                     ]
                 ]
             ];
-
+            
             try {
                 $response = Http::withHeaders([
                     'Content-Type' => 'application/json'
