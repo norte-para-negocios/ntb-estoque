@@ -52,10 +52,10 @@ class NotafiscalController extends Controller
         return view('notafiscal.itens', compact("recebimento"));
     }
 
-    public function imprimir(Request $request, $nIdReceb){
+    public function imprimir(Request $request, $nIdReceb, $cCodigoProduto=""){
 
         $recebimento=$this->omie->getConsultarRecebimento($nIdReceb);
-        return view('notafiscal.imprimir', compact("recebimento"));
+        return view('notafiscal.imprimir', compact("recebimento", "cCodigoProduto"));
     }
 
 }

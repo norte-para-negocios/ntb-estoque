@@ -12,10 +12,12 @@ Auth::routes();
 Route::middleware(['auth'])->group(function () {
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
+    Route::get('/menu', [App\Http\Controllers\HomeController::class, 'index']);
+
     Route::get('/notasfiscais', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.index');
 
     Route::get('/notasfiscais/itens/{nIdReceb}', [App\Http\Controllers\NotafiscalController::class, 'itens'])->name('notafiscal.itens');
 
-    Route::get('/notasfiscais/itens/{nIdReceb}/imprimir', [App\Http\Controllers\NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
+    Route::get('/notasfiscais/itens/{nIdReceb}/imprimir/{cCodigoProduto?}', [App\Http\Controllers\NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
 
 });

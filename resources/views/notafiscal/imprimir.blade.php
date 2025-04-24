@@ -45,7 +45,7 @@
             justify-content: center;
             align-items: left;
             flex-direction: column;
-            
+
         }
 
         .product-name {
@@ -66,19 +66,10 @@
             margin-bottom: 0.1cm;
         }
 
+        /* Espaçamento das infomações */
         .label-field strong {
             display: inline-block;
-            width: 1.5cm;
-        }
-
-        .producer-info {
-            font-size: 7pt;
-            margin-top: 0.2cm;
-        }
-
-        .separator {
-            border-top: 1px solid #000;
-            margin: 0.1cm 0;
+            width: 1.3cm;
         }
     </style>
 </head>
@@ -86,23 +77,29 @@
 <body>
     @if (isset($recebimento) && !empty($recebimento))
         @foreach ($recebimento->itensRecebimento as $it)
-            <div class="label-container">
-                {{-- @dd($recebimento) --}}
-                <div class="qrcode-section">
-                    {!! QrCode::size(80)->generate($it->itensCabec->cDescricaoProduto . ' | ' . $it->itensCabec->cCodigoProduto) !!}
-                    <div class="product-code">{{ $it->itensCabec->cCodigoProduto }}</div>
+            @if (($it->itensCabec->cCodigoProduto == $cCodigoProduto && $cCodigoProduto !== '') || $cCodigoProduto == '')
+                <div class="label-container">
+                    <div class="qrcode-section">
+                        {!! QrCode::size(80)->generate($it->itensCabec->cCodigoProduto) !!}
+                        <div class="product-code">{{ $it->itensCabec->cCodigoProduto }}</div>
+                    </div>
+                    <div class="info-section">
+                        <tr>
+                            <div class="product-name">{{ strtoupper($it->itensCabec->cDescricaoProduto ?? '') }}</div>
+                            <div class="label-field"><strong>Produto:</strong>
+                                {{ $it->itensCabec->cCodigoProduto ?? '' }}</div>
+                            <div class="label-field"><strong>Lote:</strong> {{ $it->itensCabec->cNCM ?? '' }}</div>
+                            <div class="label-field"><strong>Qtd:</strong> {{ $it->itensCabec->nQtdeNFe ?? '' }}
+                                {{ strtoupper($it->itensCabec->cUnidadeNfe) }}</div>
+                            <div class="label-field"><strong>Validade:</strong> {{ $it->itensCabec->nIdValidade ?? '' }}
+                            </div>
+
+                        </tr>
+                    </div>
                 </div>
-                <div class="info-section">
-                    <tr>
-                        <div class="product-name">{{ strtoupper($it->itensCabec->cDescricaoProduto ?? "") }}</div>
-                        <div class="label-field"><strong>Produto:</strong> {{ $it->itensCabec->cCodigoProduto ?? "" }}</div>
-                        <div class="label-field"><strong>Lote:</strong> {{ $it->itensCabec->cNCM ?? "" }}</div>
-                        <div class="label-field"><strong>Qtd:</strong> {{ $it->itensCabec->nQtdeNFe ?? ""}} {{ strtoupper($it->itensCabec->cUnidadeNfe) }}</div>
-                        <div class="label-field"><strong>Validade:</strong> {{ $it->itensCabec->nIdValidade ?? "" }}</div>
-                        
-                    </tr>
-                </div>
+            @endif
         @endforeach
     @endif
 </body>
+
 </html>

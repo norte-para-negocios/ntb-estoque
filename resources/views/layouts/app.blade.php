@@ -14,17 +14,16 @@
     <link rel="dns-prefetch" href="//fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=Nunito" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-
     <!-- Scripts -->
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
 </head>
 
 <body>
     <div id="app">
-        <nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+        <nav class="navbar navbar-expand-md navbar-dark bg-white shadow-sm">
             <div class="cabecalho">
                 <a class="navbar-brand" href="{{ url('/') }}">
-                    {{ config('app.name', 'Laravel') }}
+                    <h5 class="app-name">{{ config('app.name', 'Laravel') }}</h5>
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                     data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
@@ -38,7 +37,10 @@
                         @auth
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('notafiscal.index') }}">{{ __('Notas Fiscais') }}</a>
-                            </li>
+                            {{-- </li>
+                            <a href="#" class="nav-link" id="filtrosToggle">
+                                <i class="fas fa-filter"></i> Filtros
+                              </a> --}}
                         @endauth
                     </ul>
 
@@ -86,6 +88,4 @@
             @yield('content')
         </main>
     </div>
-</body>
-
 </html>

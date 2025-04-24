@@ -78,14 +78,17 @@
             <div class="main-content">
                 <div class="top-bar">
                     <div class="page-title">
-                        <h2>{{ __('Dados da Nota Fiscal Eletrônica') }}</h2>
+                        {{-- <h1>{{ __('Detalhamento dos Itens') }}</h1> --}}
+                        <h5>{{ __($recebimento->cabec->cNome ?? '') }}</h5>
+                        {{-- <h6 style="font-weight: 700;">{{ $recebimento->cabec->cNome ?? '' }}</h6> --}}
+                        <h6>N° NFe.: {{ $recebimento->cabec->cNumeroNFe ?? '' }} | Emissão: {{ $recebimento->cabec->dEmissaoNFe ?? '' }}</h6>
                     </div>
-                    <div class="user-actions">
+                    {{-- <div class="user-actions">
                         <div class="user-info">
-                            {{-- <img src="{{ asset('images/user-placeholder.jpg') }}" alt="Usuário"> --}}
+                            <img src="{{ asset('images/user-placeholder.jpg') }}" alt="Usuário">
                             <div>
                                 <div class="name">{{ Auth::user()->name ?? 'Usuário' }}</div>
-                                {{-- <div class="role">{{ Auth::user()->role ?? 'Gerente' }}</div> --}}
+                                <div class="role">{{ Auth::user()->role ?? 'Gerente' }}</div>
                             </div>
                         </div>
                         @auth
@@ -96,7 +99,7 @@
                                 </button>
                             </form>
                         @endauth
-                    </div>
+                    </div> --}}
                 </div>
 
                 @if (session('status'))
@@ -107,15 +110,15 @@
 
                 <!-- Notas Fiscais -->
                 <div class="tab-content active" id="notas-content">
-                   
+
                     <div class="card">
-                        @if (isset($recebimento) && !empty($recebimento))
+                        {{-- @if (isset($recebimento) && !empty($recebimento))
                             <div class="card-header">
                                 <h5>Número: {{ $recebimento->cabec->cNumeroNFe ?? '' }} </h5>
                                 <h5>Emissão: {{ $recebimento->cabec->dEmissaoNFe ?? '' }}</h5>
                                 <h5>Chave: {{ $recebimento->cabec->cChaveNFe ?? '' }}</h5>
                             </div>
-                        @endif
+                        @endif --}}
 
                         {{-- @else
                             <tr>
@@ -127,88 +130,53 @@
 
 
                         <div class="card-body">
-                            {{-- <form action="{{ route('notafiscal.index') }}" method="GET" class="mb-4">
-                            @csrf
-                            <div class="form-group">
-                                <label for="nf-filter">Filtrar por</label>
-                                <div class="filter-row">
-                                    <div>
-                                        <label for="data_inicio">Data Início:</label>
-                                        <input title="Data criação omie" type="date" id="data_inicio" name="data_inicio" class="form-control" value="{{ request('data_inicio', $dataInicio ?? '') }}">
-                                    </div>
-                                    <div>
-                                        <label for="data_final">Data Final:</label>
-                                        <input type="date" id="data_final" name="data_final" class="form-control" value="{{ request('data_final', $dataFinal ?? '') }}">
-                                    </div>
-                                    <div>
-                                        <label for="num_nfe">Nota Fiscal:</label>
-                                        <input type="text" id="num_nfe" name="num_nfe" class="form-control" value="{{ request('num_nfe', $numNFe ?? '') }}">
-                                    </div>
-                                        <button type="submit" class="btn btn-secondary">Filtrar</button>
-                                </div>
-                            </div>
-                        </form> --}}
-
-
-                            {{-- itensRecebimento->itensCabec->vTotalItem --}}
-
                             <div class="table-responsive">
                                 <table class="table table-hover">
-                                    <h5>Dados dos produtos/serviços</h5>
-                                    <thead>
-                                        <tr>
-                                            <th>Cód. Prod.</th>
-                                            <th>Descrição</th>
-                                            <th>QTDE</th>
-                                            <th>UN</th>
-                                            <th>VL. Unit.</th>
-                                            <th>VL. Total</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
                                     <tbody>
-                                        {{-- @dd($recebimento->cabec) --}}
+                                        {{-- @dd($recebimento) --}}
                                         @if (isset($recebimento) && !empty($recebimento))
                                             @foreach ($recebimento->itensRecebimento as $it)
-                                                {{-- @dd($it) --}}
                                                 <tr>
-                                                    <td>{{ $it->itensCabec->cCodigoProduto }}</td>
-                                                    <td>{{ $it->itensCabec->cDescricaoProduto }}</td>
-                                                    <td>{{ $it->itensCabec->nQtdeNFe }}</td>
-                                                    <td>{{ $it->itensCabec->cUnidadeNfe }}</td>
-                                                    <td>R$ {{ number_format($it->itensCabec->nPrecoUnit, 2, ',', '.') }}
-                                                    </td>
-                                                    <td>R$ {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
-                                                    </td>
-
-                                                    <td class="actions">
-                                                        {{-- <button class="btn btn-accent btn-sm"
-                                                            onclick="showBarcodeModal({{ $it->itensCabec->cCodigoProduto }})">
-                                                            <i class="fas fa-barcode"></i> Imprimir
-                                                        </button> --}}
-                                                        <td class="actions">
-                                                            
-                                                            <a href="{{ route('notafiscal.imprimir', $recebimento->cabec->nIdReceb, [], false) }}" class="btn btn-secondary btn-sm">
-                                                                <i class="fas fa-eye"></i> Imprimir
-                                                            </a>
-                                                        </td>
-                                                    </td>
+                                                    <div class="row">
+                                                        <div class="col">
+                                                            <div class="card card-body">
+                                                                <h6>
+                                                                    {{ $it->itensCabec->cDescricaoProduto }}
+                                                                </h6>
+                                                                <p class="mb-0">
+                                                                    Cód Prod.: {{ $it->itensCabec->cCodigoProduto ?? '' }}
+                                                                </p>
+                                                                <p class="mb-0">
+                                                                    QTDE.: {{ $it->itensCabec->nQtdeNFe ?? '' }}
+                                                                    {{ strtoupper($it->itensCabec->cUnidadeNfe) }}
+                                                                </p>
+                                                                <p class="mt-1 mb-0">
+                                                                    VL. Unit.: R$
+                                                                    {{ number_format($it->itensCabec->nPrecoUnit, 2, ',', '.') }}
+                                                                </p>
+                                                                <p class="mt-1 mb-0">
+                                                                    VL. Total.: R$
+                                                                    {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
+                                                                </p>
+                                                                <p class="my-1">
+                                                                    <a href="{{ route('notafiscal.imprimir', $recebimento->cabec->nIdReceb) }}"
+                                                                        class="btn btn-secondary btn-sm">
+                                                                        <i class="fas fa-eye"></i> Imprimir
+                                                                    </a>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </tr>
                                             @endforeach
                                         @else
                                             <tr>
-                                                <td colspan="7" class="text-center">Nenhuma nota fiscal encontrada</td>
+                                                <td class="text-center">Nenhuma item encontrado</td>
                                             </tr>
                                         @endif
                                     </tbody>
                                 </table>
                             </div>
-
-                            {{-- @if (isset($notasfiscais) && method_exists($notasfiscais, 'links'))
-                            <div class="pagination-container">
-                                {{ $notasfiscais->appends(request()->query())->links() }}
-                            </div>
-                        @endif --}}
                         </div>
                     </div>
                 </div>
@@ -279,6 +247,33 @@
             if (movimentacoesSubmenu) {
                 movimentacoesSubmenu.classList.add('show');
             }
+
+            // // Adicione este código ao final do seu script existente
+            // document.addEventListener('DOMContentLoaded', function() {
+            //             // Criar botão toggle para sidebar
+            //             const mainApp = document.getElementById('mainApp');
+            //             const sidebar = document.querySelector('.sidebar');
+
+            //             const toggleButton = document.createElement('button');
+            //             toggleButton.classList.add('sidebar-toggle');
+            //             toggleButton.innerHTML = '<i class="fas fa-bars"></i>';
+            //             mainApp.prepend(toggleButton);
+
+            //             // Função para alternar a visibilidade da sidebar
+            //             toggleButton.addEventListener('click', function() {
+            //                 sidebar.classList.toggle('visible');
+            //             });
+
+            //             // Fechar sidebar ao clicar em um item do menu em mobile
+            //             const menuItems = document.querySelectorAll('.menu-item');
+            //             if (window.innerWidth <= 768) {
+            //                 menuItems.forEach(item => {
+            //                         item.addEventListener('click', function() {
+            //                             sidebar.classList.remove('visible');
+
+            //                         });
+            //                     }
+
         });
     </script>
 @endsection
