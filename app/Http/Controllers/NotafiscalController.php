@@ -19,43 +19,35 @@ class NotafiscalController extends Controller
 
     public function index(Request $request)
     {
+        $data_inicio = Carbon::parse($request->get('data_inicio'));
+        $data_final = Carbon::parse($request->get('data_final'));
+        $num_nfe = $request->get('num_nfe');
 
-        $dtInicio = Carbon::parse($request->get('data_inicio'));
-        $dtFinal = Carbon::parse($request->get('data_final'));
-        $numNFe = $request->get('num_nfe');
-   
-         $notasfiscais = [];
-         $nfes=$this->omie->getNotasFiscais($dtInicio, $dtFinal);
-               
+        $notasfiscais = [];
+        $nfes = $this->omie->getNotasFiscais($data_inicio, $data_final);
+
         if ($request->filled("num_nfe")) {
-            foreach($nfes as $nfe){
-                if ((int)$nfe->cabec->cNumeroNFe==(int)$numNFe){
+            foreach ($nfes as $nfe) {
+                if ((int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) {
                     array_push($notasfiscais, $nfe);
                 }
             }
-            /**
-             * 1. Pegar recebimento Filtrar na objeto $$notasfiscais por recebimentos->cabec->cNumeroNFe.
-             * 2. Achei o recebimento 1 único recebimento então retornar para tela que detalhe o Recebimento listando os produtos do mesmo.
-             * 3. Senão retornar com apenas os recebimentos que possuem o número de nota fiscal pesquisado.
-             **/
-
-        }
-        else{
+        } else {
             $notasfiscais = $nfes;
         }
-        return view('notafiscal.index', compact('notasfiscais'));
+        return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe'));
     }
-    
-    public function itens(Request $request, $nIdReceb){
 
-        $recebimento=$this->omie->getConsultarRecebimento($nIdReceb);
+    public function itens(Request $request, $nIdReceb)
+    {
+        $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
         return view('notafiscal.itens', compact("recebimento"));
     }
 
-    public function imprimir(Request $request, $nIdReceb, $cCodigoProduto=""){
+    public function imprimir(Request $request, $nIdReceb, $cCodigoProduto = "")
+    {
 
-        $recebimento=$this->omie->getConsultarRecebimento($nIdReceb);
+        $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
         return view('notafiscal.imprimir', compact("recebimento", "cCodigoProduto"));
     }
-
 }

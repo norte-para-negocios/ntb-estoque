@@ -17,13 +17,26 @@ class OrdemProController extends Controller
         $this->omie = new OmieService();
     }
 
-    public function ordempro(Request $request)
+    public function index(Request $request)
     {
 
-        $dtInicio = Carbon::parse($request->get('data_inicio'));
-        $dtFinal = Carbon::parse($request->get('data_final'));
-        
-        $ordenspro=$this->omie->getOrdensPro($dtInicio, $dtFinal);
-        return view('notafiscal.ordenspro', compact('ordenspro'));
+        $data_inicio = Carbon::parse($request->get('data_inicio'));
+        $data_final = Carbon::parse($request->get('data_final'));
+
+        $ordem_producao = $request->get('ordem_producao');
+
+        $ops = [];
+        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
+
+        if ($request->filled("ordem_producao")) {
+            foreach ($ordenspro as $op) {
+                if ((int)$op->identificacao->cNumOP == (int)$ordem_producao) {
+                    array_push($ops, $op);
+                }
+            }
+            $ordenspro = $ops;
+        }
+
+        return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao'));
     }
 }

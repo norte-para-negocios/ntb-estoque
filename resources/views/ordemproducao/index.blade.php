@@ -2,7 +2,7 @@
 
 @section('content')
     <div class="container">
-        <h2 class="mb-4">{{ __('Notas fiscais') }}</h2>
+        <h2 class="mb-4">{{ __('Ordens de Produção') }}</h2>
 
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
@@ -15,7 +15,7 @@
                 </h2>
                 <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
                     <div class="accordion-body">
-                        <form id="filtrosForm" method="GET" action="{{ route('notafiscal.index') }}">
+                        <form id="filtrosForm" method="GET" action="{{ route('ordemproducao.index') }}">
                             <div class="row">
                                 <div class="col-md-3">
                                     <div class="mb-3">
@@ -34,9 +34,10 @@
                                 </div>
                                 <div class="col-md-3">
                                     <div class="mb-3">
-                                        <label for="num_nfe" class="form-label">Número NFe</label>
-                                        <input type="text" id="num_nfe" name="num_nfe" placeholder="Nº NFe"
-                                            class="form-control" value="{{ request('num_nfe', $num_nfe ?? '') }}">
+                                        <label for="ordem_producao" class="form-label">Nº Ordem de Produção</label>
+                                        <input type="text" id="ordem_producao" name="ordem_producao"
+                                            placeholder="Nº da OP '2021/38804'" class="form-control"
+                                            value="{{ request('ordem_producao', $ordem_producao ?? '') }}">
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
@@ -55,31 +56,35 @@
             <div class="table-responsive">
                 <table class="table table-hover">
                     <tbody>
-                        @if (isset($notasfiscais) && !empty($notasfiscais))
-                            @foreach ($notasfiscais as $nf)
+                        @if (isset($ordenspro) && !empty($ordenspro))
+                            @foreach ($ordenspro as $op)
+                                @php
+                                    $omie = new \App\Services\OmieService();
+                                    $produto = $omie->getConsultaProduto($op->identificacao->nCodProduto);
+                                @endphp
                                 <tr>
                                     <td class="px-0">
                                         <div class="container">
                                             <div class="row">
                                                 <div class="col-12 p-0">
-                                                    <div class="card card-body m-0">
+                                                    <div class="card card-body m-0 px-0 py-2">
                                                         <h6>
-                                                            {{ $nf->cabec->cNome }}
+                                                            Cód. OP: {{ $op->identificacao->cCodIntOP }}
                                                         </h6>
                                                         <p class="mb-0">
-                                                            Nº NFe: <strong>{{ $nf->cabec->cNumeroNFe ?? '' }}</strong>|
-                                                            Emissão:
-                                                            {{ $nf->cabec->dEmissaoNFe ?? '' }}
+                                                            Lote : <strong>{{ $op->identificacao->cNumOP ?? '' }}</strong>
                                                         </p>
                                                         <p class="mt-1 mb-0">
-                                                            R$
-                                                            {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') ?? '' }}
+                                                            Produto: {{ $op->identificacao->nCodProduto }}  - {{ $produto->descricao }}
                                                         </p>
-                                                        <p class="my-1">
-                                                            <a href="{{ route('notafiscal.itens', $nf->cabec->nIdReceb) }}"
-                                                                class="btn btn-secondary btn-sm">
-                                                                <i class="fas fa-eye"></i> Visualizar
-                                                            </a>
+                                                        <p class="mt-1 mb-0">
+                                                            nCodOP: {{ $op->identificacao->nCodOP }}
+                                                        </p>
+                                                        <p class="mt-1 mb-0">
+                                                            QTDE a Produzir.: {{ $op->identificacao->nQtde }}
+                                                        </p>
+                                                        <p class="mt-1 mb-0">
+                                                            Unidade de medida: {{ $produto->unidade }}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -90,7 +95,7 @@
                             @endforeach
                         @else
                             <tr>
-                                <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                                <td class="text-center">Nenhuma ordem de produção encontrada</td>
                             </tr>
                         @endif
                     </tbody>
