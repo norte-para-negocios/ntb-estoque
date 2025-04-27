@@ -10,14 +10,15 @@ Route::get('/', [\App\Http\Controllers\Auth\LoginController::class, 'showLoginFo
 Auth::routes();
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
-
-    Route::get('/menu', [App\Http\Controllers\HomeController::class, 'index']);
+    Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home.index');
 
     Route::get('/notasfiscais', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.index');
 
     Route::get('/notasfiscais/itens/{nIdReceb}', [App\Http\Controllers\NotafiscalController::class, 'itens'])->name('notafiscal.itens');
 
     Route::get('/notasfiscais/itens/{nIdReceb}/imprimir/{cCodigoProduto?}', [App\Http\Controllers\NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
+
+    Route::get('/ordenspro', [App\Http\Controllers\OrdemProController::class, 'ordempro'])->name('notafiscal.ordenspro');
+
 
 });

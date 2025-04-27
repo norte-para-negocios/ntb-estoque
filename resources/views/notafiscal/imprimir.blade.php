@@ -76,6 +76,7 @@
 
 <body>
     @if (isset($recebimento) && !empty($recebimento))
+        
         @foreach ($recebimento->itensRecebimento as $it)
             @if (($it->itensCabec->cCodigoProduto == $cCodigoProduto && $cCodigoProduto !== '') || $cCodigoProduto == '')
                 <div class="label-container">

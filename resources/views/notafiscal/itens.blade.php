@@ -78,11 +78,14 @@
             <div class="main-content">
                 <div class="top-bar">
                     <div class="page-title">
-                        {{-- <h1>{{ __('Detalhamento dos Itens') }}</h1> --}}
                         <h5>{{ __($recebimento->cabec->cNome ?? '') }}</h5>
-                        {{-- <h6 style="font-weight: 700;">{{ $recebimento->cabec->cNome ?? '' }}</h6> --}}
                         <h6>N° NFe.: {{ $recebimento->cabec->cNumeroNFe ?? '' }} | Emissão: {{ $recebimento->cabec->dEmissaoNFe ?? '' }}</h6>
                     </div>
+                    <div Class="btn-imp-tudo">
+                        <a href="{{ route('notafiscal.imprimir', $recebimento->cabec->nIdReceb, [], false) }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-eye"></i> Imprimir Tudo
+                        </a>    
+                    </div>    
                     {{-- <div class="user-actions">
                         <div class="user-info">
                             <img src="{{ asset('images/user-placeholder.jpg') }}" alt="Usuário">
@@ -126,9 +129,6 @@
                             </tr>
                         @endif --}}
 
-
-
-
                         <div class="card-body">
                             <div class="table-responsive">
                                 <table class="table table-hover">
@@ -159,7 +159,9 @@
                                                                     {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
                                                                 </p>
                                                                 <p class="my-1">
-                                                                    <a href="{{ route('notafiscal.imprimir', $recebimento->cabec->nIdReceb) }}"
+                                                                
+                                                                    {{-- @dd($it->itensCabec->cCodigoProduto) --}}
+                                                                    <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->cCodigoProduto]) }}"
                                                                         class="btn btn-secondary btn-sm">
                                                                         <i class="fas fa-eye"></i> Imprimir
                                                                     </a>

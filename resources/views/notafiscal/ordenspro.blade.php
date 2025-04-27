@@ -6,7 +6,7 @@
         <div class="main-content">
             <div class="top-bar">
                 <div class="page-title">
-                    <h2>{{ __('Notas fiscais') }}</h2>
+                    <h2>{{ __('Ordens de Produção') }}</h2>
                 </div>
                 <div>
                     <a href="#" class="nav-link" id="filtrosToggle">
@@ -26,7 +26,7 @@
                 <div id="filtrosContainer" class="container my-3" style="display: none;">
                     <div class="card">
                         <div class="card-body">
-                            <form id="filtrosForm" method="GET" action="{{ route('notafiscal.index') }}">
+                            <form id="filtrosForm" method="GET" action="{{ route('notafiscal.ordenspro') }}">
                                 <div class="row">
                                     <div class="col-md-3">
                                         <div class="mb-3">
@@ -42,73 +42,74 @@
                                             <input type="date" class="form-control" id="data_final" name="data_final"
                                                 value="{{ request('data_final', $dataFinal ?? '') }}">
                                         </div>
-                                    </div>
+                                        {{-- </div>
                                     <div class="col-md-3">
                                         <div class="mb-3">
-                                            <label for="num_nfe" class="form-label">Número NFe</label>
+                                            <label for="num_nfe" class="form-label">Número OrdemPro</label>
                                             <input type="text" id="num_nfe" name="num_nfe" placeholder="Nº NFe"
                                                 class="form-control" value="{{ request('num_nfe', $numNFe ?? '') }}">
                                         </div>
+                                    </div> --}}
+                                        <div class="col-md-3 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-primary me-2">
+                                                <i class="fas fa-search"></i> Filtrar
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div class="col-md-3 d-flex align-items-end">
-                                        <button type="submit" class="btn btn-primary me-2">
-                                            <i class="fas fa-search"></i> Filtrar
-                                        </button>
-                                    </div>
-                                </div>
                             </form>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="card-body-nf">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <tbody>
-                                @if (isset($notasfiscais) && !empty($notasfiscais))
-                                    @foreach ($notasfiscais as $nf)
-                                        <tr>
-                                            <div class="row">
-                                                <div class="col">
-                                                    <div class="card card-body">
-                                                        <h6>
-                                                            {{ $nf->cabec->cNome }}
-                                                        </h6>
-                                                        <p class="mb-0">
-                                                            Nº NFe: <strong>{{ $nf->cabec->cNumeroNFe ?? '' }}</strong>|
-                                                            Emissão:
-                                                            {{ $nf->cabec->dEmissaoNFe ?? '' }}
-                                                        </p>
-                                                        <p class="mt-1 mb-0">
-                                                            R$
-                                                            {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') ?? '' }}
-                                                        </p>
-                                                        <p class="my-1">
-                                                            <a href="{{ route('notafiscal.itens', $nf->cabec->nIdReceb) }}"
+            <div class="card-body-nf">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <tbody>
+                            {{-- @if (isset($ordenspro) && !empty($ordenspro)) --}}
+                            @foreach ($ordenspro as $op)
+                                <tr>
+                                    <div class="row">
+                                        <div class="col">
+                                            <div class="card card-body">
+                                                <h6>
+                                                    Cód. OP: {{ $op->identificacao->cCodIntOP }}
+                                                </h6>
+                                                <p class="mb-0">
+                                                    Lote : <strong>{{ $op->identificacao->cNumOP ?? '' }}</strong>
+                                                </p>
+                                                <p class="mt-1 mb-0">
+                                                    Cód. Produto: {{ $op->identificacao->nCodProduto }}
+                                                </p>
+                                                <p class="mt-1 mb-0">
+                                                    nCodOP: {{ $op->identificacao->nCodOP }}
+                                                </p>
+                                                <p class="mt-1 mb-0">
+                                                    QTDE a Produzir.: {{ $op->identificacao->nQtde }}
+                                                </p>
+                                                {{-- <p class="my-1">
+                                                            <a href="{{ route('notafiscal.itens', $op->cabec->nIdReceb) }}"
                                                                 class="btn btn-secondary btn-sm">
                                                                 <i class="fas fa-eye"></i> Visualizar
                                                             </a>
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                                </p> --}}
                                             </div>
-                                        </tr>
-                                    @endforeach
-                                @else
+                                        </div>
+                                    </div>
+                                </tr>
+                            @endforeach
+                            {{-- @else
                                     <tr>
-                                        <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                                        <td class="text-center">Nenhuma ordem de produção encontrada</td>
                                     </tr>
-                                @endif
-                            </tbody>
-                        </table>
-                    </div>
+                                @endif --}}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
-    </div>
-    </div>
-    </div>
+
 
     <!-- Scripts para navegação e interatividade da interface -->
     <script>

@@ -25,18 +25,24 @@
                 <a class="navbar-brand" href="{{ url('/') }}">
                     <h5 class="app-name">{{ config('app.name', 'Laravel') }}</h5>
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                {{-- <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                     data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
                     aria-expanded="false" aria-label="{{ __('Toggle navigation') }}">
                     <span class="navbar-toggler-icon"></span>
-                </button>
+                </button> --}}
+
+                <div class="menu-item" onclick="window.location.href='{{ route('home.index') }}'">
+                    {{-- <i class="fas fa-truck"></i> --}}
+                    <span class="navbar-toggler-icon"></span>
+                    <span></span>
+                </div>
 
                 <div class="collapse navbar-collapse" id="navbarSupportedContent">
                     <!-- Left Side Of Navbar -->
                     <ul class="navbar-nav me-auto">
                         @auth
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ route('notafiscal.index') }}">{{ __('Notas Fiscais') }}</a>
+                                <a class="nav-link" href="{{ route('home.index') }}">{{ __('Menu') }}</a>
                             {{-- </li>
                             <a href="#" class="nav-link" id="filtrosToggle">
                                 <i class="fas fa-filter"></i> Filtros
@@ -45,7 +51,7 @@
                     </ul>
 
                     <!-- Right Side Of Navbar -->
-                    <ul class="navbar-nav ms-auto">
+                    {{-- <ul class="navbar-nav ms-auto">
                         <!-- Authentication Links -->
                         @guest
                             @if (Route::has('login'))
@@ -79,7 +85,7 @@
                                 </div>
                             </li>
                         @endguest
-                    </ul>
+                    </ul> --}}
                 </div>
             </div>
         </nav>
