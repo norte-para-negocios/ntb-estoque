@@ -1,8 +1,595 @@
 // Fonts
-@import url('https://fonts.bunny.net/css?family=Nunito');
+@import url("https://fonts.bunny.net/css?family=Nunito");
 
 // Variables
-@import 'variables';
+@import "variables";
 
 // Bootstrap
-@import 'bootstrap/scss/bootstrap';
+@import "bootstrap/scss/bootstrap";
+
+/* Estilos básicos */
+* {
+    font-family: "Nunito", sans-serif;
+}
+
+body {
+    background-color: #f3f3f3;
+    color: #333333;
+    line-height: 1.6;
+    font-size: .9rem;
+}
+
+
+
+// .app-name #offcanvasExampleLabel {
+//   color: #00e3f4;
+
+// }
+
+// .card-body-Login {
+// //   padding: 200px;
+// }
+
+// .container {
+//     display: flex;
+//     width: 100%;
+//     max-width: 100%;
+//     padding: 0 !important;
+//     margin: 0 !important;
+// }
+
+// .navbar-brand {
+//     margin: 10px !important;
+//     padding: 1px !important;
+// }
+
+// /* Sidebar - Barra do Menu */
+// .sidebar {
+//     display: none;
+//     width: 260px;
+//     background-color: #4E4E56;
+//     color: white;
+//     padding: 20px 0;
+//     transition: all 0.3s;
+//     height: 100vh;
+//     position: fixed;
+//     left: 0;
+//     top: 0;
+//     z-index: 100;
+//     transform: translateX(-100%);
+// }
+
+// /* Sidebar visível */
+// .sidebar.visible {
+//     transform: translateX(0);
+// }
+
+// /* Botão toggle para sidebar */
+// .sidebar-toggle {
+//     position: fixed;
+//     top: 15px;
+//     left: 15px;
+//     z-index: 101;
+//     background-color: #4E4E56;
+//     color: white;
+//     border: none;
+//     border-radius: 4px;
+//     padding: 8px 12px;
+//     font-size: 16px;
+//     cursor: pointer;
+//     display: none;
+// }
+
+// /* Cabeçalho da Barra do Menu */
+// .sidebar-header {
+//     padding: 15px;
+//     text-align: center;
+//     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+// }
+
+// .sidebar-header h1 {
+//     font-size: 20px;
+//     margin-bottom: 5px;
+//     color: white;
+// }
+
+// .sidebar-header span {
+//     font-size: 12px;
+//     color: #2EC4B6;
+// }
+
+// .sidebar-menu {
+//     padding: 15px 0;
+// }
+
+// .menu-item {
+//     padding: 12px 15px;
+//     border-left: 4px solid transparent;
+//     transition: all 0.3s;
+//     cursor: pointer;
+//     display: flex;
+//     align-items: center;
+// }
+
+// .menu-item:hover {
+//     background-color: rgba(255, 255, 255, 0.05);
+//     border-left-color: #FF6B35;
+// }
+
+// .menu-item.active {
+//     background-color: rgba(255, 255, 255, 0.1);
+//     border-left-color: #FF6B35;
+// }
+
+// .menu-item i {
+//     margin-right: 10px;
+//     font-size: 16px;
+// }
+
+// .submenu {
+//     padding-left: 20px;
+//     display: none;
+// }
+
+// .submenu.show {
+//     display: block;
+// }
+
+// .submenu .menu-item {
+//     padding: 8px 15px;
+//     font-size: 14px;
+// }
+
+// /* Main Content */
+// .main-content {
+//     flex: 1;
+//     padding: 15px;
+//     overflow-y: auto;
+//     margin-left: 0; /* Para dispositivos móveis, sem margem lateral */
+//     width: 100%;
+// }
+
+// .top-bar {
+//     display: flex;
+//     justify-content: space-between;
+//     align-items: center;
+//     margin-bottom: 20px;
+//     padding-bottom: 10px;
+//     border-bottom: 1px solid #ddd;
+//     flex-wrap: wrap;
+// }
+
+// .page-title h2 {
+//     font-size: 20px;
+//     font-weight: 500;
+//     color: #333;
+//     margin-bottom: 10px;
+// }
+
+// .user-actions {
+//     display: flex;
+//     align-items: center;
+//     flex-wrap: wrap;
+// }
+
+// .user-actions .btn {
+//     margin-left: 10px;
+// }
+
+// .user-info {
+//     display: flex;
+//     align-items: center;
+//     margin-right: 15px;
+// }
+
+// .user-info img {
+//     width: 30px;
+//     height: 30px;
+//     border-radius: 50%;
+//     margin-right: 8px;
+//     object-fit: cover;
+// }
+
+// .user-info .name {
+//     font-weight: 500;
+//     font-size: 14px;
+// }
+
+// .user-info .role {
+//     font-size: 11px;
+//     color: #777;
+// }
+
+// /* Cards */
+// .card {
+//     background-color: white;
+//     border-radius: 8px;
+//     box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+//     padding: 5px;
+//     margin-bottom: 15px;
+//     border: none;
+// }
+
+// .card-header {
+//     display: flex;
+//     justify-content: space-between;
+//     align-items: center;
+//     margin-bottom: 12px;
+//     padding-bottom: 12px;
+//     border-bottom: 1px solid #eee;
+//     background-color: transparent;
+//     flex-wrap: wrap;
+// }
+
+// .card-header h3, .card-header h5 {
+//     font-size: 16px;
+//     font-weight: 500;
+//     margin-bottom: 5px;
+//     color: #333;
+// }
+
+// .card-body-login {
+//     padding: 8px 0;
+// }
+
+// /* Forms */
+// .form-group {
+//     margin-bottom: 15px;
+// }
+
+// .form-group label {
+//     display: block;
+//     margin-bottom: 6px;
+//     font-weight: 500;
+//     font-size: 13px;
+// }
+
+// .filter-row {
+//     display: flex;
+//     gap: 8px;
+//     flex-wrap: wrap;
+// }
+
+// .filter-row .form-control {
+//     flex: 1;
+//     min-width: 100px;
+// }
+
+// .filter-row .btn {
+//     flex-shrink: 0;
+//     margin-top: 8px;
+//     width: 100%;
+// }
+
+// .form-control {
+//     width: 100%;
+//     padding: 8px 12px;
+//     border: 1px solid #ddd;
+//     border-radius: 4px;
+//     font-size: 13px;
+//     transition: border-color 0.3s;
+// }
+
+// .form-control:focus {
+//     border-color: #FF6B35;
+//     outline: none;
+//     box-shadow: none;
+// }
+
+// /* Buttons */
+// .btn {
+//     display: inline-block;
+//     padding: 8px 16px;
+//     background-color: #001e27;
+//     color: white;
+//     border: none;
+//     border-radius: 4px;
+//     cursor: pointer;
+//     font-size: 13px;
+//     transition: background-color 0.3s;
+// }
+
+// .btn-sm {
+//     padding: 5px 10px;
+//     font-size: 11px;
+// }
+
+// .btn-primary {
+//     background-color: #001e27;
+// }
+
+// .btn-secondary {
+//     background-color: #001e27;
+// }
+
+// .btn-accent {
+//     background-color: $accent-color;
+// }
+
+// .btn-danger {
+//     background-color: $danger-color;
+// }
+
+// .btn:hover {
+//     filter: brightness(110%);
+// }
+
+// /* Tables */
+// .table-responsive {
+//     // overflow-x: auto;
+//     // max-height: 400px;
+//     // overflow-y: auto;
+//     // margin-top: 0.5rem;
+//     -webkit-overflow-scrolling: touch; /* Melhora a rolagem no iOS */
+// }
+
+// .table {
+//     width: 100%;
+//     border-collapse: collapse;
+//     margin-bottom: 0.5rem;
+//     font-size: 12px; /* Reduzindo tamanho da fonte para tabelas em mobile */
+// }
+
+// .table th {
+//     background-color: #f8f8f8;
+//     font-weight: 500;
+//     text-align: center !important;
+//     padding: 8px 5px;
+//     position: sticky;
+//     top: 0;
+//     z-index: 10;
+//     white-space: nowrap;
+// }
+
+// .table td {
+//     padding: 8px 5px;
+//     text-align: center;
+//     border-bottom: 1px solid #ddd;
+//     white-space: nowrap;
+// }
+
+// /* Para permitir quebra de texto em colunas específicas */
+// .table td.wrap-text {
+//     white-space: normal;
+// }
+
+// .table td[name="Valor"] {
+//     text-align: right !important;
+//     padding-right: 10px !important;
+// }
+
+// .table tbody tr:hover {
+//     background-color: #f5f5f5;
+// }
+
+// .table .actions {
+//     display: flex;
+//     gap: 3px;
+//     flex-wrap: wrap;
+//     justify-content: center;
+// }
+
+// /* Badges */
+// .badge {
+//     padding: 4px 8px;
+//     border-radius: 4px;
+//     font-weight: normal;
+//     font-size: 11px;
+// }
+
+// .bg-success {
+//     background-color: #4CAF50 !important;
+// }
+
+// .bg-warning {
+//     background-color: #FFCA3A !important;
+//     color: #333333;
+// }
+
+// /* Pagination */
+// .pagination-container {
+//     display: flex;
+//     justify-content: center;
+//     margin-top: 15px;
+// }
+
+// .pagination {
+//     margin-bottom: 0;
+// }
+
+// .pagination .page-link {
+//     color: #FF6B35;
+//     border-color: #ddd;
+//     padding: 0.25rem 0.5rem;
+//     font-size: 12px;
+// }
+
+// .pagination .page-item.active .page-link {
+//     background-color: #FF6B35;
+//     border-color: #FF6B35;
+// }
+
+// /* Tab Content */
+// .tab-content {
+//     display: none;
+// }
+
+// .tab-content.active {
+//     display: block;
+// }
+
+// /* Responsive Design - Mobile First Approach */
+// /* iPhone XR tem largura de 414px */
+// @media (max-width: 576px) {
+//     body {
+//         font-size: 13px;
+//     }
+
+//     .sidebar {
+//         width: 80%;
+//         max-width: 250px;
+//     }
+
+//     .sidebar-toggle {
+//         display: block;
+//     }
+
+//     .main-content {
+//         margin-left: 0;
+//         padding: 10px;
+//         margin-top: 20px; /* Espaço para o botão toggle */
+//     }
+
+//     /* Botão Menu - Hamburger */
+//     .navbar-toggler {
+//       position: absolute;
+//       left: 0;
+//       right: -350px;
+//       //color: red;
+//       //top: 100%;
+//       //flex-direction: column;
+//       //overflow: hidden;
+//       //transition: 0.3s ease-in-out;
+//     }
+
+//     /* Menu - Hamburger */
+//     .nav-link {
+//         color: #7b7c7d;
+//         //position: relative;
+//         left: 100px;
+//         right: 0px;
+
+//     }
+
+//     .card-body {
+//       padding: 8px 0;
+
+//   }
+
+//    .card-body-Login {
+//     //   padding: 60px 80px;
+//   }
+//     .top-bar {
+//         //flex-direction: column;
+//         align-items: flex-start;
+//     }
+
+//     .user-actions {
+//         margin-top: 1px;
+//         width: 100%;
+//         justify-content: space-between;
+//     }
+
+//     .user-info .name {
+//         font-size: 13px;
+//     }
+
+//     .card {
+//         padding: 10px;
+//     }
+
+//     /* Cabçalho do Cartão */
+//     .card-header {
+//         flex-direction: column;
+//         align-items: flex-start;
+
+//     }
+
+//     .card-header h3, .card-header h5 {
+//         font-size: 15px;
+//         margin-bottom: 5px;
+//     }
+
+//     .filter-row > div {
+//         width: 100%;
+//         margin-bottom: 8px;
+//     }
+
+//     .table {
+//         font-size: 11px;
+//     }
+
+//     .table th, .table td {
+//         padding: 6px 4px;
+//     }
+
+//     .actions .btn-sm {
+//         padding: 4px 8px;
+//         font-size: 10px;
+//     }
+
+//     /* Ajuste específico para iPhone XR */
+//     @media (max-width: 414px) {
+//         .table-responsive {
+//             max-width: 394px; /* 414px - 20px (padding do container) */
+//         }
+
+//         .main-content {
+//             padding: 8px;
+//         }
+
+//         .btn-sm {
+//             padding: 4px 8px;
+//             font-size: 10px;
+//         }
+
+//     }
+// }
+
+// /* Breakpoint médio */
+// @media (min-width: 577px) and (max-width: 768px) {
+//     .container {
+//         flex-direction: column;
+//     }
+
+//     .sidebar {
+//         width: 100%;
+//         height: auto;
+//         position: relative;
+//         transform: none;
+//     }
+
+//     .main-content {
+//         margin-left: 0;
+//     }
+
+//     .top-bar {
+//         flex-direction: column;
+//         align-items: flex-start;
+//     }
+
+//     .user-actions {
+//         margin-top: 10px;
+//         width: 100%;
+//     }
+
+//     .filter-row {
+//         flex-direction: column;
+//     }
+
+//     .card-header {
+//         flex-direction: column;
+//         font-size: 0.5rem;
+//     }
+// }
+
+// /* Breakpoint grande - Para desktop, restaurar o layout lateral */
+// @media (min-width: 769px) {
+//     .sidebar {
+//      transform: none;
+//       position: relative;
+//       margin-top: 53px;
+//       height: 100vh;
+
+//     }
+
+//     .sidebar-toggle {
+//         display: none;
+//     }
+
+//     .main-content {
+//         margin-left: 0;
+//     }
+// }
+
+// /* Script para toggle da sidebar em dispositivos móveis */
