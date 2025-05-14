@@ -13,7 +13,7 @@
 
         body {
             margin: 0;
-            padding: 0.1cm;
+            /* padding: 0.1cm; */
             font-family: 'Courier New', sans-serif;
             width: 7cm;
             height: 4cm;
@@ -50,9 +50,12 @@
 
         .product-name {
             font-weight: bold;
-            font-size: 8pt;
+            font-size: 7pt;
             /* text-align: center; */
             margin-bottom: 0.2cm;
+            margin-left: 0;
+            margin-right: 0;
+
         }
 
         .product-code {
@@ -75,32 +78,23 @@
 </head>
 
 <body>
-    @if (isset($recebimento) && !empty($recebimento))
-        
-        @foreach ($recebimento->itensRecebimento as $it)
-            @if (($it->itensCabec->cCodigoProduto == $cCodigoProduto && $cCodigoProduto !== '') || $cCodigoProduto == '')
-                <div class="label-container">
-                    <div class="qrcode-section">
-                        {!! QrCode::size(80)->generate($it->itensCabec->cCodigoProduto) !!}
-                        <div class="product-code">{{ $it->itensCabec->cCodigoProduto }}</div>
-                    </div>
-                    <div class="info-section">
-                        <tr>
-                            <div class="product-name">{{ strtoupper($it->itensCabec->cDescricaoProduto ?? '') }}</div>
-                            <div class="label-field"><strong>Produto:</strong>
-                                {{ $it->itensCabec->cCodigoProduto ?? '' }}</div>
-                            <div class="label-field"><strong>Lote:</strong> {{ $it->itensCabec->cNCM ?? '' }}</div>
-                            <div class="label-field"><strong>Qtd:</strong> {{ $it->itensCabec->nQtdeNFe ?? '' }}
-                                {{ strtoupper($it->itensCabec->cUnidadeNfe) }}</div>
-                            <div class="label-field"><strong>Validade:</strong> {{ $it->itensCabec->nIdValidade ?? '' }}
-                            </div>
+    @foreach ($dadosInfoSection as $info)
+        {{-- @dd($info) --}}
+        <div class="label-container">
+            <div class="qrcode-section">
+                {!! QrCode::size(80)->generate($info['nCodProduto']) !!}
+                <div class="product-code">{{ $info['nCodProduto'] }}</div>
+            </div>
+            <div class="info-section">
+                <div class="product-name">{{ substr($info['descricao'],0,20) }}</div>
+                <div class="label-field"><strong>Lote:</strong> {{ $info['lote'] }}</div>
+                {{-- <div class="label-field"><strong>Produto:</strong> {{ $info['nCodProduto'] }}</div> --}}
+                <div class="label-field"><strong>Qtde:</strong> {{ $info['nQtde'] }} {{ $info['unidade'] }}</div>
+                <div class="label-field"><strong>Validade:</strong> {{ $info['validade'] }}</div>
+            </div>
+        </div>
+    @endforeach
 
-                        </tr>
-                    </div>
-                </div>
-            @endif
-        @endforeach
-    @endif
 </body>
 
 </html>

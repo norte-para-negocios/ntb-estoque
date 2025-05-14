@@ -46,8 +46,32 @@ class NotafiscalController extends Controller
 
     public function imprimir(Request $request, $nIdReceb, $cCodigoProduto = "")
     {
-
+        $dadosInfoSection = [];
+        $recebimentos_filtrados = [];
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
-        return view('notafiscal.imprimir', compact("recebimento", "cCodigoProduto"));
+
+        foreach ($recebimento->itensRecebimento as $it) {
+            $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
+            
+            if (($it->itensCabec->nIdProduto == $cCodigoProduto && $cCodigoProduto !== '') || $cCodigoProduto == '') {
+        
+                $dadosInfoSection[] = [
+                    'descricao'   => $it->itensCabec->cDescricaoProduto ?? '',
+                    'lote'        => $recebimento->cabec->cNumeroNFe ?? '',
+                    'cCodIntOP'   => '',
+                    'nCodProduto' => $produto->codigo ?? '',
+                    'nQtde'       => $it->itensCabec->nQtdeNFe ?? '',
+                    'unidade'     => $it->itensCabec->cUnidadeNfe ?? '',
+                    'validade'    => $it->itensCabec->nIdValidade ?? '',
+                ];
+
+                $recebimentos_filtrados[] = $it;
+            }
+        }
+        
+        return view('etiqueta.imprimir', [
+    
+            'dadosInfoSection' => $dadosInfoSection,
+        ]);
     }
 }

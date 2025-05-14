@@ -29,7 +29,7 @@
                                                             {{ $it->itensCabec->cDescricaoProduto }}
                                                         </h6>
                                                         <p class="mb-0">
-                                                            Cód Prod.: {{ $it->itensCabec->nIdProduto ?? '' }}
+                                                            Cód Prod.: {{ $it->itensCabec->cCodigoProduto ?? '' }}
                                                         </p>
                                                         <p class="mb-0">
                                                             QTDE.: {{ $it->itensCabec->nQtdeNFe ?? '' }}
@@ -44,7 +44,7 @@
                                                             {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
                                                         </p>
                                                         <p class="my-1">
-                                                            <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->nIdProduto]) }}"
+                                                            <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->cCodigoProduto]) }}"
                                                                 class="btn btn-secondary btn-sm">
                                                                 <i class="fa-solid fa-print me-2"></i> Imprimir
                                                             </a>
