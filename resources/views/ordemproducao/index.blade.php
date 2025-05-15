@@ -41,9 +41,11 @@
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-primary me-2">
-                                        <i class="fas fa-search"></i> Filtrar
-                                    </button>
+                                    <div class="mb-3">
+                                        <button type="submit" class="btn btn-primary me-2">
+                                            <i class="fas fa-search"></i> Filtrar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </form>
@@ -89,10 +91,10 @@
                                                             Lote : {{ $op->identificacao->cNumOP ?? '' }}
                                                         </p>
                                                         <p class="mb-0">
-                                                            Cód. OP: {{ $op->identificacao->cCodIntOP ?? '' }}
+                                                            Ordem de Produção: {{ $op->identificacao->cNumOP ?? '' }}
                                                         </p>
                                                         <p class="mt-1 mb-0">
-                                                            Produto: {{ $op->identificacao->nCodProduto ?? '' }}
+                                                            Produto: {{ $produto->codigo ?? '' }}
                                                         </p>
                                                         <p class="mt-1 mb-0">
                                                             Quantidade: {{ $op->identificacao->nQtde ?? '' }}
@@ -150,9 +152,8 @@
         function imprimir(data_inicio, data_final, ordem_producao) {
             const url =
                 `{{ route('etiqueta.imprimir') }}?data_inicio=${encodeURIComponent(data_inicio)}&data_final=${encodeURIComponent(data_final)}&ordem_producao=${encodeURIComponent(ordem_producao)}`;
-                // alert(url);
+            // alert(url);
             window.location.href = url;
         }
-
     </script>
 @endsection

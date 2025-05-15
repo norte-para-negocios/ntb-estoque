@@ -40,9 +40,11 @@
                                     </div>
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-primary me-2">
-                                        <i class="fas fa-search"></i> Filtrar
-                                    </button>
+                                    <div class="mb-3">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-search"></i> Filtrar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </form>

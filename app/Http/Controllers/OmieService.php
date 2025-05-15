@@ -15,41 +15,41 @@ class OmieService
 
     public function getConsultarRecebimento($nIdReceb): object
     {
-        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
-
-        $data = [
-            "call" => "ConsultarRecebimento",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
-            "param" => [
-                [
-                    "nIdReceb" => $nIdReceb
+        return Cache::remember('getConsultarRecebimento' . $nIdReceb, 3600, function () use ($nIdReceb) {
+            $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+            $data = [
+                "call" => "ConsultarRecebimento",
+                "app_key" => config('omie.app_key'),
+                "app_secret" => config('omie.app_secret'),
+                "param" => [
+                    [
+                        "nIdReceb" => $nIdReceb
+                    ]
                 ]
-            ]
-        ];
+            ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
-
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
                 ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return new stdClass();
+            return new stdClass();
+        });
     }
 
     public function getNotasFiscais(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): array
@@ -71,8 +71,7 @@ class OmieService
 
     private function getNFes(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
-        $chave = "getNotasFiscais-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
-
+        $chave = "getNFes" . Carbon::parse($dataInicio)->format('Ymd') . '-' . Carbon::parse($dataFinal)->format('Ymd') . $pagina;
         return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
             $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
 
@@ -133,13 +132,12 @@ class OmieService
                 }
             }
         }
-
         return $ordenspro;
     }
 
     public function getOrds(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
-        $chave = "getOrdensPro-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
+        $chave = "getOrds" . Carbon::parse($dataInicio)->format('Ymd') . '-' . Carbon::parse($dataFinal)->format('Ymd') . $pagina;
         return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
             $url = $this->urlBase . 'v1/produtos/op/';
 
@@ -150,7 +148,7 @@ class OmieService
                 "param" => [
                     [
                         "pagina" => $pagina,
-                        "registros_por_pagina" => 50,
+                        "registros_por_pagina" => 200,
                         "dDtConclusaoDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
                         "dDtConclusaoAte" => Carbon::parse($dataFinal)->format('d/m/Y')
                     ]
@@ -184,7 +182,7 @@ class OmieService
     //Consulta Produto
     public function getConsultaProduto(string $codigo_produto): object
     {
-        $chave = "ConsultarProduto-" . $codigo_produto;
+        $chave = "ConsultarProduto" . $codigo_produto;
         return Cache::remember($chave, 3600, function () use ($codigo_produto) {
             $url = $this->urlBase . 'v1/geral/produtos/';
 

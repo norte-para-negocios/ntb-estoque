@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html  lang="pt_BR">
 
 <head>
     <meta charset="UTF-8">
@@ -23,6 +23,7 @@
 
         .label-container {
             display: flex;
+            flex-flow: column;
             width: 100%;
             height: 100%;
             border: 1px dashed #ccc;
@@ -42,7 +43,7 @@
             display: flex;
             width: 70%;
             padding: 0.2cm;
-            justify-content: center;
+            justify-content: start;
             align-items: left;
             flex-direction: column;
 
@@ -72,29 +73,31 @@
         /* Espaçamento das infomações */
         .label-field strong {
             display: inline-block;
-            width: 1.3cm;
+            /* width: 1.3cm; */
         }
     </style>
 </head>
 
 <body>
-    @foreach ($dadosInfoSection as $info)
-        {{-- @dd($info) --}}
+    @foreach ($etiquetas as $etiqueta)
         <div class="label-container">
-            <div class="qrcode-section">
-                {!! QrCode::size(80)->generate($info['nCodProduto']) !!}
-                <div class="product-code">{{ $info['nCodProduto'] }}</div>
+            <div style="padding-top: 0.3cm; padding-left: 0.2cm; font-size: 8pt;">
+                <div class="product-name">{{ substr($etiqueta['descricao'], 0, 42) }}</div>
             </div>
-            <div class="info-section">
-                <div class="product-name">{{ substr($info['descricao'],0,20) }}</div>
-                <div class="label-field"><strong>Lote:</strong> {{ $info['lote'] }}</div>
-                {{-- <div class="label-field"><strong>Produto:</strong> {{ $info['nCodProduto'] }}</div> --}}
-                <div class="label-field"><strong>Qtde:</strong> {{ $info['nQtde'] }} {{ $info['unidade'] }}</div>
-                <div class="label-field"><strong>Validade:</strong> {{ $info['validade'] }}</div>
+
+            <div style="display: flex; padding-left: 0.2cm;">
+                <div class="qrcode-section">
+                    {!! QrCode::size(90)->generate($etiqueta['codigo_produto']) !!}
+                </div>
+                <div class="info-section">
+                    <div class="label-field"><strong>Código:</strong>{{ trim($etiqueta['codigo_produto']) }}</div>
+                    <div class="label-field"><strong>Lote:</strong> {{ trim($etiqueta['lote']) }}</div>
+                    <div class="label-field"><strong>Quant.:</strong> {{ trim($etiqueta['quantidade']) }}</div>
+                    <div class="label-field"><strong>Validade:</strong> {{ trim($etiqueta['validade']) }}</div>
+                </div>
             </div>
         </div>
     @endforeach
-
 </body>
 
 </html>

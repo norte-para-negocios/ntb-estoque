@@ -44,34 +44,30 @@ class NotafiscalController extends Controller
         return view('notafiscal.itens', compact("recebimento"));
     }
 
-    public function imprimir(Request $request, $nIdReceb, $cCodigoProduto = "")
+    public function imprimir(Request $request, $nIdReceb, $nIdProduto = "")
     {
-        $dadosInfoSection = [];
-        $recebimentos_filtrados = [];
+        $etiquetas = [];
+
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
 
         foreach ($recebimento->itensRecebimento as $it) {
-            $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
-            
-            if (($it->itensCabec->nIdProduto == $cCodigoProduto && $cCodigoProduto !== '') || $cCodigoProduto == '') {
-        
-                $dadosInfoSection[] = [
-                    'descricao'   => $it->itensCabec->cDescricaoProduto ?? '',
-                    'lote'        => $recebimento->cabec->cNumeroNFe ?? '',
-                    'cCodIntOP'   => '',
-                    'nCodProduto' => $produto->codigo ?? '',
-                    'nQtde'       => $it->itensCabec->nQtdeNFe ?? '',
-                    'unidade'     => $it->itensCabec->cUnidadeNfe ?? '',
-                    'validade'    => $it->itensCabec->nIdValidade ?? '',
-                ];
-
-                $recebimentos_filtrados[] = $it;
+            if ($it->itensCabec->nIdProduto > 0) {
+                $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
+                if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
+                    $etiquetas[] = [
+                        'codigo_produto' => $produto->codigo ?? '',
+                        'descricao'   => $it->itensCabec->cDescricaoProduto ?? '',
+                        'lote'        => $recebimento->cabec->cNumeroNFe ?? '',
+                        'quantidade'  => $it->itensAjustes->nQtdeRecebida ?? '' . ' ' . $it->itensAjustes->cUnidade ?? '',
+                        'validade'    => $it->itensCabec->nIdValidade ?? '',
+                    ];
+                }
             }
         }
-        
+
         return view('etiqueta.imprimir', [
-    
-            'dadosInfoSection' => $dadosInfoSection,
+
+            'etiquetas' => $etiquetas,
         ]);
     }
 }

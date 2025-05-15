@@ -20,30 +20,21 @@ class OrdemProController extends Controller
 
     public function index(Request $request)
     {
-
         $data_inicio = Carbon::parse($request->get('data_inicio'));
         $data_final = Carbon::parse($request->get('data_final'));
-
         $ordem_producao = $request->get('ordem_producao');
 
         $ops = [];
-        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
 
-        //dd($ordem_producao, $data_inicio, $data_final);
-        //dd($ordenspro);
+        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
 
         foreach ($ordenspro as $op) {
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
-            dd($produto->tipoItem, $op->identificacao->nCodProduto);
-            if (($produto->tipoItem == "03")
-                // && (($request->filled("ordem_producao")) &&  ((int)$op->identificacao->cNumOP == (int)$ordem_producao))
-            ) {
-
+            if (($produto->tipoItem == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
                 array_push($ops, $op);
             }
         }
         $ordenspro = $ops;
-
 
         return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao'));
     }
@@ -67,52 +58,29 @@ class OrdemProController extends Controller
 
     public function imprimir(Request $request)
     {
-        try {
-            $data_inicio = Carbon::parse($request->query('data_inicio'));
-            $data_final = Carbon::parse($request->query('data_final'));
-        } catch (\Exception $e) {
-            return back()->withErrors(['datas' => 'Datas inválidas fornecidas.']);
-        }
-
+        $data_inicio = Carbon::parse($request->get('data_inicio') ?? date('Y-m-d'));
+        $data_final = Carbon::parse($request->get('data_final') ?? date('Y-m-d'));
         $ordem_producao = $request->query('ordem_producao');
-
-        $ordens_filtradas = [];
-        $dadosInfoSection = [];
-
         $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
-
+        $etiquetas = [];
         foreach ($ordenspro as $op) {
-            $cNumOP = (string) $op->identificacao->cNumOP;
+            $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
 
-            if (($cNumOP == $ordem_producao && $ordem_producao !== '') || $ordem_producao == '') {
-
-                $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
-
-                $validade = \App\Models\Op::where('num_ordem', $cNumOP)->first()?->validade;
-                $validade_formatada = $validade
-                    ? Carbon::parse($validade)->format('d/m/Y')
-                    : '';
-
-                $dadosInfoSection[] = [
+            if (($produto->tipoItem == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
+                $validade = Op::where('num_ordem', $op->identificacao->cNumOP)
+                    ->first();
+                $etiquetas[] = [
+                    'codigo_produto' => $produto->codigo ?? '',
                     'descricao'   => $produto->descricao ?? '',
-                    'lote'        => $cNumOP,
-                    'cCodIntOP'   => $op->identificacao->cCodIntOP ?? '',
-                    'nCodProduto' => $op->identificacao->nCodProduto ?? '',
-                    'nQtde'       => $op->identificacao->nQtde ?? '',
-                    'unidade'     => $produto->unidade ?? '',
-                    'validade'    => $validade_formatada,
+                    'lote'        => $op->identificacao->cNumOP ?? '',
+                    'quantidade'  => $op->identificacao->nQtde ?? '' . ' ' . $produto->unidade ?? '',
+                    'validade'    => $validade ? $validade->validade->format('d/m/Y') : '',
                 ];
-
-                $ordens_filtradas[] = $op;
             }
         }
 
         return view('etiqueta.imprimir', [
-            'ordenspro'         => $ordens_filtradas,
-            'data_inicio'       => $data_inicio,
-            'data_final'        => $data_final,
-            'ordem_producao'    => $ordem_producao,
-            'dadosInfoSection'  => $dadosInfoSection,
+            'etiquetas' => $etiquetas,
         ]);
     }
 }
