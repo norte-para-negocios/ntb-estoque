@@ -19,13 +19,6 @@
                     <tbody>
                         @if (isset($recebimento) && !empty($recebimento))
                             @foreach ($recebimento->itensRecebimento as $it)
-                                @php
-                                    if ($it->itensCabec->nIdProduto > 0) {
-                                        $produto = (new \App\Services\OmieService())->getConsultaProduto(
-                                            $it->itensCabec->nIdProduto,
-                                        );
-                                    }
-                                @endphp
                                 <tr>
                                     <td class="px-0">
                                         <div class="container">
@@ -36,7 +29,7 @@
                                                             {{ $it->itensCabec->cDescricaoProduto }}
                                                         </h6>
                                                         <p class="mb-0">
-                                                            Cód Prod.: {{ $produto->codigo ?? '' }}
+                                                            Cód Prod.: {{ $it->itensCabec->cCodigoProduto ?? '' }}
                                                         </p>
                                                         <p class="mb-0">
                                                             QTDE.: {{ $it->itensCabec->nQtdeNFe ?? '' }}
@@ -50,16 +43,12 @@
                                                             VL. Total.: R$
                                                             {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
                                                         </p>
-                                                        @if ($it->itensCabec->nIdProduto > 0)
-                                                            <p class="my-1">
-                                                                <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->nIdProduto]) }}"
-                                                                    class="btn btn-secondary btn-sm">
-                                                                    <i class="fa-solid fa-print me-2"></i> Imprimir
-                                                                </a>
-                                                            </p>
-                                                        @else
-                                                            <p>Produto não está cadastrado no estoque</p>
-                                                        @endif
+                                                        <p class="my-1">
+                                                            <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->cCodigoProduto]) }}"
+                                                                class="btn btn-secondary btn-sm">
+                                                                <i class="fa-solid fa-print me-2"></i> Imprimir
+                                                            </a>
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>

@@ -44,10 +44,30 @@ class NotafiscalController extends Controller
         return view('notafiscal.itens', compact("recebimento"));
     }
 
-    public function imprimir(Request $request, $nIdReceb, $cCodigoProduto = "")
+    public function imprimir(Request $request, $nIdReceb, $nIdProduto = "")
     {
+        $etiquetas = [];
 
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
-        return view('notafiscal.imprimir', compact("recebimento", "cCodigoProduto"));
+
+        foreach ($recebimento->itensRecebimento as $it) {
+            if ($it->itensCabec->nIdProduto > 0) {
+                $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
+                if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
+                    $etiquetas[] = [
+                        'codigo_produto' => $produto->codigo ?? '',
+                        'descricao'   => $it->itensCabec->cDescricaoProduto ?? '',
+                        'lote'        => $recebimento->cabec->cNumeroNFe ?? '',
+                        'quantidade'  => $it->itensAjustes->nQtdeRecebida ?? '' . ' ' . $it->itensAjustes->cUnidade ?? '',
+                        'validade'    => $it->itensCabec->nIdValidade ?? '',
+                    ];
+                }
+            }
+        }
+
+        return view('etiqueta.imprimir', [
+
+            'etiquetas' => $etiquetas,
+        ]);
     }
 }
