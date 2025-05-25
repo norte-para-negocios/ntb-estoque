@@ -65,9 +65,24 @@ class NotafiscalController extends Controller
             }
         }
 
-        return view('etiqueta.imprimir', [
-
+        // Gerar PDF
+        $pdf = PDF::loadView('etiqueta.imprimir', [
             'etiquetas' => $etiquetas,
-        ]);
+        ])
+            ->setOption('margin-top', 5)
+            ->setOption('margin-bottom', 5)
+            ->setOption('margin-left', 5)
+            ->setOption('margin-right', 5)
+            ->setOption('page-size', 'A4')
+            ->setOption('orientation', 'portrait')
+            ->setOption('enable-local-file-access', true);
+        
+        return $pdf->stream('etiquetas_Nfe.pdf');
+
+        
+        // return view('etiqueta.imprimir', [
+
+        //     'etiquetas' => $etiquetas,
+        // ]);
     }
 }

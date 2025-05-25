@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [\App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('welcome');
 
+Route::get('/teste-pdf', function() {
+    $pdf = PDF::loadHTML('<h1>Ronaldo Lima</h1>');
+    return $pdf->download('teste.pdf');
+});
+
 Auth::routes(['register' => false]);
 
 Route::middleware(['auth'])->group(function () {
