@@ -72,9 +72,9 @@ class NotafiscalController extends Controller
             ->setOption('margin-left', 0)
             ->setOption('margin-right', 0)
             // ->setOption('page-size', 'A4')
-            ->setOption('page-width', '40.04')
-            ->setOption('page-height', '72.56')
-            ->setOption('orientation', 'landscape')
+            ->setOption('page-width', '72.56')
+            ->setOption('page-height', '40.04')
+            ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
         return $pdf->stream('etiquetas_Nfe.pdf');
