@@ -67,14 +67,14 @@ class NotafiscalController extends Controller
 
         // Gerar PDF
         $pdf = PDF::loadView('etiqueta.imprimir', compact('etiquetas'))
-            ->setOption('margin-top', 5)
-            ->setOption('margin-bottom', 5)
-            ->setOption('margin-left', 5)
-            ->setOption('margin-right', 5)
+            ->setOption('margin-top', 0)
+            ->setOption('margin-bottom', 0)
+            ->setOption('margin-left', 0)
+            ->setOption('margin-right', 0)
             // ->setOption('page-size', 'A4')
             ->setOption('page-width', '40.04')
             ->setOption('page-height', '72.56')
-            ->setOption('orientation', 'portrait')
+            ->setOption('orientation', 'landscape')
             ->setOption('enable-local-file-access', true);
 
         return $pdf->stream('etiquetas_Nfe.pdf');
