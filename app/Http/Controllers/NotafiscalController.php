@@ -72,8 +72,8 @@ class NotafiscalController extends Controller
             ->setOption('margin-left', 5)
             ->setOption('margin-right', 5)
             // ->setOption('page-size', 'A4')
-            ->setOption('page-width', '40')
-            ->setOption('page-height', '70')
+            ->setOption('page-width', '40.04')
+            ->setOption('page-height', '72.56')
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
