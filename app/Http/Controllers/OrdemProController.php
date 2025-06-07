@@ -27,7 +27,6 @@ class OrdemProController extends Controller
         $ops = [];
 
         $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
-
         foreach ($ordenspro as $op) {
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
             if (($produto->tipoItem == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
@@ -78,7 +77,7 @@ class OrdemProController extends Controller
                 ];
             }
         }
-       
+
         // Gerar PDF
         $pdf = PDF::loadView('etiqueta.imprimir', [
             'etiquetas' => $etiquetas,
@@ -90,10 +89,10 @@ class OrdemProController extends Controller
             ->setOption('page-size', 'A4')
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
-        
+
         return $pdf->stream('etiquetas_op.pdf');
 
-       
+
         // return view('etiqueta.imprimir', [
         //     'etiquetas' => $etiquetas,
         // ]);

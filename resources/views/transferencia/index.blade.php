@@ -25,25 +25,21 @@
                                             value="">
                                     </div>
                                 </div>
-                                {{-- <div class="col-md-3">
+                                <div class="col-md-3">
                                     <div class="mb-3">
                                         <label for="data_final" class="form-label">Data Final</label>
                                         <input type="date" class="form-control" id="data_final" name="data_final"
-                                            value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
+                                            value="{{ request('data_final', date('Y-m-d')) }}">
                                     </div>
-                                </div> --}}
-                                {{-- <div class="col-md-3">
-                                    <div class="mb-3">
-                                        <label for="num_nfe" class="form-label">Número NFe</label>
-                                        <input type="text" id="num_nfe" name="num_nfe" placeholder="Nº NFe"
-                                            class="form-control" value="{{ request('num_nfe', $num_nfe ?? '') }}">
-                                    </div> --}}
                                 </div>
                                 <div class="col-md-3 d-flex align-items-end">
-                                    <div class="mb-3">
+                                    <div class="mb-3 g-6">
                                         <button type="submit" class="btn btn-primary">
                                             <i class="fas fa-search"></i> Filtrar
                                         </button>
+                                        <a href="{{ route('transferencia.create') }}" class="btn btn-primary">
+                                            <i class="fas fa-plus"></i> Nova
+                                        </a>
                                     </div>
                                 </div>
                             </div>

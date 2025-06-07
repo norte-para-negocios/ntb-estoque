@@ -26,7 +26,6 @@ class MovimentacaoEstoqueController extends Controller
     public function index()
     {
         $transferencias = Transferencia::all();
-        //dd($transferencias);
         return view('transferencia.index', compact('transferencias'));
     }
 
@@ -57,7 +56,7 @@ class MovimentacaoEstoqueController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-            
+
             foreach ($request->produtos as $index => $produtoId) {
                 $movimentacao = new Transferencia();
                 $movimentacao->produto_id = $produtoId;
