@@ -23,7 +23,7 @@
     <div id="app">
 
         <nav class="navbar navbar-expand-lg bg-body-tertiary">
-            <div class="container-fluid">
+            <div class="container">
                 <a class="navbar-brand" href="{{ route('home.index') }}">{{ config('app.name', 'NTB - Estoque') }}</a>
 
                 <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
@@ -64,6 +64,8 @@
         </main>
 
     </div>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     @stack('js')
     @include('layouts.delete')
 </body>

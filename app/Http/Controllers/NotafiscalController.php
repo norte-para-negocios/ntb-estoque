@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use PDF;
 
 class NotafiscalController extends Controller
@@ -14,6 +13,7 @@ class NotafiscalController extends Controller
 
     public function __construct()
     {
+        $this->middleware('auth');
         $this->omie = new OmieService();
     }
 
@@ -71,18 +71,11 @@ class NotafiscalController extends Controller
             ->setOption('margin-bottom', 0)
             ->setOption('margin-left', 0)
             ->setOption('margin-right', 0)
-            // ->setOption('page-size', 'A4')
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
         return $pdf->stream('etiquetas_Nfe.pdf');
-
-
-        // return view('etiqueta.imprimir', [
-
-        //     'etiquetas' => $etiquetas,
-        // ]);
     }
 }

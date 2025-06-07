@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('transferencias', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('loja_id');
             $table->unsignedBigInteger('produto_id');
             $table->string('tipo_movimento');
             $table->dateTime('data');
@@ -28,6 +29,7 @@ return new class extends Migration
             $table->integer('id_movest')->nullable();
             $table->integer('id_ajuste')->nullable();
             $table->timestamps();
+            $table->foreign('loja_id')->references('id')->on('lojas');
         });
     }
 

@@ -3,20 +3,18 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Produto;
-use App\Models\MovimentacaoEstoque;
-use App\Models\LocalEstoque;
 use App\Models\Transferencia;
 use Illuminate\Support\Facades\DB;
 use App\Services\OmieService;
-use \Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
-class MovimentacaoEstoqueController extends Controller
+class TransferenciaController extends Controller
 {
     private $omie;
 
     public function __construct()
     {
+        $this->middleware('auth');
         $this->omie = new OmieService();
     }
 
@@ -113,7 +111,7 @@ class MovimentacaoEstoqueController extends Controller
             ], 200);
         } catch (\Exception $e) {
             // Log do erro para debug
-            \Log::error('Erro ao buscar produto por QR Code', [
+            Log::error('Erro ao buscar produto por QR Code', [
                 'codigo' => $codigo,
                 'erro' => $e->getMessage()
             ]);
