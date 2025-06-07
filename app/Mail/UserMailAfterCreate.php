@@ -22,14 +22,37 @@ class UserMailAfterCreate extends Mailable
         //
     }
 
-    public function build()
+    /**
+     * Get the message envelope.
+     */
+    public function envelope(): Envelope
     {
-        return $this->subject('NTB- Estoque - Sua conta foi criada!')
-            ->view('user.mail')
-            ->with([
-                'name' => $this->user->name,
-                'email' => $this->user->email,
-                'password' => $this->password,
-            ]);
+        return new Envelope(
+            subject: config('app.name') . ' - Olá ' . $this->user->name . ', sua conta foi criada!',
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     */
+    public function content(): Content
+    {
+        return new Content(
+            markdown: 'user.mail',
+            with: [
+                'user' => $this->user,
+                'password' => $this->password
+            ]
+        );
+    }
+
+    /**
+     * Get the attachments for the message.
+     *
+     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     */
+    public function attachments(): array
+    {
+        return [];
     }
 }

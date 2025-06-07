@@ -41,7 +41,6 @@ class UserController extends Controller
     {
         try {
             $pass = Str::random('20');
-
             $user = new User();
             $user->name = $request->get('name');
             $user->email = $request->get('email');
