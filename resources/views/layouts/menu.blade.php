@@ -27,3 +27,10 @@
         Transferências
     </a>
 </div>
+
+<div class="d-grid gap-2 mb-2">
+    <a href="{{ route('usuario.index') }}" class="btn btn-secondary text-start">
+        <i class="fa-solid fa-users"></i>
+        Usuários
+    </a>
+</div>

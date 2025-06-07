@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MovimentacaoEstoqueController;
 use App\Http\Controllers\OrdemProController;
+use App\Http\Controllers\UserController;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -13,6 +14,9 @@ Auth::routes(['register' => false]);
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home.index');
+
+    // Usuários
+    Route::resource('usuario', UserController::class)->parameter('usuario', 'user');
 
     // Notas fiscais
     Route::get('/notasfiscais', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.index');
