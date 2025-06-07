@@ -39,7 +39,9 @@
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
             <div class="offcanvas-body">
-                @include('layouts.menu')
+                @auth
+                    @include('layouts.menu')
+                @endauth
             </div>
         </div>
 

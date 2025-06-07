@@ -1,13 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Bem-vindo!</title>
-</head>
-<body>
-    <p>Olá, {{ $name }}!</p>
-    <p>Sua conta foi criada com sucesso.</p>
-    <p>Seu e-mail: {{ $email }}</p>
-    <p>Sua senha: {{ $password }}</p>
-    <p>Recomendamos que você altere sua senha após o primeiro login.</p>
-</body>
-</html>
+<x-mail::message>
+Olá {{ $user->name }},
+
+Sua conta foi criada com sucesso!<br><br>
+
+Sugerimos que troque sua senha assim que possível, segue link de redefinição de senha abaixo.<br>
+
+<x-mail::button :url="route('password.request')">
+    Trocar senha
+</x-mail::button>
+
+Bem vindo(a),<br>
+{{ config('app.name') }}
+</x-mail::message>
