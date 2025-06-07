@@ -11,11 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ops', function (Blueprint $table) {
+        Schema::create('loja_user', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('num_ordem');
-            $table->date('validade');
+            $table->unsignedBigInteger('loja_id');
+            $table->unsignedBigInteger('user_id');
             $table->timestamps();
+            $table->foreign('loja_id')->references('id')->on('lojas');
+            $table->foreign('user_id')->references('id')->on('users');
         });
     }
 
@@ -24,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ops');
+        Schema::dropIfExists('loja_user');
     }
 };

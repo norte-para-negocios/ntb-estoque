@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Op;
+use App\Models\OrdemProducao;
 use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use PDF;
 
-class OrdemProController extends Controller
+class OrdemProducaoController extends Controller
 {
     private $omie;
 
     public function __construct()
     {
+        $this->middleware('auth');
         $this->omie = new OmieService();
     }
 
@@ -42,12 +42,12 @@ class OrdemProController extends Controller
     {
         $numOrdem = $request->get("num_ordem");
         $validadeRequest = $request->get("validade");
-        $op = Op::where('num_ordem', $numOrdem)->first();
+        $op = OrdemProducao::where('num_ordem', $numOrdem)->first();
 
         if ($op && isset($op->validade) && $op->validade == $validadeRequest) {
             return $op;
         } else {
-            return Op::updateOrCreate(
+            return OrdemProducao::updateOrCreate(
                 ['num_ordem' => $numOrdem],
                 ['validade' => $validadeRequest]
             );
@@ -66,7 +66,7 @@ class OrdemProController extends Controller
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
 
             if (($produto->tipoItem == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
-                $validade = Op::where('num_ordem', $op->identificacao->cNumOP)
+                $validade = OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)
                     ->first();
                 $etiquetas[] = [
                     'codigo_produto' => $produto->codigo ?? '',
@@ -91,10 +91,5 @@ class OrdemProController extends Controller
             ->setOption('enable-local-file-access', true);
 
         return $pdf->stream('etiquetas_op.pdf');
-
-
-        // return view('etiqueta.imprimir', [
-        //     'etiquetas' => $etiquetas,
-        // ]);
     }
 }

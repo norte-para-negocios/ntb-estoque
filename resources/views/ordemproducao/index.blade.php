@@ -7,8 +7,8 @@
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne"
-                        aria-expanded="false" aria-controls="collapseOne">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
                         <i class="fa-solid fa-filter me-2"></i>
                         FILTRO
                     </button>
@@ -106,7 +106,7 @@
                                                                     class="form-label">Validade:</label>
                                                                 <input type="date" class="form-control"
                                                                     id="data_validade" name="data_validade"
-                                                                    value="{{ \App\Models\Op::where('num_ordem', $op->identificacao->cNumOP)->first()->validade ?? '' }}"
+                                                                    value="{{ \App\Models\OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)->first()->validade ?? '' }}"
                                                                     onblur="sincValidade(this,'{{ $op->identificacao->cNumOP }}')">
                                                             </div>
                                                         </div>
@@ -134,7 +134,6 @@
             </div>
         </div>
     </div>
-
     <script>
         // Função para Inserir ou alterar a data de validade
         function sincValidade(el, cNumOP) {
@@ -147,12 +146,9 @@
                 console.log(r)
             })
         }
-
-
         function imprimir(data_inicio, data_final, ordem_producao) {
             const url =
                 `{{ route('etiqueta.imprimir') }}?data_inicio=${encodeURIComponent(data_inicio)}&data_final=${encodeURIComponent(data_final)}&ordem_producao=${encodeURIComponent(ordem_producao)}`;
-            // alert(url);
             window.location.href = url;
         }
     </script>

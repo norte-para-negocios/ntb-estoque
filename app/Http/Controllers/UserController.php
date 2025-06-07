@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\UserMailAfterCreate;
+use App\Models\Loja;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -10,6 +11,11 @@ use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -46,6 +52,11 @@ class UserController extends Controller
             $user->email = $request->get('email');
             $user->password = $pass;
             $user->save();
+
+            if ($request->has('lojas')) {
+                $user->lojas()->sync($request->get('lojas'));
+            }
+
             Mail::to($user->email)->send(new UserMailAfterCreate($user, $pass));
             return redirect()->route('usuario.index')->with('success', 'Registro cadastrado com sucesso!');
         } catch (\Throwable $th) {
@@ -81,6 +92,9 @@ class UserController extends Controller
                 'email' => $request->get('email'),
             ];
             $user->update($update);
+            if ($request->has('lojas')) {
+                $user->lojas()->sync($request->get('lojas'));
+            }
             return redirect()->route('usuario.index')->with('success', 'Registro atualizado com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
@@ -97,6 +111,17 @@ class UserController extends Controller
             return redirect()->route('usuario.index')->with('success', 'Registro excluído com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
+        }
+    }
+
+    public function setCurrentLoja(User $user, Loja $loja)
+    {
+        try {
+            $user->current_loja_id = $loja->id;
+            $user->save();
+            return response(['success', 'Registro atualizado com sucesso!']);
+        } catch (\Throwable $th) {
+            return response(['error', $th->getMessage()]);
         }
     }
 }

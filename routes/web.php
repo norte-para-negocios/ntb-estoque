@@ -1,11 +1,11 @@
 <?php
 
-use App\Http\Controllers\MovimentacaoEstoqueController;
-use App\Http\Controllers\OrdemProController;
+use App\Http\Controllers\LojaController;
+use App\Http\Controllers\NotafiscalController;
+use App\Http\Controllers\OrdemProducaoController;
+use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\UserController;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [\App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('welcome');
@@ -17,25 +17,28 @@ Route::middleware(['auth'])->group(function () {
 
     // Usuários
     Route::resource('usuario', UserController::class)->parameter('usuario', 'user');
+    Route::post('/usuario/{user}/loja/{loja}', [UserController::class, 'setCurrentLoja'])->name('usuario.loja');
+
+    // Lojas
+    Route::resource('loja', LojaController::class);
 
     // Notas fiscais
-    Route::get('/notasfiscais', [App\Http\Controllers\NotafiscalController::class, 'index'])->name('notafiscal.index');
-    Route::get('/notasfiscais/itens/{nIdReceb}', [App\Http\Controllers\NotafiscalController::class, 'itens'])->name('notafiscal.itens');
-    Route::get('/notasfiscais/itens/{nIdReceb}/imprimir/{cCodigoProduto?}', [App\Http\Controllers\NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
+    Route::get('/notasfiscais', [NotafiscalController::class, 'index'])->name('notafiscal.index');
+    Route::get('/notasfiscais/itens/{nIdReceb}', [NotafiscalController::class, 'itens'])->name('notafiscal.itens');
+    Route::get('/notasfiscais/itens/{nIdReceb}/imprimir/{cCodigoProduto?}', [NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
 
     // Ordens de produção
-    Route::get('/ordenspro', [App\Http\Controllers\OrdemProController::class, 'index'])->name('ordemproducao.index');
-    Route::post('/ordenspro', [App\Http\Controllers\OrdemProController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
-    Route::get('/ordenspro/validade', [App\Http\Controllers\OrdemProController::class, 'getValidade'])->name('ordemproducao.getValidade');
-    Route::get('/ordenspro/imprimir', [App\Http\Controllers\OrdemProController::class, 'imprimir'])->name('etiqueta.imprimir');
+    Route::get('/ordenspro', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
+    Route::post('/ordenspro', [OrdemProducaoController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
+    Route::get('/ordenspro/validade', [OrdemProducaoController::class, 'getValidade'])->name('ordemproducao.getValidade');
+    Route::get('/ordenspro/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('etiqueta.imprimir');
 
     // Transferências
     Route::prefix('transferencia')->group(function () {
-        Route::get('/', [App\Http\Controllers\MovimentacaoEstoqueController::class, 'index'])->name('transferencia.index');
-        Route::get('/create', [MovimentacaoEstoqueController::class, 'create'])->name('transferencia.create');
-        Route::post('/store', [MovimentacaoEstoqueController::class, 'store'])->name('transferencia.store');
+        Route::get('/', [TransferenciaController::class, 'index'])->name('transferencia.index');
+        Route::get('/create', [TransferenciaController::class, 'create'])->name('transferencia.create');
+        Route::post('/store', [TransferenciaController::class, 'store'])->name('transferencia.store');
         // Rota para buscar produto via QR Code
-        Route::get('/produto/buscar-por-qrcode/{codigo}', [MovimentacaoEstoqueController::class, 'buscarProdutoPorQrCode']);
+        Route::get('/produto/buscar-por-qrcode/{codigo}', [TransferenciaController::class, 'buscarProdutoPorQrCode']);
     });
-
 });

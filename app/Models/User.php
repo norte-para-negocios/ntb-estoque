@@ -6,6 +6,8 @@ namespace App\Models;
 
 use App\Mail\UserMailAfterCreate;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -23,6 +25,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'current_loja_id'
     ];
 
     /**
@@ -46,5 +49,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function currentLoja():BelongsTo
+    {
+        return $this->belongsTo(Loja::class, 'current_loja_id');
+    }
+
+    public function lojas(): BelongsToMany
+    {
+        return $this->belongsToMany(Loja::class);
     }
 }
