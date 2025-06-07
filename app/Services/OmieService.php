@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Transferencia;
 use Carbon\Carbon;
 use DateTime;
 use Illuminate\Support\Facades\Cache;
@@ -122,7 +123,6 @@ class OmieService
     {
         $ordenspro = [];
         $response = $this->getOrds($dataInicio, $dataFinal, $pagina);
-
         if (isset($response->cadastros) && count($response->cadastros) > 0) {
             if ($response->total_de_paginas == 1) {
                 $ordenspro = (array)$response->cadastros;
@@ -133,52 +133,53 @@ class OmieService
                 }
             }
         }
-
         return $ordenspro;
     }
 
     public function getOrds(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
         $chave = "getOrdensPro-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
-        return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
-            $url = $this->urlBase . 'v1/produtos/op/';
+        // return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
+        $url = $this->urlBase . 'v1/produtos/op/';
 
-            $data = [
-                "call" => "ListarOrdemProducao",
-                "app_key" => config('omie.app_key'),
-                "app_secret" => config('omie.app_secret'),
-                "param" => [
-                    [
-                        "pagina" => $pagina,
-                        "registros_por_pagina" => 50,
-                        "dDtConclusaoDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
-                        "dDtConclusaoAte" => Carbon::parse($dataFinal)->format('d/m/Y')
-                    ]
+        $data = [
+            "call" => "ListarOrdemProducao",
+            "app_key" => config('omie.app_key'),
+            "app_secret" => config('omie.app_secret'),
+            "param" => [
+                [
+                    "pagina" => $pagina,
+                    "registros_por_pagina" => 50,
+                    // "dDtConclusaoDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
+                    // "dDtConclusaoAte" => Carbon::parse($dataFinal)->format('d/m/Y')
+                    "ordenar_por" => "dInclusao",
+                    "ordem_decrescente" => "S"
                 ]
-            ];
+            ]
+        ];
 
-            try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json'
-                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
-                if ($response->status() === 200) {
-                    return $response->object();
-                } else {
-                    Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
-                        'statusCode' => $response->status(),
-                        'response' => $response->body(),
-                    ]);
-                }
-            } catch (\Throwable $th) {
-                Log::critical($th->getMessage(), [
-                    'Code' => $th->getCode(),
-                    'File' => $th->getFile(),
-                    'Line' => $th->getLine()
+            if ($response->status() === 200) {
+                return $response->object();
+            } else {
+                Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
                 ]);
             }
-            return new stdClass();
-        });
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
+        // });
     }
 
     //Consulta Produto
@@ -223,5 +224,157 @@ class OmieService
             }
             return new stdClass();
         });
+    }
+
+    public function getConsultaProdutoCodigo(string $codigo): object
+    {
+        $chave = "getConsultaProdutoCodigo-" . $codigo;
+        return Cache::remember($chave, 3600, function () use ($codigo) {
+            $url = $this->urlBase . 'v1/geral/produtos/';
+
+            $data = [
+                "call" => "ConsultarProduto",
+                "app_key" => config('omie.app_key'),
+                "app_secret" => config('omie.app_secret'),
+                "param" => [
+                    [
+                        "codigo_produto" => 0,
+                        "codigo_produto_integracao" => "",
+                        "codigo" => $codigo,
+                    ]
+                ]
+            ];
+
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    Log::critical('OMIE - getConsultaProduto - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
+                ]);
+            }
+            return new stdClass();
+        });
+    }
+
+
+    //Listar Local Estoque
+    public function getLocaisEstoque(): array
+    {
+
+        $localEstoque = [];
+        $response = $this->getLocais();
+
+        if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
+            if ($response->nTotPaginas == 1) {
+                $localEstoque = (array)$response->locaisEncontrados;
+            } else {
+                $localEstoque = (array)$response->locaisEncontrados;
+                for ($i = 2; $i <= $response->nTotPaginas; $i++) {
+                    $localEstoque = array_merge($localEstoque, (array)$this->getLocais($i)->locaisEncontrados);
+                }
+            }
+        }
+
+        return $localEstoque;
+    }
+
+    public function getLocais(): object
+    {
+
+        $url = $this->urlBase . 'v1/estoque/local/';
+
+        $data = [
+            "call" => "ListarLocaisEstoque",
+            "app_key" => config('omie.app_key'),
+            "app_secret" => config('omie.app_secret'),
+            "param" => [
+                [
+                    "nPagina" => 1,
+                    "nRegPorPagina" => 20
+
+                ]
+            ]
+        ];
+        //dd(json_encode($data), $url);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+            //dd($response);
+            if ($response->status() === 200) {
+                return $response->object();
+            } else {
+                Log::critical('OMIE - getLocalEstoque - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+
+        return new stdClass();
+    }
+
+    public function createTransferencia(Transferencia $transferencia): object
+    {
+        $url = $this->urlBase . 'v1/estoque/ajuste/';
+        $data = [
+            "call" => "IncluirAjusteEstoque",
+            "app_key" => config('omie.app_key'),
+            "app_secret" => config('omie.app_secret'),
+            "param" => [
+                [
+                    "codigo_local_estoque" => $transferencia->local_origem_id,
+                    "id_prod" => $transferencia->produto_id,
+                    "data" => $transferencia->data,
+                    "quan" => $transferencia->quantidade,
+                    "obs" => "NTB - Estoque #{$transferencia->id}",
+                    "origem" => "AJU",
+                    "tipo" => "TRF",
+                    "motivo" => $transferencia->motivo,
+                    "valor" => $transferencia->valor_unitario
+                ]
+            ]
+        ];
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            if ($response->status() === 200) {
+                return $response->object();
+            } else {
+                Log::critical('OMIE - createTransferencia - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+
+        return new stdClass();
     }
 }
