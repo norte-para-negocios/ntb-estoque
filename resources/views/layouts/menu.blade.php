@@ -22,7 +22,7 @@
 </div>
 
 <div class="d-grid gap-2 mb-2">
-    <a href="{{ route('notafiscal.index') }}" class="btn btn-secondary text-start">
+    <a href="{{ route('transferencia.index') }}" class="btn btn-secondary text-start">
         <i class="fas fa-truck me-3"></i>
         Transferências
     </a>

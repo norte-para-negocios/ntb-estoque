@@ -224,4 +224,112 @@ class OmieService
             return new stdClass();
         });
     }
+
+    public function getConsultaProdutoCodigo(string $codigo): object
+    {
+        $chave = "getConsultaProdutoCodigo-" . $codigo;
+        return Cache::remember($chave, 3600, function () use ($codigo) {
+            $url = $this->urlBase . 'v1/geral/produtos/';
+
+            $data = [
+                "call" => "ConsultarProduto",
+                "app_key" => config('omie.app_key'),
+                "app_secret" => config('omie.app_secret'),
+                "param" => [
+                    [
+                        "codigo_produto" => 0,
+                        "codigo_produto_integracao" => "",
+                        "codigo" => $codigo,
+                    ]
+                ]
+            ];
+
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    Log::critical('OMIE - getConsultaProduto - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
+                ]);
+            }
+            return new stdClass();
+        });
+    }
+
+
+    //Listar Local Estoque
+    public function getLocaisEstoque(): array
+    {
+
+        $localEstoque = [];
+        $response = $this->getLocais();
+
+        if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
+            if ($response->nTotPaginas == 1) {
+                $localEstoque = (array)$response->locaisEncontrados;
+            } else {
+                $localEstoque = (array)$response->locaisEncontrados;
+                for ($i = 2; $i <= $response->nTotPaginas; $i++) {
+                    $localEstoque = array_merge($localEstoque, (array)$this->getLocais($i)->locaisEncontrados);
+                }
+            }
+        }
+
+        return $localEstoque;
+    }
+
+    public function getLocais(): object
+    {
+
+        $url = $this->urlBase . 'v1/estoque/local/';
+
+        $data = [
+            "call" => "ListarLocaisEstoque",
+            "app_key" => config('omie.app_key'),
+            "app_secret" => config('omie.app_secret'),
+            "param" => [
+                [
+                    "nPagina" => 1,
+                    "nRegPorPagina" => 20
+
+                ]
+            ]
+        ];
+        //dd(json_encode($data), $url);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            
+            //dd($response);        
+            if ($response->status() === 200) {
+                return $response->object();
+            } else {
+                Log::critical('OMIE - getLocalEstoque - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+      
+        return new stdClass();
+    }
 }
