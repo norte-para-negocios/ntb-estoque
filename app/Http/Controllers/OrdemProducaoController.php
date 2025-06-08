@@ -6,6 +6,7 @@ use App\Models\OrdemProducao;
 use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use PDF;
 
 class OrdemProducaoController extends Controller
@@ -20,10 +21,11 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
-        $data_inicio = Carbon::parse($request->get('data_inicio'));
-        $data_final = Carbon::parse($request->get('data_final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         $ordem_producao = $request->get('ordem_producao');
 
+        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
         $ops = [];
 
         $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
@@ -40,6 +42,7 @@ class OrdemProducaoController extends Controller
 
     public function sincValidade(Request $request)
     {
+
         $numOrdem = $request->get("num_ordem");
         $validadeRequest = $request->get("validade");
         $op = OrdemProducao::where('num_ordem', $numOrdem)->first();
@@ -48,7 +51,10 @@ class OrdemProducaoController extends Controller
             return $op;
         } else {
             return OrdemProducao::updateOrCreate(
-                ['num_ordem' => $numOrdem],
+                [
+                    'num_ordem' => $numOrdem,
+                    'loja_id' => Auth::user()->current_loja_id,
+                ],
                 ['validade' => $validadeRequest]
             );
         }

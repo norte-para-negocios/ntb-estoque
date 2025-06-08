@@ -22,14 +22,14 @@
                                         <label for="data_inicio" class="form-label">Data Início</label>
                                         <input title="Data criação Omie" type="date" class="form-control"
                                             id="data_inicio" name="data_inicio"
-                                            value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
+                                            value="{{ session('inicio') ?? date('Y-m-d') }}">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="mb-3">
                                         <label for="data_final" class="form-label">Data Final</label>
                                         <input type="date" class="form-control" id="data_final" name="data_final"
-                                            value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
+                                            value="{{ session('final') ?? date('Y-m-d') }}">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
