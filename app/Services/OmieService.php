@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Helpers\Constants;
 use App\Models\Transferencia;
 use Carbon\Carbon;
 use DateTime;
+use Exception;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,43 +17,62 @@ class OmieService
 {
     private $urlBase = "https://app.omie.com.br/api/";
 
+    protected $key;
+    protected $secret;
+    protected $loja_id;
+
+    private function init()
+    {
+        $user = Auth::user();
+        if ($user && $user->loja && $user->loja->omie_app_key !== "" && $user->loja->omie_app_secret !== "") {
+            $this->key = $user->loja->omie_app_key;
+            $this->secret = $user->loja->omie_app_secret;
+            $this->loja_id = $user->loja->id;
+        } else {
+            throw new Exception("APP_KEY e APP_SECRET não localizados!");
+        }
+    }
+
     public function getConsultarRecebimento($nIdReceb): object
     {
-        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
-
-        $data = [
-            "call" => "ConsultarRecebimento",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
-            "param" => [
-                [
-                    "nIdReceb" => $nIdReceb
+        $this->init();
+        $chave = "getConsultarRecebimento-" . $this->loja_id . $nIdReceb;
+        return Cache::remember($chave, 1800, function () use ($nIdReceb) {
+            $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+            $data = [
+                "call" => "ConsultarRecebimento",
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
+                "param" => [
+                    [
+                        "nIdReceb" => $nIdReceb
+                    ]
                 ]
-            ]
-        ];
+            ];
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-
-
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
+                } else {
+                    Log::critical('OMIE - getConsultarRecebimento - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
                 ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return new stdClass();
+            return new stdClass();
+        });
     }
 
     public function getNotasFiscais(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): array
@@ -72,22 +94,22 @@ class OmieService
 
     private function getNFes(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
-        $chave = "getNotasFiscais-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
-
-        return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
+        $this->init();
+        $chave = "getNFes-" . $this->loja_id . Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_YMD) . '-' . Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_YMD) . $pagina;
+        return Cache::remember($chave, 1800, function () use ($dataInicio, $dataFinal, $pagina) {
             $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
 
             $data = [
                 "call" => "ListarRecebimentos",
-                "app_key" => config('omie.app_key'),
-                "app_secret" => config('omie.app_secret'),
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
                 "param" => [
                     [
                         "nPagina" => $pagina,
                         "nRegistrosPorPagina" => 50,
                         "cExibirDetalhes" => "S",
-                        "dtAltDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
-                        "dtAltAte" => Carbon::parse($dataFinal)->format('d/m/Y'),
+                        "dtAltDe" => Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_PT_BR),
+                        "dtAltAte" => Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_PT_BR),
                         "hrAltDe" => "00:00:00",
                         "hrAltAte" => "23:59:59",
                     ]
@@ -101,8 +123,10 @@ class OmieService
 
                 if ($response->status() === 200) {
                     return $response->object();
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
                 } else {
-                    Log::critical('OMIE - getNotasFiscais - Retorno inexperado', [
+                    Log::critical('OMIE - getNFes - Retorno inexperado', [
                         'statusCode' => $response->status(),
                         'response' => $response->body(),
                     ]);
@@ -138,61 +162,64 @@ class OmieService
 
     public function getOrds(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
-        $chave = "getOrdensPro-" . Carbon::parse($dataInicio)->format('d/m/Y') . '-' . Carbon::parse($dataFinal)->format('d/m/Y') . $pagina;
-        // return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
-        $url = $this->urlBase . 'v1/produtos/op/';
-
-        $data = [
-            "call" => "ListarOrdemProducao",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
-            "param" => [
-                [
-                    "pagina" => $pagina,
-                    "registros_por_pagina" => 50,
-                    // "dDtConclusaoDe" => Carbon::parse($dataInicio)->format('d/m/Y'),
-                    // "dDtConclusaoAte" => Carbon::parse($dataFinal)->format('d/m/Y')
-                    "ordenar_por" => "dInclusao",
-                    "ordem_decrescente" => "S"
+        $this->init();
+        $chave = "getOrds-" . $this->loja_id . Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_YMD) . '-' . Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_YMD) . $pagina;
+        return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
+            $url = $this->urlBase . 'v1/produtos/op/';
+            $data = [
+                "call" => "ListarOrdemProducao",
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
+                "param" => [
+                    [
+                        "pagina" => $pagina,
+                        "registros_por_pagina" => 50,
+                        "dDtConclusaoDe" => Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_PT_BR),
+                        "dDtConclusaoAte" => Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_PT_BR),
+                        "ordenar_por" => "dInclusao",
+                        "ordem_decrescente" => "S"
+                    ]
                 ]
-            ]
-        ];
+            ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
+                } {
+                    Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
                 ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return new stdClass();
-        // });
+            return new stdClass();
+        });
     }
 
     //Consulta Produto
     public function getConsultaProduto(string $codigo_produto): object
     {
-        $chave = "ConsultarProduto-" . $codigo_produto;
-        return Cache::remember($chave, 3600, function () use ($codigo_produto) {
+        $this->init();
+        $chave = "getConsultaProduto-" . $this->loja_id . $codigo_produto;
+        return Cache::remember($chave, 1800, function () use ($codigo_produto) {
             $url = $this->urlBase . 'v1/geral/produtos/';
 
             $data = [
                 "call" => "ConsultarProduto",
-                "app_key" => config('omie.app_key'),
-                "app_secret" => config('omie.app_secret'),
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
                 "param" => [
                     [
                         "codigo_produto" => $codigo_produto,
@@ -209,7 +236,9 @@ class OmieService
 
                 if ($response->status() === 200) {
                     return $response->object();
-                } else {
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
+                } {
                     Log::critical('OMIE - getConsultaProduto - Retorno inexperado', [
                         'statusCode' => $response->status(),
                         'response' => $response->body(),
@@ -228,14 +257,15 @@ class OmieService
 
     public function getConsultaProdutoCodigo(string $codigo): object
     {
-        $chave = "getConsultaProdutoCodigo-" . $codigo;
-        return Cache::remember($chave, 3600, function () use ($codigo) {
+        $this->init();
+        $chave = "getConsultaProdutoCodigo-" . $this->loja_id . $codigo;
+        return Cache::remember($chave, 1800, function () use ($codigo) {
             $url = $this->urlBase . 'v1/geral/produtos/';
 
             $data = [
                 "call" => "ConsultarProduto",
-                "app_key" => config('omie.app_key'),
-                "app_secret" => config('omie.app_secret'),
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
                 "param" => [
                     [
                         "codigo_produto" => 0,
@@ -252,6 +282,8 @@ class OmieService
 
                 if ($response->status() === 200) {
                     return $response->object();
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
                 } else {
                     Log::critical('OMIE - getConsultaProduto - Retorno inexperado', [
                         'statusCode' => $response->status(),
@@ -273,10 +305,8 @@ class OmieService
     //Listar Local Estoque
     public function getLocaisEstoque(): array
     {
-
         $localEstoque = [];
         $response = $this->getLocais();
-
         if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
             if ($response->nTotPaginas == 1) {
                 $localEstoque = (array)$response->locaisEncontrados;
@@ -287,60 +317,60 @@ class OmieService
                 }
             }
         }
-
         return $localEstoque;
     }
 
     public function getLocais(): object
     {
+        $this->init();
+        $chave = "getLocais-" . $this->loja_id;
+        return Cache::remember($chave, 1800, function () {
+            $url = $this->urlBase . 'v1/estoque/local/';
+            $data = [
+                "call" => "ListarLocaisEstoque",
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
+                "param" => [
+                    [
+                        "nPagina" => 1,
+                        "nRegPorPagina" => 20
 
-        $url = $this->urlBase . 'v1/estoque/local/';
-
-        $data = [
-            "call" => "ListarLocaisEstoque",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
-            "param" => [
-                [
-                    "nPagina" => 1,
-                    "nRegPorPagina" => 20
-
+                    ]
                 ]
-            ]
-        ];
-        //dd(json_encode($data), $url);
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-
-            //dd($response);
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                Log::critical('OMIE - getLocalEstoque - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
+            ];
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                    return new stdClass();
+                } else {
+                    Log::critical('OMIE - getLocais - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
                 ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-
-        return new stdClass();
+            return new stdClass();
+        });
     }
 
     public function createTransferencia(Transferencia $transferencia): object
     {
+        $this->init();
         $url = $this->urlBase . 'v1/estoque/ajuste/';
         $data = [
             "call" => "IncluirAjusteEstoque",
-            "app_key" => config('omie.app_key'),
-            "app_secret" => config('omie.app_secret'),
+            "app_key" => $this->key,
+            "app_secret" => $this->secret,
             "param" => [
                 [
                     "codigo_local_estoque" => $transferencia->local_origem_id,
@@ -361,6 +391,8 @@ class OmieService
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
             if ($response->status() === 200) {
                 return $response->object();
+            } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                return new stdClass();
             } else {
                 Log::critical('OMIE - createTransferencia - Retorno inexperado', [
                     'statusCode' => $response->status(),
@@ -374,7 +406,6 @@ class OmieService
                 'Line' => $th->getLine()
             ]);
         }
-
         return new stdClass();
     }
 }

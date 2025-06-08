@@ -52,11 +52,7 @@ class UserController extends Controller
             $user->email = $request->get('email');
             $user->password = $pass;
             $user->save();
-
-            if ($request->has('lojas')) {
-                $user->lojas()->sync($request->get('lojas'));
-            }
-
+            $user->lojas()->sync($request->get('lojas'));
             Mail::to($user->email)->send(new UserMailAfterCreate($user, $pass));
             return redirect()->route('usuario.index')->with('success', 'Registro cadastrado com sucesso!');
         } catch (\Throwable $th) {
@@ -92,9 +88,7 @@ class UserController extends Controller
                 'email' => $request->get('email'),
             ];
             $user->update($update);
-            if ($request->has('lojas')) {
-                $user->lojas()->sync($request->get('lojas'));
-            }
+            $user->lojas()->sync($request->get('lojas'));
             return redirect()->route('usuario.index')->with('success', 'Registro atualizado com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());

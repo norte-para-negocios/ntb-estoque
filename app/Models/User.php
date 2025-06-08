@@ -51,7 +51,7 @@ class User extends Authenticatable
         ];
     }
 
-    public function currentLoja():BelongsTo
+    public function loja():BelongsTo
     {
         return $this->belongsTo(Loja::class, 'current_loja_id');
     }

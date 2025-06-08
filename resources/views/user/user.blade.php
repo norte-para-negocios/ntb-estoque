@@ -34,17 +34,15 @@
                     <h4>LOJAS</h4>
                     <ul class="list-group">
                         @foreach (\App\Models\Loja::orderBy('nome_fantasia')->get() as $loja)
-                            <li class="list-group-item d-flex justify-content-start align-items-center">
-                                <span class="w-25">
-                                    {{ $loja->nome_fantasia }}
-                                </span>
-                                <span>
-                                    <div class="form-check form-switch py-2">
-                                        <input class="form-check-input" type="checkbox" id="loja-{{ $loja->id }}"
-                                            name="lojas[]" value="{{ $loja->id }}"
-                                            @if ($user->lojas->contains($loja->id)) checked @endif>
-                                    </div>
-                                </span>
+                            <li class="list-group-item">
+                                <div class="form-check form-switch fs-5">
+                                    <input class="form-check-input" type="checkbox" name="lojas[]"
+                                        value="{{ $loja->id }}" id="loja-{{ $loja->id }}"
+                                        @if ($user->lojas->contains($loja->id)) checked @endif>
+                                    <label class="form-check-label" for="loja-{{ $loja->id }}">
+                                        {{ $loja->nome_fantasia }}
+                                    </label>
+                                </div>
                             </li>
                         @endforeach
                     </ul>

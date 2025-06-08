@@ -50,4 +50,7 @@ class Constants
     ];
 
     const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+
+    const DATE_FORMAT_PT_BR = 'd/m/Y';
+    const DATE_FORMAT_YMD = 'Ymd';
 }

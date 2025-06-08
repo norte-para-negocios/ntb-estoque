@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\OmieService;
 use Carbon\Carbon;
+use App\Models\User;
+use App\Services\OmieService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Exception;
 use PDF;
 
 class NotafiscalController extends Controller

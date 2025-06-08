@@ -2,13 +2,13 @@
 
 @section('content')
     <div class="container">
-        <h2 class="mb-4">{{ __('Notas fiscais') }}</h2>
+        <h2 class="mb-3">{{ __('Notas fiscais') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small></h2>
 
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne"
-                        aria-expanded="false" aria-controls="collapseOne">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
                         <i class="fa-solid fa-filter me-2"></i>
                         FILTRO
                     </button>
@@ -54,50 +54,52 @@
         </div>
 
         <div class="card card-body mt-4">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <tbody>
-                        @if (isset($notasfiscais) && !empty($notasfiscais))
-                            @foreach ($notasfiscais as $nf)
-                                <tr>
-                                    <td class="px-0">
-                                        <div class="container">
-                                            <div class="row">
-                                                <div class="col-12 p-0">
-                                                    <div class="card card-body m-0">
-                                                        <h6>
-                                                            {{ $nf->cabec->cNome }}
-                                                        </h6>
-                                                        <p class="mb-0">
-                                                            Nº NFe: <strong>{{ $nf->cabec->cNumeroNFe ?? '' }}</strong>|
-                                                            Emissão:
-                                                            {{ $nf->cabec->dEmissaoNFe ?? '' }}
-                                                        </p>
-                                                        <p class="mt-1 mb-0">
-                                                            R$
-                                                            {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') ?? '' }}
-                                                        </p>
-                                                        <p class="my-1">
+            <table class="table table-hover table-borderless">
+                <tbody>
+                    @if (isset($notasfiscais) && !empty($notasfiscais))
+                        @foreach ($notasfiscais as $nf)
+                            <tr>
+                                <td class="px-2">
+                                    <div class="container">
+                                        <div class="row">
+                                            <div class="col-12 p-0">
+                                                <div class="card card-body m-0" style="background-color: #e4e9f5;">
+                                                    <div class="row">
+                                                        <div class="col-md-6 col-12">
+                                                            <h6>
+                                                                {{ $nf->cabec->cNome }}
+                                                            </h6>
+                                                            <p class="mb-0">
+                                                                <small>Nº NFe:</small>
+                                                                <strong>{{ $nf->cabec->cNumeroNFe ?? '' }}</strong>|
+                                                                <small>Emissão:</small> {{ $nf->cabec->dEmissaoNFe ?? '' }}
+                                                            </p>
+                                                            <p class="mt-1 mb-2">
+                                                                <small>Valor da NF:</small> R$
+                                                                {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') ?? '' }}
+                                                            </p>
+                                                        </div>
+                                                        <div class="col-md-6 col-12 text-end">
                                                             <a href="{{ route('notafiscal.itens', $nf->cabec->nIdReceb) }}"
                                                                 class="btn btn-secondary btn-sm">
                                                                 <i class="fas fa-eye"></i> Visualizar
                                                             </a>
-                                                        </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        @else
-                            <tr>
-                                <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                                    </div>
+                                </td>
                             </tr>
-                        @endif
-                    </tbody>
-                </table>
-            </div>
+                        @endforeach
+                    @else
+                        <tr>
+                            <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                        </tr>
+                    @endif
+                </tbody>
+            </table>
         </div>
     </div>
 @endsection
