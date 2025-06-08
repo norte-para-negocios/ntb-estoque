@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\OmieService;
 use Carbon\Carbon;
+use App\Models\User;
+use App\Services\OmieService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Exception;
 use PDF;
 
 class NotafiscalController extends Controller
@@ -19,8 +22,10 @@ class NotafiscalController extends Controller
 
     public function index(Request $request)
     {
-        $data_inicio = Carbon::parse($request->get('data_inicio'));
-        $data_final = Carbon::parse($request->get('data_final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
+
         $num_nfe = $request->get('num_nfe');
 
         $notasfiscais = [];

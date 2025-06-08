@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('ordem_producaos', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('loja_id');
-            $table->unsignedBigInteger('num_ordem');
+            $table->string('num_ordem', 60);
             $table->date('validade');
             $table->timestamps();
             $table->foreign('loja_id')->references('id')->on('lojas');
