@@ -60,11 +60,11 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 30%; padding: 0 2mm 0 1mm;">
-                            <p>
+                        <td style="width: 30%; padding: 0;">
+                            <p style="margin-bottom: 0; padding-bottom: 0;">
                                 {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
                             </p>
-                            <p style="font-size: 8pt;">
+                            <p style="font-size: 8pt; padding: 0; margin: 0; line-height: 8pt;">
                                 {{ substr(trim($etiqueta['codigo_produto']), 0, 16) }}
                             </p>
                         </td>
