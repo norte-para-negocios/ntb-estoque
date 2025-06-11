@@ -59,7 +59,7 @@
                             <p>
                                 {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
                             </p>
-                            <p style="font-size: 8pt;">Código: {{ trim($etiqueta['codigo_produto']) }}</p>
+                            <p style="font-size: 8pt;">{{ substr(trim($etiqueta['codigo_produto']), 0,16) }}</p>
                         </td>
                         <td style="width: 70%;">
                             <strong>Lote:</strong> {{ trim($etiqueta['lote']) }} <br>
