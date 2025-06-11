@@ -37,7 +37,12 @@
         }
 
         td {
+            border: 1px dashed #ccc;
             vertical-align: top;
+        }
+
+        tr {
+            border: 1px dashed #ccc;
         }
     </style>
 </head>
@@ -55,26 +60,40 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="width: 30%; padding: 0 2mm 0 1mm;">
-                            <p>
+                        <td style="width: 30%; padding: 0;">
+                            <p style="margin-bottom: 0; padding-bottom: 0;">
                                 {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
                             </p>
-                            <p style="font-size: 8pt;">
+                            <p style="font-size: 8pt; padding: 0; margin: 0; line-height: 8pt;">
                                 {{ substr(trim($etiqueta['codigo_produto']), 0, 16) }}
                             </p>
                         </td>
                         <td style="width: 70%;">
-                            <span style="margin-bottom: 2mm;">
-                                Lote: {{ substr(trim($etiqueta['lote']), 0, 19) }}
-                            </span>
-                            <br>
-                            <span style="margin-bottom: 2mm;">
-                                Quantidade: {{ substr(trim($etiqueta['quantidade']), 0, 13) }}
-                            </span>
-                            <br>
-                            <span style="margin-bottom: 2mm;">
-                                Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
-                            </span>
+                            @if ($etiqueta['fornecedor'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Fornec.: {{ substr(trim($etiqueta['fornecedor']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['nfe'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    NF: {{ substr(trim($etiqueta['nfe']), 0, 22) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['lote'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Lote: {{ substr(trim($etiqueta['lote']), 0, 19) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['quantidade'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Quant.: {{ substr(trim($etiqueta['quantidade']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['validade'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
+                                </span><br>
+                            @endif
                         </td>
                     </tr>
                     <tr>
