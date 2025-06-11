@@ -3,11 +3,8 @@
 namespace App\Http\Controllers;
 
 use Carbon\Carbon;
-use App\Models\User;
 use App\Services\OmieService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Exception;
 use PDF;
 
 class NotafiscalController extends Controller
@@ -81,6 +78,6 @@ class NotafiscalController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
-        return $pdf->stream('etiquetas_Nfe.pdf');
+        return $pdf->stream("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
     }
 }
