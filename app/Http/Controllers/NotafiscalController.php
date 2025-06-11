@@ -58,10 +58,12 @@ class NotafiscalController extends Controller
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
                     $etiquetas[] = [
                         'codigo_produto' => $produto->codigo ?? '',
-                        'descricao'   => $it->itensCabec->cDescricaoProduto ?? '',
-                        'lote'        => $recebimento->cabec->cNumeroNFe ?? '',
-                        'quantidade'  => $it->itensAjustes->nQtdeRecebida ?? '' . ' ' . $it->itensAjustes->cUnidade ?? '',
-                        'validade'    => $it->itensCabec->nIdValidade ?? '',
+                        'descricao'     => $it->itensCabec->cDescricaoProduto ?? '',
+                        'lote'          => "",
+                        'quantidade'    => (number_format(($it->itensAjustes->nQtdeRecebida ?? 0), 3, ',', '') . ' ' . ($produto->unidade ?? '')),
+                        'validade'      => $it->itensCabec->nIdValidade ?? '',
+                        'fornecedor'    => $recebimento->cabec->cNome ?? '',
+                        'nfe'           => intval($recebimento->cabec->cNumeroNFe),
                     ];
                 }
             }

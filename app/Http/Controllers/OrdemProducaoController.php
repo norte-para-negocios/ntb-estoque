@@ -78,8 +78,10 @@ class OrdemProducaoController extends Controller
                     'codigo_produto' => $produto->codigo ?? '',
                     'descricao'   => $produto->descricao ?? '',
                     'lote'        => $op->identificacao->cNumOP ?? '',
-                    'quantidade'  => $op->identificacao->nQtde ?? '' . ' ' . $produto->unidade ?? '',
+                    'quantidade'  => ($op->identificacao->nQtde ?? '') . ' ' . $produto->unidade ?? '',
                     'validade'    => $validade ? $validade->validade->format('d/m/Y') : '',
+                    'fornecedor'    => '',
+                    'nfe'           => '',
                 ];
             }
         }

@@ -69,17 +69,31 @@
                             </p>
                         </td>
                         <td style="width: 70%;">
-                            <span style="margin-bottom: 2mm;">
-                                Lote: {{ substr(trim($etiqueta['lote']), 0, 19) }}
-                            </span>
-                            <br>
-                            <span style="margin-bottom: 2mm;">
-                                Quantidade: {{ substr(trim($etiqueta['quantidade']), 0, 13) }}
-                            </span>
-                            <br>
-                            <span style="margin-bottom: 2mm;">
-                                Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
-                            </span>
+                            @if ($etiqueta['fornecedor'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Fornec.: {{ substr(trim($etiqueta['fornecedor']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['nfe'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    NF: {{ substr(trim($etiqueta['nfe']), 0, 22) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['lote'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Lote: {{ substr(trim($etiqueta['lote']), 0, 19) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['quantidade'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Quant.: {{ substr(trim($etiqueta['quantidade']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['validade'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
+                                </span><br>
+                            @endif
                         </td>
                     </tr>
                     <tr>
