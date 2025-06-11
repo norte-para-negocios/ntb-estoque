@@ -59,17 +59,27 @@
                             <p>
                                 {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
                             </p>
-                            <p style="font-size: 8pt;">{{ substr(trim($etiqueta['codigo_produto']), 0,16) }}</p>
+                            <p style="font-size: 8pt;">
+                                {{ substr(trim($etiqueta['codigo_produto']), 0, 16) }}
+                            </p>
                         </td>
                         <td style="width: 70%;">
-                            <strong>Lote:</strong> {{ trim($etiqueta['lote']) }} <br>
-                            <strong>Quant.:</strong> {{ trim($etiqueta['quantidade']) }} <br>
-                            <strong>Validade:</strong> {{ trim($etiqueta['validade']) }} <br>
+                            <span style="margin-bottom: 2mm;">
+                                Lote: {{ substr(trim($etiqueta['lote']), 0, 19) }}
+                            </span>
+                            <br>
+                            <span style="margin-bottom: 2mm;">
+                                Quantidade: {{ substr(trim($etiqueta['quantidade']), 0, 13) }}
+                            </span>
+                            <br>
+                            <span style="margin-bottom: 2mm;">
+                                Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
+                            </span>
                         </td>
                     </tr>
                     <tr>
                         <td colspan="2" style="vertical-align: bottom;">
-                            <small>CNPJ: {{ Auth::user()->loja->cnpj ?? '-' }}</small>
+                            <small>CNPJ:{{ Auth::user()->loja->cnpj ?? '-' }}</small>
                         </td>
                     </tr>
                 </tbody>
