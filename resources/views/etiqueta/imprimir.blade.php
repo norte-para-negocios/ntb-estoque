@@ -5,10 +5,100 @@
     <meta charset="UTF-8">
     <title>Etiqueta de Produto</title>
     <style>
-        @page {
+        * {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 10pt;
+        }
+
+        body {
             margin: 0;
             padding: 0;
-            /* size: 7cm 4cm; */
+        }
+
+        .container {
+            height: 4.36cm;
+            border: 1px dashed #ccc;
+            padding: 3mm;
+        }
+
+        table {
+            width: 100%;
+        }
+
+        .product {
+            /* margin-top: 2mm; */
+            /* font-size: 10pt; */
+        }
+
+        p {
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+
+        td {
+            vertical-align: top;
+        }
+    </style>
+</head>
+
+<body>
+    @foreach ($etiquetas as $etiqueta)
+        <div class="container">
+            <table aria-hidden="true">
+                <tbody>
+                    <tr>
+                        <td colspan="2" style="margin:0; padding: 0;">
+                            <div class="product">
+                                {{ substr($etiqueta['descricao'], 0, 38) }}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 30%; padding: 0 2mm 0 1mm;">
+                            <p>
+                                {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
+                            </p>
+                            <p style="font-size: 8pt;">Código: {{ trim($etiqueta['codigo_produto']) }}</p>
+                        </td>
+                        <td style="width: 70%;">
+                            <strong>Lote:</strong> {{ trim($etiqueta['lote']) }} <br>
+                            <strong>Quant.:</strong> {{ trim($etiqueta['quantidade']) }} <br>
+                            <strong>Validade:</strong> {{ trim($etiqueta['validade']) }} <br>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="vertical-align: bottom;">
+                            <small>CNPJ: {{ Auth::user()->loja->cnpj ?? '-' }}</small>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    @endforeach
+</body>
+
+</html>
+
+
+
+
+
+
+
+{{--
+
+<!DOCTYPE html>
+<html lang="pt_BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Etiqueta de Produto</title>
+    <style>
+        @page {
+            margin: 0;
+            padding: 5mm;
+            size: 7cm 4cm;
             width: 100%;
             height: 100%;
         }
@@ -21,15 +111,6 @@
             box-sizing: border-box;
             font-size: 7pt;
             line-height: 1.2;
-        }
-
-        .label-container {
-            display: flex;
-            flex-direction: row;
-            width: 100%;
-            height: 100%;
-            border: 1px dashed #ccc;
-            box-sizing: border-box;
         }
 
         .qrcode-section {
@@ -61,7 +142,7 @@
 
         .product-name {
             font-weight: bold;
-            font-size: 7pt;
+            font-size: 9pt;
             margin: 0 0 0.15cm 0;
             line-height: 1.1;
             word-wrap: break-word;
@@ -102,11 +183,11 @@
         /* Alternativa usando Table Layout (máxima compatibilidade) */
         .label-container-table {
             display: table;
-            width: 100%;
-            height: 100%;
+            size: 7cm 4cm;
             border: 1px dashed #ccc;
             box-sizing: border-box;
             table-layout: fixed;
+            background-color: darkorange;
         }
 
         .qrcode-section-table {
@@ -151,4 +232,4 @@
     @endforeach
 </body>
 
-</html>
+</html> --}}
