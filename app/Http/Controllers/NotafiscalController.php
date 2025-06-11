@@ -80,6 +80,6 @@ class NotafiscalController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
-        return $pdf->stream("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
+        return $pdf->download("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
     }
 }

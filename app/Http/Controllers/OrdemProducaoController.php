@@ -99,6 +99,6 @@ class OrdemProducaoController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
-        return $pdf->stream('etiquetas_op.pdf');
+        return $pdf->download('etiquetas_op.pdf');
     }
 }
