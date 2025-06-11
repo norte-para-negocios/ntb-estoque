@@ -37,7 +37,12 @@
         }
 
         td {
+            border: 1px dashed #ccc;
             vertical-align: top;
+        }
+
+        tr {
+            border: 1px dashed #ccc;
         }
     </style>
 </head>
