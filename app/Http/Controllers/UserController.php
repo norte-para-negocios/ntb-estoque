@@ -6,6 +6,7 @@ use App\Mail\UserMailAfterCreate;
 use App\Models\Loja;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
@@ -21,6 +22,10 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $query = User::orderBy('name');
         if ($request->filled('search')) {
             $query->where('name', 'like', "%{$request->get('search')}%")
@@ -35,6 +40,10 @@ class UserController extends Controller
      */
     public function create()
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $user = new User();
         $action = 'create';
         return view('user.user', compact('action', 'user'));
@@ -45,6 +54,10 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $pass = Str::random('20');
             $user = new User();
@@ -73,6 +86,10 @@ class UserController extends Controller
      */
     public function edit(User $user)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $action = 'edit';
         return view('user.user', compact('action', 'user'));
     }
@@ -82,6 +99,10 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $update = [
                 'name' => $request->get('name'),
@@ -100,6 +121,10 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $user->delete();
             return redirect()->route('usuario.index')->with('success', 'Registro excluído com sucesso!');

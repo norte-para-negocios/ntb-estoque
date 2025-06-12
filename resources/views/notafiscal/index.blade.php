@@ -81,8 +81,8 @@
                                                         </div>
                                                         <div class="col-md-6 col-12 text-end">
                                                             <a href="{{ route('notafiscal.itens', $nf->cabec->nIdReceb) }}"
-                                                                class="btn btn-secondary btn-sm">
-                                                                <i class="fas fa-eye"></i> Visualizar
+                                                                class="btn btn-secondary text-center">
+                                                                <i class="fas fa-eye me-2"></i> Visualizar
                                                             </a>
                                                         </div>
                                                     </div>

@@ -53,4 +53,11 @@ class Constants
 
     const DATE_FORMAT_PT_BR = 'd/m/Y';
     const DATE_FORMAT_YMD = 'Ymd';
+
+    const PERMISSOES = [
+        "Notas Fiscais",
+        "Ordens de Produção",
+        "Inventário",
+        "Transferência",
+    ];
 }

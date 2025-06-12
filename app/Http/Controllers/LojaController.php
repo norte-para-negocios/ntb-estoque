@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loja;
+use App\Services\CanService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class LojaController extends Controller
 {
@@ -17,6 +19,9 @@ class LojaController extends Controller
      */
     public function index(Request $request)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
         $query = Loja::orderBy('nome_fantasia');
         if ($request->filled('search')) {
             $query->where('cnpj', 'like', "%{$request->get('search')}%")
@@ -31,6 +36,9 @@ class LojaController extends Controller
      */
     public function create()
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
         $loja = new Loja();
         $action = 'create';
         return view('loja.loja', compact('action', 'loja'));
@@ -41,6 +49,10 @@ class LojaController extends Controller
      */
     public function store(Request $request)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $loja = new Loja();
             $loja->cnpj = $request->get('cnpj');
@@ -74,6 +86,10 @@ class LojaController extends Controller
      */
     public function edit(Loja $loja)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $action = 'edit';
         return view('loja.loja', compact('action', 'loja'));
     }
@@ -83,6 +99,10 @@ class LojaController extends Controller
      */
     public function update(Request $request, Loja $loja)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $update = [
                 'cnpj' => $request->get('cnpj'),
@@ -109,6 +129,10 @@ class LojaController extends Controller
      */
     public function destroy(Loja $loja)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $loja->delete();
             return redirect()->route('loja.index')->with('success', 'Registro excluído com sucesso!');

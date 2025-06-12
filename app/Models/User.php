@@ -25,7 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'current_loja_id'
+        'current_loja_id',
+        'perfil'
     ];
 
     /**
@@ -51,7 +52,7 @@ class User extends Authenticatable
         ];
     }
 
-    public function loja():BelongsTo
+    public function loja(): BelongsTo
     {
         return $this->belongsTo(Loja::class, 'current_loja_id');
     }
@@ -59,5 +60,18 @@ class User extends Authenticatable
     public function lojas(): BelongsToMany
     {
         return $this->belongsToMany(Loja::class);
+    }
+
+    public function permissoes(): BelongsToMany
+    {
+        return $this->belongsToMany(Permissao::class)->using(PermissaoUser::class)->withPivot('loja_id');
+    }
+
+    public function canPermissao($lojaId, $permissaoId)
+    {
+        return PermissaoUser::where('loja_id', $lojaId)
+            ->where('permissao_id', $permissaoId)
+            ->where('user_id', $this->id)
+            ->count() > 0;
     }
 }

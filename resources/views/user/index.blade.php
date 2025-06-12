@@ -30,8 +30,8 @@
             <table class="table table-hover" id="tableUsuarios" aria-hidden="true">
                 <thead>
                     <tr>
-                        <th>Usuário</th>
-                        <th>Ações</th>
+                        <th style="width: 80%;">Usuário</th>
+                        <th style="width: 20%;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -46,11 +46,11 @@
                             <td>
                                 <div class="row">
                                     <div class="col">
-                                        <a href="{{ route('usuario.edit', $usuario->id) }}" class="btn btn-secondary">
+                                        <a href="{{ route('usuario.edit', $usuario->id) }}" class="btn btn-secondary m-1">
                                             <i class="fas fa-pencil"></i>
                                         </a>
                                         <button onclick="deleteRegistro('{{ route('usuario.destroy', $usuario->id) }}')"
-                                            class="btn btn-danger text-white">
+                                            class="btn btn-danger text-white m-1">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>

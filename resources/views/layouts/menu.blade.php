@@ -27,28 +27,32 @@
 </div>
 
 <div class="d-grid gap-2 mb-2">
-    <a href="{{ route('notafiscal.index') }}" class="btn btn-secondary text-start disabled">
-        <i class="fas fa-cubes me-3"></i>Inventário
-    </a>
-</div>
-
-<div class="d-grid gap-2 mb-2">
-    <a href="{{ route('transferencia.index') }}" class="btn btn-secondary text-start disabled">
+    <a href="{{ route('transferencia.index') }}" class="btn btn-secondary text-start">
         <i class="fas fa-truck me-3"></i>Transferências
     </a>
 </div>
 
 <div class="d-grid gap-2 mb-2">
-    <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-building me-3"></i>Lojas
+    <a href="{{ route('notafiscal.index') }}" class="btn btn-secondary text-start disabled">
+        <i class="fas fa-cubes me-3"></i>Inventário
     </a>
 </div>
 
-<div class="d-grid gap-2 mb-2">
-    <a href="{{ route('usuario.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-users me-3"></i>Usuários
-    </a>
-</div>
+@if (Auth::user()->perfil === 'Admin')
+    <div class="d-grid gap-2 mb-2">
+        <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">
+            <i class="fas fa-building me-3"></i>Lojas
+        </a>
+    </div>
+@endif
+
+@if (Auth::user()->perfil === 'Admin')
+    <div class="d-grid gap-2 mb-2">
+        <a href="{{ route('usuario.index') }}" class="btn btn-secondary text-start">
+            <i class="fas fa-users me-3"></i>Usuários
+        </a>
+    </div>
+@endif
 
 <div class="d-grid gap-2 mb-2">
     <a href="{{ route('logout') }}" class="btn btn-secondary text-start"
