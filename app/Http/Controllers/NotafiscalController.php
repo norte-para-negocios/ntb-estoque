@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CanService;
 use Carbon\Carbon;
 use App\Services\OmieService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use PDF;
 
 class NotafiscalController extends Controller
@@ -19,6 +21,10 @@ class NotafiscalController extends Controller
 
     public function index(Request $request)
     {
+        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Notas Fiscais!");
+        }
+
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
@@ -42,12 +48,20 @@ class NotafiscalController extends Controller
 
     public function itens(Request $request, $nIdReceb)
     {
+        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Notas Fiscais!");
+        }
+
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
         return view('notafiscal.itens', compact("recebimento"));
     }
 
     public function imprimir(Request $request, $nIdReceb, $nIdProduto = "")
     {
+        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Notas Fiscais!");
+        }
+
         $etiquetas = [];
 
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);

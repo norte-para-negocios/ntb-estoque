@@ -3,6 +3,7 @@
 use App\Http\Controllers\LojaController;
 use App\Http\Controllers\NotafiscalController;
 use App\Http\Controllers\OrdemProducaoController;
+use App\Http\Controllers\PermissaoController;
 use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,9 @@ Route::middleware(['auth'])->group(function () {
     // Usuários
     Route::resource('usuario', UserController::class)->parameter('usuario', 'user');
     Route::post('/usuario/{user}/loja/{loja}', [UserController::class, 'setCurrentLoja'])->name('usuario.loja');
+    Route::post('/usuario/{user}/permissao', [PermissaoController::class, 'attach'])->name('usuario.permissao.attach');
+    Route::delete('/usuario/{user}/loja/{loja}/permissao/{permissao}', [PermissaoController::class, 'detach'])->name('usuario.permissao.detach');
+
 
     // Lojas
     Route::resource('loja', LojaController::class);

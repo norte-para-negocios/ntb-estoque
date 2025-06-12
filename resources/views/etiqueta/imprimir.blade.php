@@ -71,12 +71,12 @@
                         <td style="width: 70%;">
                             @if ($etiqueta['fornecedor'] !== '')
                                 <span style="margin-bottom: 2mm;">
-                                    Fornec.: {{ substr(trim($etiqueta['fornecedor']), 0, 17) }}
+                                    Fornec.: {{ substr(trim($etiqueta['fornecedor']), 0, 16) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['nfe'] !== '')
                                 <span style="margin-bottom: 2mm;">
-                                    NF: {{ substr(trim($etiqueta['nfe']), 0, 22) }}
+                                    NF: {{ substr(trim($etiqueta['nfe']), 0, 21) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['lote'] !== '')

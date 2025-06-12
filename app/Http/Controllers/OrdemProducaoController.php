@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\OrdemProducao;
+use App\Services\CanService;
 use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,6 +22,10 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
+        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
+
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         $ordem_producao = $request->get('ordem_producao');
@@ -42,6 +47,9 @@ class OrdemProducaoController extends Controller
 
     public function sincValidade(Request $request)
     {
+        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
 
         $numOrdem = $request->get("num_ordem");
         $validadeRequest = $request->get("validade");
@@ -63,6 +71,10 @@ class OrdemProducaoController extends Controller
 
     public function imprimir(Request $request)
     {
+        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
+
         $data_inicio = Carbon::parse($request->get('data_inicio') ?? date('Y-m-d'));
         $data_final = Carbon::parse($request->get('data_final') ?? date('Y-m-d'));
         $ordem_producao = $request->query('ordem_producao');
