@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Helpers\Constants;
-use App\Models\Transferencia;
+use App\Models\Movimento;
 use Carbon\Carbon;
 use DateTime;
 use Exception;
@@ -320,7 +320,18 @@ class OmieService
         return $localEstoque;
     }
 
-    public function getLocais(): object
+    //Local Estoque
+    public function getLocalEstoque($codigo_local_estoque): null|object
+    {
+        foreach ($this->getLocaisEstoque() as $local) {
+            if ($local->codigo_local_estoque == $codigo_local_estoque) {
+                return $local;
+            }
+        }
+        return null;
+    }
+
+    private function getLocais(): object
     {
         $this->init();
         $chave = "getLocais-" . $this->loja_id;
@@ -334,7 +345,6 @@ class OmieService
                     [
                         "nPagina" => 1,
                         "nRegPorPagina" => 20
-
                     ]
                 ]
             ];
@@ -363,7 +373,7 @@ class OmieService
         });
     }
 
-    public function createTransferencia(Transferencia $transferencia): object
+    public function createTransferencia(Movimento $movimento): null|object
     {
         $this->init();
         $url = $this->urlBase . 'v1/estoque/ajuste/';
@@ -373,15 +383,16 @@ class OmieService
             "app_secret" => $this->secret,
             "param" => [
                 [
-                    "codigo_local_estoque" => $transferencia->local_origem_id,
-                    "id_prod" => $transferencia->produto_id,
-                    "data" => $transferencia->data,
-                    "quan" => $transferencia->quantidade,
-                    "obs" => "NTB - Estoque #{$transferencia->id}",
-                    "origem" => "AJU",
-                    "tipo" => "TRF",
-                    "motivo" => $transferencia->motivo,
-                    "valor" => $transferencia->valor_unitario
+                    "codigo_local_estoque" => $movimento->codigo_local_estoque,
+                    "id_prod" => $movimento->id_prod,
+                    "cod_int_ajuste" => $movimento->id,
+                    "data" => $movimento->data,
+                    "quan" => $movimento->quan,
+                    "obs" => $movimento->obs ?? "NTB - Estoque #{$movimento->id}",
+                    "origem" => $movimento->origem,
+                    "tipo" => $movimento->tipo,
+                    "motivo" => $movimento->motivo,
+                    "valor" => $movimento->valor
                 ]
             ]
         ];
@@ -392,7 +403,7 @@ class OmieService
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
-                return new stdClass();
+                return null;
             } else {
                 Log::critical('OMIE - createTransferencia - Retorno inexperado', [
                     'statusCode' => $response->status(),
@@ -406,6 +417,6 @@ class OmieService
                 'Line' => $th->getLine()
             ]);
         }
-        return new stdClass();
+        return null;
     }
 }

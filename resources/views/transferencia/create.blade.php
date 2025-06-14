@@ -8,14 +8,15 @@
             @csrf
 
             <div class="row mb-3">
-                <div class="col-md-4">
+                {{-- <div class="col-md-4">
                     <label for="tipo_movimento" class="form-label">Tipo do Movimento de Estoque</label>
                     <select name="tipo_movimento" id="tipo_movimento" class="form-select" required>
-                        <option value="transferencia">Transferência entre Locais</option>
-                        <option value="entrada">Entrada</option>
-                        <option value="saida">Saída</option>
+                        <option value="TRF">Transferência entre Locais</option>
+                        <option value="ENT">Entrada</option>
+                        <option value="SAI">Saída</option>
+                        <option value="SLD">Ajuste de Estoque</option>
                     </select>
-                </div>
+                </div> --}}
 
                 <div class="col-md-4">
                     <label for="data" class="form-label">Data</label>
@@ -142,7 +143,21 @@
 
 
     document.addEventListener('DOMContentLoaded', function() {
+
         document.getElementById('btn-ativar-camera').addEventListener('click', function() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({
+                        video: true
+                    })
+                    .then(stream => {
+                        document.querySelector("#video").srcObject = stream;
+                    })
+                    .catch(error => console.error("Erro ao acessar a câmera:", error));
+            } else {
+                console.error("API getUserMedia não suportada neste navegador.");
+            }
+
+
             const qrReader = document.getElementById('qr-reader');
             qrReader.style.display = 'block';
             console.log('Leitura QR');
@@ -177,7 +192,7 @@
     });
 
     function buscarProdutoPorQrCode(codigo) {
-        fetch(`/movimentacao/produto/buscar-por-qrcode/${codigo}`)
+        fetch(`/transferencia/produto/buscar-por-qrcode/${codigo}`)
             .then(response => response.json())
             .then(produto => {
                 if (produto.data.id) {

@@ -67,7 +67,7 @@
         </div>
 
         <div class="card card-body mt-4">
-            <table class="table table-hover table-borderless">
+            <table class="table table-hover table-borderless" aria-hidden="true">
                 <tbody>
                     @if (isset($ordenspro) && !empty($ordenspro))
                         @foreach ($ordenspro as $op)
@@ -88,17 +88,20 @@
                                                                 {{ $produto->descricao ?? '' }}
                                                             </h6>
                                                             <p class="mb-2">
-                                                                <small>Lote:</small> {{ $op->identificacao->cNumOP ?? '' }}<br>
+                                                                <small>Lote:</small>
+                                                                {{ $op->identificacao->cNumOP ?? '' }}<br>
                                                                 <small>Ordem de Produção:</small>
                                                                 {{ $op->identificacao->cNumOP ?? '' }}<br>
-                                                                <small>Quantidade:</small> {{ $op->identificacao->nQtde ?? '' }}
+                                                                <small>Quantidade:</small>
+                                                                {{ $op->identificacao->nQtde ?? '' }}
                                                                 ({{ $produto->unidade ?? '' }})
                                                             </p>
                                                         </div>
 
                                                         <div class="col">
                                                             <div class="mb-3">
-                                                                <label for="data_validade" class="form-label mb-0">Validade:</label>
+                                                                <label for="data_validade"
+                                                                    class="form-label mb-0">Validade:</label>
                                                                 <input type="date" class="form-control"
                                                                     id="data_validade" name="data_validade"
                                                                     value="{{ \App\Models\OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)->first()->validade ?? '' }}"
