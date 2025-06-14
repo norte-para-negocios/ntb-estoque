@@ -71,7 +71,7 @@
                         <td style="width: 70%;">
                             @if ($etiqueta['fornecedor'] !== '')
                                 <span style="margin-bottom: 2mm;">
-                                    Fornec.: {{ substr(trim($etiqueta['fornecedor']), 0, 16) }}
+                                    {{ substr(trim($etiqueta['fornecedor']), 0, 25) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['nfe'] !== '')
