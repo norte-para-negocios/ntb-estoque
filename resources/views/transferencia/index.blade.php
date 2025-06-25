@@ -117,6 +117,7 @@
                     @endif
                 </tbody>
             </table>
+            {{ $transferencias->links() }}
         </div>
     </div>
 @endsection

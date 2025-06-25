@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Movimento extends Model
 {
     protected $fillable = [
+        'loja_id',
         'codigo_local_estoque',
         'id_prod',
         'data',
