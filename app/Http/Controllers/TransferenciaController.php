@@ -25,7 +25,7 @@ class TransferenciaController extends Controller
      */
     public function index()
     {
-        $transferencias = Movimento::all();
+        $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)->orderBy('data', 'desc')->paginate(10);
         return view('transferencia.index', compact('transferencias'));
     }
 
