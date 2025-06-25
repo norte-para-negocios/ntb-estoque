@@ -30,20 +30,24 @@ class NotafiscalController extends Controller
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
         $num_nfe = $request->get('num_nfe');
+        $fornecedor = $request->get('fornecedor') ?? '';
 
         $notasfiscais = [];
         $nfes = $this->omie->getNotasFiscais($data_inicio, $data_final);
 
-        if ($request->filled("num_nfe")) {
+        if ($request->filled("num_nfe") || $request->filled("fornecedor")) {
             foreach ($nfes as $nfe) {
-                if ((int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) {
+                if ($request->filled("num_nfe") && (int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) {
+                    array_push($notasfiscais, $nfe);
+                }
+                if ($request->filled("fornecedor") && (stripos($nfe->cabec->cNome, $fornecedor) !== false)) {
                     array_push($notasfiscais, $nfe);
                 }
             }
         } else {
             $notasfiscais = $nfes;
         }
-        return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe'));
+        return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe', 'fornecedor'));
     }
 
     public function itens(Request $request, $nIdReceb)
