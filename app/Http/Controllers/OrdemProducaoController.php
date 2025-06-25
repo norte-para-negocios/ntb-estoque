@@ -36,7 +36,7 @@ class OrdemProducaoController extends Controller
         $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
         foreach ($ordenspro as $op) {
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
-            if (($produto->tipoItem == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
+            if ($produto && ($produto->tipoItem??"" == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
                 array_push($ops, $op);
             }
         }
@@ -83,7 +83,7 @@ class OrdemProducaoController extends Controller
         foreach ($ordenspro as $op) {
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
 
-            if (($produto->tipoItem == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
+            if ($produto && ($produto->tipoItem??"" == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
                 $validade = OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)
                     ->first();
                 $etiquetas[] = [

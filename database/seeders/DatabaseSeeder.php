@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Rodolfo Melo',
             'email' => 'rmelo@bahiash.com.br',
             'password' => 'Omie@2025**',
+            'perfil' => 'Admin',
         ]);
 
         Loja::create([

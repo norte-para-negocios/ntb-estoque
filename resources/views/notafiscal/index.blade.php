@@ -67,16 +67,16 @@
                                                     <div class="row">
                                                         <div class="col-md-6 col-12">
                                                             <h6>
-                                                                {{ $nf->cabec->cNome }}
+                                                                {{ $nf->cabec->cNome ?? '-' }}
                                                             </h6>
                                                             <p class="mb-0">
                                                                 <small>Nº NFe:</small>
-                                                                <strong>{{ $nf->cabec->cNumeroNFe ?? '' }}</strong>|
+                                                                <strong>{{ $nf->cabec->cNumeroNFe ?? '-' }}</strong>|
                                                                 <small>Emissão:</small> {{ $nf->cabec->dEmissaoNFe ?? '' }}
                                                             </p>
                                                             <p class="mt-1 mb-2">
                                                                 <small>Valor da NF:</small> R$
-                                                                {{ number_format($nf->cabec->nValorNFe, 2, ',', '.') ?? '' }}
+                                                                {{ number_format(($nf->cabec->nValorNFe ?? 0), 2, ',', '.') ?? '' }}
                                                             </p>
                                                         </div>
                                                         <div class="col-md-6 col-12 text-end">

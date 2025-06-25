@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\TransferenciaCreateJob;
 use Illuminate\Http\Request;
-use App\Models\Transferencia;
+use App\Models\Movimento;
 use Illuminate\Support\Facades\DB;
 use App\Services\OmieService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class TransferenciaController extends Controller
@@ -23,7 +25,7 @@ class TransferenciaController extends Controller
      */
     public function index()
     {
-        $transferencias = Transferencia::all();
+        $transferencias = Movimento::all();
         return view('transferencia.index', compact('transferencias'));
     }
 
@@ -33,7 +35,6 @@ class TransferenciaController extends Controller
     public function create()
     {
         $locaisEstoque = $this->omie->getLocaisEstoque();
-
         return view('transferencia.create', compact('locaisEstoque'));
     }
 
@@ -43,7 +44,6 @@ class TransferenciaController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'tipo_movimento' => 'required|string',
             'data' => 'required|date',
             'estoque_origem' => 'required|integer',
             'estoque_destino' => 'required|integer',
@@ -54,21 +54,24 @@ class TransferenciaController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-
             foreach ($request->produtos as $index => $produtoId) {
-                $movimentacao = new Transferencia();
-                $movimentacao->produto_id = $produtoId;
-                $movimentacao->tipo_movimento = $request->tipo_movimento;
+                $movimentacao = new Movimento();
+                $movimentacao->loja_id = Auth::user()->current_loja_id;
+
+                $movimentacao->codigo_local_estoque = $request->estoque_origem;
+                $movimentacao->id_prod = $produtoId;
                 $movimentacao->data = $request->data;
-                $movimentacao->local_origem_id = $request->estoque_origem;
-                $movimentacao->local_destino_id = $request->estoque_destino;
+                $movimentacao->tipo = 'TRF';
+                $movimentacao->quan = $request->quantidades[$index];
+                $movimentacao->valor = $request->valores[$index];
+                $movimentacao->obs = $request->observacao ?? 'Transferências entre estoques - NTB Estoque';
+                $movimentacao->origem = 'AJU';
                 $movimentacao->motivo = $request->motivo;
-                $movimentacao->quantidade = $request->quantidades[$index];
-                $movimentacao->valor_unitario = $request->valores[$index];
-                $movimentacao->observacao = $request->observacao ?? null;
+                $movimentacao->codigo_local_estoque_destino = $request->estoque_destino;
                 $movimentacao->save();
 
                 // Aqui pode-se implementar lógica para atualizar os estoques de origem e destino
+                TransferenciaCreateJob::dispatch($movimentacao);
             }
         });
 
@@ -110,6 +113,7 @@ class TransferenciaController extends Controller
                 ]
             ], 200);
         } catch (\Exception $e) {
+
             // Log do erro para debug
             Log::error('Erro ao buscar produto por QR Code', [
                 'codigo' => $codigo,
