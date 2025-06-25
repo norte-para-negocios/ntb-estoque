@@ -2,13 +2,22 @@
 
 @section('content')
     <div class="container">
-        <h2 class="mb-4">{{ __('Transferências') }}</h2>
+
+        <h2 class="mb-4 d-flex justify-content-between align-items-center">
+            <span>
+                {{ __('Transferências') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+            </span>
+
+            <a href="{{ route('transferencia.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nova transferência
+            </a>
+        </h2>
 
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne"
-                        aria-expanded="false" aria-controls="collapseOne">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
                         <i class="fa-solid fa-filter me-2"></i>
                         FILTRO
                     </button>
@@ -21,8 +30,7 @@
                                     <div class="mb-3">
                                         <label for="data_inicio" class="form-label">Data</label>
                                         <input title="Data criação Omie" type="date" class="form-control"
-                                            id="data_inicio" name="data_inicio"
-                                            value="">
+                                            id="data_inicio" name="data_inicio" value="">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
@@ -37,9 +45,6 @@
                                         <button type="submit" class="btn btn-primary">
                                             <i class="fas fa-search"></i> Filtrar
                                         </button>
-                                        <a href="{{ route('transferencia.create') }}" class="btn btn-primary">
-                                            <i class="fas fa-plus"></i> Nova
-                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -55,7 +60,7 @@
                     <tbody>
                         @if (isset($transferencias) && !empty($transferencias))
                             @foreach ($transferencias as $tr)
-                            {{-- @dd($tr) --}}
+                                {{-- @dd($tr) --}}
                                 <tr>
                                     <td class="px-0">
                                         <div class="container">
@@ -63,10 +68,11 @@
                                                 <div class="col-12 p-0">
                                                     <div class="card card-body m-0">
                                                         <h6>
-                                                           Código Produto: {{ $tr->produto_id }}
+                                                            Código Produto: {{ $tr->produto_id }}
                                                         </h6>
                                                         <p class="mb-0">
-                                                            Tipo Movimento : <strong>{{ $tr->tipo_movimento ?? '' }}</strong>
+                                                            Tipo Movimento :
+                                                            <strong>{{ $tr->tipo_movimento ?? '' }}</strong>
                                                         </p>
                                                         <p class="mt-1 mb-0">
                                                             Data : <strong>{{ $tr->data ?? '' }}</strong>
@@ -84,7 +90,8 @@
                                                             Quantidade : <strong>{{ $tr->quantidade ?? '' }}</strong>
                                                         </p>
                                                         <p class="my-1">
-                                                            Valor Unitário : <strong>{{ $tr->valor_unitario ?? '' }}</strong>
+                                                            Valor Unitário :
+                                                            <strong>{{ $tr->valor_unitario ?? '' }}</strong>
                                                         </p>
                                                     </div>
                                                 </div>
