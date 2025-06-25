@@ -83,11 +83,11 @@
                                                     </p>
                                                     <p class="my-1">
                                                         Origem : <strong>{{ $tr->codigo_local_estoque ?? '' }} -
-                                                            {{ $local->descricao }}</strong>
+                                                            {{ $local->descricao ?? '' }}</strong>
                                                     </p>
                                                     <p class="my-1">
                                                         Destino : <strong>{{ $tr->codigo_local_estoque_destino ?? '' }} -
-                                                            {{ $localDestino->descricao }}</strong>
+                                                            {{ $localDestino->descricao ?? '' }}</strong>
                                                     </p>
                                                     <p class="my-1">
                                                         Motivo : <strong>{{ $tr->motivo ?? '' }}</strong>
@@ -96,12 +96,12 @@
                                                         Quantidade :
                                                         <strong>
                                                             {{ number_format($tr->quan, 3, ',', '.') }}
-                                                            {{ $produto->unidade }}
+                                                            {{ $produto->unidade ?? '' }}
                                                         </strong>
                                                     </p>
                                                     <p class="my-1">
                                                         Valor Unitário :
-                                                        <strong>{{ number_format($tr->valor, 3, ',', '.') }}</strong>
+                                                        <strong>{{ number_format(($tr->valor ?? 0), 3, ',', '.') }}</strong>
                                                     </p>
                                                 </div>
                                             </div>
