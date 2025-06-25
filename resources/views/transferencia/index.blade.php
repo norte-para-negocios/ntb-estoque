@@ -2,9 +2,15 @@
 
 @section('content')
     <div class="container">
-        <h2 class="mb-4">
-            {{ __('Transferências') }}
-            <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+
+        <h2 class="mb-4 d-flex justify-content-between align-items-center">
+            <span>
+                {{ __('Transferências') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+            </span>
+
+            <a href="{{ route('transferencia.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nova transferência
+            </a>
         </h2>
 
         <div class="accordion" id="accordionExample">
@@ -39,9 +45,6 @@
                                         <button type="submit" class="btn btn-primary">
                                             <i class="fas fa-search"></i> Filtrar
                                         </button>
-                                        <a href="{{ route('transferencia.create') }}" class="btn btn-primary">
-                                            <i class="fas fa-plus"></i> Nova
-                                        </a>
                                     </div>
                                 </div>
                             </div>
