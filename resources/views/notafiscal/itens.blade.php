@@ -37,6 +37,7 @@
                                                     <h6>
                                                         <small>Produto:</small> {{ $produto->codigo ?? '' }} -
                                                         {{ $it->itensCabec->cDescricaoProduto }}
+                                                        {{ $produto->tipoItem ?? '' }}
                                                     </h6>
                                                     <p class="mb-2">
                                                         <small>Quantidade:</small> {{ $it->itensCabec->nQtdeNFe ?? '' }}

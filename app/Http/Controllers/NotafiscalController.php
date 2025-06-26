@@ -31,23 +31,70 @@ class NotafiscalController extends Controller
 
         $num_nfe = $request->get('num_nfe');
         $fornecedor = $request->get('fornecedor') ?? '';
+        $produto = $request->get('produto') ?? '';
+        $tipo = $request->get('tipo') ?? '';
+        $status = $request->get('status') ?? '';
 
         $notasfiscais = [];
         $nfes = $this->omie->getNotasFiscais($data_inicio, $data_final);
 
-        if ($request->filled("num_nfe") || $request->filled("fornecedor")) {
+        if ($request->filled("num_nfe") || $request->filled("fornecedor") || $request->filled("produto") || $request->filled("tipo") || $request->filled("status")) {
             foreach ($nfes as $nfe) {
-                if ($request->filled("num_nfe") && (int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) {
+                if (
+                    $request->filled("num_nfe") &&
+                    ((int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) &&
+                    (!in_array($nfe, $notasfiscais))
+                ) {
                     array_push($notasfiscais, $nfe);
                 }
-                if ($request->filled("fornecedor") && (stripos($nfe->cabec->cNome, $fornecedor) !== false)) {
+
+                if (
+                    $request->filled("fornecedor") &&
+                    (stripos($nfe->cabec->cNome, $fornecedor) !== false) &&
+                    (!in_array($nfe, $notasfiscais))
+                ) {
                     array_push($notasfiscais, $nfe);
+                }
+
+                if (
+                    $request->filled("status") &&
+                    (
+                        (((int)$nfe->cabec->cEtapa === 60) && ($status == "C")) ||
+                        (((int)$nfe->cabec->cEtapa !== 60) && ($status == "P"))
+                    ) &&
+                    (!in_array($nfe, $notasfiscais))
+                ) {
+                    array_push($notasfiscais, $nfe);
+                }
+
+                if ($request->filled("produto")) {
+                    foreach ($nfe->itensRecebimento as $item) {
+                        if (
+                            ((stripos($item->itensCabec->cDescricaoProduto, $produto) !== false) || (stripos($item->itensCabec->cCodigoProduto, $produto) !== false)) &&
+                            (!in_array($nfe, $notasfiscais))
+                        ) {
+                            array_push($notasfiscais, $nfe);
+                        }
+                    }
+                }
+
+                if ($request->filled("tipo")) {
+                    foreach ($nfe->itensRecebimento as $item) {
+                        $prod = $this->omie->getConsultaProduto($item->itensCabec->nIdProduto);
+                        if (
+                            isset($prod->tipoItem) &&
+                            ((int)$prod->tipoItem == (int)$tipo) &&
+                            (!in_array($nfe, $notasfiscais))
+                        ) {
+                            array_push($notasfiscais, $nfe);
+                        }
+                    }
                 }
             }
         } else {
             $notasfiscais = $nfes;
         }
-        return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe', 'fornecedor'));
+        return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe', 'fornecedor', 'produto', 'tipo', 'status'));
     }
 
     public function itens(Request $request, $nIdReceb)
