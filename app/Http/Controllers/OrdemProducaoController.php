@@ -22,12 +22,15 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
+        $inicio = Carbon::now();
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $data_final = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('final'));
+
+        // $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         $ordem_producao = $request->get('ordem_producao');
 
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
@@ -42,7 +45,9 @@ class OrdemProducaoController extends Controller
         }
         $ordenspro = $ops;
 
-        return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao'));
+        $tempo = $inicio->diffInSeconds(Carbon::now());
+
+        return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao', 'tempo'));
     }
 
     public function sincValidade(Request $request)
@@ -94,6 +99,7 @@ class OrdemProducaoController extends Controller
                     'validade'    => $validade ? $validade->validade->format('d/m/Y') : '',
                     'fornecedor'    => '',
                     'nfe'           => '',
+                    'quantidade'    => 1,
                 ];
             }
         }

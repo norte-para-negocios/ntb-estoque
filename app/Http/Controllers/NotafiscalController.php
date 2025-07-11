@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Nf;
 use App\Services\CanService;
 use Carbon\Carbon;
 use App\Services\OmieService;
@@ -107,6 +108,30 @@ class NotafiscalController extends Controller
         return view('notafiscal.itens', compact("recebimento"));
     }
 
+    public function setQuantidade(Request $request, string $nIdReceb, string $codigo)
+    {
+        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Notas Fiscais!");
+        }
+
+        $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $codigo)->first();
+
+        if ($nf && isset($nf->quantidade) && $nf->$nf == $request->get('quantidade')) {
+            return $nf;
+        } else {
+            return Nf::updateOrCreate(
+                [
+                    'loja_id' => Auth::user()->current_loja_id,
+                    'n_id_receb' => $nIdReceb,
+                    'produto_codigo' => $codigo,
+                ],
+                [
+                    'quantidade' => $request->get('quantidade')
+                ]
+            );
+        }
+    }
+
     public function imprimir(Request $request, $nIdReceb, $nIdProduto = "")
     {
         if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
@@ -119,6 +144,7 @@ class NotafiscalController extends Controller
 
         foreach ($recebimento->itensRecebimento as $it) {
             if ($it->itensCabec->nIdProduto > 0) {
+                $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $nIdProduto)->first();
                 $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
                     $etiquetas[] = [
@@ -129,6 +155,7 @@ class NotafiscalController extends Controller
                         'validade'      => $it->itensCabec->nIdValidade ?? '',
                         'fornecedor'    => $recebimento->cabec->cNome ?? '',
                         'nfe'           => intval($recebimento->cabec->cNumeroNFe),
+                        'quantidade'    => ($nf) ? ($nf->quantidade ?? 1) : 1,
                     ];
                 }
             }

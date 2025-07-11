@@ -19,19 +19,19 @@
                             <div class="row">
                                 <div class="col-md-3">
                                     <div class="mb-3">
-                                        <label for="data_inicio" class="form-label">Data Início</label>
+                                        <label for="data_inicio" class="form-label">Data</label>
                                         <input title="Data criação Omie" type="date" class="form-control"
                                             id="data_inicio" name="data_inicio"
                                             value="{{ session('inicio') ?? date('Y-m-d') }}">
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                                {{-- <div class="col-md-3">
                                     <div class="mb-3">
                                         <label for="data_final" class="form-label">Data Final</label>
                                         <input type="date" class="form-control" id="data_final" name="data_final"
                                             value="{{ session('final') ?? date('Y-m-d') }}">
                                     </div>
-                                </div>
+                                </div> --}}
                                 <div class="col-md-3">
                                     <div class="mb-3">
                                         <label for="ordem_producao" class="form-label">Nº Ordem de Produção</label>
@@ -67,6 +67,11 @@
         </div>
 
         <div class="card card-body mt-4">
+            <div class="row">
+                <div class="col">
+                    Tempo de execução: {{ $tempo ?? '-' }} segundos
+                </div>
+            </div>
             <table class="table table-hover table-borderless" aria-hidden="true">
                 <tbody>
                     @if (isset($ordenspro) && !empty($ordenspro))
