@@ -30,6 +30,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/notasfiscais', [NotafiscalController::class, 'index'])->name('notafiscal.index');
     Route::get('/notasfiscais/itens/{nIdReceb}', [NotafiscalController::class, 'itens'])->name('notafiscal.itens');
     Route::get('/notasfiscais/itens/{nIdReceb}/imprimir/{cCodigoProduto?}', [NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
+    Route::post('/notasfiscais/{nIdReceb}/produto/{codigo}/quantidade', [NotafiscalController::class, 'setQuantidade'])->name('notafiscal.setQuantidade');
 
     // Ordens de produção
     Route::get('/ordenspro', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');

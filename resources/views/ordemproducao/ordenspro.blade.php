@@ -42,14 +42,6 @@
                                             <input type="date" class="form-control" id="data_final" name="data_final"
                                                 value="{{ request('data_final', $dataFinal ?? '') }}">
                                         </div>
-                                        {{-- </div>
-                                    <div class="col-md-3">
-                                        <div class="mb-3">
-                                            <label for="num_nfe" class="form-label">Número OrdemPro</label>
-                                            <input type="text" id="num_nfe" name="num_nfe" placeholder="Nº NFe"
-                                                class="form-control" value="{{ request('num_nfe', $numNFe ?? '') }}">
-                                        </div>
-                                    </div> --}}
                                         <div class="col-md-3 d-flex align-items-end">
                                             <button type="submit" class="btn btn-primary me-2">
                                                 <i class="fas fa-search"></i> Filtrar
@@ -66,7 +58,6 @@
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <tbody>
-                            {{-- @if (isset($ordenspro) && !empty($ordenspro)) --}}
                             @foreach ($ordenspro as $op)
                                 <tr>
                                     <div class="row">
@@ -87,22 +78,11 @@
                                                 <p class="mt-1 mb-0">
                                                     QTDE a Produzir.: {{ $op->identificacao->nQtde }}
                                                 </p>
-                                                {{-- <p class="my-1">
-                                                            <a href="{{ route('notafiscal.itens', $op->cabec->nIdReceb) }}"
-                                                                class="btn btn-secondary btn-sm">
-                                                                <i class="fas fa-eye"></i> Visualizar
-                                                            </a>
-                                                </p> --}}
                                             </div>
                                         </div>
                                     </div>
                                 </tr>
                             @endforeach
-                            {{-- @else
-                                    <tr>
-                                        <td class="text-center">Nenhuma ordem de produção encontrada</td>
-                                    </tr>
-                                @endif --}}
                         </tbody>
                     </table>
                 </div>
@@ -182,12 +162,9 @@
                         filtrosContainer.style.display = 'block';
                         filtrosToggle.innerHTML =
                             '<i class="fas fa-filter"></i>';
-                        // '<i class="fas fa-filter"></i> Ocultar Filtros';
                     } else {
                         filtrosContainer.style.display = 'none';
-                        filtrosToggle.innerHTML =
-                            '<i class="fas fa-filter"></i>';
-                        // '<i class="fas fa-filter"></i> Exibir Filtros';
+                        filtrosToggle.innerHTML = '<i class="fas fa-filter"></i>';
                     }
 
                     // Adicionar animação suave (opcional)
@@ -205,9 +182,7 @@
                 // Verificar estado anterior (opcional)
                 if (localStorage.getItem('filtrosVisiveis') === 'true') {
                     filtrosContainer.style.display = 'block';
-                    filtrosToggle.innerHTML =
-                        '<i class="fas fa-filter"></i>';
-                    // '<i class="fas fa-filter"></i> Ocultar Filtros';
+                    filtrosToggle.innerHTML = '<i class="fas fa-filter"></i>';
                     localStorage.removeItem('filtrosVisiveis');
                 }
             }
