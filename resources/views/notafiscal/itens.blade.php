@@ -48,6 +48,14 @@
                                                         {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
                                                     </p>
                                                     @if ($it->itensCabec->nIdProduto > 0)
+                                                        <div class="mb-3">
+                                                            <label for="quantidade"
+                                                                class="form-label mb-0">Quantidade:</label>
+                                                            <input type="number" class="form-control" id="quantidade"
+                                                                name="quantidade"
+                                                                value="{{ \App\Models\Nf::where('n_id_receb', $recebimento->cabec->nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first()->quantidade ?? 1 }}"
+                                                                onblur="setQuantidade(this,'{{ route('notafiscal.setQuantidade', [$recebimento->cabec->nIdReceb, $it->itensCabec->nIdProduto]) }}')">
+                                                        </div>
                                                         <p class="my-1">
                                                             <a href="{{ route('notafiscal.imprimir', [$recebimento->cabec->nIdReceb, $it->itensCabec->nIdProduto]) }}"
                                                                 class="btn btn-secondary btn-sm">
@@ -73,5 +81,12 @@
             </table>
         </div>
     </div>
-    </div>
+
+    <script>
+        function setQuantidade(el, url) {
+            axios.post(url, {
+                "quantidade": el.value
+            })
+        }
+    </script>
 @endsection

@@ -143,17 +143,17 @@ class OmieService
     }
 
     //Listar Ordem de Producao
-    public function getOrdensPro(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): array
+    public function getOrdensPro(DateTime $dataInicio, DateTime $dataFinal)
     {
         $ordenspro = [];
-        $response = $this->getOrds($dataInicio, $dataFinal, $pagina);
+        $response = $this->getOrds($dataInicio, $dataFinal, 1);
         if (isset($response->cadastros) && count($response->cadastros) > 0) {
             if ($response->total_de_paginas == 1) {
                 $ordenspro = (array)$response->cadastros;
             } else {
                 $ordenspro = (array)$response->cadastros;
                 for ($i = 2; $i <= $response->total_de_paginas; $i++) {
-                    $ordenspro = array_merge($ordenspro, (array)$this->getOrds($dataInicio, $dataFinal, $i)->cadastros);
+                    $ordenspro = collect($ordenspro)->merge($this->getOrds($dataInicio, $dataFinal, $i)->cadastros)->all();
                 }
             }
         }
@@ -162,50 +162,50 @@ class OmieService
 
     public function getOrds(DateTime $dataInicio, DateTime $dataFinal, $pagina = 1): object
     {
+
+        /**
+         * Não utilizar o cache aqui, pois as ordens de produção podem ser atualizadas com frequência.
+         **/
+
         $this->init();
-        $chave = "getOrds-" . $this->loja_id . Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_YMD) . '-' . Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_YMD) . $pagina;
-        return Cache::remember($chave, 3600, function () use ($dataInicio, $dataFinal, $pagina) {
-            $url = $this->urlBase . 'v1/produtos/op/';
-            $data = [
-                "call" => "ListarOrdemProducao",
-                "app_key" => $this->key,
-                "app_secret" => $this->secret,
-                "param" => [
-                    [
-                        "pagina" => $pagina,
-                        "registros_por_pagina" => 50,
-                        "dDtConclusaoDe" => Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_PT_BR),
-                        "dDtConclusaoAte" => Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_PT_BR),
-                        "ordenar_por" => "dInclusao",
-                        "ordem_decrescente" => "S"
-                    ]
+        $url = $this->urlBase . 'v1/produtos/op/';
+        $data = [
+            "call" => "ListarOrdemProducao",
+            "app_key" => $this->key,
+            "app_secret" => $this->secret,
+            "param" => [
+                [
+                    "pagina" => $pagina,
+                    "registros_por_pagina" => 50,
+                    "dDtConclusaoDe" => Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_PT_BR),
+                    "dDtConclusaoAte" => Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_PT_BR),
                 ]
-            ];
+            ]
+        ];
 
-            try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json'
-                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
 
-                if ($response->status() === 200) {
-                    return $response->object();
-                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
-                    return new stdClass();
-                } {
-                    Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
-                        'statusCode' => $response->status(),
-                        'response' => $response->body(),
-                    ]);
-                }
-            } catch (\Throwable $th) {
-                Log::critical($th->getMessage(), [
-                    'Code' => $th->getCode(),
-                    'File' => $th->getFile(),
-                    'Line' => $th->getLine()
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            } {
+                Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
                 ]);
             }
-            return new stdClass();
-        });
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
     }
 
     //Consulta Produto
