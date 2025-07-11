@@ -49,7 +49,7 @@
 
 <body>
     @foreach ($etiquetas as $etiqueta)
-        @for ($x = 0; $x <= $etiquetas['quantidade']; $x++)
+        @for ($x = 0; $x <= $etiqueta['quantidade']; $x++)
             <div class="container">
                 <table aria-hidden="true">
                     <tbody>
