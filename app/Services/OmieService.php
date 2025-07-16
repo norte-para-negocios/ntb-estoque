@@ -174,11 +174,63 @@ class OmieService
                 [
                     "pagina" => $pagina,
                     "registros_por_pagina" => 50,
-                    "dDtConclusaoDe" => Carbon::parse($dataInicio)->format(Constants::DATE_FORMAT_PT_BR),
-                    "dDtConclusaoAte" => Carbon::parse($dataFinal)->format(Constants::DATE_FORMAT_PT_BR),
+                    "ordenar_por" => "dDtInicio",
+                    "ordem_decrescente" => "S",
                 ]
             ]
         ];
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
+
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            } {
+                Log::critical('OMIE - getOrdensPro - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
+    }
+
+    public function getOrdensProducao($pagina = 1, $data_producao = ''): object
+    {
+        /**
+         * Não utilizar o cache aqui, pois as ordens de produção podem ser atualizadas com frequência.
+         **/
+
+        $this->init();
+        $url = $this->urlBase . 'v1/produtos/op/';
+        $data = [
+            "call" => "ListarOrdemProducao",
+            "app_key" => $this->key,
+            "app_secret" => $this->secret,
+            "param" => [
+                [
+                    "pagina" => $pagina,
+                    "registros_por_pagina" => 500,
+                    "ordenar_por" => "dDtInicio",
+                    "ordem_decrescente" => "S",
+                ]
+            ]
+        ];
+
+        if ($data_producao !== '') {
+            $data['param'][0]['dDtConclusaoDe'] = Carbon::parse($data_producao)->format(Constants::DATE_FORMAT_PT_BR);
+            $data['param'][0]['dDtConclusaoAte'] = Carbon::parse($data_producao)->format(Constants::DATE_FORMAT_PT_BR);
+        }
 
         try {
             $response = Http::withHeaders([
@@ -303,7 +355,7 @@ class OmieService
     public function getLocaisEstoque(): array
     {
         $localEstoque = [];
-        $response = $this->getLocais();
+        $response = $this->getLocais(1);
         if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
             if ($response->nTotPaginas == 1) {
                 $localEstoque = (array)$response->locaisEncontrados;
@@ -328,11 +380,11 @@ class OmieService
         return null;
     }
 
-    private function getLocais(): object
+    private function getLocais($pagina): object
     {
         $this->init();
-        $chave = "getLocais-" . $this->loja_id;
-        return Cache::remember($chave, 1800, function () {
+        $chave = "getLocais-" . $this->loja_id . $pagina;
+        return Cache::remember($chave, 1800, function () use ($pagina) {
             $url = $this->urlBase . 'v1/estoque/local/';
             $data = [
                 "call" => "ListarLocaisEstoque",
@@ -340,7 +392,7 @@ class OmieService
                 "app_secret" => $this->secret,
                 "param" => [
                     [
-                        "nPagina" => 1,
+                        "nPagina" => $pagina,
                         "nRegPorPagina" => 20
                     ]
                 ]
@@ -351,7 +403,7 @@ class OmieService
                 ])->connectTimeout(60)->timeout(60)->post($url, $data);
                 if ($response->status() === 200) {
                     return $response->object();
-                } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
+                } elseif ($response->status() === 500) {
                     return new stdClass();
                 } else {
                     Log::critical('OMIE - getLocais - Retorno inexperado', [

@@ -49,6 +49,21 @@ class Constants
         "12" => "Dezembro",
     ];
 
+    const PRODUTO_TIPO_ITEM = [
+        "00" => "Mercadoria para Revenda",
+        "01" => "Matéria Prima",
+        "02" => "Embalagem",
+        "03" => "Produto em Processo",
+        "04" => "Produto Acabado",
+        "05" => "Subproduto",
+        "06" => "Produto Intermediário",
+        "07" => "Material de Uso e Consumo",
+        "08" => "Ativo Imobilizado",
+        "09" => "Serviços",
+        "10" => "Outros Insumos",
+        "99" => "Outras",
+    ];
+
     const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
 
     const DATE_FORMAT_PT_BR = 'd/m/Y';

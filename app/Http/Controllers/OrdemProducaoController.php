@@ -12,96 +12,93 @@ use PDF;
 
 class OrdemProducaoController extends Controller
 {
-    private $omie;
-
     public function __construct()
     {
         $this->middleware('auth');
-        $this->omie = new OmieService();
     }
 
     public function index(Request $request)
     {
-        $inicio = Carbon::now();
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('final'));
-
-        // $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         $ordem_producao = $request->get('ordem_producao');
+        $data_producao = $request->get('data_producao') ?? '';
+        $tipo_produto = $request->get('tipo_produto') ?? '';
+        $op_produto = $request->get('op_produto');
 
-        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
-        $ops = [];
+        session([
+            'ordem_producao' => $ordem_producao,
+            'data_producao' => $data_producao,
+            'tipo_produto' => $tipo_produto,
+            'op_produto' => $op_produto,
+        ]);
 
-        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
-        foreach ($ordenspro as $op) {
-            $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
-            if ($produto && ($produto->tipoItem??"" == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
-                array_push($ops, $op);
-            }
+        $queryOrdemProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
+            ->when($data_producao, function ($query) use ($data_producao) {
+                return $query->whereBetween('adicionais_d_dt_conclusao', [Carbon::parse($data_producao)->startOfDay(), Carbon::parse($data_producao)->endOfDay()]);
+            })
+            ->orderBy('adicionais_d_dt_conclusao', 'desc');
+
+        if ($request->filled("ordem_producao")) {
+            $queryOrdemProducao->where('num_ordem', $ordem_producao);
         }
-        $ordenspro = $ops;
+        if ($request->filled("tipo_produto")) {
+            $queryOrdemProducao->where('produto_tipo_item', $tipo_produto);
+        }
+        if ($request->filled("op_produto")) {
+            $queryOrdemProducao->where(function ($query) use ($op_produto) {
+                $query->where('produto_codigo', 'like', '%' . $op_produto . '%')
+                    ->orWhere('produto_descricao', 'like', '%' . $op_produto . '%');
+            });
+        }
 
-        $tempo = $inicio->diffInSeconds(Carbon::now());
+        $ordenspro = $queryOrdemProducao->paginate(20);
 
-        return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao', 'tempo'));
+        return view('ordemproducao.index', compact('ordenspro', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
     }
 
-    public function sincValidade(Request $request)
+    public function setValidade(Request $request, OrdemProducao $ordemProducao)
     {
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $numOrdem = $request->get("num_ordem");
-        $validadeRequest = $request->get("validade");
-        $op = OrdemProducao::where('num_ordem', $numOrdem)->first();
-
-        if ($op && isset($op->validade) && $op->validade == $validadeRequest) {
-            return $op;
+        if ($request->filled('validade')) {
+            $ordemProducao->validade = Carbon::parse($request->get('validade'));
         } else {
-            return OrdemProducao::updateOrCreate(
-                [
-                    'num_ordem' => $numOrdem,
-                    'loja_id' => Auth::user()->current_loja_id,
-                ],
-                ['validade' => $validadeRequest]
-            );
+            $ordemProducao->validade = null;
         }
+        $ordemProducao->save();
     }
 
 
-    public function imprimir(Request $request)
+    public function imprimir(Request $request, OrdemProducao $ordemProducao)
     {
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->get('data_inicio') ?? date('Y-m-d'));
-        $data_final = Carbon::parse($request->get('data_final') ?? date('Y-m-d'));
-        $ordem_producao = $request->query('ordem_producao');
-        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
         $etiquetas = [];
-        foreach ($ordenspro as $op) {
-            $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
+        $qtde = ($ordemProducao->produto_unidade = 'UN') ? ($ordemProducao->identificacao_n_qtde ?? '1') : 1;
 
-            if ($produto && ($produto->tipoItem??"" == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
-                $validade = OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)
-                    ->first();
-                $etiquetas[] = [
-                    'codigo_produto' => $produto->codigo ?? '',
-                    'descricao'   => $produto->descricao ?? '',
-                    'lote'        => $op->identificacao->cNumOP ?? '',
-                    'quantidade'  => ($op->identificacao->nQtde ?? '') . ' ' . $produto->unidade ?? '',
-                    'validade'    => $validade ? $validade->validade->format('d/m/Y') : '',
-                    'fornecedor'    => '',
-                    'nfe'           => '',
-                    'quantidade'    => 1,
-                ];
+        for ($i = 1; $i <= $qtde; $i++) {
+            if ($ordemProducao->produto_unidade = 'UN') {
+                $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
+            } else {
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ','. '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
             }
+
+            $etiquetas[] = [
+                'codigo_produto' => $ordemProducao->produto_codigo ?? '',
+                'descricao'   => $ordemProducao->produto_descricao ?? '',
+                'lote'        => $ordemProducao->identificacao_c_num_op ?? '',
+                'quantidade'  => $quantidade,
+                'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
+                'fornecedor'    => '',
+                'nfe'           => '',
+            ];
         }
 
         // Gerar PDF
@@ -117,6 +114,9 @@ class OrdemProducaoController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
+        if (config('app.env') === 'local') {
+            return $pdf->inline('etiquetas_op.pdf');
+        }
         return $pdf->download('etiquetas_op.pdf');
     }
 }

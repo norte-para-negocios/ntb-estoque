@@ -24,7 +24,7 @@ class Loja extends Model
     ];
 
     protected $casts = [
-        'omie_app_key' => 'encrypted',
+        // 'omie_app_key' => 'encrypted',
         'omie_app_secret' => 'encrypted',
     ];
 

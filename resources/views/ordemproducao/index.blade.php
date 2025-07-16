@@ -17,30 +17,50 @@
                     <div class="accordion-body">
                         <form id="filtrosForm" method="GET" action="{{ route('ordemproducao.index') }}">
                             <div class="row">
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <div class="mb-3">
-                                        <label for="data_inicio" class="form-label">Data</label>
-                                        <input title="Data criação Omie" type="date" class="form-control"
-                                            id="data_inicio" name="data_inicio"
-                                            value="{{ session('inicio') ?? date('Y-m-d') }}">
+                                        <label for="data_producao" class="form-label">Conclusão</label>
+                                        <input type="date" id="data_producao" name="data_producao" class="form-control"
+                                            value="{{ request('data_producao', $data_producao ?? '') }}">
                                     </div>
                                 </div>
-                                {{-- <div class="col-md-3">
+
+                                <div class="col-md-2">
                                     <div class="mb-3">
-                                        <label for="data_final" class="form-label">Data Final</label>
-                                        <input type="date" class="form-control" id="data_final" name="data_final"
-                                            value="{{ session('final') ?? date('Y-m-d') }}">
+                                        <label for="tipo_produto" class="form-label">Tipo de Produto</label>
+                                        <select id="tipo_produto" name="tipo_produto" class="form-control">
+                                            <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>
+                                                Todos
+                                            </option>
+                                            @foreach (\App\Helpers\Constants::PRODUTO_TIPO_ITEM as $key => $value)
+                                                <option value="{{ $key }}"
+                                                    {{ ($tipo_produto ?? '') == $key ? 'selected' : '' }}>
+                                                    {{ $key }} - {{ $value }}
+                                                </option>
+                                            @endforeach
+                                        </select>
                                     </div>
-                                </div> --}}
-                                <div class="col-md-3">
+                                </div>
+
+                                <div class="col-md-2">
                                     <div class="mb-3">
                                         <label for="ordem_producao" class="form-label">Nº Ordem de Produção</label>
                                         <input type="text" id="ordem_producao" name="ordem_producao"
-                                            placeholder="Nº da OP '2021/38804'" class="form-control"
+                                            placeholder="Nº 2021/38804" class="form-control"
                                             value="{{ request('ordem_producao', $ordem_producao ?? '') }}">
                                     </div>
                                 </div>
-                                <div class="col-md-3 d-flex align-items-end">
+
+                                <div class="col-md-2">
+                                    <div class="mb-3">
+                                        <label for="op_produto" class="form-label">Produto</label>
+                                        <input type="text" id="op_produto" name="op_produto"
+                                            placeholder="Código/Descrição" class="form-control"
+                                            value="{{ request('op_produto', $op_produto ?? '') }}">
+                                    </div>
+                                </div>
+
+                                <div class="col-md-2 d-flex align-items-end">
                                     <div class="mb-3">
                                         <button type="submit" class="btn btn-primary me-2">
                                             <i class="fas fa-search"></i> Filtrar
@@ -54,32 +74,11 @@
             </div>
         </div>
 
-        <div class="container mb-3"><br>
-            <div class="row">
-                <div class="col-12">
-                    <button type="button"
-                        onclick="imprimir('{{ $data_inicio }}', '{{ $data_final }}', '{{ $ordem_producao }}')"
-                        class="btn btn-primary">
-                        <i class="fa-solid fa-print me-2"></i> Imprimir Todos
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <div class="card card-body mt-4">
-            <div class="row">
-                <div class="col">
-                    Tempo de execução: {{ $tempo ?? '-' }} segundos
-                </div>
-            </div>
             <table class="table table-hover table-borderless" aria-hidden="true">
                 <tbody>
-                    @if (isset($ordenspro) && !empty($ordenspro))
+                    @if ($ordenspro->count() > 0)
                         @foreach ($ordenspro as $op)
-                            @php
-                                $omie = new \App\Services\OmieService();
-                                $produto = $omie->getConsultaProduto($op->identificacao->nCodProduto);
-                            @endphp
                             <tr>
                                 <td class="px-2">
                                     <div class="container">
@@ -88,18 +87,40 @@
                                                 <div class="card card-body m-0" style="background-color: #e4e9f5;">
                                                     <div class="row">
                                                         <div class="col">
-                                                            <h6 class="mb-3">
-                                                                <small>Produto:</small> {{ $produto->codigo ?? '' }} -
-                                                                {{ $produto->descricao ?? '' }}
-                                                            </h6>
-                                                            <p class="mb-2">
-                                                                <small>Lote:</small>
-                                                                {{ $op->identificacao->cNumOP ?? '' }}<br>
+                                                            <p class="mb-0">
                                                                 <small>Ordem de Produção:</small>
-                                                                {{ $op->identificacao->cNumOP ?? '' }}<br>
+                                                                {{ $op->identificacao_c_num_op ?? '' }}
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Produto:</small> {{ $op->produto_codigo ?? '' }} -
+                                                                {{ $op->produto_descricao ?? '' }}
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Status:</small>
+                                                                @if ((json_decode($op->full_object)->outrasInf->cConcluida ?? '') == 'S')
+                                                                    <span class="badge bg-success">
+                                                                        Produzida em:
+                                                                        {{ json_decode($op->full_object)->outrasInf->dConclusao ?? '' }}
+                                                                    </span>
+                                                                @else
+                                                                    <span class="badge bg-warning">
+                                                                        Pendente
+                                                                    </span>
+                                                                @endif
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Tipo:</small>
+                                                                {{ $op->produto_tipo_item }} -
+                                                                {{ \App\Helpers\Constants::PRODUTO_TIPO_ITEM[$op->produto_tipo_item] ?? '' }}
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Lote:</small>
+                                                                {{ $op->identificacao_c_num_op ?? '' }}<br>
+                                                            </p>
+                                                            <p class="mb-0">
                                                                 <small>Quantidade:</small>
-                                                                {{ $op->identificacao->nQtde ?? '' }}
-                                                                ({{ $produto->unidade ?? '' }})
+                                                                {{ $op->identificacao_n_qtde ?? '' }}
+                                                                ({{ $op->produto_unidade ?? '' }})
                                                             </p>
                                                         </div>
 
@@ -109,12 +130,12 @@
                                                                     class="form-label mb-0">Validade:</label>
                                                                 <input type="date" class="form-control"
                                                                     id="data_validade" name="data_validade"
-                                                                    value="{{ \App\Models\OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)->first()->validade ?? '' }}"
-                                                                    onblur="sincValidade(this,'{{ $op->identificacao->cNumOP }}')">
+                                                                    value="{{ $op->validade ?? '' }}"
+                                                                    onblur="sincValidade(this.value,{{ $op->id }})">
                                                             </div>
                                                             <div class="text-end">
                                                                 <button type="button"
-                                                                    onclick="imprimir('{{ $data_inicio }}', '{{ $data_final }}', '{{ $op->identificacao->cNumOP }}')"
+                                                                    onclick="imprimir({{ $op->id }})"
                                                                     class="btn btn-secondary btn-sm">
                                                                     <i class="fa-solid fa-print me-2"></i> Imprimir
                                                                 </button>
@@ -135,25 +156,18 @@
                     @endif
                 </tbody>
             </table>
+            {{ $ordenspro->links('pagination::bootstrap-5') }}
         </div>
     </div>
 
     <script>
-        // Função para Inserir ou alterar a data de validade
-        function sincValidade(el, cNumOP) {
-            axios.post("{{ route('ordemproducao.sincValidade') }}", {
-                "num_ordem": cNumOP,
-                "validade": el.value
-            }).then(function(r) {
-                console.log(r)
-            }).catch(function(r) {
-                console.log(r)
+        function sincValidade(validade, ordemproducao_id) {
+            axios.post(`/ordenspro/${ordemproducao_id}/validade`, {
+                "validade": validade
             })
         }
-
-        function imprimir(data_inicio, data_final, ordem_producao) {
-            const url =
-                `{{ route('etiqueta.imprimir') }}?data_inicio=${encodeURIComponent(data_inicio)}&data_final=${encodeURIComponent(data_final)}&ordem_producao=${encodeURIComponent(ordem_producao)}`;
+        function imprimir(ordemproducao_id) {
+            const url = `/ordenspro/${ordemproducao_id}/imprimir`;
             window.location.href = url;
         }
     </script>

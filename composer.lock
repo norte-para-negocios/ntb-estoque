@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ac396af0831df3ab35e7fa4e9a15a91a",
+    "content-hash": "fb6b84b87e51f8e3e584c5ff41623a6e",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -1578,6 +1578,70 @@
             "time": "2025-02-11T13:34:40+00:00"
         },
         {
+            "name": "laravel/sanctum",
+            "version": "v4.1.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laravel/sanctum.git",
+                "reference": "e4c09e69aecd5a383e0c1b85a6bb501c997d7491"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laravel/sanctum/zipball/e4c09e69aecd5a383e0c1b85a6bb501c997d7491",
+                "reference": "e4c09e69aecd5a383e0c1b85a6bb501c997d7491",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "illuminate/console": "^11.0|^12.0",
+                "illuminate/contracts": "^11.0|^12.0",
+                "illuminate/database": "^11.0|^12.0",
+                "illuminate/support": "^11.0|^12.0",
+                "php": "^8.2",
+                "symfony/console": "^7.0"
+            },
+            "require-dev": {
+                "mockery/mockery": "^1.6",
+                "orchestra/testbench": "^9.0|^10.0",
+                "phpstan/phpstan": "^1.10",
+                "phpunit/phpunit": "^11.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Laravel\\Sanctum\\SanctumServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Laravel\\Sanctum\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "Laravel Sanctum provides a featherweight authentication system for SPAs and simple APIs.",
+            "keywords": [
+                "auth",
+                "laravel",
+                "sanctum"
+            ],
+            "support": {
+                "issues": "https://github.com/laravel/sanctum/issues",
+                "source": "https://github.com/laravel/sanctum"
+            },
+            "time": "2025-07-01T15:49:32+00:00"
+        },
+        {
             "name": "laravel/serializable-closure",
             "version": "v2.0.4",
             "source": {
@@ -2894,6 +2958,53 @@
                 }
             ],
             "time": "2024-07-20T21:41:07+00:00"
+        },
+        {
+            "name": "plesk/ext-laravel-integration",
+            "version": "7.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/plesk/ext-laravel-integration.git",
+                "reference": "73dc4ea3f99e033396497f147aa033eb0602f943"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/plesk/ext-laravel-integration/zipball/73dc4ea3f99e033396497f147aa033eb0602f943",
+                "reference": "73dc4ea3f99e033396497f147aa033eb0602f943",
+                "shasum": ""
+            },
+            "require": {
+                "laravel/framework": ">=7.0.0",
+                "php": ">=7.4"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "PleskExtLaravel\\Providers\\ConsoleServiceProvider"
+                    ]
+                },
+                "component": "package"
+            },
+            "autoload": {
+                "psr-4": {
+                    "PleskExtLaravel\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "description": "Plesk Laravel Toolkit integration with Laravel applications.",
+            "keywords": [
+                "laravel",
+                "plesk"
+            ],
+            "support": {
+                "issues": "https://github.com/plesk/ext-laravel-integration/issues",
+                "source": "https://github.com/plesk/ext-laravel-integration/tree/7.0.0"
+            },
+            "time": "2023-01-20T09:40:57+00:00"
         },
         {
             "name": "psr/clock",
@@ -9453,12 +9564,12 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "plugin-api-version": "2.6.0"
 }
