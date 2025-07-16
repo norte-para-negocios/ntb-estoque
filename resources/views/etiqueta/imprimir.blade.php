@@ -25,11 +25,6 @@
             width: 100%;
         }
 
-        .product {
-            /* margin-top: 2mm; */
-            /* font-size: 10pt; */
-        }
-
         p {
             margin: 0;
             padding: 0;

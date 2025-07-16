@@ -18,13 +18,13 @@ class OrdemProducaoService
 
     public function __construct(protected Loja $loja) {}
 
-    public function fetchAll(): void
+    public function fetchAll($lastPages = 0): void
     {
         $response = $this->fetchPage(1);
         if (isset($response->cadastros) && count($response->cadastros) > 0) {
             $this->saveOrdensProducao((array)$response->cadastros);
-            if ($response->total_de_paginas > 1) {
-                for ($i = 2; $i <= $response->total_de_paginas; $i++) {
+            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
+                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
                     $resp = $this->fetchPage($i);
                     if (isset($resp->cadastros) && count($resp->cadastros) > 0) {
                         $this->saveOrdensProducao((array)$resp->cadastros);
@@ -44,7 +44,8 @@ class OrdemProducaoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 1000
+                    "registros_por_pagina" => 1000,
+                    "ordem_decrescente" => "S"
                 ]
             ]
         ];

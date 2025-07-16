@@ -12,12 +12,9 @@ use PDF;
 
 class OrdemProducaoController extends Controller
 {
-    private $omie;
-
     public function __construct()
     {
         $this->middleware('auth');
-        $this->omie = new OmieService();
     }
 
     public function index(Request $request)
@@ -25,8 +22,6 @@ class OrdemProducaoController extends Controller
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
-
-        $ops = [];
 
         $ordem_producao = $request->get('ordem_producao');
         $data_producao = $request->get('data_producao') ?? '';

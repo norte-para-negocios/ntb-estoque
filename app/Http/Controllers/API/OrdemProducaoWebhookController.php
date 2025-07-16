@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Loja;
-use App\Models\Webhook;
+
 use Illuminate\Http\Request;
 
 class OrdemProducaoWebhookController extends Controller

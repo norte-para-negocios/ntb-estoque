@@ -74,18 +74,6 @@
             </div>
         </div>
 
-        {{-- <div class="container mb-3"><br>
-            <div class="row">
-                <div class="col-12">
-                    <button type="button"
-                        onclick="imprimir('{{ $data_inicio }}', '{{ $data_final }}', '{{ $ordem_producao }}')"
-                        class="btn btn-primary">
-                        <i class="fa-solid fa-print me-2"></i> Imprimir Todos
-                    </button>
-                </div>
-            </div>
-        </div> --}}
-
         <div class="card card-body mt-4">
             <table class="table table-hover table-borderless" aria-hidden="true">
                 <tbody>
@@ -176,10 +164,6 @@
         function sincValidade(validade, ordemproducao_id) {
             axios.post(`/ordenspro/${ordemproducao_id}/validade`, {
                 "validade": validade
-            }).then(function(r) {
-                console.log(r)
-            }).catch(function(r) {
-                console.log(r)
             })
         }
         function imprimir(ordemproducao_id) {
