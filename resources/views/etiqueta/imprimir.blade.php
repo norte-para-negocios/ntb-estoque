@@ -84,6 +84,11 @@
                                     Quant.: {{ substr(trim($etiqueta['quantidade']), 0, 17) }}
                                 </span><br>
                             @endif
+                            @if ($etiqueta['produzido'] !== '')
+                                <span style="margin-bottom: 2mm;">
+                                    Embalado: {{ substr(trim($etiqueta['produzido']), 0, 15) }}
+                                </span><br>
+                            @endif
                             @if ($etiqueta['validade'] !== '')
                                 <span style="margin-bottom: 2mm;">
                                     Validade: {{ substr(trim($etiqueta['validade']), 0, 15) }}
