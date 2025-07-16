@@ -22,7 +22,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/usuario/{user}/permissao', [PermissaoController::class, 'attach'])->name('usuario.permissao.attach');
     Route::delete('/usuario/{user}/loja/{loja}/permissao/{permissao}', [PermissaoController::class, 'detach'])->name('usuario.permissao.detach');
 
-
     // Lojas
     Route::resource('loja', LojaController::class);
 
@@ -36,7 +35,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/ordenspro', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
     Route::post('/ordenspro', [OrdemProducaoController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
     Route::get('/ordenspro/validade', [OrdemProducaoController::class, 'getValidade'])->name('ordemproducao.getValidade');
-    Route::get('/ordenspro/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('etiqueta.imprimir');
+    Route::get('/ordenspro/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('etiqueta.imprimir');
 
     // Transferências
     Route::prefix('transferencia')->group(function () {

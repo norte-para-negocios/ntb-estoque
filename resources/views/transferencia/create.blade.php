@@ -30,7 +30,10 @@
                     <label for="estoque_origem" class="form-label">Local de Estoque de Origem</label>
                     <select name="estoque_origem" id="estoque_origem" class="form-select" required>
                         @foreach ($locaisEstoque as $local)
-                            <option value="{{ $local->codigo_local_estoque }}">{{ $local->descricao }}</option>
+                            <option value="{{ $local->codigo_local_estoque }}">
+                                <small>{{ $local->codigo }}</small> -
+                                {{ $local->descricao }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
@@ -39,7 +42,10 @@
                     <label for="estoque_destino" class="form-label">Local de Estoque de Destino</label>
                     <select name="estoque_destino" id="estoque_destino" class="form-select" required>
                         @foreach ($locaisEstoque as $local)
-                            <option value="{{ $local->codigo_local_estoque }}">{{ $local->descricao }}</option>
+                            <option value="{{ $local->codigo_local_estoque }}">
+                                <small>{{ $local->codigo }}</small> -
+                                {{ $local->descricao }}
+                            </option>
                         @endforeach
                     </select>
                 </div>

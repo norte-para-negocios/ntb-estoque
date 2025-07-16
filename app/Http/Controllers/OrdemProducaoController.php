@@ -22,32 +22,46 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
-        $inicio = Carbon::now();
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('final'));
-
-        // $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
-        $ordem_producao = $request->get('ordem_producao');
-
-        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
         $ops = [];
 
-        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
-        foreach ($ordenspro as $op) {
-            $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
-            if ($produto && ($produto->tipoItem??"" == "03") && (($request->filled("ordem_producao") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
-                array_push($ops, $op);
-            }
+        $ordem_producao = $request->get('ordem_producao');
+        $data_producao = $request->get('data_producao') ?? '';
+        $tipo_produto = $request->get('tipo_produto') ?? '';
+        $op_produto = $request->get('op_produto');
+
+        session([
+            'ordem_producao' => $ordem_producao,
+            'data_producao' => $data_producao,
+            'tipo_produto' => $tipo_produto,
+            'op_produto' => $op_produto,
+        ]);
+
+        $queryOrdemProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
+            ->when($data_producao, function ($query) use ($data_producao) {
+                return $query->whereBetween('adicionais_d_dt_conclusao', [Carbon::parse($data_producao)->startOfDay(), Carbon::parse($data_producao)->endOfDay()]);
+            })
+            ->orderBy('adicionais_d_dt_conclusao', 'desc');
+
+        if ($request->filled("ordem_producao")) {
+            $queryOrdemProducao->where('num_ordem', $ordem_producao);
         }
-        $ordenspro = $ops;
+        if ($request->filled("tipo_produto")) {
+            $queryOrdemProducao->where('produto_tipo_item', $tipo_produto);
+        }
+        if ($request->filled("op_produto")) {
+            $queryOrdemProducao->where(function ($query) use ($op_produto) {
+                $query->where('produto_codigo', 'like', '%' . $op_produto . '%')
+                    ->orWhere('produto_descricao', 'like', '%' . $op_produto . '%');
+            });
+        }
 
-        $tempo = $inicio->diffInSeconds(Carbon::now());
+        $ordenspro = $queryOrdemProducao->paginate(20);
 
-        return view('ordemproducao.index', compact('ordenspro', 'data_inicio', 'data_final', 'ordem_producao', 'tempo'));
+        return view('ordemproducao.index', compact('ordenspro', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
     }
 
     public function sincValidade(Request $request)
@@ -74,7 +88,7 @@ class OrdemProducaoController extends Controller
     }
 
 
-    public function imprimir(Request $request)
+    public function imprimir(Request $request, OrdemProducao $ordemProducao)
     {
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
@@ -88,7 +102,7 @@ class OrdemProducaoController extends Controller
         foreach ($ordenspro as $op) {
             $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
 
-            if ($produto && ($produto->tipoItem??"" == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
+            if ($produto && ($produto->tipoItem ?? "" == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
                 $validade = OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)
                     ->first();
                 $etiquetas[] = [

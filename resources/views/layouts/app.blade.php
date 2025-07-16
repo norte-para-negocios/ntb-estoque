@@ -17,9 +17,35 @@
     <!-- Scripts -->
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     @stack('css')
+    <style>
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        #content {
+            display: none;
+        }
+    </style>
+
 </head>
 
 <body>
+    <div id="loader">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+    </div>
+
+
     <div id="app">
 
         <nav class="navbar navbar-expand-lg bg-body-tertiary">
@@ -66,6 +92,13 @@
     </div>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script>
+        $(document).ready(function() {
+            document.getElementById("loader").style.display = "none";
+            document.getElementById("app").style.display = "block";
+        });
+    </script>
+
     @stack('js')
     @include('layouts.delete')
 </body>
