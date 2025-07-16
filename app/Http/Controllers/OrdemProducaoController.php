@@ -96,7 +96,8 @@ class OrdemProducaoController extends Controller
                 'lote'        => $ordemProducao->identificacao_c_num_op ?? '',
                 'quantidade'  => $quantidade,
                 'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
-                'fornecedor'    => '',
+                'produzido'   => json_decode($ordemProducao->full_object)->outrasInf->dConclusao ?? '',
+                'fornecedor'  => '',
                 'nfe'           => '',
             ];
         }
