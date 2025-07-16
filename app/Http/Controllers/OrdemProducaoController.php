@@ -64,27 +64,18 @@ class OrdemProducaoController extends Controller
         return view('ordemproducao.index', compact('ordenspro', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
     }
 
-    public function sincValidade(Request $request)
+    public function setValidade(Request $request, OrdemProducao $ordemProducao)
     {
         if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $numOrdem = $request->get("num_ordem");
-        $validadeRequest = $request->get("validade");
-        $op = OrdemProducao::where('num_ordem', $numOrdem)->first();
-
-        if ($op && isset($op->validade) && $op->validade == $validadeRequest) {
-            return $op;
+        if ($request->filled('validade')) {
+            $ordemProducao->validade = Carbon::parse($request->get('validade'));
         } else {
-            return OrdemProducao::updateOrCreate(
-                [
-                    'num_ordem' => $numOrdem,
-                    'loja_id' => Auth::user()->current_loja_id,
-                ],
-                ['validade' => $validadeRequest]
-            );
+            $ordemProducao->validade = null;
         }
+        $ordemProducao->save();
     }
 
 
@@ -94,28 +85,25 @@ class OrdemProducaoController extends Controller
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->get('data_inicio') ?? date('Y-m-d'));
-        $data_final = Carbon::parse($request->get('data_final') ?? date('Y-m-d'));
-        $ordem_producao = $request->query('ordem_producao');
-        $ordenspro = $this->omie->getOrdensPro($data_inicio, $data_final);
         $etiquetas = [];
-        foreach ($ordenspro as $op) {
-            $produto = $this->omie->getConsultaProduto($op->identificacao->nCodProduto);
+        $qtde = ($ordemProducao->produto_unidade = 'UN') ? ($ordemProducao->identificacao_n_qtde ?? '1') : 1;
 
-            if ($produto && ($produto->tipoItem ?? "" == "03") && ((($ordem_producao !== "") && ($op->identificacao->cNumOP == $ordem_producao)) || $ordem_producao == "")) {
-                $validade = OrdemProducao::where('num_ordem', $op->identificacao->cNumOP)
-                    ->first();
-                $etiquetas[] = [
-                    'codigo_produto' => $produto->codigo ?? '',
-                    'descricao'   => $produto->descricao ?? '',
-                    'lote'        => $op->identificacao->cNumOP ?? '',
-                    'quantidade'  => ($op->identificacao->nQtde ?? '') . ' ' . $produto->unidade ?? '',
-                    'validade'    => $validade ? $validade->validade->format('d/m/Y') : '',
-                    'fornecedor'    => '',
-                    'nfe'           => '',
-                    'quantidade'    => 1,
-                ];
+        for ($i = 1; $i <= $qtde; $i++) {
+            if ($ordemProducao->produto_unidade = 'UN') {
+                $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
+            } else {
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ','. '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
             }
+
+            $etiquetas[] = [
+                'codigo_produto' => $ordemProducao->produto_codigo ?? '',
+                'descricao'   => $ordemProducao->produto_descricao ?? '',
+                'lote'        => $ordemProducao->identificacao_c_num_op ?? '',
+                'quantidade'  => $quantidade,
+                'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
+                'fornecedor'    => '',
+                'nfe'           => '',
+            ];
         }
 
         // Gerar PDF
@@ -131,6 +119,9 @@ class OrdemProducaoController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
+        if (config('app.env') === 'local') {
+            return $pdf->inline('etiquetas_op.pdf');
+        }
         return $pdf->download('etiquetas_op.pdf');
     }
 }

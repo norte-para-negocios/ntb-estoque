@@ -34,8 +34,8 @@ Route::middleware(['auth'])->group(function () {
     // Ordens de produção
     Route::get('/ordenspro', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
     Route::post('/ordenspro', [OrdemProducaoController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
-    Route::get('/ordenspro/validade', [OrdemProducaoController::class, 'getValidade'])->name('ordemproducao.getValidade');
-    Route::get('/ordenspro/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('etiqueta.imprimir');
+    Route::post('/ordenspro/{ordemProducao}/validade', [OrdemProducaoController::class, 'setValidade'])->name('ordemproducao.setValidade');
+    Route::get('/ordenspro/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('ordemproducao.imprimir');
 
     // Transferências
     Route::prefix('transferencia')->group(function () {

@@ -164,6 +164,7 @@ class OrdemProducaoService
         $op['produto_codigo'] = $produto->codigo ?? null;
         $op['produto_descricao'] = $produto->descricao ?? null;
         $op['produto_tipo_item'] = $produto->tipoItem ?? null;
+        $op['produto_unidade'] = $produto->unidade ?? null;
 
         $op['full_object'] = json_encode($ordem);
 

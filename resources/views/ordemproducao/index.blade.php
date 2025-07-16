@@ -29,44 +29,15 @@
                                     <div class="mb-3">
                                         <label for="tipo_produto" class="form-label">Tipo de Produto</label>
                                         <select id="tipo_produto" name="tipo_produto" class="form-control">
-                                            <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>Todos
+                                            <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>
+                                                Todos
                                             </option>
-                                            <option value="00" {{ ($tipo_produto ?? '') == '00' ? 'selected' : '' }}>
-                                                00 - Mercadoria para Revenda
-                                            </option>
-                                            <option value="01" {{ ($tipo_produto ?? '') == '01' ? 'selected' : '' }}>
-                                                01 - Matéria Prima
-                                            </option>
-                                            <option value="02" {{ ($tipo_produto ?? '') == '02' ? 'selected' : '' }}>
-                                                02 - Embalagem
-                                            </option>
-                                            <option value="03" {{ ($tipo_produto ?? '') == '03' ? 'selected' : '' }}>
-                                                03 - Produto em Processo
-                                            </option>
-                                            <option value="04" {{ ($tipo_produto ?? '') == '04' ? 'selected' : '' }}>
-                                                04 - Produto Acabado
-                                            </option>
-                                            <option value="05" {{ ($tipo_produto ?? '') == '05' ? 'selected' : '' }}>
-                                                05 - Subproduto
-                                            </option>
-                                            <option value="06" {{ ($tipo_produto ?? '') == '06' ? 'selected' : '' }}>
-                                                06 - Produto Intermediário
-                                            </option>
-                                            <option value="07" {{ ($tipo_produto ?? '') == '07' ? 'selected' : '' }}>
-                                                07 - Material de Uso e Consumo
-                                            </option>
-                                            <option value="08" {{ ($tipo_produto ?? '') == '08' ? 'selected' : '' }}>
-                                                08 - Ativo Imobilizado
-                                            </option>
-                                            <option value="09" {{ ($tipo_produto ?? '') == '09' ? 'selected' : '' }}>
-                                                09 - Serviços
-                                            </option>
-                                            <option value="10" {{ ($tipo_produto ?? '') == '10' ? 'selected' : '' }}>
-                                                10 - Outros Insumos
-                                            </option>
-                                            <option value="99" {{ ($tipo_produto ?? '') == '99' ? 'selected' : '' }}>
-                                                99 - Outras
-                                            </option>
+                                            @foreach (\App\Helpers\Constants::PRODUTO_TIPO_ITEM as $key => $value)
+                                                <option value="{{ $key }}"
+                                                    {{ ($tipo_produto ?? '') == $key ? 'selected' : '' }}>
+                                                    {{ $key }} - {{ $value }}
+                                                </option>
+                                            @endforeach
                                         </select>
                                     </div>
                                 </div>
@@ -128,25 +99,37 @@
                                                 <div class="card card-body m-0" style="background-color: #e4e9f5;">
                                                     <div class="row">
                                                         <div class="col">
-                                                            <h6 class="mb-0">
+                                                            <p class="mb-0">
+                                                                <small>Ordem de Produção:</small>
+                                                                {{ $op->identificacao_c_num_op ?? '' }}
+                                                            </p>
+                                                            <p class="mb-0">
                                                                 <small>Produto:</small> {{ $op->produto_codigo ?? '' }} -
                                                                 {{ $op->produto_descricao ?? '' }}
-                                                            </h6>
-                                                            @if ((json_decode($op->full_object)->outrasInf->cConcluida ?? '') == 'S')
-                                                                <span class="badge bg-success">
-                                                                    Produzida em:
-                                                                    {{ json_decode($op->full_object)->outrasInf->dConclusao ?? '' }}
-                                                                </span>
-                                                            @else
-                                                                <span class="badge bg-warning">
-                                                                    Pendente
-                                                                </span>
-                                                            @endif
-                                                            <p class="mb-2">
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Status:</small>
+                                                                @if ((json_decode($op->full_object)->outrasInf->cConcluida ?? '') == 'S')
+                                                                    <span class="badge bg-success">
+                                                                        Produzida em:
+                                                                        {{ json_decode($op->full_object)->outrasInf->dConclusao ?? '' }}
+                                                                    </span>
+                                                                @else
+                                                                    <span class="badge bg-warning">
+                                                                        Pendente
+                                                                    </span>
+                                                                @endif
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <small>Tipo:</small>
+                                                                {{ $op->produto_tipo_item }} -
+                                                                {{ \App\Helpers\Constants::PRODUTO_TIPO_ITEM[$op->produto_tipo_item] ?? '' }}
+                                                            </p>
+                                                            <p class="mb-0">
                                                                 <small>Lote:</small>
                                                                 {{ $op->identificacao_c_num_op ?? '' }}<br>
-                                                                <small>Ordem de Produção:</small>
-                                                                {{ $op->identificacao_c_num_op ?? '' }}<br>
+                                                            </p>
+                                                            <p class="mb-0">
                                                                 <small>Quantidade:</small>
                                                                 {{ $op->identificacao_n_qtde ?? '' }}
                                                                 ({{ $op->produto_unidade ?? '' }})
@@ -159,12 +142,12 @@
                                                                     class="form-label mb-0">Validade:</label>
                                                                 <input type="date" class="form-control"
                                                                     id="data_validade" name="data_validade"
-                                                                    value="{{ \App\Models\OrdemProducao::where('num_ordem', $op->identificacao_c_num_op)->first()->validade ?? '' }}"
-                                                                    onblur="sincValidade(this,'{{ $op->identificacao_c_num_op }}')">
+                                                                    value="{{ $op->validade ?? '' }}"
+                                                                    onblur="sincValidade(this.value,{{ $op->id }})">
                                                             </div>
                                                             <div class="text-end">
                                                                 <button type="button"
-                                                                    onclick="imprimir('{{ $op->id }}')"
+                                                                    onclick="imprimir({{ $op->id }})"
                                                                     class="btn btn-secondary btn-sm">
                                                                     <i class="fa-solid fa-print me-2"></i> Imprimir
                                                                 </button>
@@ -190,20 +173,17 @@
     </div>
 
     <script>
-        // Função para Inserir ou alterar a data de validade
-        function sincValidade(el, cNumOP) {
-            axios.post("{{ route('ordemproducao.sincValidade') }}", {
-                "num_ordem": cNumOP,
-                "validade": el.value
+        function sincValidade(validade, ordemproducao_id) {
+            axios.post(`/ordenspro/${ordemproducao_id}/validade`, {
+                "validade": validade
             }).then(function(r) {
                 console.log(r)
             }).catch(function(r) {
                 console.log(r)
             })
         }
-
-        function imprimir(ordem_producao) {
-            const url = `/ordenspro/${ordem_producao}/imprimir`;
+        function imprimir(ordemproducao_id) {
+            const url = `/ordenspro/${ordemproducao_id}/imprimir`;
             window.location.href = url;
         }
     </script>

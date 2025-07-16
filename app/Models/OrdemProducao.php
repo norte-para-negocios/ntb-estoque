@@ -27,6 +27,7 @@ class OrdemProducao extends Model
         'produto_codigo',
         'produto_descricao',
         'produto_tipo_item',
+        'produto_unidade',
 
         'full_object'
     ];

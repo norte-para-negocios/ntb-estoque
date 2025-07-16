@@ -29,6 +29,7 @@ return new class extends Migration
             $table->string('produto_codigo', 60)->nullable();
             $table->string('produto_descricao', 120)->nullable();
             $table->string('produto_tipo_item', 2)->nullable();
+            $table->string('produto_unidade', 6)->nullable();
 
             $table->json('full_object')->nullable();
 
@@ -58,7 +59,11 @@ return new class extends Migration
                 'adicionais_n_cod_projeto',
                 'adicionais_d_dt_inicio',
                 'adicionais_d_dt_conclusao',
-                'full_object'
+                'produto_codigo',
+                'produto_descricao',
+                'produto_tipo_item',
+                'produto_unidade',
+                'full_object',
             ]);
         });
     }
