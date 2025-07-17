@@ -49,15 +49,15 @@
                 <tbody>
                     <tr>
                         <td colspan="2" style="margin:0 !important; padding: 0 !important;">
-                            <div class="product">
-                                {{ substr($etiqueta['descricao'], 0, 37) }}
-                            </div>
+                            <p style="margin:0 !important; padding: 0 !important; text-align: left !important;">
+                                {{ substr($etiqueta['descricao'], 0, 38) }}
+                            </p>
                         </td>
                     </tr>
                     <tr>
                         <td style="width: 30% !important; padding: 0 !important;">
                             <p style="margin-bottom: 0 !important; padding-bottom: 0 !important;">
-                                {!! QrCode::size(102)->generate($etiqueta['codigo_produto']) !!}
+                                {!! QrCode::size(100)->generate($etiqueta['codigo_produto']) !!}
                             </p>
                             <p style="font-size: 8pt !important; padding: 0 !important; margin: 0 !important; line-height: 8pt !important;">
                                 {{ substr(trim($etiqueta['codigo_produto']), 0, 16) }}
@@ -98,7 +98,7 @@
                     </tr>
                     <tr>
                         <td colspan="2" style="vertical-align: bottom !important;">
-                            <span style="font-size: 7pt !important;">CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}</span>
+                            <p style="font-size: 7pt !important; text-align: left !important;">CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}</p>
                         </td>
                     </tr>
                 </tbody>
