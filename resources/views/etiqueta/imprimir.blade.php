@@ -50,7 +50,7 @@
                     <tr>
                         <td colspan="2" style="margin:0 !important; padding: 0 !important;">
                             <p style="margin:0 !important; padding: 0 !important; text-align: left !important;">
-                                {{ substr($etiqueta['descricao'], 0, 38) }}
+                                {{ substr(trim($etiqueta['descricao']), 0, 38) }}
                             </p>
                         </td>
                     </tr>
