@@ -139,20 +139,27 @@ class NotafiscalController extends Controller
         }
 
         $etiquetas = [];
-
         $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
 
         foreach ($recebimento->itensRecebimento as $it) {
             if ($it->itensCabec->nIdProduto > 0) {
-                $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $nIdProduto)->first();
                 $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
+                $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
+                $qtde = ($produto->unidade = 'UN') ? ($nf->quantidade ?? 1) : 1;
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
-                    for ($i = 0; $i < ($nf->quantidade ?? 1); $i++) {
+                    for ($i = 1; $i <= $qtde; $i++) {
+                        if ($produto->unidade = 'UN') {
+                            $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
+                        } else {
+                            $quantidade = number_format($it->itensAjustes->nQtdeRecebida, 3, ',' . '.') . ' (' . ($produto->unidade ?? '') . ')';
+                        }
+
+
                         $etiquetas[] = [
                             'codigo_produto' => $produto->codigo ?? '',
                             'descricao' => $it->itensCabec->cDescricaoProduto ?? '',
                             'lote' => "",
-                            'quantidade' => (number_format(($it->itensAjustes->nQtdeRecebida ?? 0), 3, ',', '') . ' ' . ($produto->unidade ?? '')),
+                            'quantidade' => $quantidade,
                             'validade' => $it->itensCabec->nIdValidade ?? '',
                             'produzido' => '',
                             'fornecedor' => $recebimento->cabec->cNome ?? '',
@@ -174,6 +181,9 @@ class NotafiscalController extends Controller
             ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
 
+        if (config('app.env') === 'local') {
+            return $pdf->inline("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
+        }
         return $pdf->download("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
     }
 }
