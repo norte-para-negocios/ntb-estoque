@@ -98,7 +98,7 @@
                     </tr>
                     <tr>
                         <td colspan="2" style="vertical-align: bottom !important;">
-                            <small>CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}</small>
+                            <span style="font-size: 7pt !important;">CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}</span>
                         </td>
                     </tr>
                 </tbody>
