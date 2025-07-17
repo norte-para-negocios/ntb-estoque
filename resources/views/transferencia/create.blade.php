@@ -2,22 +2,25 @@
 
 @section('content')
     <div class="container">
-        <h1 class="mb-4">Novo Movimento de Estoque</h1>
+
+        <div class="row">
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" id="botaoPermissao" style="display: none;">Permitir Acessar a
+                    Câmera</button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Novo Movimento de Estoque</h1>
+            </div>
+        </div>
+
 
         <form method="POST" action="{{ route('transferencia.store') }}">
             @csrf
 
             <div class="row mb-3">
-                {{-- <div class="col-md-4">
-                    <label for="tipo_movimento" class="form-label">Tipo do Movimento de Estoque</label>
-                    <select name="tipo_movimento" id="tipo_movimento" class="form-select" required>
-                        <option value="TRF">Transferência entre Locais</option>
-                        <option value="ENT">Entrada</option>
-                        <option value="SAI">Saída</option>
-                        <option value="SLD">Ajuste de Estoque</option>
-                    </select>
-                </div> --}}
-
                 <div class="col-md-4">
                     <label for="data" class="form-label">Data</label>
                     <input type="date" name="data" id="data" class="form-control"
@@ -61,16 +64,16 @@
             </div>
 
             <div class="mb-3">
-                {{-- <label class="form-label">Leitura do QR Code</label> --}}
                 <div class="mb-3">
-                    <button type="button" class="btn btn-primary" id="btn-ativar-camera">
-                        Ativar Leitor de QR Code
+                    <button type="button" id="botaoUsarCamera" class="btn btn-primary" style="display: none;">
+                        Ler QR Code
+                    </button>
+                    <button type="button" id="botaoPararCamera" class="btn btn-primary" style="display: none;">
+                        Parar Leitura
                     </button>
                 </div>
-
-                <div id="qr-reader" style="width: 300px; display: none;"></div>
-                <div id="qr-reader-results" class="mt-2 text-success"></div>
-
+                <div id="reader"></div>
+                <div id="resultado">Aguardando leitura...</div>
             </div>
 
             <div class="mb-3">
@@ -100,136 +103,145 @@
     </div>
 @endsection
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+@push('css')
+    <style>
+        #reader {
+            width: 300px;
+            margin: auto;
+        }
 
-<script>
-    // document.addEventListener('DOMContentLoaded', function() {
-    //     const qrInput = document.getElementById('qr_input');
-    //     const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
+        #resultado {
+            text-align: center;
+            margin-top: 1rem;
+        }
+    </style>
+@endpush
 
-    //     qrInput.addEventListener('change', function() {
-    //         const codigo = this.value;
+@push('js')
+    <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
+    <script>
+        async function verificarPermissaoCamera() {
+            try {
+                // Tenta acessar a câmera com vídeo, sem exibir o stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true
+                });
 
-    //         // Simulação de requisição AJAX
-    //         fetch(`/produtos/buscar-por-qrcode/${codigo}`)
-    //             .then(response => response.json())
-    //             .then(produto => {
-    //                 const novaLinha = `
-    //                 <tr>
-    //                     <td>
-    //                         <input type="hidden" name="produtos[]" value="${produto.id}">
-    //                         ${produto.nome}
-    //                     </td>
-    //                     <td>
-    //                         <input type="number" name="quantidades[]" value="1" class="form-control" min="1">
-    //                     </td>
-    //                     <td>
-    //                         <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>
-    //                     </td>
-    //                     <td>
-    //                         <button type="button" class="btn btn-danger btn-sm remover-produto">Remover</button>
-    //                     </td>
-    //                 </tr>
-    //             `;
-    //                 produtosTable.insertAdjacentHTML('beforeend', novaLinha);
-    //                 qrInput.value = '';
-    //                 qrInput.focus();
-    //             })
-    //             .catch(() => {
-    //                 alert('Produto não encontrado!');
-    //             });
-    //     });
+                stream.getTracks().forEach(track => track.stop());
 
-    //     document.addEventListener('click', function(e) {
-    //         if (e.target.classList.contains('remover-produto')) {
-    //             e.target.closest('tr').remove();
-    //         }
-    //     });
-    // });
-
-
-    document.addEventListener('DOMContentLoaded', function() {
-
-        document.getElementById('btn-ativar-camera').addEventListener('click', function() {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({
-                        video: true
-                    })
-                    .then(stream => {
-                        document.querySelector("#video").srcObject = stream;
-                    })
-                    .catch(error => console.error("Erro ao acessar a câmera:", error));
-            } else {
-                console.error("API getUserMedia não suportada neste navegador.");
+                // Se não lançar erro, permissão foi concedida
+                document.getElementById('botaoUsarCamera').style.display = 'inline-block';
+                document.getElementById('botaoPararCamera').style.display = 'none';
+            } catch (erro) {
+                // Se erro for de permissão, exibe botão para solicitar
+                console.warn('Permissão não concedida ou erro:', erro);
+                document.getElementById('botaoPermissao').style.display = 'inline-block';
             }
+        }
 
+        async function solicitarPermissaoCamera() {
+            try {
+                await navigator.mediaDevices.getUserMedia({
+                    video: true
+                });
+                document.getElementById('botaoPermissao').style.display = 'none';
+                document.getElementById('botaoPararCamera').style.display = 'none';
+                document.getElementById('botaoUsarCamera').style.display = 'inline-block';
+            } catch (erro) {
+                alert('Permissão negada ou erro ao acessar a câmera.');
+            }
+        }
 
-            const qrReader = document.getElementById('qr-reader');
-            qrReader.style.display = 'block';
-            console.log('Leitura QR');
+        function onScanStop() {
+            html5QrCode.stop()
+                .then(() => {
+                    document.getElementById("resultado").innerText = "Aguardando leitura...";
+                    document.getElementById('botaoUsarCamera').style.display = 'inline-block';
+                    document.getElementById('botaoPararCamera').style.display = 'none';
+                })
+                .catch(err => console.error("Erro ao parar a câmera:", err));
+        }
 
-            const html5QrCode = new Html5Qrcode("qr-reader");
+        // Função chamada quando um QR Code é detectado
+        function onScanSuccess(decodedText, decodedResult) {
+            document.getElementById("resultado").innerText =
+                `QR Code detectado: ${decodedText}`;
+            // Após leitura, buscar o produto e adicionar na listagem
+            buscarProdutoPorQrCode(decodedText);
+
+            html5QrCode.stop()
+                .then(() => console.log("Leitura parada."))
+                .catch(err => console.error("Erro ao parar:", err));
+        }
+
+        // Função opcional para erros de leitura em cada frame
+        function onScanError(errorMessage) {
+            // errorMessage pode ser ignorado ou logado
+            console.warn("Falha na leitura:", errorMessage);
+        }
+
+        function buscarProdutoPorQrCode(codigo) {
+            fetch(`/transferencia/produto/buscar-por-qrcode/${codigo}`)
+                .then(response => response.json())
+                .then(produto => {
+                    if (produto.data.id) {
+                        adicionarProdutoNaListagem(produto.data);
+                    } else {
+                        alert('Produto não encontrado!');
+                    }
+                });
+        }
+
+        function adicionarProdutoNaListagem(produto) {
+            const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
+            const novaLinha =
+                `<tr>
+                <td>
+                    <input type="hidden" name="produtos[]" value="${produto.id}">
+                    ${produto.nome}
+                </td>
+                <td>
+                    <input type="number" name="quantidades[]" value="1" class="form-control" min="1">
+                </td>
+                <td>
+                    <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-danger btn-sm remover-produto">Remover</button>
+                </td>
+            </tr>`;
+            produtosTable.insertAdjacentHTML('beforeend', novaLinha);;
+        }
+
+        // Cria uma instância apontando para o elemento #reader
+        const html5QrCode = new Html5Qrcode("reader");
+
+        // Inicia a câmera traseira, 10 quadros por segundo, e área de escaneamento 250×250
+        function usarCamera() {
+            document.getElementById('botaoUsarCamera').style.display = 'none';
+            document.getElementById('botaoPararCamera').style.display = 'inline-block';
 
             html5QrCode.start({
                     facingMode: "environment"
                 }, {
-                    fps: 10, // frames por segundo
-                    qrbox: 250 // área de leitura
+                    fps: 10,
+                    qrbox: {
+                        width: 250,
+                        height: 250
+                    }
                 },
-                (decodedText, decodedResult) => {
-                    document.getElementById('qr-reader-results').innerText =
-                        `QR Code lido: ${decodedText}`;
-
-                    // Após leitura, buscar o produto e adicionar na listagem
-                    buscarProdutoPorQrCode(decodedText);
-
-                    // Parar a leitura após capturar o código
-                    html5QrCode.stop().then(() => {
-                        qrReader.style.display = 'none';
-                    });
-                },
-                (errorMessage) => {
-                    // console.log(`Erro: ${errorMessage}`);
-                }
+                onScanSuccess
+                // ,onScanError
             ).catch(err => {
-                console.error("Erro ao iniciar a câmera", err);
+                document.getElementById("resultado").innerText =
+                    "Não foi possível iniciar a câmera: " + err;
             });
-        });
-    });
+        }
 
-    function buscarProdutoPorQrCode(codigo) {
-        fetch(`/transferencia/produto/buscar-por-qrcode/${codigo}`)
-            .then(response => response.json())
-            .then(produto => {
-                if (produto.data.id) {
-                    adicionarProdutoNaListagem(produto.data);
-                } else {
-                    alert('Produto não encontrado!');
-                }
-            });
-    }
+        document.getElementById('botaoPermissao').onclick = solicitarPermissaoCamera;
+        document.getElementById('botaoUsarCamera').onclick = usarCamera;
+        document.getElementById('botaoPararCamera').onclick = onScanStop;
 
-    function adicionarProdutoNaListagem(produto) {
-        console.log(produto);
-
-        const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
-        const novaLinha = `
-                     <tr>
-                         <td>
-                             <input type="hidden" name="produtos[]" value="${produto.id}">
-                             ${produto.nome}
-                         </td>
-                         <td>
-                             <input type="number" name="quantidades[]" value="1" class="form-control" min="1">
-                         </td>
-                         <td>
-                             <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>
-                         </td>
-                         <td>
-                             <button type="button" class="btn btn-danger btn-sm remover-produto">Remover</button>
-                         </td>
-                     </tr>
-                 `;
-        produtosTable.insertAdjacentHTML('beforeend', novaLinha);;
-    }
-</script>
+        verificarPermissaoCamera();
+    </script>
+@endpush

@@ -86,7 +86,7 @@
                             @endif
                             @if ($etiqueta['produzido'] !== '')
                                 <span style="margin-bottom: 2mm !important;">
-                                    Embalado: {{ substr(trim($etiqueta['produzido']), 0, 15) }}
+                                    Fabricado: {{ substr(trim($etiqueta['produzido']), 0, 15) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['validade'] !== '')
