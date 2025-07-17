@@ -16,7 +16,7 @@
         }
 
         .container {
-            height: 4.36cm;
+            height: 4.34cm;
             border: 1px dashed #ccc;
             padding: 3mm;
         }
