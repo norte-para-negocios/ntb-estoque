@@ -215,7 +215,7 @@
                     <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>
                 </td>
                 <td>
-                    <button type="button" class="btn btn-danger btn-sm remover-produto">Remover</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeProduto(this)">Remover</button>
                 </td>
             </tr>`;
             produtosTable.insertAdjacentHTML('beforeend', novaLinha);;
@@ -251,5 +251,12 @@
         document.getElementById('botaoPararCamera').onclick = onScanStop;
 
         verificarPermissaoCamera();
+
+        function removeProduto(el) {
+            const linha = el.closest('tr');
+            if (linha) {
+                linha.remove();
+            }
+        }
     </script>
 @endpush
