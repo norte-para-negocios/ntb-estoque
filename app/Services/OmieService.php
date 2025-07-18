@@ -369,6 +369,47 @@ class OmieService
         return $localEstoque;
     }
 
+    public function getPosicaoEstoque($local, $codigo, $data): null|object
+    {
+        $this->init();
+        $url = $this->urlBase . 'v1/estoque/consulta/';
+        $data = [
+            "call" => "PosicaoEstoque",
+            "app_key" => $this->key,
+            "app_secret" => $this->secret,
+            "param" => [
+                [
+                    "codigo_local_estoque" => $local,
+                    "id_prod" => $codigo,
+                    "cod_int" => "",
+                    "data" => $data
+                ]
+            ]
+        ];
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            } else {
+                Log::critical('OMIE - getLocais - Retorno inexperado', [
+                    'statusCode' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
+    }
+
     //Local Estoque
     public function getLocalEstoque($codigo_local_estoque): null|object
     {

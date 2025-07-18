@@ -116,7 +116,7 @@
                                                     <div class="row">
                                                         <div class="col-md-6 col-12">
                                                             <h6>
-                                                                {{ $nf->cabec->cNome ?? '-' }}
+                                                                <small>{{ $nf->cabec->nIdReceb }}</small>: {{ $nf->cabec->cNome ?? '-' }}
                                                             </h6>
                                                             <p class="mb-0">
                                                                 <small>Nº NFe:</small>

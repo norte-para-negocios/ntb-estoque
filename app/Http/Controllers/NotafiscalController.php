@@ -147,25 +147,27 @@ class NotafiscalController extends Controller
                 $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
                 $qtde = ($produto->unidade = 'UN') ? ($nf->quantidade ?? 1) : 1;
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
-                    for ($i = 1; $i <= $qtde; $i++) {
-                        if ($produto->unidade = 'UN') {
-                            $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
+                    // for ($i = 1; $i <= $qtde; $i++) {
+                        if ($produto->unidade == 'UN') {
+                            $quantidade = number_format($qtde, 0, '', '') . '(' . ($produto->unidade ?? '') . ')';
                         } else {
                             $quantidade = number_format($it->itensAjustes->nQtdeRecebida, 3, ',' . '.') . ' (' . ($produto->unidade ?? '') . ')';
                         }
-
 
                         $etiquetas[] = [
                             'codigo_produto' => $produto->codigo ?? '',
                             'descricao' => $it->itensCabec->cDescricaoProduto ?? '',
                             'lote' => "",
-                            'quantidade' => $quantidade,
+                            'quantidade' => '',
+                            'qtde_nf' => $it->itensAjustes->nQtdeRecebida . '(' . ($produto->unidade ?? '') . ')',
+                            'qtde_etiqueta' => $quantidade,
                             'validade' => $it->itensCabec->nIdValidade ?? '',
+                            'inclusao' => $it->infoCadastro->dRec ?? '15/05/2025',
                             'produzido' => '',
                             'fornecedor' => $recebimento->cabec->cNome ?? '',
                             'nfe' => intval($recebimento->cabec->cNumeroNFe),
                         ];
-                    }
+                    // }
                 }
             }
         }

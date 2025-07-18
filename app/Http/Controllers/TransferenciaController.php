@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Movimento;
 use Illuminate\Support\Facades\DB;
 use App\Services\OmieService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -63,7 +64,7 @@ class TransferenciaController extends Controller
                 $movimentacao->data = $request->data;
                 $movimentacao->tipo = 'TRF';
                 $movimentacao->quan = $request->quantidades[$index];
-                $movimentacao->valor = $request->valores[$index];
+                $movimentacao->valor = str_replace(',', '.', str_replace('.', '', $request->valores[$index]));
                 $movimentacao->obs = $request->observacao ?? 'Transferências entre estoques - NTB Estoque';
                 $movimentacao->origem = 'AJU';
                 $movimentacao->motivo = $request->motivo;
@@ -81,7 +82,7 @@ class TransferenciaController extends Controller
     /**
      * Busca produto pelo código de QR Code.
      */
-    public function buscarProdutoPorQrCode($codigo)
+    public function buscarProdutoPorQrCode($local, $codigo, $data)
     {
         try {
             // Validação básica do parâmetro
@@ -94,6 +95,7 @@ class TransferenciaController extends Controller
 
             // Busca o produto na API do Omie
             $produto = $this->omie->getConsultaProdutoCodigo($codigo);
+            $posicaoEstoque = $this->omie->getPosicaoEstoque($local, $produto->codigo_produto, Carbon::parse($data)->format('d/m/Y'));
 
             // Verifica se o produto foi encontrado
             if (!$produto) {
@@ -109,7 +111,7 @@ class TransferenciaController extends Controller
                 'data' => [
                     'id' => $produto->codigo,
                     'nome' => $produto->descricao,
-                    'valor_unitario' => $produto->valor_unitario,
+                    'valor_unitario' => number_format($posicaoEstoque->cmc, 2, ',', '.'),
                 ]
             ], 200);
         } catch (\Exception $e) {

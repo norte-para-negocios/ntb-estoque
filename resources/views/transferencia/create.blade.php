@@ -5,14 +5,16 @@
 
         <div class="row">
             <div class="col-12">
-                <button type="button" class="btn btn-primary" id="botaoPermissao" style="display: none;">Permitir Acessar a
-                    Câmera</button>
+
             </div>
         </div>
 
         <div class="row">
             <div class="col-12">
-                <h1 class="mb-4">Novo Movimento de Estoque</h1>
+                <h1 class="mb-4">
+                    Novo Movimento de Estoque:
+                    <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+                </h1>
             </div>
         </div>
 
@@ -65,6 +67,9 @@
 
             <div class="mb-3">
                 <div class="mb-3">
+                    <button type="button" class="btn btn-primary" id="botaoPermissao" style="display: none;">
+                        Conceder Acesso a Câmera
+                    </button>
                     <button type="button" id="botaoUsarCamera" class="btn btn-primary" style="display: none;">
                         Ler QR Code
                     </button>
@@ -170,8 +175,15 @@
             buscarProdutoPorQrCode(decodedText);
 
             html5QrCode.stop()
-                .then(() => console.log("Leitura parada."))
-                .catch(err => console.error("Erro ao parar:", err));
+                .then(function() {
+                    document.getElementById("resultado").innerText = "Aguardando leitura...";
+                    document.getElementById('botaoUsarCamera').style.display = 'inline-block';
+                    document.getElementById('botaoPararCamera').style.display = 'none';
+                    console.log("Leitura parada.")
+                })
+                .catch(function(err) {
+                    console.error("Erro ao parar:", err)
+                });
         }
 
         // Função opcional para erros de leitura em cada frame
@@ -181,15 +193,11 @@
         }
 
         function buscarProdutoPorQrCode(codigo) {
-            fetch(`/transferencia/produto/buscar-por-qrcode/${codigo}`)
-                .then(response => response.json())
-                .then(produto => {
-                    if (produto.data.id) {
-                        adicionarProdutoNaListagem(produto.data);
-                    } else {
-                        alert('Produto não encontrado!');
-                    }
-                });
+            let local = document.getElementById('estoque_origem').value;
+            let data = document.getElementById('data').value;
+            axios.get(`/transferencia/local/${local}/produto/${codigo}/data/${data}`).then(function(r) {
+                adicionarProdutoNaListagem(r.data.data);
+            });
         }
 
         function adicionarProdutoNaListagem(produto) {
@@ -201,7 +209,7 @@
                     ${produto.nome}
                 </td>
                 <td>
-                    <input type="number" name="quantidades[]" value="1" class="form-control" min="1">
+                    <input type="number" name="quantidades[]" value="1" class="form-control" min="1" step="0.001">
                 </td>
                 <td>
                     <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>

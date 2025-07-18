@@ -84,6 +84,21 @@
                                     Quant.: {{ substr(trim($etiqueta['quantidade']), 0, 17) }}
                                 </span><br>
                             @endif
+                            @if ($etiqueta['qtde_nf'] !== '')
+                                <span style="margin-bottom: 2mm !important;">
+                                    Qt. NF: {{ substr(trim($etiqueta['qtde_nf']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['qtde_etiqueta'] !== '')
+                                <span style="margin-bottom: 2mm !important;">
+                                    Qt. etiqueta: {{ substr(trim($etiqueta['qtde_etiqueta']), 0, 17) }}
+                                </span><br>
+                            @endif
+                            @if ($etiqueta['inclusao'] !== '')
+                                <span style="margin-bottom: 2mm !important;">
+                                    Dt. receb: {{ substr(trim($etiqueta['inclusao']), 0, 17) }}
+                                </span><br>
+                            @endif
                             @if ($etiqueta['produzido'] !== '')
                                 <span style="margin-bottom: 2mm !important;">
                                     Fabricado: {{ substr(trim($etiqueta['produzido']), 0, 15) }}

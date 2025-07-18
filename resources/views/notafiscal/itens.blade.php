@@ -39,14 +39,14 @@
                                                         {{ $it->itensCabec->cDescricaoProduto }}
                                                         {{ $produto->tipoItem ?? '' }}
                                                     </h6>
-                                                    <p class="mb-2">
+                                                    {{-- <p class="mb-2">
                                                         <small>Quantidade:</small> {{ $it->itensCabec->nQtdeNFe ?? '' }}
                                                         {{ strtoupper($it->itensCabec->cUnidadeNfe) }}<br>
                                                         <small>Unitário: R$</small>
                                                         {{ number_format($it->itensCabec->nPrecoUnit, 2, ',', '.') }}<br>
                                                         <small>Total: R$</small>
                                                         {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
-                                                    </p>
+                                                    </p> --}}
                                                     @if ($it->itensCabec->nIdProduto > 0)
                                                         <div class="mb-3">
                                                             <label for="quantidade"

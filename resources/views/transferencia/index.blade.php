@@ -101,7 +101,7 @@
                                                     </p>
                                                     <p class="my-1">
                                                         Valor Unitário :
-                                                        <strong>{{ number_format(($tr->valor ?? 0), 3, ',', '.') }}</strong>
+                                                        <strong>{{ number_format(($tr->valor ?? 0), 2, ',', '.') }}</strong>
                                                     </p>
                                                 </div>
                                             </div>

@@ -43,6 +43,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create', [TransferenciaController::class, 'create'])->name('transferencia.create');
         Route::post('/store', [TransferenciaController::class, 'store'])->name('transferencia.store');
         // Rota para buscar produto via QR Code
-        Route::get('/produto/buscar-por-qrcode/{codigo}', [TransferenciaController::class, 'buscarProdutoPorQrCode']);
+        Route::get('/local/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'buscarProdutoPorQrCode']);
     });
 });
