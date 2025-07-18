@@ -23,12 +23,18 @@ class Movimento extends Model
         'descricao_status',
         'id_movest',
         'id_ajuste',
+        'response'
     ];
 
     protected function casts(): array
     {
         return [
-            'data' => 'datetime',
+            'data' => 'date',
         ];
+    }
+
+    public function loja()
+    {
+        return $this->belongsTo(Loja::class);
     }
 }

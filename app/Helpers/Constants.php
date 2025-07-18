@@ -75,4 +75,9 @@ class Constants
         "Inventário",
         "Transferência",
     ];
+
+    const TIPO_TRANSFERENCIA = [
+        "TRF" => "Transferência entre Locais de Estoque",
+        "TPQ" => "Transferência por Perda ou Quebra"
+    ];
 }
