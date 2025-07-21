@@ -105,7 +105,7 @@ class OrdemProducaoController extends Controller
                 'qtde_etiqueta' => '',
                 'inclusao' => '',
                 'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
-                'produzido'   => json_decode($ordemProducao->full_object)->outrasInf->dConclusao ?? '',
+                'produzido'   => json_decode($ordemProducao->full_object)->infAdicionais->dDtConclusao ?? '',
                 'fornecedor'  => '',
                 'nfe'           => '',
             ];
