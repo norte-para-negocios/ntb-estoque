@@ -76,8 +76,15 @@ class Constants
         "Transferência",
     ];
 
-    const TIPO_TRANSFERENCIA = [
+    const TIPO_MOVIMENTO_TRANSFERENCIA = [
         "TRF" => "Transferência entre Locais de Estoque",
         "TPQ" => "Transferência por Perda ou Quebra"
+    ];
+
+    const TIPO_MOVIMENTO_INVENTARIO = [
+        "INV" => "Ajuste por Inventário",
+        "INI" => "Ajuste por Inventário (Estoque Inicial)",
+        // "CMC" => "Ajuste do Valor do CMC",
+        // "PDV" => "Integração com PDV"
     ];
 }

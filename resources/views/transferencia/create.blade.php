@@ -60,8 +60,9 @@
                 <label for="motivo" class="form-label">Motivo do Movimento de Estoque</label>
                 <select name="motivo" id="motivo" class="form-select" required>
                     <option value="">Selecione o motivo</option>
-                    <option value="TRF">Transferência entre Locais de Estoque.</option>
-                    <option value="TPQ">Transferência por Perda ou Quebra.</option>
+                    @foreach (\App\Helpers\Constants::TIPO_MOVIMENTO_TRANSFERENCIA as $key => $value)
+                        <option value="{{ $key }}">{{ $value }}</option>
+                    @endforeach
                 </select>
             </div>
 

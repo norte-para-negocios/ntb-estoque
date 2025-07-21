@@ -41,6 +41,7 @@ class TransferenciaController extends Controller
         ]);
 
         $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)
+            ->where('tipo', 'TRF')
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
             ->orderBy('id', 'desc')
             ->paginate(20)
@@ -109,7 +110,7 @@ class TransferenciaController extends Controller
     /**
      * Busca produto pelo código de QR Code.
      */
-    public function buscarProdutoPorQrCode($local, $codigo, $data)
+    public function produto($local, $codigo, $data)
     {
         if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Transferência!");

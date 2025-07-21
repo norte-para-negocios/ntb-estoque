@@ -2,6 +2,7 @@
 
 use App\Models\Loja;
 use App\Services\OrdemProducaoService;
+use App\Services\ProdutoService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -15,3 +16,9 @@ Schedule::call(function () {
         (new OrdemProducaoService($loja))->fetchAll(3);
     }
 })->everyFifteenMinutes();
+
+Schedule::call(function () {
+    foreach (Loja::all() as $loja) {
+        (new ProdutoService($loja))->fetchAll();
+    }
+})->everySixHours();
