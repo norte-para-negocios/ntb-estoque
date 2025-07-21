@@ -19,7 +19,7 @@
                             <div class="row">
                                 <div class="col-md-2">
                                     <div class="mb-3">
-                                        <label for="data_producao" class="form-label">Conclusão</label>
+                                        <label for="data_producao" class="form-label">Previsão/Conclusão</label>
                                         <input type="date" id="data_producao" name="data_producao" class="form-control"
                                             value="{{ request('data_producao', $data_producao ?? '') }}">
                                     </div>
@@ -57,6 +57,19 @@
                                         <input type="text" id="op_produto" name="op_produto"
                                             placeholder="Código/Descrição" class="form-control"
                                             value="{{ request('op_produto', $op_produto ?? '') }}">
+                                    </div>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <div class="mb-3">
+                                        <label for="op_produto" class="form-label">Concluído</label>
+                                        <select id="op_concluido" name="op_concluido" class="form-control">
+                                            <option value=""
+                                                {{ request('op_concluido', $op_concluido ?? '') == '' ? 'selected' : '' }}>
+                                                Todos</option>
+                                            <option value="S" {{ request('op_concluido', $op_concluido ?? '') == 'S' ? 'selected' : '' }}>Concluído</option>
+                                            <option value="N" {{ request('op_concluido', $op_concluido ?? '') == 'N' ? 'selected' : '' }}>Pendente</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -166,6 +179,7 @@
                 "validade": validade
             })
         }
+
         function imprimir(ordemproducao_id) {
             const url = `/ordenspro/${ordemproducao_id}/imprimir`;
             window.location.href = url;

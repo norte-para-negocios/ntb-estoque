@@ -11,22 +11,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        /**
-         *
-         * codigo_local_estoque	integer	Código do local do estoque.+
-         * id_prod	integer	Código do produto.
-         * cod_int	string20	Código de Integração do Produto.+
-         * cod_int_ajuste	string60	Código de Integração com sistemas legados.
-         * data	string10	Data do Movimento.+
-         * tipo	text	Tipo do Ajuste de Estoque.+
-         * quan	decimal	Novo valor para quantidade mínima no estoque.+
-         * valor	decimal	Valor do Movimento.+
-         * obs	text	Observação do Movimento de Estoque.+
-         * origem	string3	Origem do Movimento de Estoque.+
-         * motivo	string3	Motivo do ajuste.+
-         * codigo_local_estoque_destino	integer	Obrigatório quando utilizar Tipo = "TRF"+
-         *
-         */
         Schema::create('movimentos', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('loja_id');

@@ -33,7 +33,7 @@
 </div>
 
 <div class="d-grid gap-2 mb-2">
-    <a href="{{ route('notafiscal.index') }}" class="btn btn-secondary text-start disabled">
+    <a href="{{ route('inventario.index') }}" class="btn btn-secondary text-start">
         <i class="fas fa-cubes me-3"></i>Inventário
     </a>
 </div>

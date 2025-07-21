@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Helpers\Constants;
-use App\Models\Movimento;
 use Carbon\Carbon;
 use DateTime;
 use Exception;
@@ -138,6 +137,68 @@ class OmieService
             return new stdClass();
         });
     }
+
+    public function listarProdutos()
+    {
+        $produtos = [];
+        $response = $this->produtosPage(1);
+        if (isset($response->produto_servico_cadastro) && count($response->produto_servico_cadastro) > 0) {
+            if ($response->total_de_paginas == 1) {
+                $produtos = (array)$response->produto_servico_cadastro;
+            } else {
+                $produtos = (array)$response->produto_servico_cadastro;
+                for ($i = 2; $i <= $response->total_de_paginas; $i++) {
+                    $produtos = collect($produtos)->merge($this->produtosPage($i)->produto_servico_cadastro)->all();
+                }
+            }
+        }
+        return $produtos;
+    }
+
+    public function produtosPage($pagina = 1): object
+    {
+
+        /**
+         * Não utilizar o cache aqui, pois as ordens de produção podem ser atualizadas com frequência.
+         **/
+
+        $this->init();
+        $url = $this->urlBase . 'v1/geral/produtos/';
+        $data = [
+            "call" => "ListarProdutos",
+            "app_key" => $this->key,
+            "app_secret" => $this->secret,
+            "param" => [
+                [
+                    "pagina" => $pagina,
+                    "registros_por_pagina" => 250,
+                    "apenas_importado_api" => "N",
+                    "filtrar_apenas_omiepdv" => "N",
+                    "ordem_decrescente" => "S",
+                ]
+            ]
+        ];
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
+
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            }
+        } catch (\Throwable $th) {
+            Log::critical($th->getMessage(), [
+                'Code' => $th->getCode(),
+                'File' => $th->getFile(),
+                'Line' => $th->getLine()
+            ]);
+        }
+        return new stdClass();
+    }
+
 
     //Listar Ordem de Producao
     public function getOrdensPro(DateTime $dataInicio, DateTime $dataFinal)
@@ -312,7 +373,8 @@ class OmieService
             $url = $this->urlBase . 'v1/geral/produtos/';
 
             $data = [
-                "call" => "ConsultarProduto",
+                "call" => "Consultar
+                ",
                 "app_key" => $this->key,
                 "app_secret" => $this->secret,
                 "param" => [
@@ -357,16 +419,56 @@ class OmieService
         $localEstoque = [];
         $response = $this->getLocais(1);
         if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
-            if ($response->nTotPaginas == 1) {
-                $localEstoque = (array)$response->locaisEncontrados;
-            } else {
-                $localEstoque = (array)$response->locaisEncontrados;
-                for ($i = 2; $i <= $response->nTotPaginas; $i++) {
-                    $localEstoque = array_merge($localEstoque, (array)$this->getLocais($i)->locaisEncontrados);
-                }
+            $localEstoque = (array)$response->locaisEncontrados;
+            for ($i = 2; $i <= $response->nTotPaginas; $i++) {
+                $localEstoque = array_merge($localEstoque, (array)$this->getLocais($i)->locaisEncontrados);
             }
         }
         return $localEstoque;
+    }
+
+    public function getPosicaoEstoque($local, $codigo, $data): null|object
+    {
+        $this->init();
+        $chave = "getPosicaoEstoque" . $this->loja_id . $local . $codigo . $data;
+        return Cache::remember($chave, 1800, function () use ($local, $codigo, $data) {
+            $url = $this->urlBase . 'v1/estoque/consulta/';
+            $data = [
+                "call" => "PosicaoEstoque",
+                "app_key" => $this->key,
+                "app_secret" => $this->secret,
+                "param" => [
+                    [
+                        "codigo_local_estoque" => $local,
+                        "id_prod" => $codigo,
+                        "cod_int" => "",
+                        "data" => $data
+                    ]
+                ]
+            ];
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                } else {
+                    Log::critical('OMIE - getPosicaoEstoque - Retorno inexperado', [
+                        'statusCode' => $response->status(),
+                        'response' => $response->body(),
+                    ]);
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
+                ]);
+            }
+            return new stdClass();
+        });
     }
 
     //Local Estoque
@@ -420,52 +522,5 @@ class OmieService
             }
             return new stdClass();
         });
-    }
-
-    public function createTransferencia(Movimento $movimento): null|object
-    {
-        $this->init();
-        $url = $this->urlBase . 'v1/estoque/ajuste/';
-        $data = [
-            "call" => "IncluirAjusteEstoque",
-            "app_key" => $this->key,
-            "app_secret" => $this->secret,
-            "param" => [
-                [
-                    "codigo_local_estoque" => $movimento->codigo_local_estoque,
-                    "id_prod" => $movimento->id_prod,
-                    "cod_int_ajuste" => $movimento->id,
-                    "data" => $movimento->data,
-                    "quan" => $movimento->quan,
-                    "obs" => $movimento->obs ?? "NTB - Estoque #{$movimento->id}",
-                    "origem" => $movimento->origem,
-                    "tipo" => $movimento->tipo,
-                    "motivo" => $movimento->motivo,
-                    "valor" => $movimento->valor
-                ]
-            ]
-        ];
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500 && stripos($response->object()->faultstring, "Não existem registros para")) {
-                return null;
-            } else {
-                Log::critical('OMIE - createTransferencia - Retorno inexperado', [
-                    'statusCode' => $response->status(),
-                    'response' => $response->body(),
-                ]);
-            }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return null;
     }
 }
