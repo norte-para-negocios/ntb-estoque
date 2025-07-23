@@ -145,7 +145,7 @@ class NotafiscalController extends Controller
             if ($it->itensCabec->nIdProduto > 0) {
                 $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
                 $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
-                $qtde = ($produto->unidade = 'UN') ? ($nf->quantidade ?? 1) : 1;
+                $qtde = ($produto->unidade == 'UN') ? ($nf->quantidade ?? 1) : 1;
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
                     // for ($i = 1; $i <= $qtde; $i++) {
                         if ($produto->unidade == 'UN') {
