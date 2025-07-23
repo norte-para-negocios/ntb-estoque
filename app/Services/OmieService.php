@@ -373,8 +373,7 @@ class OmieService
             $url = $this->urlBase . 'v1/geral/produtos/';
 
             $data = [
-                "call" => "Consultar
-                ",
+                "call" => "ConsultarProduto",
                 "app_key" => $this->key,
                 "app_secret" => $this->secret,
                 "param" => [
