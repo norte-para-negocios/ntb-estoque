@@ -22,3 +22,9 @@ Schedule::call(function () {
         (new ProdutoService($loja))->fetchAll();
     }
 })->everySixHours();
+
+Schedule::call(function () {
+    foreach (Loja::all() as $loja) {
+        (new LocalEstoqueService($loja))->fetchAll();
+    }
+})->everySixHours();

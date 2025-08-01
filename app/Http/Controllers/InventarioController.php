@@ -6,7 +6,6 @@ use App\Jobs\InventarioAjustesJob;
 use App\Jobs\InventarioItensJob;
 use App\Models\Inventario;
 use App\Models\InventarioItem;
-use App\Models\Movimento;
 use App\Models\Produto;
 use App\Services\CanService;
 use App\Services\OmieService;
