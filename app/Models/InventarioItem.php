@@ -15,6 +15,12 @@ class InventarioItem extends Model
         'produto_familia',
         'quan',
         'valor',
+
+        'response',
+        'codigo_status',
+        'descricao_status',
+        'id_movest',
+        'id_ajuste',
     ];
 
     public function inventario()

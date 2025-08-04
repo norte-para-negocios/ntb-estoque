@@ -27,6 +27,7 @@ class InventarioAjustesJob implements ShouldQueue
     {
         $response = $this->createAjuste($this->inventarioItem);
         if ($response) {
+            $this->inventarioItem->response = json_encode($response);
             $this->inventarioItem->codigo_status = $response->codigo_status;
             $this->inventarioItem->descricao_status = $response->descricao_status;
             $this->inventarioItem->id_movest = $response->id_movest;
@@ -37,43 +38,48 @@ class InventarioAjustesJob implements ShouldQueue
 
     private function createAjuste(InventarioItem $inventarioItem): null|object
     {
-        $loja = $inventarioItem->inventario->loja;
-        $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-        $data = [
-            "call" => "IncluirAjusteEstoque",
-            "app_key" => $loja->omie_app_key,
-            "app_secret" => $loja->omie_app_secret,
-            "param" => [
-                [
-                    "codigo_local_estoque" => $inventarioItem->inventario->codigo_local_estoque,
-                    "id_prod" => $inventarioItem->produto_codigo_produto,
-                    "cod_int_ajuste" => 'ITEM'.$inventarioItem->id,
-                    "data" => $inventarioItem->inventario->data->format('d/m/Y'),
-                    "quan" => $inventarioItem->quan,
-                    "valor" => $inventarioItem->valor,
-                    "obs" => "NTB - Estoque Item: #{$inventarioItem->id}",
-                    "origem" => $inventarioItem->inventario->origem,
-                    "tipo" => $inventarioItem->inventario->tipo,
-                    "motivo" => $inventarioItem->inventario->motivo,
+        if ($inventarioItem->quan !== null) {
+            $loja = $inventarioItem->inventario->loja;
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                "call" => "IncluirAjusteEstoque",
+                "app_key" => $loja->omie_app_key,
+                "app_secret" => $loja->omie_app_secret,
+                "param" => [
+                    [
+                        "codigo_local_estoque" => $inventarioItem->inventario->codigo_local_estoque,
+                        "id_prod" => $inventarioItem->produto_codigo_produto,
+                        "cod_int_ajuste" => 'ITEM' . $inventarioItem->id,
+                        "data" => $inventarioItem->inventario->data->format('d/m/Y'),
+                        "quan" => $inventarioItem->quan,
+                        "valor" => $inventarioItem->valor == 0 ? 0.01 : $inventarioItem->valor,
+                        "obs" => "NTB - Estoque Item: #{$inventarioItem->id}",
+                        "origem" => $inventarioItem->inventario->origem,
+                        "tipo" => $inventarioItem->inventario->tipo,
+                        "motivo" => $inventarioItem->inventario->motivo,
+                    ]
                 ]
-            ]
-        ];
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                $inventarioItem->response = $response->body();
-                $inventarioItem->save();
+            ];
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    $inventarioItem->response = $response->body();
+                    $inventarioItem->save();
+                }
+            } catch (\Throwable $th) {
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
+                ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+        } else {
+            $inventarioItem->response = 'Não ajustado, quantidade não informada!';
+            $inventarioItem->save();
         }
         return null;
     }

@@ -84,7 +84,10 @@
                                             onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
                                             value="{{ $item->quan }}">
                                     @else
-                                        {{ $item->quan }}
+                                        {{ $item->quan }} <br>
+                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
+                                        ID Movimento: {{ $item->id_movest }}<br>
+                                        ID Ajuste: {{ $item->id_ajuste }}
                                     @endif
                                 </td>
                             </tr>
