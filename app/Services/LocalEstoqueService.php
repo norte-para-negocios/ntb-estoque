@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\LocalEstoque;
 use App\Models\Loja;
-use App\Models\Produto;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -18,13 +18,13 @@ class LocalEstoqueService
     public function fetchAll($lastPages = 0): void
     {
         $response = $this->fetchPage(1);
-        if (isset($response->produto_servico_cadastro) && count($response->produto_servico_cadastro) > 0) {
-            $this->saveProdutos((array)$response->produto_servico_cadastro);
-            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
+        if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
+            $this->saveLocais((array)$response->locaisEncontrados);
+            if (($response->nTotPaginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
+                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->nTotPaginas); $i++) {
                     $resp = $this->fetchPage($i);
-                    if (isset($resp->produto_servico_cadastro) && count($resp->produto_servico_cadastro) > 0) {
-                        $this->saveProdutos((array)$resp->produto_servico_cadastro);
+                    if (isset($resp->locaisEncontrados) && count($resp->locaisEncontrados) > 0) {
+                        $this->saveLocais((array)$resp->locaisEncontrados);
                     }
                 }
             }
@@ -33,18 +33,15 @@ class LocalEstoqueService
 
     public function fetchPage($pagina = 1): object
     {
-        $url = $this->urlBase . 'v1/geral/produtos/';
+        $url = $this->urlBase . 'v1/estoque/local/';
         $data = [
-            "call" => "ListarProdutos",
+            "call" => "ListarLocaisEstoque",
             "app_key" => $this->loja->omie_app_key,
             "app_secret" => $this->loja->omie_app_secret,
             "param" => [
                 [
-                    "pagina" => $pagina,
-                    "registros_por_pagina" => 500,
-                    "apenas_importado_api" => "N",
-                    "filtrar_apenas_omiepdv" => "N",
-                    "ordem_decrescente" => "S",
+                    "nPagina" => $pagina,
+                    "nRegPorPagina" => 20
                 ]
             ]
         ];
@@ -69,75 +66,57 @@ class LocalEstoqueService
         return new stdClass();
     }
 
-    public function saveProdutos(array $produtos): void
+    public function saveLocais(array $locais): void
     {
-        foreach ($produtos as $produto) {
-            $this->saveProduto((object)$produto);
+        foreach ($locais as $local) {
+            $this->saveLocal((object)$local);
         }
     }
 
-    public function saveProduto(object $produto): void
+    public function saveLocal(object $local): void
     {
-        $prod['loja_id'] = $this->loja->id;
-        $prod['codigo_produto'] = $produto->codigo_produto ?? null;
-        $prod['codigo'] = $produto->codigo ?? null;
-        $prod['descricao'] = $produto->descricao ?? null;
-        $prod['codigo_familia'] = $produto->codigo_familia ?? null;
-        $prod['descricao_familia'] = $produto->descricao_familia ?? null;
-        $prod['tipo_item'] = $produto->tipoItem ?? null;
-        $prod['unidade'] = $produto->unidade ?? null;
-        $prod['valor_unitario'] = $produto->valor_unitario ?? null;
 
-        $prod['full_object'] = json_encode($produto);
+        $item['loja_id'] = $this->loja->id;
+        $item['codigo_local_estoque'] = $local->codigo_local_estoque ?? null;
+        $item['codigo'] = $local->codigo ?? null;
+        $item['descricao'] = $local->descricao ?? null;
+        $item['tipo'] = $local->tipo ?? null;
+        $item['padrao'] = $local->padrao ?? null;
+        $item['inativo'] = $local->inativo ?? null;
+        $item['codigo_cliente'] = $local->codigo_cliente ?? null;
+        $item['dispOrdemProducao'] = $local->dispOrdemProducao ?? null;
+        $item['dispConsumoOP'] = $local->dispConsumoOP ?? null;
+        $item['dispRemessa'] = $local->dispRemessa ?? null;
+        $item['dispVenda'] = $local->dispVenda ?? null;
+        $item['dInc'] = $local->dInc ?? null;
+        $item['hInc'] = $local->hInc ?? null;
+        $item['uInc'] = $local->uInc ?? null;
+        $item['dAlt'] = $local->dAlt ?? null;
+        $item['hAlt'] = $local->hAlt ?? null;
+        $item['uAlt'] = $local->uAlt ?? null;
 
         try {
-            Produto::updateOrCreate(
+            LocalEstoque::updateOrCreate(
                 [
                     'loja_id' => $this->loja->id,
-                    'codigo_produto' => $prod['codigo_produto']
+                    'codigo_local_estoque' => $item['codigo_local_estoque']
                 ],
-                $prod
+                $item
             );
         } catch (Exception $e) {
-            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+            Log::error("Erro ao salvar local de estoque nº: " . $item['codigo_local_estoque'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
         }
-    }
 
-    public function fetchProduto(string $codigo_produto): object
-    {
-        $url = $this->urlBase . 'v1/geral/produtos/';
-        $data = [
-            "call" => "ConsultarProduto",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
-                [
-                    "codigo_produto" => $codigo_produto,
-                    "codigo_produto_integracao" => "",
-                    "codigo" => "",
-                ]
-            ]
-        ];
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->timeout(60)->post($url, $data);
-            if ($response->status() === 200) {
-                return $response->object();
-            }
-        } finally {
-            // Evitar qualquer erro.
-        }
-        return new stdClass();
     }
 
     public function webhook(array $data): void
     {
-        if (isset($data['event']['codigo_produto'])) {
-            $produto = $this->fetchProduto($data['event']['codigo_produto']);
-            if (isset($produto->codigo_produto)) {
-                $this->saveProduto($produto);
-            }
-        }
+        Log::info('Webhook Local Estoque', $data);
+        // if (isset($data['event']['codigo_produto'])) {
+        //     $produto = $this->fetchProduto($data['event']['codigo_produto']);
+        //     if (isset($produto->codigo_produto)) {
+        //         $this->saveProduto($produto);
+        //     }
+        // }
     }
 }

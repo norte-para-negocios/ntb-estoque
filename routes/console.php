@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Loja;
+use App\Services\LocalEstoqueService;
 use App\Services\OrdemProducaoService;
 use App\Services\ProdutoService;
 use Illuminate\Foundation\Inspiring;
@@ -13,6 +14,12 @@ Artisan::command('inspire', function () {
 
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
+        (new LocalEstoqueService($loja))->fetchAll();
+    }
+})->everySixHours();
+
+Schedule::call(function () {
+    foreach (Loja::all() as $loja) {
         (new OrdemProducaoService($loja))->fetchAll(3);
     }
 })->everyFifteenMinutes();
@@ -20,11 +27,5 @@ Schedule::call(function () {
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
         (new ProdutoService($loja))->fetchAll();
-    }
-})->everySixHours();
-
-Schedule::call(function () {
-    foreach (Loja::all() as $loja) {
-        (new LocalEstoqueService($loja))->fetchAll();
     }
 })->everySixHours();

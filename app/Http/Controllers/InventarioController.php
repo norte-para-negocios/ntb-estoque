@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\InventarioAjustesJob;
-use App\Jobs\InventarioItensJob;
 use App\Models\Inventario;
 use App\Models\InventarioItem;
+use App\Models\LocalEstoque;
+use App\Models\Loja;
+use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Services\CanService;
 use App\Services\OmieService;
+use App\Services\PosicaoEstoqueService;
+use App\Services\ProdutoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,12 +20,9 @@ use Illuminate\Support\Facades\Http;
 
 class InventarioController extends Controller
 {
-    private $omie;
-
     public function __construct()
     {
         $this->middleware('auth');
-        $this->omie = new OmieService();
     }
 
     public function index(Request $request)
@@ -45,7 +46,7 @@ class InventarioController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $locaisEstoque = $this->omie->getLocaisEstoque();
+        $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao', 'asc')->get();
 
         return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque'));
     }
@@ -63,6 +64,9 @@ class InventarioController extends Controller
             'motivo' => 'required|in:INV,INI',
         ]);
 
+        (new ProdutoService(Loja::find(Auth::user()->current_loja_id)))->fetchAll();
+        (new PosicaoEstoqueService(Loja::find(Auth::user()->current_loja_id)))->fetchAll($request->input('estoque_origem'), Carbon::parse($request->input('data'))->format('d/m/Y'));
+
         $inventario = Inventario::create([
             'loja_id' => Auth::user()->current_loja_id,
             'codigo_local_estoque' => $request->input('estoque_origem'),
@@ -78,6 +82,13 @@ class InventarioController extends Controller
             ->get();
 
         foreach ($produtos as $produto) {
+
+            $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
+                ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
+                ->where('n_cod_prod', $produto->codigo_produto)
+                ->where('data_posicao', $inventario->data->format('Y-m-d'))
+                ->first();
+
             $inventario->items()->create([
                 'loja_id' => Auth::user()->current_loja_id,
                 'produto_codigo_produto' => $produto->codigo_produto,
@@ -85,12 +96,14 @@ class InventarioController extends Controller
                 'produto_descricao' => $produto->descricao ?? '',
                 'produto_familia' => $produto->descricao_familia ?? '',
                 'quan' => null,
-                'valor' => null,
+                'valor' => $posicaoEstoque->n_cmc ?? 0.01,
             ]);
-        }
-        dispatch(new InventarioItensJob($inventario));
 
-        $localEstoque = $this->omie->getLocalEstoque($request->input('estoque_origem'));
+        }
+
+        $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
+            ->where('codigo_local_estoque', $request->input('estoque_origem'))
+            ->first();
 
         return view('inventario.contagem', compact('inventario', 'localEstoque'));
     }
@@ -107,7 +120,10 @@ class InventarioController extends Controller
 
     public function contagem(Inventario $inventario)
     {
-        $localEstoque = $this->omie->getLocalEstoque($inventario->codigo_local_estoque);
+        $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
+            ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
+            ->first();
+
         return view('inventario.contagem', compact('inventario', 'localEstoque'));
     }
 
