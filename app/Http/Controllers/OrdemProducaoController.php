@@ -93,7 +93,7 @@ class OrdemProducaoController extends Controller
             if ($ordemProducao->produto_unidade == 'UN') {
                 $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
             } else {
-                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ','. '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',' . '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
             }
 
             $etiquetas[] = [
@@ -105,7 +105,7 @@ class OrdemProducaoController extends Controller
                 'qtde_etiqueta' => '',
                 'inclusao' => '',
                 'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
-                'produzido'   => json_decode($ordemProducao->full_object)->outrasInf->dConclusao ?? '',
+                'produzido'   => json_decode($ordemProducao->full_object)->outrasInf->dConclusao !== "" ? json_decode($ordemProducao->full_object)->outrasInf->dConclusao : Carbon::now()->format('d/m/Y'),
                 'fornecedor'  => '',
                 'nfe'           => '',
             ];

@@ -91,17 +91,17 @@
                             @endif
                             @if ($etiqueta['qtde_etiqueta'] !== '')
                                 <span style="margin-bottom: 2mm !important;">
-                                    Qt. etiqueta: {{ substr(trim($etiqueta['qtde_etiqueta']), 0, 17) }}
+                                    Qt. etiq.: {{ substr(trim($etiqueta['qtde_etiqueta']), 0, 14) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['inclusao'] !== '')
                                 <span style="margin-bottom: 2mm !important;">
-                                    Dt. receb: {{ substr(trim($etiqueta['inclusao']), 0, 17) }}
+                                    Dt. receb: {{ substr(trim($etiqueta['inclusao']), 0, 14) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['produzido'] !== '')
                                 <span style="margin-bottom: 2mm !important;">
-                                    Fabricado: {{ substr(trim($etiqueta['produzido']), 0, 15) }}
+                                    Fabricado: {{ substr(trim($etiqueta['produzido']), 0, 14) }}
                                 </span><br>
                             @endif
                             @if ($etiqueta['validade'] !== '')

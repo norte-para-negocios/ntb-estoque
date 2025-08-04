@@ -33,4 +33,9 @@ class Inventario extends Model
     {
         return $this->belongsTo(Loja::class, 'loja_id');
     }
+
+    public function localEstoque()
+    {
+        return $this->belongsTo(LocalEstoque::class, 'codigo_local_estoque', 'codigo_local_estoque')->where('loja_id', $this->loja_id);
+    }
 }

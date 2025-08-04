@@ -133,6 +133,7 @@ class ProdutoService
 
     public function webhook(array $data): void
     {
+        Log::debug('ProdutoService Webhook', $data);
         if (isset($data['event']['codigo_produto'])) {
             $produto = $this->fetchProduto($data['event']['codigo_produto']);
             if (isset($produto->codigo_produto)) {

@@ -60,10 +60,6 @@
                 <tbody>
                     @if (isset($inventarios) && !empty($inventarios))
                         @foreach ($inventarios as $inventario)
-                            @php
-                                $omie = new \App\Services\OmieService();
-                                $local = $omie->getLocalEstoque($inventario->codigo_local_estoque);
-                            @endphp
                             <tr>
                                 <td class="px-2">
                                     <div class="container">
@@ -83,7 +79,7 @@
                                                             <p class="mb-0">
                                                                 Local:
                                                                 <strong>{{ $inventario->codigo_local_estoque ?? '' }} -
-                                                                    {{ $local->descricao ?? '' }}</strong>
+                                                                    {{ $inventario->localEstoque->descricao ?? '' }}</strong>
                                                             </p>
                                                             <p class="mb-0">
                                                                 Produtos contados:
@@ -101,7 +97,7 @@
                                                                     </span>
                                                                 @else
                                                                     Finalizado em: <span class="badge bg-success fs-6 text-dark">
-                                                                        {{ $movimento->finalizado->format('d/m/Y') }}
+                                                                        {{ $inventario->finalizado->format('d/m/Y') }}
                                                                     </span>
                                                                 @endif
                                                             </p>
