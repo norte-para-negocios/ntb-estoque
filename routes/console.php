@@ -20,6 +20,12 @@ Schedule::call(function () {
 
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
+        (new OrdemProducaoService($loja))->fetchAll();
+    }
+})->daily();
+
+Schedule::call(function () {
+    foreach (Loja::all() as $loja) {
         (new OrdemProducaoService($loja))->fetchAll(3);
     }
 })->everyFifteenMinutes();
