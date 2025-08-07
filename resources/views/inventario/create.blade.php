@@ -30,13 +30,13 @@
                         </select>
                     </div>
 
-                    <div class="mb-3">
+                    <div class="mb-3" hidden>
                         <label for="motivo" class="form-label">Motivo do Inventário</label>
                         <select name="motivo" id="motivo" class="form-select" required>
-                            <option value="">Selecione o motivo</option>
-                            @foreach (\App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO as $key => $value)
+                            <option value="INV" selected>Ajuste por Inventário</option>
+                            {{-- @foreach (\App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO as $key => $value)
                                 <option value="{{ $key }}">{{ $value }}</option>
-                            @endforeach
+                            @endforeach --}}
                         </select>
                     </div>
                 </form>

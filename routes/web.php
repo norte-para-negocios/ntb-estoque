@@ -7,6 +7,7 @@ use App\Http\Controllers\OrdemProducaoController;
 use App\Http\Controllers\PermissaoController;
 use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\CheckCurrentLoja;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -16,7 +17,6 @@ Auth::routes(['register' => false]);
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home.index');
-
     // Usuário
     Route::resource('usuario', UserController::class)->parameter('usuario', 'user');
     Route::post('/usuario/{user}/loja/{loja}', [UserController::class, 'setCurrentLoja'])->name('usuario.loja');
@@ -25,6 +25,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Loja
     Route::resource('loja', LojaController::class);
+});
+
+Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
 
     // Nota fiscal
     Route::get('/notasfiscais', [NotafiscalController::class, 'index'])->name('notafiscal.index');
