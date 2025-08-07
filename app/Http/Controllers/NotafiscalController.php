@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Nf;
+use App\Models\Produto;
 use App\Services\CanService;
 use Carbon\Carbon;
 use App\Services\OmieService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use PDF;
 
 class NotafiscalController extends Controller
@@ -186,6 +188,13 @@ class NotafiscalController extends Controller
         if (config('app.env') === 'local') {
             return $pdf->inline("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
         }
-        return $pdf->download("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
+
+        if ($nIdProduto !== '') {
+            $prod = Produto::where('codigo_produto', $nIdProduto)->first();
+            $arquivo_nome = Str::slug("etiqueta_nfe_" . $recebimento->cabec->cNumeroNFe . "_" .  ($prod->descricao ?? $nIdProduto)) . ".pdf";
+        } else {
+            $arquivo_nome = Str::slug("etiquetas_nfe_" . $recebimento->cabec->cNumeroNFe) . "_" . ($recebimento->cabec->cNome ?? '') . ".pdf";
+        }
+        return $pdf->download($arquivo_nome);
     }
 }

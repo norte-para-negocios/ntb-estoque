@@ -23,9 +23,10 @@
                             @php
                                 $produto = '';
                                 if ($it->itensCabec->nIdProduto > 0) {
-                                    $produto = (new \App\Services\OmieService())->getConsultaProduto(
+                                    $produto = \App\Models\Produto::where(
+                                        'codigo_produto',
                                         $it->itensCabec->nIdProduto,
-                                    );
+                                    )->first();
                                 }
                             @endphp
                             <tr>
@@ -39,18 +40,10 @@
                                                         {{ $it->itensCabec->cDescricaoProduto }}
                                                         {{ $produto->tipoItem ?? '' }}
                                                     </h6>
-                                                    {{-- <p class="mb-2">
-                                                        <small>Quantidade:</small> {{ $it->itensCabec->nQtdeNFe ?? '' }}
-                                                        {{ strtoupper($it->itensCabec->cUnidadeNfe) }}<br>
-                                                        <small>Unitário: R$</small>
-                                                        {{ number_format($it->itensCabec->nPrecoUnit, 2, ',', '.') }}<br>
-                                                        <small>Total: R$</small>
-                                                        {{ number_format($it->itensCabec->vTotalItem, 2, ',', '.') }}
-                                                    </p> --}}
                                                     @if ($it->itensCabec->nIdProduto > 0)
                                                         <div class="mb-3">
                                                             <label for="quantidade"
-                                                                class="form-label mb-0">Quantidade:</label>
+                                                                class="form-label mb-0">Quantidade ({{ $produto->unidade ?? "-" }}):</label>
                                                             <input type="number" class="form-control" id="quantidade"
                                                                 name="quantidade"
                                                                 value="{{ \App\Models\Nf::where('n_id_receb', $recebimento->cabec->nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first()->quantidade ?? 1 }}"

@@ -10,7 +10,6 @@ use App\Models\Loja;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Services\CanService;
-use App\Services\OmieService;
 use App\Services\PosicaoEstoqueService;
 use App\Services\ProdutoService;
 use Carbon\Carbon;
@@ -77,6 +76,7 @@ class InventarioController extends Controller
         ]);
 
         $produtos = Produto::where('loja_id', Auth::user()->current_loja_id)
+            ->where('full_object->inativo', "N")
             ->orderBy('descricao_familia', 'asc')
             ->orderBy('descricao', 'asc')
             ->get();

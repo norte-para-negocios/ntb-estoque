@@ -72,25 +72,37 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($inventario->items as $item)
-                            <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}">
-                                <td>
-                                    {{ $item->produto_descricao }}
-                                    <small> #{{ $item->produto_codigo }}</small>
-                                </td>
-                                <td>
-                                    @if ($inventario->finalizado === null)
-                                        <input type="number" class="form-control" min="0.001" step="0.001"
-                                            onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
-                                            value="{{ $item->quan }}">
-                                    @else
-                                        {{ $item->quan }} <br>
-                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
-                                        ID Movimento: {{ $item->id_movest }}<br>
-                                        ID Ajuste: {{ $item->id_ajuste }}
-                                    @endif
+                        @foreach ($inventario->items->groupBy('produto_familia') as $familia => $items)
+                            <tr>
+                                <td colspan="2" class="bg-secondary text-white">
+                                    <strong>{{ $familia == '' ? 'Sem Classificação' : $familia }}</strong>
                                 </td>
                             </tr>
+                            @foreach ($items->sortBy('produto_descricao') as $item)
+                                <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}">
+                                    <td class="align-middle">
+                                        <div class="d-flex justify-content-between">
+                                            <span>
+                                                {{ $item->produto_descricao }}
+                                                <small> #{{ $item->produto_codigo }}</small>
+                                            </span>
+                                            <span>{{ $item->produto->unidade ?? '-' }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if ($inventario->finalizado === null)
+                                            <input type="number" class="form-control" min="0.001" step="0.001"
+                                                onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
+                                                value="{{ $item->quan }}"> {{ $item->produto_unidade }}
+                                        @else
+                                            {{ $item->quan }} <br>
+                                            {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
+                                            ID Movimento: {{ $item->id_movest }}<br>
+                                            ID Ajuste: {{ $item->id_ajuste }}
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
                         @endforeach
                     </tbody>
                 </table>
