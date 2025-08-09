@@ -54,6 +54,9 @@
                                     OMIE KEY: {{ Str::limit($loja->omie_app_key, 6) }}<br>
                                     OMIE SECRET: {{ Str::limit($loja->omie_app_secret, 6) }}
                                 </p>
+                                <p>
+                                    Ativa: {{ $loja->ativo ? 'Sim' : 'Não' }}
+                                </p>
                             </td>
                             <td>
                                 <a href="{{ route('loja.edit', $loja->id) }}" class="btn btn-secondary m-1">

@@ -59,7 +59,7 @@ class User extends Authenticatable
 
     public function lojas(): BelongsToMany
     {
-        return $this->belongsToMany(Loja::class);
+        return $this->belongsToMany(Loja::class)->where('ativo', true);
     }
 
     public function permissoes(): BelongsToMany

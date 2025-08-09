@@ -21,6 +21,8 @@ class Loja extends Model
 
         'omie_app_key',
         'omie_app_secret',
+
+        'ativo',
     ];
 
     protected $casts = [

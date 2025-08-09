@@ -66,6 +66,7 @@ class LojaController extends Controller
             $loja->numero = $request->get('numero');
             $loja->omie_app_key = $request->get('omie_app_key');
             $loja->omie_app_secret = $request->get('omie_app_secret');
+            $loja->ativo = $request->has('ativo') ? true : false;
             $loja->save();
             return redirect()->route('loja.index')->with('success', 'Registro cadastrado com sucesso!');
         } catch (\Throwable $th) {
@@ -116,6 +117,7 @@ class LojaController extends Controller
                 'numero' => $request->get('numero'),
                 'omie_app_key' => $request->get('omie_app_key'),
                 'omie_app_secret' => $request->get('omie_app_secret'),
+                'ativo' => $request->has('ativo') ? true : false,
             ];
             $loja->update($update);
             return redirect()->route('loja.index')->with('success', 'Registro atualizado com sucesso!');
