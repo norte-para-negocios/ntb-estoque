@@ -5,7 +5,7 @@
         <div class="card card-body mb-4">
             <div class="row">
                 <div class="col-12 d-flex justify-content-between align-items-start">
-                    <h1 class="">
+                    <h1>
                         Inventário #{{ $inventario->id }}:
                         <small>{{ auth()->user()->loja->nome_fantasia }}</small>
                     </h1>
@@ -38,12 +38,47 @@
                     </p>
                 </div>
             </div>
+
+            <div class="row">
+                <div class="col-lg-4 col-12">
+                    <div class="mb-3">
+                        <label for="tipo_produto" class="form-label">Tipo de Produto</label>
+                        <select id="tipo_produto" name="tipo_produto" class="form-control"
+                            onchange="searchTipo(this.value)">
+                            <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>
+                                Todos
+                            </option>
+                            @foreach (\App\Helpers\Constants::PRODUTO_TIPO_ITEM as $key => $value)
+                                <option value="{{ $key }}" {{ ($tipo_produto ?? '') == $key ? 'selected' : '' }}>
+                                    {{ $key }} - {{ $value }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-12">
+                    <div class="mb-3">
+                        <label for="familia_produto" class="form-label">Família</label>
+                        <select id="familia_produto" name="familia_produto" class="form-control"
+                            onchange="searchFamilia(this.value)">
+                            <option value="">
+                                Todos
+                            </option>
+                            @foreach ($inventario->items->groupBy('produto_familia')->sortBy('produto_familia') as $produto_familia => $produtosfamilia)
+                                <option value="{{ $produto_familia }}">
+                                    {{ $produto_familia == '' ? 'Sem Classificação' : $produto_familia }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="card card-body">
             <nav class="navbar navbar-dark bg-primary px-2">
                 <span class="text-white fs-4 me-2">Produtos</span>
-                <form class="d-flex flex-grow-1">
+                <div class="d-flex flex-grow-1">
                     <div class="input-group">
                         <input class="form-control" type="search" placeholder="Ctrl+F ou digite para buscar..."
                             id="search" autofocus />
@@ -60,7 +95,7 @@
                             Parar Leitura
                         </button>
                     </div>
-                </form>
+                </div>
             </nav>
 
             <div class="table-responsive">
@@ -73,13 +108,14 @@
                     </thead>
                     <tbody>
                         @foreach ($inventario->items->groupBy('produto_familia') as $familia => $items)
-                            <tr>
+                            <tr data-produto="" data-familia="{{ $familia }}" data-tipo="">
                                 <td colspan="2" class="bg-secondary text-white">
                                     <strong>{{ $familia == '' ? 'Sem Classificação' : $familia }}</strong>
                                 </td>
                             </tr>
                             @foreach ($items->sortBy('produto_descricao') as $item)
-                                <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}">
+                                <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}"
+                                    data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
                                     <td class="align-middle">
                                         <div class="d-flex justify-content-between">
                                             <span>
@@ -148,7 +184,7 @@
                     document.getElementById('botaoPararCamera').style.display = 'none';
                 } catch (erro) {
                     // Se erro for de permissão, exibe botão para solicitar
-                    console.warn('Permissão não concedida ou erro:', erro);
+                    alert('Permissão não concedida ou erro:', erro);
                     document.getElementById('botaoPermissao').style.display = 'inline-block';
                 }
             }
@@ -173,8 +209,7 @@
                         .then(() => {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
-                        })
-                        .catch(err => console.error("Erro ao parar a câmera:", err));
+                        });
                 }
             }
 
@@ -190,10 +225,6 @@
                         .then(function() {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
-                            console.log("Leitura parada.")
-                        })
-                        .catch(function(err) {
-                            console.error("Erro ao parar:", err)
                         });
                 }
 
@@ -203,7 +234,7 @@
             // Função opcional para erros de leitura em cada frame
             function onScanError(errorMessage) {
                 // errorMessage pode ser ignorado ou logado
-                console.warn("Falha na leitura:", errorMessage);
+                alert("Falha na leitura:", errorMessage);
             }
 
             function buscarProdutoPorQrCode(codigo) {
@@ -254,10 +285,6 @@
                         .then(function() {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
-                            console.log("Leitura parada.")
-                        })
-                        .catch(function(err) {
-                            console.error("Erro ao parar:", err)
                         });
                 }
             });
@@ -288,6 +315,22 @@
             });
         });
 
+
+        function searchTipo(el) {
+            const tipo = el.toLowerCase();
+            rows.forEach(row => {
+                const rowTipo = row.dataset.tipo.toLowerCase();
+                row.style.display = rowTipo.includes(tipo) ? '' : 'none';
+            });
+        }
+
+        function searchFamilia(el) {
+            const familia = el.toLowerCase();
+            rows.forEach(row => {
+                const rowFamilia = row.dataset.familia.toLowerCase();
+                row.style.display = rowFamilia.includes(familia) ? '' : 'none';
+            });
+        }
 
         document.addEventListener('keydown', e => {
             if (e.ctrlKey && e.key === 'f') {

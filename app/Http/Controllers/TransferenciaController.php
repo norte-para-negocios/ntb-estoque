@@ -180,28 +180,29 @@ class TransferenciaController extends Controller
             abort(403, "Você não possui a permissão: Transferência!");
         }
 
-        // Verifica se o movimento já foi processado
-        if ($movimento->id_ajuste !== null) {
-            $loja = $movimento->loja;
-            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-            $data = [
-                "call" => "ExcluirAjusteEstoque",
-                "app_key" => $loja->omie_app_key,
-                "app_secret" => $loja->omie_app_secret,
-                "param" => [
-                    [
-                        "id_ajuste" => $movimento->id_ajuste,
+        try {
+            // Verifica se o movimento já foi processado
+            if ($movimento->id_ajuste !== null) {
+                $loja = $movimento->loja;
+                $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+                $data = [
+                    "call" => "ExcluirAjusteEstoque",
+                    "app_key" => $loja->omie_app_key,
+                    "app_secret" => $loja->omie_app_secret,
+                    "param" => [
+                        [
+                            "id_ajuste" => $movimento->id_ajuste,
+                        ]
                     ]
-                ]
-            ];
-            try {
+                ];
                 Http::withHeaders([
                     'Content-Type' => 'application/json'
                 ])->connectTimeout(60)->timeout(60)->post($url, $data);
-                return redirect()->route('transferencia.index')->with('success', 'Movimentação excluída com sucesso!');
-            } finally {
-                $movimento->delete();
             }
+            $movimento->delete();
+            return redirect()->route('transferencia.index')->with('success', 'Movimentação excluída com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()->route('transferencia.index')->with('warning', 'Ops! :(, Algo de errado aconteceu ao excluir a movimentação: ' . $e->getMessage());
         }
     }
 }

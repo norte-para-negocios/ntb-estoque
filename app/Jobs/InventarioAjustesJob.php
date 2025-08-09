@@ -2,7 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\Inventario;
 use App\Models\InventarioItem;
+use App\Models\Loja;
+use App\Models\PosicaoEstoque;
+use App\Services\PosicaoEstoqueService;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -15,7 +20,7 @@ class InventarioAjustesJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(protected InventarioItem $inventarioItem)
+    public function __construct(protected Inventario $inventario)
     {
         //
     }
@@ -25,14 +30,29 @@ class InventarioAjustesJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $response = $this->createAjuste($this->inventarioItem);
-        if ($response) {
-            $this->inventarioItem->response = json_encode($response);
-            $this->inventarioItem->codigo_status = $response->codigo_status;
-            $this->inventarioItem->descricao_status = $response->descricao_status;
-            $this->inventarioItem->id_movest = $response->id_movest;
-            $this->inventarioItem->id_ajuste = $response->id_ajuste;
-            $this->inventarioItem->save();
+        (new PosicaoEstoqueService(Loja::find($this->inventario->loja_id)))->fetchAll($this->inventario->codigo_local_estoque, $this->inventario->data->format('d/m/Y'));
+
+        foreach ($this->inventario->items()->whereNotNull('inventario_items.quan')->get() as $inventarioItem) {
+
+            if ($inventarioItem->valor === null || $inventarioItem->valor <= 0) {
+                $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
+                    ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
+                    ->where('n_cod_prod', $inventarioItem->produto_codigo_produto)
+                    ->where('data_posicao', $this->inventario->data->format('Y-m-d'))
+                    ->first();
+                $inventarioItem->valor = $posicaoEstoque->n_cmc ?? 0.01; // Default to 0.01 if not found
+                $inventarioItem->save();
+            }
+
+            $response = $this->createAjuste($inventarioItem);
+            if ($response) {
+                $inventarioItem->response = json_encode($response);
+                $inventarioItem->codigo_status = $response->codigo_status;
+                $inventarioItem->descricao_status = $response->descricao_status;
+                $inventarioItem->id_movest = $response->id_movest;
+                $inventarioItem->id_ajuste = $response->id_ajuste;
+                $inventarioItem->save();
+            }
         }
     }
 

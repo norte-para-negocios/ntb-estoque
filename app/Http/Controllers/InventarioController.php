@@ -63,9 +63,6 @@ class InventarioController extends Controller
             'motivo' => 'required|in:INV,INI',
         ]);
 
-        (new ProdutoService(Loja::find(Auth::user()->current_loja_id)))->fetchAll();
-        (new PosicaoEstoqueService(Loja::find(Auth::user()->current_loja_id)))->fetchAll($request->input('estoque_origem'), Carbon::parse($request->input('data'))->format('d/m/Y'));
-
         $inventario = Inventario::create([
             'loja_id' => Auth::user()->current_loja_id,
             'codigo_local_estoque' => $request->input('estoque_origem'),
@@ -96,7 +93,7 @@ class InventarioController extends Controller
                 'produto_descricao' => $produto->descricao ?? '',
                 'produto_familia' => $produto->descricao_familia ?? '',
                 'quan' => null,
-                'valor' => $posicaoEstoque->n_cmc ?? 0.01,
+                'valor' => $posicaoEstoque->n_cmc ?? -1,
             ]);
 
         }
@@ -110,9 +107,7 @@ class InventarioController extends Controller
 
     public function finish(Inventario $inventario)
     {
-        foreach ($inventario->items()->whereNotNull('inventario_items.quan')->get() as $inventarioItem) {
-            dispatch(new InventarioAjustesJob($inventarioItem));
-        }
+        dispatch(new InventarioAjustesJob($inventario));
         $inventario->finalizado = Carbon::now();
         $inventario->save();
         return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')]);
