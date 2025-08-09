@@ -76,12 +76,7 @@
         };
 
         function changeLoja(el) {
-            console.log("O DOM está pronto!", usuarioLogado);
-            axios.post(`/usuario/${usuarioLogado}/loja/${el.value}`).then(function(r) {
-                console.log(r);
-            }).catch(function(e) {
-                console.log(e);
-            });
+            axios.post(`/usuario/${usuarioLogado}/loja/${el.value}`);
         }
     </script>
 @endpush
