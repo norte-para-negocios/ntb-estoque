@@ -33,8 +33,8 @@ class DatabaseSeeder extends Seeder
             'logradouro' => 'AV SÃO CRISTÓVÃO',
             'numero' => '13223',
 
-            'omie_app_key' => '6180392819601',
-            'omie_app_secret' => '261e1daeb9359fc19e648af88651d01f',
+            'omie_app_key' => '6447545219115',
+            'omie_app_secret' => 'a3c4f363a497a8e2c24b058e385fb94c',
         ]);
     }
 }
