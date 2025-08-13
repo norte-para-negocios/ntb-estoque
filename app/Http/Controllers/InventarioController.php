@@ -103,12 +103,12 @@ class InventarioController extends Controller
             ->where('codigo_local_estoque', $request->input('estoque_origem'))
             ->first();
 
-        return view('inventario.contagem', compact('inventario', 'localEstoque'));
+        return redirect()->route('inventario.contagem', $inventario->id);
     }
 
     private function createAjuste(InventarioItem $inventarioItem): null|object
     {
-        if ($inventarioItem->quan !== null) {
+        if ($inventarioItem->quan >= 0) {
             $loja = $inventarioItem->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
             $data = [
@@ -136,10 +136,9 @@ class InventarioController extends Controller
                 ])->connectTimeout(60)->timeout(60)->post($url, $data);
                 if ($response->status() === 200) {
                     return $response->object();
-                } else {
-                    $inventarioItem->response = $response->body();
-                    $inventarioItem->save();
                 }
+                $inventarioItem->response = $response->body();
+                $inventarioItem->save();
             } catch (\Throwable $th) {
                 Log::critical($th->getMessage(), [
                     'Code' => $th->getCode(),
@@ -204,7 +203,7 @@ class InventarioController extends Controller
         }
 
         $request->validate([
-            'quantidade' => 'required|numeric|min:0.001',
+            'quantidade' => 'required|numeric|min:0',
         ]);
 
         $inventarioItem->update(['quan' => $request->input('quantidade')]);
