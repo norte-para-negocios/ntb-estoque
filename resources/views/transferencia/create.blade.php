@@ -2,7 +2,7 @@
 
 @section('content')
     <div class="container">
-        <form method="POST" action="{{ route('transferencia.store') }}">
+        <form method="POST" action="{{ route('transferencia.store') }}" id="formTransferencia">
             @csrf
             <div class="card card-body mb-4">
                 <div class="row">
@@ -23,7 +23,7 @@
                     <div class="col-md-2 mb-3">
                         <label for="data" class="form-label">Data</label>
                         <input type="date" name="data" id="data" class="form-control"
-                            value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" required>
+                               value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" required>
                     </div>
 
                     <div class="col-md-4 mb-3">
@@ -68,49 +68,34 @@
                     <div class="d-flex flex-grow-1">
                         <div class="input-group">
                             <input class="form-control" type="search" placeholder="Ctrl+F ou digite para buscar..."
-                                id="search" autofocus />
+                                   id="search" autofocus/>
                             <button type="button" id="botaoPermissao" class="btn btn-secondary rounded-end-2"
-                                style="display: none;">
+                                    style="display: none;">
                                 Conceder Acesso a Câmera
                             </button>
                             <button type="button" id="botaoUsarCamera" class="btn btn-light rounded-end-2"
-                                style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
+                                    style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
                                 <i class="fa-solid fa-camera fa-2xl" style="color: #ff6b35;"></i>
                             </button>
                             <button type="button" id="botaoPararCamera" class="btn btn-secondary rounded-end-2"
-                                style="display: none;">
+                                    style="display: none;">
                                 Parar Leitura
                             </button>
                         </div>
                     </div>
                 </nav>
-                {{-- <div class="mb-3">
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-primary" id="botaoPermissao" style="display: none;">
-                            Conceder Acesso a Câmera
-                        </button>
-                        <button type="button" id="botaoUsarCamera" class="btn btn-primary" style="display: none;">
-                            Ler QR Code
-                        </button>
-                        <button type="button" id="botaoPararCamera" class="btn btn-primary" style="display: none;">
-                            Parar Leitura
-                        </button>
-                    </div>
-                    <div id="reader"></div>
-                    <div id="resultado">Aguardando leitura...</div>
-                </div> --}}
                 <div class="table-responsive">
                     <table class="table table-bordered" id="produtos_transferencia">
                         <thead class="table-light">
-                            <tr>
-                                <th>Produto</th>
-                                <th>Quantidade</th>
-                                <th>Valor Unitário</th>
-                                <th>Ação</th>
-                            </tr>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Quantidade</th>
+                            <th>Valor Unitário</th>
+                            <th>Ação</th>
+                        </tr>
                         </thead>
                         <tbody>
-                            <!-- Linhas dinâmicas via JS -->
+                        <!-- Linhas dinâmicas via JS -->
                         </tbody>
                     </table>
                 </div>
@@ -123,34 +108,23 @@
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
-        $(document).ready(function() {
-
-
-
+        $(document).ready(function () {
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
-
                 if (jaPermitido === 'true') {
                     document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                     document.getElementById('botaoPararCamera').style.display = 'none';
                     return;
                 }
-
                 try {
-                    // Tenta acessar a câmera com vídeo, sem exibir o stream
                     const stream = await navigator.mediaDevices.getUserMedia({
                         video: true
                     });
-
                     stream.getTracks().forEach(track => track.stop());
-
                     localStorage.setItem('cameraPermitida', 'true');
-
-                    // Se não lançar erro, permissão foi concedida
                     document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                     document.getElementById('botaoPararCamera').style.display = 'none';
                 } catch (erro) {
-                    // Se erro for de permissão, exibe botão para solicitar
                     alert('Permissão não concedida ou erro:', erro);
                     document.getElementById('botaoPermissao').style.display = 'inline-block';
                 }
@@ -188,7 +162,7 @@
 
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
-                        .then(function() {
+                        .then(function () {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
                         });
@@ -205,7 +179,7 @@
             function buscarProdutoPorQrCode(codigo) {
                 let local = document.getElementById('estoque_origem').value;
                 let data = document.getElementById('data').value;
-                axios.get(`/transferencia/local/${local}/produto/${codigo}/data/${data}`).then(function(r) {
+                axios.get(`/transferencia/local/${local}/produto/${codigo}/data/${data}`).then(function (r) {
                     adicionarProdutoNaListagem(r.data.data);
                 });
             }
@@ -228,7 +202,7 @@
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeProduto(this)">Remover</button>
                 </td>
             </tr>`;
-                produtosTable.insertAdjacentHTML('beforeend', novaLinha);;
+                produtosTable.insertAdjacentHTML('beforeend', novaLinha);
             }
 
             // Cria uma instância apontando para o elemento #reader
@@ -255,7 +229,7 @@
                 });
             }
 
-             const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
+            const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
                 backdrop: 'static',
                 keyboard: false
             })
@@ -267,7 +241,7 @@
             document.getElementById('qrcodeModal').addEventListener('hidden.bs.modal', event => {
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
-                        .then(function() {
+                        .then(function () {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
                         });
@@ -288,6 +262,24 @@
             }
         })
 
+        const formTransferencia = document.getElementById('formTransferencia');
+
+        formTransferencia.addEventListener('submit', function (event) {
+            const valor1 = document.getElementById('estoque_origem').value;
+            const valor2 = document.getElementById('estoque_destino').value;
+            const produtos = document.getElementsByName('produtos[]');
+
+            if (valor1 && valor2 && valor1 === valor2) {
+                alert('O local de estoque de origem e destino não podem ser iguais!');
+                event.preventDefault();
+            }
+
+            if (produtos.length == 0) {
+                alert('Informe os produtos a serem transferidos!');
+                event.preventDefault();
+            }
+        });
+
         const searchInput = document.getElementById('search');
         const rows = Array.from(document.querySelectorAll('#produtos_transferencia tbody tr'));
 
@@ -307,5 +299,6 @@
                 searchInput.focus();
             }
         });
+
     </script>
 @endpush

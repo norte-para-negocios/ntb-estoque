@@ -152,7 +152,7 @@
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
         function setQuantidade(url, quantidade) {
-            if (quantidade > 0) {
+            if (quantidade >= 0) {
                 axios.post(url, {
                     "quantidade": quantidade
                 })
