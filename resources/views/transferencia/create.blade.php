@@ -275,7 +275,7 @@
             }
 
             if (produtos.length == 0) {
-                alert('Informe os produtos que deseja transferir!');
+                alert('Informe os produtos a serem transferidos!');
                 event.preventDefault();
             }
         });
