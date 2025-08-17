@@ -6,6 +6,7 @@ use App\Http\Controllers\NotafiscalController;
 use App\Http\Controllers\OrdemProducaoController;
 use App\Http\Controllers\PermissaoController;
 use App\Http\Controllers\RelatorioOrdemProducaoController;
+use App\Http\Controllers\RelatorioNotaFiscalController;
 use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Auth;
@@ -65,5 +66,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [RelatorioOrdemProducaoController::class, 'index'])->name('relatorio.ordemproducao.index');
         Route::post('/imprimir', [RelatorioOrdemProducaoController::class, 'imprimir'])->name('relatorio.ordemproducao.imprimir');
         Route::post('/excel', [RelatorioOrdemProducaoController::class, 'excel'])->name('relatorio.ordemproducao.excel');
+    });
+
+    // Relatório de Notas Fiscais
+    Route::prefix('relatorio/notafiscal')->group(function () {
+        Route::get('/', [RelatorioNotaFiscalController::class, 'index'])->name('relatorio.notafiscal.index');
+        Route::post('/imprimir', [RelatorioNotaFiscalController::class, 'imprimir'])->name('relatorio.notafiscal.imprimir');
+        Route::post('/excel', [RelatorioNotaFiscalController::class, 'excel'])->name('relatorio.notafiscal.excel');
     });
 });

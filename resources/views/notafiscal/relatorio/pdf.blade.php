@@ -14,45 +14,42 @@
 </head>
 
 <body>
-     <h2 class="mb-4 text-center">{{ __('Ordens de Produção') }} - {{ $loja->nome ?? '' }}</h2>
+     <h2 class="mb-4 text-center">{{ __('Nota Fiscal') }} - {{ $loja->nome ?? '' }}</h2>
     <div class="container" style="padding-top: 20px;">
         <div class="row">
             <div class="col-xs-12">
                 <table class="table table-bordered table-condensed table-fixed">
                     <thead style="font-size: 9px; font-weight: bold;">
                         <tr>
-                            <th class="col-especialidade">Conclusão</th>
-                             <th class="col-especialidade">Cód Produto</th>
-                             <th class="col-status">Descrição Produto</th>
-                            <th class="col-servico">Número da OP</th>
-                            <th class="col-data text-left">Und</th>
-                            <th class="col-data text-left">Qtd Prevista</th>
+                            <th class="col-especialidade">Nº Nota Fiscal</th>                           
+                            <th class="col-status">Fornecedor</th> 
+                            <th class="col-especialidade">Emissão</th>
+                            <th class="col-status">Valor</th>
+                            
+                           
                         </tr>
                     </thead>
                     <tbody style="font-size: 9px; font-weight: regular;">
-                        @foreach ($ordenspro as $ordem)
-                        
+                        {{-- @dd($nfes) --}}
+                        @foreach ($nfes as $nf)
                             <tr>
                                 <td>
-                                    {{ optional($ordem->adicionais_d_dt_conclusao) ? \Carbon\Carbon::parse($ordem->adicionais_d_dt_conclusao)->format('d/m/Y') : '' }}
+                                    {{ $nf->cabec->cNumeroNFe ?? '' }}
                                 </td>
                                 <td>
-                                    {{ $ordem->identificacao_n_cod_produto ?? '' }}
+                                    {{ $nf->cabec->cNome ?? '' }}
                                 </td>
                                 <td>
-                                    {{ $ordem->produto_descricao ?? '' }}
+                                    {{ $nf->cabec->dEmissaoNFe ?? '' }}
                                 </td>
                                 <td>
-                                    {{ $ordem->num_ordem ?? '' }}
+                                    {{ $nf->cabec->nValorNFe ?? '' }}
                                 </td>
                                 <td>
-                                    {{ $ordem->produto_unidade ?? '' }}
-                                </td>
-                                <td>
-                                    {{ $ordem->identificacao_n_qtde ?? '' }}
-                                </td>
+                                    {{ $nf->itensRecebimento->cabec->cDescricaoProduto ?? '' }}
+                                </td>                                     
                             </tr>
-                            {{-- @dd($ordem) --}}
+                           
                         @endforeach
                     </tbody>
                 </table>

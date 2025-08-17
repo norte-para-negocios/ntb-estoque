@@ -44,6 +44,12 @@
     </a>
 </div>
 
+<div class="d-grid gap-2 mb-2">
+    <a href="{{ route('relatorio.notafiscal.index') }}" class="btn btn-secondary text-start">
+        <i class="fas fa-print me-3"></i>Relatório de Nota Fiscal
+    </a>
+</div>
+
 @if (Auth::user()->perfil === 'Admin')
     <div class="d-grid gap-2 mb-2">
         <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">

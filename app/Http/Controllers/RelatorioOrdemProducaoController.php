@@ -32,12 +32,14 @@ class RelatorioOrdemProducaoController extends Controller
         if (!CanService::canPermissionLoja('Relatório - Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Relatório - Ordens de Produção!");
         }
-
+        
         $ordem_producao = $request->get('ordem_producao');
         $data_producao = $request->get('data_producao') ?? '';
         $tipo_produto = $request->get('tipo_produto') ?? '';
         $op_produto = $request->get('op_produto');
         $op_concluido = $request->get('op_concluido');
+
+        //dd($ordem_producao, $data_producao, $tipo_produto, $op_produto, $op_concluido);
 
         session([
             'ordem_producao' => $ordem_producao,
@@ -52,6 +54,8 @@ class RelatorioOrdemProducaoController extends Controller
                 return $query->whereBetween('adicionais_d_dt_conclusao', [Carbon::parse($data_producao)->startOfDay(), Carbon::parse($data_producao)->endOfDay()]);
             })
             ->orderBy('adicionais_d_dt_conclusao', 'desc');
+
+            //dd($queryOrdemProducao);
 
         if ($request->filled("ordem_producao")) {
             $queryOrdemProducao->where('num_ordem', $ordem_producao);
@@ -74,17 +78,13 @@ class RelatorioOrdemProducaoController extends Controller
             });
         }
 
-        $ordenspro = $queryOrdemProducao->get();
+        $ordenspro = $queryOrdemProducao->get(); //Alterado de get para dd
+
+        //dd($ordenspro);
 
         $pdf = PDF::loadView('ordemproducao.relatorio.pdf', ['ordenspro' => $ordenspro, 'loja' => Auth::user()->loja, 'params' => $request->all()])
-            // ->setOption('margin-top', 0)
-            // ->setOption('margin-bottom', 0)
-            // ->setOption('margin-left', 0)
-            // ->setOption('margin-right', 0)
-            // ->setOption('page-width', '72.56')
-            // ->setOption('page-height', '40.04')
-            // ->setOption('orientation', 'portrait')
             ->setOption('enable-local-file-access', true);
+            //dd($pdf);
 
         return $pdf->inline("relatorios-ordem-producao.pdf");
     }
@@ -100,6 +100,8 @@ class RelatorioOrdemProducaoController extends Controller
         $tipo_produto = $request->get('tipo_produto') ?? '';
         $op_produto = $request->get('op_produto');
         $op_concluido = $request->get('op_concluido');
+
+        //dd($ordem_producao, $data_producao, $tipo_produto, $op_produto, $op_concluido);
 
         session([
             'ordem_producao' => $ordem_producao,
