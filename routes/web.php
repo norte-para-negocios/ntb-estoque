@@ -5,6 +5,8 @@ use App\Http\Controllers\LojaController;
 use App\Http\Controllers\NotafiscalController;
 use App\Http\Controllers\OrdemProducaoController;
 use App\Http\Controllers\PermissaoController;
+use App\Http\Controllers\RelatorioOrdemProducaoController;
+use App\Http\Controllers\RelatorioNotaFiscalController;
 use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\CheckCurrentLoja;
@@ -60,5 +62,19 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
         Route::post('/finish/{inventario}', [InventarioController::class, 'finish'])->name('inventario.finish');
         Route::delete('/destroy/{inventario}', [InventarioController::class, 'destroy'])->name('inventario.destroy');
+    });
+
+    // Relatório Ordem Produção
+    Route::prefix('relatorio/ordemproducao')->group(function () {
+        Route::get('/', [RelatorioOrdemProducaoController::class, 'index'])->name('relatorio.ordemproducao.index');
+        Route::post('/imprimir', [RelatorioOrdemProducaoController::class, 'imprimir'])->name('relatorio.ordemproducao.imprimir');
+        Route::post('/excel', [RelatorioOrdemProducaoController::class, 'excel'])->name('relatorio.ordemproducao.excel');
+    });
+
+    // Relatório de Notas Fiscais
+    Route::prefix('relatorio/notafiscal')->group(function () {
+        Route::get('/', [RelatorioNotaFiscalController::class, 'index'])->name('relatorio.notafiscal.index');
+        Route::post('/imprimir', [RelatorioNotaFiscalController::class, 'imprimir'])->name('relatorio.notafiscal.imprimir');
+        Route::post('/excel', [RelatorioNotaFiscalController::class, 'excel'])->name('relatorio.notafiscal.excel');
     });
 });
