@@ -10,13 +10,17 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
 
-class RecebimentoNFService
+class NotaFiscalService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
-    public function fetchAll(int $codigoLocalEstoque, $dataPosicao, $lastPages = 0): void
+    public function fetchAll($lastPages = 0): void
     {
         $response = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
         if (isset($response->produtos) && count($response->produtos) > 0) {
@@ -32,7 +36,7 @@ class RecebimentoNFService
         }
     }
 
-    public function fetchPage(int $codigoLocalEstoque, $dataPosicao, $pagina = 1): object
+    public function fetchPage($pagina = 1): object
     {
         $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
         $data = [
@@ -43,43 +47,48 @@ class RecebimentoNFService
                 [
                     "nPagina" => $pagina,
                     "nRegistrosPorPagina" => 200,
-                    "dDataPosicao" => $dataPosicao,
-                    "cExibeTodos" => 'S',
-                    "codigo_local_estoque" => $codigoLocalEstoque,
+                    "cExibirDetalhes" => "S"
                 ]
             ]
         ];
+
+        // Inicializando Log de integração
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
 
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
             ])->post($url, $data);
 
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
+
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500) {
                 return new stdClass();
             }
+
         } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
         }
         return new stdClass();
     }
 
-    public function savePosicoes(array $posicoes, $dataPosicao): void
+    public function saveNotasFiscais(array $notasFiscais): void
     {
-        foreach ($posicoes as $posicao) {
-            $this->savePosicao((object)$posicao, $dataPosicao);
+        foreach ($notasFiscais as $notaFiscal) {
+            $this->saveNotaFiscal((object)$notaFiscal);
         }
     }
 
-    public function savePosicao(object $posicao, $dataPosicao): void
+    public function saveNotaFiscal(object $notaFiscal): void
     {
-
         $item['loja_id'] = $this->loja->id;
         $item['codigo_local_estoque'] = $posicao->codigo_local_estoque ?? null;
         $item['n_cod_prod'] = $posicao->nCodProd ?? null;
@@ -111,16 +120,5 @@ class RecebimentoNFService
                 $item
             );
         }
-    }
-
-    public function webhook(array $data): void
-    {
-        Log::info('Webhook Posicao Estoque', $data);
-        // if (isset($data['event']['codigo_produto'])) {
-        //     $produto = $this->fetchProduto($data['event']['codigo_produto']);
-        //     if (isset($produto->codigo_produto)) {
-        //         $this->saveProduto($produto);
-        //     }
-        // }
     }
 }

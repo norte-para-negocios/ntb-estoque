@@ -12,9 +12,13 @@ use stdClass;
 
 class PosicaoEstoqueService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
     public function fetchAll(int $codigoLocalEstoque, $dataPosicao, $lastPages = 0): void
     {
@@ -50,10 +54,18 @@ class PosicaoEstoqueService
             ]
         ];
 
+        // Inicializando Log de integração
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
             ])->post($url, $data);
+
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
 
             if ($response->status() === 200) {
                 return $response->object();
@@ -61,11 +73,54 @@ class PosicaoEstoqueService
                 return new stdClass();
             }
         } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
+        }
+        return new stdClass();
+    }
+
+    public function fetchPosicaoProduto(int $codigoLocalEstoque, $produtoCodigo, $dataPosicao): object
+    {
+        $url = $this->urlBase . 'v1/estoque/consulta/';
+        $data = [
+            "call" => "PosicaoEstoque",
+            "app_key" => $this->loja->omie_app_key,
+            "app_secret" => $this->loja->omie_app_secret,
+            "param" => [
+                [
+                    "codigo_local_estoque" => $codigoLocalEstoque,
+                    "id_prod" => $produtoCodigo,
+                    "cod_int" => '',
+                    "data" => $dataPosicao,
+                ]
+            ]
+        ];
+
+        // Inicializando Log de integração
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
+
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
+
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            }
+        } catch (\Throwable $th) {
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
         }
         return new stdClass();
     }
@@ -79,7 +134,6 @@ class PosicaoEstoqueService
 
     public function savePosicao(object $posicao, $dataPosicao): void
     {
-
         $item['loja_id'] = $this->loja->id;
         $item['codigo_local_estoque'] = $posicao->codigo_local_estoque ?? null;
         $item['n_cod_prod'] = $posicao->nCodProd ?? null;

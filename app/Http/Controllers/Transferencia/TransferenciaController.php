@@ -1,15 +1,16 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Transferencia;
 
+use App\Http\Controllers\Controller;
 use App\Jobs\TransferenciaCreateJob;
-use Illuminate\Http\Request;
 use App\Models\Movimento;
 use App\Services\CanService;
-use Illuminate\Support\Facades\DB;
 use App\Services\OmieService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 

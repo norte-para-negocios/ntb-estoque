@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Inventario;
 
-use App\Jobs\InventarioAjustesJob;
+use App\Http\Controllers\Controller;
 use App\Models\Inventario;
 use App\Models\InventarioItem;
 use App\Models\LocalEstoque;
@@ -11,7 +11,6 @@ use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Services\CanService;
 use App\Services\PosicaoEstoqueService;
-use App\Services\ProdutoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

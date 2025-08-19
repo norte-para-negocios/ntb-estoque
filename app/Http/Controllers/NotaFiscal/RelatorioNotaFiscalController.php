@@ -1,15 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\NotaFiscal;
 
 use App\Exports\RelatorioNotaFiscalExport;
-use App\Models\Nf;
+use App\Http\Controllers\Controller;
 use App\Services\CanService;
+use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Services\OmieService;
 use PDF;
 
 
@@ -18,7 +17,7 @@ class RelatorioNotaFiscalController extends Controller
    private $omie;
 
    public function __construct()
-       
+
     {
         $this->middleware('auth');
         $this->omie = new OmieService();
@@ -34,7 +33,7 @@ class RelatorioNotaFiscalController extends Controller
     }
 
     public function imprimir(Request $request)
-    
+
     {
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
@@ -52,11 +51,11 @@ class RelatorioNotaFiscalController extends Controller
             ->setOption('enable-local-file-access', true);
 
         //dd($pdf);
-        
+
         return $pdf->inline("relatorios-ordem-producao.pdf");
 
-        
-         
+
+
     }
 
 

@@ -6,7 +6,7 @@ use App\Models\Loja;
 use App\Services\OrdemProducaoService;
 use Illuminate\Console\Command;
 
-class UpdateOrdemproducaoCommand extends Command
+class UpdateOrdemProducaoCommand extends Command
 {
     /**
      * The name and signature of the console command.

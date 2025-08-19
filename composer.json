@@ -1,13 +1,13 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "ntb/estoque",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "Omie ERP Support Application.",
     "keywords": [
-        "laravel",
-        "framework"
+        "omie",
+        "ntb"
     ],
-    "license": "MIT",
+    "license": "Copyright",
     "require": {
         "php": "^8.4",
         "barryvdh/laravel-snappy": "^1.0",

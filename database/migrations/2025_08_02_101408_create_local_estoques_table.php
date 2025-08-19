@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('h_alt', 8)->nullable();
             $table->string('u_alt', 10)->nullable();
             $table->timestamps();
-
+            $table->softDeletes();
             $table->foreign('loja_id')->references('id')->on('lojas');
         });
     }

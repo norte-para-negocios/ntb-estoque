@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\NotaFiscal;
 
-use App\Models\Nf;
+use App\Http\Controllers\Controller;
+use App\Models\NotaFiscal;
 use App\Models\Produto;
 use App\Services\CanService;
-use Carbon\Carbon;
 use App\Services\OmieService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -116,12 +117,12 @@ class NotafiscalController extends Controller
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
-        $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $codigo)->first();
+        $nf = NotaFiscal::where('n_id_receb', $nIdReceb)->where('produto_codigo', $codigo)->first();
 
         if ($nf && isset($nf->quantidade) && $nf->$nf == $request->get('quantidade')) {
             return $nf;
         } else {
-            return Nf::updateOrCreate(
+            return NotaFiscal::updateOrCreate(
                 [
                     'loja_id' => Auth::user()->current_loja_id,
                     'n_id_receb' => $nIdReceb,
@@ -146,7 +147,7 @@ class NotafiscalController extends Controller
         foreach ($recebimento->itensRecebimento as $it) {
             if ($it->itensCabec->nIdProduto > 0) {
                 $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
-                $nf = Nf::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
+                $nf = NotaFiscal::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
                 $qtde = ($produto->unidade == 'UN') ? ($nf->quantidade ?? 1) : 1;
                 if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
                     // for ($i = 1; $i <= $qtde; $i++) {

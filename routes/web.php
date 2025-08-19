@@ -1,14 +1,14 @@
 <?php
 
-use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\Inventario\InventarioController;
 use App\Http\Controllers\LojaController;
-use App\Http\Controllers\NotafiscalController;
-use App\Http\Controllers\OrdemProducaoController;
-use App\Http\Controllers\PermissaoController;
-use App\Http\Controllers\RelatorioOrdemProducaoController;
-use App\Http\Controllers\RelatorioNotaFiscalController;
-use App\Http\Controllers\TransferenciaController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\NotaFiscal\NotafiscalController;
+use App\Http\Controllers\NotaFiscal\RelatorioNotaFiscalController;
+use App\Http\Controllers\OrdemProducao\OrdemProducaoController;
+use App\Http\Controllers\OrdemProducao\RelatorioOrdemProducaoController;
+use App\Http\Controllers\Transferencia\TransferenciaController;
+use App\Http\Controllers\User\PermissaoController;
+use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\CheckCurrentLoja;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;

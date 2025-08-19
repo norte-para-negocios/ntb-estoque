@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\OrdemProducao;
 
+use App\Http\Controllers\Controller;
 use App\Models\OrdemProducao;
 use App\Services\CanService;
 use Carbon\Carbon;

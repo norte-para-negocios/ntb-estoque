@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\User;
 
+use App\Http\Controllers\Controller;
 use App\Models\Loja;
 use App\Models\Permissao;
 use App\Models\PermissaoUser;
 use App\Models\User;
-use App\Services\CanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 

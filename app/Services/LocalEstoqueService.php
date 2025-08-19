@@ -11,9 +11,13 @@ use stdClass;
 
 class LocalEstoqueService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
     public function fetchAll($lastPages = 0): void
     {
@@ -46,10 +50,18 @@ class LocalEstoqueService
             ]
         ];
 
+        // Inicializando Log de integração
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json'
             ])->post($url, $data);
+
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
 
             if ($response->status() === 200) {
                 return $response->object();
@@ -57,11 +69,10 @@ class LocalEstoqueService
                 return new stdClass();
             }
         } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
         }
         return new stdClass();
     }
@@ -75,7 +86,6 @@ class LocalEstoqueService
 
     public function saveLocal(object $local): void
     {
-
         $item['loja_id'] = $this->loja->id;
         $item['codigo_local_estoque'] = $local->codigo_local_estoque ?? null;
         $item['codigo'] = $local->codigo ?? null;
@@ -109,14 +119,14 @@ class LocalEstoqueService
 
     }
 
-    public function webhook(array $data): void
+    public function deleteLocal(object $local): void
     {
-        Log::info('Webhook Local Estoque', $data);
-        // if (isset($data['event']['codigo_produto'])) {
-        //     $produto = $this->fetchProduto($data['event']['codigo_produto']);
-        //     if (isset($produto->codigo_produto)) {
-        //         $this->saveProduto($produto);
-        //     }
-        // }
+        try {
+            LocalEstoque::where('loja_id', $this->loja->id)
+                ->where('codigo_local_estoque', $local->codigo_local_estoque)
+                ->delete();
+        } catch (Exception $e) {
+            Log::error("Erro ao excluir local de estoque nº: " . $local->codigo_local_estoque . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        }
     }
 }
