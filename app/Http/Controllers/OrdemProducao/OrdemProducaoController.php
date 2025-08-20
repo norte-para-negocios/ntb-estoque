@@ -24,7 +24,7 @@ class OrdemProducaoController extends Controller
         }
 
         $ordem_producao = $request->get('ordem_producao');
-        $data_producao = $request->get('data_producao') ?? '';
+        $data_producao = $request->get('data_producao') !== null ? $request->get('data_producao') : date('Y-m-d');
         $tipo_produto = $request->get('tipo_produto') ?? '';
         $op_produto = $request->get('op_produto');
         $op_concluido = $request->get('op_concluido');
@@ -37,33 +37,28 @@ class OrdemProducaoController extends Controller
             'op_concluido' => $op_concluido,
         ]);
 
-        $queryOrdemProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
+        $ordensProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
             ->when($data_producao, function ($query) use ($data_producao) {
                 return $query->whereBetween('adicionais_d_dt_conclusao', [Carbon::parse($data_producao)->startOfDay(), Carbon::parse($data_producao)->endOfDay()]);
+            })->when($ordem_producao, function ($query) use ($ordem_producao) {
+                $query->where('num_ordem', $ordem_producao);
+            })->when($tipo_produto, function ($query) use ($tipo_produto) {
+                $query->where('produto_tipo_item', $tipo_produto);
+            })->when($op_produto, function ($query) use ($op_produto) {
+                $query->where(function ($q) use ($op_produto) {
+                    $q->where('produto_codigo', 'like', '%' . $op_produto . '%')
+                        ->orWhere('produto_descricao', 'like', '%' . $op_produto . '%');
+                });
+            })->when(in_array($op_concluido, ['S', 'N']), function ($query) use ($op_concluido) {
+                $query->where(function ($query) use ($op_concluido) {
+                    $query->where('full_object->outrasInf->cConcluida', '=', $op_concluido);
+                });
             })
-            ->orderBy('adicionais_d_dt_conclusao', 'desc');
+            ->orderBy('adicionais_d_dt_conclusao', 'desc')
+            ->paginate(20)
+            ->withQueryString();
 
-        if ($request->filled("ordem_producao")) {
-            $queryOrdemProducao->where('num_ordem', $ordem_producao);
-        }
-        if ($request->filled("tipo_produto")) {
-            $queryOrdemProducao->where('produto_tipo_item', $tipo_produto);
-        }
-        if ($request->filled("op_produto")) {
-            $queryOrdemProducao->where(function ($query) use ($op_produto) {
-                $query->where('produto_codigo', 'like', '%' . $op_produto . '%')
-                    ->orWhere('produto_descricao', 'like', '%' . $op_produto . '%');
-            });
-        }
-        if (in_array($op_concluido, ['S', 'N'])) {
-            $queryOrdemProducao->where(function ($query) use ($op_concluido) {
-                $query->where('full_object->outrasInf->cConcluida', '=', $op_concluido);
-            });
-        }
-
-        $ordenspro = $queryOrdemProducao->paginate(20)->withQueryString();
-
-        return view('ordemproducao.index', compact('ordenspro', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
+        return view('ordemproducao.index', compact('ordensProducao', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
     }
 
     public function setValidade(Request $request, OrdemProducao $ordemProducao)
@@ -99,16 +94,16 @@ class OrdemProducaoController extends Controller
 
             $etiquetas[] = [
                 'codigo_produto' => $ordemProducao->produto_codigo ?? '',
-                'descricao'   => $ordemProducao->produto_descricao ?? '',
-                'lote'        => $ordemProducao->identificacao_c_num_op ?? '',
-                'quantidade'  => $quantidade,
+                'descricao' => $ordemProducao->produto_descricao ?? '',
+                'lote' => $ordemProducao->identificacao_c_num_op ?? '',
+                'quantidade' => $quantidade,
                 'qtde_nf' => '',
                 'qtde_etiqueta' => '',
                 'inclusao' => '',
-                'validade'    => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
-                'produzido'   => json_decode($ordemProducao->full_object)->outrasInf->dConclusao !== "" ? json_decode($ordemProducao->full_object)->outrasInf->dConclusao : Carbon::now()->format('d/m/Y'),
-                'fornecedor'  => '',
-                'nfe'           => '',
+                'validade' => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
+                'produzido' => json_decode($ordemProducao->full_object)->outrasInf->dConclusao !== "" ? json_decode($ordemProducao->full_object)->outrasInf->dConclusao : Carbon::now()->format('d/m/Y'),
+                'fornecedor' => '',
+                'nfe' => '',
             ];
         }
 
@@ -122,10 +117,9 @@ class OrdemProducaoController extends Controller
             ->setOption('margin-right', 0)
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
-            ->setOption('orientation', 'portrait')
-            ->setOption('enable-local-file-access', true);
+            ->setOption('orientation', 'portrait');
 
-        if (config('app.env') === 'local') {
+        if (config('app.env') === 'local-estoque') {
             return $pdf->inline('etiquetas_op.pdf');
         }
         return $pdf->download('etiquetas_op.pdf');

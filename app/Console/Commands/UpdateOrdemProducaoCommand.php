@@ -13,7 +13,7 @@ class UpdateOrdemProducaoCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'omie:ordens-producao';
+    protected $signature = 'omie:ordem_producao_update';
 
     /**
      * The console command description.
@@ -28,9 +28,9 @@ class UpdateOrdemProducaoCommand extends Command
     public function handle()
     {
         foreach (Loja::all() as $loja) {
-            $this->info("Atualizando ordens de produção para a loja: {$loja->nome}");
+            $this->info("Atualizando ordens de produção da loja: {$loja->nome}");
             (new OrdemProducaoService($loja))->fetchAll();
-            $this->info("Ordens de produção atualizadas com sucesso para a loja: {$loja->nome}");
+            $this->info("Ordens de produção da loja: {$loja->nome}, atualizadas com sucesso!");
         }
     }
 }

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Jobs\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
-use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -21,17 +21,12 @@ class ProdutoService
 
     public function fetchAll($lastPages = 0): void
     {
-        $response = $this->fetchPage(1);
-        if (isset($response->produto_servico_cadastro) && count($response->produto_servico_cadastro) > 0) {
-            $this->saveProdutos((array)$response->produto_servico_cadastro);
-            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
-                    $resp = $this->fetchPage($i);
-                    if (isset($resp->produto_servico_cadastro) && count($resp->produto_servico_cadastro) > 0) {
-                        $this->saveProdutos((array)$resp->produto_servico_cadastro);
-                    }
-                }
-            }
+        $first = $this->fetchPage(1);
+        $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+
+        // Dispara um Job para cada página
+        for ($i = 1; $i <= $total; $i++) {
+            ProdutoUpdateJob::dispatch($this->loja, $i);
         }
     }
 
@@ -58,26 +53,30 @@ class ProdutoService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function saveProdutos(array $produtos): void
@@ -109,8 +108,8 @@ class ProdutoService
                 ],
                 $prod
             );
-        } catch (Exception $e) {
-            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 
@@ -135,24 +134,28 @@ class ProdutoService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->timeout(60)->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->timeout(60)->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
+                if ($response->status() === 200) {
+                    return $response->object();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function deleteProduto(object $produto): void
@@ -161,8 +164,8 @@ class ProdutoService
             Produto::where('loja_id', $this->loja->id)
                 ->where('codigo_produto', $produto->codigo_produto)
                 ->delete();
-        } catch (Exception $e) {
-            Log::error("Erro ao excluir produto nº: " . $produto->codigo_produto . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao excluir produto nº: " . $produto->codigo_produto . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 }

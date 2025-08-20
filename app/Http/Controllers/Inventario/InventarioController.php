@@ -31,13 +31,9 @@ class InventarioController extends Controller
             abort(403, "Você não possui a permissão: Inventário!");
         }
 
-        $data_inicio = $request->filled('data_inicio') ? Carbon::parse($request->get('data_inicio'))->format('Y-m-d') : Carbon::now()->format('Y-m-d');
-        $data_final = $request->filled('data_final') ? Carbon::parse($request->get('data_final'))->format('Y-m-d') : Carbon::now()->format('Y-m-d');
-
-        session([
-            'data_inicio' => $data_inicio,
-            'data_final' => $data_final,
-        ]);
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
         $inventarios = Inventario::where('loja_id', Auth::user()->current_loja_id)
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
@@ -52,7 +48,6 @@ class InventarioController extends Controller
 
     public function store(Request $request)
     {
-        // Lógica para armazenar um novo inventário e redirecionar para tela de contagem
         if (!CanService::canPermissionLoja('Inventário', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventário!");
         }
@@ -97,10 +92,6 @@ class InventarioController extends Controller
             ]);
 
         }
-
-        $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
-            ->where('codigo_local_estoque', $request->input('estoque_origem'))
-            ->first();
 
         return redirect()->route('inventario.contagem', $inventario->id);
     }

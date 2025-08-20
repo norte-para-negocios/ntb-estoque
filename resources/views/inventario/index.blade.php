@@ -5,6 +5,10 @@
 
         <h2 class="mb-4 d-flex justify-content-between align-items-center">
             <span>
+            <a href="{{route('home.index')}}" class="btn btn-sm btn-outline-primary mb-1"
+               title="Voltar">
+                <i class="fa-solid fa-arrow-left-long"></i>
+            </a>
                 {{ __('Inventários') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
             </span>
 
@@ -31,14 +35,14 @@
                                         <label for="data_inicio" class="form-label">Início</label>
                                         <input title="Data criação Omie" type="date" class="form-control"
                                             id="data_inicio" name="data_inicio"
-                                            value="{{ request('data_inicio', $data_inicio) }}">
+                                            value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="mb-3">
                                         <label for="data_final" class="form-label">Final</label>
                                         <input type="date" class="form-control" id="data_final" name="data_final"
-                                            value="{{ request('data_final', $data_final) }}">
+                                            value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
                                     </div>
                                 </div>
                                 <div class="col-md-6 d-flex align-items-end">
@@ -141,3 +145,25 @@
     </div>
     @include('inventario.create')
 @endsection
+
+@push('js')
+    <script>
+        document.querySelectorAll('.accordion-collapse').forEach((item) => {
+            item.addEventListener('shown.bs.collapse', () => {
+                localStorage.setItem('accordionInventario', item.id);
+            });
+            item.addEventListener('hidden.bs.collapse', () => {
+                localStorage.removeItem('accordionInventario');
+            });
+        });
+
+        // Restaurar estado ao carregar
+        window.addEventListener('DOMContentLoaded', () => {
+            const aberto = localStorage.getItem('accordionInventario');
+            if (aberto) {
+                const el = document.getElementById(aberto);
+                const collapse = new bootstrap.Collapse(el, {toggle: true});
+            }
+        });
+    </script>
+@endpush

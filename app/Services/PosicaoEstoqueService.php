@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -59,26 +58,30 @@ class PosicaoEstoqueService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function fetchPosicaoProduto(int $codigoLocalEstoque, $produtoCodigo, $dataPosicao): object
@@ -103,26 +106,30 @@ class PosicaoEstoqueService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function savePosicoes(array $posicoes, $dataPosicao): void
@@ -159,22 +166,11 @@ class PosicaoEstoqueService
                 ],
                 $item
             );
-        } catch (Exception $e) {
+        } catch (\Throwable $th) {
             Log::error(
-                "Erro ao salvar posição de estoque" . $e->getMessage(),
+                "Erro ao salvar posição de estoque" . $th->getMessage(),
                 $item
             );
         }
-    }
-
-    public function webhook(array $data): void
-    {
-        Log::info('Webhook Posicao Estoque', $data);
-        // if (isset($data['event']['codigo_produto'])) {
-        //     $produto = $this->fetchProduto($data['event']['codigo_produto']);
-        //     if (isset($produto->codigo_produto)) {
-        //         $this->saveProduto($produto);
-        //     }
-        // }
     }
 }

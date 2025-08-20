@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Transferencia;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\TransferenciaCreateJob;
+use App\Models\LocalEstoque;
 use App\Models\Movimento;
+use App\Models\PosicaoEstoque;
+use App\Models\Produto;
 use App\Services\CanService;
-use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,7 +23,6 @@ class TransferenciaController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->omie = new OmieService();
     }
 
     /**
@@ -33,13 +34,9 @@ class TransferenciaController extends Controller
             abort(403, "Você não possui a permissão: Transferência!");
         }
 
-        $data_inicio = $request->filled('data_inicio') ? Carbon::parse($request->get('data_inicio'))->format('Y-m-d') : Carbon::now()->format('Y-m-d');
-        $data_final = $request->filled('data_final') ? Carbon::parse($request->get('data_final'))->format('Y-m-d') : Carbon::now()->format('Y-m-d');
-
-        session([
-            'data_inicio' => $data_inicio,
-            'data_final' => $data_final,
-        ]);
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
         $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)
             ->where('tipo', 'TRF')
@@ -59,7 +56,7 @@ class TransferenciaController extends Controller
             abort(403, "Você não possui a permissão: Transferência!");
         }
 
-        $locaisEstoque = $this->omie->getLocaisEstoque();
+        $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao')->get();
         return view('transferencia.create', compact('locaisEstoque'));
     }
 
@@ -84,10 +81,10 @@ class TransferenciaController extends Controller
 
         DB::transaction(function () use ($request) {
             foreach ($request->produtos as $index => $produtoId) {
-                $produto = $this->omie->getConsultaProdutoCodigo($produtoId);
+                $produto = Produto::where('loja_id', auth()->user()->current_loja_id)->where('codigo', $produtoId)->first();
 
                 $movimentacao = new Movimento();
-                $movimentacao->loja_id = Auth::user()->current_loja_id;
+                $movimentacao->loja_id = auth()->user()->current_loja_id;
 
                 $movimentacao->codigo_local_estoque = $request->estoque_origem;
                 $movimentacao->id_prod = $produto->codigo_produto;
@@ -127,8 +124,12 @@ class TransferenciaController extends Controller
             }
 
             // Busca o produto na API do Omie
-            $produto = $this->omie->getConsultaProdutoCodigo($codigo);
-            $posicaoEstoque = $this->omie->getPosicaoEstoque($local, $produto->codigo_produto, Carbon::parse($data)->format('d/m/Y'));
+            $produto = Produto::where('loja_id', auth()->user()->current_loja_id)->where('codigo', $codigo)->first();
+            $posicaoEstoque = PosicaoEstoque::where('loja_id', auth()->user()->current_loja_id)
+                ->where('codigo_local_estoque', $local)
+                ->where('c_codigo', $produto->codigo_produto)
+                ->where('data_posicao', Carbon::parse($data)->format('Y-m-d'))
+                ->first();
 
             // Verifica se o produto foi encontrado
             if (!$produto) {
@@ -144,7 +145,7 @@ class TransferenciaController extends Controller
                 'data' => [
                     'id' => $produto->codigo,
                     'nome' => $produto->descricao,
-                    'valor_unitario' => number_format($posicaoEstoque->cmc, 2, ',', '.'),
+                    'valor_unitario' => number_format(($posicaoEstoque->cmc ?? 0), 2, ',', '.'),
                 ]
             ], 200);
         } catch (\Exception $e) {
@@ -160,6 +161,37 @@ class TransferenciaController extends Controller
                 'message' => 'Erro interno do servidor'
             ], 500);
         }
+    }
+
+    public function produtos(Request $request)
+    {
+        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferência!");
+        }
+
+        // Termo de busca vindo do Select2 (parâmetro "q")
+        $term = $request->get('q', '');
+
+        // Consulta simples com filtro e limite
+        $results = Produto::where('loja_id', auth()->user()->current_loja_id)
+            ->where('descricao', 'LIKE', "%{$term}%")
+            ->orWhere('codigo', 'LIKE', "%{$term}%")
+            ->orderBy('descricao')
+            ->select(['codigo', 'descricao'])
+            ->paginate(20);
+
+        $formatted = $results->map(function ($item) {
+            return [
+                'id' => $item->codigo,
+                'text' => $item->descricao,
+            ];
+        });
+
+        return response()->json([
+            'data' => $formatted,
+            'current_page' => $results->currentPage(),
+            'last_page' => $results->lastPage(),
+        ]);
     }
 
     /**

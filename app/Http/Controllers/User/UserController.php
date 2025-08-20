@@ -66,20 +66,23 @@ class UserController extends Controller
             $user->email = $request->get('email');
             $user->password = $pass;
             $user->save();
+
+            // Lojas Vinculadas
             $user->lojas()->sync($request->get('lojas'));
+
+            // Permissões
+            if ($request->filled('permissao')) {
+                foreach ($request->get('permissao') as $permissao) {
+                    $split = explode('|', $permissao);
+                    $user->permissoes()->attach($split[1], ['loja_id' => $split[0]]);
+                }
+            }
+
             Mail::to($user->email)->send(new UserMailAfterCreate($user, $pass));
             return redirect()->route('usuario.index')->with('success', 'Registro cadastrado com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
         }
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(User $user)
-    {
-        //
     }
 
     /**
@@ -127,6 +130,11 @@ class UserController extends Controller
         }
 
         try {
+            if ($user->id === Auth::user()->id) {
+                abort(403, "Você não pode excluir a si mesmo!");
+            }
+            $user->lojas()->detach();
+            $user->permissoes()->detach();
             $user->delete();
             return redirect()->route('usuario.index')->with('success', 'Registro excluído com sucesso!');
         } catch (\Throwable $th) {

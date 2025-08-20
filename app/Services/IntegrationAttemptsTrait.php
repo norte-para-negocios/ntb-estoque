@@ -6,11 +6,9 @@ use App\Models\IntegrationAttempt;
 
 trait IntegrationAttemptsTrait
 {
-
     /**
      *  Logs the integration attempt before it completes.
      */
-
     private $integrationAttempt;
     private $request;
     private $response;

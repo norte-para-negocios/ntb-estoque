@@ -4,9 +4,9 @@ namespace App\Http\Controllers\NotaFiscal;
 
 use App\Http\Controllers\Controller;
 use App\Models\NotaFiscal;
+use App\Models\NotaFiscalItem;
 use App\Models\Produto;
 use App\Services\CanService;
-use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,12 +15,9 @@ use PDF;
 
 class NotafiscalController extends Controller
 {
-    private $omie;
-
     public function __construct()
     {
         $this->middleware('auth');
-        $this->omie = new OmieService();
     }
 
     public function index(Request $request)
@@ -39,138 +36,92 @@ class NotafiscalController extends Controller
         $tipo = $request->get('tipo') ?? '';
         $status = $request->get('status') ?? '';
 
-        $notasfiscais = [];
-        $nfes = $this->omie->getNotasFiscais($data_inicio, $data_final);
 
-        if ($request->filled("num_nfe") || $request->filled("fornecedor") || $request->filled("produto") || $request->filled("tipo") || $request->filled("status")) {
-            foreach ($nfes as $nfe) {
-                if (
-                    $request->filled("num_nfe") &&
-                    ((int)$nfe->cabec->cNumeroNFe == (int)$num_nfe) &&
-                    (!in_array($nfe, $notasfiscais))
-                ) {
-                    array_push($notasfiscais, $nfe);
+        $notasfiscais = NotaFiscal::where('loja_id', auth()->user()->current_loja_id)
+            ->with(['nfItems', 'nfItems.produto'])
+            ->whereBetween('d_emissao_nfe', [$data_inicio->format('Y-m-d'), $data_final->format('Y-m-d')])
+            ->when($num_nfe, function ($query) use ($num_nfe) {
+                return $query->where('c_numero_nfe', 'like', '%' . $num_nfe . '%');
+            })->when($fornecedor, function ($query) use ($fornecedor) {
+                return $query->where('c_nome', 'like', '%' . $fornecedor . '%');
+            })->when($status, function ($query) use ($status) {
+                if ($status == "C") {
+                    return $query->where('c_etapa', '=', '60');
+                } elseif ($status == "P") {
+                    return $query->where('c_etapa', '<>', '60');
                 }
+            })->when($produto, function ($query) use ($produto) {
+                return $query->whereHas('nfItems', function ($qHas) use ($produto) {
+                    $qHas->where('c_descricao_produto', 'like', '%' . $produto . '%')
+                        ->orWhere('nfs.c_codigo_produto', 'like', '%' . $produto . '%');
+                });
+            })->when($tipo, function ($query) use ($tipo) {
+                return $query->whereHas('nfItems.produto', function ($qHas) use ($tipo) {
+                    $qHas->where('tipo_item', $tipo)
+                        ->where('loja_id', auth()->user()->current_loja_id);
+                });
+            })
+            ->orderBy('d_emissao_nfe', 'desc')
+            ->paginate(20)
+            ->withQueryString();
 
-                if (
-                    $request->filled("fornecedor") &&
-                    (stripos($nfe->cabec->cNome, $fornecedor) !== false) &&
-                    (!in_array($nfe, $notasfiscais))
-                ) {
-                    array_push($notasfiscais, $nfe);
-                }
-
-                if (
-                    $request->filled("status") &&
-                    (
-                        (((int)$nfe->cabec->cEtapa === 60) && ($status == "C")) ||
-                        (((int)$nfe->cabec->cEtapa !== 60) && ($status == "P"))
-                    ) &&
-                    (!in_array($nfe, $notasfiscais))
-                ) {
-                    array_push($notasfiscais, $nfe);
-                }
-
-                if ($request->filled("produto")) {
-                    foreach ($nfe->itensRecebimento as $item) {
-                        if (
-                            ((stripos($item->itensCabec->cDescricaoProduto, $produto) !== false) || (stripos($item->itensCabec->cCodigoProduto, $produto) !== false)) &&
-                            (!in_array($nfe, $notasfiscais))
-                        ) {
-                            array_push($notasfiscais, $nfe);
-                        }
-                    }
-                }
-
-                if ($request->filled("tipo")) {
-                    foreach ($nfe->itensRecebimento as $item) {
-                        $prod = $this->omie->getConsultaProduto($item->itensCabec->nIdProduto);
-                        if (
-                            isset($prod->tipoItem) &&
-                            ((int)$prod->tipoItem == (int)$tipo) &&
-                            (!in_array($nfe, $notasfiscais))
-                        ) {
-                            array_push($notasfiscais, $nfe);
-                        }
-                    }
-                }
-            }
-        } else {
-            $notasfiscais = $nfes;
-        }
         return view('notafiscal.index', compact('notasfiscais', 'data_inicio', 'data_final', 'num_nfe', 'fornecedor', 'produto', 'tipo', 'status'));
     }
 
-    public function itens(Request $request, $nIdReceb)
+    public function itens(Request $request, NotaFiscal $notaFiscal)
     {
         if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
-        $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
-        return view('notafiscal.itens', compact("recebimento"));
+        return view('notafiscal.itens', compact("notaFiscal"));
     }
 
-    public function setQuantidade(Request $request, string $nIdReceb, string $codigo)
+    public function setQuantidade(Request $request, NotaFiscalItem $notaFiscalItem)
     {
         if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
-        $nf = NotaFiscal::where('n_id_receb', $nIdReceb)->where('produto_codigo', $codigo)->first();
-
-        if ($nf && isset($nf->quantidade) && $nf->$nf == $request->get('quantidade')) {
-            return $nf;
+        if (($notaFiscalItem->quantidade !== null) && $notaFiscalItem->quantidade == $request->get('quantidade')) {
+            return $notaFiscalItem;
         } else {
-            return NotaFiscal::updateOrCreate(
-                [
-                    'loja_id' => Auth::user()->current_loja_id,
-                    'n_id_receb' => $nIdReceb,
-                    'produto_codigo' => $codigo,
-                ],
-                [
-                    'quantidade' => $request->get('quantidade')
-                ]
-            );
+            $notaFiscalItem->quantidade = $request->get('quantidade') ?? null;
+            $notaFiscalItem->save();
         }
     }
 
-    public function imprimir(Request $request, $nIdReceb, $nIdProduto = "")
+    public function imprimir(Request $request, NotaFiscal $notaFiscal, $nIdProduto = "")
     {
         if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
         $etiquetas = [];
-        $recebimento = $this->omie->getConsultarRecebimento($nIdReceb);
 
-        foreach ($recebimento->itensRecebimento as $it) {
-            if ($it->itensCabec->nIdProduto > 0) {
-                $produto = $this->omie->getConsultaProduto($it->itensCabec->nIdProduto);
-                $nf = NotaFiscal::where('n_id_receb', $nIdReceb)->where('produto_codigo', $it->itensCabec->nIdProduto)->first();
-                $qtde = ($produto->unidade == 'UN') ? ($nf->quantidade ?? 1) : 1;
-                if (($it->itensCabec->nIdProduto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
-                    // for ($i = 1; $i <= $qtde; $i++) {
-                    if ($produto->unidade == 'UN') {
-                        $quantidade = number_format($qtde, 0, ',', '.') . '(' . ($produto->unidade ?? '') . ')';
+        foreach ($notaFiscal->nfItems as $item) {
+            if ($item->produto) {
+                $qtde = ($item->produto->unidade == 'UN') ? ($item->quantidade ?? 1) : 1;
+                if (($item->n_id_produto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
+                    if ($item->produto->unidade == 'UN') {
+                        $quantidade = number_format($qtde, 0, ',', '.') . '(' . ($item->produto->unidade ?? '') . ')';
                     } else {
-                        $quantidade = number_format((float)$it->itensAjustes->nQtdeRecebida, 3, ',', '.') . ' (' . ($produto->unidade ?? '') . ')';
+                        $quantidade = number_format((float)json_decode($item->full_object)->itensAjustes->nQtdeRecebida ?? 0, 3, ',', '.') . ' (' . ($item->produto->unidade ?? '') . ')';
                     }
 
                     $etiquetas[] = [
-                        'codigo_produto' => $produto->codigo ?? '',
-                        'descricao' => $it->itensCabec->cDescricaoProduto ?? '',
+                        'codigo_produto' => $item->produto->codigo ?? '',
+                        'descricao' => $item->c_descricao_produto ?? '',
                         'lote' => "",
                         'quantidade' => '',
-                        'qtde_nf' => $it->itensAjustes->nQtdeRecebida . '(' . ($produto->unidade ?? '') . ')',
+                        'qtde_nf' => json_decode($item->full_object)->itensAjustes->nQtdeRecebida . '(' . ($item->produto->unidade ?? '') . ')',
                         'qtde_etiqueta' => $quantidade,
-                        'validade' => $it->itensCabec->nIdValidade ?? '',
-                        'inclusao' => $it->infoCadastro->dRec ?? '15/05/2025',
+                        'validade' => json_decode($item->full_object)->itensCabec->nIdValidade ?? '',
+                        'inclusao' => json_decode($item->full_object)->infoCadastro->dRec ?? '15/05/2025',
                         'produzido' => '',
-                        'fornecedor' => $recebimento->cabec->cNome ?? '',
-                        'nfe' => intval($recebimento->cabec->cNumeroNFe),
+                        'fornecedor' => $notaFiscal->c_nome ?? '',
+                        'nfe' => intval($notaFiscal->c_numero_nfe),
                     ];
-                    // }
                 }
             }
         }
@@ -183,18 +134,17 @@ class NotafiscalController extends Controller
             ->setOption('margin-right', 0)
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
-            ->setOption('orientation', 'portrait')
-            ->setOption('enable-local-file-access', true);
+            ->setOption('orientation', 'portrait');
 
-        if (config('app.env') === 'local') {
-            return $pdf->inline("etiquetas_nfe_{$recebimento->cabec->cNumeroNFe}.pdf");
+        if (config('app.env') === 'local-estoque') {
+            return $pdf->inline("etiquetas_nfe_{$notaFiscal->c_numero_nfe}.pdf");
         }
 
         if ($nIdProduto !== '') {
-            $prod = Produto::where('codigo_produto', $nIdProduto)->first();
-            $arquivo_nome = Str::slug("etiqueta_nfe_" . $recebimento->cabec->cNumeroNFe . "_" .  ($prod->descricao ?? $nIdProduto)) . ".pdf";
+            $prod = Produto::where('loja_id', auth()->user()->current_loja_id)->where('codigo_produto', $nIdProduto)->first();
+            $arquivo_nome = Str::slug("etiqueta_nfe_" . $notaFiscal->c_numero_nfe . "_" . ($prod->descricao ?? $nIdProduto)) . ".pdf";
         } else {
-            $arquivo_nome = Str::slug("etiquetas_nfe_" . $recebimento->cabec->cNumeroNFe) . "_" . ($recebimento->cabec->cNome ?? '') . ".pdf";
+            $arquivo_nome = Str::slug("etiquetas_nfe_" . $notaFiscal->c_numero_nfe) . "_" . ($notaFiscal->c_nome ?? '') . ".pdf";
         }
         return $pdf->download($arquivo_nome);
     }

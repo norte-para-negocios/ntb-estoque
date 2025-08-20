@@ -5,9 +5,8 @@ namespace App\Services;
 use App\Helpers\Constants;
 use App\Models\Loja;
 use App\Models\OrdemProducao;
+use App\Models\Produto;
 use Carbon\Carbon;
-use Exception;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -48,7 +47,7 @@ class OrdemProducaoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 1000,
+                    "registros_por_pagina" => 100,
                     "ordem_decrescente" => "S"
                 ]
             ]
@@ -59,26 +58,30 @@ class OrdemProducaoService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function fetchOrdemProducao(int $nCodOP): object
@@ -101,26 +104,30 @@ class OrdemProducaoService
         $this->beforeAttemptLog();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            // Log de integração
-            $this->response = $response->getBody()->getContents();
-            $this->code = $response->getStatusCode();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
-            $this->code = $th->getCode();
-            $this->error = true;
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function saveOrdensProducao(array $ordens): void
@@ -164,8 +171,8 @@ class OrdemProducaoService
                 ],
                 $op
             );
-        } catch (Exception $e) {
-            Log::error("Erro ao salvar ordem de produção nº: " . $op['num_ordem'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao salvar ordem de produção nº: " . $op['num_ordem'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 
@@ -175,8 +182,8 @@ class OrdemProducaoService
             OrdemProducao::where('loja_id', $this->loja->id)
                 ->where('identificacao_n_cod_op', $ordem->nCodOP)
                 ->delete();
-        } catch (Exception $e) {
-            Log::error("Erro ao excluir ordem de produção nº: " . $ordem->nCodOP . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao excluir ordem de produção nº: " . $ordem->nCodOP . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 }
