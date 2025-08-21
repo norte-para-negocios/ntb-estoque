@@ -8,6 +8,10 @@
                 <div class="row">
                     <div class="col-12 d-flex justify-content-between align-items-start">
                         <h1>
+                            <a href="{{route('transferencia.index')}}" class="btn btn-sm btn-outline-primary mb-1"
+                               title="Voltar">
+                                <i class="fa-solid fa-arrow-left-long"></i>
+                            </a>
                             Nova Transferência:
                             <small>{{ auth()->user()->loja->nome_fantasia }}</small>
                         </h1>
@@ -17,7 +21,6 @@
                         </button>
                     </div>
                 </div>
-
 
                 <div class="row mt-3">
                     <div class="col-md-2 mb-3">
@@ -69,14 +72,23 @@
                         <div class="input-group">
                             <input class="form-control" type="search" placeholder="Ctrl+F ou digite para buscar..."
                                    id="search" autofocus/>
+
                             <button type="button" id="botaoPermissao" class="btn btn-secondary rounded-end-2"
                                     style="display: none;">
                                 Conceder Acesso a Câmera
                             </button>
+
+                            <button type="button" class="btn btn-light mx-1" data-bs-toggle="modal"
+                                    data-bs-target="#produtoModal" title="Adicionar Produto">
+                                <i class="fa-solid fa-plus fa-2xl" style="color: #ff6b35;"></i>
+                            </button>
+
                             <button type="button" id="botaoUsarCamera" class="btn btn-light rounded-end-2"
-                                    style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
+                                    style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal"
+                                    title="Scanear QRCode">
                                 <i class="fa-solid fa-camera fa-2xl" style="color: #ff6b35;"></i>
                             </button>
+
                             <button type="button" id="botaoPararCamera" class="btn btn-secondary rounded-end-2"
                                     style="display: none;">
                                 Parar Leitura
@@ -103,11 +115,19 @@
         </form>
     </div>
     @include('inventario.qrcode')
+    @include('transferencia.produto')
 @endsection
 
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
+        function removeProduto(el) {
+            const linha = el.closest('tr');
+            if (linha) {
+                linha.remove();
+            }
+        }
+
         $(document).ready(function () {
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
@@ -179,7 +199,7 @@
             function buscarProdutoPorQrCode(codigo) {
                 let local = document.getElementById('estoque_origem').value;
                 let data = document.getElementById('data').value;
-                axios.get(`/transferencia/local/${local}/produto/${codigo}/data/${data}`).then(function (r) {
+                axios.get(`/transferencia/local-estoque/${local}/produto/${codigo}/data/${data}`).then(function (r) {
                     adicionarProdutoNaListagem(r.data.data);
                 });
             }
@@ -234,6 +254,11 @@
                 keyboard: false
             })
 
+            const produtoModal = new bootstrap.Modal(document.getElementById('produtoModal'), {
+                backdrop: 'static',
+                keyboard: false
+            })
+
             document.getElementById('qrcodeModal').addEventListener('shown.bs.modal', event => {
                 usarCamera();
             });
@@ -254,12 +279,46 @@
 
             verificarPermissaoCamera();
 
-            function removeProduto(el) {
-                const linha = el.closest('tr');
-                if (linha) {
-                    linha.remove();
-                }
-            }
+            document.getElementById('addProdutoButton').addEventListener('click', event => {
+                event.preventDefault();
+                const produto = document.getElementById('selectProduto');
+                buscarProdutoPorQrCode(produto.value);
+                produtoModal.hide();
+            })
+
+            $('#produtoModal').on('shown.bs.modal', function () {
+                $('#selectProduto').select2({
+                    dropdownParent: $(this),
+                    theme: 'bootstrap-5',
+                    placeholder: 'Digite para buscar…',
+                    ajax: {
+                        url: '{{route('transferencia.produtos')}}',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function (params) {
+                            return {
+                                q: params.term,
+                                page: params.page || 1
+                            };
+                        },
+                        processResults: function (response, params) {
+                            params.page = params.page || 1;
+                            return {
+                                results: response.data.map(function (item) {
+                                    return {
+                                        id: item.id,
+                                        text: item.text
+                                    };
+                                }),
+                                pagination: {
+                                    more: response.current_page < response.last_page
+                                }
+                            };
+                        },
+                        cache: true
+                    }
+                });
+            });
         })
 
         const formTransferencia = document.getElementById('formTransferencia');
@@ -270,7 +329,7 @@
             const produtos = document.getElementsByName('produtos[]');
 
             if (valor1 && valor2 && valor1 === valor2) {
-                alert('O local de estoque de origem e destino não podem ser iguais!');
+                alert('O local-estoque de estoque de origem e destino não podem ser iguais!');
                 event.preventDefault();
             }
 

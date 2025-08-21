@@ -14,6 +14,7 @@ class Inventario extends Model
         'origem',
         'motivo',
         'finalizado',
+        'status'
     ];
 
     protected function casts(): array

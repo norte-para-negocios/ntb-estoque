@@ -3,34 +3,57 @@
 namespace App\Services;
 
 use App\Helpers\Constants;
+use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
+use App\Jobs\UpdateOmieLocalData\OrdemProducaoUpdateJob;
 use App\Models\Loja;
 use App\Models\OrdemProducao;
+use App\Models\Produto;
 use Carbon\Carbon;
-use Exception;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
 
 class OrdemProducaoService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
     public function fetchAll($lastPages = 0): void
     {
-        $response = $this->fetchPage(1);
-        if (isset($response->cadastros) && count($response->cadastros) > 0) {
-            $this->saveOrdensProducao((array)$response->cadastros);
-            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
-                    $resp = $this->fetchPage($i);
-                    if (isset($resp->cadastros) && count($resp->cadastros) > 0) {
-                        $this->saveOrdensProducao((array)$resp->cadastros);
-                    }
-                }
+        if ($this->loja->ordem_producao_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->ordem_producao_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage(1);
+            $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i);
             }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->ordem_producao_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->ordem_producao_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
+
         }
     }
 
@@ -50,24 +73,37 @@ class OrdemProducaoService
             ]
         ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'OrdemProducao';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+        try {
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
+
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function fetchOrdemProducao(int $nCodOP): object
@@ -85,55 +121,37 @@ class OrdemProducaoService
             ]
         ];
 
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'OrdemProducao';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
-
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
-            }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
-        }
-        return new stdClass();
-    }
-
-    public function fetchProduto(string $codigo_produto): object
-    {
-        $chave = "fetchProduto" . $this->loja->id . $codigo_produto;
-        return Cache::remember($chave, 1800, function () use ($codigo_produto) {
-            $url = $this->urlBase . 'v1/geral/produtos/';
-            $data = [
-                "call" => "ConsultarProduto",
-                "app_key" => $this->loja->omie_app_key,
-                "app_secret" => $this->loja->omie_app_secret,
-                "param" => [
-                    [
-                        "codigo_produto" => $codigo_produto,
-                        "codigo_produto_integracao" => "",
-                        "codigo" => "",
-                    ]
-                ]
-            ];
             try {
                 $response = Http::withHeaders([
                     'Content-Type' => 'application/json'
-                ])->timeout(60)->post($url, $data);
+                ])->post($url, $data);
+
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
                 if ($response->status() === 200) {
                     return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
                 }
-            } finally {
-                // Evitar qualquer erro.
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
             return new stdClass();
-        });
+        } finally {
+            $this->afterAttemptLog();
+        }
     }
 
     public function saveOrdensProducao(array $ordens): void
@@ -160,11 +178,11 @@ class OrdemProducaoService
         $op['adicionais_d_dt_inicio'] = $ordem->infAdicionais->dDtInicio ? Carbon::createFromFormat(Constants::DATE_FORMAT_PT_BR, $ordem->infAdicionais->dDtInicio) : null;
         $op['adicionais_d_dt_conclusao'] = $ordem->infAdicionais->dDtConclusao ? Carbon::createFromFormat(Constants::DATE_FORMAT_PT_BR, $ordem->infAdicionais->dDtConclusao) : null;
 
-        $produto = $this->fetchProduto($ordem->identificacao->nCodProduto);
+        $produto = Produto::where('loja_id', $this->loja->id)->where('codigo_produto', $ordem->identificacao->nCodProduto)->first();
 
         $op['produto_codigo'] = $produto->codigo ?? null;
         $op['produto_descricao'] = $produto->descricao ?? null;
-        $op['produto_tipo_item'] = $produto->tipoItem ?? null;
+        $op['produto_tipo_item'] = $produto->tipo_item ?? null;
         $op['produto_unidade'] = $produto->unidade ?? null;
 
         $op['full_object'] = json_encode($ordem);
@@ -177,18 +195,19 @@ class OrdemProducaoService
                 ],
                 $op
             );
-        } catch (Exception $e) {
-            Log::error("Erro ao salvar ordem de produção nº: " . $op['num_ordem'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao salvar ordem de produção nº: " . $op['num_ordem'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 
-    public function webhook(array $data): void
+    public function deleteOrdemProducao(array $ordem): void
     {
-        if (isset($data['event']['nCodOP'])) {
-            $ordem = $this->fetchOrdemProducao($data['event']['nCodOP']);
-            if (isset($ordem->identificacao->nCodOP)) {
-                $this->saveOrdemProducao($ordem);
-            }
+        try {
+            OrdemProducao::where('loja_id', $this->loja->id)
+                ->where('identificacao_n_cod_op', $ordem->nCodOP)
+                ->delete();
+        } catch (\Throwable $th) {
+            Log::error("Erro ao excluir ordem de produção nº: " . $ordem->nCodOP . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 }

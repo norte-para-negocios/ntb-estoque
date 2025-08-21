@@ -13,7 +13,7 @@ class UpdateLocalEstoqueCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'omie:locais-estoque';
+    protected $signature = 'omie:local_estoque_update';
 
     /**
      * The console command description.
@@ -28,9 +28,9 @@ class UpdateLocalEstoqueCommand extends Command
     public function handle()
     {
         foreach (Loja::all() as $loja) {
-            $this->info("Atualizando locais de estoque para a loja: {$loja->nome}");
+            $this->info("Atualizando locais de estoque da loja: {$loja->nome}");
             (new LocalEstoqueService($loja))->fetchAll();
-            $this->info("Locais de estoque atualizados com sucesso para a loja: {$loja->nome}");
+            $this->info("Locais de estoque da loja {$loja->nome}, atualizados com sucesso!");
         }
     }
 }

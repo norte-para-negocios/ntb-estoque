@@ -22,35 +22,35 @@
 
 <div class="d-grid gap-2 mb-2">
     <a href="{{ route('ordemproducao.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-clipboard-list me-3"></i>Ordens de Produção
+        <i class="fa-solid fa-receipt me-3"></i>Ordens de Produção
     </a>
 </div>
 
 <div class="d-grid gap-2 mb-2">
     <a href="{{ route('transferencia.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-truck me-3"></i>Transferências
+        <i class="fa-solid fa-shuffle me-3"></i>Transferências
     </a>
 </div>
 
 <div class="d-grid gap-2 mb-2">
     <a href="{{ route('inventario.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-cubes me-3"></i>Inventário
-    </a>
-</div>
-
-<div class="d-grid gap-2 mb-2">
-    <a href="{{ route('relatorio.ordemproducao.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-print me-3"></i>Relatório de Ordens de Produção
-    </a>
-</div>
-
-<div class="d-grid gap-2 mb-2">
-    <a href="{{ route('relatorio.notafiscal.index') }}" class="btn btn-secondary text-start">
-        <i class="fas fa-print me-3"></i>Relatório de Nota Fiscal
+        <i class="fa-solid fa-cart-flatbed me-3"></i>Inventário
     </a>
 </div>
 
 @if (Auth::user()->perfil === 'Admin')
+    <div class="d-grid gap-2 mb-2">
+        <a href="{{ route('produto.index') }}" class="btn btn-secondary text-start">
+            <i class="fa-brands fa-product-hunt me-3"></i>Produtos
+        </a>
+    </div>
+
+    <div class="d-grid gap-2 mb-2">
+        <a href="{{ route('locais-estoque.index') }}" class="btn btn-secondary text-start">
+            <i class="fa-solid fa-boxes-stacked me-3"></i>Locais de Estoque
+        </a>
+    </div>
+
     <div class="d-grid gap-2 mb-2">
         <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">
             <i class="fas fa-building me-3"></i>Lojas
@@ -64,11 +64,17 @@
             <i class="fas fa-users me-3"></i>Usuários
         </a>
     </div>
+
+    <div class="d-grid gap-2 mb-2">
+        <a href="{{ route('log.index') }}" class="btn btn-secondary text-start">
+            <i class="fa-solid fa-bug me-3"></i>Logs de Integração
+        </a>
+    </div>
 @endif
 
 <div class="d-grid gap-2 mb-2">
     <a href="{{ route('logout') }}" class="btn btn-secondary text-start"
-        onclick="event.preventDefault();
+       onclick="event.preventDefault();
         document.getElementById('logout-form').submit();">
         <i class="fas fa-arrow-right-from-bracket me-3"></i>Sair
     </a>
@@ -83,7 +89,7 @@
             const usuarioLogado = '';
         }
 
-        window.onload = function() {
+        window.onload = function () {
             usuarioLogado = '{{ Auth::id() }}';
         };
 

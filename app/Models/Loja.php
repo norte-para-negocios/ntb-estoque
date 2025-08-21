@@ -23,6 +23,21 @@ class Loja extends Model
         'omie_app_secret',
 
         'ativo',
+
+        'local_estoque_ultima_atualizacao',
+        'local_estoque_status',
+
+        'produto_ultima_atualizacao',
+        'produto_status',
+
+        'posicao_estoque_ultima_atualizacao',
+        'posicao_estoque_status',
+
+        'nota_fiscal_ultima_atualizacao',
+        'nota_fiscal_status',
+
+        'ordem_producao_ultima_atualizacao',
+        'ordem_producao_status',
     ];
 
     protected $casts = [
