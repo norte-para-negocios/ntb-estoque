@@ -23,7 +23,7 @@ class DatabaseSeeder extends Seeder
 
         Loja::create([
             'cnpj' => '13.228.344/0001-02',
-            'nome' => 'RODOLFO NEVES MELO ',
+            'nome' => 'RODOLFO NEVES MELO',
             'nome_fantasia' => 'BAHIA|SH',
 
             'cep' => '41500300',
@@ -33,8 +33,8 @@ class DatabaseSeeder extends Seeder
             'logradouro' => 'AV SÃO CRISTÓVÃO',
             'numero' => '13223',
 
-            'omie_app_key' => '6447545219115',
-            'omie_app_secret' => 'a3c4f363a497a8e2c24b058e385fb94c',
+            'omie_app_key' => '6482942183718',
+            'omie_app_secret' => 'dd771bab663d33b8151f4556f0a06e8f',
         ]);
     }
 }

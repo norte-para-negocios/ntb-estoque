@@ -1,4 +1,5 @@
 import * as bootstrap from 'bootstrap';
+
 window.bootstrap = bootstrap;
 
 /**
@@ -8,9 +9,41 @@ window.bootstrap = bootstrap;
  */
 
 import axios from 'axios';
+
 window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+
+import Swal from 'sweetalert2';
+
+const swal = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    timerProgressBar: true,
+    customClass: {
+        confirmButton: 'btn btn-primary',
+        cancelButton: 'btn btn-secondary'
+    },
+    // buttonsStyling: false,
+    // reverseButtons: false,
+    // showCancelButton: true,
+    confirmButtonText: 'Ok',
+    cancelButtonText: 'Cancelar'
+});
+
+window.swal = swal;
+
+import { Notyf } from 'notyf';
+
+window.notyf = new Notyf({
+    duration: 0,
+    position: { x: 'right', y: 'top' },
+    dismissible: true,
+    types: [
+        { type: 'info', background: '#3b82f6', icon: false },
+        { type: 'warning', background: '#f59e0b', icon: false }
+    ]
+});
 
 
 /**
@@ -34,3 +67,11 @@ window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 //     forceTLS: (import.meta.env.VITE_PUSHER_SCHEME ?? 'https') === 'https',
 //     enabledTransports: ['ws', 'wss'],
 // });
+
+/**
+ * Echo exposes an expressive API for subscribing to channels and listening
+ * for events that are broadcast by Laravel. Echo and event broadcasting
+ * allow your team to quickly build robust real-time web applications.
+ */
+
+import './echo';

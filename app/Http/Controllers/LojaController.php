@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loja;
-use App\Services\CanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,6 +21,7 @@ class LojaController extends Controller
         if (Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
+
         $query = Loja::orderBy('nome_fantasia');
         if ($request->filled('search')) {
             $query->where('cnpj', 'like', "%{$request->get('search')}%")
@@ -39,6 +39,7 @@ class LojaController extends Controller
         if (Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
+
         $loja = new Loja();
         $action = 'create';
         return view('loja.loja', compact('action', 'loja'));
@@ -72,14 +73,6 @@ class LojaController extends Controller
         } catch (\Throwable $th) {
             return redirect()->route('loja.index')->with('error', $th->getMessage());
         }
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Loja $loja)
-    {
-        //
     }
 
     /**

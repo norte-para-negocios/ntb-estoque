@@ -2,32 +2,55 @@
 
 namespace App\Services;
 
+use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
+use App\Jobs\UpdateOmieLocalData\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
-use Exception;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
 
 class ProdutoService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
     public function fetchAll($lastPages = 0): void
     {
-        $response = $this->fetchPage(1);
-        if (isset($response->produto_servico_cadastro) && count($response->produto_servico_cadastro) > 0) {
-            $this->saveProdutos((array)$response->produto_servico_cadastro);
-            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
-                    $resp = $this->fetchPage($i);
-                    if (isset($resp->produto_servico_cadastro) && count($resp->produto_servico_cadastro) > 0) {
-                        $this->saveProdutos((array)$resp->produto_servico_cadastro);
-                    }
-                }
+        if ($this->loja->produto_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->produto_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage($this->loja, 1);
+            $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new ProdutoUpdateJob($this->loja, $i);
             }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->produto_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->produto_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
+
         }
     }
 
@@ -41,7 +64,7 @@ class ProdutoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 500,
+                    "registros_por_pagina" => 1000,
                     "apenas_importado_api" => "N",
                     "filtrar_apenas_omiepdv" => "N",
                     "ordem_decrescente" => "S",
@@ -49,24 +72,37 @@ class ProdutoService
             ]
         ];
 
-        try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'Produto';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+        try {
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
+
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function saveProdutos(array $produtos): void
@@ -98,8 +134,8 @@ class ProdutoService
                 ],
                 $prod
             );
-        } catch (Exception $e) {
-            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 
@@ -118,27 +154,46 @@ class ProdutoService
                 ]
             ]
         ];
+
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'Produto';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->timeout(60)->post($url, $data);
-            if ($response->status() === 200) {
-                return $response->object();
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->timeout(60)->post($url, $data);
+
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
+            return new stdClass();
         } finally {
-            // Evitar qualquer erro.
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
-    public function webhook(array $data): void
+    public function deleteProduto(object $produto): void
     {
-        Log::debug('ProdutoService Webhook', $data);
-        if (isset($data['event']['codigo_produto'])) {
-            $produto = $this->fetchProduto($data['event']['codigo_produto']);
-            if (isset($produto->codigo_produto)) {
-                $this->saveProduto($produto);
-            }
+        try {
+            Produto::where('loja_id', $this->loja->id)
+                ->where('codigo_produto', $produto->codigo_produto)
+                ->delete();
+        } catch (\Throwable $th) {
+            Log::error("Erro ao excluir produto nº: " . $produto->codigo_produto . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
 }

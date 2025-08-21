@@ -13,7 +13,7 @@ class UpdateProdutoCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'omie:produto';
+    protected $signature = 'omie:produto_update';
 
     /**
      * The console command description.
@@ -28,9 +28,9 @@ class UpdateProdutoCommand extends Command
     public function handle()
     {
         foreach (Loja::all() as $loja) {
-            $this->info("Atualizando produtos para a loja: {$loja->nome}");
+            $this->info("Atualizando produtos da loja: {$loja->nome}");
             (new ProdutoService($loja))->fetchAll();
-            $this->info("Produtos atualizados com sucesso para a loja: {$loja->nome}");
+            $this->info("Produtos da loja: {$loja->nome}, atualizados com sucesso!");
         }
     }
 }

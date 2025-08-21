@@ -21,6 +21,8 @@ class InventarioItem extends Model
         'descricao_status',
         'id_movest',
         'id_ajuste',
+
+        'status',
     ];
 
     public function inventario()

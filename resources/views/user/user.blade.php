@@ -4,9 +4,18 @@
     <div class="container">
         <div class="card p-3">
             <form action="{{ $action == 'create' ? route('usuario.store') : route('usuario.update', $user->id) }}"
-                method="POST">
+                  method="POST">
                 <div class="card-header">
-                    <h2>{{ __('Novo Usuário') }}</h2>
+                    <h2>
+                        <a href="{{route('usuario.index')}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar">
+                            <i class="fa-solid fa-arrow-left-long"></i>
+                        </a>
+                        @if($action == "create")
+                            {{ __('Novo Usuário') }}
+                        @else
+                            {{ __('Editando Usuário: ' . $user->name) }}
+                        @endif
+                    </h2>
                 </div>
 
                 <div class="card-body">
@@ -19,14 +28,14 @@
                     <div class="mb-3">
                         <label for="name" class="form-label">Nome do Usuário</label>
                         <input type="text" class="form-control" id="name" name="name"
-                            placeholder="Nome do Usuário" minlength="5" maxlength="255" required
-                            value="{{ $user->name }}">
+                               placeholder="Nome do Usuário" minlength="5" maxlength="255" required
+                               value="{{ $user->name }}">
                     </div>
                     <div class="mb-3">
                         <label for="email" class="form-label">E-mail</label>
                         <input type="email" class="form-control" id="email" name="email"
-                            placeholder="name@example.com" minlength="10" maxlength="255" required
-                            value="{{ $user->email }}">
+                               placeholder="name@example.com" minlength="10" maxlength="255" required
+                               value="{{ $user->email }}">
                     </div>
 
                     <div>
@@ -45,8 +54,8 @@
                             <li class="list-group-item">
                                 <div class="form-check form-switch fs-5">
                                     <input class="form-check-input" type="checkbox" name="lojas[]"
-                                        value="{{ $loja->id }}" id="loja-{{ $loja->id }}"
-                                        @if ($user->lojas->contains($loja->id)) checked @endif>
+                                           value="{{ $loja->id }}" id="loja-{{ $loja->id }}"
+                                           @if ($user->lojas->contains($loja->id)) checked @endif>
                                     <label class="form-check-label" for="loja-{{ $loja->id }}">
                                         {{ $loja->nome_fantasia }}
                                     </label>
@@ -56,11 +65,12 @@
                                         <li class="list-group-item">
                                             <div class="form-check form-switch fs-5">
                                                 <input class="form-check-input" type="checkbox" name="permissao[]"
-                                                    value="{{ $permissao->id }}" id="permissao-{{ $permissao->id }}"
-                                                    @if ($user->canPermissao($loja->id, $permissao->id)) checked
-                                                                onchange="detachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')"
-                                                                @else
-                                                                onchange="attachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')" @endif>
+                                                       value="{{ $loja->id }}|{{ $permissao->id }}"
+                                                       id="permissao-{{ $permissao->id }}"
+                                                       @if ($user->canPermissao($loja->id, $permissao->id)) checked
+                                                       onchange="detachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')"
+                                                       @else
+                                                           onchange="attachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')" @endif>
                                                 <label class="form-check-label" for="loja-{{ $permissao->id }}">
                                                     {{ $permissao->nome }}
                                                 </label>
@@ -68,12 +78,10 @@
                                         </li>
                                     @endforeach
                                 </ul>
-
                             </li>
                         @endforeach
                     </ul>
                 </div>
-
                 <div class="card-footer d-flex justify-content-between">
                     <a href="{{ route('usuario.index') }}" class="btn btn-secondary">Cancelar</a>
                     <button type="submit" class="btn btn-primary">Salvar</button>
@@ -83,17 +91,18 @@
     </div>
 @endsection
 
-
 @push('js')
     <script>
         function attachPermissao(userId, lojaId, permissaoId) {
+
+            console.log(userId, lojaId, permissaoId);
             axios.post(`/usuario/${userId}/permissao`, {
                 "loja_id": lojaId,
                 "permissao_id": permissaoId,
             })
         }
-
         function detachPermissao(userId, lojaId, permissaoId) {
+            console.log(userId, lojaId, permissaoId);
             axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`);
         }
     </script>

@@ -6,11 +6,18 @@
             <div class="row">
                 <div class="col-12 d-flex justify-content-between align-items-start">
                     <h1>
+                        <span>
+                        <a href="{{route('inventario.index')}}" class="btn btn-sm btn-outline-primary mb-1"
+                           title="Voltar">
+                            <i class="fa-solid fa-arrow-left-long"></i>
+                        </a>
                         Inventário #{{ $inventario->id }}:
+                        </span>
                         <small>{{ auth()->user()->loja->nome_fantasia }}</small>
                     </h1>
                     @if ($inventario->finalizado === null)
-                        <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}" id="formInventario">
+                        <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}"
+                              id="formInventario">
                             @csrf
                             <button type="submit" class="btn btn-primary text-white" form="formInventario">
                                 <i class="fa-solid fa-check fa-lg" style="color: #ffffff;"></i>
@@ -44,7 +51,7 @@
                     <div class="mb-3">
                         <label for="tipo_produto" class="form-label">Tipo de Produto</label>
                         <select id="tipo_produto" name="tipo_produto" class="form-control"
-                            onchange="searchTipo(this.value)">
+                                onchange="searchTipo(this.value)">
                             <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>
                                 Todos
                             </option>
@@ -60,7 +67,7 @@
                     <div class="mb-3">
                         <label for="familia_produto" class="form-label">Família</label>
                         <select id="familia_produto" name="familia_produto" class="form-control"
-                            onchange="searchFamilia(this.value)">
+                                onchange="searchFamilia(this.value)">
                             <option value="">
                                 Todos
                             </option>
@@ -81,17 +88,17 @@
                 <div class="d-flex flex-grow-1">
                     <div class="input-group">
                         <input class="form-control" type="search" placeholder="Ctrl+F ou digite para buscar..."
-                            id="search" autofocus />
+                               id="search" autofocus/>
                         <button type="button" id="botaoPermissao" class="btn btn-secondary rounded-end-2"
-                            style="display: none;">
+                                style="display: none;">
                             Conceder Acesso a Câmera
                         </button>
                         <button type="button" id="botaoUsarCamera" class="btn btn-light rounded-end-2"
-                            style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
+                                style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
                             <i class="fa-solid fa-camera fa-2xl" style="color: #ff6b35;"></i>
                         </button>
                         <button type="button" id="botaoPararCamera" class="btn btn-secondary rounded-end-2"
-                            style="display: none;">
+                                style="display: none;">
                             Parar Leitura
                         </button>
                     </div>
@@ -101,45 +108,45 @@
             <div class="table-responsive">
                 <table class="table table-bordered" id="produtos_inventario">
                     <thead class="table-light">
-                        <tr>
-                            <th class="col-10">Produto</th>
-                            <th class="col-2">Quantidade</th>
-                        </tr>
+                    <tr>
+                        <th class="col-10">Produto</th>
+                        <th class="col-2">Quantidade</th>
+                    </tr>
                     </thead>
                     <tbody>
-                        @foreach ($inventario->items->groupBy('produto_familia') as $familia => $items)
-                            <tr data-produto="" data-familia="{{ $familia }}" data-tipo="">
-                                <td colspan="2" class="bg-secondary text-white">
-                                    <strong>{{ $familia == '' ? 'Sem Classificação' : $familia }}</strong>
-                                </td>
-                            </tr>
-                            @foreach ($items->sortBy('produto_descricao') as $item)
-                                <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}"
-                                    data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
-                                    <td class="align-middle">
-                                        <div class="d-flex justify-content-between">
+                    @foreach ($inventario->items->groupBy('produto_familia') as $familia => $items)
+                        <tr data-produto="" data-familia="{{ $familia }}" data-tipo="">
+                            <td colspan="2" class="bg-secondary text-white">
+                                <strong>{{ $familia == '' ? 'Sem Classificação' : $familia }}</strong>
+                            </td>
+                        </tr>
+                        @foreach ($items->sortBy('produto_descricao') as $item)
+                            <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}"
+                                data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
+                                <td class="align-middle">
+                                    <div class="d-flex justify-content-between">
                                             <span>
                                                 {{ $item->produto_descricao }}
                                                 <small> #{{ $item->produto_codigo }}</small>
                                             </span>
-                                            <span>{{ $item->produto->unidade ?? '-' }}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        @if ($inventario->finalizado === null)
-                                            <input type="number" class="form-control" min="0.001" step="0.001"
-                                                onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
-                                                value="{{ $item->quan }}"> {{ $item->produto_unidade }}
-                                        @else
-                                            {{ $item->quan }} <br>
-                                            {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
-                                            ID Movimento: {{ $item->id_movest }}<br>
-                                            ID Ajuste: {{ $item->id_ajuste }}
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforeach
+                                        <span>{{ $item->produto->unidade ?? '-' }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if ($inventario->finalizado === null)
+                                        <input type="number" class="form-control" min="0.001" step="0.001"
+                                               onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
+                                               value="{{ $item->quan }}"> {{ $item->produto_unidade }}
+                                    @else
+                                        {{ $item->quan }} <br>
+                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
+                                        ID Movimento: {{ $item->id_movest }}<br>
+                                        ID Ajuste: {{ $item->id_ajuste }}
+                                    @endif
+                                </td>
+                            </tr>
                         @endforeach
+                    @endforeach
                     </tbody>
                 </table>
             </div>
@@ -158,7 +165,8 @@
                 })
             }
         }
-        $(document).ready(function() {
+
+        $(document).ready(function () {
 
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
@@ -222,7 +230,7 @@
 
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
-                        .then(function() {
+                        .then(function () {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
                         });
@@ -240,7 +248,7 @@
             function buscarProdutoPorQrCode(codigo) {
                 let local = document.getElementById('estoque_origem').value;
                 let data = document.getElementById('data').value;
-                axios.get(`/inventario/local/${local}/produto/${codigo}/data/${data}`).then(function(r) {
+                axios.get(`/inventario/local/${local}/produto/${codigo}/data/${data}`).then(function (r) {
                     adicionarProdutoNaListagem(r.data.data);
                 });
             }
@@ -282,7 +290,7 @@
             document.getElementById('qrcodeModal').addEventListener('hidden.bs.modal', event => {
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
-                        .then(function() {
+                        .then(function () {
                             document.getElementById('botaoUsarCamera').style.display = 'inline-block';
                             document.getElementById('botaoPararCamera').style.display = 'none';
                         });

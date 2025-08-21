@@ -2,32 +2,54 @@
 
 namespace App\Services;
 
+use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
-use Exception;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
 
 class LocalEstoqueService
 {
+    use IntegrationAttemptsTrait;
+
     private $urlBase = "https://app.omie.com.br/api/";
 
-    public function __construct(protected Loja $loja) {}
+    public function __construct(protected Loja $loja)
+    {
+    }
 
     public function fetchAll($lastPages = 0): void
     {
-        $response = $this->fetchPage(1);
-        if (isset($response->locaisEncontrados) && count($response->locaisEncontrados) > 0) {
-            $this->saveLocais((array)$response->locaisEncontrados);
-            if (($response->nTotPaginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->nTotPaginas); $i++) {
-                    $resp = $this->fetchPage($i);
-                    if (isset($resp->locaisEncontrados) && count($resp->locaisEncontrados) > 0) {
-                        $this->saveLocais((array)$resp->locaisEncontrados);
-                    }
-                }
+        if ($this->loja->local_estoque_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->local_estoque_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage(1);
+            $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new LocalEstoqueUpdateJob($this->loja, $i);
             }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->local_estoque_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->local_estoque_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
+
         }
     }
 
@@ -41,29 +63,41 @@ class LocalEstoqueService
             "param" => [
                 [
                     "nPagina" => $pagina,
-                    "nRegPorPagina" => 20
+                    "nRegPorPagina" => 1000
                 ]
             ]
         ];
 
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'LocalEstoque';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->post($url, $data);
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->post($url, $data);
 
-            if ($response->status() === 200) {
-                return $response->object();
-            } elseif ($response->status() === 500) {
-                return new stdClass();
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } elseif ($response->status() === 500) {
+                    return new stdClass();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+            return new stdClass();
+        } finally {
+            $this->afterAttemptLog();
         }
-        return new stdClass();
     }
 
     public function saveLocais(array $locais): void
@@ -75,7 +109,6 @@ class LocalEstoqueService
 
     public function saveLocal(object $local): void
     {
-
         $item['loja_id'] = $this->loja->id;
         $item['codigo_local_estoque'] = $local->codigo_local_estoque ?? null;
         $item['codigo'] = $local->codigo ?? null;
@@ -103,20 +136,20 @@ class LocalEstoqueService
                 ],
                 $item
             );
-        } catch (Exception $e) {
-            Log::error("Erro ao salvar local de estoque nº: " . $item['codigo_local_estoque'] . ', Loja: ' . $this->loja->nome . $e->getMessage());
+        } catch (\Throwable $th) {
+            Log::error("Erro ao salvar local-estoque de estoque nº: " . $item['codigo_local_estoque'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
 
     }
 
-    public function webhook(array $data): void
+    public function deleteLocal(object $local): void
     {
-        Log::info('Webhook Local Estoque', $data);
-        // if (isset($data['event']['codigo_produto'])) {
-        //     $produto = $this->fetchProduto($data['event']['codigo_produto']);
-        //     if (isset($produto->codigo_produto)) {
-        //         $this->saveProduto($produto);
-        //     }
-        // }
+        try {
+            LocalEstoque::where('loja_id', $this->loja->id)
+                ->where('codigo_local_estoque', $local->codigo_local_estoque)
+                ->delete();
+        } catch (\Throwable $th) {
+            Log::error("Erro ao excluir local-estoque de estoque nº: " . $local->codigo_local_estoque . ', Loja: ' . $this->loja->nome . $th->getMessage());
+        }
     }
 }

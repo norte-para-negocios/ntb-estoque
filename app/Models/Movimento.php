@@ -23,7 +23,9 @@ class Movimento extends Model
         'descricao_status',
         'id_movest',
         'id_ajuste',
-        'response'
+        'response',
+
+        'status'
     ];
 
     protected function casts(): array
