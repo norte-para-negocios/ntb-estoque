@@ -1,18 +1,21 @@
 <?php
 
-namespace App\Jobs;
+namespace App\Jobs\UpdateOmieLocalData;
 
+use App\Events\NotificaAllEvent;
 use App\Models\Loja;
+use App\Services\OrdemProducaoService;
 use App\Services\ProdutoService;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class ProdutoUpdateJob implements ShouldQueue
+class OrdemProducaoUpdateJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     // Tentativas antes de falhar de vez
     public int $tries = 5;
@@ -29,11 +32,12 @@ class ProdutoUpdateJob implements ShouldQueue
 
     public function handle(): void
     {
-        $service = new ProdutoService($this->loja);
+        $service = new OrdemProducaoService($this->loja);
         $response = $service->fetchPage($this->pagina);
 
-        if (!empty($response->produto_servico_cadastro)) {
-            $service->saveProdutos((array)$response->produto_servico_cadastro);
+        if (!empty($response->cadastros)) {
+            $service->saveOrdensProducao((array)$response->cadastros);
+            broadcast(new NotificaAllEvent("success", "Ordens de Produção da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->total_de_paginas}, atualizada com sucesso!"));
         }
     }
 

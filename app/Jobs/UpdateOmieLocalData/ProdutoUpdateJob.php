@@ -1,18 +1,20 @@
 <?php
 
-namespace App\Jobs;
+namespace App\Jobs\UpdateOmieLocalData;
 
+use App\Events\NotificaAllEvent;
 use App\Models\Loja;
-use App\Services\NotaFiscalService;
+use App\Services\ProdutoService;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class NotaFiscalUpdateJob implements ShouldQueue
+class ProdutoUpdateJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     // Tentativas antes de falhar de vez
     public int $tries = 5;
@@ -29,11 +31,12 @@ class NotaFiscalUpdateJob implements ShouldQueue
 
     public function handle(): void
     {
-        $service = new NotaFiscalService($this->loja);
+        $service = new ProdutoService($this->loja);
         $response = $service->fetchPage($this->pagina);
 
-        if (!empty($response->recebimentos)) {
-            $service->saveNotasFiscais((array)$response->recebimentos);
+        if (!empty($response->produto_servico_cadastro)) {
+            $service->saveProdutos((array)$response->produto_servico_cadastro);
+            broadcast(new NotificaAllEvent("success", "Produtos da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->total_de_paginas}, atualizada com sucesso!"));
         }
     }
 

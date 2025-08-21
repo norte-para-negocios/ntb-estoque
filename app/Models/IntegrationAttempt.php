@@ -7,12 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class IntegrationAttempt extends Model
 {
     protected $fillable = [
+        'loja_id',
+        'model',
         'request',
         'response',
         'code',
         'error',
         'error_message',
-        'read_at',
-        'read_by',
     ];
 }

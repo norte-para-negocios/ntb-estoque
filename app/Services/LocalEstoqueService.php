@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use App\Jobs\LocalEstoqueUpdateJob;
+use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -21,12 +22,34 @@ class LocalEstoqueService
 
     public function fetchAll($lastPages = 0): void
     {
-        $first = $this->fetchPage(1);
-        $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
+        if ($this->loja->local_estoque_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->local_estoque_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage(1);
+            $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new LocalEstoqueUpdateJob($this->loja, $i);
+            }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->local_estoque_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->local_estoque_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
 
-        // Dispara um Job para cada página
-        for ($i = 1; $i <= $total; $i++) {
-            LocalEstoqueUpdateJob::dispatch($this->loja, $i);
         }
     }
 
@@ -40,12 +63,14 @@ class LocalEstoqueService
             "param" => [
                 [
                     "nPagina" => $pagina,
-                    "nRegPorPagina" => 20
+                    "nRegPorPagina" => 1000
                 ]
             ]
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'LocalEstoque';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
         try {

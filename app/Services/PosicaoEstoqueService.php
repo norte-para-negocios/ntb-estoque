@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
+use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -21,17 +24,33 @@ class PosicaoEstoqueService
 
     public function fetchAll(int $codigoLocalEstoque, $dataPosicao, $lastPages = 0): void
     {
-        $response = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
-        if (isset($response->produtos) && count($response->produtos) > 0) {
-            $this->savePosicoes((array)$response->produtos, $dataPosicao);
-            if (($response->nTotPaginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->nTotPaginas); $i++) {
-                    $resp = $this->fetchPage($codigoLocalEstoque, $dataPosicao, $i);
-                    if (isset($resp->produtos) && count($resp->produtos) > 0) {
-                        $this->savePosicoes((array)$resp->produtos, $dataPosicao);
-                    }
-                }
+        if ($this->loja->posicao_estoque_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->posicao_estoque_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
+            $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
             }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->posicao_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->posicao_estoque_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->posicao_estoque_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
         }
     }
 
@@ -45,7 +64,7 @@ class PosicaoEstoqueService
             "param" => [
                 [
                     "nPagina" => $pagina,
-                    "nRegPorPagina" => 200,
+                    "nRegPorPagina" => 1000,
                     "dDataPosicao" => $dataPosicao,
                     "cExibeTodos" => 'S',
                     "codigo_local_estoque" => $codigoLocalEstoque,
@@ -54,6 +73,8 @@ class PosicaoEstoqueService
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'PosicaoEstoque';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
@@ -102,6 +123,8 @@ class PosicaoEstoqueService
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'PosicaoEstoque';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 

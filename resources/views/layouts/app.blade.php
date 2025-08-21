@@ -14,7 +14,6 @@
     <link rel="dns-prefetch" href="//fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=Nunito" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
     <!-- Scripts -->
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     @stack('css')
@@ -40,68 +39,87 @@
 </head>
 
 <body>
-    <div id="loader">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Carregando...</span>
-        </div>
+<div id="loader">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Carregando...</span>
     </div>
+</div>
 
 
-    <div id="app">
+<div id="app">
 
-        <nav class="navbar navbar-expand-lg bg-body-tertiary">
-            <div class="container">
-                <a class="navbar-brand" href="{{ route('home.index') }}">{{ config('app.name', 'NTB - Estoque') }}</a>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ route('home.index') }}">{{ config('app.name', 'NTB - Estoque') }}</a>
 
-                <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
+            <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
                     aria-controls="offcanvasTop" class="btn btn-lg">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-            </div>
-        </nav>
-
-        <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="offcanvasTopLabel">NTB - Estoque</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-            </div>
-            <div class="offcanvas-body">
-                @auth
-                    @include('layouts.menu')
-                @endauth
-            </div>
+                <i class="fa-solid fa-bars"></i>
+            </button>
         </div>
+    </nav>
 
-        <main class="py-4">
-            <div class="container">
-                @if (session('success'))
-                    <div class="alert alert-success" role="alert">
-                        {{ session('success') }}
-                    </div>
-                @endif
-
-                @if (session('error'))
-                    <div class="alert alert-danger" role="alert">
-                        {{ session('error') }}
-                    </div>
-                @endif
-            </div>
-
-            @yield('content')
-        </main>
-
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasTopLabel">NTB - Estoque</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            @auth
+                @include('layouts.menu')
+            @endauth
+        </div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    <script>
-        $(document).ready(function() {
-            document.getElementById("loader").style.display = "none";
-            document.getElementById("app").style.display = "block";
-        });
-    </script>
 
-    @stack('js')
-    @include('layouts.delete')
+    <main class="py-4">
+        @yield('content')
+    </main>
+
+</div>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+<script>
+    $(document).ready(function () {
+        @if (session('success'))
+        notyf.open({type: "success", message: "{{ session('success') }}"});
+        @elseif(session('error'))
+        notyf.open({type: "error", message: "{{ session('error') }}"});
+        @elseif(session('info'))
+        notyf.open({type: "info", message: "{{ session('info') }}"});
+        @elseif(session('warning'))
+        notyf.open({type: "warning", message: "{{ session('warning') }}"});
+        @endif
+
+        document.getElementById("loader").style.display = "none";
+        document.getElementById("app").style.display = "block";
+
+        window.Echo.private(`App.Models.User.{{auth()->id()}}`).listenToAll((eventName, e) => {
+            const type = eventName.replace('.', ''); // Remove o ponto
+
+            if (['success', 'error', 'info', 'warning'].includes(type)) {
+                notyf.open({type, message: e.message});
+            } else {
+                console.warn(`Tipo de evento não reconhecido: ${eventName}`, e);
+                notyf.open({type: 'waring', message: e.message});
+            }
+        });
+
+        window.Echo.channel(`All.User`).listenToAll((eventName, e) => {
+            const type = eventName.replace('.', ''); // Remove o ponto
+
+            if (['success', 'error', 'info', 'warning'].includes(type)) {
+                notyf.open({type, message: e.message});
+            } else {
+                console.warn(`Tipo de evento não reconhecido: ${eventName}`, e);
+                notyf.open({type: 'waring', message: e.message});
+            }
+        });
+
+    });
+</script>
+
+@stack('js')
+@include('layouts.delete')
 </body>
 
 </html>

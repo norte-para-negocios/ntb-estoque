@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
-use App\Jobs\ProdutoUpdateJob;
+use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
+use App\Jobs\UpdateOmieLocalData\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -21,12 +23,34 @@ class ProdutoService
 
     public function fetchAll($lastPages = 0): void
     {
-        $first = $this->fetchPage(1);
-        $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+        if ($this->loja->produto_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->produto_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage($this->loja, 1);
+            $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new ProdutoUpdateJob($this->loja, $i);
+            }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->produto_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->produto_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
 
-        // Dispara um Job para cada página
-        for ($i = 1; $i <= $total; $i++) {
-            ProdutoUpdateJob::dispatch($this->loja, $i);
         }
     }
 
@@ -40,7 +64,7 @@ class ProdutoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 500,
+                    "registros_por_pagina" => 1000,
                     "apenas_importado_api" => "N",
                     "filtrar_apenas_omiepdv" => "N",
                     "ordem_decrescente" => "S",
@@ -49,6 +73,8 @@ class ProdutoService
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'Produto';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
@@ -130,6 +156,8 @@ class ProdutoService
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'Produto';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 

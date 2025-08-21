@@ -124,17 +124,22 @@
 
                                                         <p class="mb-0">
                                                         <div class="d-grid gap-2 col-sm-6 col-md-4 col-12">
-                                                            @if ($tr->id_movest === null)
-                                                                <a href="{{ route('transferencia.reprocess', $tr->id) }}"
-                                                                   class="btn btn-sm btn-secondary text-white">
-                                                                    <i class="fa-solid fa-arrows-rotate"></i>
-                                                                </a>
+                                                            @if($tr->status !== ['Concluído'])
+                                                                @if ($tr->id_movest === null && (!in_array($tr->status, ['Processando', 'Concluído'])))
+                                                                    <a href="{{ route('transferencia.reprocess', $tr->id) }}"
+                                                                       class="btn btn-sm btn-secondary text-white">
+                                                                        <i class="fa-solid fa-arrows-rotate"></i>
+                                                                    </a>
+                                                                @endif
+
+                                                                @if (!in_array($tr->status, ['Processando', 'Iniciado']))
+                                                                    <button
+                                                                        onclick="deleteRegistro('{{ route('transferencia.destroy', $tr->id) }}')"
+                                                                        class="btn btn-sm btn-danger text-white">
+                                                                        <i class="fas fa-trash"></i>
+                                                                    </button>
+                                                                @endif
                                                             @endif
-                                                            <button
-                                                                onclick="deleteRegistro('{{ route('transferencia.destroy', $tr->id) }}')"
-                                                                class="btn btn-sm btn-danger text-white">
-                                                                <i class="fas fa-trash"></i>
-                                                            </button>
                                                         </div>
                                                         </p>
 

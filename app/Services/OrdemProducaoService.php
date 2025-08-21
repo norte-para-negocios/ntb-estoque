@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Helpers\Constants;
+use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
+use App\Jobs\UpdateOmieLocalData\OrdemProducaoUpdateJob;
 use App\Models\Loja;
 use App\Models\OrdemProducao;
 use App\Models\Produto;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -23,17 +26,34 @@ class OrdemProducaoService
 
     public function fetchAll($lastPages = 0): void
     {
-        $response = $this->fetchPage(1);
-        if (isset($response->cadastros) && count($response->cadastros) > 0) {
-            $this->saveOrdensProducao((array)$response->cadastros);
-            if (($response->total_de_paginas > 1) && ($lastPages > 1 || $lastPages == 0)) {
-                for ($i = 2; $i <= ($lastPages > 0 ? $lastPages : $response->total_de_paginas); $i++) {
-                    $resp = $this->fetchPage($i);
-                    if (isset($resp->cadastros) && count($resp->cadastros) > 0) {
-                        $this->saveOrdensProducao((array)$resp->cadastros);
-                    }
-                }
+        if ($this->loja->ordem_producao_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->ordem_producao_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage(1);
+            $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i);
             }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->ordem_producao_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->ordem_producao_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
+
         }
     }
 
@@ -47,13 +67,15 @@ class OrdemProducaoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 100,
+                    "registros_por_pagina" => 1000,
                     "ordem_decrescente" => "S"
                 ]
             ]
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'OrdemProducao';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
@@ -100,6 +122,8 @@ class OrdemProducaoService
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'OrdemProducao';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 

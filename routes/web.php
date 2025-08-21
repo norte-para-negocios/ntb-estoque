@@ -74,7 +74,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     });
 
     // Transferência
-    Route::resource('transferencia', TransferenciaController::class)->only(['index', 'create', 'store', 'destroy']);
+    Route::resource('transferencia', TransferenciaController::class)->only(['index', 'create', 'store', 'destroy'])->parameter('transferencia', 'movimento');
     Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
     Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
     Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');

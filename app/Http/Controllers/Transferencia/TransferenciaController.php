@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Transferencia;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\TransferenciaCreateJob;
+use App\Jobs\TransferenciaJob;
+use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\LocalEstoque;
 use App\Models\Movimento;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
+use App\Models\User;
 use App\Services\CanService;
+use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -55,7 +58,6 @@ class TransferenciaController extends Controller
         if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Transferência!");
         }
-
         $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao')->get();
         return view('transferencia.create', compact('locaisEstoque'));
     }
@@ -96,9 +98,10 @@ class TransferenciaController extends Controller
                 $movimentacao->origem = 'AJU';
                 $movimentacao->motivo = $request->motivo;
                 $movimentacao->codigo_local_estoque_destino = $request->estoque_destino;
+                $movimentacao->status = 'Iniciado';
                 $movimentacao->save();
                 // Dispara o job para processar a movimentação no OMIE
-                TransferenciaCreateJob::dispatch($movimentacao);
+                TransferenciaJob::dispatch(auth()->user(), $movimentacao);
             }
         });
 
@@ -115,7 +118,6 @@ class TransferenciaController extends Controller
         }
 
         try {
-            // Validação básica do parâmetro
             if (empty($codigo)) {
                 return response()->json([
                     'success' => false,
@@ -123,15 +125,10 @@ class TransferenciaController extends Controller
                 ], 400);
             }
 
-            // Busca o produto na API do Omie
-            $produto = Produto::where('loja_id', auth()->user()->current_loja_id)->where('codigo', $codigo)->first();
-            $posicaoEstoque = PosicaoEstoque::where('loja_id', auth()->user()->current_loja_id)
-                ->where('codigo_local_estoque', $local)
-                ->where('c_codigo', $produto->codigo_produto)
-                ->where('data_posicao', Carbon::parse($data)->format('Y-m-d'))
+            $produto = Produto::where('loja_id', auth()->user()->current_loja_id)
+                ->where('codigo', $codigo)
                 ->first();
 
-            // Verifica se o produto foi encontrado
             if (!$produto) {
                 return response()->json([
                     'success' => false,
@@ -139,23 +136,32 @@ class TransferenciaController extends Controller
                 ], 404);
             }
 
-            // Retorna os dados do produto
+            $posicaoEstoque = PosicaoEstoque::where('loja_id', auth()->user()->current_loja_id)
+                ->where('codigo_local_estoque', $local)
+                ->where('c_codigo', $produto->codigo_produto)
+                ->where('data_posicao', Carbon::parse($data)->format('Y-m-d'))
+                ->first();
+
+            if (!$posicaoEstoque) {
+                $posicaoEstoque = (new PosicaoEstoqueService(auth()->user()->loja))->fetchPosicaoProduto($local, $produto->codigo_produto, Carbon::parse($data)->format('d/m/Y'));
+                $cmc = $posicaoEstoque->cmc ?? 0.01;
+            } else {
+                $cmc = $posicaoEstoque->cmc ?? 0.01;
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
                     'id' => $produto->codigo,
                     'nome' => $produto->descricao,
-                    'valor_unitario' => number_format(($posicaoEstoque->cmc ?? 0), 2, ',', '.'),
+                    'valor_unitario' => number_format(($cmc ?? 0.01), 2, ',', '.'),
                 ]
             ], 200);
-        } catch (\Exception $e) {
-
-            // Log do erro para debug
+        } catch (\Throwable $th) {
             Log::error('Erro ao buscar produto por QR Code', [
                 'codigo' => $codigo,
-                'erro' => $e->getMessage()
+                'erro' => $th->getMessage()
             ]);
-
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno do servidor'
@@ -174,8 +180,10 @@ class TransferenciaController extends Controller
 
         // Consulta simples com filtro e limite
         $results = Produto::where('loja_id', auth()->user()->current_loja_id)
-            ->where('descricao', 'LIKE', "%{$term}%")
-            ->orWhere('codigo', 'LIKE', "%{$term}%")
+            ->where(function ($query) use ($term) {
+                $query->where('descricao', 'LIKE', "%{$term}%")
+                    ->orWhere('codigo', 'LIKE', "%{$term}%");
+            })
             ->orderBy('descricao')
             ->select(['codigo', 'descricao'])
             ->paginate(20);
@@ -199,9 +207,11 @@ class TransferenciaController extends Controller
      */
     public function reprocess(Movimento $movimento)
     {
-        // Dispara o job para processar a movimentação no OMIE
-        TransferenciaCreateJob::dispatch($movimento);
-        return redirect()->route('transferencia.index')->with('success', 'Transferência reenviada para OMIE!');
+        if (!in_array($movimento->status, ['Processando', 'Concluído'])) {
+            TransferenciaJob::dispatch(auth()->user, $movimento);
+        }
+        return redirect()->route('transferencia.index')
+            ->with('success', 'Transferência reenviada para OMIE!');
     }
 
     /**
@@ -212,7 +222,6 @@ class TransferenciaController extends Controller
         if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Transferência!");
         }
-
         try {
             // Verifica se o movimento já foi processado
             if ($movimento->id_ajuste !== null) {
@@ -234,8 +243,8 @@ class TransferenciaController extends Controller
             }
             $movimento->delete();
             return redirect()->route('transferencia.index')->with('success', 'Movimentação excluída com sucesso!');
-        } catch (\Exception $e) {
-            return redirect()->route('transferencia.index')->with('warning', 'Ops! :(, Algo de errado aconteceu ao excluir a movimentação: ' . $e->getMessage());
+        } catch (\Throwable $th) {
+            return redirect()->route('transferencia.index')->with('warning', 'Ops! :(, Algo de errado aconteceu ao excluir a movimentação: ' . $th->getMessage());
         }
     }
 }

@@ -121,6 +121,13 @@
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
+        function removeProduto(el) {
+            const linha = el.closest('tr');
+            if (linha) {
+                linha.remove();
+            }
+        }
+
         $(document).ready(function () {
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
@@ -271,13 +278,6 @@
             document.getElementById('botaoPararCamera').onclick = onScanStop;
 
             verificarPermissaoCamera();
-
-            function removeProduto(el) {
-                const linha = el.closest('tr');
-                if (linha) {
-                    linha.remove();
-                }
-            }
 
             document.getElementById('addProdutoButton').addEventListener('click', event => {
                 event.preventDefault();

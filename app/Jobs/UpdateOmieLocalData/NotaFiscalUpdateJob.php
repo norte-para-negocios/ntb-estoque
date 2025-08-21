@@ -1,18 +1,20 @@
 <?php
 
-namespace App\Jobs;
+namespace App\Jobs\UpdateOmieLocalData;
 
+use App\Events\NotificaAllEvent;
 use App\Models\Loja;
-use App\Services\LocalEstoqueService;
+use App\Services\NotaFiscalService;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class LocalEstoqueUpdateJob implements ShouldQueue
+class NotaFiscalUpdateJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     // Tentativas antes de falhar de vez
     public int $tries = 5;
@@ -29,11 +31,11 @@ class LocalEstoqueUpdateJob implements ShouldQueue
 
     public function handle(): void
     {
-        $service = new LocalEstoqueService($this->loja);
+        $service = new NotaFiscalService($this->loja);
         $response = $service->fetchPage($this->pagina);
-
-        if (!empty($response->locaisEncontrados)) {
-            $service->saveLocais((array)$response->locaisEncontrados);
+        if (!empty($response->recebimentos)) {
+            $service->saveNotasFiscais((array)$response->recebimentos);
+            broadcast(new NotificaAllEvent("success", "Notas fiscais da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->nTotalPaginas}, atualizada com sucesso!"));
         }
     }
 

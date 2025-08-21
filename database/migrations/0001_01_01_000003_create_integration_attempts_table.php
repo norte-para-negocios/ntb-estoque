@@ -13,14 +13,17 @@ return new class extends Migration
     {
         Schema::create('integration_attempts', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('loja_id');
+            $table->string('model', 120);
+
             $table->longText('request');
             $table->longText('response')->nullable();
             $table->string('code', 3)->nullable();
-            $table->boolean('error', 3)->nullable()->default(false);
+            $table->boolean('error')->default(false);
             $table->longText('error_message')->nullable();
-            $table->dateTime('read_at')->nullable();
-            $table->unsignedBigInteger('read_by')->nullable();
             $table->timestamps();
+
+            $table->foreign('loja_id')->references('id')->on('lojas');
         });
     }
 

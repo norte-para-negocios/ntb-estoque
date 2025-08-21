@@ -3,7 +3,7 @@
 @section('content')
     <div class="container">
 
-        <h2 class="mb-4 d-flex justify-content-between align-items-center">
+        <h2 class="mb-2 d-flex justify-content-between align-items-center">
             <span>
             <a href="{{route('home.index')}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar">
                 <i class="fa-solid fa-arrow-left-long"></i>
@@ -14,6 +14,10 @@
                 <i class="fas fa-plus"></i> Nova loja
             </a>
         </h2>
+        <p class="fw-bold mb-3">
+            Importante: Cadastre o webhook "{{route('webhook')}}" nos seus aplicativos Omie no endereço <a href="https://developer.omie.com.br/my-apps/">developer.omie.com.br/my-apps</a>, ative todas as opções.
+        </p>
+
 
         <form id="filtrosForm" method="GET" action="{{ route('loja.index') }}">
             <div class="card card-body">

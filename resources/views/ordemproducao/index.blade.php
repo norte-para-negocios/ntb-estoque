@@ -236,7 +236,7 @@
                 window.open(blobUrl, '_blank');
                 setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
             }).catch((error) => {
-                swal({
+                swal.fire({
                     title: "Ops :(!",
                     text: error,
                     icon: "error",

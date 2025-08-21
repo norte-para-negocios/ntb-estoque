@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
-use App\Jobs\NotaFiscalUpdateJob;
+use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
+use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
 use App\Models\Loja;
 use App\Models\NotaFiscal;
 use App\Models\NotaFiscalItem;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -23,12 +25,34 @@ class NotaFiscalService
 
     public function fetchAll($lastPages = 0): void
     {
-        $first = $this->fetchPage(1);
-        $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
+        if ($this->loja->nota_fiscal_status !== 'Processando') {
+            // Aciona a Variavel de Controle
+            $this->loja->nota_fiscal_status = 'Processando';
+            $this->loja->save();
+            $first = $this->fetchPage(1);
+            $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
+            $jobs = [];
+            for ($i = 1; $i <= $total; $i++) {
+                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i);
+            }
+            // Dispara o batch
+            Bus::batch($jobs)
+                ->then(function () {
+                    // Todos os Jobs concluídos com sucesso
+                    $this->loja->nota_fiscal_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->nota_fiscal_status = 'Concluído';
+                    $this->loja->save();
+                })
+                ->catch(function (Throwable $e) {
+                    // Algum Job falhou — você pode logar ou tratar aqui
+                    $this->loja->nota_fiscal_status = 'Erro';
+                    $this->loja->save();
+                })
+                ->finally(function () {
+                    // Executado sempre, mesmo com falhas
+                })
+                ->dispatch();
 
-        // Dispara um Job para cada página
-        for ($i = 1; $i <= $total; $i++) {
-            NotaFiscalUpdateJob::dispatch($this->loja, $i);
         }
     }
 
@@ -42,13 +66,15 @@ class NotaFiscalService
             "param" => [
                 [
                     "nPagina" => $pagina,
-                    "nRegistrosPorPagina" => 50,
+                    "nRegistrosPorPagina" => 1000,
                     "cExibirDetalhes" => "S"
                 ]
             ]
         ];
 
         // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'NotaFiscal';
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 

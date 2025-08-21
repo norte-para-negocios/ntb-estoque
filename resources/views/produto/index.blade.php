@@ -70,14 +70,14 @@
     <script>
         function update() {
             axios.get('/produto/update').then(response => {
-                swal({
+                swal.fire({
                     title: "Tudo certo, só aguardar alguns instantes!",
                     text: response.data.message,
                     icon: "success",
                     button: "OK!",
                 });
             }).catch(error => {
-                swal({
+                swal.fire({
                     title: "Ops :(!",
                     text: error.message,
                     icon: "error",
