@@ -2,10 +2,8 @@
 
 namespace App\Jobs\UpdateOmieLocalData;
 
-use App\Events\NotificaAllEvent;
 use App\Models\Loja;
 use App\Services\OrdemProducaoService;
-use App\Services\ProdutoService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -20,7 +18,6 @@ class OrdemProducaoUpdateJob implements ShouldQueue
     // Tentativas antes de falhar de vez
     public int $tries = 5;
 
-    // Intervalos em segundos para cada retry
     public array|int $backoff = [10, 30, 60, 120];
 
     public function __construct(
@@ -37,7 +34,6 @@ class OrdemProducaoUpdateJob implements ShouldQueue
 
         if (!empty($response->cadastros)) {
             $service->saveOrdensProducao((array)$response->cadastros);
-            broadcast(new NotificaAllEvent("success", "Ordens de Produção da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->total_de_paginas}, atualizada com sucesso!"));
         }
     }
 

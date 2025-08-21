@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
+use App\Events\NotificaUserEvent;
 use App\Helpers\Constants;
-use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
 use App\Jobs\UpdateOmieLocalData\OrdemProducaoUpdateJob;
 use App\Models\Loja;
 use App\Models\OrdemProducao;
 use App\Models\Produto;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -34,7 +35,7 @@ class OrdemProducaoService
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i);
+                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i)->onQueue('op');
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -43,6 +44,9 @@ class OrdemProducaoService
                     $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->ordem_producao_status = 'Concluído';
                     $this->loja->save();
+                    foreach (User::where('perfil', 'Admin')->get() as $user) {
+                        broadcast(new NotificaUserEvent($user, "success", "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -52,6 +56,7 @@ class OrdemProducaoService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('ordemproducao')
                 ->dispatch();
 
         }
@@ -67,8 +72,9 @@ class OrdemProducaoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 1000,
-                    "ordem_decrescente" => "S"
+                    "registros_por_pagina" => 500,
+                    "ordem_decrescente" => "S",
+                    "ordenar_por" => "dDtPrevisao"
                 ]
             ]
         ];

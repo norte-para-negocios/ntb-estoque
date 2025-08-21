@@ -23,18 +23,18 @@ class DatabaseSeeder extends Seeder
 
         Loja::create([
             'cnpj' => '13.228.344/0001-02',
-            'nome' => 'RODOLFO NEVES MELO',
-            'nome_fantasia' => 'BAHIA|SH',
+            'nome' => 'JR SANTOS RESTAURANTES LTDA',
+            'nome_fantasia' => 'DON ANA - BROTAS',
 
-            'cep' => '41500300',
+            'cep' => '40279090',
             'uf' => 'BA',
             'cidade' => 'SALVADOR',
-            'bairro' => 'SÃO CRISTÓVÃO',
-            'logradouro' => 'AV SÃO CRISTÓVÃO',
-            'numero' => '13223',
+            'bairro' => 'PARQUE BELA VISTA',
+            'logradouro' => 'RUA TEIXEIRA DE BARROS',
+            'numero' => 'SN',
 
-            'omie_app_key' => '6482942183718',
-            'omie_app_secret' => 'dd771bab663d33b8151f4556f0a06e8f',
+            'omie_app_key' => '1299859033473',
+            'omie_app_secret' => '98e0d98a2fe34c7e165cf68faa935a5e',
         ]);
     }
 }

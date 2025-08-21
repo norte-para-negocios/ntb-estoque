@@ -27,7 +27,7 @@ class UpdateProdutoCommand extends Command
      */
     public function handle()
     {
-        foreach (Loja::all() as $loja) {
+        foreach (Loja::where('ativo', true)->get() as $loja) {
             $this->info("Atualizando produtos da loja: {$loja->nome}");
             (new ProdutoService($loja))->fetchAll();
             $this->info("Produtos da loja: {$loja->nome}, atualizados com sucesso!");

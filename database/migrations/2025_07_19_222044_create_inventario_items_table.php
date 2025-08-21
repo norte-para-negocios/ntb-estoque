@@ -19,8 +19,8 @@ return new class extends Migration
             $table->string('produto_codigo', 60);
             $table->string('produto_descricao', 120);
             $table->string('produto_familia', 50)->nullable();
-            $table->decimal('quan')->nullable();
-            $table->decimal('valor')->nullable();
+            $table->decimal('quan', 10, 2)->nullable();
+            $table->decimal('valor', 10, 2)->nullable();
 
             $table->text('response')->nullable();
             $table->text('codigo_status')->nullable();

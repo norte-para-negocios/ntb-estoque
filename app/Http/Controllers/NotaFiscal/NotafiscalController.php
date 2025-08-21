@@ -7,6 +7,7 @@ use App\Models\NotaFiscal;
 use App\Models\NotaFiscalItem;
 use App\Models\Produto;
 use App\Services\CanService;
+use App\Services\NotaFiscalService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,7 +36,6 @@ class NotafiscalController extends Controller
         $produto = $request->get('produto') ?? '';
         $tipo = $request->get('tipo') ?? '';
         $status = $request->get('status') ?? '';
-
 
         $notasfiscais = NotaFiscal::where('loja_id', auth()->user()->current_loja_id)
             ->with(['nfItems', 'nfItems.produto'])
@@ -147,5 +147,10 @@ class NotafiscalController extends Controller
             $arquivo_nome = Str::slug("etiquetas_nfe_" . $notaFiscal->c_numero_nfe) . "_" . ($notaFiscal->c_nome ?? '') . ".pdf";
         }
         return $pdf->download($arquivo_nome);
+    }
+
+    public function syncNotasFiscais()
+    {
+        (new NotaFiscalService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(30)->format('d/m/Y'), Carbon::now()->format('d/m/Y'));
     }
 }

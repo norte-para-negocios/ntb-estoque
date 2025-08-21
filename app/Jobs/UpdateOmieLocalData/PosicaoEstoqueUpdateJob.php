@@ -2,7 +2,6 @@
 
 namespace App\Jobs\UpdateOmieLocalData;
 
-use App\Events\NotificaAllEvent;
 use App\Models\Loja;
 use App\Services\PosicaoEstoqueService;
 use Illuminate\Bus\Batchable;
@@ -16,7 +15,6 @@ class PosicaoEstoqueUpdateJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
-    // Tentativas antes de falhar de vez
     public int $tries = 5;
 
     // Intervalos em segundos para cada retry
@@ -38,7 +36,6 @@ class PosicaoEstoqueUpdateJob implements ShouldQueue
 
         if (!empty($response->produtos)) {
             $service->savePosicoes((array)$response->produtos, $this->dataPosicao);
-            broadcast(new NotificaAllEvent("success", "Posição de Estoque da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->nTotPaginas}, atualizada com sucesso!"));
         }
     }
 

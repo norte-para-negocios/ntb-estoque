@@ -29,12 +29,9 @@ class UpdateNotaFiscalCommand extends Command
     public function handle()
     {
         foreach (Loja::where('ativo', true)->get() as $loja) {
-            $inicio = Carbon::now();
-            $this->info("Notas fiscais da loja: {$loja->nome_fantasia} - " . $inicio->format('d/m/Y H:i:s'));
+            $this->info("Atualizando Notas Fiscais da loja: {$loja->nome_fantasia}");
             (new NotaFiscalService($loja))->fetchAll();
-            $final = Carbon::now();
-            $this->info("Final: " . $final->format('d/m/Y H:i:s') . " - " . "Tempo total: " . $inicio->diffInMinutes($final));
-            $this->info("");
+            $this->info("Notas Fiscais da loja: {$loja->nome_fantasia}, atualizadas com sucesso!");
         }
     }
 }

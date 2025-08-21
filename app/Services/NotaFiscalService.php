@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
-use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
 use App\Models\Loja;
 use App\Models\NotaFiscal;
 use App\Models\NotaFiscalItem;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -23,17 +24,17 @@ class NotaFiscalService
     {
     }
 
-    public function fetchAll($lastPages = 0): void
+    public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
         if ($this->loja->nota_fiscal_status !== 'Processando') {
             // Aciona a Variavel de Controle
             $this->loja->nota_fiscal_status = 'Processando';
             $this->loja->save();
-            $first = $this->fetchPage(1);
+            $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i);
+                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i, $dataIni = '', $dataFim = '')->onQueue('nf');
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -42,6 +43,9 @@ class NotaFiscalService
                     $this->loja->nota_fiscal_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->nota_fiscal_status = 'Concluído';
                     $this->loja->save();
+                    foreach (User::where('perfil', 'Admin')->get() as $user) {
+                        broadcast(new NotificaUserEvent($user, "success", "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -51,12 +55,13 @@ class NotaFiscalService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('notafiscal')
                 ->dispatch();
 
         }
     }
 
-    public function fetchPage($pagina = 1): object
+    public function fetchPage($pagina = 1, $dataIni = '', $dataFim = ''): object
     {
         $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
         $data = [
@@ -66,11 +71,16 @@ class NotaFiscalService
             "param" => [
                 [
                     "nPagina" => $pagina,
-                    "nRegistrosPorPagina" => 1000,
+                    "nRegistrosPorPagina" => 100,
                     "cExibirDetalhes" => "S"
                 ]
             ]
         ];
+
+        if (($dataIni !== '') && ($dataFim !== '')) {
+            $data["param"]["dtAltDe"] = $dataIni;
+            $data["param"]["dtAltAte"] = $dataFim;
+        }
 
         // Inicializando Log de integração
         $this->loja_id = $this->loja->id;
@@ -90,17 +100,25 @@ class NotaFiscalService
 
                 if ($response->status() === 200) {
                     return $response->object();
+                } elseif ($response->status() === 425) {
+                    $data = $response->object();
+                    preg_match('/em (\d+) segundos/', $data->faultstring, $matches);
+                    if (isset($matches[1])) {
+                        sleep((int)$matches[1]);
+                        foreach (User::where('perfil', 'Admin')->get() as $user) {
+                            broadcast(new NotificaUserEvent($user, "error", "A API de Notas Fiscais da loja: {$this->loja->nome}, retorno a seguinte mensagem de erro: {$data->faultstring}!"));
+                        }
+                    }
+                    return new stdClass();
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-
             } catch (\Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
                 $this->error = true;
             }
-            return new stdClass();
         } finally {
             $this->afterAttemptLog();
         }

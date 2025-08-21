@@ -15,7 +15,9 @@
             </a>
         </h2>
         <p class="fw-bold mb-3">
-            Importante: Cadastre o webhook "{{route('webhook')}}" nos seus aplicativos Omie no endereço <a href="https://developer.omie.com.br/my-apps/">developer.omie.com.br/my-apps</a>, ative todas as opções.
+            Importante: Cadastre o webhook "{{route('webhook')}}" nos seus aplicativos Omie no endereço <a
+                href="https://developer.omie.com.br/my-apps/">developer.omie.com.br/my-apps</a>, ative todas as
+            opções.
         </p>
 
 
@@ -47,25 +49,32 @@
                 @foreach ($lojas as $loja)
                     <tr>
                         <td>
-                            <p>
-                                {{ $loja->cnpj }}<br>
-                                {{ $loja->nome_fantasia }}<br>
-                                {{ $loja->nome }}
-                            </p>
-                            <p>
-                                CEP: {{ $loja->cep }}<br>
-                                Endereço: {{ $loja->logradouro }},
-                                {{ $loja->numero ?? '-' }},
-                                {{ $loja->bairro ?? '-' }},
-                                {{ $loja->cidade ?? '-' }} - {{ $loja->uf ?? '-' }}
-                            </p>
-                            <p>
-                                OMIE KEY: {{ Str::limit($loja->omie_app_key, 6) }}<br>
-                                OMIE SECRET: {{ Str::limit($loja->omie_app_secret, 6) }}
-                            </p>
-                            <p>
-                                Ativa: {{ $loja->ativo ? 'Sim' : 'Não' }}
-                            </p>
+                            <div class="card card-body" style="background-color: #eac2a4;">
+                                <p class="mb-0">
+                                    {{ $loja->cnpj }}: {{ $loja->nome_fantasia }} | <small>{{ $loja->nome }}</small><br>
+                                    Loja: {{ $loja->ativo ? 'Ativa' : 'Inativa' }}
+                                </p>
+                                <hr class="mb-0">
+                                <p class="mb-1">
+                                    Atualizaçoes:<br>
+                                    <strong>Local de
+                                        Estoque:</strong> {{$loja->local_estoque_ultima_atualizacao ? \Carbon\Carbon::parse($loja->local_estoque_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
+                                    ({{$loja->local_estoque_status??'N/A'}})<br>
+                                    <strong>Produto:</strong> {{$loja->produto_ultima_atualizacao ? \Carbon\Carbon::parse($loja->produto_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
+                                    ({{$loja->produto_status??'N/A'}})<br>
+                                    <strong>Ordem de
+                                        Produção:</strong> {{$loja->orde_producao_ultima_atualizacao ? \Carbon\Carbon::parse($loja->orde_producao_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
+                                    ({{$loja->orde_producao_status??'N/A'}})<br>
+                                    <strong>Nota
+                                        Fiscal:</strong> {{$loja->nota_fiscal_ultima_atualizacao ? \Carbon\Carbon::parse($loja->nota_fiscal_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
+                                    ({{$loja->nota_fiscal_status??'N/A'}})
+                                </p>
+                                <hr class="mb-0">
+                                <p>
+                                    OMIE KEY: {{ Str::limit($loja->omie_app_key, 6) }}<br>
+                                    OMIE SECRET: {{ Str::limit($loja->omie_app_secret, 6) }}
+                                </p>
+                            </div>
                         </td>
                         <td>
                             <a href="{{ route('loja.edit', $loja->id) }}" class="btn btn-secondary m-1">

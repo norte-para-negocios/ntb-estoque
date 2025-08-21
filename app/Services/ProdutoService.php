@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
-use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
+use App\Models\User;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -27,12 +28,13 @@ class ProdutoService
             // Aciona a Variavel de Controle
             $this->loja->produto_status = 'Processando';
             $this->loja->save();
-            $first = $this->fetchPage($this->loja, 1);
+            $first = $this->fetchPage(1);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
                 $jobs[] = new ProdutoUpdateJob($this->loja, $i);
             }
+
             // Dispara o batch
             Bus::batch($jobs)
                 ->then(function () {
@@ -40,6 +42,9 @@ class ProdutoService
                     $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->produto_status = 'Concluído';
                     $this->loja->save();
+                    foreach (User::where('perfil', 'Admin')->get() as $user) {
+                        broadcast(new NotificaUserEvent($user, "success", "Produtos da loja {$this->loja->nome}, atualizados com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -49,8 +54,8 @@ class ProdutoService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('produto')
                 ->dispatch();
-
         }
     }
 
@@ -64,7 +69,7 @@ class ProdutoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 1000,
+                    "registros_por_pagina" => 500,
                     "apenas_importado_api" => "N",
                     "filtrar_apenas_omiepdv" => "N",
                     "ordem_decrescente" => "S",

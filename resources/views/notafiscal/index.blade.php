@@ -3,8 +3,18 @@
 @section('content')
     <div class="container">
         <h2 class="mb-3">
-            <a href="{{url()->previous()}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar"><i class="fa-solid fa-arrow-left-long"></i></a>
+            <a href="{{url()->previous()}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar"><i
+                    class="fa-solid fa-arrow-left-long"></i></a>
             {{ __('Notas fiscais') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+            <span style="font-size: 12px;">
+                @if(auth()->user()->loja->nota_fiscal_ultima_atualizacao)
+                    Atualizado
+                    em: {{\Carbon\Carbon::parse(auth()->user()->loja->nota_fiscal_ultima_atualizacao)->format('d/m/y H:i:s')}}
+                @elseif(in_array(auth()->user()->loja->nota_fiscal_status, [null, 'Concluído']))
+                    <a href="{{route('notafiscal.sync')}}" class="btn btn-sm btn-secondary">Sincronizar Notas Fiscais</a>
+                @endif
+                | Status: {{auth()->user()->loja->nota_fiscal_status??'N/A'}}
+            </span>
         </h2>
 
         <div class="accordion" id="accordionExample">

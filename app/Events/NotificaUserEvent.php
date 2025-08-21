@@ -13,6 +13,13 @@ class NotificaUserEvent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public $queue = 'notifications';
+
+    public int $tries = 5;
+
+    // Intervalos em segundos para cada retry
+    public array|int $backoff = [10, 30, 60, 120];
+
     public function __construct(public User $user, public $type, public $message)
     {
     }

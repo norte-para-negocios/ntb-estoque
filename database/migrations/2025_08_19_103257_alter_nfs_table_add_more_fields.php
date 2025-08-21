@@ -24,12 +24,12 @@ return new class extends Migration {
             $table->string('c_ncm', 13)->nullable();
             $table->string('c_ean', 14)->nullable();
             $table->string('c_cfop', 10)->nullable();
-            $table->decimal('n_qtde_nfe')->nullable();
+            $table->decimal('n_qtde_nfe', 10, 2)->nullable();
             $table->string('c_unidade_nfe', 6)->nullable();
-            $table->decimal('n_preco_unit')->nullable();
-            $table->decimal('v_desconto')->nullable();
-            $table->decimal('v_frete')->nullable();
-            $table->decimal('v_total_item')->nullable();
+            $table->decimal('n_preco_unit', 10, 2)->nullable();
+            $table->decimal('v_desconto', 10, 2)->nullable();
+            $table->decimal('v_frete', 10, 2)->nullable();
+            $table->decimal('v_total_item', 10, 2)->nullable();
             $table->json('full_object')->nullable();
             $table->foreign('nota_fiscal_id')->references('id')->on('notas_fiscais');
         });

@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
-use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -32,7 +33,7 @@ class PosicaoEstoqueService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
+                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i)->onQueue('ps');
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -41,6 +42,9 @@ class PosicaoEstoqueService
                     $this->loja->posicao_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->posicao_estoque_status = 'Concluído';
                     $this->loja->save();
+                    foreach (User::where('perfil', 'Admin')->get() as $user) {
+                        broadcast(new NotificaUserEvent($user, "success", "Posição de Estoque da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -50,6 +54,7 @@ class PosicaoEstoqueService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('posicaoestoque')
                 ->dispatch();
         }
     }

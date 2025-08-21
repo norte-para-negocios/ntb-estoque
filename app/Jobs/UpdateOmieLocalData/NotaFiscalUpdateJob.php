@@ -2,7 +2,6 @@
 
 namespace App\Jobs\UpdateOmieLocalData;
 
-use App\Events\NotificaAllEvent;
 use App\Models\Loja;
 use App\Services\NotaFiscalService;
 use Illuminate\Bus\Batchable;
@@ -16,15 +15,15 @@ class NotaFiscalUpdateJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
-    // Tentativas antes de falhar de vez
     public int $tries = 5;
 
-    // Intervalos em segundos para cada retry
     public array|int $backoff = [10, 30, 60, 120];
 
     public function __construct(
         protected Loja $loja,
-        protected int  $pagina
+        protected int  $pagina,
+        protected string  $dataIni,
+        protected string  $dataFim
     )
     {
     }
@@ -32,10 +31,9 @@ class NotaFiscalUpdateJob implements ShouldQueue
     public function handle(): void
     {
         $service = new NotaFiscalService($this->loja);
-        $response = $service->fetchPage($this->pagina);
+        $response = $service->fetchPage($this->pagina, $dataIni = '', $dataFim = '');
         if (!empty($response->recebimentos)) {
             $service->saveNotasFiscais((array)$response->recebimentos);
-            broadcast(new NotificaAllEvent("success", "Notas fiscais da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->nTotalPaginas}, atualizada com sucesso!"));
         }
     }
 
