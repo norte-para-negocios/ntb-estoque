@@ -20,32 +20,32 @@ class Webhook extends Model
     protected static function booted()
     {
         static::created(function ($webhook) {
-            $message = $webhook->message;
-            if (stripos($message->topic, 'LocalEstoque.') !== false) {
+            $message = json_encode($webhook->message);
+            if (stripos($message['topic'], 'LocalEstoque.') !== false) {
                 $localService = new LocalEstoqueService($webhook->loja);
-                if ($message->topic === 'LocalEstoque.Excluido') {
-                    $localService->deleteLocal($message->event);
+                if ($message['topic'] === 'LocalEstoque.Excluido') {
+                    $localService->deleteLocal($message['event']);
                 } else {
-                    $localService->saveLocal($message->event);
+                    $localService->saveLocal($message['event']);
                 }
-            } elseif (stripos($message->topic, 'Produto.MovimentacaoEstoque') !== false) {
+            } elseif (stripos($message['topic'], 'Produto.MovimentacaoEstoque') !== false) {
                 $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
-                $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message->event->codigo_local_estoque, $message->event->codigo_produto, date('d/m/Y'));
+                $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
                 $posicaoEstoqueService->savePosicao($posicao);
-            } elseif (stripos($message->topic, 'Produto.') !== false) {
+            } elseif (stripos($message['topic'], 'Produto.') !== false) {
                 $produtoService = new ProdutoService($webhook->loja);
-                if ($message->topic === 'Produto.Excluido') {
-                    $produtoService->deleteProduto($message->event);
+                if ($message['topic'] === 'Produto.Excluido') {
+                    $produtoService->deleteProduto($message['event']);
                 } else {
-                    $produto = $produtoService->fetchProduto($message->event->codigo_produto);
+                    $produto = $produtoService->fetchProduto($message['event']['codigo_produto']);
                     $produtoService->saveProduto($produto);
                 }
-            } elseif (stripos($message->topic, 'OrdemProducao.') !== false) {
+            } elseif (stripos($message['topic'], 'OrdemProducao.') !== false) {
                 $ordemProducaoService = new OrdemProducaoService($webhook->loja);
-                if ($message->topic === 'OrdemProducao.Excluida') {
-                    $ordemProducaoService->deleteOrdemProducao($message->event);
+                if ($message['topic'] === 'OrdemProducao.Excluida') {
+                    $ordemProducaoService->deleteOrdemProducao($message['event']);
                 } else {
-                    $ordemProducao = $ordemProducaoService->fetchOrdemProducao($message->event->nCodOP);
+                    $ordemProducao = $ordemProducaoService->fetchOrdemProducao($message['event']['nCodOP']);
                     $ordemProducaoService->saveOrdemProducao($ordemProducao);
                 }
             }

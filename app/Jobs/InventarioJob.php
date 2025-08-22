@@ -103,7 +103,7 @@ class InventarioJob implements ShouldQueue
                         "data" => $inventarioItem->inventario->data->format('d/m/Y'),
                         "quan" => $inventarioItem->quan,
                         "valor" => $inventarioItem->valor == 0 ? 0.01 : $inventarioItem->valor,
-                        "obs" => "NTB - Estoque Item: #{$inventarioItem->id}",
+                        "obs" => 'NTB - Estoque|Usuário:' . $this->user->name,
                         "origem" => $inventarioItem->inventario->origem,
                         "tipo" => $inventarioItem->inventario->tipo,
                         "motivo" => $inventarioItem->inventario->motivo,

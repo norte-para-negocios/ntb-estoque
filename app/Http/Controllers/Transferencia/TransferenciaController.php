@@ -94,7 +94,7 @@ class TransferenciaController extends Controller
                 $movimentacao->tipo = 'TRF';
                 $movimentacao->quan = $request->quantidades[$index];
                 $movimentacao->valor = str_replace(',', '.', str_replace('.', '', $request->valores[$index]));
-                $movimentacao->obs = $request->observacao ?? 'Transferências entre estoques - NTB Estoque';
+                $movimentacao->obs = $request->observacao ?? 'NTB - Estoque|Usuário:' . auth()->user()->name;
                 $movimentacao->origem = 'AJU';
                 $movimentacao->motivo = $request->motivo;
                 $movimentacao->codigo_local_estoque_destino = $request->estoque_destino;

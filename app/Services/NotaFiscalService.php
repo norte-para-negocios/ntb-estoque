@@ -162,48 +162,47 @@ class NotaFiscalService
                 $item
             );
 
-            $batchItems = [];
+
             foreach ($notaFiscal->itensRecebimento ?? [] as $nfItem) {
-                $batchItems[] = [
-                    'loja_id' => $this->loja->id,
-                    'nota_fiscal_id' => $nf->id,
+                NotaFiscalItem::updateOrCreate(
+                    [
+                        'loja_id' => $this->loja->id,
+                        'nota_fiscal_id' => $nf->id,
 
-                    'n_id_receb' => $item['n_id_receb'],
-                    'produto_codigo' => $nfItem->itensCabec->nIdProduto ?? null,
+                        'n_id_receb' => $item['n_id_receb'],
+                        'n_sequencia' => $nfItem->itensCabec->nSequencia ?? null
+                    ],
+                    [
+                        'loja_id' => $this->loja->id,
+                        'nota_fiscal_id' => $nf->id,
 
-                    'n_id_item' => $nfItem->itensCabec->nIdItem ?? null,
-                    'n_id_pedido' => $nfItem->itensCabec->nIdPedido ?? null,
-                    'n_id_it_pedido' => $nfItem->itensCabec->nIdItPedido ?? null,
-                    'n_id_produto' => $nfItem->itensCabec->nIdProduto ?? null,
-                    'n_sequencia' => $nfItem->itensCabec->nSequencia ?? null,
-                    'c_codigo_produto' => $nfItem->itensCabec->cCodigoProduto ?? null,
-                    'c_descricao_produto' => $nfItem->itensCabec->cDescricaoProduto ?? null,
-                    'c_ignorar_item' => $nfItem->itensCabec->cIgnorarItem ?? null,
-                    'c_adicionar_novo' => $nfItem->itensCabec->cAdicionarNovo ?? null,
-                    'c_associar_existente' => $nfItem->itensCabec->cAssociarExistente ?? null,
-                    'c_item_devolvido' => $nfItem->itensCabec->cItemDevolvido ?? null,
-                    'c_ncm' => $nfItem->itensCabec->cNCM ?? null,
-                    'c_ean' => $nfItem->itensCabec->cEAN ?? null,
-                    'c_cfop' => $nfItem->itensCabec->cCFOP ?? null,
-                    'n_qtde_nfe' => $nfItem->itensCabec->nQtdeNFe ?? null,
-                    'c_unidade_nfe' => $nfItem->itensCabec->cUnidadeNfe ?? null,
-                    'n_preco_unit' => $nfItem->itensCabec->nPrecoUnit ?? null,
-                    'v_desconto' => $nfItem->itensCabec->vDesconto ?? null,
-                    'v_frete' => $nfItem->itensCabec->vFrete ?? null,
-                    'v_total_item' => $nfItem->itensCabec->vTotalItem ?? null,
+                        'n_id_receb' => $item['n_id_receb'],
+                        'produto_codigo' => $nfItem->itensCabec->nIdProduto ?? null,
 
-                    'full_object' => json_encode($nfItem),
-                ];
+                        'n_id_item' => $nfItem->itensCabec->nIdItem ?? null,
+                        'n_id_pedido' => $nfItem->itensCabec->nIdPedido ?? null,
+                        'n_id_it_pedido' => $nfItem->itensCabec->nIdItPedido ?? null,
+                        'n_id_produto' => $nfItem->itensCabec->nIdProduto ?? null,
+                        'n_sequencia' => $nfItem->itensCabec->nSequencia ?? null,
+                        'c_codigo_produto' => $nfItem->itensCabec->cCodigoProduto ?? null,
+                        'c_descricao_produto' => $nfItem->itensCabec->cDescricaoProduto ?? null,
+                        'c_ignorar_item' => $nfItem->itensCabec->cIgnorarItem ?? null,
+                        'c_adicionar_novo' => $nfItem->itensCabec->cAdicionarNovo ?? null,
+                        'c_associar_existente' => $nfItem->itensCabec->cAssociarExistente ?? null,
+                        'c_item_devolvido' => $nfItem->itensCabec->cItemDevolvido ?? null,
+                        'c_ncm' => $nfItem->itensCabec->cNCM ?? null,
+                        'c_ean' => $nfItem->itensCabec->cEAN ?? null,
+                        'c_cfop' => $nfItem->itensCabec->cCFOP ?? null,
+                        'n_qtde_nfe' => $nfItem->itensCabec->nQtdeNFe ?? null,
+                        'c_unidade_nfe' => $nfItem->itensCabec->cUnidadeNfe ?? null,
+                        'n_preco_unit' => $nfItem->itensCabec->nPrecoUnit ?? null,
+                        'v_desconto' => $nfItem->itensCabec->vDesconto ?? null,
+                        'v_frete' => $nfItem->itensCabec->vFrete ?? null,
+                        'v_total_item' => $nfItem->itensCabec->vTotalItem ?? null,
+
+                        'full_object' => json_encode($nfItem),
+                    ]);
             }
-
-            if (count($batchItems) > 0) {
-                NotaFiscalItem::upsert(
-                    $batchItems,
-                    ['loja_id', 'nota_fiscal_id', 'n_id_receb', 'n_sequencia'],
-                    array_keys($batchItems[0])
-                );
-            }
-
         } catch (\Throwable $th) {
             Log::error(
                 "Erro ao salvar nota fiscal" . $th->getMessage(),
