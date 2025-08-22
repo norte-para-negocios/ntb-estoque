@@ -199,7 +199,7 @@ class NotaFiscalService
             if (count($batchItems) > 0) {
                 NotaFiscalItem::upsert(
                     $batchItems,
-                    ['loja_id', 'nota_fiscal_id', 'n_id_receb', 'c_codigo_produto'],
+                    ['loja_id', 'nota_fiscal_id', 'n_id_receb', 'n_sequencia'],
                     array_keys($batchItems[0])
                 );
             }
