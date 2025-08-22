@@ -41,6 +41,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Loja
     Route::resource('loja', LojaController::class)->except(['show']);
+    Route::get('/loja/{loja}/sync/force', [LojaController::class, 'syncForce'])->name('loja.sync.force');
 });
 
 Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {

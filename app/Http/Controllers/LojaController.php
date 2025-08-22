@@ -119,6 +119,17 @@ class LojaController extends Controller
         }
     }
 
+    public function syncForce(Request $request, Loja $loja)
+    {
+        $loja->local_estoque_status = null;
+        $loja->produto_status = null;
+        $loja->posicao_estoque_status = null;
+        $loja->nota_fiscal_status = null;
+        $loja->ordem_producao_status = null;
+        $loja->save();
+        return redirect()->back()->with('success', 'Destravados para atualização!');
+    }
+
     /**
      * Remove the specified resource from storage.
      */

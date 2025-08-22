@@ -49,14 +49,14 @@
                 @foreach ($lojas as $loja)
                     <tr>
                         <td>
-                            <div class="card card-body" style="background-color: #eac2a4;">
+                            <div class="card card-body text-white" style="background-color: rgba(243,106,30,0.73);">
                                 <p class="mb-0">
                                     {{ $loja->cnpj }}: {{ $loja->nome_fantasia }} | <small>{{ $loja->nome }}</small><br>
                                     Loja: {{ $loja->ativo ? 'Ativa' : 'Inativa' }}
                                 </p>
                                 <hr class="mb-0">
                                 <p class="mb-1">
-                                    Atualizaçoes:<br>
+                                    Atualizaçoes: <a href="{{route('loja.sync.force', $loja->id)}}" class="btn btn-sm btn-link btn-light text-white">Forçar Liberação p/ Atualização</a><br>
                                     <strong>Local de
                                         Estoque:</strong> {{$loja->local_estoque_ultima_atualizacao ? \Carbon\Carbon::parse($loja->local_estoque_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
                                     ({{$loja->local_estoque_status??'N/A'}})<br>
