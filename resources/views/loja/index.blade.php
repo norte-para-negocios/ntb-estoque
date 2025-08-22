@@ -63,8 +63,8 @@
                                     <strong>Produto:</strong> {{$loja->produto_ultima_atualizacao ? \Carbon\Carbon::parse($loja->produto_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
                                     ({{$loja->produto_status??'N/A'}})<br>
                                     <strong>Ordem de
-                                        Produção:</strong> {{$loja->orde_producao_ultima_atualizacao ? \Carbon\Carbon::parse($loja->orde_producao_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
-                                    ({{$loja->orde_producao_status??'N/A'}})<br>
+                                        Produção:</strong> {{$loja->ordem_producao_ultima_atualizacao ? \Carbon\Carbon::parse($loja->ordem_producao_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
+                                    ({{$loja->ordem_producao_status??'N/A'}})<br>
                                     <strong>Nota
                                         Fiscal:</strong> {{$loja->nota_fiscal_ultima_atualizacao ? \Carbon\Carbon::parse($loja->nota_fiscal_ultima_atualizacao)->format('d/m/y H:i:s') : 'dd/mm/aa hh:mm:ss'}}
                                     ({{$loja->nota_fiscal_status??'N/A'}})
