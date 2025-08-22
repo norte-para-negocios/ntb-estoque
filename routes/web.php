@@ -51,7 +51,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::get('/itens/{notaFiscal}', [NotafiscalController::class, 'itens'])->name('notafiscal.itens');
         Route::get('/itens/{notaFiscal}/imprimir/{cCodigoProduto?}', [NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
         Route::post('/{notaFiscalItem}/quantidade', [NotafiscalController::class, 'setQuantidade'])->name('notafiscal.setQuantidade');
-        Route::get('/sync-omie', [NotafiscalController::class, 'sync'])->name('notafiscal.sync');
+        Route::get('/sync-omie', [NotafiscalController::class, 'syncNotasFiscais'])->name('notafiscal.sync');
     });
 
     // Relatório de Notas Fiscais
