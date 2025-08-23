@@ -183,17 +183,18 @@ class PosicaoEstoqueService
         $item['estoque_minimo'] = $posicao->estoque_minimo ?? null;
         $item['reservado'] = $posicao->reservado ?? null;
         $item['fisico'] = $posicao->fisico ?? null;
-
         try {
-            PosicaoEstoque::updateOrCreate(
-                [
-                    'loja_id' => $this->loja->id,
-                    'codigo_local_estoque' => $item['codigo_local_estoque'],
-                    'n_cod_prod' => $item['n_cod_prod'],
-                    'data_posicao' => $item['data_posicao'],
-                ],
-                $item
-            );
+            if (!empty($item['codigo_local_estoque']) && !empty($item['n_cod_prod']) && !empty($item['data_posicao'])) {
+                PosicaoEstoque::updateOrCreate(
+                    [
+                        'loja_id' => $this->loja->id,
+                        'codigo_local_estoque' => $item['codigo_local_estoque'],
+                        'n_cod_prod' => $item['n_cod_prod'],
+                        'data_posicao' => $item['data_posicao'],
+                    ],
+                    $item
+                );
+            }
         } catch (\Throwable $th) {
             Log::error(
                 "Erro ao salvar posição de estoque" . $th->getMessage(),
