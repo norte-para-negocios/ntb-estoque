@@ -34,7 +34,7 @@ class Webhook extends Model
                 } elseif (stripos($message['topic'], 'Produto.MovimentacaoEstoque') !== false) {
                     $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
                     $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
-                    $posicaoEstoqueService->savePosicao($posicao);
+                    $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
