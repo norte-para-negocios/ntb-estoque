@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Transferencia;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\TransferenciaJob;
-use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\LocalEstoque;
 use App\Models\Movimento;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
-use App\Models\User;
 use App\Services\CanService;
 use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
@@ -78,12 +76,24 @@ class TransferenciaController extends Controller
             'motivo' => 'required|string',
             'produtos' => 'required|array',
             'quantidades' => 'required|array',
-            'valores' => 'required|array',
         ]);
 
         DB::transaction(function () use ($request) {
             foreach ($request->produtos as $index => $produtoId) {
                 $produto = Produto::where('loja_id', auth()->user()->current_loja_id)->where('codigo', $produtoId)->first();
+
+                $posicaoEstoque = PosicaoEstoque::where('loja_id', auth()->user()->current_loja_id)
+                    ->where('codigo_local_estoque', $request->get('estoque_origem'))
+                    ->where('c_codigo', $produto->codigo_produto)
+                    ->where('data_posicao', normalizarData($request->get('data')))
+                    ->first();
+
+                if (!$posicaoEstoque) {
+                    $posicaoEstoque = (new PosicaoEstoqueService(auth()->user()->loja))->fetchPosicaoProduto($request->get('estoque_origem'), $produto->codigo_produto, Carbon::parse(normalizarData($request->get('data')))->format('d/m/Y'));
+                    $cmc = $posicaoEstoque->cmc ?? 0.01;
+                } else {
+                    $cmc = $posicaoEstoque->cmc ?? 0.01;
+                }
 
                 $movimentacao = new Movimento();
                 $movimentacao->loja_id = auth()->user()->current_loja_id;
@@ -93,7 +103,7 @@ class TransferenciaController extends Controller
                 $movimentacao->data = $request->data;
                 $movimentacao->tipo = 'TRF';
                 $movimentacao->quan = $request->quantidades[$index];
-                $movimentacao->valor = str_replace(',', '.', str_replace('.', '', $request->valores[$index]));
+                $movimentacao->valor = $cmc;
                 $movimentacao->obs = $request->observacao ?? 'NTB - Estoque|Usuário:' . auth()->user()->name;
                 $movimentacao->origem = 'AJU';
                 $movimentacao->motivo = $request->motivo;
@@ -136,25 +146,12 @@ class TransferenciaController extends Controller
                 ], 404);
             }
 
-            $posicaoEstoque = PosicaoEstoque::where('loja_id', auth()->user()->current_loja_id)
-                ->where('codigo_local_estoque', $local)
-                ->where('c_codigo', $produto->codigo_produto)
-                ->where('data_posicao', Carbon::parse($data)->format('Y-m-d'))
-                ->first();
-
-            if (!$posicaoEstoque) {
-                $posicaoEstoque = (new PosicaoEstoqueService(auth()->user()->loja))->fetchPosicaoProduto($local, $produto->codigo_produto, Carbon::parse($data)->format('d/m/Y'));
-                $cmc = $posicaoEstoque->cmc ?? 0.01;
-            } else {
-                $cmc = $posicaoEstoque->cmc ?? 0.01;
-            }
-
             return response()->json([
                 'success' => true,
                 'data' => [
                     'id' => $produto->codigo,
                     'nome' => $produto->descricao,
-                    'valor_unitario' => number_format(($cmc ?? 0.01), 2, ',', '.'),
+                    'unidade' => $produto->unidade??''
                 ]
             ], 200);
         } catch (\Throwable $th) {

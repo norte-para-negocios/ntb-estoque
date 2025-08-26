@@ -182,12 +182,12 @@
                                                         <p class="mb-0">
                                                             <small>Nº NFe:</small>
                                                             <strong>{{ $nf->c_numero_nfe ?? '-' }}</strong>|
-                                                            <small>Emissão:</small> {{ $nf->d_emissao_nfe ?? '' }}
+                                                            <small>Emissão:</small> {{ \Carbon\Carbon::parse(normalizarData($nf->d_emissao_nfe))->format('d/m/Y') }}
                                                         </p>
-                                                        <p class="mt-1 mb-2">
-                                                            <small>Valor da NF:</small> R$
-                                                            {{ number_format($nf->n_valor_nfe ?? 0, 2, ',', '.') ?? '' }}
-                                                        </p>
+{{--                                                        <p class="mt-1 mb-2">--}}
+{{--                                                            <small>Valor da NF:</small> R$--}}
+{{--                                                            {{ number_format($nf->n_valor_nfe ?? 0, 2, ',', '.') ?? '' }}--}}
+{{--                                                        </p>--}}
                                                     </div>
                                                     <div class="col-md-6 col-12 text-end">
                                                         <a href="{{ route('notafiscal.itens', $nf->id) }}"

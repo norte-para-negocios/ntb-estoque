@@ -139,9 +139,7 @@
                                                value="{{ $item->quan }}"> {{ $item->produto_unidade }}
                                     @else
                                         {{ $item->quan }} <br>
-                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
-                                        ID Movimento: {{ $item->id_movest }}<br>
-                                        ID Ajuste: {{ $item->id_ajuste }}
+                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}
                                     @endif
                                 </td>
                             </tr>

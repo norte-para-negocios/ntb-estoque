@@ -7,7 +7,6 @@ use App\Services\OrdemProducaoService;
 use App\Services\PosicaoEstoqueService;
 use App\Services\ProdutoService;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 class Webhook extends Model
