@@ -6,6 +6,7 @@ use App\Services\LocalEstoqueService;
 use App\Services\OrdemProducaoService;
 use App\Services\PosicaoEstoqueService;
 use App\Services\ProdutoService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
@@ -22,8 +23,6 @@ class Webhook extends Model
         static::created(function ($webhook) {
             $message = $webhook->message;
             if (is_array($message)) {
-
-
                 if (stripos($message['topic'], 'LocalEstoque.') !== false) {
                     $localService = new LocalEstoqueService($webhook->loja);
                     if ($message['topic'] === 'LocalEstoque.Excluido') {
@@ -35,6 +34,10 @@ class Webhook extends Model
                     $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
                     $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
                     $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
+                } elseif (stripos($message['topic'], 'Produto.AjusteEstoque') !== false) {
+                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
+                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
+                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
