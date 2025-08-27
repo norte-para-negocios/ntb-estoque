@@ -41,7 +41,7 @@
                 </tr>
                 </thead>
                 <tbody style="font-size: 9px; font-weight: 500;">
-                @foreach ($inventario->items()->whereNotNull('quan') as $item)
+                @foreach ($inventario->items()->where('quan', '>=', 0) as $item)
                     <tr>
                         <td style="width: 100px;">
                             {{ $item->produto->codigo ?? '' }}
