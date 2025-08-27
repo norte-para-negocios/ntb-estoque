@@ -6,25 +6,18 @@
     <meta content="ie=edge" http-equiv="X-UA-Compatible">
     <title>NTB - Estoque</title>
     <style>
+        {!! file_get_contents(resource_path('css/bootstrap3-3-7.min.css')) !!}
     </style>
-    {!! file_get_contents(resource_path('css/bootstrap3-3-7.min.css')) !!}
 </head>
 <body>
 <div class="container">
     <h2 class="mb-4 text-center">
-        {{ 'Transferência: '.$inventario->id }} - <small>{{ $loja->nome ?? '' }}</small>
+        Transferências: <small>{{ $loja->nome ?? '' }}</small>
     </h2>
     <p class="mb-0">
         <span class="fw-bold">Data:</span>
-        <span>{{ $inventario->data->format('d/m/Y') }}</span>
-        <br>
-        <span class="fw-bold">Local de Estoque:</span>
-        <span>{{ $inventario->localEstoque->codigo_local_estoque }} - {{ $inventario->localEstoque->descricao }}</span>
-        <br>
-        <span class="fw-bold">Tipo de Inventário:</span>
-        <span>
-            {{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$inventario->motivo] ?? 'Desconhecido' }}
-        </span>
+        <span>De: {{ \Carbon\Carbon::parse($params['data_inicio'])->format('d/m/Y') }}</span>
+        <span>Até: {{ \Carbon\Carbon::parse($params['data_final'])->format('d/m/Y') }}</span>
     </p>
 </div>
 <div class="container" style="padding-top: 20px;">
@@ -33,30 +26,35 @@
             <table class="table table-bordered table-condensed table-fixed">
                 <thead style="font-size: 9px; font-weight: 700;">
                 <tr>
-                    <th>Código do Produto</th>
+                    <th>Cód.</th>
                     <th>Descrição do Produto</th>
                     <th>Unidade</th>
                     <th style="text-align: right;">Quantidade</th>
+                    <th>Estoque</th>
                     <th style="text-align: center;">Status</th>
                 </tr>
                 </thead>
                 <tbody style="font-size: 9px; font-weight: 500;">
-                @foreach ($inventario->items()->whereNotNull('quan') as $item)
+                @foreach($transferencias as $transferencia)
                     <tr>
                         <td style="width: 100px;">
-                            {{ $item->produto->codigo ?? '' }}
+                            {{ $transferencia->produto->codigo ?? '' }}
                         </td>
-                        <td style="width: 800px;">
-                            {{ $item->produto->descricao ?? '' }}
+                        <td style="width: 700px;">
+                            {{ $transferencia->produto->descricao ?? '' }}
                         </td>
-                        <td style="width: 100px;">
-                            {{ $item->produto->unidade ?? '' }}
+                        <td style="width: 90px;">
+                            {{ $transferencia->produto->unidade ?? '' }}
                         </td>
-                        <td style="text-align: right; width: 160px;">
-                            {{ $item->quant ?? '-' }}
+                        <td style="text-align: right; width: 120px;">
+                            {{ $transferencia->quan ?? '-' }}
+                        </td>
+                        <td style="width: 180px;">
+                            De: {{ $transferencia->estoqueOrigem->descricao ?? '' }}<br>
+                            Para: {{ $transferencia->estoqueDestino->descricao ?? '' }}
                         </td>
                         <td style="width: 120px; text-align: center;">
-                            {{ $item->status??'N/A' }}
+                            {{ $transferencia->status??'N/A' }}
                         </td>
                     </tr>
                 @endforeach

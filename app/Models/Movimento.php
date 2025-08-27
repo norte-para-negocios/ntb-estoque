@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Movimento extends Model
 {
@@ -38,5 +39,24 @@ class Movimento extends Model
     public function loja()
     {
         return $this->belongsTo(Loja::class);
+    }
+
+    public function produto(): hasOne
+    {
+        return $this->hasOne(Produto::class, 'codigo_produto', 'id_prod')
+            ->where('loja_id', '=', $this->loja_id);
+    }
+
+    public function estoqueOrigem(): hasOne
+    {
+        return $this->hasOne(LocalEstoque::class, 'codigo_local_estoque', 'codigo_local_estoque')
+            ->where('loja_id', '=', $this->loja_id);
+
+    }
+
+    public function estoqueDestino(): hasOne
+    {
+        return $this->hasOne(LocalEstoque::class, 'codigo_local_estoque', 'codigo_local_estoque_destino')
+            ->where('loja_id', '=', $this->loja_id);
     }
 }

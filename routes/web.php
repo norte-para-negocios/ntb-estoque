@@ -10,6 +10,7 @@ use App\Http\Controllers\NotaFiscal\RelatorioNotaFiscalController;
 use App\Http\Controllers\OrdemProducao\OrdemProducaoController;
 use App\Http\Controllers\OrdemProducao\RelatorioOrdemProducaoController;
 use App\Http\Controllers\ProdutoController;
+use App\Http\Controllers\Transferencia\RelatorioTransferenciaController;
 use App\Http\Controllers\Transferencia\TransferenciaController;
 use App\Http\Controllers\User\PermissaoController;
 use App\Http\Controllers\User\UserController;
@@ -79,6 +80,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
     Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
     Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');
+    Route::post('/transferencia/pdf', [RelatorioTransferenciaController::class, 'pdf'])->name('transferencia.pdf');
 
     // Inventário
     Route::prefix('inventario')->group(function () {
