@@ -125,21 +125,23 @@
                                 data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
                                 <td class="align-middle">
                                     <div class="d-flex justify-content-between">
-                                            <span>
-                                                {{ $item->produto_descricao }}
-                                                <small> #{{ $item->produto_codigo }}</small>
-                                            </span>
+                                        <span>
+                                            {{ $item->produto_descricao }}
+                                            <small> #{{ $item->produto_codigo }}</small>
+                                        </span>
                                         <span>{{ $item->produto->unidade ?? '-' }}</span>
                                     </div>
+                                    @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro'])))
+                                        <span>{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
+                                    @endif
                                 </td>
                                 <td>
-                                    @if ($inventario->finalizado === null)
+                                    @if (($inventario->status === 'Em contagem') && ($item->id_ajuste === null) && ($item->id_movest === null))
                                         <input type="number" class="form-control" min="0.001" step="0.001"
                                                onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
                                                value="{{ $item->quan }}"> {{ $item->produto_unidade }}
                                     @else
-                                        {{ $item->quan }} <br>
-                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}
+                                        {{ $item->quan }}
                                     @endif
                                 </td>
                             </tr>
