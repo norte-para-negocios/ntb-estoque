@@ -109,20 +109,31 @@
 
 
                                                         <div class="mb-0">
-                                                            <div class="d-grid gap-2 col-sm-6 col-md-4 col-12">
-                                                                <a href="{{ route('inventario.contagem', $inventario->id) }}"
-                                                                   class="btn btn-primary text-white p-2 d-flex justify-content-start align-items-center">
-                                                                    <i class="fa-solid fa-calculator fa-xl mx-2"
-                                                                       style="color: #ffffff;"></i>
-                                                                    <span class="fs-5">Contagem</span>
-                                                                </a>
-                                                                @if($inventario->status !== 'Processando no Omie')
-                                                                    <a href="{{ route('inventario.destroy', $inventario->id) }}"
-                                                                       onclick="event.preventDefault(); deleteRegistro(this.href);"
-                                                                       class="btn btn-danger text-white p-2 d-flex justify-content-start align-items-center">
-                                                                        <i class="fa-solid fa-trash fa-xl mx-2"></i>
-                                                                        <span class="fs-5">Excluir</span>
+                                                            <div class="row">
+                                                                <div class="d-grid col-md-3 col-12">
+                                                                    <a href="{{ route('inventario.contagem', $inventario->id) }}"
+                                                                       class="btn btn-primary text-white d-flex justify-content-start align-items-center">
+                                                                        <i class="fa-solid fa-calculator fa-xl mx-2"
+                                                                           style="color: #ffffff;"></i>
+                                                                        <span class="fs-5">Contagem</span>
                                                                     </a>
+                                                                </div>
+                                                                @if($inventario->status !== 'Processando no Omie')
+                                                                    <div class="d-grid col-md-3 col-12">
+                                                                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                                           class="btn btn-info text-white d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-print fa-xl mx-2"></i>
+                                                                            <span class="fs-5">Imprimir</span>
+                                                                        </a>
+                                                                    </div>
+                                                                    <div class="d-grid col-md-3 col-12">
+                                                                        <a href="{{ route('inventario.destroy', $inventario->id) }}"
+                                                                           onclick="event.preventDefault(); deleteRegistro(this.href);"
+                                                                           class="btn btn-danger text-white d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-trash fa-xl mx-2"></i>
+                                                                            <span class="fs-5">Excluir</span>
+                                                                        </a>
+                                                                    </div>
                                                                 @endif
                                                             </div>
                                                         </div>
@@ -165,7 +176,7 @@
             const aberto = localStorage.getItem('accordionInventario');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                const collapse = new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, {toggle: true});
             }
         });
     </script>

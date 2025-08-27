@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use PDF;
 
 class InventarioController extends Controller
 {
@@ -97,6 +98,11 @@ class InventarioController extends Controller
         return redirect()->route('inventario.contagem', $inventario->id);
     }
 
+    public function pdf(Request $request, Inventario $inventario)
+    {
+        $pdf = PDF::loadView('inventario.pdf', ['inventario' => $inventario, 'loja' => Auth::user()->loja, 'params' => $request->all()]);
+        return $pdf->inline("inventario-{$inventario->id}.pdf");
+    }
     public function finish(Inventario $inventario)
     {
         (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));

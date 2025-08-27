@@ -2,11 +2,8 @@
 
 namespace App\Http\Controllers\NotaFiscal;
 
-use App\Exports\RelatorioNotaFiscalExport;
 use App\Http\Controllers\Controller;
 use App\Models\NotaFiscal;
-use App\Services\CanService;
-use App\Services\OmieService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

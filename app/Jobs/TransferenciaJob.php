@@ -8,6 +8,7 @@ use App\Models\LocalEstoque;
 use App\Models\Movimento;
 use App\Models\Produto;
 use App\Models\User;
+use App\Services\IntegrationAttemptsTrait;
 use App\Services\OmieService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 
 class TransferenciaJob implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, IntegrationAttemptsTrait;
 
     /**
      * Create a new job instance.
@@ -77,22 +78,40 @@ class TransferenciaJob implements ShouldQueue
                 ]
             ]
         ];
+        // Inicializando Log de integração
+        $this->loja_id = $loja->id;
+        $this->model = 'Movimento';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
-            if ($response->status() === 200) {
-                return $response->object();
-            } else {
-                $movimento->response = $response->body();
-                $movimento->save();
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                // Log de integração
+                $this->response = $response->getBody()->getContents();
+                $this->code = $response->getStatusCode();
+
+                if ($response->status() === 200) {
+                    return $response->object();
+                } else {
+                    $movimento->response = $response->body();
+                    $movimento->save();
+                }
+            } catch (\Throwable $th) {
+                // Log de erro.
+                $this->error_message = json_encode($th->getMessage());
+                $this->code = $th->getCode();
+                $this->error = true;
+                Log::critical($th->getMessage(), [
+                    'Code' => $th->getCode(),
+                    'File' => $th->getFile(),
+                    'Line' => $th->getLine()
+                ]);
             }
-        } catch (\Throwable $th) {
-            Log::critical($th->getMessage(), [
-                'Code' => $th->getCode(),
-                'File' => $th->getFile(),
-                'Line' => $th->getLine()
-            ]);
+        } finally {
+            $this->afterAttemptLog();
         }
         return null;
     }

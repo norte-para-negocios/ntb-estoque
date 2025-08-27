@@ -21,7 +21,7 @@ Route::get('/', [LoginController::class, 'showLoginForm'])->name('welcome');
 
 Auth::routes(['register' => false]);
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home.index');
 
     // Usuário
@@ -64,7 +64,6 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     // Ordens de produção
     Route::prefix('ordem-producao')->group(function () {
         Route::get('/', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
-        Route::post('/', [OrdemProducaoController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
         Route::post('/{ordemProducao}/validade', [OrdemProducaoController::class, 'setValidade'])->name('ordemproducao.setValidade');
         Route::get('/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('ordemproducao.imprimir');
     });
@@ -89,5 +88,6 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
         Route::post('/finish/{inventario}', [InventarioController::class, 'finish'])->name('inventario.finish');
         Route::delete('/destroy/{inventario}', [InventarioController::class, 'destroy'])->name('inventario.destroy');
+        Route::get('/pdf/{inventario}', [InventarioController::class, 'pdf'])->name('inventario.pdf');
     });
 });

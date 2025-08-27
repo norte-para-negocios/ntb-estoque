@@ -20,3 +20,10 @@ Schedule::call(function () {
         }
     }
 })->dailyAt('00:30:00');
+
+Schedule::call(function () {
+    \App\Models\InventarioItem::where('status', 'Erro')
+        ->whereNotNull('id_ajuste')
+        ->whereNotNull('id_movest')
+        ->update(['status' => 'Concluído']);
+})->everyTenMinutes();

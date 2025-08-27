@@ -9,6 +9,7 @@ use App\Models\LocalEstoque;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Models\User;
+use App\Services\IntegrationAttemptsTrait;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 
 class InventarioJob implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, IntegrationAttemptsTrait;
 
     /**
      * Create a new job instance.
@@ -38,7 +39,7 @@ class InventarioJob implements ShouldQueue
 
         $localOrigem = LocalEstoque::where('loja_id', $this->inventario->loja_id)->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)->first();
 
-        while ($this->inventario->items()->whereNull('inventario_items.status')->orWhere('inventario_items.status', 'Iniciado')->orWhere('inventario_items.status', 'Erro')->count() > 0) {
+        while (InventarioItem::where('inventario_id', $this->inventario->id)->whereNull('inventario_items.status')->orWhere('inventario_items.status', 'Iniciado')->orWhere('inventario_items.status', 'Erro')->count() > 0) {
 
             foreach ($this->inventario->items()->get() as $inventarioItem) {
 
@@ -68,7 +69,6 @@ class InventarioJob implements ShouldQueue
                         broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto {$produto->descricao} <br> No estoque {$localOrigem->descricao} <br>Processado com sucesso no Omie!"));
                     } else {
                         $inventarioItem->status = 'Erro';
-                        broadcast(new NotificaUserEvent($this->user, "error", "Não foi possível registrar o inventário do produto {$produto->descricao} <br>No estoque {$localOrigem->descricao}<br>Tentaremos novamente logo mais, só aguardar!"));
                     }
                     $inventarioItem->save();
                 }
@@ -110,23 +110,42 @@ class InventarioJob implements ShouldQueue
                     ]
                 ]
             ];
+
+            // Inicializando Log de integração
+            $this->loja_id = $loja->id;
+            $this->model = 'InventarioItem';
+            $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+            $this->beforeAttemptLog();
+
             try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json'
-                ])->connectTimeout(60)->timeout(60)->post($url, $data);
-                if ($response->status() === 200) {
-                    return $response->object();
-                } else {
-                    $inventarioItem->status = 'Erro';
-                    $inventarioItem->response = $response->body();
-                    $inventarioItem->save();
+                try {
+                    $response = Http::withHeaders([
+                        'Content-Type' => 'application/json'
+                    ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                    // Log de integração
+                    $this->response = $response->getBody()->getContents();
+                    $this->code = $response->getStatusCode();
+
+                    if ($response->status() === 200) {
+                        return $response->object();
+                    } else {
+                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->response = $response->body();
+                        $inventarioItem->save();
+                    }
+                } catch (\Throwable $th) {
+                    $this->error_message = json_encode($th->getMessage());
+                    $this->code = $th->getCode();
+                    $this->error = true;
+                    Log::critical($th->getMessage(), [
+                        'Code' => $th->getCode(),
+                        'File' => $th->getFile(),
+                        'Line' => $th->getLine()
+                    ]);
                 }
-            } catch (\Throwable $th) {
-                Log::critical($th->getMessage(), [
-                    'Code' => $th->getCode(),
-                    'File' => $th->getFile(),
-                    'Line' => $th->getLine()
-                ]);
+            } finally {
+                $this->afterAttemptLog();
             }
         }
         return null;
