@@ -30,13 +30,19 @@ class Webhook extends Model
                         $localService->saveLocal($message['event']);
                     }
                 } elseif (stripos($message['topic'], 'Produto.MovimentacaoEstoque') !== false) {
-                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
-                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
-                    $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
+                    /*
+                     * Identificar se deseja fazer algo quando houver movimento de estoque, não remover sem adicionar Produto.Inclusao, Edicao, Etc
+                     * */
+//                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
+//                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
+//                    $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
                 } elseif (stripos($message['topic'], 'Produto.AjusteEstoque') !== false) {
-                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
-                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
-                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
+                    /*
+                     * Identificar se deseja fazer algo quando houver movimento de estoque, não remover sem adicionar Produto.Inclusao, Edicao, Etc
+                     * */
+//                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
+//                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
+//                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
