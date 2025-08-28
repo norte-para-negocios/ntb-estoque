@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\LocalEstoqueService;
+use App\Services\NotaFiscalService;
 use App\Services\OrdemProducaoService;
 use App\Services\ProdutoService;
 use Illuminate\Database\Eloquent\Model;
@@ -49,6 +50,10 @@ class Webhook extends Model
 //                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
 //                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
 //                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
+                } elseif (stripos($message['topic'], 'RecebimentoProduto') !== false) {
+                    $notaFiscalService = new NotaFiscalService($webhook->loja);
+                    $notafiscal = $notaFiscalService->fetchNotaFiscal($message['event']['cabecalho']['nIdReceb']);
+                    $notaFiscalService->saveNotaFiscal($notafiscal);
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
