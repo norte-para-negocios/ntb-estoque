@@ -38,4 +38,14 @@ Schedule::call(function () {
             $query->whereNotNull('finalizado');
         })
         ->delete();
+
+    \App\Models\Inventario::whereNull('finalizado')
+        ->where('status', 'Processando no Omie')
+        ->whereDoesntHave('items', function ($query) {
+            $query->where('status', '<>','Concluído');
+        })
+        ->update([
+            'status' => 'Finalizado',
+            'finalizado' => date('Y-m-d H:i:s')
+        ]);
 })->everyTenMinutes();

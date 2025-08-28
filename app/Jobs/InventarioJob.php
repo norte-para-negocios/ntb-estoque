@@ -75,9 +75,10 @@ class InventarioJob implements ShouldQueue
             }
         }
 
-        $this->inventario->status = 'Finalizado';
-        $this->inventario->finalizado = date('Y-m-d H:i:s');
-        $this->inventario->save();
+        Inventario::where('id', $this->inventario->id)->update([
+            'status' => 'Finalizado',
+            'finalizado' => now(),
+        ]);
         broadcast(new NotificaUserEvent($this->user, "success", "Inventário do estoque {$localOrigem->descricao}, <br>concluído processamento com sucesso no Omie!"));
     }
 
