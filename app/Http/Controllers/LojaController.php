@@ -121,6 +121,10 @@ class LojaController extends Controller
 
     public function syncForce(Request $request, Loja $loja)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $loja->local_estoque_status = null;
         $loja->produto_status = null;
         $loja->posicao_estoque_status = null;

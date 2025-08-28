@@ -14,6 +14,9 @@
                         Inventário #{{ $inventario->id }}:
                         </span>
                         <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+                        @if($inventario->finalizado !== null || $inventario->status === 'Finalizado')
+                            <span class="badge text-bg-success">{{$inventario->status}}</span>
+                        @endif
                     </h1>
                     @if ($inventario->finalizado === null)
                         <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}"
@@ -110,7 +113,7 @@
                     <thead class="table-light">
                     <tr>
                         <th class="col-10">Produto</th>
-                        <th class="col-2">Quantidade</th>
+                        <th class="col-2 text-end">Quantidade</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -135,13 +138,19 @@
                                         <span>{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
                                     @endif
                                 </td>
-                                <td>
-                                    @if (($inventario->status === 'Em contagem') && ($item->id_ajuste === null) && ($item->id_movest === null))
+                                <td style="text-align: right;">
+                                    @if ($inventario->status === 'Em contagem')
                                         <input type="number" class="form-control" min="0.001" step="0.001"
                                                onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
-                                               value="{{ $item->quan }}"> {{ $item->produto_unidade }}
+                                               value="{{ $item->quan }}">
                                     @else
-                                        {{ $item->quan }}
+                                        @if(\App\Services\CanService::canPermissionLoja('Inventários - Editar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin')
+                                            <input type="number" class="form-control" min="0.001" step="0.001" data-quan="{{ $item->quan }}"
+                                                   onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
+                                                   value="{{ $item->quan }}">
+                                        @else
+                                            {{ number_format($item->quan, 2, ',', '.') }}
+                                        @endif
                                     @endif
                                 </td>
                             </tr>
@@ -163,6 +172,31 @@
                 axios.post(url, {
                     "quantidade": quantidade
                 })
+            }
+        }
+
+        function editQuantidade(el, url, quantidade) {
+            if (quantidade >= 0 && quantidade != el.dataset.quan) {
+                swal.fire({
+                    title: 'Tem certeza?',
+                    text: 'Gostaria realmente de editar a quantidade do produto, do inventário já Finalizado?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sim, editar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        axios.post(url, {
+                            "quantidade": quantidade
+                        }).then(() => {
+                            swal.fire('Editado!', 'A quantidade foi atualizada com sucesso.', 'success');
+                        }).catch(() => {
+                            swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
+                        });
+                    } else {
+                        el.value = el.dataset.quan;
+                    }
+                });
             }
         }
 

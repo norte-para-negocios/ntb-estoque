@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Permissao extends Model
 {
     protected $fillable = [
-        'nome'
+        'nome',
+        'view',
+        'create',
+        'edit',
+        'delete'
     ];
 
     public function users(): BelongsToMany

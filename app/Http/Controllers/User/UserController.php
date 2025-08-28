@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\UserMailAfterCreate;
 use App\Models\Loja;
 use App\Models\User;
+use App\Services\CanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;

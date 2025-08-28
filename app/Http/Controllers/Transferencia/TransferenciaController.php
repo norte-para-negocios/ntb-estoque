@@ -19,8 +19,6 @@ use Illuminate\Support\Facades\Log;
 
 class TransferenciaController extends Controller
 {
-    private $omie;
-
     public function __construct()
     {
         $this->middleware('auth');
@@ -31,8 +29,8 @@ class TransferenciaController extends Controller
      */
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Transferências - Ver', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Ver!");
         }
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
@@ -53,9 +51,10 @@ class TransferenciaController extends Controller
      */
     public function create()
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Transferências - Criar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Criar!");
         }
+
         $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao')->get();
         return view('transferencia.create', compact('locaisEstoque'));
     }
@@ -65,8 +64,8 @@ class TransferenciaController extends Controller
      */
     public function store(Request $request)
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Transferências - Criar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Criar!");
         }
 
         $validated = $request->validate([
@@ -123,8 +122,8 @@ class TransferenciaController extends Controller
      */
     public function produto($local, $codigo, $data)
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Transferências - Criar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Criar!");
         }
 
         try {
@@ -151,7 +150,7 @@ class TransferenciaController extends Controller
                 'data' => [
                     'id' => $produto->codigo,
                     'nome' => $produto->descricao,
-                    'unidade' => $produto->unidade??''
+                    'unidade' => $produto->unidade ?? ''
                 ]
             ], 200);
         } catch (\Throwable $th) {
@@ -168,8 +167,8 @@ class TransferenciaController extends Controller
 
     public function produtos(Request $request)
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Transferências - Criar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Criar!");
         }
 
         // Termo de busca vindo do Select2 (parâmetro "q")
@@ -204,6 +203,10 @@ class TransferenciaController extends Controller
      */
     public function reprocess(Movimento $movimento)
     {
+        if (!CanService::canPermissionLoja('Transferências - Criar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Criar!");
+        }
+
         if (!in_array($movimento->status, ['Processando', 'Concluído'])) {
             TransferenciaJob::dispatch(auth()->user, $movimento);
         }
@@ -216,6 +219,10 @@ class TransferenciaController extends Controller
      */
     public function destroy(Movimento $movimento)
     {
+        if (!CanService::canPermissionLoja('Transferências - Excluir', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Transferências - Excluir!");
+        }
+
         if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Transferência!");
         }

@@ -38,27 +38,25 @@
     </a>
 </div>
 
+
+<div class="d-grid gap-2 mb-2">
+    <a href="{{ route('produto.index') }}" class="btn btn-secondary text-start">
+        <i class="fa-brands fa-product-hunt me-3"></i>Produtos
+    </a>
+</div>
+
+<div class="d-grid gap-2 mb-2">
+    <a href="{{ route('locais-estoque.index') }}" class="btn btn-secondary text-start">
+        <i class="fa-solid fa-boxes-stacked me-3"></i>Locais de Estoque
+    </a>
+</div>
+
 @if (Auth::user()->perfil === 'Admin')
-    <div class="d-grid gap-2 mb-2">
-        <a href="{{ route('produto.index') }}" class="btn btn-secondary text-start">
-            <i class="fa-brands fa-product-hunt me-3"></i>Produtos
-        </a>
-    </div>
-
-    <div class="d-grid gap-2 mb-2">
-        <a href="{{ route('locais-estoque.index') }}" class="btn btn-secondary text-start">
-            <i class="fa-solid fa-boxes-stacked me-3"></i>Locais de Estoque
-        </a>
-    </div>
-
     <div class="d-grid gap-2 mb-2">
         <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">
             <i class="fas fa-building me-3"></i>Lojas
         </a>
     </div>
-@endif
-
-@if (Auth::user()->perfil === 'Admin')
     <div class="d-grid gap-2 mb-2">
         <a href="{{ route('usuario.index') }}" class="btn btn-secondary text-start">
             <i class="fas fa-users me-3"></i>Usuários

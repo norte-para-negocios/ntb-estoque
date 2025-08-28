@@ -8,8 +8,17 @@ use Illuminate\Http\Request;
 
 class LocalEstoqueController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     public function index(Request $request)
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         $locais = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)
             ->when($request->descricao, function ($query, $descricao) {
                 $query->where('descricao', 'like', '%' . $descricao . '%');
@@ -22,6 +31,10 @@ class LocalEstoqueController extends Controller
 
     public function update()
     {
+        if (Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
         try {
             $service = new LocalEstoqueService(auth()->user()->loja);
             $service->fetchAll();

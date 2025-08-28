@@ -151,6 +151,9 @@ class NotafiscalController extends Controller
 
     public function syncNotasFiscais()
     {
+        if (!CanService::canPermissionLoja('Notas Fiscais - Sincronizar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Notas Fiscais - Sincronizar!");
+        }
         (new NotaFiscalService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(30)->format('d/m/Y'), Carbon::now()->format('d/m/Y'));
     }
 }

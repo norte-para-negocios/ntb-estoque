@@ -21,9 +21,21 @@ Schedule::call(function () {
     }
 })->dailyAt('00:30:00');
 
+Schedule::command('model:prune')->daily();
+
 Schedule::call(function () {
     \App\Models\InventarioItem::where('status', 'Erro')
         ->whereNotNull('id_ajuste')
         ->whereNotNull('id_movest')
         ->update(['status' => 'Concluído']);
+
+    \App\Models\Inventario::whereNotNull('finalizado')
+        ->update(['status' => 'Finalizado']);
+
+    \App\Models\InventarioItem::whereNull('id_movest')
+        ->whereNull('id_ajuste')
+        ->whereHas('inventario', function ($query) {
+            $query->whereNotNull('finalizado');
+        })
+        ->delete();
 })->everyTenMinutes();

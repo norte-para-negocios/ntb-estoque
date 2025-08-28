@@ -21,8 +21,8 @@ class RelatorioOrdemProducaoController extends Controller
 
     public function imprimir(Request $request)
     {
-        if (!CanService::canPermissionLoja('Relatório - Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Relatório - Ordens de Produção!");
+        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
         $ordem_producao = $request->get('ordem_producao');

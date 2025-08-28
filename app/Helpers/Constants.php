@@ -71,9 +71,20 @@ class Constants
 
     const PERMISSOES = [
         "Notas Fiscais",
+        "Notas Fiscais - Sincronizar",
         "Ordens de Produção",
-        "Inventário",
-        "Transferência",
+        "Ordens de Produção - Sincronizar",
+        "Inventários - Ver",
+        "Inventários - Criar",
+        "Inventários - Editar",
+        "Inventários - Excluir",
+        "Transferências - Ver",
+        "Transferências - Criar",
+        "Transferências - Excluir",
+        "Produtos",
+        "Produtos - Sincronizar",
+        "Locais de Estoque",
+        "Locais de Estoque - Sincronizar",
     ];
 
     const TIPO_MOVIMENTO_TRANSFERENCIA = [
