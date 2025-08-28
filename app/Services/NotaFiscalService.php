@@ -88,40 +88,42 @@ class NotaFiscalService
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
+
         try {
-            try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json'
-                ])->post($url, $data);
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
 
-                // Log de integração
-                $this->response = $response->getBody()->getContents();
-                $this->code = $response->getStatusCode();
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
+            $objectReturn = new stdClass();
 
-                if ($response->status() === 200) {
-                    return $response->object();
-                } elseif ($response->status() === 425) {
-                    $data = $response->object();
-                    preg_match('/em (\d+) segundos/', $data->faultstring, $matches);
-                    if (isset($matches[1])) {
-                        sleep((int)$matches[1]);
-                        foreach (User::where('perfil', 'Admin')->get() as $user) {
-                            broadcast(new NotificaUserEvent($user, "error", "A API de Notas Fiscais da loja: {$this->loja->nome}, retorno a seguinte mensagem de erro: {$data->faultstring}!"));
-                        }
+            if ($response->status() === 200) {
+                $objectReturn = $response->object();
+            } elseif ($response->status() === 425) {
+                $data = $response->object();
+                preg_match('/em (\d+) segundos/', $data->faultstring, $matches);
+                if (isset($matches[1])) {
+                    sleep((int)$matches[1]);
+                    foreach (User::where('perfil', 'Admin')->get() as $user) {
+                        broadcast(new NotificaUserEvent($user, "error", "A API de Notas Fiscais da loja: {$this->loja->nome}, retorno a seguinte mensagem de erro: {$data->faultstring}!"));
                     }
-                    return new stdClass();
-                } elseif ($response->status() === 500) {
-                    return new stdClass();
                 }
-            } catch (\Throwable $th) {
-                // Log de erro.
-                $this->error_message = json_encode($th->getMessage());
-                $this->code = $th->getCode();
-                $this->error = true;
+            } elseif ($response->status() === 500) {
+                $objectReturn = new stdClass();
             }
+
+        } catch (\Throwable $th) {
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
         } finally {
             $this->afterAttemptLog();
         }
+
+        return $objectReturn;
     }
 
     public function saveNotasFiscais(array $notasFiscais): void
