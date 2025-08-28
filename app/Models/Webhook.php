@@ -6,6 +6,7 @@ use App\Services\LocalEstoqueService;
 use App\Services\NotaFiscalService;
 use App\Services\OrdemProducaoService;
 use App\Services\ProdutoService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\MassPrunable;
 
