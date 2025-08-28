@@ -4,13 +4,19 @@ namespace App\Models;
 
 use App\Services\LocalEstoqueService;
 use App\Services\OrdemProducaoService;
-use App\Services\PosicaoEstoqueService;
 use App\Services\ProdutoService;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\MassPrunable;
 
 class Webhook extends Model
 {
+    use MassPrunable;
+
+    public function prunable(): Builder
+    {
+        return static::where('created_at', '<=', now()->subDays(7));
+    }
+
     protected $fillable = [
         'loja_id',
         'message_id',
