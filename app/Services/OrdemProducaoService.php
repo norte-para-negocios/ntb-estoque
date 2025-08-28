@@ -25,13 +25,13 @@ class OrdemProducaoService
     {
     }
 
-    public function fetchAll($lastPages = 0): void
+    public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
         if ($this->loja->ordem_producao_status !== 'Processando') {
             // Aciona a Variavel de Controle
             $this->loja->ordem_producao_status = 'Processando';
             $this->loja->save();
-            $first = $this->fetchPage(1);
+            $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
@@ -62,7 +62,7 @@ class OrdemProducaoService
         }
     }
 
-    public function fetchPage($pagina = 1): object
+    public function fetchPage($pagina = 1, $dataIni = '', $dataFim = ''): object
     {
         $url = $this->urlBase . 'v1/produtos/op/';
         $data = [
@@ -74,10 +74,15 @@ class OrdemProducaoService
                     "pagina" => $pagina,
                     "registros_por_pagina" => 500,
                     "ordem_decrescente" => "S",
-                    "ordenar_por" => "dDtPrevisao"
+                    "ordenar_por" => "dConclusao"
                 ]
             ]
         ];
+
+        if (($dataIni !== '') && ($dataFim !== '')) {
+            $data["param"]["dDtConclusaoDe"] = $dataIni;
+            $data["param"]["dDtConclusaoAte"] = $dataFim;
+        }
 
         // Inicializando Log de integração
         $this->loja_id = $this->loja->id;

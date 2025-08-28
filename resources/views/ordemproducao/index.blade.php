@@ -7,6 +7,15 @@
                 <i class="fa-solid fa-arrow-left-long"></i>
             </a>
             {{ __('Ordens de Produção') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+            <span style="font-size: 12px;">
+                @if(auth()->user()->loja->ordem_producao_ultima_atualizacao)
+                    Atualizado
+                    em: {{\Carbon\Carbon::parse(auth()->user()->loja->ordem_producao_ultima_atualizacao)->format('d/m/y H:i:s')}}
+                @elseif(in_array(auth()->user()->loja->ordem_producao_status, [null, 'Concluído']))
+                    <a href="{{route('ordemproducao.sync')}}" class="btn btn-sm btn-secondary">Sincronizar Ordens de Produção</a>
+                @endif
+                | Status: {{auth()->user()->loja->ordem_producao_status??'N/A'}}
+            </span>
         </h2>
 
         <div class="accordion" id="accordionExample">
@@ -22,11 +31,24 @@
                     <div class="accordion-body">
                         <form id="filtrosForm" method="GET" action="{{ route('ordemproducao.index') }}">
                             <div class="row g-1">
-                                <div class="col-md-2">
-                                    <div class="mb-3">
-                                        <label for="data_producao" class="form-label">Previsão/Conclusão</label>
-                                        <input type="date" id="data_producao" name="data_producao" class="form-control"
-                                               value="{{ $data_producao !== "" ? $data_producao : date('Y-m-d') }}" required>
+                                <div class="col-md-3">
+                                    <div class="row g-1">
+                                        <div class="col-lg-6 col-12">
+                                            <div class="mb-3">
+                                                <label for="data_inicio" class="form-label">Data Início</label>
+                                                <input title="Data criação Omie" type="date" class="form-control"
+                                                       id="data_inicio" name="data_inicio"
+                                                       value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6 col-12">
+                                            <div class="mb-3">
+                                                <label for="data_final" class="form-label">Data Final</label>
+                                                <input type="date" class="form-control" id="data_final"
+                                                       name="data_final"
+                                                       value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 

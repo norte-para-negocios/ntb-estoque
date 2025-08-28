@@ -5,6 +5,7 @@ namespace App\Http\Controllers\OrdemProducao;
 use App\Http\Controllers\Controller;
 use App\Models\OrdemProducao;
 use App\Services\CanService;
+use App\Services\OrdemProducaoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,24 +24,28 @@ class OrdemProducaoController extends Controller
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+
         $ordem_producao = $request->get('ordem_producao');
-        $data_producao = $request->get('data_producao') !== null ? $request->get('data_producao') : date('Y-m-d');
         $tipo_produto = $request->get('tipo_produto') ?? '';
         $op_produto = $request->get('op_produto');
         $op_concluido = $request->get('op_concluido');
 
         session([
+            'inicio' => $data_inicio->format('Y-m-d'),
+            'final' => $data_final->format('Y-m-d'),
             'ordem_producao' => $ordem_producao,
-            'data_producao' => $data_producao,
             'tipo_produto' => $tipo_produto,
             'op_produto' => $op_produto,
             'op_concluido' => $op_concluido,
         ]);
 
         $ordensProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
-            ->when($data_producao, function ($query) use ($data_producao) {
-                return $query->whereBetween('adicionais_d_dt_conclusao', [Carbon::parse($data_producao)->startOfDay(), Carbon::parse($data_producao)->endOfDay()]);
-            })->when($ordem_producao, function ($query) use ($ordem_producao) {
+            ->whereBetween('adicionais_d_dt_conclusao', [
+                    $data_inicio->startOfDay()->format('Y-m-d H:i:s'),
+                    $data_final->endOfDay()->format('Y-m-d H:i:s')]
+            )->when($ordem_producao, function ($query) use ($ordem_producao) {
                 $query->where('num_ordem', $ordem_producao);
             })->when($tipo_produto, function ($query) use ($tipo_produto) {
                 $query->where('produto_tipo_item', $tipo_produto);
@@ -58,7 +63,7 @@ class OrdemProducaoController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('ordemproducao.index', compact('ordensProducao', 'ordem_producao', 'data_producao', 'tipo_produto', 'op_produto'));
+        return view('ordemproducao.index', compact('ordensProducao', 'ordem_producao', 'data_inicio', 'data_final', 'tipo_produto', 'op_produto'));
     }
 
     public function setValidade(Request $request, OrdemProducao $ordemProducao)
@@ -75,6 +80,14 @@ class OrdemProducaoController extends Controller
         $ordemProducao->save();
     }
 
+    public function syncOrdensProducao()
+    {
+        if (!CanService::canPermissionLoja('Ordens de Produção - Sincronizar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção - Sincronizar!");
+        }
+        (new OrdemProducaoService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(7)->format('d/m/Y'), Carbon::now()->format('d/m/Y'));
+        return redirect()->route('ordemproducao.index')->with('success', 'Sincronizando Ordens de Produção!');
+    }
 
     public function imprimir(Request $request, OrdemProducao $ordemProducao)
     {
