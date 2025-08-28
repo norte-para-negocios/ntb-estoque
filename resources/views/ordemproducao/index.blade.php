@@ -8,11 +8,13 @@
             </a>
             {{ __('Ordens de Produção') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
             <span style="font-size: 12px;">
+                @if(in_array(auth()->user()->loja->ordem_producao_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                    <a href="{{route('ordemproducao.sync')}}" class="btn btn-sm btn-secondary">Sincronizar Ordens de Produção</a>
+                @endif
+
                 @if(auth()->user()->loja->ordem_producao_ultima_atualizacao)
                     Atualizado
                     em: {{\Carbon\Carbon::parse(auth()->user()->loja->ordem_producao_ultima_atualizacao)->format('d/m/y H:i:s')}}
-                @elseif(in_array(auth()->user()->loja->ordem_producao_status, [null, 'Concluído']))
-                    <a href="{{route('ordemproducao.sync')}}" class="btn btn-sm btn-secondary">Sincronizar Ordens de Produção</a>
                 @endif
                 | Status: {{auth()->user()->loja->ordem_producao_status??'N/A'}}
             </span>

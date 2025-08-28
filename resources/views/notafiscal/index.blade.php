@@ -7,11 +7,13 @@
                     class="fa-solid fa-arrow-left-long"></i></a>
             {{ __('Notas fiscais') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
             <span style="font-size: 12px;">
+                @if(in_array(auth()->user()->loja->nota_fiscal_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Notas Fiscais - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                    <a href="{{route('notafiscal.sync')}}"
+                       class="btn btn-sm btn-secondary">Sincronizar Notas Fiscais</a>
+                @endif
                 @if(auth()->user()->loja->nota_fiscal_ultima_atualizacao)
                     Atualizado
                     em: {{\Carbon\Carbon::parse(auth()->user()->loja->nota_fiscal_ultima_atualizacao)->format('d/m/y H:i:s')}}
-                @elseif(in_array(auth()->user()->loja->nota_fiscal_status, [null, 'Concluído']))
-                    <a href="{{route('notafiscal.sync')}}" class="btn btn-sm btn-secondary">Sincronizar Notas Fiscais</a>
                 @endif
                 | Status: {{auth()->user()->loja->nota_fiscal_status??'N/A'}}
             </span>
@@ -184,10 +186,10 @@
                                                             <strong>{{ $nf->c_numero_nfe ?? '-' }}</strong>|
                                                             <small>Emissão:</small> {{ \Carbon\Carbon::parse(normalizarData($nf->d_emissao_nfe))->format('d/m/Y') }}
                                                         </p>
-{{--                                                        <p class="mt-1 mb-2">--}}
-{{--                                                            <small>Valor da NF:</small> R$--}}
-{{--                                                            {{ number_format($nf->n_valor_nfe ?? 0, 2, ',', '.') ?? '' }}--}}
-{{--                                                        </p>--}}
+                                                        {{--                                                        <p class="mt-1 mb-2">--}}
+                                                        {{--                                                            <small>Valor da NF:</small> R$--}}
+                                                        {{--                                                            {{ number_format($nf->n_valor_nfe ?? 0, 2, ',', '.') ?? '' }}--}}
+                                                        {{--                                                        </p>--}}
                                                     </div>
                                                     <div class="col-md-6 col-12 text-end">
                                                         <a href="{{ route('notafiscal.itens', $nf->id) }}"
