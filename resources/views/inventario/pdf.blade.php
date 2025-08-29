@@ -53,7 +53,7 @@
                             {{ $item->produto->unidade ?? '' }}
                         </td>
                         <td style="text-align: right; width: 160px;">
-                            {{ $item->quan ?? '-' }}
+                            {{ number_format($item->quan, 2, ',', '.') }}
                         </td>
                         <td style="width: 120px; text-align: center;">
                             {{ $item->status??'N/A' }}
