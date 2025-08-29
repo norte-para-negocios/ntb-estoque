@@ -28,9 +28,9 @@ class UpdateOrdemProducaoCommand extends Command
     public function handle()
     {
         foreach (Loja::where('ativo', true)->get() as $loja) {
-            $this->info("Atualizando ordens de produção da loja: {$loja->nome}");
+            $this->info("Atualizando ordens de produção da loja: {$loja->nome_fantasia}");
             (new OrdemProducaoService($loja))->fetchAll();
-            $this->info("Ordens de produção da loja: {$loja->nome}, atualizadas com sucesso!");
+            $this->info("Ordens de produção da loja: {$loja->nome_fantasia}, atualizadas com sucesso!");
         }
     }
 }

@@ -11,8 +11,8 @@
 </head>
 <body>
 <div class="container">
-    <h2 class="mb-4 text-center">
-        {{ 'Inventário: '.$inventario->id }} - <small>{{ $loja->nome ?? '' }}</small>
+    <h2 class="mb-4">
+        {{ 'Inventário: '.$inventario->id }} - <small>{{ $loja->nome_fantasia ?? '' }}</small>
     </h2>
     <p class="mb-0">
         <span class="fw-bold">Data:</span>
@@ -53,7 +53,7 @@
                             {{ $item->produto->unidade ?? '' }}
                         </td>
                         <td style="text-align: right; width: 160px;">
-                            {{ $item->quant ?? '-' }}
+                            {{ $item->quan ?? '-' }}
                         </td>
                         <td style="width: 120px; text-align: center;">
                             {{ $item->status??'N/A' }}

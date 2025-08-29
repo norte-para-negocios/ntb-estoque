@@ -11,7 +11,7 @@
 </head>
 
 <body>
-<h2 class="mb-4 text-center">{{ __('Ordens de Produção') }} - {{ $loja->nome ?? '' }}</h2>
+<h2 class="mb-4 text-center">{{ __('Ordens de Produção') }} - {{ $loja->nome_fantasia ?? '' }}</h2>
 <div class="container" style="padding-top: 20px;">
     <div class="row">
         <div class="col-xs-12">

@@ -73,7 +73,7 @@
                                                 <div class="row">
                                                     <div class="col-md-6 col-12">
                                                         <p class="mb-0">
-                                                            Data :
+                                                            #{{$inventario->id}} - Data:
                                                             <strong>{{ $inventario->data->format('d/m/Y') }}</strong>
                                                         </p>
                                                         <p class="mb-0">

@@ -27,6 +27,12 @@
                                 Finalizar
                             </button>
                         </form>
+                    @elseif($inventario->status !== 'Processando no Omie')
+                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                           class="btn btn-info text-white d-flex justify-content-start align-items-center">
+                            <i class="fa-solid fa-print fa-xl mx-2"></i>
+                            <span class="fs-5">Imprimir</span>
+                        </a>
                     @endif
                 </div>
                 <div class="col-12">
@@ -37,7 +43,7 @@
                     <p class="mb-0">
                         <span class="fw-bold">Local de Estoque:</span>
                         <span>
-                            {{ $localEstoque->codigo }} - {{ $localEstoque->descricao }}
+                            {{ $localEstoque->codigo??'' }} - {{ $localEstoque->descricao??'' }}
                         </span>
                     </p>
                     <p>
@@ -145,7 +151,8 @@
                                                value="{{ $item->quan }}">
                                     @else
                                         @if(\App\Services\CanService::canPermissionLoja('Inventários - Editar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin')
-                                            <input type="number" class="form-control" min="0.001" step="0.001" data-quan="{{ $item->quan }}"
+                                            <input type="number" class="form-control" min="0.001" step="0.001"
+                                                   data-quan="{{ $item->quan }}"
                                                    onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
                                                    value="{{ $item->quan }}">
                                         @else

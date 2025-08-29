@@ -12,7 +12,7 @@
 <body>
 <div class="container">
     <h2 class="mb-4 text-center">
-        Transferências: <small>{{ $loja->nome ?? '' }}</small>
+        Transferências: <small>{{ $loja->nome_fantasia ?? '' }}</small>
     </h2>
     <p class="mb-0">
         <span class="fw-bold">Data:</span>
