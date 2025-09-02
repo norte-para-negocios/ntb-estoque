@@ -15,7 +15,7 @@ class LocalEstoqueController extends Controller
 
     public function index(Request $request)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -31,7 +31,7 @@ class LocalEstoqueController extends Controller
 
     public function update()
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
