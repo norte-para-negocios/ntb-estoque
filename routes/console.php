@@ -42,10 +42,14 @@ Schedule::call(function () {
     \App\Models\Inventario::whereNull('finalizado')
         ->where('status', 'Processando no Omie')
         ->whereDoesntHave('items', function ($query) {
-            $query->where('status', '<>','Concluído');
+            $query->where('status', '<>', 'Concluído');
         })
         ->update([
             'status' => 'Finalizado',
             'finalizado' => date('Y-m-d H:i:s')
         ]);
+
+    foreach (Loja::all() as $loja) {
+        (new OrdemProducaoService($loja))->fetchAll(0, \Carbon\Carbon::now()->subDays(4)->format('d/m/Y'), \Carbon\Carbon::now()->addDays(1)->format('d/m/Y'));
+    }
 })->everyTenMinutes();
