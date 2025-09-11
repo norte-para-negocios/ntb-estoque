@@ -108,32 +108,52 @@
                                                         </p>
 
 
-                                                        <div class="mb-0">
-                                                            <div class="row">
-                                                                <div class="d-grid col-md-3 col-12">
-                                                                    <a href="{{ route('inventario.contagem', $inventario->id) }}"
-                                                                       class="btn btn-primary text-white d-flex justify-content-start align-items-center">
-                                                                        <i class="fa-solid fa-calculator fa-xl mx-2"
+                                                        <div class="row">
+                                                            <div class="col">
+                                                                <a href="{{ route('inventario.contagem', $inventario->id) }}"
+                                                                   class="btn btn-primary text-white">
+                                                                    <div
+                                                                        class="d-flex justify-content-start align-items-center">
+                                                                        <i class="fa-solid fa-calculator fa-lg me-2"
                                                                            style="color: #ffffff;"></i>
-                                                                        <span class="fs-5">Contagem</span>
-                                                                    </a>
-                                                                </div>
+                                                                        <span class="fs-6">Contagem</span>
+                                                                    </div>
+                                                                </a>
+
                                                                 @if($inventario->status !== 'Processando no Omie')
-                                                                    <div class="d-grid col-md-3 col-12">
-                                                                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                                           class="btn btn-info text-white d-flex justify-content-start align-items-center">
-                                                                            <i class="fa-solid fa-print fa-xl mx-2"></i>
-                                                                            <span class="fs-5">Imprimir</span>
-                                                                        </a>
-                                                                    </div>
-                                                                    <div class="d-grid col-md-3 col-12">
-                                                                        <a href="{{ route('inventario.destroy', $inventario->id) }}"
-                                                                           onclick="event.preventDefault(); deleteRegistro(this.href);"
-                                                                           class="btn btn-danger text-white d-flex justify-content-start align-items-center">
-                                                                            <i class="fa-solid fa-trash fa-xl mx-2"></i>
-                                                                            <span class="fs-5">Excluir</span>
-                                                                        </a>
-                                                                    </div>
+                                                                    <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                                       class="btn btn-info text-white">
+                                                                        <div
+                                                                            class="d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-print fa-lg me-2"></i>
+                                                                            <span class="fs-6">Imprimir</span>
+                                                                        </div>
+                                                                    </a>
+                                                                    <a href="{{ route('inventario.destroy', $inventario->id) }}"
+                                                                       onclick="event.preventDefault(); deleteRegistro(this.href);"
+                                                                       class="btn btn-danger text-white">
+                                                                        <div
+                                                                            class="d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-trash fa-lg me-2"></i>
+                                                                            <span class="fs-6">Excluir</span>
+                                                                        </div>
+                                                                    </a>
+                                                                @endif
+                                                                @if(auth()->user()->perfil === 'Admin')
+                                                                    <button type="submit" form="formReprocessar"
+                                                                            class="btn btn-secondary text-white">
+                                                                        <div
+                                                                            class="d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-arrows-rotate fa-lg me-2"
+                                                                               style="color: #ffffff;"></i>
+                                                                            <span class="fs-6">Reprocessar</span>
+                                                                        </div>
+                                                                    </button>
+                                                                    <form id="formReprocessar"
+                                                                          action="{{route('inventario.reprocessa', $inventario->id)}}"
+                                                                          method="post">
+                                                                        @csrf
+                                                                    </form>
                                                                 @endif
                                                             </div>
                                                         </div>

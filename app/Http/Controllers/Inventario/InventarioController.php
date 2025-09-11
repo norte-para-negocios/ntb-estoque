@@ -194,6 +194,47 @@ class InventarioController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function reprocessa(Inventario $inventario)
+    {
+        if (!CanService::canPermissionLoja('Inventários - Editar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Editar!");
+        }
+
+        foreach ($inventario->items as $item) {
+            if ($item->id_ajuste !== null) {
+                $loja = $inventario->loja;
+                $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+                $data = [
+                    "call" => "ExcluirAjusteEstoque",
+                    "app_key" => $loja->omie_app_key,
+                    "app_secret" => $loja->omie_app_secret,
+                    "param" => [
+                        [
+                            "id_ajuste" => $item->id_ajuste,
+                        ]
+                    ]
+                ];
+                Http::withHeaders([
+                    'Content-Type' => 'application/json'
+                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            }
+
+            $item->update([
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+                'id_movest' => null,
+                'id_ajuste' => null,
+                'status' => null,
+                'valor' => null
+            ]);
+        }
+
+        InventarioJob::dispatch($inventario, auth()->user());
+
+        return response()->json(['success' => true]);
+    }
+
     public function destroy(Inventario $inventario)
     {
         if (!CanService::canPermissionLoja('Inventários - Excluir', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
