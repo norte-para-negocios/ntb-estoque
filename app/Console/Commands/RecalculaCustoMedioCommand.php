@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\InventarioJob;
 use App\Models\InventarioItem;
 use App\Models\Loja;
+use App\Models\User;
 use App\Services\IntegrationAttemptsTrait;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -75,7 +76,9 @@ class RecalculaCustoMedioCommand extends Command
                             'valor' => floatval($movimento->cmc),
                         ]);
 
-                        InventarioJob::dispatch($inventarioItem->inventario, auth()->user());
+                        $user = User::where('perfil', 'Admin')->orderBy('id')->first();
+
+                        InventarioJob::dispatch($inventarioItem->inventario, $user);
                     }
                 }
             }
