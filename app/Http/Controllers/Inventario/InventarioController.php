@@ -219,6 +219,10 @@ class InventarioController extends Controller
                 ])->connectTimeout(60)->timeout(60)->post($url, $data);
             }
 
+            $inventario->finalizado = null;
+            $inventario->status = 'Em contagem';
+            $inventario->save();
+
             $item->update([
                 'response' => null,
                 'codigo_status' => null,
