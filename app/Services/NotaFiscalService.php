@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class NotaFiscalService
 {
@@ -110,7 +111,7 @@ class NotaFiscalService
                     }
                 }
             }
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             // Log de erro.
             $this->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
@@ -247,7 +248,7 @@ class NotaFiscalService
                             'full_object' => json_encode($nfItem),
                         ]);
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 Log::error(
                     "Erro ao salvar nota fiscal" . $th->getMessage(),
                     $item

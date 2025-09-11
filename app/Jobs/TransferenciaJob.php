@@ -9,7 +9,6 @@ use App\Models\Movimento;
 use App\Models\Produto;
 use App\Models\User;
 use App\Services\IntegrationAttemptsTrait;
-use App\Services\OmieService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;

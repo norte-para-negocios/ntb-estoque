@@ -234,7 +234,7 @@
             const aberto = localStorage.getItem('accordionNotaFiscal');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                const collapse = new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, {toggle: true});
             }
         });
 

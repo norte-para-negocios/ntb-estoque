@@ -7,31 +7,31 @@ function getPessoaJuridica(cnpj, nmObjNome, nmObjFantasia, nmObjCep, nmObjUf, nm
             jsonp: "callback",
             dataType: "jsonp",
             success: function (response) {
-                if (response.status != 'ERROR') {
-                    if (response.nome != '') {
+                if (response.status !== 'ERROR') {
+                    if (response.nome !== '') {
                         $(nmObjNome).val(response.nome.toUpperCase());
                     }
-                    if (response.fantasia != '') {
+                    if (response.fantasia !== '') {
                         $(nmObjFantasia).val(response.fantasia.toUpperCase());
                     } else {
                         $(nmObjFantasia).val(response.nome.toUpperCase());
                     }
-                    if (response.cep != '') {
+                    if (response.cep !== '') {
                         $(nmObjCep).val(response.cep.replace(/[^\d]+/g, ''));
                     }
-                    if (response.uf != '') {
+                    if (response.uf !== '') {
                         $(nmObjUf).val(response.uf.toUpperCase());
                     }
-                    if (response.municipio != '') {
+                    if (response.municipio !== '') {
                         $(nmObjCidade).val(response.municipio.toUpperCase());
                     }
-                    if (response.bairro != '') {
+                    if (response.bairro !== '') {
                         $(nmObjBairro).val(response.bairro.toUpperCase());
                     }
-                    if (response.logradouro != '') {
+                    if (response.logradouro !== '') {
                         $(nmObjLogradouro).val(response.logradouro.toUpperCase());
                     }
-                    if (response.numero != '') {
+                    if (response.numero !== '') {
                         $(nmObjNum).val(response.numero.toUpperCase());
                     }
                 } else {

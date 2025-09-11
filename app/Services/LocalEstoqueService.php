@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class LocalEstoqueService
 {
@@ -92,7 +93,7 @@ class LocalEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -140,7 +141,7 @@ class LocalEstoqueService
                 ],
                 $item
             );
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao salvar local-estoque de estoque nº: " . $item['codigo_local_estoque'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
 
@@ -152,7 +153,7 @@ class LocalEstoqueService
             LocalEstoque::where('loja_id', $this->loja->id)
                 ->where('codigo_local_estoque', $local->codigo_local_estoque)
                 ->delete();
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao excluir local-estoque de estoque nº: " . $local->codigo_local_estoque . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }

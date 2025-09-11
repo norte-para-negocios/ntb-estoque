@@ -83,9 +83,7 @@
 
 @push('js')
     <script>
-        if (typeof usuarioLogado === "undefined") {
-            const usuarioLogado = '';
-        }
+        let usuarioLogado = '';
 
         window.onload = function () {
             usuarioLogado = '{{ Auth::id() }}';

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Produto;
+use App\Services\CanService;
 use App\Services\ProdutoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProdutoController extends Controller
 {

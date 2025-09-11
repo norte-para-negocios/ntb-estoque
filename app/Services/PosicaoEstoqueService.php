@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class PosicaoEstoqueService
 {
@@ -98,7 +99,7 @@ class PosicaoEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -148,7 +149,7 @@ class PosicaoEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -195,7 +196,7 @@ class PosicaoEstoqueService
                     $item
                 );
             }
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error(
                 "Erro ao salvar posição de estoque" . $th->getMessage(),
                 $item

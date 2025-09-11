@@ -9,6 +9,7 @@ use App\Services\ProdutoService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\MassPrunable;
+use Illuminate\Support\Facades\Log;
 
 class Webhook extends Model
 {
@@ -58,7 +59,7 @@ class Webhook extends Model
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
-                        $produtoService->deleteProduto($message['event']);
+                        $produtoService->deleteProduto((object)$message['event']);
                     } else {
                         $produto = $produtoService->fetchProduto($message['event']['codigo_produto']);
                         $produtoService->saveProduto($produto);

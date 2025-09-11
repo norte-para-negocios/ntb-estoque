@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class ProdutoService
 {
@@ -98,7 +99,7 @@ class ProdutoService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -139,7 +140,7 @@ class ProdutoService
                 ],
                 $prod
             );
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
@@ -179,7 +180,7 @@ class ProdutoService
                 if ($response->status() === 200) {
                     return $response->object();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -197,7 +198,7 @@ class ProdutoService
             Produto::where('loja_id', $this->loja->id)
                 ->where('codigo_produto', $produto->codigo_produto)
                 ->delete();
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao excluir produto nº: " . $produto->codigo_produto . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }

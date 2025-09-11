@@ -327,7 +327,7 @@
                 event.preventDefault();
             }
 
-            if (produtos.length == 0) {
+            if (produtos.length === 0) {
                 alert('Informe os produtos a serem transferidos!');
                 event.preventDefault();
             }

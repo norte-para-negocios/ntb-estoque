@@ -186,7 +186,7 @@
             const aberto = localStorage.getItem('accordionTransferencia');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                const collapse = new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, {toggle: true});
             }
         });
 

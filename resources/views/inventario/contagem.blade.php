@@ -183,7 +183,7 @@
         }
 
         function editQuantidade(el, url, quantidade) {
-            if (quantidade >= 0 && quantidade != el.dataset.quan) {
+            if (quantidade >= 0 && quantidade !== el.dataset.quan) {
                 swal.fire({
                     title: 'Tem certeza?',
                     text: 'Gostaria realmente de editar a quantidade do produto, do inventário já Finalizado?',

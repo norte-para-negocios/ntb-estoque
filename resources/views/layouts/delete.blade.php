@@ -29,7 +29,7 @@
 
 <script type="text/javascript">
     function deleteRegistro(url) {
-        deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'), {
+        let deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'), {
             keyboard: false
         })
         document.getElementById("deleteForm").reset()

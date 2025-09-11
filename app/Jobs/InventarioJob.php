@@ -10,21 +10,26 @@ use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Models\User;
 use App\Services\IntegrationAttemptsTrait;
+use App\Services\PosicaoEstoqueService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use stdClass;
+use Throwable;
 
 class InventarioJob implements ShouldQueue
 {
     use Queueable, IntegrationAttemptsTrait;
+
+    protected PosicaoEstoqueService $posicaoService;
 
     /**
      * Create a new job instance.
      */
     public function __construct(protected Inventario $inventario, protected User $user)
     {
-        //
+        $this->posicaoService = new PosicaoEstoqueService($inventario->loja);
     }
 
     /**
@@ -37,9 +42,15 @@ class InventarioJob implements ShouldQueue
         $this->inventario->status = 'Processando no Omie';
         $this->inventario->save();
 
-        $localOrigem = LocalEstoque::where('loja_id', $this->inventario->loja_id)->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)->first();
+        $localOrigem = LocalEstoque::where('loja_id', $this->inventario->loja_id)
+            ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
+            ->first();
 
-        while (InventarioItem::where('inventario_id', $this->inventario->id)->whereNull('inventario_items.status')->orWhere('inventario_items.status', 'Iniciado')->orWhere('inventario_items.status', 'Erro')->count() > 0) {
+        while (InventarioItem::where('inventario_id', $this->inventario->id)
+                ->whereNull('inventario_items.status')
+                ->orWhere('inventario_items.status', 'Iniciado')
+                ->orWhere('inventario_items.status', 'Erro')
+                ->count() > 0) {
 
             foreach ($this->inventario->items()->get() as $inventarioItem) {
 
@@ -52,8 +63,23 @@ class InventarioJob implements ShouldQueue
                             ->where('n_cod_prod', $inventarioItem->produto_codigo_produto)
                             ->where('data_posicao', $this->inventario->data->format('Y-m-d'))
                             ->first();
-                        $inventarioItem->valor = $posicaoEstoque->n_cmc ?? 0.01; // Default to 0.01 if not found
-                        $inventarioItem->save();
+                        if ($posicaoEstoque?->n_cmc > 0) {
+                            $inventarioItem->valor = $posicaoEstoque->n_cmc;
+                            $inventarioItem->save();
+                        } else {
+                            // Tenta depois novamente, aguardando a posição de estoque carregar.
+                            try {
+                                $posicaoProd = $this->posicaoService->fetchPosicaoProduto($this->inventario->codigo_local_estoque, $inventarioItem->produto_codigo_produto, $this->inventario->data->format('d/m/Y'));
+                                $this->posicaoService->savePosicao($posicaoProd, $this->inventario->data->format('d/m/Y'));
+                                break;
+                            } catch (Throwable $e) {
+                                Log::error("Não foi possível obter o CMC do Produto: " . $e->getMessage(),
+                                    [
+                                        'inventarioItem' => $inventarioItem,
+                                    ]
+                                );
+                            }
+                        }
                     }
 
                     $produto = Produto::where('loja_id', $this->inventario->loja_id)->where('codigo_produto', $inventarioItem->produto_codigo_produto)->first();
@@ -64,9 +90,9 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->codigo_status = $response->codigo_status;
                         $inventarioItem->descricao_status = $response->descricao_status;
                         $inventarioItem->id_movest = $response->id_movest;
-                        $inventarioItem->id_ajuste = $response->id_ajuste;
+                        $inventarioItem->id_movest = $response->id_ajuste;
                         $inventarioItem->status = 'Concluído';
-                        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto {$produto->descricao} <br> No estoque {$localOrigem->descricao} <br>Processado com sucesso no Omie!"));
+                        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
                         $inventarioItem->status = 'Erro';
                     }
@@ -79,7 +105,7 @@ class InventarioJob implements ShouldQueue
             'status' => 'Finalizado',
             'finalizado' => now(),
         ]);
-        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do estoque {$localOrigem->descricao}, <br>concluído processamento com sucesso no Omie!"));
+        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
     }
 
     private function createAjuste(InventarioItem $inventarioItem): null|object
@@ -87,6 +113,7 @@ class InventarioJob implements ShouldQueue
         if (($inventarioItem->quan >= 0)
             && (in_array(!$inventarioItem->status, [null, 'Erro']))
             && ($inventarioItem->id_ajuste === null)
+            && $inventarioItem->valor > 0
         ) {
             $inventarioItem->status = 'Iniciado';
             $inventarioItem->save();
@@ -103,7 +130,7 @@ class InventarioJob implements ShouldQueue
                         "cod_int_ajuste" => 'ITEM' . $inventarioItem->id,
                         "data" => $inventarioItem->inventario->data->format('d/m/Y'),
                         "quan" => $inventarioItem->quan,
-                        "valor" => $inventarioItem->valor == 0 ? 0.01 : $inventarioItem->valor,
+                        "valor" => $inventarioItem->valor,
                         "obs" => 'NTB - Estoque|Usuário:' . $this->user->name,
                         "origem" => $inventarioItem->inventario->origem,
                         "tipo" => $inventarioItem->inventario->tipo,
@@ -130,12 +157,22 @@ class InventarioJob implements ShouldQueue
 
                     if ($response->status() === 200) {
                         return $response->object();
-                    } else {
+                    } elseif($response->status() === 500 && stripos($response->object()->faultstring, 'Já existe um ajuste para o código de integração') !== false) {
+                        preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
+                        $idAjuste = isset($matches[1]) ? $matches[1] : '';
+                        $obj = new stdClass();
+                        $obj->codigo_status = '0';
+                        $obj->descricao_status = '';
+                        $obj->id_movest = '';
+                        $obj->id_ajuste = $idAjuste;
+                        return $obj;
+                    }
+                    else {
                         $inventarioItem->status = 'Erro';
                         $inventarioItem->response = $response->body();
                         $inventarioItem->save();
                     }
-                } catch (\Throwable $th) {
+                } catch (Throwable $th) {
                     $this->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;

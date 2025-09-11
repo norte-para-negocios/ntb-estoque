@@ -53,3 +53,6 @@ Schedule::call(function () {
         (new OrdemProducaoService($loja))->fetchAll(0, \Carbon\Carbon::now()->subDays(4)->format('d/m/Y'), \Carbon\Carbon::now()->addDays(1)->format('d/m/Y'));
     }
 })->everyTenMinutes();
+
+Schedule::command('queue:prune-batches')->daily();
+Schedule::command('queue:prune-failed')->daily();
