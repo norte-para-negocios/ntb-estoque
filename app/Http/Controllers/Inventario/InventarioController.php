@@ -236,7 +236,7 @@ class InventarioController extends Controller
 
         InventarioJob::dispatch($inventario, auth()->user());
 
-        return response()->json(['success' => true]);
+        return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')])->with('success', 'Reprocessando Inventário!');
     }
 
     public function destroy(Inventario $inventario)
