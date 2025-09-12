@@ -240,26 +240,15 @@ class InventarioController extends Controller
                         'status' => null,
                         'valor' => null
                     ]);
-
-                    $item->fresh();
-
-                    $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
-                        ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
-                        ->where('n_cod_prod', $item->produto_codigo_produto)
-                        ->where('data_posicao', $inventario->data->format('Y-m-d'))
-                        ->first();
-
-                    if ($posicaoEstoque->n_cmc > 0) {
-                        if (floatval($posicaoEstoque->n_cmc) !== floatval($item->valor)) {
-                            $item->valor = floatval($posicaoEstoque->n_cmc);
-                            $item->save();
-                        }
-                    }
+                    broadcast(new NotificaUserEvent(auth()->user(), "success", "Exclusão do movimento do produto: $produto->descricao.<br> Realizada com sucesso!"));
+                } else {
+                    $content = $resp->getBody()->getContents();
+                    broadcast(new NotificaUserEvent(auth()->user(), "error", "Não foi possível processar a exclusão do movimento do produto: $produto->descricao.<br> Erro: $content"));
                 }
             }
         }
 
-        return redirect()->route('inventario.index')->with('success', 'Inventário reprocessado!');
+        return redirect()->route('inventario.index')->with('success', 'Exclusão da movimentação realizada com sucesso!');
     }
 
     public function destroy(Inventario $inventario)
