@@ -227,10 +227,11 @@ class InventarioController extends Controller
                 $resp = Http::withHeaders([
                     'Content-Type' => 'application/json'
                 ])->post($url, $data);
+                $response = $resp->object();
 
                 $produto = Produto::where('loja_id', $inventario->loja_id)->where('codigo_produto', $item->produto_codigo_produto)->first();
 
-                if ($resp->status() == 200) {
+                if (($resp->status() == 200) || ($resp->status() == 500 && $response->faultstring = 'ERROR: O movimento de estoque não foi localizado.')) {
                     $item->update([
                         'response' => null,
                         'codigo_status' => null,
