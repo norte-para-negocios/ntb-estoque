@@ -233,6 +233,8 @@ class InventarioController extends Controller
                     'Content-Type' => 'application/json'
                 ])->post($url, $data);
 
+                $produto = Produto::where('loja_id', $inventario->loja_id)->where('codigo_produto', $item->produto_codigo_produto)->first();
+
                 if ($resp->status() == 200) {
                     $item->update([
                         'response' => null,
@@ -249,8 +251,6 @@ class InventarioController extends Controller
                         ->where('n_cod_prod', $item->produto_codigo_produto)
                         ->where('data_posicao', $inventario->data->format('Y-m-d'))
                         ->first();
-
-                    $produto = Produto::where('loja_id', $inventario->loja_id)->where('codigo_produto', $item->produto_codigo_produto)->first();
 
                     if ($posicaoEstoque->n_cmc > 0) {
                         if (floatval($posicaoEstoque->n_cmc) !== floatval($item->valor)) {
