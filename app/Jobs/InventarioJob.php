@@ -47,15 +47,12 @@ class InventarioJob implements ShouldQueue
             ->first();
 
         while (InventarioItem::where('inventario_id', $this->inventario->id)
-                ->whereNull('inventario_items.status')
-                ->orWhere('inventario_items.status', 'Iniciado')
-                ->orWhere('inventario_items.status', 'Erro')
+                ->whereIn('inventario_items.status', [null, 'Iniciado', 'Erro'])
                 ->count() > 0) {
 
             foreach (InventarioItem::where('inventario_id', $this->inventario->id)
-                         ->whereNull('inventario_items.status')
-                         ->orWhere('inventario_items.status', 'Iniciado')
-                         ->orWhere('inventario_items.status', 'Erro')->get() as $inventarioItem) {
+                         ->whereIn('inventario_items.status', [null, 'Iniciado', 'Erro'])
+                         ->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
@@ -93,7 +90,7 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->codigo_status = $response->codigo_status;
                         $inventarioItem->descricao_status = $response->descricao_status;
                         $inventarioItem->id_movest = $response->id_movest;
-                        $inventarioItem->id_movest = $response->id_ajuste;
+                        $inventarioItem->id_ajuste = $response->id_ajuste;
                         $inventarioItem->status = 'Concluído';
                         broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
@@ -160,7 +157,7 @@ class InventarioJob implements ShouldQueue
 
                     if ($response->status() === 200) {
                         return $response->object();
-                    } elseif($response->status() === 500 && stripos($response->object()->faultstring, 'Já existe um ajuste para o código de integração') !== false) {
+                    } elseif ($response->status() === 500 && stripos($response->object()->faultstring, 'Já existe um ajuste para o código de integração') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
                         $obj = new stdClass();
@@ -169,8 +166,7 @@ class InventarioJob implements ShouldQueue
                         $obj->id_movest = '';
                         $obj->id_ajuste = $idAjuste;
                         return $obj;
-                    }
-                    else {
+                    } else {
                         $inventarioItem->status = 'Erro';
                         $inventarioItem->response = $response->body();
                         $inventarioItem->save();

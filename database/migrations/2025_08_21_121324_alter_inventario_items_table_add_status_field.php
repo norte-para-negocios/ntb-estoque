@@ -8,7 +8,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('inventario_items', function (Blueprint $table) {
-            $table->enum('status', [null, 'Iniciado', 'Processando', 'Concluído', 'Erro'])->nullable();
+            $table->enum('status', [null, 'Iniciado', 'Processando', 'Concluído', 'Erro', 'Cancelado'])->nullable();
         });
     }
 
