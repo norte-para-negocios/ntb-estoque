@@ -28,6 +28,9 @@ class PosicaoEstoqueService
     {
         if ($this->loja->posicao_estoque_status !== 'Processando') {
             // Aciona a Variavel de Controle
+            PosicaoEstoque::where('loja_id', $this->loja->id)
+                ->where('data', Carbon::createFromFormat('d/m/Y', $dataPosicao)->format('Y-m-d'))
+                ->delete();
             $this->loja->posicao_estoque_status = 'Processando';
             $this->loja->save();
             $first = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);

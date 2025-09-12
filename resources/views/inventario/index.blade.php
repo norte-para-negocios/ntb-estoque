@@ -146,7 +146,7 @@
                                                                             class="d-flex justify-content-start align-items-center">
                                                                             <i class="fa-solid fa-arrows-rotate fa-lg me-2"
                                                                                style="color: #ffffff;"></i>
-                                                                            <span class="fs-6">Reprocessar</span>
+                                                                            <span class="fs-6">Excluir Movimento no Omie</span>
                                                                         </div>
                                                                     </button>
                                                                     <form id="formReprocessar"

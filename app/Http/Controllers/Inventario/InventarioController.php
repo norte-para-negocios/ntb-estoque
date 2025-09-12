@@ -206,11 +206,6 @@ class InventarioController extends Controller
 
         $loja = $inventario->loja;
 
-        if (session("posicao_estoque_$inventario->data->format('dmY')_lojaid_$loja->id") !== 'true') {
-            new PosicaoEstoqueService($inventario->loja)->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
-            session(["posicao_estoque_$inventario->data->format('dmY')_lojaid_$loja->id" => 'true']);
-        }
-
         $inventario->finalizado = null;
         $inventario->status = 'Em contagem';
         $inventario->save();
@@ -246,6 +241,8 @@ class InventarioController extends Controller
                         'valor' => null
                     ]);
 
+                    $item->fresh();
+
                     $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
                         ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
                         ->where('n_cod_prod', $item->produto_codigo_produto)
@@ -257,58 +254,7 @@ class InventarioController extends Controller
                             $item->valor = floatval($posicaoEstoque->n_cmc);
                             $item->save();
                         }
-                        $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-                        $data = [
-                            "call" => "IncluirAjusteEstoque",
-                            "app_key" => $loja->omie_app_key,
-                            "app_secret" => $loja->omie_app_secret,
-                            "param" => [
-                                [
-                                    "codigo_local_estoque" => $inventario->codigo_local_estoque,
-                                    "id_prod" => $item->produto_codigo_produto,
-                                    "cod_int_ajuste" => 'ITEM' . $item->id,
-                                    "data" => $item->inventario->data->format('d/m/Y'),
-                                    "quan" => $item->quan,
-                                    "valor" => $item->valor,
-                                    "obs" => 'NTB - Estoque|Usuário:' . auth()->user()->name,
-                                    "origem" => $item->inventario->origem,
-                                    "tipo" => $item->inventario->tipo,
-                                    "motivo" => $item->inventario->motivo,
-                                ]
-                            ]
-                        ];
-
-                        $resp = Http::withHeaders([
-                            'Content-Type' => 'application/json'
-                        ])->connectTimeout(60)->timeout(60)->post($url, $data);
-
-                        $response = $resp->object();
-                        if ($resp->status() == 200) {
-                            $item->response = json_encode($response);
-                            $item->codigo_status = $response->codigo_status;
-                            $item->descricao_status = $response->descricao_status;
-                            $item->id_movest = $response->id_movest;
-                            $item->id_ajuste = $response->id_ajuste;
-                            $item->status = 'Concluído';
-                            broadcast(new NotificaUserEvent(auth()->user(), "success", "Inventário do produto $produto->descricao <br> Processado com sucesso no Omie!"));
-                        } else {
-                            $item->response = null;
-                            $item->codigo_status = null;
-                            $item->descricao_status = isset($response->faultstring) ? $response->faultstring : json_encode($response);
-                            $item->id_movest = null;
-                            $item->id_ajuste = null;
-                            $item->status = 'Erro';
-                            broadcast(new NotificaUserEvent(auth()->user(), "error", "Produto: $produto->descricao, erro ao processar movimentação no Omie, Erro: $item->descricao_status"));
-                        }
                     }
-                } else {
-                    $item->response = null;
-                    $item->codigo_status = null;
-                    $item->descricao_status = "O CMC é $item->valor, não foi possível processar no Omie!";
-                    $item->id_movest = null;
-                    $item->id_ajuste = null;
-                    $item->status = 'Cancelado';
-                    broadcast(new NotificaUserEvent(auth()->user(), "error", "O produto $produto->descricao, não possui CMC, não foi processado ajuste."));
                 }
             }
         }
