@@ -250,6 +250,8 @@ class InventarioController extends Controller
                         ->where('data_posicao', $inventario->data->format('Y-m-d'))
                         ->first();
 
+                    $produto = Produto::where('loja_id', $inventario->loja_id)->where('codigo_produto', $item->produto_codigo_produto)->first();
+
                     if ($posicaoEstoque->n_cmc > 0) {
                         if (floatval($posicaoEstoque->n_cmc) !== floatval($item->valor)) {
                             $item->valor = floatval($posicaoEstoque->n_cmc);
@@ -275,8 +277,6 @@ class InventarioController extends Controller
                                 ]
                             ]
                         ];
-
-                        $produto = Produto::where('loja_id', $inventario->loja_id)->where('codigo_produto', $item->produto_codigo_produto)->first();
 
                         $resp = Http::withHeaders([
                             'Content-Type' => 'application/json'
@@ -312,10 +312,6 @@ class InventarioController extends Controller
                 }
             }
         }
-
-        $inventario->finalizado = date('Y-m-d H:i:s');
-        $inventario->status = 'Finalizado';
-        $inventario->save();
 
         return redirect()->route('inventario.index')->with('success', 'Inventário reprocessado!');
     }
