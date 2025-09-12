@@ -52,7 +52,10 @@ class InventarioJob implements ShouldQueue
                 ->orWhere('inventario_items.status', 'Erro')
                 ->count() > 0) {
 
-            foreach ($this->inventario->items()->get() as $inventarioItem) {
+            foreach (InventarioItem::where('inventario_id', $this->inventario->id)
+                         ->whereNull('inventario_items.status')
+                         ->orWhere('inventario_items.status', 'Iniciado')
+                         ->orWhere('inventario_items.status', 'Erro')->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
@@ -162,7 +165,7 @@ class InventarioJob implements ShouldQueue
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
                         $obj = new stdClass();
                         $obj->codigo_status = '0';
-                        $obj->descricao_status = '';
+                        $obj->descricao_status = 'Ajuste realizado';
                         $obj->id_movest = '';
                         $obj->id_ajuste = $idAjuste;
                         return $obj;
