@@ -204,9 +204,12 @@ class InventarioController extends Controller
             abort(403, "Você não possui a permissão: Inventários - Editar!");
         }
 
-        new PosicaoEstoqueService($inventario->loja)->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
-
         $loja = $inventario->loja;
+
+        if (session("posicao_estoque_$inventario->data->format('dmY')_lojaid_$loja->id") !== 'true') {
+            new PosicaoEstoqueService($inventario->loja)->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
+            session(["posicao_estoque_$inventario->data->format('dmY')_lojaid_$loja->id" => 'true']);
+        }
 
         $inventario->finalizado = null;
         $inventario->status = 'Em contagem';
