@@ -8,36 +8,47 @@
         * {
             font-family: 'Courier New', Courier, monospace;
             font-size: 10pt;
+            color: #000000;
         }
 
         body {
             margin: 0;
             padding: 0;
+            color: #000000;
         }
 
         .container {
             height: 4.34cm;
             border: 1px dashed #ccc;
             padding: 3mm;
+            color: #000000;
         }
 
         table {
             width: 100%;
+            color: #000000;
         }
 
         p {
             margin: 0;
             padding: 0;
             text-align: center;
+            color: #000000;
         }
 
         td {
             border: 1px dashed #ccc;
             vertical-align: top;
+            color: #000000;
         }
 
         tr {
             border: 1px dashed #ccc;
+            color: #000000;
+        }
+
+        p {
+            color: #000000;
         }
     </style>
 </head>
