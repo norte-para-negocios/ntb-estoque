@@ -43,18 +43,18 @@ class RelatorioNotaFiscalController extends Controller
                 return $query->where('c_nome', 'like', '%' . $fornecedor . '%');
             })->when($status, function ($query) use ($status) {
                 if ($status == "C") {
-                    return $query->where('c_etapa', '=', '60');
+                    $query->where('c_etapa', '=', '60');
                 } elseif ($status == "P") {
-                    return $query->where('c_etapa', '<>', '60');
+                    $query->where('c_etapa', '<>', '60');
                 }
             })->when($produto, function ($query) use ($produto) {
                 return $query->whereHas('nfItems', function ($qHas) use ($produto) {
-                    $qHas->where('c_descricao_produto', 'like', '%' . $produto . '%')
+                    return $qHas->where('c_descricao_produto', 'like', '%' . $produto . '%')
                         ->orWhere('nfs.c_codigo_produto', 'like', '%' . $produto . '%');
                 });
             })->when($tipo, function ($query) use ($tipo) {
                 return $query->whereHas('nfItems.produto', function ($qHas) use ($tipo) {
-                    $qHas->where('tipo_item', $tipo)
+                    return $qHas->where('tipo_item', $tipo)
                         ->where('loja_id', auth()->user()->current_loja_id);
                 });
             })
