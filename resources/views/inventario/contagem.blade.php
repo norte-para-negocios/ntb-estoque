@@ -140,8 +140,13 @@
                                         </span>
                                         <span>{{ $item->produto->unidade ?? '-' }}</span>
                                     </div>
-                                    @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro'])))
-                                        <span>{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
+                                    @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
+                                        @if($item->status == 'Sem CMC')
+                                            <span class="badge text-bg-danger">CMC Zerado para o Produto, a movimentação não foi realizada no Omie</span>
+                                        @else
+                                            <span
+                                                class="badge text-bg-success">{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="text-align: right;">

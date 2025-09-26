@@ -19,7 +19,7 @@ class RelatorioTransferenciaController extends Controller
 
     public function pdf(Request $request)
     {
-        if (!CanService::canPermissionLoja('Relatório - Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Relatório - Transferência', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Relatório - Transferência!");
         }
 

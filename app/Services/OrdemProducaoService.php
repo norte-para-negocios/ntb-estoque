@@ -45,8 +45,8 @@ class OrdemProducaoService
                     $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->ordem_producao_status = 'Concluído';
                     $this->loja->save();
-                    foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "success", "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {

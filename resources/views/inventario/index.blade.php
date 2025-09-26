@@ -104,6 +104,10 @@
                                                                     class="badge bg-success fs-6 text-dark">
                                                                         {{ $inventario->finalizado->format('d/m/Y') }}
                                                                     </span>
+
+                                                                <a href="{{route('inventario.duplicar', $inventario->id)}}" class="btn btn-sm btn-secondary" title="Copiar Inventário">
+                                                                    <i class="fa-solid fa-copy"></i>
+                                                                </a>
                                                             @endif
                                                         </p>
 
@@ -139,22 +143,7 @@
                                                                         </div>
                                                                     </a>
                                                                 @endif
-                                                                @if(auth()->user()->perfil === 'Admin')
-                                                                    <button type="submit" form="formReprocessar"
-                                                                            class="btn btn-secondary text-white">
-                                                                        <div
-                                                                            class="d-flex justify-content-start align-items-center">
-                                                                            <i class="fa-solid fa-arrows-rotate fa-lg me-2"
-                                                                               style="color: #ffffff;"></i>
-                                                                            <span class="fs-6">Excluir Movimento no Omie</span>
-                                                                        </div>
-                                                                    </button>
-                                                                    <form id="formReprocessar"
-                                                                          action="{{route('inventario.reprocessa', $inventario->id)}}"
-                                                                          method="post">
-                                                                        @csrf
-                                                                    </form>
-                                                                @endif
+
                                                             </div>
                                                         </div>
                                                     </div>

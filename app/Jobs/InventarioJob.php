@@ -46,12 +46,19 @@ class InventarioJob implements ShouldQueue
             ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
             ->first();
 
+
         while (InventarioItem::where('inventario_id', $this->inventario->id)
-                ->whereIn('inventario_items.status', [null, 'Iniciado', 'Erro'])
+                ->where(function ($q) {
+                    $q->whereNull('inventario_items.status')
+                        ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                })
                 ->count() > 0) {
 
             foreach (InventarioItem::where('inventario_id', $this->inventario->id)
-                         ->whereIn('inventario_items.status', [null, 'Iniciado', 'Erro'])
+                         ->where(function ($q) {
+                             $q->whereNull('inventario_items.status')
+                                 ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                         })
                          ->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
@@ -71,6 +78,19 @@ class InventarioJob implements ShouldQueue
                             try {
                                 $posicaoProd = $this->posicaoService->fetchPosicaoProduto($this->inventario->codigo_local_estoque, $inventarioItem->produto_codigo_produto, $this->inventario->data->format('d/m/Y'));
                                 $this->posicaoService->savePosicao($posicaoProd, $this->inventario->data->format('d/m/Y'));
+                                $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
+                                    ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
+                                    ->where('n_cod_prod', $inventarioItem->produto_codigo_produto)
+                                    ->where('data_posicao', $this->inventario->data->format('Y-m-d'))
+                                    ->first();
+                                if ($posicaoEstoque?->n_cmc > 0) {
+                                    $inventarioItem->valor = $posicaoEstoque->n_cmc;
+                                    $inventarioItem->save();
+                                } else {
+                                    $inventarioItem->valor = 0;
+                                    $inventarioItem->status = 'Sem CMC';
+                                    $inventarioItem->save();
+                                }
                                 break;
                             } catch (Throwable $e) {
                                 Log::error("Não foi possível obter o CMC do Produto: " . $e->getMessage(),
@@ -111,7 +131,7 @@ class InventarioJob implements ShouldQueue
     private function createAjuste(InventarioItem $inventarioItem): null|object
     {
         if (($inventarioItem->quan >= 0)
-            && (in_array(!$inventarioItem->status, [null, 'Erro']))
+            && (in_array(!$inventarioItem->status, [null, 'Erro', 'Sem CMC']))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
@@ -184,6 +204,10 @@ class InventarioJob implements ShouldQueue
             } finally {
                 $this->afterAttemptLog();
             }
+        } elseif ($inventarioItem->valor <= 0 || $inventarioItem->valor === null) {
+            $inventarioItem->valor = 0;
+            $inventarioItem->status = 'Sem CMC';
+            $inventarioItem->save();
         }
         return null;
     }

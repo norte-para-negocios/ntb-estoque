@@ -24,7 +24,7 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -42,7 +42,7 @@ class UserController extends Controller
      */
     public function create()
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -56,7 +56,7 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -91,7 +91,7 @@ class UserController extends Controller
      */
     public function edit(User $user)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -104,7 +104,7 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -126,7 +126,7 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 

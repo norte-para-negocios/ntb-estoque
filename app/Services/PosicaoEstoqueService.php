@@ -46,8 +46,8 @@ class PosicaoEstoqueService
                     $this->loja->posicao_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->posicao_estoque_status = 'Concluído';
                     $this->loja->save();
-                    foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "success", "Posição de Estoque da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Posição de Estoque da loja {$this->loja->nome}, atualizada com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {

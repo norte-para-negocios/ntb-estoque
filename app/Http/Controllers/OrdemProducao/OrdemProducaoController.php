@@ -20,7 +20,7 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
@@ -68,7 +68,7 @@ class OrdemProducaoController extends Controller
 
     public function setValidade(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
@@ -82,7 +82,7 @@ class OrdemProducaoController extends Controller
 
     public function syncOrdensProducao()
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção - Sincronizar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção - Sincronizar!");
         }
         (new OrdemProducaoService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(7)->format('d/m/Y'), Carbon::now()->addDays(2)->format('d/m/Y'));
@@ -91,7 +91,7 @@ class OrdemProducaoController extends Controller
 
     public function imprimir(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 

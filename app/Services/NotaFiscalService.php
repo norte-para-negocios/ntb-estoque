@@ -44,8 +44,8 @@ class NotaFiscalService
                     $this->loja->nota_fiscal_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->nota_fiscal_status = 'Concluído';
                     $this->loja->save();
-                    foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "success", "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {

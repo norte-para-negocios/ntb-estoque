@@ -20,7 +20,7 @@ class RelatorioNotaFiscalController extends Controller
 
     public function imprimir(Request $request)
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 

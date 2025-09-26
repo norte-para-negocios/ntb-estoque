@@ -42,8 +42,8 @@ class LocalEstoqueService
                     $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->local_estoque_status = 'Concluído';
                     $this->loja->save();
-                    foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "success", "Locais de Estoque da loja {$this->loja->nome},  atualizados com sucesso!"));
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Locais de Estoque da loja {$this->loja->nome},  atualizados com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {

@@ -17,7 +17,7 @@ class ProdutoController extends Controller
 
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Produtos - Ver', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Produtos - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Produtos - Ver!");
         }
 
@@ -34,7 +34,7 @@ class ProdutoController extends Controller
 
     public function update()
     {
-        if (!CanService::canPermissionLoja('Produtos - Sincronizar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Produtos - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Produtos - Sincronizar!");
         }
 

@@ -43,8 +43,8 @@ class ProdutoService
                     $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->produto_status = 'Concluído';
                     $this->loja->save();
-                    foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "success", "Produtos da loja {$this->loja->nome}, atualizados com sucesso!"));
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Produtos da loja {$this->loja->nome}, atualizados com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {

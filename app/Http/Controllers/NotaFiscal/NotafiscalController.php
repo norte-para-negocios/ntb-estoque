@@ -23,7 +23,7 @@ class NotafiscalController extends Controller
 
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
@@ -70,7 +70,7 @@ class NotafiscalController extends Controller
 
     public function itens(Request $request, NotaFiscal $notaFiscal)
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
@@ -79,7 +79,7 @@ class NotafiscalController extends Controller
 
     public function setQuantidade(Request $request, NotaFiscalItem $notaFiscalItem)
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
@@ -93,7 +93,7 @@ class NotafiscalController extends Controller
 
     public function imprimir(Request $request, NotaFiscal $notaFiscal, $nIdProduto = "")
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
@@ -151,7 +151,7 @@ class NotafiscalController extends Controller
 
     public function syncNotasFiscais()
     {
-        if (!CanService::canPermissionLoja('Notas Fiscais - Sincronizar', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Notas Fiscais - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais - Sincronizar!");
         }
         (new NotaFiscalService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(7)->format('d/m/Y'), Carbon::now()->format('d/m/Y'));

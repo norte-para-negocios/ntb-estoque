@@ -51,7 +51,7 @@
     </a>
 </div>
 
-@if (Auth::user()->perfil === 'Admin')
+@if (auth()->user()->perfil === 'Admin')
     <div class="d-grid gap-2 mb-2">
         <a href="{{ route('loja.index') }}" class="btn btn-secondary text-start">
             <i class="fas fa-building me-3"></i>Lojas

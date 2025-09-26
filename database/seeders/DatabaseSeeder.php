@@ -23,18 +23,18 @@ class DatabaseSeeder extends Seeder
 
         Loja::create([
             'cnpj' => '13.228.344/0001-02',
-            'nome' => 'JR SANTOS RESTAURANTES LTDA',
-            'nome_fantasia' => 'DON ANA - BROTAS',
+            'nome' => 'BAHIA SOFTWARE HOUSE TECNOLOGIA EM INFORMACAO LTDA',
+            'nome_fantasia' => 'BAHIASH',
 
-            'cep' => '40279090',
+            'cep' => '41820022',
             'uf' => 'BA',
             'cidade' => 'SALVADOR',
-            'bairro' => 'PARQUE BELA VISTA',
-            'logradouro' => 'RUA TEIXEIRA DE BARROS',
-            'numero' => 'SN',
+            'bairro' => 'CAMINHO DAS ÁRVORES',
+            'logradouro' => 'RUA EWERTON VISCO',
+            'numero' => '290',
 
-            'omie_app_key' => '1299859033473',
-            'omie_app_secret' => '98e0d98a2fe34c7e165cf68faa935a5e',
+            'omie_app_key' => '6657964342029',
+            'omie_app_secret' => 'fc7627f5617b0963448f79e88ba53829',
         ]);
     }
 }
