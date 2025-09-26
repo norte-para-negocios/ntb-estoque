@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('descricao_familia', 50)->nullable();
             $table->string('tipo_item', 2)->nullable();
             $table->string('unidade', 6)->nullable();
-            $table->decimal('valor_unitario')->nullable();
+            $table->decimal('valor_unitario', 10, 2)->nullable();
             $table->json('full_object')->nullable();
             $table->timestamps();
 

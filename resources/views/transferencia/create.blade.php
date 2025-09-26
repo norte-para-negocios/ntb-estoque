@@ -100,15 +100,12 @@
                     <table class="table table-bordered" id="produtos_transferencia">
                         <thead class="table-light">
                         <tr>
-                            <th>Produto</th>
-                            <th>Quantidade</th>
-                            <th>Valor Unitário</th>
-                            <th>Ação</th>
+                            <th style="width: 60%;">Produto</th>
+                            <th style="width: 20%;">Quantidade</th>
+                            <th style="width: 20%;">Ação</th>
                         </tr>
                         </thead>
-                        <tbody>
-                        <!-- Linhas dinâmicas via JS -->
-                        </tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
@@ -210,13 +207,10 @@
                     `<tr data-produto="${produto.nome}">
                 <td>
                     <input type="hidden" name="produtos[]" value="${produto.id}">
-                    ${produto.nome}
+                    ${produto.nome} (${produto.unidade})
                 </td>
                 <td>
                     <input type="number" name="quantidades[]" value="1" class="form-control" min="1" step="0.001">
-                </td>
-                <td>
-                    <input type="text" name="valores[]" value="${produto.valor_unitario}" class="form-control" readonly>
                 </td>
                 <td>
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeProduto(this)">Remover</button>
@@ -333,7 +327,7 @@
                 event.preventDefault();
             }
 
-            if (produtos.length == 0) {
+            if (produtos.length === 0) {
                 alert('Informe os produtos a serem transferidos!');
                 event.preventDefault();
             }

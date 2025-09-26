@@ -4,7 +4,7 @@ namespace App\Helpers;
 
 class Constants
 {
-    const UF = [
+    const array UF = [
         'BA' => 'BAHIA',
         'AC' => 'ACRE',
         'AL' => 'ALAGOAS',
@@ -34,7 +34,7 @@ class Constants
         'TO' => 'TOCANTINS',
     ];
 
-    const MES = [
+    const array MES = [
         "1" => "Janeiro",
         "2" => "Fevereiro",
         "3" => "Março",
@@ -49,7 +49,7 @@ class Constants
         "12" => "Dezembro",
     ];
 
-    const PRODUTO_TIPO_ITEM = [
+    const array PRODUTO_TIPO_ITEM = [
         "00" => "Mercadoria para Revenda",
         "01" => "Matéria Prima",
         "02" => "Embalagem",
@@ -64,24 +64,35 @@ class Constants
         "99" => "Outras",
     ];
 
-    const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+    const array DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
 
-    const DATE_FORMAT_PT_BR = 'd/m/Y';
-    const DATE_FORMAT_YMD = 'Ymd';
+    const string DATE_FORMAT_PT_BR = 'd/m/Y';
+    const string DATE_FORMAT_YMD = 'Ymd';
 
-    const PERMISSOES = [
+    const array PERMISSOES = [
         "Notas Fiscais",
+        "Notas Fiscais - Sincronizar",
         "Ordens de Produção",
-        "Inventário",
-        "Transferência",
+        "Ordens de Produção - Sincronizar",
+        "Inventários - Ver",
+        "Inventários - Criar",
+        "Inventários - Editar",
+        "Inventários - Excluir",
+        "Transferências - Ver",
+        "Transferências - Criar",
+        "Transferências - Excluir",
+        "Produtos",
+        "Produtos - Sincronizar",
+        "Locais de Estoque",
+        "Locais de Estoque - Sincronizar",
     ];
 
-    const TIPO_MOVIMENTO_TRANSFERENCIA = [
+    const array TIPO_MOVIMENTO_TRANSFERENCIA = [
         "TRF" => "Transferência entre Locais de Estoque",
         "TPQ" => "Transferência por Perda ou Quebra"
     ];
 
-    const TIPO_MOVIMENTO_INVENTARIO = [
+    const array TIPO_MOVIMENTO_INVENTARIO = [
         "INV" => "Ajuste por Inventário",
         "INI" => "Ajuste por Inventário (Estoque Inicial)",
         // "CMC" => "Ajuste do Valor do CMC",

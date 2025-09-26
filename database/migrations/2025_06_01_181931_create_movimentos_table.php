@@ -20,8 +20,8 @@ return new class extends Migration
             $table->unsignedBigInteger('id_prod');
             $table->dateTime('data');
             $table->enum('tipo', ['ENT', 'SAI', 'SLD', 'TRF']);
-            $table->decimal('quan');
-            $table->decimal('valor');
+            $table->decimal('quan', 10, 2);
+            $table->decimal('valor', 10, 2);
             $table->text('obs');
             $table->enum('origem', ['AJU', 'PDV'])->default('AJU');
             $table->enum('motivo', ['INV', 'OPE', 'PDV', 'INI', 'PER', 'OPS', 'CMC', 'TPQ', 'TRF']);

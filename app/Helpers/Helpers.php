@@ -1,5 +1,40 @@
 <?php
 
+if (!function_exists('normalizarData')) {
+    function normalizarData($dataString) {
+        $formatosPossiveis = [
+            'd/m/Y',
+            'd/m/Y H:i',
+            'd/m/Y H:i:s',
+            'Y-m-d',
+            'Y-m-d H:i',
+            'Y-m-d H:i:s',
+            'd-m-Y',
+            'd-m-Y H:i',
+            'd-m-Y H:i:s',
+            DateTime::RFC3339,
+            DateTime::ATOM,
+            DateTime::ISO8601
+        ];
+
+        foreach ($formatosPossiveis as $formato) {
+            $data = DateTime::createFromFormat($formato, $dataString);
+            if ($data && $data->format($formato) === $dataString) {
+                return $data->format('Y-m-d');
+            }
+        }
+
+        // Tenta como último recurso o parser automático
+        try {
+            $data = new DateTime($dataString);
+            return $data->format('Y-m-d');
+        } catch (Exception $e) {
+            Log::error("Formato de data não reconhecido: '$dataString'");
+            return null;
+        }
+    }
+}
+
 if (!function_exists('spaceToCamelCase')) {
     function spaceToCamelCase($string, $capitalizeFirstCharacter = false)
     {
@@ -81,18 +116,13 @@ if (!function_exists('removeSpecialCaracters')) {
             'û' => 'u',
             'ü' => 'u',
             'ý' => 'y',
-            'ý' => 'y',
             'þ' => 'b',
             'ÿ' => 'y',
             'ƒ' => 'f',
             'Ä' => 'a',
-            'î' => 'i',
-            'â' => 'a',
             'È' => 's',
             'È' => 't',
             'Ä' => 'A',
-            'Î' => 'I',
-            'Â' => 'A',
             'È' => 'S',
             'È' => 'T',
             'º' => '',

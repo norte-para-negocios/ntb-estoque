@@ -32,6 +32,9 @@
         "pestphp/pest-plugin-laravel": "^3.1"
     },
     "autoload": {
+        "files": [
+            "app/Helpers/Helpers.php"
+        ],
         "psr-4": {
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
@@ -62,6 +65,10 @@
         "dev": [
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+        ],
+        "queues": [
+            "Composer\\Config::disableProcessTimeout",
+            "npx concurrently -c \"#86efac,#f9a8d4,#fde68a,#bfdbfe,#fcd34d,#fca5a5,#a5b4fc\" \"php artisan queue:listen --queue=notafiscal --tries=1\" \"php artisan queue:listen --queue=ordemproducao --tries=1\" \"php artisan queue:listen --queue=posicaoestoque --tries=1\" \"php artisan queue:listen --queue=produto --tries=1\" \"php artisan queue:listen --queue=notifications --tries=1\" \"php artisan queue:listen --queue=default --tries=1\" \"php artisan reverb:start\" --names='notafiscal,ordemproducao,posicaoestoque,produto,notifications,default,reverb'"
         ]
     },
     "extra": {

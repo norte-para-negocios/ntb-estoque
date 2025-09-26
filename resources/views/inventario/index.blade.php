@@ -73,7 +73,7 @@
                                                 <div class="row">
                                                     <div class="col-md-6 col-12">
                                                         <p class="mb-0">
-                                                            Data :
+                                                            #{{$inventario->id}} - Data:
                                                             <strong>{{ $inventario->data->format('d/m/Y') }}</strong>
                                                         </p>
                                                         <p class="mb-0">
@@ -104,26 +104,46 @@
                                                                     class="badge bg-success fs-6 text-dark">
                                                                         {{ $inventario->finalizado->format('d/m/Y') }}
                                                                     </span>
+
+                                                                <a href="{{route('inventario.duplicar', $inventario->id)}}" class="btn btn-sm btn-secondary" title="Copiar Inventário">
+                                                                    <i class="fa-solid fa-copy"></i>
+                                                                </a>
                                                             @endif
                                                         </p>
 
 
-                                                        <div class="mb-0">
-                                                            <div class="d-grid gap-2 col-sm-6 col-md-4 col-12">
+                                                        <div class="row">
+                                                            <div class="col">
                                                                 <a href="{{ route('inventario.contagem', $inventario->id) }}"
-                                                                   class="btn btn-primary text-white p-2 d-flex justify-content-start align-items-center">
-                                                                    <i class="fa-solid fa-calculator fa-xl mx-2"
-                                                                       style="color: #ffffff;"></i>
-                                                                    <span class="fs-5">Contagem</span>
+                                                                   class="btn btn-primary text-white">
+                                                                    <div
+                                                                        class="d-flex justify-content-start align-items-center">
+                                                                        <i class="fa-solid fa-calculator fa-lg me-2"
+                                                                           style="color: #ffffff;"></i>
+                                                                        <span class="fs-6">Contagem</span>
+                                                                    </div>
                                                                 </a>
+
                                                                 @if($inventario->status !== 'Processando no Omie')
+                                                                    <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                                       class="btn btn-info text-white">
+                                                                        <div
+                                                                            class="d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-print fa-lg me-2"></i>
+                                                                            <span class="fs-6">Imprimir</span>
+                                                                        </div>
+                                                                    </a>
                                                                     <a href="{{ route('inventario.destroy', $inventario->id) }}"
                                                                        onclick="event.preventDefault(); deleteRegistro(this.href);"
-                                                                       class="btn btn-danger text-white p-2 d-flex justify-content-start align-items-center">
-                                                                        <i class="fa-solid fa-trash fa-xl mx-2"></i>
-                                                                        <span class="fs-5">Excluir</span>
+                                                                       class="btn btn-danger text-white">
+                                                                        <div
+                                                                            class="d-flex justify-content-start align-items-center">
+                                                                            <i class="fa-solid fa-trash fa-lg me-2"></i>
+                                                                            <span class="fs-6">Excluir</span>
+                                                                        </div>
                                                                     </a>
                                                                 @endif
+
                                                             </div>
                                                         </div>
                                                     </div>
@@ -165,7 +185,7 @@
             const aberto = localStorage.getItem('accordionInventario');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                const collapse = new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, {toggle: true});
             }
         });
     </script>

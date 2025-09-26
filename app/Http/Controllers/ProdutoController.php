@@ -3,13 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\Produto;
+use App\Services\CanService;
 use App\Services\ProdutoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProdutoController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     public function index(Request $request)
     {
+        if (!CanService::canPermissionLoja('Produtos - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Produtos - Ver!");
+        }
+
         $produtos = Produto::where('loja_id', auth()->user()->current_loja_id)
             ->when($request->search, function ($query, $search) {
                 $query->where('descricao', 'like', '%' . $search . '%');
@@ -23,6 +34,10 @@ class ProdutoController extends Controller
 
     public function update()
     {
+        if (!CanService::canPermissionLoja('Produtos - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Produtos - Sincronizar!");
+        }
+
         try {
             $service = new ProdutoService(auth()->user()->loja);
             $service->fetchAll();

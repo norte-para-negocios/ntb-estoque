@@ -18,7 +18,7 @@ return new class extends Migration
             $table->bigInteger('identificacao_n_cod_produto')->nullable();
             $table->string('identificacao_c_cod_int_prod', 60)->nullable();
             $table->dateTime('identificacao_d_dt_previsao')->nullable();
-            $table->decimal('identificacao_n_qtde')->nullable();
+            $table->decimal('identificacao_n_qtde', 10, 2)->nullable();
             $table->bigInteger('identificacao_codigo_local_estoque')->nullable();
 
             $table->string('adicionais_c_etapa',2)->nullable();

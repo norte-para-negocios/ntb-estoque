@@ -18,7 +18,7 @@ class LojaController extends Controller
      */
     public function index(Request $request)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -36,7 +36,7 @@ class LojaController extends Controller
      */
     public function create()
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -50,7 +50,7 @@ class LojaController extends Controller
      */
     public function store(Request $request)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -80,7 +80,7 @@ class LojaController extends Controller
      */
     public function edit(Loja $loja)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -93,7 +93,7 @@ class LojaController extends Controller
      */
     public function update(Request $request, Loja $loja)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -119,12 +119,27 @@ class LojaController extends Controller
         }
     }
 
+    public function syncForce(Request $request, Loja $loja)
+    {
+        if (auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não é um usuário Administrador!");
+        }
+
+        $loja->local_estoque_status = null;
+        $loja->produto_status = null;
+        $loja->posicao_estoque_status = null;
+        $loja->nota_fiscal_status = null;
+        $loja->ordem_producao_status = null;
+        $loja->save();
+        return redirect()->back()->with('success', 'Destravados para atualização!');
+    }
+
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(Loja $loja)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 

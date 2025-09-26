@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 
 class IntegrationAttemptController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     public function __invoke(Request $request)
     {
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));

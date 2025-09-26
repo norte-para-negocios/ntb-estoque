@@ -2,15 +2,17 @@
 
 namespace App\Services;
 
-use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class PosicaoEstoqueService
 {
@@ -26,13 +28,16 @@ class PosicaoEstoqueService
     {
         if ($this->loja->posicao_estoque_status !== 'Processando') {
             // Aciona a Variavel de Controle
+            PosicaoEstoque::where('loja_id', $this->loja->id)
+                ->where('data_posicao', Carbon::createFromFormat('d/m/Y', $dataPosicao)->format('Y-m-d'))
+                ->delete();
             $this->loja->posicao_estoque_status = 'Processando';
             $this->loja->save();
             $first = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
+                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i)->onQueue('ps');
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -41,6 +46,9 @@ class PosicaoEstoqueService
                     $this->loja->posicao_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->posicao_estoque_status = 'Concluído';
                     $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Posição de Estoque da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -50,6 +58,7 @@ class PosicaoEstoqueService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('posicaoestoque')
                 ->dispatch();
         }
     }
@@ -93,7 +102,7 @@ class PosicaoEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -143,7 +152,7 @@ class PosicaoEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -178,18 +187,19 @@ class PosicaoEstoqueService
         $item['estoque_minimo'] = $posicao->estoque_minimo ?? null;
         $item['reservado'] = $posicao->reservado ?? null;
         $item['fisico'] = $posicao->fisico ?? null;
-
         try {
-            PosicaoEstoque::updateOrCreate(
-                [
-                    'loja_id' => $this->loja->id,
-                    'codigo_local_estoque' => $item['codigo_local_estoque'],
-                    'n_cod_prod' => $item['n_cod_prod'],
-                    'data_posicao' => $item['data_posicao'],
-                ],
-                $item
-            );
-        } catch (\Throwable $th) {
+            if (!empty($item['codigo_local_estoque']) && !empty($item['n_cod_prod']) && !empty($item['data_posicao'])) {
+                PosicaoEstoque::updateOrCreate(
+                    [
+                        'loja_id' => $this->loja->id,
+                        'codigo_local_estoque' => $item['codigo_local_estoque'],
+                        'n_cod_prod' => $item['n_cod_prod'],
+                        'data_posicao' => $item['data_posicao'],
+                    ],
+                    $item
+                );
+            }
+        } catch (Throwable $th) {
             Log::error(
                 "Erro ao salvar posição de estoque" . $th->getMessage(),
                 $item

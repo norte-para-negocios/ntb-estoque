@@ -19,7 +19,7 @@ class PermissaoController extends Controller
 
     public function attach(Request $request, User $user)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 
@@ -33,7 +33,7 @@ class PermissaoController extends Controller
 
     public function detach(Request $request, User $user, Loja $loja, Permissao $permissao)
     {
-        if (Auth::user()->perfil !== 'Admin') {
+        if (auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não é um usuário Administrador!");
         }
 

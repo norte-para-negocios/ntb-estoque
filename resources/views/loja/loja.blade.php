@@ -16,7 +16,7 @@
                                 @if ($action == 'create')
                                     {{ __('Nova Loja') }}
                                 @else
-                                    {{ __('Editando Loja: ') . $loja->nome }}
+                                    {{ __('Editando Loja: ') . $loja->nome_fantasia }}
                                 @endif
                             </h2>
                             <p>

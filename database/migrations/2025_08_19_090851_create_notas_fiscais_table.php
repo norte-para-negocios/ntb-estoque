@@ -23,7 +23,7 @@ return new class extends Migration {
             $table->string('c_serie_nfe', 3)->nullable();
             $table->string('c_modelo_nfe', 2)->nullable();
             $table->date('d_emissao_nfe')->nullable();
-            $table->decimal('n_valor_nfe')->nullable();
+            $table->decimal('n_valor_nfe', 10, 2)->nullable();
             $table->string('c_ambiente_nfe', 1)->nullable();
             $table->string('c_natureza_operacao', 60)->nullable();
             $table->json('full_object')->nullable();

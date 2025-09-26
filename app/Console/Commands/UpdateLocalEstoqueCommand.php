@@ -27,10 +27,10 @@ class UpdateLocalEstoqueCommand extends Command
      */
     public function handle()
     {
-        foreach (Loja::all() as $loja) {
-            $this->info("Atualizando locais de estoque da loja: {$loja->nome}");
+        foreach (Loja::where('ativo', true)->get() as $loja) {
+            $this->info("Atualizando locais de estoque da loja: {$loja->nome_fantasia}");
             (new LocalEstoqueService($loja))->fetchAll();
-            $this->info("Locais de estoque da loja {$loja->nome}, atualizados com sucesso!");
+            $this->info("Locais de estoque da loja {$loja->nome_fantasia}, atualizados com sucesso!");
         }
     }
 }

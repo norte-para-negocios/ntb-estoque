@@ -2,7 +2,6 @@
 
 namespace App\Jobs\UpdateOmieLocalData;
 
-use App\Events\NotificaAllEvent;
 use App\Models\Loja;
 use App\Services\ProdutoService;
 use Illuminate\Bus\Batchable;
@@ -16,10 +15,8 @@ class ProdutoUpdateJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
-    // Tentativas antes de falhar de vez
     public int $tries = 5;
 
-    // Intervalos em segundos para cada retry
     public array|int $backoff = [10, 30, 60, 120];
 
     public function __construct(
@@ -36,7 +33,6 @@ class ProdutoUpdateJob implements ShouldQueue
 
         if (!empty($response->produto_servico_cadastro)) {
             $service->saveProdutos((array)$response->produto_servico_cadastro);
-            broadcast(new NotificaAllEvent("success", "Produtos da loja {$this->loja->nome}, etapa {$this->pagina} de {$response->total_de_paginas}, atualizada com sucesso!"));
         }
     }
 

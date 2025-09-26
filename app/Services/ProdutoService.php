@@ -2,14 +2,16 @@
 
 namespace App\Services;
 
-use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
+use App\Models\User;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class ProdutoService
 {
@@ -27,12 +29,13 @@ class ProdutoService
             // Aciona a Variavel de Controle
             $this->loja->produto_status = 'Processando';
             $this->loja->save();
-            $first = $this->fetchPage($this->loja, 1);
+            $first = $this->fetchPage(1);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
                 $jobs[] = new ProdutoUpdateJob($this->loja, $i);
             }
+
             // Dispara o batch
             Bus::batch($jobs)
                 ->then(function () {
@@ -40,6 +43,9 @@ class ProdutoService
                     $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->produto_status = 'Concluído';
                     $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Produtos da loja {$this->loja->nome}, atualizados com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -49,8 +55,8 @@ class ProdutoService
                 ->finally(function () {
                     // Executado sempre, mesmo com falhas
                 })
+                ->onQueue('produto')
                 ->dispatch();
-
         }
     }
 
@@ -64,7 +70,7 @@ class ProdutoService
             "param" => [
                 [
                     "pagina" => $pagina,
-                    "registros_por_pagina" => 1000,
+                    "registros_por_pagina" => 500,
                     "apenas_importado_api" => "N",
                     "filtrar_apenas_omiepdv" => "N",
                     "ordem_decrescente" => "S",
@@ -93,7 +99,7 @@ class ProdutoService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -134,7 +140,7 @@ class ProdutoService
                 ],
                 $prod
             );
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }
@@ -174,7 +180,7 @@ class ProdutoService
                 if ($response->status() === 200) {
                     return $response->object();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -192,7 +198,7 @@ class ProdutoService
             Produto::where('loja_id', $this->loja->id)
                 ->where('codigo_produto', $produto->codigo_produto)
                 ->delete();
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao excluir produto nº: " . $produto->codigo_produto . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }

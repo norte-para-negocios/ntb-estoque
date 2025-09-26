@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
+use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
+use App\Models\User;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
+use Throwable;
 
 class LocalEstoqueService
 {
@@ -39,6 +42,9 @@ class LocalEstoqueService
                     $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
                     $this->loja->local_estoque_status = 'Concluído';
                     $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Locais de Estoque da loja {$this->loja->nome},  atualizados com sucesso!"));
+                    }
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
@@ -49,7 +55,6 @@ class LocalEstoqueService
                     // Executado sempre, mesmo com falhas
                 })
                 ->dispatch();
-
         }
     }
 
@@ -88,7 +93,7 @@ class LocalEstoqueService
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
-            } catch (\Throwable $th) {
+            } catch (Throwable $th) {
                 // Log de erro.
                 $this->error_message = json_encode($th->getMessage());
                 $this->code = $th->getCode();
@@ -136,7 +141,7 @@ class LocalEstoqueService
                 ],
                 $item
             );
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao salvar local-estoque de estoque nº: " . $item['codigo_local_estoque'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
 
@@ -148,7 +153,7 @@ class LocalEstoqueService
             LocalEstoque::where('loja_id', $this->loja->id)
                 ->where('codigo_local_estoque', $local->codigo_local_estoque)
                 ->delete();
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             Log::error("Erro ao excluir local-estoque de estoque nº: " . $local->codigo_local_estoque . ', Loja: ' . $this->loja->nome . $th->getMessage());
         }
     }

@@ -21,13 +21,13 @@ return new class extends Migration
             $table->string('c_cod_int', 60)->nullable();
             $table->string('c_codigo', 60)->nullable();
             $table->string('c_descricao', 120)->nullable();
-            $table->decimal('n_preco_unitario')->nullable();
-            $table->decimal('n_saldo')->nullable();
-            $table->decimal('n_cmc')->nullable();
-            $table->decimal('n_pendente')->nullable();
-            $table->decimal('estoque_minimo')->nullable();
-            $table->decimal('reservado')->nullable();
-            $table->decimal('fisico')->nullable();
+            $table->decimal('n_preco_unitario', 10, 2)->nullable();
+            $table->decimal('n_saldo', 10, 2)->nullable();
+            $table->decimal('n_cmc', 10, 2)->nullable();
+            $table->decimal('n_pendente', 10, 2)->nullable();
+            $table->decimal('estoque_minimo', 10, 2)->nullable();
+            $table->decimal('reservado', 10, 2)->nullable();
+            $table->decimal('fisico', 10, 2)->nullable();
             $table->timestamps();
             $table->foreign('loja_id')->references('id')->on('lojas');
 

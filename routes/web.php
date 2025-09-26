@@ -10,6 +10,7 @@ use App\Http\Controllers\NotaFiscal\RelatorioNotaFiscalController;
 use App\Http\Controllers\OrdemProducao\OrdemProducaoController;
 use App\Http\Controllers\OrdemProducao\RelatorioOrdemProducaoController;
 use App\Http\Controllers\ProdutoController;
+use App\Http\Controllers\Transferencia\RelatorioTransferenciaController;
 use App\Http\Controllers\Transferencia\TransferenciaController;
 use App\Http\Controllers\User\PermissaoController;
 use App\Http\Controllers\User\UserController;
@@ -21,7 +22,7 @@ Route::get('/', [LoginController::class, 'showLoginForm'])->name('welcome');
 
 Auth::routes(['register' => false]);
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home.index');
 
     // Usuário
@@ -41,6 +42,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Loja
     Route::resource('loja', LojaController::class)->except(['show']);
+    Route::get('/loja/{loja}/sync/force', [LojaController::class, 'syncForce'])->name('loja.sync.force');
 });
 
 Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
@@ -51,6 +53,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::get('/itens/{notaFiscal}', [NotafiscalController::class, 'itens'])->name('notafiscal.itens');
         Route::get('/itens/{notaFiscal}/imprimir/{cCodigoProduto?}', [NotafiscalController::class, 'imprimir'])->name('notafiscal.imprimir');
         Route::post('/{notaFiscalItem}/quantidade', [NotafiscalController::class, 'setQuantidade'])->name('notafiscal.setQuantidade');
+        Route::get('/sync-omie', [NotafiscalController::class, 'syncNotasFiscais'])->name('notafiscal.sync');
     });
 
     // Relatório de Notas Fiscais
@@ -62,9 +65,9 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     // Ordens de produção
     Route::prefix('ordem-producao')->group(function () {
         Route::get('/', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
-        Route::post('/', [OrdemProducaoController::class, 'sincValidade'])->name('ordemproducao.sincValidade');
         Route::post('/{ordemProducao}/validade', [OrdemProducaoController::class, 'setValidade'])->name('ordemproducao.setValidade');
         Route::get('/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('ordemproducao.imprimir');
+        Route::get('/sync-omie', [OrdemProducaoController::class, 'syncOrdensProducao'])->name('ordemproducao.sync');
     });
 
     // Relatório Ordem Produção
@@ -78,6 +81,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
     Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
     Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');
+    Route::post('/transferencia/pdf', [RelatorioTransferenciaController::class, 'pdf'])->name('transferencia.pdf');
 
     // Inventário
     Route::prefix('inventario')->group(function () {
@@ -85,7 +89,10 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::get('/contagem/{inventario}', [InventarioController::class, 'contagem'])->name('inventario.contagem');
         Route::post('/store', [InventarioController::class, 'store'])->name('inventario.store');
         Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
+        Route::post('edit/quantidade/{inventarioItem}', [InventarioController::class, 'editQuantidade'])->name('inventario.editQuantidade');
         Route::post('/finish/{inventario}', [InventarioController::class, 'finish'])->name('inventario.finish');
         Route::delete('/destroy/{inventario}', [InventarioController::class, 'destroy'])->name('inventario.destroy');
+        Route::get('/pdf/{inventario}', [InventarioController::class, 'pdf'])->name('inventario.pdf');
+        Route::get('/{inventario}/duplicar', [InventarioController::class, 'duplicar'])->name('inventario.duplicar');
     });
 });

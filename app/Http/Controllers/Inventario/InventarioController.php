@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Inventario;
 
+use App\Events\NotificaUserEvent;
 use App\Http\Controllers\Controller;
 use App\Jobs\InventarioJob;
 use App\Models\Inventario;
@@ -14,8 +15,8 @@ use App\Services\CanService;
 use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use PDF;
 
 class InventarioController extends Controller
 {
@@ -27,29 +28,38 @@ class InventarioController extends Controller
     public function index(Request $request)
     {
         // Lógica para exibir a lista de inventários
-        if (!CanService::canPermissionLoja('Inventário', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventário!");
+        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Ver!");
         }
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
-        $inventarios = Inventario::where('loja_id', Auth::user()->current_loja_id)
+        $inventarios = Inventario::where('loja_id', auth()->user()->current_loja_id)
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
             ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
 
-        $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao', 'asc')->get();
+        $locaisEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)->orderBy('descricao', 'asc')->get();
 
         return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque'));
     }
 
     public function store(Request $request)
     {
-        if (!CanService::canPermissionLoja('Inventário', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventário!");
+        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        }
+
+        $emContagem = Inventario::where('status', 'Em contagem')
+            ->where('codigo_local_estoque', $request->input('estoque_origem'))
+            ->where('loja_id', auth()->user()->current_loja_id)
+            ->first();
+
+        if ($emContagem) {
+            return redirect()->route('inventario.index')->with('info', "Inventário nº $emContagem->id ainda em contagem, finalize-o antes de iniciar um novo inventario!");
         }
 
         $request->validate([
@@ -59,7 +69,7 @@ class InventarioController extends Controller
         ]);
 
         $inventario = Inventario::create([
-            'loja_id' => Auth::user()->current_loja_id,
+            'loja_id' => auth()->user()->current_loja_id,
             'codigo_local_estoque' => $request->input('estoque_origem'),
             'data' => Carbon::parse($request->input('data')),
             'tipo' => 'SLD',
@@ -68,7 +78,7 @@ class InventarioController extends Controller
             'status' => 'Em contagem',
         ]);
 
-        $produtos = Produto::where('loja_id', Auth::user()->current_loja_id)
+        $produtos = Produto::where('loja_id', auth()->user()->current_loja_id)
             ->where('full_object->inativo', "N")
             ->orderBy('descricao_familia', 'asc')
             ->orderBy('descricao', 'asc')
@@ -83,7 +93,7 @@ class InventarioController extends Controller
                 ->first();
 
             $inventario->items()->create([
-                'loja_id' => Auth::user()->current_loja_id,
+                'loja_id' => auth()->user()->current_loja_id,
                 'produto_codigo_produto' => $produto->codigo_produto,
                 'produto_codigo' => $produto->codigo ?? '',
                 'produto_descricao' => $produto->descricao ?? '',
@@ -97,22 +107,38 @@ class InventarioController extends Controller
         return redirect()->route('inventario.contagem', $inventario->id);
     }
 
+    public function pdf(Request $request, Inventario $inventario)
+    {
+        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Ver!");
+        }
+        $pdf = PDF::loadView('inventario.pdf', ['inventario' => $inventario, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
+        return $pdf->inline("inventario-{$inventario->id}.pdf");
+    }
+
     public function finish(Inventario $inventario)
     {
+        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        }
         (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
         $inventario->status = 'Processando no Omie';
         $inventario->save();
         InventarioJob::dispatch($inventario, auth()->user());
         return redirect()
             ->route('inventario.index', [
-                'data_inicio' => $inventario->data->format('Y-m-d'),
-                'data_final' => $inventario->data->format('Y-m-d')]
+                    'data_inicio' => $inventario->data->format('Y-m-d'),
+                    'data_final' => $inventario->data->format('Y-m-d')]
             )->with('success', 'Inventário processando no Omie, só aguardar a finalização do processamento. :)');
     }
 
     public function contagem(Inventario $inventario)
     {
-        $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
+        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        }
+
+        $localEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)
             ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
             ->first();
 
@@ -121,9 +147,8 @@ class InventarioController extends Controller
 
     public function setQuantidade(InventarioItem $inventarioItem, Request $request)
     {
-        // Lógica para atualizar a quantidade de um item no inventário
-        if (!CanService::canPermissionLoja('Inventário', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventário!");
+        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Criar!");
         }
 
         $request->validate([
@@ -135,13 +160,80 @@ class InventarioController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function destroy(Inventario $inventario)
+    public function editQuantidade(InventarioItem $inventarioItem, Request $request)
     {
-        if (!CanService::canPermissionLoja('Transferência', Auth::user()->loja->id) && Auth::user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
+        if (!CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Editar!");
         }
 
-        // Verifica se o movimento já foi processado
+        $request->validate([
+            'quantidade' => 'required|numeric|min:0',
+        ]);
+
+        if ($inventarioItem->id_ajuste !== null) {
+            $loja = $inventarioItem->inventario->loja;
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                "call" => "ExcluirAjusteEstoque",
+                "app_key" => $loja->omie_app_key,
+                "app_secret" => $loja->omie_app_secret,
+                "param" => [
+                    [
+                        "id_ajuste" => $inventarioItem->id_ajuste,
+                    ]
+                ]
+            ];
+            Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+        }
+
+        $inventarioItem->update([
+            'response' => null,
+            'codigo_status' => null,
+            'descricao_status' => null,
+            'id_movest' => null,
+            'id_ajuste' => null,
+            'status' => null,
+            'quan' => $request->input('quantidade')
+        ]);
+
+        InventarioJob::dispatch($inventarioItem->inventario, auth()->user());
+
+        return response()->json(['success' => true]);
+    }
+
+    public function duplicar(Inventario $inventario)
+    {
+        $clone = $inventario->replicate();
+        $clone->data = date('Y-m-d H:i:s');
+        $clone->finalizado = null;
+        $clone->status = 'Em contagem';
+        $clone->save();
+
+        foreach ($inventario->items as $item) {
+            $clonedItem = $item->replicate();
+            $clonedItem->inventario_id = $clone->id;
+            $clonedItem->quan = null;
+            $clonedItem->valor = null;
+            $clonedItem->response = null;
+            $clonedItem->codigo_status = null;
+            $clonedItem->descricao_status = null;
+            $clonedItem->id_movest = null;
+            $clonedItem->id_ajuste = null;
+            $clonedItem->status = null;
+            $clonedItem->save();
+        }
+        return redirect()->route('inventario.contagem', $clonedItem->inventario)
+            ->with('success', 'Inventario duplicado com sucesso!');
+    }
+
+    public function destroy(Inventario $inventario)
+    {
+        if (!CanService::canPermissionLoja('Inventários - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Excluir!");
+        }
+
         foreach ($inventario->items as $inventarioItem) {
             if ($inventarioItem->id_ajuste !== null) {
                 $loja = $inventario->loja;
@@ -158,7 +250,9 @@ class InventarioController extends Controller
                 ];
                 Http::withHeaders([
                     'Content-Type' => 'application/json'
-                ])->connectTimeout(60)->timeout(60)->post($url, $data);
+                ])->connectTimeout(60)
+                    ->timeout(60)
+                    ->post($url, $data);
             }
             $inventarioItem->delete();
         }

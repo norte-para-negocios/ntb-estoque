@@ -14,6 +14,9 @@
                         Inventário #{{ $inventario->id }}:
                         </span>
                         <small>{{ auth()->user()->loja->nome_fantasia }}</small>
+                        @if($inventario->finalizado !== null || $inventario->status === 'Finalizado')
+                            <span class="badge text-bg-success">{{$inventario->status}}</span>
+                        @endif
                     </h1>
                     @if ($inventario->finalizado === null)
                         <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}"
@@ -24,6 +27,12 @@
                                 Finalizar
                             </button>
                         </form>
+                    @elseif($inventario->status !== 'Processando no Omie')
+                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                           class="btn btn-info text-white d-flex justify-content-start align-items-center">
+                            <i class="fa-solid fa-print fa-xl mx-2"></i>
+                            <span class="fs-5">Imprimir</span>
+                        </a>
                     @endif
                 </div>
                 <div class="col-12">
@@ -34,7 +43,7 @@
                     <p class="mb-0">
                         <span class="fw-bold">Local de Estoque:</span>
                         <span>
-                            {{ $localEstoque->codigo }} - {{ $localEstoque->descricao }}
+                            {{ $localEstoque->codigo??'' }} - {{ $localEstoque->descricao??'' }}
                         </span>
                     </p>
                     <p>
@@ -110,7 +119,7 @@
                     <thead class="table-light">
                     <tr>
                         <th class="col-10">Produto</th>
-                        <th class="col-2">Quantidade</th>
+                        <th class="col-2 text-end">Quantidade</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -125,23 +134,35 @@
                                 data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
                                 <td class="align-middle">
                                     <div class="d-flex justify-content-between">
-                                            <span>
-                                                {{ $item->produto_descricao }}
-                                                <small> #{{ $item->produto_codigo }}</small>
-                                            </span>
+                                        <span>
+                                            {{ $item->produto_descricao }}
+                                            <small> #{{ $item->produto_codigo }}</small>
+                                        </span>
                                         <span>{{ $item->produto->unidade ?? '-' }}</span>
                                     </div>
+                                    @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
+                                        @if($item->status == 'Sem CMC')
+                                            <span class="badge text-bg-danger">CMC Zerado para o Produto, a movimentação não foi realizada no Omie</span>
+                                        @else
+                                            <span
+                                                class="badge text-bg-success">{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
+                                        @endif
+                                    @endif
                                 </td>
-                                <td>
-                                    @if ($inventario->finalizado === null)
+                                <td style="text-align: right;">
+                                    @if ($inventario->status === 'Em contagem')
                                         <input type="number" class="form-control" min="0.001" step="0.001"
                                                onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
-                                               value="{{ $item->quan }}"> {{ $item->produto_unidade }}
+                                               value="{{ $item->quan }}">
                                     @else
-                                        {{ $item->quan }} <br>
-                                        {{ $item->codigo_status }} - {{ $item->descricao_status }}<br>
-                                        ID Movimento: {{ $item->id_movest }}<br>
-                                        ID Ajuste: {{ $item->id_ajuste }}
+                                        @if(\App\Services\CanService::canPermissionLoja('Inventários - Editar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin')
+                                            <input type="number" class="form-control" min="0.001" step="0.001"
+                                                   data-quan="{{ $item->quan }}"
+                                                   onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
+                                                   value="{{ $item->quan }}">
+                                        @else
+                                            {{ number_format($item->quan, 2, ',', '.') }}
+                                        @endif
                                     @endif
                                 </td>
                             </tr>
@@ -163,6 +184,31 @@
                 axios.post(url, {
                     "quantidade": quantidade
                 })
+            }
+        }
+
+        function editQuantidade(el, url, quantidade) {
+            if (quantidade >= 0 && quantidade !== el.dataset.quan) {
+                swal.fire({
+                    title: 'Tem certeza?',
+                    text: 'Gostaria realmente de editar a quantidade do produto, do inventário já Finalizado?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sim, editar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        axios.post(url, {
+                            "quantidade": quantidade
+                        }).then(() => {
+                            swal.fire('Editado!', 'A quantidade foi atualizada com sucesso.', 'success');
+                        }).catch(() => {
+                            swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
+                        });
+                    } else {
+                        el.value = el.dataset.quan;
+                    }
+                });
             }
         }
 

@@ -43,9 +43,15 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 d-flex align-items-end">
-                                    <div class="mb-3 g-6">
-                                        <button type="submit" class="btn btn-primary text-white">
-                                            <i class="fas fa-search"></i> Filtrar
+                                    <div class="mb-3">
+                                        <button type="button" class="btn btn-primary" onclick="filtrarRegistros()"
+                                                title="Filtrar registros">
+                                            <i class="fas fa-search me-2"></i> Filtrar
+                                        </button>
+
+                                        <button type="button" class="btn btn-primary ms-2" onclick="imprimirRegistros()"
+                                                title="Imprimir registros">
+                                            <i class="fas fa-print me-2"></i> Imprimir
                                         </button>
                                     </div>
                                 </div>
@@ -99,9 +105,6 @@
                                                                 {{ number_format($tr->quan, 3, ',', '.') }}
                                                                 {{ $produto->unidade ?? '' }}
                                                             </strong>
-                                                            <span> | </span>
-                                                            Valor Unitário :
-                                                            <strong>{{ number_format($tr->valor ?? 0, 2, ',', '.') }}</strong>
                                                         </p>
                                                     </div>
                                                     <div class="col-md-6 col-12">
@@ -117,14 +120,11 @@
                                                                     </span>
                                                             @endif
                                                         </p>
-                                                        <p class="mb-0">
-                                                            Movimento nº: <strong>{{ $tr->id_movest }}</strong> |
-                                                            Ajuste nº: <strong>{{ $tr->id_ajuste }}</strong>
-                                                        </p>
 
                                                         <p class="mb-0">
                                                         <div class="d-grid gap-2 col-sm-6 col-md-4 col-12">
                                                             @if($tr->status !== ['Concluído'])
+
                                                                 @if ($tr->id_movest === null && (!in_array($tr->status, ['Processando', 'Concluído'])))
                                                                     <a href="{{ route('transferencia.reprocess', $tr->id) }}"
                                                                        class="btn btn-sm btn-secondary text-white">
@@ -132,10 +132,10 @@
                                                                     </a>
                                                                 @endif
 
-                                                                @if (!in_array($tr->status, ['Processando', 'Iniciado']))
+                                                                @if (!in_array($tr->status, ['Iniciado']))
                                                                     <button
                                                                         onclick="deleteRegistro('{{ route('transferencia.destroy', $tr->id) }}')"
-                                                                        class="btn btn-sm btn-danger text-white">
+                                                                        class="btn btn-sm btn-danger text-white mt-2">
                                                                         <i class="fas fa-trash"></i>
                                                                     </button>
                                                                 @endif
@@ -186,8 +186,34 @@
             const aberto = localStorage.getItem('accordionTransferencia');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                const collapse = new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, {toggle: true});
             }
         });
+
+        function filtrarRegistros() {
+            document.getElementById('filtrosForm').submit();
+        }
+
+        function imprimirRegistros() {
+            const filtrosForm = document.getElementById('filtrosForm');
+            const url = '{{ route("transferencia.pdf") }}';
+            const formData = new FormData(filtrosForm);
+
+            axios.post(url, formData, {
+                responseType: 'blob'
+            }).then((response) => {
+                const blob = new Blob([response.data], {type: response.headers['content-type']});
+                const blobUrl = window.URL.createObjectURL(blob);
+                window.open(blobUrl, '_blank');
+                setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
+            }).catch((error) => {
+                swal.fire({
+                    title: "Ops :(!",
+                    text: error,
+                    icon: "error",
+                    button: "OK!",
+                });
+            });
+        }
     </script>
 @endpush
