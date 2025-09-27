@@ -52,7 +52,7 @@ class NotafiscalController extends Controller
                 }
             })->when($produto, function ($query) use ($produto) {
                 return $query->whereHas('nfItems', function ($qHas) use ($produto) {
-                    $qHas->where('c_descricao_produto', 'like', '%' . $produto . '%')
+                    return $qHas->where('c_descricao_produto', 'like', '%' . $produto . '%')
                         ->orWhere('nfs.c_codigo_produto', 'like', '%' . $produto . '%');
                 });
             })->when($tipo, function ($query) use ($tipo) {
