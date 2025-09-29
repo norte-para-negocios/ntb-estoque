@@ -36,7 +36,7 @@ class OrdemProducaoService
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i)->onQueue('op');
+                $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i);
             }
             // Dispara o batch
             Bus::batch($jobs)

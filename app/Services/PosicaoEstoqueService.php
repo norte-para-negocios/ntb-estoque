@@ -37,7 +37,7 @@ class PosicaoEstoqueService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i)->onQueue('ps');
+                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -75,7 +75,6 @@ class PosicaoEstoqueService
                     "nPagina" => $pagina,
                     "nRegPorPagina" => 1000,
                     "dDataPosicao" => $dataPosicao,
-                    "cExibeTodos" => 'S',
                     "codigo_local_estoque" => $codigoLocalEstoque,
                 ]
             ]

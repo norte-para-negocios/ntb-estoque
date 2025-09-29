@@ -35,7 +35,7 @@ class NotaFiscalService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i, $dataIni = '', $dataFim = '')->onQueue('nf');
+                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i, $dataIni = '', $dataFim = '');
             }
             // Dispara o batch
             Bus::batch($jobs)
