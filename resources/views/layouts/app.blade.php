@@ -48,20 +48,24 @@
 
 <div id="app">
 
-    <nav class="navbar navbar-expand-lg bg-body-tertiary">
-        <div class="container">
-            <a class="navbar-brand" href="{{ route('home.index') }}">{{ config('app.name', 'NTB - Estoque') }}</a>
-
+    <nav class="navbar navbar-expand-lg ntb-header">
+        <div class="container-fluid justify-content-start">
             <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
                     aria-controls="offcanvasTop" class="btn btn-lg">
-                <i class="fa-solid fa-bars"></i>
+                <img src="{{asset('images/menu.png')}}" alt="">
             </button>
+
+            <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
+                <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
+            </a>
         </div>
     </nav>
 
     <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="offcanvasTopLabel">NTB - Estoque</h5>
+            <h5 class="offcanvas-title" id="offcanvasTopLabel">
+                <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
+            </h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
