@@ -6,6 +6,7 @@ use App\Events\NotificaUserEvent;
 use App\Models\Inventario;
 use App\Models\InventarioItem;
 use App\Models\LocalEstoque;
+use App\Models\Loja;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Models\User;
@@ -46,6 +47,15 @@ class InventarioJob implements ShouldQueue
             ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
             ->first();
 
+        $esperaPosicao = 0;
+        while (Loja::find($this->inventario->loja_id)->posicao_estoque_status !== 'Concluído') {
+            $esperaPosicao += 1;
+            sleep(1);
+
+            if ($esperaPosicao >= 30) {
+                break;
+            }
+        }
 
         while (InventarioItem::where('inventario_id', $this->inventario->id)
                 ->where(function ($q) {
