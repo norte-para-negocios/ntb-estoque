@@ -124,7 +124,7 @@ class InventarioController extends Controller
         (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
         $inventario->status = 'Processando no Omie';
         $inventario->save();
-        InventarioJob::dispatch($inventario, auth()->user());
+        InventarioJob::dispatch($inventario, auth()->user())->delay(10);
         return redirect()
             ->route('inventario.index', [
                     'data_inicio' => $inventario->data->format('Y-m-d'),
