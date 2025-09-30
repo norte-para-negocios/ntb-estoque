@@ -117,15 +117,17 @@ class PosicaoEstoqueService
     {
         $url = $this->urlBase . 'v1/estoque/consulta/';
         $data = [
-            "call" => "PosicaoEstoque",
+            "call" => "ListarPosEstoque",
             "app_key" => $this->loja->omie_app_key,
             "app_secret" => $this->loja->omie_app_secret,
             "param" => [
                 [
+                    "nPagina" => 1,
+                    "nRegPorPagina" => 1,
+                    "dDataPosicao" => $dataPosicao,
                     "codigo_local_estoque" => $codigoLocalEstoque,
-                    "id_prod" => $produtoCodigo,
-                    "cod_int" => '',
-                    "data" => $dataPosicao,
+                    "lista_produtos" => ["nCodProd" => $produtoCodigo],
+                    "cExibeTodos" => 'S',
                 ]
             ]
         ];
@@ -146,8 +148,8 @@ class PosicaoEstoqueService
                 $this->response = $response->getBody()->getContents();
                 $this->code = $response->getStatusCode();
 
-                if ($response->status() === 200) {
-                    return $response->object();
+                if ($response->status() === 200 && isset($response->object()->produtos[0])) {
+                    return  $response->object()->produtos[0];
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
