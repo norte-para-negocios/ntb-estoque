@@ -208,7 +208,7 @@ class TransferenciaController extends Controller
         }
 
         if (!in_array($movimento->status, ['Processando', 'Concluído'])) {
-            TransferenciaJob::dispatch(auth()->user, $movimento);
+            TransferenciaJob::dispatch(auth()->user(), $movimento);
         }
         return redirect()->route('transferencia.index')
             ->with('success', 'Transferência reenviada para OMIE!');
