@@ -165,36 +165,37 @@
             </div>
         </div>
 
-        <div class="card card-body mt-4">
-            <table class="table table-hover table-borderless">
-                <tbody>
-                @if (isset($notasfiscais) && !empty($notasfiscais))
-                    @foreach ($notasfiscais as $nf)
-                        <tr>
-                            <td class="px-2">
-                                <div class="container">
-                                    <div class="row">
-                                        <div class="col-12 p-0">
-                                            <div class="card card-body m-0" style="background-color: #e4e9f5;">
+
+        <table class="table table-hover table-borderless">
+            <tbody>
+            @if (isset($notasfiscais) && !empty($notasfiscais))
+                @foreach ($notasfiscais as $nf)
+                    <tr>
+                        <td class="px-2">
+                            <div class="container">
+                                <div class="row">
+                                    <div class="col-12 p-0">
+                                        <span>Emissão: {{ \Carbon\Carbon::parse(normalizarData($nf->d_emissao_nfe))->format('d/m/Y') }}</span>
+                                        <div class="card m-0">
+                                            <div class="card-header">
+                                                    <span class="text-white">
+                                                        NF nº {{ $nf->c_numero_nfe ?? '-' }}
+                                                    </span>
+                                            </div>
+                                            <div class="card-footer">
                                                 <div class="row">
                                                     <div class="col-md-6 col-12">
-                                                        <h6>
-                                                            <small>{{ $nf->n_id_receb }}</small>: {{ $nf->c_nome ?? '-' }}
-                                                        </h6>
-                                                        <p class="mb-0">
-                                                            <small>Nº NFe:</small>
-                                                            <strong>{{ $nf->c_numero_nfe ?? '-' }}</strong>|
-                                                            <small>Emissão:</small> {{ \Carbon\Carbon::parse(normalizarData($nf->d_emissao_nfe))->format('d/m/Y') }}
+                                                        <small>Fornecedor</small>
+                                                        <p>
+                                                            <strong>
+                                                                {{ $nf->c_nome ?? '-' }}
+                                                            </strong>
                                                         </p>
-                                                        {{--                                                        <p class="mt-1 mb-2">--}}
-                                                        {{--                                                            <small>Valor da NF:</small> R$--}}
-                                                        {{--                                                            {{ number_format($nf->n_valor_nfe ?? 0, 2, ',', '.') ?? '' }}--}}
-                                                        {{--                                                        </p>--}}
                                                     </div>
                                                     <div class="col-md-6 col-12 text-end">
                                                         <a href="{{ route('notafiscal.itens', $nf->id) }}"
-                                                           class="btn btn-secondary text-center">
-                                                            <i class="fas fa-eye me-2"></i> Visualizar
+                                                           class="btn btn-outline-secondary text-center">
+                                                            <img src="{{asset('images/eye.png')}}" alt="" class="me-1"> Ver
                                                         </a>
                                                     </div>
                                                 </div>
@@ -202,18 +203,19 @@
                                         </div>
                                     </div>
                                 </div>
-                            </td>
-                        </tr>
-                    @endforeach
-                @else
-                    <tr>
-                        <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                            </div>
+                        </td>
                     </tr>
-                @endif
-                </tbody>
-            </table>
-            {{ $notasfiscais->links('pagination::bootstrap-5') }}
-        </div>
+                @endforeach
+            @else
+                <tr>
+                    <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                </tr>
+            @endif
+            </tbody>
+        </table>
+        {{ $notasfiscais->links('pagination::bootstrap-5') }}
+
     </div>
 @endsection
 
