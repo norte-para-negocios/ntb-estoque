@@ -89,7 +89,7 @@ class TransferenciaController extends Controller
 
                 if (!$posicaoEstoque) {
                     $posicaoEstoque = (new PosicaoEstoqueService(auth()->user()->loja))->fetchPosicaoProduto($request->get('estoque_origem'), $produto->codigo_produto, Carbon::parse(normalizarData($request->get('data')))->format('d/m/Y'));
-                    $cmc = $posicaoEstoque ? $posicaoEstoque->cmc : 0;
+                    $cmc = $posicaoEstoque ? $posicaoEstoque->nCMC : 0;
                 } else {
                     $cmc = $posicaoEstoque->cmc;
                 }
@@ -208,7 +208,7 @@ class TransferenciaController extends Controller
         }
 
         if (!in_array($movimento->status, ['Processando', 'Concluído'])) {
-            TransferenciaJob::dispatch(auth()->user, $movimento);
+            TransferenciaJob::dispatch(auth()->user(), $movimento);
         }
         return redirect()->route('transferencia.index')
             ->with('success', 'Transferência reenviada para OMIE!');

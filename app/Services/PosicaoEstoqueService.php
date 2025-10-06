@@ -37,7 +37,7 @@ class PosicaoEstoqueService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i)->onQueue('ps');
+                $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
             }
             // Dispara o batch
             Bus::batch($jobs)
@@ -75,7 +75,6 @@ class PosicaoEstoqueService
                     "nPagina" => $pagina,
                     "nRegPorPagina" => 1000,
                     "dDataPosicao" => $dataPosicao,
-                    "cExibeTodos" => 'S',
                     "codigo_local_estoque" => $codigoLocalEstoque,
                 ]
             ]
@@ -118,15 +117,17 @@ class PosicaoEstoqueService
     {
         $url = $this->urlBase . 'v1/estoque/consulta/';
         $data = [
-            "call" => "PosicaoEstoque",
+            "call" => "ListarPosEstoque",
             "app_key" => $this->loja->omie_app_key,
             "app_secret" => $this->loja->omie_app_secret,
             "param" => [
                 [
+                    "nPagina" => 1,
+                    "nRegPorPagina" => 1,
+                    "dDataPosicao" => $dataPosicao,
                     "codigo_local_estoque" => $codigoLocalEstoque,
-                    "id_prod" => $produtoCodigo,
-                    "cod_int" => '',
-                    "data" => $dataPosicao,
+                    "lista_produtos" => ["nCodProd" => $produtoCodigo],
+                    "cExibeTodos" => 'S',
                 ]
             ]
         ];
@@ -147,8 +148,8 @@ class PosicaoEstoqueService
                 $this->response = $response->getBody()->getContents();
                 $this->code = $response->getStatusCode();
 
-                if ($response->status() === 200) {
-                    return $response->object();
+                if ($response->status() === 200 && isset($response->object()->produtos[0])) {
+                    return  $response->object()->produtos[0];
                 } elseif ($response->status() === 500) {
                     return new stdClass();
                 }
