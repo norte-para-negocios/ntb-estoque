@@ -12,13 +12,6 @@
     font-family: "Nunito", sans-serif;
 }
 
-body {
-    background-color: #ebe9e9;
-    color: #333333;
-    line-height: 1.6;
-    font-size: 0.9rem;
-}
-
 .fas {
     display: inline-block;
     width: 16px;
@@ -29,3 +22,14 @@ body {
 
 @import "sweetalert2/src/sweetalert2.scss";
 @import "notyf/notyf.min.css";
+
+
+select {
+    appearance: none;        /* Padrão */
+    -webkit-appearance: none; /* Safari/Chrome */
+    -moz-appearance: none;    /* Firefox */
+
+    background: url('/images/select-arrow.svg') no-repeat right center;
+    background-size: 1.3em;
+    padding-right: 3em !important;
+}

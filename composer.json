@@ -7,7 +7,7 @@
         "omie",
         "ntb"
     ],
-    "license": "Copyright",
+    "license": "proprietary",
     "require": {
         "php": "^8.4",
         "barryvdh/laravel-snappy": "^1.0",
