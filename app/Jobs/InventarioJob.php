@@ -23,6 +23,8 @@ class InventarioJob implements ShouldQueue
 {
     use Queueable, IntegrationAttemptsTrait;
 
+    public $timeout = 0;
+
     protected PosicaoEstoqueService $posicaoService;
 
     /**
@@ -69,6 +71,7 @@ class InventarioJob implements ShouldQueue
                              $q->whereNull('inventario_items.status')
                                  ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
                          })
+                         ->orderBy('quan')
                          ->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
