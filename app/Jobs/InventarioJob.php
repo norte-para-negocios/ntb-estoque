@@ -190,7 +190,7 @@ class InventarioJob implements ShouldQueue
 
                     if ($response->status() === 200) {
                         return $response->object();
-                    } elseif ($response->status() === 500 && stripos($response->object()->faultstring, 'Já existe um ajuste para o código de integração') !== false) {
+                    } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
                         $obj = new stdClass();
