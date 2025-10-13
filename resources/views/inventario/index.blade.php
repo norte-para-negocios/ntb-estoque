@@ -105,9 +105,12 @@
                                                                         {{ $inventario->finalizado->format('d/m/Y') }}
                                                                     </span>
 
-                                                                <a href="{{route('inventario.duplicar', $inventario->id)}}" class="btn btn-sm btn-secondary" title="Copiar Inventário">
+                                                                <button type="button"
+                                                                        onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
+                                                                        class="btn btn-sm btn-secondary"
+                                                                        title="Copiar Inventário">
                                                                     <i class="fa-solid fa-copy"></i>
-                                                                </a>
+                                                                </button>
                                                             @endif
                                                         </p>
 
@@ -188,5 +191,32 @@
                 new bootstrap.Collapse(el, {toggle: true});
             }
         });
+
+        function duplicarInventario(baseurl) {
+            const hoje = new Date().toISOString().split('T')[0];
+            swal.fire({
+                title: 'Informe a data do inventário?',
+                input: 'date',
+                inputLabel: 'Data do inventário',
+                inputPlaceholder: 'Escolha uma data',
+                showCancelButton: true,
+                confirmButtonText: 'Duplicar',
+                cancelButtonText: 'Cancelar',
+                inputAttributes: {
+                    required: true,
+                    max: hoje
+                },
+                preConfirm: (date) => {
+                    if (!date) {
+                        swal.showValidationMessage('Você precisa escolher uma data');
+                    }
+                    return date;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = `${baseurl}?data=${encodeURIComponent(result.value)}`;
+                }
+            });
+        }
     </script>
 @endpush

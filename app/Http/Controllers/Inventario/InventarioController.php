@@ -203,10 +203,10 @@ class InventarioController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function duplicar(Inventario $inventario)
+    public function duplicar(Request $request, Inventario $inventario)
     {
         $clone = $inventario->replicate();
-        $clone->data = date('Y-m-d H:i:s');
+        $clone->data = $request->get('data');
         $clone->finalizado = null;
         $clone->status = 'Em contagem';
         $clone->save();
