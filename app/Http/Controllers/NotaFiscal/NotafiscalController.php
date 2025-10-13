@@ -96,7 +96,6 @@ class NotafiscalController extends Controller
         if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
-
         $etiquetas = [];
 
         foreach ($notaFiscal->nfItems as $item) {
@@ -136,7 +135,7 @@ class NotafiscalController extends Controller
             ->setOption('page-height', '40.04')
             ->setOption('orientation', 'portrait');
 
-        if (config('app.env') === 'local-estoque') {
+        if (config('app.env') === 'local') {
             return $pdf->inline("etiquetas_nfe_{$notaFiscal->c_numero_nfe}.pdf");
         }
 

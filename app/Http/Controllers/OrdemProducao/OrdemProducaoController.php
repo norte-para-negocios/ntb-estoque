@@ -132,7 +132,7 @@ class OrdemProducaoController extends Controller
             ->setOption('page-height', '40.04')
             ->setOption('orientation', 'portrait');
 
-        if (config('app.env') === 'local-estoque') {
+        if (config('app.env') === 'local') {
             return $pdf->inline('etiquetas_op.pdf');
         }
         return $pdf->download('etiquetas_op.pdf');
