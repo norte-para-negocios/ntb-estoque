@@ -120,28 +120,30 @@ class ProdutoService
 
     public function saveProduto(object $produto): void
     {
-        $prod['loja_id'] = $this->loja->id;
-        $prod['codigo_produto'] = $produto->codigo_produto ?? null;
-        $prod['codigo'] = $produto->codigo ?? null;
-        $prod['descricao'] = $produto->descricao ?? null;
-        $prod['codigo_familia'] = $produto->codigo_familia ?? null;
-        $prod['descricao_familia'] = $produto->descricao_familia ?? null;
-        $prod['tipo_item'] = $produto->tipoItem ?? null;
-        $prod['unidade'] = $produto->unidade ?? null;
-        $prod['valor_unitario'] = $produto->valor_unitario ?? null;
+        if (!empty($produto->codigo_produto)) {
+            $prod['loja_id'] = $this->loja->id;
+            $prod['codigo_produto'] = $produto->codigo_produto ?? null;
+            $prod['codigo'] = $produto->codigo ?? null;
+            $prod['descricao'] = $produto->descricao ?? null;
+            $prod['codigo_familia'] = $produto->codigo_familia ?? null;
+            $prod['descricao_familia'] = $produto->descricao_familia ?? null;
+            $prod['tipo_item'] = $produto->tipoItem ?? null;
+            $prod['unidade'] = $produto->unidade ?? null;
+            $prod['valor_unitario'] = $produto->valor_unitario ?? null;
 
-        $prod['full_object'] = json_encode($produto);
+            $prod['full_object'] = json_encode($produto);
 
-        try {
-            Produto::updateOrCreate(
-                [
-                    'loja_id' => $this->loja->id,
-                    'codigo_produto' => $prod['codigo_produto']
-                ],
-                $prod
-            );
-        } catch (Throwable $th) {
-            Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
+            try {
+                Produto::updateOrCreate(
+                    [
+                        'loja_id' => $this->loja->id,
+                        'codigo_produto' => $prod['codigo_produto']
+                    ],
+                    $prod
+                );
+            } catch (Throwable $th) {
+                Log::error("Erro ao salvar produto nº: " . $prod['codigo_produto'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
+            }
         }
     }
 
