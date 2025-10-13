@@ -1,5 +1,6 @@
 // Fonts
 @import url("https://fonts.bunny.net/css?family=Nunito");
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
 // Variables
 @import "variables";
@@ -9,7 +10,8 @@
 
 /* Estilos básicos */
 * {
-    font-family: "Nunito", sans-serif;
+    font-family: "Inter", sans-serif;
+    color: #5D5D5D;
 }
 
 .fas {
@@ -25,11 +27,20 @@
 
 
 select {
-    appearance: none;        /* Padrão */
+    appearance: none; /* Padrão */
     -webkit-appearance: none; /* Safari/Chrome */
-    -moz-appearance: none;    /* Firefox */
+    -moz-appearance: none; /* Firefox */
 
     background: url('/images/select-arrow.svg') no-repeat right center;
     background-size: 1.3em;
     padding-right: 3em !important;
+}
+
+.card-header {
+    background-color: #2EB5C3;
+    color: #ffffff !important;
+}
+
+.card-footer {
+    background-color: #ffffff;
 }
