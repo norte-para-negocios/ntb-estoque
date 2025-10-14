@@ -43,31 +43,31 @@
 
 <div class="d-grid gap-2 mb-4">
     <a href="{{ route('produto.index') }}" class="text-start text-decoration-none fw-bold">
-        <i class="fa-brands fa-product-hunt me-3"></i>Produtos
+        <img src="{{asset('images/produto.png')}}" alt=""> Produtos
     </a>
 </div>
 
 <div class="d-grid gap-2 mb-4">
     <a href="{{ route('locais-estoque.index') }}" class="text-start text-decoration-none fw-bold">
-        <i class="fa-solid fa-boxes-stacked me-3"></i>Locais de Estoque
+        <img src="{{asset('images/local.png')}}" alt=""> Locais de Estoque
     </a>
 </div>
 
 @if (auth()->user()->perfil === 'Admin')
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('loja.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fas fa-building me-3"></i>Lojas
+            <img src="{{asset('images/loja.png')}}" alt=""> Lojas
         </a>
     </div>
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('usuario.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fas fa-users me-3"></i> Usuários
+            <img src="{{asset('images/usuario.png')}}" alt=""> Usuários
         </a>
     </div>
 
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('log.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fa-solid fa-bug me-3"></i>Logs de Integração
+            <img src="{{asset('images/log.png')}}" alt=""> Logs de Integração
         </a>
     </div>
 @endif

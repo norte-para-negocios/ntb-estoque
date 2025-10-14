@@ -48,20 +48,25 @@
 
 <div id="app">
 
-    <nav class="navbar navbar-expand-lg ntb-header">
-        <div class="container-fluid justify-content-start">
-            <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
-                    aria-controls="offcanvasTop" class="btn btn-lg">
-                <img src="{{asset('images/menu.png')}}" alt="">
-            </button>
+    <nav class="navbar navbar-expand-lg ntb-header bg-white">
+        <div class="container-fluid">
+            <div class="justify-content-start">
+                <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
+                        aria-controls="offcanvasTop" class="btn btn-lg">
+                    <img src="{{asset('images/menu.png')}}" alt="">
+                </button>
+                <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
+                    <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
+                </a>
+            </div>
 
-            <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
-                <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
-            </a>
+            <button class="btn" hidden id="btn-filtrar">
+                <img src="{{asset('images/filtrar.png')}}"> Filtrar
+            </button>
         </div>
     </nav>
 
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
+    <div class="offcanvas offcanvas-start bg-white" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
         <div class="offcanvas-header">
             <h5 class="offcanvas-title" id="offcanvasTopLabel">
                 <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
