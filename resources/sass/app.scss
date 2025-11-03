@@ -34,6 +34,7 @@ select {
     background: url('../images/select-arrow.svg') no-repeat right center;
     background-size: 1.3em;
     padding-right: 3em !important;
+    border-color: #D5D5D5 !important;
 }
 
 .card-header {
@@ -43,4 +44,18 @@ select {
 
 .card-footer {
     background-color: #ffffff;
+}
+
+#div-filtro .form-control {
+    color: #2EB5C3 !important;
+    border-color: #D5D5D5 !important;
+    background-color: #ffffff !important;
+}
+
+#offcanvasFiltro {
+    background-color: #f4f4f4 !important;
+}
+
+#offcanvasMenu {
+    background-color: #f4f4f4 !important;
 }

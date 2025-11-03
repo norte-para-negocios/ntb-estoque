@@ -19,17 +19,16 @@
 </head>
 
 <body>
-<main class="py-4">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body pt-5">
+<main>
+    <div class="container vh-100 d-flex flex-column justify-content-center">
+        <div class="row">
+            <div class="col-md-8 col-12 mx-auto">
+                <div class="card" style="background-color: #F4F4F4;">
+                    <div class="card-body">
 
                         <div class="row d-flex justify-content-center p-5">
                             <img src="{{asset('logo.png')}}" alt="NTB - Estoque" style="width: 40%; height: auto;">
                         </div>
-                        {{--                            <h1 class="text-center my-5">NTB - Estoque</h1>--}}
 
                         <form method="POST" action="{{ route('login') }}">
                             @csrf
@@ -79,7 +78,8 @@
                                     </div>
 
                                     @if (Route::has('password.request'))
-                                        <a class="btn btn-link pt-0 text-decoration-none" href="{{ route('password.request') }}">
+                                        <a class="btn btn-link pt-0 text-decoration-none"
+                                           href="{{ route('password.request') }}">
                                             {{ __('Forgot Your Password?') }}
                                         </a>
                                     @endif
