@@ -62,7 +62,6 @@ class OrdemProducaoController extends Controller
             ->orderBy('adicionais_d_dt_conclusao', 'desc')
             ->paginate(20)
             ->withQueryString();
-
         return view('ordemproducao.index', compact('ordensProducao', 'ordem_producao', 'data_inicio', 'data_final', 'tipo_produto', 'op_produto'));
     }
 

@@ -8,7 +8,10 @@
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'NTB - Estoque') }}</title>
+    <title>
+        {{ config('app.name', 'NTB - Estoque') }}
+        {{ isset(auth()->user()->current_loja_id) ? '| ' . auth()->user()->loja->nome_fantasia : ''}}
+    </title>
 
     <!-- Fonts -->
     <link rel="dns-prefetch" href="//fonts.bunny.net">
@@ -52,8 +55,6 @@
                 <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
                     <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
                 </a>
-                <img class="mx-1" src="{{asset('images/loja.png')}}" alt="Loja">
-                {{ auth()->user()->loja->nome_fantasia }}
             </div>
             @auth
                 @if(Route::currentRouteName() !== 'home.index')

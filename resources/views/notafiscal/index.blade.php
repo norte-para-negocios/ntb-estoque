@@ -134,7 +134,7 @@
 @section('content')
     <div class="container">
         <p class="mb-0 fw-semibold">
-            <a href="{{url()->previous()}}" class="btn m-0 p-0" title="Voltar">
+            <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
             <img class="ms-0 p-0" src="{{asset('images/nota-fiscal.png')}}" alt="Notas Fiscais">

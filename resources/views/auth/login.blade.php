@@ -67,7 +67,7 @@
                             </div>
 
                             <div class="row mb-3">
-                                <div class="col-md-8 offset-4 d-flex">
+                                <div class="col-lg-8 offset-lg-4 col-12 d-flex">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="remember"
                                                id="remember" {{ old('remember') ? 'checked' : '' }}>
