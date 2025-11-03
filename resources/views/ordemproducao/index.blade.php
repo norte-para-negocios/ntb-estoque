@@ -165,31 +165,41 @@
                                                         </span>
                                                     </div>
 
-                                                    <div class="col-md-2 col-8 d-flex">
+                                                    <div class="col-md-3 col-8 d-flex">
                                                         <button
                                                             class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
-                                                            onclick="subtrai('validade-{{$op->id}}', '{{$op->id}}', '{{$op->validade}}')"
+                                                            style="width: 40px;"
+                                                            onclick="subtrai(
+                                                                '{{$op->id}}',
+                                                                '{{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('Y-m-d')}}'
+                                                                )"
                                                         >
                                                             -
                                                         </button>
+
                                                         <input type="date"
                                                                class="form-control rounded-0 validade mx-1"
                                                                id="validade-{{$op->id}}"
                                                                name="validade"
                                                                value="{{ $op->validade ? \Carbon\Carbon::parse($op->validade)->format('Y-m-d') : ''}}"
                                                                style="text-align: center;"
-                                                               onblur="sincValidade(this.value,{{ $op->id }})"
+                                                               onblur="sincValidade(this.value,'{{ $op->id }}', '{{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('Y-m-d')}}')"
                                                         >
+
                                                         <button
                                                             class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
-                                                            onclick="soma('validade-{{$op->id}}', '{{$op->id}}', '{{$op->validade}}')"
+                                                            style="width: 40px;"
+                                                            onclick="soma(
+                                                                '{{$op->id}}',
+                                                                '{{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('Y-m-d')}}'
+                                                                )"
                                                         >
                                                             +
                                                         </button>
                                                     </div>
 
                                                     <div
-                                                        class="col-md-2 col-4 text-end ps-0 d-flex justify-content-end align-items-center p-0">
+                                                        class="col-md-1 col-4 text-end ps-0 d-flex justify-content-end justify-content-md-center align-items-center p-0">
                                                         <button type="button"
                                                                 onclick="imprimir({{ $op->id }})"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold">
@@ -220,12 +230,22 @@
 
 @push('js')
     <script>
-        function sincValidade(validade, ordemproducao_id) {
+        function diferencaEmDias(data1, data2) {
+            const umDiaEmMs = 1000 * 60 * 60 * 24;
+            const diferencaMs = new Date(data2) - new Date(data1);
+            return Math.floor(diferencaMs / umDiaEmMs);
+        }
+
+        function sincValidade(validade, ordemproducao_id, dtConclusao) {
             axios.post(`/ordem-producao/${ordemproducao_id}/validade`, {
                 "validade": validade
             });
-            const displayValidade = document.getElementById('display-validade' + ordemproducao_id);
-            displayValidade.innerHTML = 'Validade ' + formatarParaBR(validade);
+
+            if (dtConclusao !== '' && validade !== '') {
+                const displayValidade = document.getElementById('display-validade' + ordemproducao_id);
+                let dias = diferencaEmDias(dtConclusao, validade);
+                displayValidade.innerHTML = (dias > 0) ? `Validade  +${dias} dias` : `Validade ${dias} dias`;
+            }
         }
 
         function imprimir(ordemproducao_id) {
@@ -276,73 +296,30 @@
             });
         }
 
-        function formatarParaBR(dataISO) {
-            if (!dataISO || typeof dataISO !== 'string') return '';
-
-            const [ano, mes, dia] = dataISO.split('-');
-            return `${dia}/${mes}/${ano}`;
-        }
-
-        function subtrai(id, opId, dataInicial) {
-            const inputValidade = document.getElementById(id);
-
+        function subtrai(opId, dataConclusao) {
+            const inputValidade = document.getElementById(`validade-${opId}`);
             if (!inputValidade) {
                 console.warn("Elemento #validade não encontrado.");
                 return;
             }
-
-            // Verifica se o input já tem valor
-            let dataBase = inputValidade.value;
-
-            // Se estiver vazio, usa a dataInicial fornecida
-            if (!dataBase) {
-                dataBase = dataInicial !== '' ? dataInicial : new Date();
-            }
-
-            // Cria um objeto Date a partir da data base
-            const data = new Date(dataBase);
-
-            // Adiciona 30 dias
-            data.setDate(data.getDate() - 30);
-
-            // Formata para YYYY-MM-DD
+            let data = inputValidade.value !== '' ? new Date(inputValidade.value) : new Date();
+            data.setDate(data.getDate() - 1);
             const dataFormatada = data.toISOString().split('T')[0];
-
-            // Atualiza o input
             inputValidade.value = dataFormatada;
-
-            sincValidade(dataFormatada, opId);
+            sincValidade(dataFormatada, opId, dataConclusao);
         }
 
-        function soma(id, opId, dataInicial) {
-            const inputValidade = document.getElementById(id);
-
+        function soma(opId, dataConclusao) {
+            const inputValidade = document.getElementById(`validade-${opId}`);
             if (!inputValidade) {
                 console.warn("Elemento #validade não encontrado.");
                 return;
             }
-
-            // Verifica se o input já tem valor
-            let dataBase = inputValidade.value;
-
-            // Se estiver vazio, usa a dataInicial fornecida
-            if (!dataBase) {
-                dataBase = dataInicial !== '' ? dataInicial : new Date();
-            }
-
-            // Cria um objeto Date a partir da data base
-            const data = new Date(dataBase);
-
-            // Adiciona 30 dias
-            data.setDate(data.getDate() + 30);
-
-            // Formata para YYYY-MM-DD
+            let data = inputValidade.value !== '' ? new Date(inputValidade.value) : new Date();
+            data.setDate(data.getDate() + 1);
             const dataFormatada = data.toISOString().split('T')[0];
-
-            // Atualiza o input
             inputValidade.value = dataFormatada;
-
-            sincValidade(dataFormatada, opId);
+            sincValidade(dataFormatada, opId, dataConclusao);
         }
     </script>
 @endpush
