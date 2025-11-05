@@ -103,7 +103,6 @@
                                                     <div
                                                         class="col-md-1 col-4 text-end ps-0 d-flex justify-content-end justify-content-md-center align-items-center p-0">
                                                         @if (!in_array($tr->status, ['Iniciado']))
-
                                                             <button type="button"
                                                                     onclick="deleteRegistro('{{ route('transferencia.destroy', $tr->id) }}')"
                                                                     class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">

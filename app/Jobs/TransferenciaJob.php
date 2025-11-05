@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Events\NotificaAllEvent;
 use App\Events\NotificaUserEvent;
 use App\Models\LocalEstoque;
 use App\Models\Movimento;

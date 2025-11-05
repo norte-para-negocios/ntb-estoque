@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Inventario;
 
-use App\Events\NotificaUserEvent;
 use App\Http\Controllers\Controller;
 use App\Jobs\InventarioJob;
 use App\Models\Inventario;
