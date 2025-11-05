@@ -99,7 +99,7 @@
             <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
-            <img class="ms-0 p-0" src="{{asset('images/ordem-producao.png')}}" alt="NOrdens de Produção">
+            <img class="ms-0 p-0" src="{{asset('images/ordem-producao.png')}}" alt="Ordens de Produção">
             {{ __('Ordens de Produção') }}
         </p>
 
@@ -132,7 +132,19 @@
                                     <div class="col-12 p-0">
                                         <div class="card m-0">
                                             <div class="card-header d-flex justify-content-between"
-                                                 style="background-color: {{json_decode($op->full_object)->outrasInf->cConcluida === 'S' ? '#2EB5C3' : '#5D5D5D' }}; font-size: .7rem;">
+                                                 style="background-color:
+                                                 @if( (json_decode($op->full_object)->outrasInf->cConcluida === 'N') &&
+                                                    (\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)
+                                                        ->lessThan(\Carbon\Carbon::now())
+                                                        )
+                                                    )
+                                                    #F24646
+                                                  @elseif(json_decode($op->full_object)->outrasInf->cConcluida === 'S')
+                                                  #2EB5C3
+                                                  @else
+                                                  #5D5D5D
+                                                 @endif;
+                                                 font-size: .7rem;">
                                                 <span class="text-white">
                                                     Data: {{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('d/m/Y')}} | Produto em Processo {{ $op->produto_codigo ?? '-' }}
                                                 </span>

@@ -40,9 +40,10 @@ class TransferenciaController extends Controller
         $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)
             ->where('tipo', 'TRF')
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
-            ->orderBy('id', 'desc')
-            ->paginate(20)
+            ->orderBy('data', 'desc')
+            ->paginate(10)
             ->withQueryString();
+
         return view('transferencia.index', compact('transferencias', 'data_inicio', 'data_final'));
     }
 
