@@ -176,13 +176,13 @@ class TransferenciaController extends Controller
         $term = $request->get('q', '');
 
         // Consulta simples com filtro e limite
-        $results = Produto::where('loja_id', auth()->user()->current_loja_id)
+        return Produto::where('loja_id', auth()->user()->current_loja_id)
             ->where(function ($query) use ($term) {
                 $query->where('descricao', 'LIKE', "%{$term}%")
                     ->orWhere('codigo', 'LIKE', "%{$term}%");
             })
             ->orderBy('descricao')
-            ->select(['codigo', 'descricao'])
+            ->select(['codigo', 'descricao', 'unidade'])
             ->paginate(20);
 
         $formatted = $results->map(function ($item) {

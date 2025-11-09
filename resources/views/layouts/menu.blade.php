@@ -1,6 +1,6 @@
 <div class="d-grid mb-4">
     <h6>Acessando:</h6>
-    <select class="form-control" onchange="changeLoja(this)">
+    <select class="form-select" onchange="changeLoja(this)">
         <option value="">Seleciona uma loja</option>
         @foreach (Auth::user()->lojas as $loja)
             <option class="select-option" value="{{ $loja->id }}" @if (Auth::user()->current_loja_id == $loja->id) selected @endif>
@@ -103,26 +103,5 @@
             color: #D5D5D5 !important;
             background: #f4f4f4 !important;
         }
-
-        select {
-            border: #D5D5D5 solid 1px !important;
-            color: #5D5D5D !important;
-        }
-
-        select.form-select option:hover {
-            background-color: #f0ad4e !important; /* cor desejada */
-            color: #fff; /* opcional: cor do texto */
-        }
-
-        select.form-select option:checked {
-            background-color: #f0ad4e !important; /* cor desejada */
-            color: #fff; /* opcional: cor do texto */
-        }
-
-        select.form-select option:focus {
-            background-color: #f0ad4e !important; /* cor desejada */
-            color: #fff; /* opcional: cor do texto */
-        }
-
     </style>
 @endpush

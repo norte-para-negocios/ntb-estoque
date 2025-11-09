@@ -52,12 +52,12 @@
                     <img src="{{asset('images/menu.png')}}" alt="">
                 </button>
 
-                <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
+                <a class="navbar-brand ntb-logo ms-2" href="{{ route('home.index') }}">
                     <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
                 </a>
             </div>
             @auth
-                @if(Route::currentRouteName() !== 'home.index')
+                @if(in_array(Route::currentRouteName(), ['notafiscal.index', 'ordemproducao.index', 'transferencia.index', 'inventario.index']))
                     <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasFiltro"
                             aria-controls="offcanvasFiltro" class="btn fw-semibold" id="btn-filtrar">
                         <img src="{{asset('images/filtrar.png')}}" alt="Botão Filtrar"> Filtrar
