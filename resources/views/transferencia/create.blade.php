@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('content')
-    <div class="container">
+    <div class="container pb-5">
         <p class="mb-3 fw-semibold">
             <a href="{{route('transferencia.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
@@ -105,7 +105,7 @@
                     </div>
                 </div>
             </div>
-            <table class="table table-hover table-borderless" style="background-color: #f4f4f4;"
+            <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
                    id="produtos_transferencia">
                 <tbody></tbody>
             </table>

@@ -17,16 +17,16 @@
                 <div class="container">
                     <div class="row">
                         <div class="col">
-                            <table class="table table-striped" id="tabelaResultados">
+                            <table class="table table-hover table-borderless" id="tabelaResultados">
                                 <tbody></tbody>
                             </table>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer d-flex justify-content-center align-items-center">
                 <div class="container">
-                    <div class="row">
+                    <div class="row pt-3">
                         <div class="col-12 d-flex justify-content-center align-items-center">
                             <nav>
                                 <ul class="pagination" id="paginacao"></ul>
@@ -59,16 +59,18 @@
                 tbody.innerHTML = "";
                 resultado.data.forEach(item => {
                     const tr = document.createElement("tr");
+                    tr.style.borderBottom = "1px solid #ccc";
                     const tdCodigo = document.createElement("td");
                     let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                     let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${item.codigo}"]`) ? 'disabled' : '';
+                    let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
                     tdCodigo.innerHTML = `
                         <div class="container">
                             <div class="row">
                                 <div class="col-10">
                                     <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="/images/plus.png" alt="+">
+                                        <img src="${imag}" alt="+">
                                      </button>
                                     <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${item.descricao}</span>
                                 </div>
@@ -79,18 +81,28 @@
                         </div>`;
 
                     const button = tdCodigo.querySelector("button.add-product");
-                    button.addEventListener("click", () => {
+                    button.addEventListener("click", (event) => {
                         const produto = {
                             id: item.codigo,
                             nome: item.descricao,
                             unidade: item.unidade,
                         }
 
+                        button.disabled = true;
+
                         let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                         let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${produto.id}"]`) ?? false;
                         if (jaExisteNaTabela) {
+                            jaExisteNaTabela.disabled = true;
                             return;
                         }
+
+                        const img = button.querySelector("img");
+                        if (img) {
+                            img.src = "/images/check-verde.svg";   // nova imagem
+                            img.alt = "✔";                   // novo texto alternativo
+                        }
+
                         const novaLinha =
                             `<tr data-id="${produto.id}" data-nome="${produto.nome}" style="background-color: #f4f4f4;">
                                 <td class="m-0 px-0" style="background-color: #f4f4f4;">
