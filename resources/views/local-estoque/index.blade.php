@@ -1,28 +1,31 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="container">
-        <h2 class="mb-3">
-            <a href="{{route('home.index')}}" class="btn btn-sm btn-outline-primary mb-1"
-               title="Voltar">
-                <i class="fa-solid fa-arrow-left-long"></i>
+    <div class="container mb-5">
+        <p class="mb-0 fw-semibold">
+            <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
+                <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
-            {{ __('Locais de Estoque') }}:
-            <small>{{ auth()->user()->loja->nome_fantasia }}</small>
-        </h2>
-
-        <div class="card card-body mt-4">
-            <div class="row">
-                <div class="col-md-3 col-12">
-                    <button class="btn btn-secondary" onclick="update()">
-                        <i class="fa-solid fa-arrows-rotate"></i> Locais de Estoque
+            <img class="ms-0 p-0" src="{{asset('images/local.png')}}" alt="Locais de Estoque">
+            {{ __('Locais de Estoque') }}
+        </p>
+        <p class="mt-0 pt-0">
+            <span style="font-size: 12px;">
+                @if(auth()->user()->loja->local_estoque_ultima_atualizacao)
+                    Atualizado
+                    em: {{\Carbon\Carbon::parse(auth()->user()->loja->local_estoque_ultima_atualizacao)->format('d/m/y H:i:s')}}
+                @endif
+                | Status: {{auth()->user()->loja->local_estoque_status??'N/A'}}
+                @if(in_array(auth()->user()->loja->local_estoque_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                    <button class="btn btn-sm btn-outline-secondary text-dark-emphasis" onclick="update()">
+                        <i class="fa-solid fa-arrows-rotate"></i>
                     </button>
-                </div>
-            </div>
+                @endif
+            </span>
+        </p>
 
-        </div>
         <div class="card card-body mt-4">
-            <table class="table table-hover">
+            <table class="table table-striped">
                 <thead>
                 <tr>
                     <td>Código Local Estoque</td>
@@ -71,4 +74,13 @@
             })
         }
     </script>
+@endpush
+
+
+@push('css')
+    <style>
+        body {
+            background-color: #F4F4F4;
+        }
+    </style>
 @endpush

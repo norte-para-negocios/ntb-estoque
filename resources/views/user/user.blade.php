@@ -2,22 +2,23 @@
 
 @section('content')
     <div class="container">
+        <p class="mb-4 fw-semibold d-flex align-items-center justify-content-between">
+            <span>
+                <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
+                    <img src="{{asset('images/voltar.png')}}" alt="<-">
+                </a>
+                <img class="ms-0 p-0" src="{{asset('images/usuario.png')}}" alt="Usuário">
+                @if($action == "create")
+                    {{ __('Novo Usuário') }}
+                @else
+                    {{ __('Editando Usuário: ' . $user->name) }}
+                @endif
+            </span>
+        </p>
+
         <div class="card p-3">
             <form action="{{ $action == 'create' ? route('usuario.store') : route('usuario.update', $user->id) }}"
                   method="POST">
-                <div class="card-header">
-                    <h2>
-                        <a href="{{route('usuario.index')}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar">
-                            <i class="fa-solid fa-arrow-left-long"></i>
-                        </a>
-                        @if($action == "create")
-                            {{ __('Novo Usuário') }}
-                        @else
-                            {{ __('Editando Usuário: ' . $user->name) }}
-                        @endif
-                    </h2>
-                </div>
-
                 <div class="card-body">
                     @csrf
                     @if ($action == 'create')
@@ -52,7 +53,7 @@
                     <ul class="list-group">
                         @foreach (\App\Models\Loja::orderBy('nome_fantasia')->get() as $loja)
                             <li class="list-group-item">
-                                <div class="form-check form-switch fs-5">
+                                <div class="form-check form-switch text-success fs-5">
                                     <input class="form-check-input" type="checkbox" name="lojas[]"
                                            value="{{ $loja->id }}" id="loja-{{ $loja->id }}"
                                            @if ($user->lojas->contains($loja->id)) checked @endif>
@@ -84,7 +85,7 @@
                 </div>
                 <div class="card-footer d-flex justify-content-between">
                     <a href="{{ route('usuario.index') }}" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <button type="submit" class="btn btn-success">Salvar</button>
                 </div>
             </form>
         </div>
@@ -101,9 +102,18 @@
                 "permissao_id": permissaoId,
             })
         }
+
         function detachPermissao(userId, lojaId, permissaoId) {
             console.log(userId, lojaId, permissaoId);
             axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`);
         }
     </script>
+@endpush
+
+@push('css')
+    <style>
+        body {
+            background-color: #F4F4F4;
+        }
+    </style>
 @endpush
