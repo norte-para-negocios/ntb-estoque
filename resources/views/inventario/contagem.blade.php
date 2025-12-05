@@ -1,184 +1,219 @@
 @extends('layouts.app')
-
 @section('content')
-    <div class="container">
-        <div class="card card-body mb-4">
-            <div class="row">
-                <div class="col-12 d-flex justify-content-between align-items-start">
-                    <h1>
-                        <span>
-                        <a href="{{route('inventario.index')}}" class="btn btn-sm btn-outline-primary mb-1"
-                           title="Voltar">
-                            <i class="fa-solid fa-arrow-left-long"></i>
+    <div class="container pb-5">
+        <p>
+            <a href="{{route('inventario.index')}}" class="btn m-0 p-0" title="Voltar">
+                <img src="{{asset('images/voltar.png')}}" alt="<-">
+            </a>
+            <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventário de estoque">
+            / + Novo Inventário #{{ $inventario->id }}
+        </p>
+        <div class="row px-2">
+            <div class="col-md-3 col-6 mb-3">
+                <label for="inventario_data" class="form-label mb-0"><small>Data</small></label>
+                <input id="inventario_data" type="date" class="form-control" readonly
+                       value="{{$inventario->data->format('Y-m-d')}}">
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <label for="inventario_estoque" class="form-label mb-0"><small>Local de Estoque</small></label>
+                <select id="inventario_estoque" class="form-select" readonly>
+                    <option value="{{ $localEstoque->codigo }}">
+                        {{ $localEstoque->descricao??'' }}
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <label for="inventario_motivo" class="form-label mb-0"><small>Tipo de Inventário</small></label>
+                <select id="inventario_motivo" class="form-select" readonly>
+                    <option value="{{ $inventario->motivo }}">
+                        {{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$inventario->motivo] ?? 'Desconhecido' }}
+                    </option>
+                </select>
+            </div>
+        </div>
+        <small class="text-muted px-2">
+            Adicionar produtos no inventário
+        </small>
+
+        <div class="px-2">
+            <div class="card card-body mb-3">
+                <div class="row">
+                    <div class="col-md-7 col-12">
+                        <select class="search form-control fw-semibold rounded-0"
+                                placeholder="Digite para buscar..."
+                                id="search">
+                        </select>
+                    </div>
+
+                    <div
+                        class="col-md-5 col-12 d-flex justify-content-md-start justify-content-around align-items-center gap-1">
+                        <button type="button" id="botaoPermissao"
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;">
+                            Conceder Acesso a Câmera
+                        </button>
+
+                        <button type="button" id="botaoUsarCamera"
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal"
+                                title="Scanear QRCode">
+                            <img src="{{asset('images/qrcode.png')}}" alt="+" class="me-1">Ler QRcode
+                        </button>
+
+                        <button type="button" id="botaoPararCamera"
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;">
+                            Parar Leitura
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                data-bs-toggle="modal"
+                                data-bs-target="#produtoModal" title="Buscar na lista">
+                            <img src="{{asset('images/lista.png')}}" alt="+" class="me-1">Buscar na lista
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
+               id="produtos_inventario">
+            <tbody>
+            @foreach ($inventario->items->sortBy('produto_descricao') as $item)
+                <tr data-id="{{$item->produto_codigo}}" data-nome="{{$item->produto_descricao}}"
+                    style="background-color: #f4f4f4;">
+                    <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                        <div class="container">
+                            <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
+                                <div class="row">
+                                    <div class="col-7 d-flex justify-content-start align-items-center">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm me-3"
+                                                onclick="deleteRegistro('{{ route('inventarioitem.destroy', $item->id) }}')">
+                                            <img src="/images/excluir-verde.png" alt="Excluir">
+                                        </button>
+                                        <span class="fw-semibold">
+                                            {{$item->produto_descricao}} <small>#{{$item->produto_codigo}}</small>
+
+                                            @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
+                                                @if($item->status === 'Sem CMC')
+                                                    <br><span class="badge text-bg-warning">
+                                                        CMC Zerado para o Produto, a movimentação não foi realizada no Omie
+                                                    </span>
+                                                @else
+                                                    <br><span class="badge text-bg-success">
+                                                        {{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}
+                                                    </span>
+                                                @endif
+                                            @endif
+                                        </span>
+                                    </div>
+
+                                    <div class="col-1 p-0">
+                                        <small>Medida</small><br>
+                                        <span class="fw-semibold">
+                                            {{$item->produto->unidade??'--'}}
+                                        </span>
+                                    </div>
+
+                                    <div class="col-md-4 col-8 d-flex">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
+                                            style="width: 40px;"
+                                            onclick="subtrai('{{$item->produto_codigo}}')"
+                                        >
+                                            -
+                                        </button>
+
+                                        <input type="number"
+                                               class="form-control rounded-0 validade mx-1"
+                                               id="quantidade-{{$item->produto_codigo}}"
+                                               style="text-align: center;"
+                                               min="0.000001"
+                                               step="0.000001"
+                                               value="{{$item->quan??1}}"
+                                               required
+                                               @if ($inventario->status === 'Em contagem')
+                                                   onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
+                                               @else
+                                                   onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
+                                            @endif
+                                        >
+
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
+                                            style="width: 40px;"
+                                            onclick="soma('{{$item->produto_codigo}}')"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+        @include('inventario.qrcode')
+        @include('inventario.produto')
+        <div class="container-fluid fixed-bottom">
+            <div class="row bg-white">
+                <div class="col d-flex justify-content-end align-items-center py-3">
+                    @if($inventario->finalizado === null)
+                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                           class="btn btn-success text-white me-2">
+                            <i class="fas fa-print text-white"></i>
+                            Imprimir
                         </a>
-                        Inventário #{{ $inventario->id }}:
-                        </span>
-                        <small>{{ auth()->user()->loja->nome_fantasia }}</small>
-                        @if($inventario->finalizado !== null || $inventario->status === 'Finalizado')
-                            <span class="badge text-bg-success">{{$inventario->status}}</span>
-                        @endif
-                    </h1>
+                    @endif
                     @if ($inventario->finalizado === null)
                         <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}"
                               id="formInventario">
                             @csrf
-                            <button type="submit" class="btn btn-primary text-white" form="formInventario">
-                                <i class="fa-solid fa-check fa-lg" style="color: #ffffff;"></i>
+                            <button type="submit" class="btn btn-success text-white" form="formInventario">
+                                <i class="fas fa-plus text-white"></i>
                                 Finalizar
                             </button>
                         </form>
-                    @elseif($inventario->status !== 'Processando no Omie')
-                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                           class="btn btn-info text-white d-flex justify-content-start align-items-center">
-                            <i class="fa-solid fa-print fa-xl mx-2"></i>
-                            <span class="fs-5">Imprimir</span>
-                        </a>
                     @endif
                 </div>
-                <div class="col-12">
-                    <p class="mb-0">
-                        <span class="fw-bold">Data:</span>
-                        <span>{{ $inventario->data->format('d/m/Y') }}</span>
-                    </p>
-                    <p class="mb-0">
-                        <span class="fw-bold">Local de Estoque:</span>
-                        <span>
-                            {{ $localEstoque->codigo??'' }} - {{ $localEstoque->descricao??'' }}
-                        </span>
-                    </p>
-                    <p>
-                        <span class="fw-bold">Tipo de Inventário:</span>
-                        <span>
-                            {{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$inventario->motivo] ?? 'Desconhecido' }}
-                        </span>
-                    </p>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-4 col-12">
-                    <div class="mb-3">
-                        <label for="tipo_produto" class="form-label">Tipo de Produto</label>
-                        <select id="tipo_produto" name="tipo_produto" class="form-control"
-                                onchange="searchTipo(this.value)">
-                            <option value="" {{ ($tipo_produto ?? '') == '' ? 'selected' : '' }}>
-                                Todos
-                            </option>
-                            @foreach (\App\Helpers\Constants::PRODUTO_TIPO_ITEM as $key => $value)
-                                <option value="{{ $key }}" {{ ($tipo_produto ?? '') == $key ? 'selected' : '' }}>
-                                    {{ $key }} - {{ $value }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div class="col-lg-4 col-12">
-                    <div class="mb-3">
-                        <label for="familia_produto" class="form-label">Família</label>
-                        <select id="familia_produto" name="familia_produto" class="form-control"
-                                onchange="searchFamilia(this.value)">
-                            <option value="">
-                                Todos
-                            </option>
-                            @foreach ($inventario->items->groupBy('produto_familia')->sortBy('produto_familia') as $produto_familia => $produtosfamilia)
-                                <option value="{{ $produto_familia }}">
-                                    {{ $produto_familia == '' ? 'Sem Classificação' : $produto_familia }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card card-body">
-            <nav class="navbar navbar-dark bg-primary px-2">
-                <span class="text-white fs-4 me-2">Produtos</span>
-                <div class="d-flex flex-grow-1">
-                    <div class="input-group">
-                        <input class="form-control" type="search" placeholder="Ctrl+F ou digite para buscar..."
-                               id="search" autofocus/>
-                        <button type="button" id="botaoPermissao" class="btn btn-secondary rounded-end-2"
-                                style="display: none;">
-                            Conceder Acesso a Câmera
-                        </button>
-                        <button type="button" id="botaoUsarCamera" class="btn btn-light rounded-end-2"
-                                style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal">
-                            <i class="fa-solid fa-camera fa-2xl" style="color: #ff6b35;"></i>
-                        </button>
-                        <button type="button" id="botaoPararCamera" class="btn btn-secondary rounded-end-2"
-                                style="display: none;">
-                            Parar Leitura
-                        </button>
-                    </div>
-                </div>
-            </nav>
-
-            <div class="table-responsive">
-                <table class="table table-bordered" id="produtos_inventario">
-                    <thead class="table-light">
-                    <tr>
-                        <th class="col-10">Produto</th>
-                        <th class="col-2 text-end">Quantidade</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    @foreach ($inventario->items->groupBy('produto_familia') as $familia => $items)
-                        <tr data-produto="" data-familia="{{ $familia }}" data-tipo="">
-                            <td colspan="2" class="bg-secondary text-white">
-                                <strong>{{ $familia == '' ? 'Sem Classificação' : $familia }}</strong>
-                            </td>
-                        </tr>
-                        @foreach ($items->sortBy('produto_descricao') as $item)
-                            <tr data-produto="{{ $item->produto_descricao }} - {{ $item->produto_codigo }}"
-                                data-familia="{{ $familia }}" data-tipo="{{ $item->produto->tipo_item ?? '' }}">
-                                <td class="align-middle">
-                                    <div class="d-flex justify-content-between">
-                                        <span>
-                                            {{ $item->produto_descricao }}
-                                            <small> #{{ $item->produto_codigo }}</small>
-                                        </span>
-                                        <span>{{ $item->produto->unidade ?? '-' }}</span>
-                                    </div>
-                                    @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
-                                        @if($item->status == 'Sem CMC')
-                                            <span class="badge text-bg-danger">CMC Zerado para o Produto, a movimentação não foi realizada no Omie</span>
-                                        @else
-                                            <span
-                                                class="badge text-bg-success">{{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}</span>
-                                        @endif
-                                    @endif
-                                </td>
-                                <td style="text-align: right;">
-                                    @if ($inventario->status === 'Em contagem')
-                                        <input type="number" class="form-control" min="0.001" step="0.001"
-                                               onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
-                                               value="{{ $item->quan }}">
-                                    @else
-                                        @if(\App\Services\CanService::canPermissionLoja('Inventários - Editar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin')
-                                            <input type="number" class="form-control" min="0.001" step="0.001"
-                                                   data-quan="{{ $item->quan }}"
-                                                   onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
-                                                   value="{{ $item->quan }}">
-                                        @else
-                                            {{ number_format($item->quan, 2, ',', '.') }}
-                                        @endif
-                                    @endif
-                                </td>
-                            </tr>
-                        @endforeach
-                    @endforeach
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
-    @include('inventario.qrcode')
 @endsection
 
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
+        function subtrai(opId) {
+            const inputValidade = document.getElementById(`quantidade-${opId}`);
+            if (!inputValidade) {
+                return;
+            }
+            let q = Number(inputValidade.value)
+            let novoValor = q - 1;
+            if (novoValor > 0) {
+                inputValidade.value = novoValor;
+                inputValidade.dispatchEvent(new Event('blur'));
+            }
+        }
+
+        function soma(opId) {
+            const inputValidade = document.getElementById(`quantidade-${opId}`);
+            if (!inputValidade) {
+                return;
+            }
+            let q = Number(inputValidade.value)
+            let novoValor = q + 1;
+            inputValidade.value = novoValor;
+            inputValidade.dispatchEvent(new Event('blur'));
+        }
+
         function setQuantidade(url, quantidade) {
             if (quantidade >= 0) {
                 axios.post(url, {
@@ -210,6 +245,85 @@
                     }
                 });
             }
+        }
+
+        function buscarProdutoPorQrCode(codigo) {
+            const produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+            const jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${codigo}"]`) ?? false;
+            if (jaExisteNaTabela) {
+                return;
+            }
+            axios.post(`/inventario/item/{{$inventario->id}}`, {
+                "codigo": codigo,
+                "quantidade": 1.0,
+            }).then(function (r) {
+                adicionarProdutoNaListagem(r.data);
+            });
+        }
+
+        function adicionarProdutoNaListagem(produto) {
+            const produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+            const novaLinha =
+                `<tr data-id="${produto.id}" data-nome="${produto.nome}" style="background-color: #f4f4f4;">
+                        <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                            <div class="container">
+                                <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
+                                    <div class="row">
+                                        <div class="col-7 d-flex justify-content-start align-items-center">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="deleteRegistro('/inventario/item/${produto.key}')">
+                                                <img src="/images/excluir-verde.png" alt="Excluir">
+                                            </button>
+                                            <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
+                                        </div>
+
+                                        <div class="col-1 p-0">
+                                            <small>Medida</small><br>
+                                            <span class="fw-semibold">
+                                                ${produto.unidade}
+                                            </span>
+                                        </div>
+
+                                        <div class="col-md-4 col-8 d-flex">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
+                                                style="width: 40px;"
+                                                onclick="subtrai('${produto.id}')"
+                                            >
+                                                -
+                                            </button>
+
+                                            <input type="number"
+                                                   class="form-control rounded-0 validade mx-1"
+                                                   id="quantidade-${produto.id}"
+                                                   name="quantidades[]"
+                                                   style="text-align: center;"
+                                                   min="0.000001"
+                                                   step="0.000001"
+                                                   value="1"
+                                                   required
+                                                   @if ($inventario->status === 'Em contagem')
+                onblur="setQuantidade('/inventario/quantidade/${produto.key}', this.value)"
+                                                   @else
+                onblur="editQuantidade(this, '/inventario/edit/quantidade/${produto.key}', this.value)"
+                                                   @endif
+                >
+
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
+                    style="width: 40px;"
+                    onclick="soma('${produto.id}')"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+            produtosTable.insertAdjacentHTML('beforeend', novaLinha);
         }
 
         $(document).ready(function () {
@@ -291,17 +405,8 @@
                 alert("Falha na leitura:", errorMessage);
             }
 
-            function buscarProdutoPorQrCode(codigo) {
-                let local = document.getElementById('estoque_origem').value;
-                let data = document.getElementById('data').value;
-                axios.get(`/inventario/local/${local}/produto/${codigo}/data/${data}`).then(function (r) {
-                    adicionarProdutoNaListagem(r.data.data);
-                });
-            }
-
             // Cria uma instância apontando para o elemento #reader
             const html5QrCode = new Html5Qrcode("reader");
-
 
             // Inicia a câmera traseira, 10 quadros por segundo, e área de escaneamento 250×250
             function usarCamera() {
@@ -313,8 +418,8 @@
                     }, {
                         fps: 10,
                         qrbox: {
-                            width: 250,
-                            height: 250
+                            width: 320,
+                            height: 320
                         }
                     },
                     onScanSuccess
@@ -354,43 +459,119 @@
                     linha.remove();
                 }
             }
-        });
 
-        const searchInput = document.getElementById('search');
-        const rows = Array.from(document.querySelectorAll('#produtos_inventario tbody tr'));
+            const selectSearch = new TomSelect('#search', {
+                render: {
+                    no_results: function (data, escape) {
+                        return '<div class="no-results">Nenhum produto encontrado</div>';
+                    },
+                    option: function (data, escape) {
+                        const tbody = document.querySelector("#produtos_inventario tbody");
+                        let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                        let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
+                        let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
-        // Filtragem instantânea
-        searchInput.addEventListener('input', () => {
-            const term = searchInput.value.toLowerCase();
+                        return `<div class="container">
+                            <div class="row">
+                                <div class="col-10">
+                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+">
+                                     </button>
+                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                </div>
+                                <div class="col-2 fw-medium text-end">
+                                    ${data.unidade}
+                                </div>
+                            </div>
+                        </div>`;
+                    },
+                    item: function (data, escape) {
+                        const tbody = document.querySelector("#produtos_inventario tbody");
+                        let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                        let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
+                        let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
-            rows.forEach(row => {
-                const nome = row.dataset.produto.toLowerCase();
-                row.style.display = nome.includes(term) ? '' : 'none';
+                        return `<div class="container">
+                            <div class="row">
+                                <div class="col-10">
+                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+">
+                                     </button>
+                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                </div>
+                                <div class="col-2 fw-medium text-end">
+                                    ${data.unidade}
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                },
+                valueField: 'codigo',
+                labelField: 'descricao',
+                searchField: 'descricao',
+                load: function (query, callback) {
+                    fetch(`/transferencia/produtos?q=${encodeURIComponent(query)}`)
+                        .then(res => res.json())
+                        .then(json => {
+                            callback(json.data);
+                        }).catch(() => {
+                        callback();
+                    });
+                }
             });
-        });
 
-
-        function searchTipo(el) {
-            const tipo = el.toLowerCase();
-            rows.forEach(row => {
-                const rowTipo = row.dataset.tipo.toLowerCase();
-                row.style.display = rowTipo.includes(tipo) ? '' : 'none';
+            selectSearch.on("change", function (produtoId) {
+                if (produtoId !== undefined && produtoId !== null && produtoId !== '') {
+                    buscarProdutoPorQrCode(produtoId)
+                    this.clear()
+                }
             });
-        }
-
-        function searchFamilia(el) {
-            const familia = el.toLowerCase();
-            rows.forEach(row => {
-                const rowFamilia = row.dataset.familia.toLowerCase();
-                row.style.display = rowFamilia.includes(familia) ? '' : 'none';
-            });
-        }
-
-        document.addEventListener('keydown', e => {
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                searchInput.focus();
-            }
         });
     </script>
+@endpush
+
+@push('css')
+    <style>
+        body {
+            background-color: #F4F4F4;
+        }
+
+        .search {
+            color: #2EB5C3 !important;
+            border: none !important;
+            border-bottom: 1px solid #c7c7c7 !important;
+        }
+
+        .search::placeholder {
+            color: #2EB5C3 !important;
+        }
+
+        .ts-wrapper .ts-control input {
+            color: #2EB5C3 !important;
+            border: none !important;
+            font-weight: 500 !important;
+        }
+
+        .ts-wrapper .ts-control input::placeholder {
+            color: #2EB5C3 !important;
+            font-weight: 700 !important;
+        }
+
+        .form-select {
+            background-color: #ffffff !important;
+        }
+
+        .validade {
+            color: #2EB5C3 !important;
+            border-color: #D5D5D5 !important;
+            border-top: none !important;
+            border-left: none !important;
+            border-right: none !important;
+        }
+
+        .btn-validade {
+            color: #2EB5C3 !important;
+            border-color: #D5D5D5 !important;
+        }
+    </style>
 @endpush

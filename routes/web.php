@@ -88,11 +88,14 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::get('/', [InventarioController::class, 'index'])->name('inventario.index');
         Route::get('/contagem/{inventario}', [InventarioController::class, 'contagem'])->name('inventario.contagem');
         Route::post('/store', [InventarioController::class, 'store'])->name('inventario.store');
-        Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
-        Route::post('edit/quantidade/{inventarioItem}', [InventarioController::class, 'editQuantidade'])->name('inventario.editQuantidade');
         Route::post('/finish/{inventario}', [InventarioController::class, 'finish'])->name('inventario.finish');
         Route::delete('/destroy/{inventario}', [InventarioController::class, 'destroy'])->name('inventario.destroy');
         Route::get('/pdf/{inventario}', [InventarioController::class, 'pdf'])->name('inventario.pdf');
         Route::get('/{inventario}/duplicar', [InventarioController::class, 'duplicar'])->name('inventario.duplicar');
+
+        Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
+        Route::post('/edit/quantidade/{inventarioItem}', [InventarioController::class, 'editQuantidade'])->name('inventario.editQuantidade');
+        Route::post('/item/{inventario}', [InventarioController::class, 'storeItem'])->name('inventarioitem.store');
+        Route::delete('/item/{inventarioItem}', [InventarioController::class, 'destroyItem'])->name('inventarioitem.destroy');
     });
 });

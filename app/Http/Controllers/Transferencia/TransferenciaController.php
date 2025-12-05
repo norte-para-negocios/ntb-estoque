@@ -183,7 +183,7 @@ class TransferenciaController extends Controller
             })
             ->orderBy('descricao')
             ->select(['codigo', 'descricao', 'unidade'])
-            ->paginate(20);
+            ->paginate(100);
 
         $formatted = $results->map(function ($item) {
             return [

@@ -146,7 +146,7 @@
                                                  @endif;
                                                  font-size: .7rem;">
                                                 <span class="text-white">
-                                                    Data: {{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('d/m/Y')}} | Produto em Processo {{ $op->produto_codigo ?? '-' }}
+                                                    Data: {{\Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('d/m/Y')}} | {{\App\Helpers\Constants::PRODUTO_TIPO_ITEM[$op->produto_tipo_item]}} {{ $op->produto_codigo ?? '-' }}
                                                 </span>
 
                                                 <span class="text-white" id="display-validade{{$op->id}}">
@@ -261,8 +261,7 @@
         }
 
         function imprimir(ordemproducao_id) {
-            const url = `/ordem-producao/${ordemproducao_id}/imprimir`;
-            window.location.href = url;
+            window.location.href = `/ordem-producao/${ordemproducao_id}/imprimir`;
         }
 
         document.querySelectorAll('.accordion-collapse').forEach((item) => {

@@ -76,34 +76,62 @@ class InventarioController extends Controller
             'motivo' => $request->input('motivo'),
             'status' => 'Em contagem',
         ]);
+        return redirect()->route('inventario.contagem', $inventario->id);
+    }
 
-        $produtos = Produto::where('loja_id', auth()->user()->current_loja_id)
-            ->where('full_object->inativo', "N")
-            ->orderBy('descricao_familia', 'asc')
-            ->orderBy('descricao', 'asc')
-            ->get();
+    public function storeItem(Request $request, Inventario $inventario)
+    {
+        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        }
 
-        foreach ($produtos as $produto) {
+        $request->validate([
+            'codigo' => 'required|string|max:60',
+            'quantidade' => 'required|numeric',
+        ]);
 
+        $produto = Produto::where('loja_id', $inventario->loja_id)
+            ->where('codigo', $request->get('codigo'))
+            ->first();
+
+        $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
+            ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
+            ->where('n_cod_prod', $produto->codigo_produto)
+            ->where('data_posicao', $inventario->data->format('Y-m-d'))
+            ->first();
+
+        if (!$posicaoEstoque || ($posicaoEstoque->n_cmc === 0) || ($posicaoEstoque->n_cmc === null)) {
+            $posicaoService = new PosicaoEstoqueService($inventario->loja);
+            $posicaoProd = $posicaoService->fetchPosicaoProduto($inventario->codigo_local_estoque, $produto->codigo_produto, $inventario->data->format('d/m/Y'));
+            $posicaoService->savePosicao($posicaoProd, $inventario->data->format('d/m/Y'));
             $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
                 ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
                 ->where('n_cod_prod', $produto->codigo_produto)
                 ->where('data_posicao', $inventario->data->format('Y-m-d'))
                 ->first();
+        }
 
-            $inventario->items()->create([
-                'loja_id' => auth()->user()->current_loja_id,
+        try {
+
+            $item = $inventario->items()->create([
+                'loja_id' => $inventario->loja_id,
                 'produto_codigo_produto' => $produto->codigo_produto,
                 'produto_codigo' => $produto->codigo ?? '',
                 'produto_descricao' => $produto->descricao ?? '',
                 'produto_familia' => $produto->descricao_familia ?? '',
-                'quan' => null,
-                'valor' => $posicaoEstoque->n_cmc ?? -1,
+                'quan' => $request->get('quantidade'),
+                'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
+                'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
             ]);
-
+            return response([
+                "key" => $item->id,
+                "id" => $produto->codigo_produto,
+                "nome" => $produto->descricao,
+                "unidade" => $produto->unidade,
+            ], 201);
+        } catch (\Exception $e) {
+            return response(["mensagem" => "Não foi possível inserir o item, erro: {$e->getMessage()}"], 500);
         }
-
-        return redirect()->route('inventario.contagem', $inventario->id);
     }
 
     public function pdf(Request $request, Inventario $inventario)
@@ -115,7 +143,7 @@ class InventarioController extends Controller
         return $pdf->inline("inventario-{$inventario->id}.pdf");
     }
 
-    public function finish(Inventario $inventario)
+    public function finish(Request $request, Inventario $inventario)
     {
         if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Criar!");
@@ -123,7 +151,9 @@ class InventarioController extends Controller
         (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
         $inventario->status = 'Processando no Omie';
         $inventario->save();
+
         InventarioJob::dispatch($inventario, auth()->user())->delay(10);
+
         return redirect()
             ->route('inventario.index', [
                     'data_inicio' => $inventario->data->format('Y-m-d'),
@@ -257,5 +287,35 @@ class InventarioController extends Controller
         }
         $inventario->delete();
         return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')])->with('success', 'Inventário cancelado com sucesso!');
+    }
+
+    public function destroyItem(InventarioItem $inventarioItem)
+    {
+        if (!CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Inventários - Editar!");
+        }
+
+        if ($inventarioItem->id_ajuste !== null) {
+            $loja = $inventarioItem->inventario->loja;
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                "call" => "ExcluirAjusteEstoque",
+                "app_key" => $loja->omie_app_key,
+                "app_secret" => $loja->omie_app_secret,
+                "param" => [
+                    [
+                        "id_ajuste" => $inventarioItem->id_ajuste,
+                    ]
+                ]
+            ];
+            Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->connectTimeout(60)
+                ->timeout(60)
+                ->post($url, $data);
+        }
+        $inventarioItem->delete();
+
+        return redirect()->back()->with('success', 'Item excluído com sucesso!');
     }
 }

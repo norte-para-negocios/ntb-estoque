@@ -66,12 +66,11 @@
             <div class="px-2">
                 <div class="card card-body mb-3">
                     <div class="row">
-                        <div class="col-md-7 col-12 mb-3">
-                            <input class="search form-control fw-semibold rounded-0"
-                                   type="search"
-                                   placeholder="Ctrl+F ou digite para buscar..."
-                                   id="search"
-                                   autofocus/>
+                        <div class="col-md-7 col-12">
+                            <select class="search form-control fw-semibold rounded-0"
+                                    placeholder="Digite para buscar..."
+                                    id="search">
+                            </select>
                         </div>
 
                         <div
@@ -133,7 +132,6 @@
             const produtoId = linha.getAttribute('data-id');
             linha.remove();
             let produtosSalvos = JSON.parse(localStorage.getItem('produtos')) || [];
-            console.log(produtosSalvos);
             produtosSalvos = produtosSalvos.filter(produto => produto.id !== produtoId);
             localStorage.setItem('produtos', JSON.stringify(produtosSalvos));
         }
@@ -239,7 +237,6 @@
                 });
             }
 
-
             function adicionarProdutoNaListagem(produto) {
                 const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                 const jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${produto.id}"]`) ?? false;
@@ -283,6 +280,8 @@
                                                    name="quantidades[]"
                                                    style="text-align: center;"
                                                    min="0.000001"
+                                                   step="0.000001"
+                                                   required
                                             >
 
                                             <button
@@ -402,6 +401,74 @@
                     }
                 });
             });
+
+            const selectSearch = new TomSelect('#search', {
+                render: {
+                    no_results: function (data, escape) {
+                        return '<div class="no-results">Nenhum produto encontrado</div>';
+                    },
+                    option: function (data, escape) {
+                        const tbody = document.querySelector("#tabelaResultados tbody");
+                        let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
+                        let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
+                        let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
+
+                        return `<div class="container">
+                            <div class="row">
+                                <div class="col-10">
+                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+">
+                                     </button>
+                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                </div>
+                                <div class="col-2 fw-medium text-end">
+                                    ${data.unidade}
+                                </div>
+                            </div>
+                        </div>`;
+                    },
+                    item: function (data, escape) {
+                        const tbody = document.querySelector("#tabelaResultados tbody");
+                        let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
+                        let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
+                        let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
+
+                        return `<div class="container">
+                            <div class="row">
+                                <div class="col-10">
+                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+">
+                                     </button>
+                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                </div>
+                                <div class="col-2 fw-medium text-end">
+                                    ${data.unidade}
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                },
+                valueField: 'codigo',
+                labelField: 'descricao',
+                searchField: 'descricao',
+                load: function (query, callback) {
+                    fetch(`/transferencia/produtos?q=${encodeURIComponent(query)}`)
+                        .then(res => res.json())
+                        .then(json => {
+                            callback(json.data);
+                        }).catch(() => {
+                        callback();
+                    });
+                }
+            });
+
+            selectSearch.on("change", function (produtoId) {
+                if (produtoId !== undefined && produtoId !== null && produtoId !== '') {
+                    buscarProdutoPorQrCode(produtoId)
+                    this.clear()
+                }
+            });
+
         })
 
         const formTransferencia = document.getElementById('formTransferencia');
@@ -453,13 +520,24 @@
         }
 
         .search {
-            color: #2EB5C3;
+            color: #2EB5C3 !important;
             border: none !important;
             border-bottom: 1px solid #c7c7c7 !important;
         }
 
         .search::placeholder {
-            color: #2EB5C3;
+            color: #2EB5C3 !important;
+        }
+
+        .ts-wrapper .ts-control input {
+            color: #2EB5C3 !important;
+            border: none !important;
+            font-weight: 500 !important;
+        }
+
+        .ts-wrapper .ts-control input::placeholder {
+            color: #2EB5C3 !important;
+            font-weight: 700 !important;
         }
 
         .form-select {

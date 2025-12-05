@@ -45,6 +45,8 @@ window.notyf = new Notyf({
     ]
 });
 
+import TomSelect from "tom-select";
+window.TomSelect = TomSelect;
 
 /**
  * Echo exposes an expressive API for subscribing to channels and listening

@@ -53,7 +53,7 @@
                                         <div class="card m-0">
                                             <div class="card-header d-flex justify-content-between"
                                                  style="font-size: .7rem;
-                                                 background-color: ;
+                                                 background-color:
                                                  @if ($tr->id_movest === null)
                                                     #F24646
                                                 @else
@@ -133,9 +133,9 @@
     <div class="container-fluid fixed-bottom">
         <div class="row bg-white">
             <div class="col d-flex justify-content-end align-items-center py-3">
-                <a href="{{ route('transferencia.create') }}" class="btn btn-success text-white">
+                <button onclick="createTransferencia('{{ route('transferencia.create') }}')" class="btn btn-success text-white">
                     <i class="fas fa-plus text-white"></i> Nova transferência
-                </a>
+                </button>
             </div>
         </div>
     </div>
@@ -143,6 +143,11 @@
 
 @push('js')
     <script>
+        function createTransferencia(url) {
+            localStorage.removeItem('produtos');
+            window.location = url;
+        }
+
         document.querySelectorAll('.accordion-collapse').forEach((item) => {
             item.addEventListener('shown.bs.collapse', () => {
                 localStorage.setItem('accordionTransferencia', item.id);

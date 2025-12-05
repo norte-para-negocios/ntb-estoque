@@ -36,7 +36,7 @@
         .scanner-wrapper {
             position: relative;
             width: 300px;
-            height: 300px;
+            height: 225px;
         }
 
         #reader {
