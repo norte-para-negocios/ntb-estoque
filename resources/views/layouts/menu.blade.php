@@ -1,9 +1,9 @@
 <div class="d-grid mb-4">
     <h6>Acessando:</h6>
-    <select class="form-control" onchange="changeLoja(this)">
+    <select class="form-select" onchange="changeLoja(this)">
         <option value="">Seleciona uma loja</option>
         @foreach (Auth::user()->lojas as $loja)
-            <option value="{{ $loja->id }}" @if (Auth::user()->current_loja_id == $loja->id) selected @endif>
+            <option class="select-option" value="{{ $loja->id }}" @if (Auth::user()->current_loja_id == $loja->id) selected @endif>
                 {{ $loja->nome_fantasia }}
             </option>
         @endforeach
@@ -43,31 +43,31 @@
 
 <div class="d-grid gap-2 mb-4">
     <a href="{{ route('produto.index') }}" class="text-start text-decoration-none fw-bold">
-        <i class="fa-brands fa-product-hunt me-3"></i>Produtos
+        <img src="{{asset('images/produto.png')}}" alt=""> Produtos
     </a>
 </div>
 
 <div class="d-grid gap-2 mb-4">
     <a href="{{ route('locais-estoque.index') }}" class="text-start text-decoration-none fw-bold">
-        <i class="fa-solid fa-boxes-stacked me-3"></i>Locais de Estoque
+        <img src="{{asset('images/local.png')}}" alt=""> Locais de Estoque
     </a>
 </div>
 
 @if (auth()->user()->perfil === 'Admin')
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('loja.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fas fa-building me-3"></i>Lojas
+            <img src="{{asset('images/loja.png')}}" alt=""> Lojas
         </a>
     </div>
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('usuario.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fas fa-users me-3"></i> Usuários
+            <img src="{{asset('images/usuario.png')}}" alt=""> Usuários
         </a>
     </div>
 
     <div class="d-grid gap-2 mb-4">
         <a href="{{ route('log.index') }}" class="text-start text-decoration-none fw-bold">
-            <i class="fa-solid fa-bug me-3"></i>Logs de Integração
+            <img src="{{asset('images/log.png')}}" alt=""> Logs de Integração
         </a>
     </div>
 @endif
@@ -95,4 +95,13 @@
             axios.post(`/usuario/${usuarioLogado}/loja/${el.value}`);
         }
     </script>
+@endpush
+
+@push('css')
+    <style>
+        body {
+            color: #D5D5D5 !important;
+            background: #f4f4f4 !important;
+        }
+    </style>
 @endpush

@@ -8,7 +8,10 @@
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'NTB - Estoque') }}</title>
+    <title>
+        {{ config('app.name', 'NTB - Estoque') }}
+        {{ isset(auth()->user()->current_loja_id) ? '| ' . auth()->user()->loja->nome_fantasia : ''}}
+    </title>
 
     <!-- Fonts -->
     <link rel="dns-prefetch" href="//fonts.bunny.net">
@@ -30,12 +33,7 @@
             align-items: center;
             z-index: 9999;
         }
-
-        #content {
-            display: none;
-        }
     </style>
-
 </head>
 
 <body>
@@ -45,25 +43,33 @@
     </div>
 </div>
 
-
 <div id="app">
+    <nav class="navbar navbar-expand-lg ntb-header bg-white">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-start align-items-center">
+                <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu"
+                        aria-controls="offcanvasMenu" class="btn btn-lg">
+                    <img src="{{asset('images/menu.png')}}" alt="">
+                </button>
 
-    <nav class="navbar navbar-expand-lg ntb-header">
-        <div class="container-fluid justify-content-start">
-            <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop"
-                    aria-controls="offcanvasTop" class="btn btn-lg">
-                <img src="{{asset('images/menu.png')}}" alt="">
-            </button>
-
-            <a class="navbar-brand ntb-logo" href="{{ route('home.index') }}">
-                <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
-            </a>
+                <a class="navbar-brand ntb-logo ms-2" href="{{ route('home.index') }}">
+                    <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
+                </a>
+            </div>
+            @auth
+                @if(in_array(Route::currentRouteName(), ['notafiscal.index', 'ordemproducao.index', 'transferencia.index', 'inventario.index']))
+                    <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasFiltro"
+                            aria-controls="offcanvasFiltro" class="btn fw-semibold" id="btn-filtrar">
+                        <img src="{{asset('images/filtrar.png')}}" alt="Botão Filtrar"> Filtrar
+                    </button>
+                @endif
+            @endauth
         </div>
     </nav>
 
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasTop" aria-labelledby="offcanvasTopLabel">
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu" aria-labelledby="offcanvasMenuLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="offcanvasTopLabel">
+            <h5 class="offcanvas-title" id="offcanvasMenuLabel">
                 <img src="{{asset('ntb-logo.png')}}" alt="{{ config('app.name', 'NTB - Estoque') }}">
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -75,10 +81,33 @@
         </div>
     </div>
 
+    @auth
+        <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasFiltro" aria-labelledby="offcanvasFiltroLabel">
+            <div class="offcanvas-header">
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0 d-flex flex-column justify-content-between">
+                <div class="container" id="div-filtro">
+                    @yield('filtro')
+                </div>
+                <div class="container-fluid">
+                    <div class="row bg-white">
+                        <div class="col d-flex justify-content-between align-items-center py-3">
+                            <button type="button" data-bs-dismiss="offcanvas" class="btn">Voltar</button>
+                            <button type="submit" form="filtrosForm" class="btn btn-success text-white">
+                                <img src="{{asset('images/check.png')}}" alt="Check">
+                                Filtrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endauth
+
     <main class="py-4">
         @yield('content')
     </main>
-
 </div>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>

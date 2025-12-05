@@ -40,9 +40,10 @@ class TransferenciaController extends Controller
         $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)
             ->where('tipo', 'TRF')
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
-            ->orderBy('id', 'desc')
-            ->paginate(20)
+            ->orderBy('data', 'desc')
+            ->paginate(10)
             ->withQueryString();
+
         return view('transferencia.index', compact('transferencias', 'data_inicio', 'data_final'));
     }
 
@@ -175,14 +176,14 @@ class TransferenciaController extends Controller
         $term = $request->get('q', '');
 
         // Consulta simples com filtro e limite
-        $results = Produto::where('loja_id', auth()->user()->current_loja_id)
+        return Produto::where('loja_id', auth()->user()->current_loja_id)
             ->where(function ($query) use ($term) {
                 $query->where('descricao', 'LIKE', "%{$term}%")
                     ->orWhere('codigo', 'LIKE', "%{$term}%");
             })
             ->orderBy('descricao')
-            ->select(['codigo', 'descricao'])
-            ->paginate(20);
+            ->select(['codigo', 'descricao', 'unidade'])
+            ->paginate(100);
 
         $formatted = $results->map(function ($item) {
             return [

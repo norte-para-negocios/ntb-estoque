@@ -8,6 +8,8 @@
 // Bootstrap
 @import "bootstrap/scss/bootstrap";
 
+@import "tom-select/dist/css/tom-select.bootstrap5.min.css";
+
 /* Estilos básicos */
 * {
     font-family: "Inter", sans-serif;
@@ -25,17 +27,6 @@
 @import "sweetalert2/src/sweetalert2.scss";
 @import "notyf/notyf.min.css";
 
-
-select {
-    appearance: none; /* Padrão */
-    -webkit-appearance: none; /* Safari/Chrome */
-    -moz-appearance: none; /* Firefox */
-
-    background: url('/images/select-arrow.svg') no-repeat right center;
-    background-size: 1.3em;
-    padding-right: 3em !important;
-}
-
 .card-header {
     background-color: #2EB5C3;
     color: #ffffff !important;
@@ -43,4 +34,55 @@ select {
 
 .card-footer {
     background-color: #ffffff;
+}
+
+#div-filtro .form-control {
+    color: #2EB5C3 !important;
+    border-color: #D5D5D5 !important;
+    background-color: #ffffff !important;
+}
+
+#offcanvasFiltro {
+    background-color: #f4f4f4 !important;
+}
+
+#offcanvasMenu {
+    background-color: #f4f4f4 !important;
+}
+
+.form-control {
+    border: #D5D5D5 solid 1px !important;
+    color: #2EB5C3 !important;
+}
+
+select.form-select {
+    appearance: none; /* Padrão */
+    -webkit-appearance: none; /* Safari/Chrome */
+    -moz-appearance: none; /* Firefox */
+
+    background: url('../images/select-arrow.svg') no-repeat right center;
+    background-size: 1.3em;
+    padding-right: 3em !important;
+    border: #D5D5D5 solid 1px !important;
+    color: #2EB5C3 !important;
+    font-weight: 500;
+}
+
+select option {
+    color: #2EB5C3 !important;
+}
+
+select option:hover {
+    background-color: #ffffff !important;
+    color: #2EB5C3;
+}
+
+select.form-select option:hover {
+    background-color: #ffffff !important;
+    color: #2EB5C3 !important;
+}
+
+select.form-select option:focus {
+    background-color: #2EB5C3 !important;
+    color: #fff !important;
 }

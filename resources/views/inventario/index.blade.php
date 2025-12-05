@@ -1,172 +1,151 @@
 @extends('layouts.app')
 
-@section('content')
-    <div class="container">
-
-        <h2 class="mb-4 d-flex justify-content-between align-items-center">
-            <span>
-            <a href="{{route('home.index')}}" class="btn btn-sm btn-outline-primary mb-1"
-               title="Voltar">
-                <i class="fa-solid fa-arrow-left-long"></i>
-            </a>
-                {{ __('Inventários') }}: <small>{{ auth()->user()->loja->nome_fantasia }}</small>
-            </span>
-
-            <button class="btn btn-primary text-white" data-bs-toggle="modal" data-bs-target="#createInventarioModal">
-                <i class="fas fa-plus"></i> Novo inventário
-            </button>
-        </h2>
-
-        <div class="accordion" id="accordionExample">
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                        <i class="fa-solid fa-filter me-2"></i>
-                        FILTRO
-                    </button>
-                </h2>
-                <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
-                    <div class="accordion-body">
-                        <form id="filtrosForm" method="GET" action="{{ route('inventario.index') }}">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <div class="mb-3">
-                                        <label for="data_inicio" class="form-label">Início</label>
-                                        <input title="Data criação Omie" type="date" class="form-control"
-                                               id="data_inicio" name="data_inicio"
-                                               value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="mb-3">
-                                        <label for="data_final" class="form-label">Final</label>
-                                        <input type="date" class="form-control" id="data_final" name="data_final"
-                                               value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
-                                    </div>
-                                </div>
-                                <div class="col-md-6 d-flex align-items-end">
-                                    <div class="mb-3 g-6">
-                                        <button type="submit" class="btn btn-primary text-white">
-                                            <i class="fas fa-search"></i> Filtrar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+@section('filtro')
+    <form id="filtrosForm" method="GET" action="{{ route('inventario.index') }}">
+        <div class="row">
+            <div class="col-6">
+                <div class="mb-3">
+                    <label for="data_inicio" class="form-label">Início</label>
+                    <input title="Data criação Omie" type="date" class="form-control"
+                           id="data_inicio" name="data_inicio"
+                           value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="mb-3">
+                    <label for="data_final" class="form-label">Final</label>
+                    <input type="date" class="form-control" id="data_final" name="data_final"
+                           value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
                 </div>
             </div>
         </div>
+    </form>
+@endsection
 
-        <div class="card card-body mt-4">
-            <table class="table table-hover table-borderless" aria-hidden="true">
-                <tbody>
-                @if (isset($inventarios) && !empty($inventarios))
-                    @foreach ($inventarios as $inventario)
-                        <tr>
-                            <td class="px-2">
-                                <div class="container">
-                                    <div class="row">
-                                        <div class="col-12 p-0">
-                                            <div class="card card-body m-0" style="background-color: #e4e9f5;">
+@section('content')
+    <div class="container mb-5">
+        <p class="mb-0 fw-semibold">
+            <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
+                <img src="{{asset('images/voltar.png')}}" alt="<-">
+            </a>
+            <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventários de estoques">
+            {{ __('Inventários') }}
+        </p>
+        <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;">
+            <tbody>
+            @if (isset($inventarios) && !empty($inventarios))
+                @foreach ($inventarios as $inventario)
+                    <tr style="background-color: #f4f4f4;">
+                        <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                            <div class="container">
+                                <div class="row">
+                                    <div class="col-12 p-0">
+                                        <small class="text-muted">
+                                            Data: {{$inventario->data->format('d/m/Y')}}
+                                        </small>
+                                        <div class="card m-0">
+                                            <div class="card-header d-flex justify-content-between"
+                                                 style="font-size: .7rem;
+                                                 background-color:
+                                                 @if ($inventario->status !== 'Finalizado')
+                                                    #F24646
+                                                @else
+                                                    #2EB5C3
+                                                @endif;
+                                                 ">
+                                                {{$inventario->status}}
+                                                @if($inventario->finalizado)
+                                                    | {{$inventario->finalizado->format('d/m/Y')}}
+                                                @endif
+                                            </div>
+
+                                            <div class="card-footer">
                                                 <div class="row">
-                                                    <div class="col-md-6 col-12">
-                                                        <p class="mb-0">
-                                                            #{{$inventario->id}} - Data:
-                                                            <strong>{{ $inventario->data->format('d/m/Y') }}</strong>
-                                                        </p>
-                                                        <p class="mb-0">
-                                                            Tipo Movimento:
-                                                            <strong>{{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$inventario->motivo] ?? '' }}</strong>
-                                                        </p>
-                                                        <p class="mb-0">
-                                                            Local:
-                                                            <strong>{{ $inventario->codigo_local_estoque ?? '' }} -
-                                                                {{ $inventario->localEstoque->descricao ?? '' }}</strong>
-                                                        </p>
-                                                        <p class="mb-0">
-                                                            Produtos contados:
-                                                            <strong>
-                                                                {{ $inventario->items()->count() ?? '' }}
-                                                            </strong>
-                                                        </p>
+                                                    <div class="col-1">
+                                                        <small>Estoque</small><br>
+                                                        <span class="fw-semibold">
+                                                            #{{$inventario->id}}
+                                                        </span>
                                                     </div>
-                                                    <div class="col-md-6 col-12">
-                                                        <p class="mb-2">
-                                                            @if ($inventario->finalizado === null)
-                                                                Situação:
-                                                                <span class="badge bg-warning fs-6 text-dark">
-                                                                        {{$inventario->status??''}}
-                                                                    </span>
-                                                            @else
-                                                                Finalizado em: <span
-                                                                    class="badge bg-success fs-6 text-dark">
-                                                                        {{ $inventario->finalizado->format('d/m/Y') }}
-                                                                    </span>
 
-                                                                <a href="{{route('inventario.duplicar', $inventario->id)}}" class="btn btn-sm btn-secondary" title="Copiar Inventário">
-                                                                    <i class="fa-solid fa-copy"></i>
-                                                                </a>
-                                                            @endif
-                                                        </p>
+                                                    <div class="col-3">
+                                                        <small>Produtos contados</small><br>
+                                                        <span class="fw-semibold">
+                                                            {{$inventario->items()->count() ?? 0}}
+                                                        </span>
+                                                    </div>
 
+                                                    <div class="col-3">
+                                                        <small>Local</small><br>
+                                                        <span class="fw-semibold">
+                                                            {{$inventario->localEstoque->descricao ?? ''}}
+                                                        </span>
+                                                    </div>
 
-                                                        <div class="row">
-                                                            <div class="col">
-                                                                <a href="{{ route('inventario.contagem', $inventario->id) }}"
-                                                                   class="btn btn-primary text-white">
-                                                                    <div
-                                                                        class="d-flex justify-content-start align-items-center">
-                                                                        <i class="fa-solid fa-calculator fa-lg me-2"
-                                                                           style="color: #ffffff;"></i>
-                                                                        <span class="fs-6">Contagem</span>
-                                                                    </div>
-                                                                </a>
+                                                    <div
+                                                        class="col-md-5 col-12 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
+                                                        <a href="{{ route('inventario.contagem', $inventario->id) }}"
+                                                           class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                            <img src="{{asset('images/editar.png')}}"
+                                                                 alt="Imprimir"
+                                                                 class="me-1"> Editar
+                                                        </a>
+                                                        @if($inventario->status === 'Finalizado')
+                                                            <button type="button"
+                                                                    onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
+                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
+                                                                    title="Duplicar Inventário">
+                                                                <img src="{{asset('images/duplicar.png')}}"
+                                                                     alt="Duplicar"
+                                                                     class="me-1"> Duplicar
+                                                            </button>
+                                                        @endif
+                                                        @if($inventario->status !== 'Processando no Omie')
+                                                            <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                               class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                                <img src="{{asset('images/imprimir.png')}}"
+                                                                     alt="Imprimir"
+                                                                     class="me-1"> Imprimir
+                                                            </a>
 
-                                                                @if($inventario->status !== 'Processando no Omie')
-                                                                    <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                                       class="btn btn-info text-white">
-                                                                        <div
-                                                                            class="d-flex justify-content-start align-items-center">
-                                                                            <i class="fa-solid fa-print fa-lg me-2"></i>
-                                                                            <span class="fs-6">Imprimir</span>
-                                                                        </div>
-                                                                    </a>
-                                                                    <a href="{{ route('inventario.destroy', $inventario->id) }}"
-                                                                       onclick="event.preventDefault(); deleteRegistro(this.href);"
-                                                                       class="btn btn-danger text-white">
-                                                                        <div
-                                                                            class="d-flex justify-content-start align-items-center">
-                                                                            <i class="fa-solid fa-trash fa-lg me-2"></i>
-                                                                            <span class="fs-6">Excluir</span>
-                                                                        </div>
-                                                                    </a>
-                                                                @endif
-
-                                                            </div>
-                                                        </div>
+                                                            <button type="button"
+                                                                    onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
+                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                                <img src="{{asset('images/excluir.png')}}" alt=""
+                                                                     class="me-1">Excluir
+                                                            </button>
+                                                        @endif
                                                     </div>
                                                 </div>
-
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </td>
-                        </tr>
-                    @endforeach
-                @else
-                    <tr>
-                        <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                            </div>
+                        </td>
                     </tr>
-                @endif
-                </tbody>
-            </table>
-            {{ $inventarios->links('pagination::bootstrap-5') }}
-        </div>
+                @endforeach
+            @else
+                <tr>
+                    <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                </tr>
+            @endif
+            </tbody>
+        </table>
+        {{ $inventarios->links('pagination::bootstrap-5') }}
     </div>
     @include('inventario.create')
+
+    <div class="container-fluid fixed-bottom">
+        <div class="row bg-white">
+            <div class="col d-flex justify-content-end align-items-center py-3">
+                <button class="btn btn-success text-white" data-bs-toggle="modal"
+                        data-bs-target="#createInventarioModal">
+                    <i class="fas fa-plus text-white"></i> Nova inventário
+                </button>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('js')
@@ -188,5 +167,40 @@
                 new bootstrap.Collapse(el, {toggle: true});
             }
         });
+
+        function duplicarInventario(baseurl) {
+            const hoje = new Date().toISOString().split('T')[0];
+            swal.fire({
+                title: 'Informe a data do inventário?',
+                input: 'date',
+                inputLabel: 'Data do inventário',
+                inputPlaceholder: 'Escolha uma data',
+                showCancelButton: true,
+                confirmButtonText: 'Duplicar',
+                cancelButtonText: 'Cancelar',
+                inputAttributes: {
+                    required: true,
+                    max: hoje
+                },
+                preConfirm: (date) => {
+                    if (!date) {
+                        swal.showValidationMessage('Você precisa escolher uma data');
+                    }
+                    return date;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = `${baseurl}?data=${encodeURIComponent(result.value)}`;
+                }
+            });
+        }
     </script>
+@endpush
+
+@push('css')
+    <style>
+        body {
+            background-color: #F4F4F4;
+        }
+    </style>
 @endpush
