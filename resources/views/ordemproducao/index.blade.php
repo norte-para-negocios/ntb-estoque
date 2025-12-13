@@ -172,7 +172,7 @@
                                                     <div class="col-md-1 col-6 mb-2">
                                                         <small>Quantidade</small><br>
                                                         <span class="fw-semibold">
-                                                            {{ $op->identificacao_n_qtde ?? '' }}
+                                                            {{ $op->identificacao_n_qtde ? number_format($op->identificacao_n_qtde, 2, ',', '.') : '' }}
                                                             ({{ $op->produto_unidade ?? '' }})
                                                         </span>
                                                     </div>

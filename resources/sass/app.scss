@@ -86,3 +86,13 @@ select.form-select option:focus {
     background-color: #2EB5C3 !important;
     color: #fff !important;
 }
+
+.form-check-input {
+    border-color: #2EB5C3;
+}
+
+.form-check-input:checked {
+    background-color: #2EB5C3; /* laranja */
+    border-color: #2EB5C3;
+}
+

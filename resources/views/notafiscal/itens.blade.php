@@ -2,7 +2,9 @@
 
 @section('content')
     <div class="container">
-        <p class="mb-0 fw-semibold">
+        <p class="mb-2 fw-semibold d-flex justify-content-between">
+            <span>
+
             <a href="{{route('notafiscal.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
                 <img class="ms-0 p-0" src="{{asset('images/nota-fiscal.png')}}" alt="Notas Fiscais">
@@ -11,6 +13,13 @@
 
             <img class="ms-0 p-0" src="{{asset('images/nota-fiscal.png')}}" alt="Fornecedor">
             {{ __($notaFiscal->c_nome ?? '') }}
+            </span>
+
+            <a href="{{ route('notafiscal.imprimir', $notaFiscal->id, [], false) }}"
+               class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold me-2">
+                <img src="{{asset('images/imprimir.png')}}" alt=""
+                     class="me-1">Imprimir Todos
+            </a>
         </p>
 
 
@@ -161,6 +170,7 @@
                 if (valorAtual > 1) {
                     quantidade.value = valorAtual - 1;
                 }
+                quantidade.dispatchEvent(new Event('blur'));
             }
         }
 
@@ -169,6 +179,7 @@
             if (quantidade && !isNaN(quantidade.value)) {
                 const valorAtual = parseInt(quantidade.value, 10);
                 quantidade.value = valorAtual + 1;
+                quantidade.dispatchEvent(new Event('blur'));
             }
         }
 

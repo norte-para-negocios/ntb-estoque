@@ -101,7 +101,7 @@ class OrdemProducaoController extends Controller
             if ($ordemProducao->produto_unidade == 'UN') {
                 $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
             } else {
-                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',' . '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',' , '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
             }
 
             $etiquetas[] = [

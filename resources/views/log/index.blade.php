@@ -2,6 +2,9 @@
 @push('css')
 
     <style>
+        body {
+            background-color: #F4F4F4;
+        }
         .table-fixed {
             table-layout: fixed;
             width: 100%;
@@ -16,12 +19,13 @@
 @endpush
 @section('content')
     <div class="container">
-        <h2 class="mb-3">
-            <a href="{{route('home.index')}}" class="btn btn-sm btn-outline-primary mb-1" title="Voltar">
-                <i class="fa-solid fa-arrow-left-long"></i>
+        <p class="mb-4 fw-semibold">
+            <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
+                <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
+            <img class="ms-0 p-0" src="{{asset('images/log.png')}}" alt="Log">
             {{ __('Logs de Integração com APIs') }}
-        </h2>
+        </p>
 
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
@@ -127,7 +131,7 @@
 
                                 <div class="col-md-3 d-flex align-items-end">
                                     <div class="mb-3">
-                                        <button type="submit" class="btn btn-primary">
+                                        <button type="submit" class="btn btn-success">
                                             <i class="fas fa-search"></i> Filtrar
                                         </button>
                                     </div>
@@ -140,7 +144,7 @@
         </div>
 
         <div class="card card-body mt-4">
-            <table class="table table-hover table-fixed">
+            <table class="table table-striped table-fixed">
                 <thead>
                 <tr>
                     <th>Log</th>
