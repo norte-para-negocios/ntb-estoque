@@ -96,6 +96,7 @@ class NotafiscalController extends Controller
         if (!CanService::canPermissionLoja('Notas Fiscais', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
+
         $etiquetas = [];
 
         foreach ($notaFiscal->nfItems as $item) {
