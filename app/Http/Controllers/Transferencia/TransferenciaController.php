@@ -35,16 +35,27 @@ class TransferenciaController extends Controller
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $tipo = $request->get('tipo', null);
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
         $transferencias = Movimento::where('loja_id', Auth::user()->current_loja_id)
             ->where('tipo', 'TRF')
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
+            ->when($request->get('familia'), function ($familia) use ($request) {
+                $familia->whereHas('produto', function ($produto) use ($request) {
+                    $produto->where('descricao_familia', $request->get('familia'));
+                });
+            })
+            ->when($request->get('tipo'), function ($q) use ($request) {
+                $q->whereHas('produto', function ($produto) use ($request) {
+                    $produto->where('tipo_item', $request->get('tipo'));
+                });
+            })
             ->orderBy('data', 'desc')
             ->paginate(10)
             ->withQueryString();
 
-        return view('transferencia.index', compact('transferencias', 'data_inicio', 'data_final'));
+        return view('transferencia.index', compact('transferencias', 'data_inicio', 'data_final', 'tipo'));
     }
 
     /**
