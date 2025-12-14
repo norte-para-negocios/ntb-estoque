@@ -22,6 +22,13 @@
     </form>
 @endsection
 
+@section('botoes-filtro')
+    <button type="button" class="btn btn-success text-white" onclick="imprimirRegistros()"
+            title="Imprimir registros">
+        <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"> Imprimir
+    </button>
+@endsection
+
 @section('content')
     <div class="container mb-5">
         <p class="mb-0 fw-semibold">

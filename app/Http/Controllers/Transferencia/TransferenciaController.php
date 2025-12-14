@@ -150,7 +150,7 @@ class TransferenciaController extends Controller
                 'success' => true,
                 'data' => [
                     'id' => $produto->codigo,
-                    'nome' => $produto->descricao,
+                    'nome' => $produto->descricao . '(' . $produto->codigo . ')',
                     'unidade' => $produto->unidade ?? ''
                 ]
             ], 200);
@@ -179,24 +179,13 @@ class TransferenciaController extends Controller
         return Produto::where('loja_id', auth()->user()->current_loja_id)
             ->where(function ($query) use ($term) {
                 $query->where('descricao', 'LIKE', "%{$term}%")
-                    ->orWhere('codigo', 'LIKE', "%{$term}%");
+                    ->orWhere('codigo', 'LIKE', "%{$term}%")
+                    ->orWhere('codigo_produto', 'LIKE', "%{$term}%")
+                    ->orWhere('descricao_familia', 'LIKE', "%{$term}%");
             })
             ->orderBy('descricao')
-            ->select(['codigo', 'descricao', 'unidade'])
+            ->selectRaw("codigo, concat(descricao, ' (#', codigo, ')') as descricao, unidade")
             ->paginate(100);
-
-        $formatted = $results->map(function ($item) {
-            return [
-                'id' => $item->codigo,
-                'text' => $item->descricao,
-            ];
-        });
-
-        return response()->json([
-            'data' => $formatted,
-            'current_page' => $results->currentPage(),
-            'last_page' => $results->lastPage(),
-        ]);
     }
 
     /**
@@ -224,9 +213,6 @@ class TransferenciaController extends Controller
             abort(403, "Você não possui a permissão: Transferências - Excluir!");
         }
 
-        if (!CanService::canPermissionLoja('Transferência', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Transferência!");
-        }
         try {
             // Verifica se o movimento já foi processado
             if ($movimento->id_ajuste !== null) {

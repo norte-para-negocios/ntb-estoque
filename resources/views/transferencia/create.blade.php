@@ -74,10 +74,11 @@
                         </div>
 
                         <div
-                            class="col-md-5 col-12 d-flex justify-content-md-start justify-content-around align-items-center gap-1">
+                            class="col-md-5 col-12 d-flex justify-content-md-start justify-content-around align-items-center gap-1 pt-2">
                             <button type="button" id="botaoPermissao"
                                     class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
                                     style="display: none;">
+                                <img src="{{asset('images/concluir.png')}}" alt="+" class="me-1">
                                 Conceder Acesso a Câmera
                             </button>
 

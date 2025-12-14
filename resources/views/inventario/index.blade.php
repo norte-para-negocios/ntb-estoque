@@ -61,21 +61,21 @@
 
                                             <div class="card-footer">
                                                 <div class="row">
-                                                    <div class="col-1">
+                                                    <div class="col-md-1 col-3">
                                                         <small>Estoque</small><br>
                                                         <span class="fw-semibold">
                                                             #{{$inventario->id}}
                                                         </span>
                                                     </div>
 
-                                                    <div class="col-3">
+                                                    <div class="col-md-3 col-4">
                                                         <small>Produtos contados</small><br>
                                                         <span class="fw-semibold">
                                                             {{$inventario->items()->count() ?? 0}}
                                                         </span>
                                                     </div>
 
-                                                    <div class="col-3">
+                                                    <div class="col-md-6 col-5">
                                                         <small>Local</small><br>
                                                         <span class="fw-semibold">
                                                             {{$inventario->localEstoque->descricao ?? ''}}

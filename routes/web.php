@@ -67,6 +67,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::get('/', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
         Route::post('/{ordemProducao}/validade', [OrdemProducaoController::class, 'setValidade'])->name('ordemproducao.setValidade');
         Route::get('/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('ordemproducao.imprimir');
+        Route::post('/{ordemProducao}/finish', [OrdemProducaoController::class, 'finish'])->name('ordemproducao.finish');
         Route::get('/sync-omie', [OrdemProducaoController::class, 'syncOrdensProducao'])->name('ordemproducao.sync');
     });
 

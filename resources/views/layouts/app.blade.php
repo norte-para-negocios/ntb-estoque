@@ -94,10 +94,13 @@
                     <div class="row bg-white">
                         <div class="col d-flex justify-content-between align-items-center py-3">
                             <button type="button" data-bs-dismiss="offcanvas" class="btn">Voltar</button>
-                            <button type="submit" form="filtrosForm" class="btn btn-success text-white">
-                                <img src="{{asset('images/check.png')}}" alt="Check">
-                                Filtrar
-                            </button>
+                            <div>
+                                @yield('botoes-filtro')
+                                <button type="submit" form="filtrosForm" class="btn btn-success text-white">
+                                    <img src="{{asset('images/check.png')}}" alt="Check">
+                                    Filtrar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
