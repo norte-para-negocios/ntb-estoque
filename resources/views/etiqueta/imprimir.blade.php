@@ -21,6 +21,7 @@
             height: 4.34cm;
             padding: 3mm;
             color: #000000;
+            page-break-after: always;
         }
 
         table {
@@ -70,13 +71,13 @@
                         @if (($etiqueta['produzido'] !== '') && ($etiqueta['validade'] !== ''))
                             <tr style="padding-bottom: 10px;">
                                 <td style="padding-bottom: 10px; width: 50%;">
-                                    Fabricação:</br>
+                                    Fabricação:<br>
                                     <span
                                         style="font-size: 11px; font-weight: bold;">{{ substr(trim($etiqueta['produzido']), 0, 14) }}</span>
                                 </td>
 
                                 <td style="padding-bottom: 10px; width: 50%;">
-                                    Validade:</br>
+                                    Validade:<br>
                                     <span
                                         style="font-size: 11px; font-weight: bold;">{{ substr(trim($etiqueta['validade']), 0, 15) }}</span>
                                 </td>

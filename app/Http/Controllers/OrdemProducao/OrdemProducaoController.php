@@ -130,6 +130,8 @@ class OrdemProducaoController extends Controller
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
             ->setOption('orientation', 'portrait');
+//            ->setOption('disable-smart-shrinking', true);
+        ;
 
         if (config('app.env') === 'local') {
             return $pdf->inline('etiquetas_op.pdf');
