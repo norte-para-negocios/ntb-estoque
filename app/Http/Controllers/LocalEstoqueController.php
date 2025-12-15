@@ -16,7 +16,7 @@ class LocalEstoqueController extends Controller
 
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Locais de Estoque', auth()->user()->current_loja_id) || auth()->user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Locais de Estoque', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Locais de Estoque!");
         }
 
@@ -32,7 +32,7 @@ class LocalEstoqueController extends Controller
 
     public function update()
     {
-        if (!CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->current_loja_id) || auth()->user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Locais de Estoque - Sincronizar!");
         }
 
