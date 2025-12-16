@@ -33,17 +33,35 @@ class InventarioController extends Controller
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
-        session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
+        $tipo = $request->get('tipo', null);
+        session([
+            'inicio' => $data_inicio->format('Y-m-d'),
+            'final' => $data_final->format('Y-m-d'),
+            'tipo' => $tipo,
+            'familia' => $request->get('familia', null),
+        ]);
 
         $inventarios = Inventario::where('loja_id', auth()->user()->current_loja_id)
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
+            ->when($request->get('familia'), function ($familia) use ($request) {
+                $familia->whereHas('items', function ($items) use($request) {
+                    $items->where('inventario_items.produto_familia', $request->get('familia'));
+                });
+            })
+            ->when($request->get('tipo'), function ($q) use ($request) {
+                $q->whereHas('items', function ($items) use ($request) {
+                    $items->whereHas('produto', function ($produto) use ($request) {
+                        $produto->where('tipo_item', $request->get('tipo'));
+                    });
+                });
+            })
             ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
 
         $locaisEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)->orderBy('descricao', 'asc')->get();
 
-        return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque'));
+        return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque', 'tipo'));
     }
 
     public function store(Request $request)

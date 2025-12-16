@@ -167,6 +167,54 @@ class OrdemProducaoService
         return new stdClass();
     }
 
+    public function concluirOrdemProducao(int $nCodOP, string $dataConclusao, float $quantidade, string $observacao): object
+    {
+        $url = $this->urlBase . 'v1/produtos/op/';
+        $data = [
+            "call" => "ConcluirOrdemProducao",
+            "app_key" => $this->loja->omie_app_key,
+            "app_secret" => $this->loja->omie_app_secret,
+            "param" => [
+                [
+                    "cCodIntOP" => "",
+                    "nCodOP" => $nCodOP,
+                    "nQtdeProduzida" => $quantidade,
+                    "cObsConclusao" => $observacao,
+                ]
+            ]
+        ];
+
+        // Inicializando Log de integração
+        $this->loja_id = $this->loja->id;
+        $this->model = 'OrdemProducao';
+        $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+        $this->beforeAttemptLog();
+
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json'
+            ])->post($url, $data);
+
+            // Log de integração
+            $this->response = $response->getBody()->getContents();
+            $this->code = $response->getStatusCode();
+
+            if ($response->status() === 200) {
+                return $response->object();
+            } elseif ($response->status() === 500) {
+                return new stdClass();
+            }
+        } catch (Throwable $th) {
+            // Log de erro.
+            $this->error_message = json_encode($th->getMessage());
+            $this->code = $th->getCode();
+            $this->error = true;
+        } finally {
+            $this->afterAttemptLog();
+        }
+        return new stdClass();
+    }
+
     public function saveOrdensProducao(array $ordens): void
     {
         foreach ($ordens as $ordem) {

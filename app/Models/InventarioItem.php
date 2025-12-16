@@ -32,7 +32,7 @@ class InventarioItem extends Model
 
     public function produto()
     {
-        return $this->belongsTo(Produto::class, 'produto_codigo_produto', 'codigo_produto')->where('loja_id', $this->loja_id);
+        return $this->belongsTo(Produto::class, 'produto_codigo_produto', 'codigo_produto');
     }
 
     public function loja()

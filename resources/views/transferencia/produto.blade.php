@@ -156,7 +156,7 @@
                                     </div>
                                 </td>
                             </tr>`;
-                        produtosTable.insertAdjacentHTML('beforeend', novaLinha);
+                        produtosTable.insertAdjacentHTML('afterbegin', novaLinha);
                         let produtosSalvos = JSON.parse(localStorage.getItem('produtos')) || [];
                         const jaExisteNoStorage = produtosSalvos.some(p => p.id === produto.id);
                         if (!jaExisteNoStorage) {

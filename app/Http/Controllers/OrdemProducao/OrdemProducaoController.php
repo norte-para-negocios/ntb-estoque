@@ -101,7 +101,7 @@ class OrdemProducaoController extends Controller
             if ($ordemProducao->produto_unidade == 'UN') {
                 $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
             } else {
-                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',' , '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',', '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
             }
 
             $etiquetas[] = [
@@ -130,10 +130,26 @@ class OrdemProducaoController extends Controller
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
             ->setOption('orientation', 'portrait');
+//            ->setOption('disable-smart-shrinking', true);
+        ;
 
         if (config('app.env') === 'local') {
             return $pdf->inline('etiquetas_op.pdf');
         }
         return $pdf->download('etiquetas_op.pdf');
+    }
+
+    public function finish(Request $request, OrdemProducao $ordemProducao)
+    {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
+        (new OrdemProducaoService(auth()->user()->loja))->concluirOrdemProducao(
+            $ordemProducao->identificacao_n_cod_op,
+            Carbon::parse($request->get('data'))->format('d/m/Y'),
+            $request->get('quantidade'),
+            $request->get('observacao')??''
+        );
+        return redirect()->route('ordemproducao.index')->with('success', 'Ordem produção concluída com sucesso!');
     }
 }

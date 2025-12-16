@@ -157,7 +157,7 @@
                                             </div>
                                             <div class="card-footer" style="background-color: #ffffff;">
                                                 <div class="row">
-                                                    <div class="col-md-5 col-12 mb-2">
+                                                    <div class="col-md-4 col-12 mb-2">
                                                         <small>Nome de produto</small><br>
                                                         <span
                                                             class="fw-semibold">{{ $op->produto_descricao ?? '' }}</span>
@@ -172,7 +172,7 @@
                                                     <div class="col-md-1 col-6 mb-2">
                                                         <small>Quantidade</small><br>
                                                         <span class="fw-semibold">
-                                                            {{ $op->identificacao_n_qtde ? number_format($op->identificacao_n_qtde, 2, ',', '.') : '' }}
+                                                            {{ $op->identificacao_n_qtde ? number_format($op->identificacao_n_qtde, 3, ',', '.') : '' }}
                                                             ({{ $op->produto_unidade ?? '' }})
                                                         </span>
                                                     </div>
@@ -211,13 +211,23 @@
                                                     </div>
 
                                                     <div
-                                                        class="col-md-1 col-4 text-end ps-0 d-flex justify-content-end justify-content-md-center align-items-center p-0">
+                                                        class="col-md-2 col-4 text-end ps-0 d-flex justify-content-end justify-content-md-around align-items-center p-0">
                                                         <button type="button"
                                                                 onclick="imprimir({{ $op->id }})"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold">
                                                             <img src="{{asset('images/imprimir.png')}}" alt=""
                                                                  class="me-1">Imprimir
                                                         </button>
+                                                        @if( (json_decode($op->full_object)->outrasInf->cConcluida === 'N'))
+                                                            <button type="button" data-bs-toggle="modal"
+                                                                    data-bs-target="#concluirOrdemProducaoModal"
+                                                                    data-url="{{ route('ordemproducao.finish', $op->id) }}"
+                                                                    data-quantidade="{{ $op->identificacao_n_qtde }}"
+                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold">
+                                                                <img src="{{asset('images/concluir.png')}}" alt=""
+                                                                     class="me-1">Concluir
+                                                            </button>
+                                                        @endif
                                                     </div>
                                                 </div>
                                             </div>
@@ -238,6 +248,7 @@
         {{ $ordensProducao->links('pagination::bootstrap-5') }}
 
     </div>
+    @include('ordemproducao.concluir')
 @endsection
 
 @push('js')

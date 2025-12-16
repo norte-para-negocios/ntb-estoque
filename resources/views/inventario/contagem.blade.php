@@ -323,7 +323,7 @@
                             </div>
                         </td>
                     </tr>`;
-            produtosTable.insertAdjacentHTML('beforeend', novaLinha);
+            produtosTable.insertAdjacentHTML('afterbegin', novaLinha);
         }
 
         $(document).ready(function () {

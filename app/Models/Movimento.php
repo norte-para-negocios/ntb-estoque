@@ -43,8 +43,7 @@ class Movimento extends Model
 
     public function produto(): hasOne
     {
-        return $this->hasOne(Produto::class, 'codigo_produto', 'id_prod')
-            ->where('loja_id', '=', $this->loja_id);
+        return $this->hasOne(Produto::class, 'codigo_produto', 'id_prod');
     }
 
     public function estoqueOrigem(): hasOne

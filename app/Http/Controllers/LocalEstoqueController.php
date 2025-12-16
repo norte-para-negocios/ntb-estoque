@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LocalEstoque;
+use App\Services\CanService;
 use App\Services\LocalEstoqueService;
 use Illuminate\Http\Request;
 
@@ -15,8 +16,8 @@ class LocalEstoqueController extends Controller
 
     public function index(Request $request)
     {
-        if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+        if (!CanService::canPermissionLoja('Locais de Estoque', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Locais de Estoque!");
         }
 
         $locais = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)
@@ -31,8 +32,8 @@ class LocalEstoqueController extends Controller
 
     public function update()
     {
-        if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+        if (!CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Locais de Estoque - Sincronizar!");
         }
 
         try {
