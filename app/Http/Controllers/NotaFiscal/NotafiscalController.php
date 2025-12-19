@@ -101,10 +101,9 @@ class NotafiscalController extends Controller
 
         foreach ($notaFiscal->nfItems as $item) {
             if ($item->produto) {
-                $qtde = ($item->produto->unidade == 'UN') ? ($item->quantidade ?? 1) : 1;
                 if (($item->n_id_produto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
-                    if ($item->produto->unidade == 'UN') {
-                        $quantidade = number_format($qtde, 0, ',', '.') . '(' . ($item->produto->unidade ?? '') . ')';
+                    if ($item->quantidade !== null) {
+                        $quantidade = number_format($item->quantidade, 0, ',', '.') . '(' . ($item->produto->unidade ?? '') . ')';
                     } else {
                         $quantidade = number_format((float)json_decode($item->full_object)->itensAjustes->nQtdeRecebida ?? 0, 3, ',', '.') . ' (' . ($item->produto->unidade ?? '') . ')';
                     }
