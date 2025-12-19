@@ -143,7 +143,7 @@ class InventarioController extends Controller
             ]);
             return response([
                 "key" => $item->id,
-                "id" => $produto->codigo_produto,
+                "id" => $produto->codigo,
                 "nome" => $produto->descricao,
                 "unidade" => $produto->unidade,
             ], 201);
