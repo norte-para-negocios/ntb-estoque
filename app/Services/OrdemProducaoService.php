@@ -178,6 +178,7 @@ class OrdemProducaoService
                 [
                     "cCodIntOP" => "",
                     "nCodOP" => $nCodOP,
+                    "dDtConclusao" => $dataConclusao,
                     "nQtdeProduzida" => $quantidade,
                     "cObsConclusao" => $observacao,
                 ]
