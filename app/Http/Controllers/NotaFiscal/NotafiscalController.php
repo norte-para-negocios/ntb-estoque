@@ -27,8 +27,8 @@ class NotafiscalController extends Controller
             abort(403, "Você não possui a permissão: Notas Fiscais!");
         }
 
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio', Carbon::now()->subDays(30)));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final', Carbon::now()));
         session(['inicio' => $data_inicio->format('Y-m-d'), 'final' => $data_final->format('Y-m-d')]);
 
         $num_nfe = $request->get('num_nfe');
@@ -101,10 +101,9 @@ class NotafiscalController extends Controller
 
         foreach ($notaFiscal->nfItems as $item) {
             if ($item->produto) {
-                $qtde = ($item->produto->unidade == 'UN') ? ($item->quantidade ?? 1) : 1;
                 if (($item->n_id_produto == $nIdProduto && $nIdProduto !== '') || $nIdProduto == '') {
-                    if ($item->produto->unidade == 'UN') {
-                        $quantidade = number_format($qtde, 0, ',', '.') . '(' . ($item->produto->unidade ?? '') . ')';
+                    if ($item->quantidade !== null) {
+                        $quantidade = number_format($item->quantidade, 0, ',', '.') . '(' . ($item->produto->unidade ?? '') . ')';
                     } else {
                         $quantidade = number_format((float)json_decode($item->full_object)->itensAjustes->nQtdeRecebida ?? 0, 3, ',', '.') . ' (' . ($item->produto->unidade ?? '') . ')';
                     }

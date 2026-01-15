@@ -10,6 +10,7 @@ class OrdemProducao extends Model
         'loja_id',
         'num_ordem',
         'validade',
+        'quantidade',
 
         'identificacao_n_cod_op',
         'identificacao_c_cod_int_op',

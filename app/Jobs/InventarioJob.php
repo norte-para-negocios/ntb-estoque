@@ -190,6 +190,14 @@ class InventarioJob implements ShouldQueue
 
                     if ($response->status() === 200) {
                         return $response->object();
+                    } elseif ($response->status() === 429) {
+                        sleep(60);
+                        return $this->createAjuste($inventarioItem);
+                    } elseif ($response->status() === 425) {
+                        preg_match('/Tente novamente em \[(\d+)\]/', $response->object()->faultstring, $matches);
+                        $idAjuste = isset($matches[1]) ? $matches[1] : '';
+                        sleep(60);
+                        return $this->createAjuste($inventarioItem);
                     } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';

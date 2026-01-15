@@ -12,6 +12,7 @@ use App\Http\Controllers\OrdemProducao\RelatorioOrdemProducaoController;
 use App\Http\Controllers\ProdutoController;
 use App\Http\Controllers\Transferencia\RelatorioTransferenciaController;
 use App\Http\Controllers\Transferencia\TransferenciaController;
+use App\Http\Controllers\Transferencia\TransfersController;
 use App\Http\Controllers\User\PermissaoController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\CheckCurrentLoja;
@@ -66,6 +67,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     Route::prefix('ordem-producao')->group(function () {
         Route::get('/', [OrdemProducaoController::class, 'index'])->name('ordemproducao.index');
         Route::post('/{ordemProducao}/validade', [OrdemProducaoController::class, 'setValidade'])->name('ordemproducao.setValidade');
+        Route::post('/{ordemProducao}/quantidade', [OrdemProducaoController::class, 'setQuantidade'])->name('ordemproducao.setQuantidade');
         Route::get('/{ordemProducao}/imprimir', [OrdemProducaoController::class, 'imprimir'])->name('ordemproducao.imprimir');
         Route::post('/{ordemProducao}/finish', [OrdemProducaoController::class, 'finish'])->name('ordemproducao.finish');
         Route::get('/sync-omie', [OrdemProducaoController::class, 'syncOrdensProducao'])->name('ordemproducao.sync');
@@ -78,11 +80,11 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     });
 
     // Transferência
-    Route::resource('transferencia', TransferenciaController::class)->only(['index', 'create', 'store', 'destroy'])->parameter('transferencia', 'movimento');
-    Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
-    Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
-    Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');
-    Route::post('/transferencia/pdf', [RelatorioTransferenciaController::class, 'pdf'])->name('transferencia.pdf');
+//    Route::resource('transferencia', TransferenciaController::class)->only(['index', 'create', 'store', 'destroy'])->parameter('transferencia', 'movimento');
+//    Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
+   Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
+//    Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');
+//    Route::post('/transferencia/pdf', [RelatorioTransferenciaController::class, 'pdf'])->name('transferencia.pdf');
 
     // Inventário
     Route::prefix('inventario')->group(function () {
@@ -98,5 +100,21 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::post('/edit/quantidade/{inventarioItem}', [InventarioController::class, 'editQuantidade'])->name('inventario.editQuantidade');
         Route::post('/item/{inventario}', [InventarioController::class, 'storeItem'])->name('inventarioitem.store');
         Route::delete('/item/{inventarioItem}', [InventarioController::class, 'destroyItem'])->name('inventarioitem.destroy');
+    });
+
+    // Transfers
+    Route::prefix('transfers')->group(function () {
+        Route::get('/', [TransfersController::class, 'index'])->name('transfers.index');
+        Route::get('/contagem/{transferencia}', [TransfersController::class, 'contagem'])->name('transfers.contagem');
+        Route::post('/store', [TransfersController::class, 'store'])->name('transfers.store');
+        Route::post('/finish/{transferencia}', [TransfersController::class, 'finish'])->name('transfers.finish');
+        Route::delete('/destroy/{transferencia}', [TransfersController::class, 'destroy'])->name('transfers.destroy');
+        Route::get('/pdf/{transferencia}', [TransfersController::class, 'pdf'])->name('transfers.pdf');
+        Route::get('/{transferencia}/duplicar', [TransfersController::class, 'duplicar'])->name('transfers.duplicar');
+
+        Route::post('/quantidade/{movimento}', [TransfersController::class, 'setQuantidade'])->name('transfers.setQuantidade');
+        Route::post('/edit/quantidade/{movimento}', [TransfersController::class, 'editQuantidade'])->name('transfers.editQuantidade');
+        Route::post('/item/{transferencia}', [TransfersController::class, 'storeItem'])->name('movimento.store');
+        Route::delete('/item/{movimento}', [TransfersController::class, 'destroyItem'])->name('movimento.destroy');
     });
 });

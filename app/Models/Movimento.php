@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Movimento extends Model
 {
     protected $fillable = [
         'loja_id',
+        'transferencia_id',
         'codigo_local_estoque',
         'id_prod',
         'data',
@@ -39,6 +41,11 @@ class Movimento extends Model
     public function loja()
     {
         return $this->belongsTo(Loja::class);
+    }
+
+    public function transferencia(): BelongsTo
+    {
+        return $this->belongsTo(Transferencia::class);
     }
 
     public function produto(): hasOne

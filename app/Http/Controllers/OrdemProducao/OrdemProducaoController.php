@@ -24,8 +24,8 @@ class OrdemProducaoController extends Controller
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio', Carbon::now()->subDays(30)));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final', Carbon::now()));
 
         $ordem_producao = $request->get('ordem_producao');
         $tipo_produto = $request->get('tipo_produto') ?? '';
@@ -75,6 +75,20 @@ class OrdemProducaoController extends Controller
             $ordemProducao->validade = Carbon::parse($request->get('validade'));
         } else {
             $ordemProducao->validade = null;
+        }
+        $ordemProducao->save();
+    }
+
+    public function setQuantidade(Request $request, OrdemProducao $ordemProducao)
+    {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
+
+        if ($request->filled('quantidade')) {
+            $ordemProducao->quantidade = $request->get('quantidade');
+        } else {
+            $ordemProducao->quantidade = null;
         }
         $ordemProducao->save();
     }
@@ -129,8 +143,7 @@ class OrdemProducaoController extends Controller
             ->setOption('margin-right', 0)
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
-            ->setOption('orientation', 'portrait');
-//            ->setOption('disable-smart-shrinking', true);
+            ->setOption('orientation', 'portrait');//            ->setOption('disable-smart-shrinking', true);
         ;
 
         if (config('app.env') === 'local') {
@@ -144,12 +157,17 @@ class OrdemProducaoController extends Controller
         if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
-        (new OrdemProducaoService(auth()->user()->loja))->concluirOrdemProducao(
-            $ordemProducao->identificacao_n_cod_op,
-            Carbon::parse($request->get('data'))->format('d/m/Y'),
-            $request->get('quantidade'),
-            $request->get('observacao')??''
-        );
+        $opService = new OrdemProducaoService(auth()->user()->loja);
+        $op = $opService->fetchOrdemProducao($ordemProducao->identificacao_n_cod_op);
+        $opService->saveOrdemProducao($op);
+        if ($op->outrasInf->cConcluida !== 'S') {
+            $opService->concluirOrdemProducao(
+                $ordemProducao->identificacao_n_cod_op,
+                Carbon::parse($request->get('data'))->format('d/m/Y'),
+                $request->get('quantidade'),
+                $request->get('observacao') ?? ''
+            );
+        }
         return redirect()->route('ordemproducao.index')->with('success', 'Ordem produção concluída com sucesso!');
     }
 }
