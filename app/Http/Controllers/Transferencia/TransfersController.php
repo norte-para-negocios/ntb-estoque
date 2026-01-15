@@ -3,19 +3,22 @@
 namespace App\Http\Controllers\Transferencia;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTransferenciaItemRequest;
+use App\Http\Requests\StoreTransferenciaRequest;
+use App\Http\Requests\UpdateQuantidadeRequest;
 use App\Jobs\TransferJob;
 use App\Models\LocalEstoque;
-use App\Models\Loja;
 use App\Models\Movimento;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
 use App\Models\Transferencia;
 use App\Services\CanService;
+use App\Services\OmieService;
 use App\Services\PosicaoEstoqueService;
+use Barryvdh\Snappy\Facades\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use PDF;
+use Illuminate\Support\Facades\Log;
 
 class TransfersController extends Controller
 {
@@ -40,7 +43,7 @@ class TransfersController extends Controller
         ]);
 
         $transferencias = Transferencia::where('loja_id', auth()->user()->current_loja_id)
-            ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
+            ->whereBetween('data', [$data_inicio->startOfDay(), $data_final->endOfDay()])
             ->when($request->get('familia'), function ($familia) use ($request) {
                 $familia->whereHas('movimentos', function ($items) use ($request) {
                     $items->whereHas('produto', function ($produto) use ($request) {
@@ -64,7 +67,7 @@ class TransfersController extends Controller
         return view('transfers.index', compact('data_inicio', 'data_final', 'transferencias', 'locaisEstoque', 'tipo'));
     }
 
-    public function store(Request $request)
+    public function store(StoreTransferenciaRequest $request)
     {
         if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Transferências - Criar!');
@@ -81,13 +84,6 @@ class TransfersController extends Controller
             return redirect()->route('transfers.index')->with('info', "Transferência nº $emContagem->id ainda em processamento, finalize-o antes de iniciar nova transferência!");
         }
 
-        $request->validate([
-            'codigo_local_origem' => 'required|integer',
-            'codigo_local_destino' => 'required|integer',
-            'data' => 'required|date',
-            'motivo' => 'required|string|max:3|in:'.implode(',', array_keys(\App\Helpers\Constants::TIPO_MOVIMENTO_TRANSFERENCIA)),
-        ]);
-
         $transferencia = Transferencia::create([
             'loja_id' => auth()->user()->current_loja_id,
             'codigo_local_origem' => $request->input('codigo_local_origem'),
@@ -100,20 +96,19 @@ class TransfersController extends Controller
         return redirect()->route('transfers.contagem', $transferencia->id);
     }
 
-    public function storeItem(Request $request, Transferencia $transferencia)
+    public function storeItem(StoreTransferenciaItemRequest $request, Transferencia $transferencia)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
+        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
-
-        $request->validate([
-            'codigo' => 'required|string|max:60',
-            'quantidade' => 'required|numeric',
-        ]);
 
         $produto = Produto::where('loja_id', $transferencia->loja_id)
             ->where('codigo', $request->get('codigo'))
             ->first();
+
+        if (! $produto) {
+            return response(['mensagem' => 'Produto não encontrado'], 404);
+        }
 
         $posicaoEstoque = PosicaoEstoque::where('loja_id', $transferencia->loja_id)
             ->where('codigo_local_estoque', $transferencia->codigo_local_origem)
@@ -133,9 +128,7 @@ class TransfersController extends Controller
         }
 
         try {
-
             $item = $transferencia->movimentos()->create([
-
                 'loja_id' => $transferencia->loja_id,
                 'codigo_local_estoque' => $transferencia->codigo_local_origem,
                 'id_prod' => $produto->codigo_produto,
@@ -163,85 +156,71 @@ class TransfersController extends Controller
                 'unidade' => $produto->unidade,
             ], 201);
         } catch (\Exception $e) {
+            Log::error('Erro ao inserir item na transferência', [
+                'transferencia_id' => $transferencia->id,
+                'produto_codigo' => $request->get('codigo'),
+                'erro' => $e->getMessage(),
+            ]);
+
             return response(['mensagem' => "Não foi possível inserir o item, erro: {$e->getMessage()}"], 500);
         }
     }
 
     public function pdf(Request $request, Transferencia $transferencia)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Ver!');
+        if (! CanService::canPermissionLoja('Transferências - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Ver!');
         }
-        $pdf = PDF::loadView('transferencia.pdf', ['transferencia' => $transferencia, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
+        $pdf = Pdf::loadView('transfers.pdf', ['transferencia' => $transferencia, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
 
-        return $pdf->inline("inventario-{$transferencia->id}.pdf");
+        return $pdf->inline("transferencia-{$transferencia->id}.pdf");
     }
 
     public function finish(Request $request, Transferencia $transferencia)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
+        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
-        (new PosicaoEstoqueService(Loja::find($transferencia->loja_id)))->fetchAll($transferencia->codigo_local_origem, $transferencia->data->format('d/m/Y'));
+        (new PosicaoEstoqueService($transferencia->loja))->fetchAll($transferencia->codigo_local_origem, $transferencia->data->format('d/m/Y'));
         TransferJob::dispatch($transferencia, auth()->user())->delay(10);
 
         return redirect()
             ->route('transfers.index', [
                 'data_inicio' => $transferencia->data->format('Y-m-d'),
-                'data_final' => $transferencia->data->format('Y-m-d')]
-            )->with('success', 'Transferência processando no Omie, só aguardar a finalização do processamento. :)');
+                'data_final' => $transferencia->data->format('Y-m-d'),
+            ])
+            ->with('success', 'Transferência processando no Omie, só aguardar a finalização do processamento. :)');
     }
 
     public function contagem(Transferencia $transferencia)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
+        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
 
         return view('transfers.contagem', compact('transferencia'));
     }
 
-    public function setQuantidade(Movimento $movimento, Request $request)
+    public function setQuantidade(Movimento $movimento, UpdateQuantidadeRequest $request)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
+        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
-
-        $request->validate([
-            'quantidade' => 'required|numeric|min:0',
-        ]);
 
         $movimento->update(['quan' => $request->input('quantidade')]);
 
         return response()->json(['success' => true]);
     }
 
-    public function editQuantidade(Movimento $movimento, Request $request)
+    public function editQuantidade(Movimento $movimento, UpdateQuantidadeRequest $request)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Editar!');
+        if (! CanService::canPermissionLoja('Transferências - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Editar!');
         }
 
-        $request->validate([
-            'quantidade' => 'required|numeric|min:0',
-        ]);
-
         if ($movimento->id_ajuste !== null) {
-            $loja = $movimento->inventario->loja;
-            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-            $data = [
-                'call' => 'ExcluirAjusteEstoque',
-                'app_key' => $loja->omie_app_key,
-                'app_secret' => $loja->omie_app_secret,
-                'param' => [
-                    [
-                        'id_ajuste' => $movimento->id_ajuste,
-                    ],
-                ],
-            ];
-            Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->connectTimeout(60)->timeout(60)->post($url, $data);
+            $omieService = new OmieService($movimento->transferencia->loja);
+            $omieService->excluirAjusteEstoque($movimento->id_ajuste);
         }
 
         $movimento->update([
@@ -254,7 +233,7 @@ class TransfersController extends Controller
             'quan' => $request->input('quantidade'),
         ]);
 
-        TransferJob::dispatch($movimento->inventario, auth()->user());
+        TransferJob::dispatch($movimento->transferencia, auth()->user());
 
         return response()->json(['success' => true]);
     }
@@ -267,9 +246,9 @@ class TransfersController extends Controller
         $clone->status = 'Em contagem';
         $clone->save();
 
-        foreach ($transferencia->items as $item) {
+        foreach ($transferencia->movimentos as $item) {
             $clonedItem = $item->replicate();
-            $clonedItem->inventario_id = $clone->id;
+            $clonedItem->transferencia_id = $clone->id;
             $clonedItem->quan = null;
             $clonedItem->valor = null;
             $clonedItem->response = null;
@@ -281,35 +260,20 @@ class TransfersController extends Controller
             $clonedItem->save();
         }
 
-        return redirect()->route('transfers.contagem', $clonedItem->inventario)
+        return redirect()->route('transfers.contagem', $clone)
             ->with('success', 'Tranferência duplicado com sucesso!');
     }
 
     public function destroy(Transferencia $transferencia)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Excluir!');
+        if (! CanService::canPermissionLoja('Transferências - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Excluir!');
         }
 
         foreach ($transferencia->movimentos as $movimento) {
             if ($movimento->id_ajuste !== null) {
-                $loja = $transferencia->loja;
-                $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-                $data = [
-                    'call' => 'ExcluirAjusteEstoque',
-                    'app_key' => $loja->omie_app_key,
-                    'app_secret' => $loja->omie_app_secret,
-                    'param' => [
-                        [
-                            'id_ajuste' => $movimento->id_ajuste,
-                        ],
-                    ],
-                ];
-                Http::withHeaders([
-                    'Content-Type' => 'application/json',
-                ])->connectTimeout(60)
-                    ->timeout(60)
-                    ->post($url, $data);
+                $omieService = new OmieService($transferencia->loja);
+                $omieService->excluirAjusteEstoque($movimento->id_ajuste);
             }
             $movimento->delete();
         }
@@ -320,28 +284,13 @@ class TransfersController extends Controller
 
     public function destroyItem(Movimento $movimento)
     {
-        if (! CanService::canPermissionLoja('Transferencia - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferencia - Editar!');
+        if (! CanService::canPermissionLoja('Transferências - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Editar!');
         }
 
         if ($movimento->id_ajuste !== null) {
-            $loja = $movimento->inventario->loja;
-            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
-            $data = [
-                'call' => 'ExcluirAjusteEstoque',
-                'app_key' => $loja->omie_app_key,
-                'app_secret' => $loja->omie_app_secret,
-                'param' => [
-                    [
-                        'id_ajuste' => $movimento->id_ajuste,
-                    ],
-                ],
-            ];
-            Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->connectTimeout(60)
-                ->timeout(60)
-                ->post($url, $data);
+            $omieService = new OmieService($movimento->transferencia->loja);
+            $omieService->excluirAjusteEstoque($movimento->id_ajuste);
         }
         $movimento->delete();
 
