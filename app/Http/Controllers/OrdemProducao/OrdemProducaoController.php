@@ -24,8 +24,8 @@ class OrdemProducaoController extends Controller
             abort(403, "Você não possui a permissão: Ordens de Produção!");
         }
 
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio', Carbon::now()->subDays(30)));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final', Carbon::now()));
 
         $ordem_producao = $request->get('ordem_producao');
         $tipo_produto = $request->get('tipo_produto') ?? '';

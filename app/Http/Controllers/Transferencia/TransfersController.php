@@ -29,8 +29,8 @@ class TransfersController extends Controller
         if (! CanService::canPermissionLoja('Transferências - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Transferências - Ver!');
         }
-        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
-        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
+        $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio', Carbon::now()->subDays(30)));
+        $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final', Carbon::now()));
         $tipo = $request->get('tipo', null);
         session([
             'inicio' => $data_inicio->format('Y-m-d'),
