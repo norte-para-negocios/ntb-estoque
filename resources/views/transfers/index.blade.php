@@ -116,7 +116,7 @@
                                             <div class="card-header d-flex justify-content-between"
                                                  style="font-size: .7rem;
                                                  background-color:
-                                                 @if ($transferencia->status !== 'Finalizado')
+                                                 @if ($transferencia->status !== 'Concluído')
                                                     #F24646
                                                 @else
                                                     #2EB5C3
@@ -147,7 +147,9 @@
                                                     <div class="col-md-3 col-5">
                                                         <small>Local</small><br>
                                                         <span class="fw-semibold">
-                                                            {{$transferencia->localEstoque->descricao ?? ''}}
+                                                            {{$transferencia->localOrigem->descricao ?? ''}}
+                                                            -
+                                                            {{$transferencia->localDestino->descricao ?? ''}}
                                                         </span>
                                                     </div>
 

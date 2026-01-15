@@ -3,8 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\NotificaUserEvent;
-use App\Models\Inventario;
-use App\Models\InventarioItem;
+use App\Models\Movimento;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
@@ -31,9 +30,9 @@ class TransferJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(protected Transferencia $inventario, protected User $user)
+    public function __construct(protected Transferencia $transferencia, protected User $user)
     {
-        $this->posicaoService = new PosicaoEstoqueService($inventario->loja);
+        $this->posicaoService = new PosicaoEstoqueService($transferencia->loja);
     }
 
     /**
@@ -43,15 +42,15 @@ class TransferJob implements ShouldQueue
     {
         broadcast(new NotificaUserEvent($this->user, "info", "Estamos registrando toda a informação no Omie, outras mensagens como essa lhe atualizará em breve. Só aguardar! ;)"));
 
-        $this->inventario->status = 'Processando no Omie';
-        $this->inventario->save();
+        $this->transferencia->status = 'Processando';
+        $this->transferencia->save();
 
-        $localOrigem = LocalEstoque::where('loja_id', $this->inventario->loja_id)
-            ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
+        $localOrigem = LocalEstoque::where('loja_id', $this->transferencia->loja_id)
+            ->where('codigo_local_estoque', $this->transferencia->codigo_local_origem)
             ->first();
 
         $esperaPosicao = 0;
-        while (Loja::find($this->inventario->loja_id)->posicao_estoque_status !== 'Concluído') {
+        while (Loja::find($this->transferencia->loja_id)->posicao_estoque_status !== 'Concluído') {
             $esperaPosicao += 1;
             sleep(1);
 
@@ -60,98 +59,97 @@ class TransferJob implements ShouldQueue
             }
         }
 
-        while (InventarioItem::where('inventario_id', $this->inventario->id)
+        while (Movimento::where('transferencia_id', $this->transferencia->id)
                 ->where(function ($q) {
-                    $q->whereNull('inventario_items.status')
-                        ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                    $q->whereNull('status')
+                        ->orWhereIn('status', ['Iniciado']);
                 })
                 ->count() > 0) {
 
-            foreach (InventarioItem::where('inventario_id', $this->inventario->id)
+            foreach (Movimento::where('transferencia_id', $this->transferencia->id)
                          ->where(function ($q) {
-                             $q->whereNull('inventario_items.status')
-                                 ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                             $q->whereNull('status')
+                                 ->orWhereIn('status', ['Iniciado']);
                          })
                          ->orderBy('quan')
-                         ->get() as $inventarioItem) {
+                         ->get() as $movimento) {
 
-                if ($inventarioItem->quan === null) {
-                    $inventarioItem->delete();
+                if ($movimento->quan === null) {
+                    $movimento->delete();
                 } else {
-                    if ($inventarioItem->valor === null || $inventarioItem->valor <= 0) {
-                        $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
-                            ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
-                            ->where('n_cod_prod', $inventarioItem->produto_codigo_produto)
-                            ->where('data_posicao', $this->inventario->data->format('Y-m-d'))
+                    if ($movimento->valor === null || $movimento->valor <= 0) {
+                        $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->transferencia->loja_id)
+                            ->where('codigo_local_estoque', $this->transferencia->codigo_local_origem)
+                            ->where('n_cod_prod', $movimento->produto->codigo_produto)
+                            ->where('data_posicao', $this->transferencia->data->format('Y-m-d'))
                             ->first();
                         if ($posicaoEstoque?->n_cmc > 0) {
-                            $inventarioItem->valor = $posicaoEstoque->n_cmc;
-                            $inventarioItem->save();
+                            $movimento->valor = $posicaoEstoque->n_cmc;
+                            $movimento->save();
                         } else {
                             // Tenta depois novamente, aguardando a posição de estoque carregar.
                             try {
-                                $posicaoProd = $this->posicaoService->fetchPosicaoProduto($this->inventario->codigo_local_estoque, $inventarioItem->produto_codigo_produto, $this->inventario->data->format('d/m/Y'));
-                                $this->posicaoService->savePosicao($posicaoProd, $this->inventario->data->format('d/m/Y'));
-                                $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
-                                    ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
-                                    ->where('n_cod_prod', $inventarioItem->produto_codigo_produto)
-                                    ->where('data_posicao', $this->inventario->data->format('Y-m-d'))
+                                $posicaoProd = $this->posicaoService->fetchPosicaoProduto($this->transferencia->codigo_local_origem, $movimento->produto->codigo_produto, $this->transferencia->data->format('d/m/Y'));
+                                $this->posicaoService->savePosicao($posicaoProd, $this->transferencia->data->format('d/m/Y'));
+                                $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->transferencia->loja_id)
+                                    ->where('codigo_local_estoque', $this->transferencia->codigo_local_origem)
+                                    ->where('n_cod_prod', $movimento->produto->codigo_produto)
+                                    ->where('data_posicao', $this->transferencia->data->format('Y-m-d'))
                                     ->first();
                                 if ($posicaoEstoque?->n_cmc > 0) {
-                                    $inventarioItem->valor = $posicaoEstoque->n_cmc;
-                                    $inventarioItem->save();
+                                    $movimento->valor = $posicaoEstoque->n_cmc;
+                                    $movimento->save();
                                 } else {
-                                    $inventarioItem->valor = 0;
-                                    $inventarioItem->status = 'Sem CMC';
-                                    $inventarioItem->save();
+                                    $movimento->valor = 0;
+                                    $movimento->status = 'Erro';
+                                    $movimento->save();
                                 }
                                 break;
                             } catch (Throwable $e) {
                                 Log::error("Não foi possível obter o CMC do Produto: " . $e->getMessage(),
                                     [
-                                        'inventarioItem' => $inventarioItem,
+                                        'movimento' => $movimento,
                                     ]
                                 );
                             }
                         }
                     }
 
-                    $produto = Produto::where('loja_id', $this->inventario->loja_id)->where('codigo_produto', $inventarioItem->produto_codigo_produto)->first();
+                    $produto = Produto::where('loja_id', $this->transferencia->loja_id)->where('codigo_produto', $movimento->produto->codigo_produto)->first();
 
-                    $response = $this->createAjuste($inventarioItem);
+                    $response = $this->createAjuste($movimento);
                     if ($response) {
-                        $inventarioItem->response = json_encode($response);
-                        $inventarioItem->codigo_status = $response->codigo_status;
-                        $inventarioItem->descricao_status = $response->descricao_status;
-                        $inventarioItem->id_movest = $response->id_movest;
-                        $inventarioItem->id_ajuste = $response->id_ajuste;
-                        $inventarioItem->status = 'Concluído';
+                        $movimento->response = json_encode($response);
+                        $movimento->codigo_status = $response->codigo_status;
+                        $movimento->descricao_status = $response->descricao_status;
+                        $movimento->id_movest = $response->id_movest;
+                        $movimento->id_ajuste = $response->id_ajuste;
+                        $movimento->status = 'Concluído';
                         broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
-                        $inventarioItem->status = 'Erro';
+                        $movimento->status = 'Erro';
                     }
-                    $inventarioItem->save();
+                    $movimento->save();
                 }
             }
         }
 
-        Inventario::where('id', $this->inventario->id)->update([
-            'status' => 'Finalizado',
-            'finalizado' => now(),
+        $this->transferencia->update([
+            'status' => 'Concluído'
         ]);
-        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
+        broadcast(new NotificaUserEvent($this->user, "success", "Transferência de estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
     }
 
-    private function createAjuste(InventarioItem $inventarioItem): null|object
+    private function createAjuste(Movimento $movimento): null|object
     {
-        if (($inventarioItem->quan >= 0)
-            && (in_array(!$inventarioItem->status, [null, 'Erro', 'Sem CMC']))
-            && ($inventarioItem->id_ajuste === null)
-            && $inventarioItem->valor > 0
+        if (($movimento->quan >= 0)
+            && (in_array(!$movimento->status, [null, 'Erro']))
+            && ($movimento->id_ajuste === null)
+            && $movimento->valor > 0
         ) {
-            $inventarioItem->status = 'Iniciado';
-            $inventarioItem->save();
-            $loja = $inventarioItem->inventario->loja;
+            $movimento->status = 'Iniciado';
+            $movimento->save();
+            $loja = $movimento->transferencia->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
             $data = [
                 "call" => "IncluirAjusteEstoque",
@@ -159,16 +157,16 @@ class TransferJob implements ShouldQueue
                 "app_secret" => $loja->omie_app_secret,
                 "param" => [
                     [
-                        "codigo_local_estoque" => $inventarioItem->inventario->codigo_local_estoque,
-                        "id_prod" => $inventarioItem->produto_codigo_produto,
-                        "cod_int_ajuste" => 'ITEM' . $inventarioItem->id,
-                        "data" => $inventarioItem->inventario->data->format('d/m/Y'),
-                        "quan" => $inventarioItem->quan,
-                        "valor" => $inventarioItem->valor,
+                        "codigo_local_estoque" => $movimento->transferencia->codigo_local_destino,
+                        "id_prod" => $movimento->produto->codigo_produto,
+                        "cod_int_ajuste" => 'MOVIMENTO' . $movimento->id,
+                        "data" => $movimento->transferencia->data->format('d/m/Y'),
+                        "quan" => $movimento->quan,
+                        "valor" => $movimento->valor,
                         "obs" => 'NTB - Estoque|Usuário:' . $this->user->name,
-                        "origem" => $inventarioItem->inventario->origem,
-                        "tipo" => $inventarioItem->inventario->tipo,
-                        "motivo" => $inventarioItem->inventario->motivo,
+                        "origem" => $movimento->transferencia->codigo_local_origem,
+                        "tipo" => $movimento->tipo,
+                        "motivo" => $movimento->transferencia->motivo,
                     ]
                 ]
             ];
@@ -201,9 +199,9 @@ class TransferJob implements ShouldQueue
                         $obj->id_ajuste = $idAjuste;
                         return $obj;
                     } else {
-                        $inventarioItem->status = 'Erro';
-                        $inventarioItem->response = $response->body();
-                        $inventarioItem->save();
+                        $movimento->status = 'Erro';
+                        $movimento->response = $response->body();
+                        $movimento->save();
                     }
                 } catch (Throwable $th) {
                     $this->error_message = json_encode($th->getMessage());
@@ -218,10 +216,10 @@ class TransferJob implements ShouldQueue
             } finally {
                 $this->afterAttemptLog();
             }
-        } elseif ($inventarioItem->valor <= 0 || $inventarioItem->valor === null) {
-            $inventarioItem->valor = 0;
-            $inventarioItem->status = 'Sem CMC';
-            $inventarioItem->save();
+        } elseif ($movimento->valor <= 0 || $movimento->valor === null) {
+            $movimento->valor = 0;
+            $movimento->status = 'Erro';
+            $movimento->save();
         }
         return null;
     }

@@ -211,25 +211,7 @@
 @endsection
 
 @push('js')
-    <script>
-        document.querySelectorAll('.accordion-collapse').forEach((item) => {
-            item.addEventListener('shown.bs.collapse', () => {
-                localStorage.setItem('accordionNotaFiscal', item.id);
-            });
-            item.addEventListener('hidden.bs.collapse', () => {
-                localStorage.removeItem('accordionNotaFiscal');
-            });
-        });
-
-        // Restaurar estado ao carregar
-        window.addEventListener('DOMContentLoaded', () => {
-            const aberto = localStorage.getItem('accordionNotaFiscal');
-            if (aberto) {
-                const el = document.getElementById(aberto);
-                new bootstrap.Collapse(el, {toggle: true});
-            }
-        });
-
+    <script>        
         {{--function filtrarRegistros() {--}}
         {{--    document.getElementById('filtrosForm').submit();--}}
         {{--}--}}

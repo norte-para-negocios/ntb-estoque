@@ -2,7 +2,7 @@
 @section('content')
     <div class="container pb-5">
         <p>
-            <a href="{{route('transfers.contagem', $transferencia->id)}}" class="btn m-0 p-0" title="Voltar">
+            <a href="{{route('transfers.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
             <img class="ms-0 p-0" src="{{asset('images/transferencia.png')}}" alt="Transferência entre estoques">
@@ -395,11 +395,7 @@
 
             // Função chamada quando um QR Code é detectado
             function onScanSuccess(decodedText, decodedResult) {
-                searchInput.value = decodedText;
-                searchInput.dispatchEvent(new Event('input', {
-                    bubbles: true
-                }));
-
+                buscarProdutoPorQrCode(decodedText);
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
                         .then(function () {
@@ -407,7 +403,6 @@
                             document.getElementById('botaoPararCamera').style.display = 'none';
                         });
                 }
-
                 qrcodeModal.hide();
             }
 
