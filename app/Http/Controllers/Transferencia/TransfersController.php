@@ -220,7 +220,19 @@ class TransfersController extends Controller
 
         if ($movimento->id_ajuste !== null) {
             $omieService = new OmieService($movimento->transferencia->loja);
-            $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+            $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+
+            if (! $excluido) {
+                Log::warning('Falha ao excluir ajuste no Omie ao editar quantidade', [
+                    'movimento_id' => $movimento->id,
+                    'id_ajuste' => $movimento->id_ajuste,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'mensagem' => 'Não foi possível excluir o ajuste no Omie. Tente novamente.',
+                ], 500);
+            }
         }
 
         $movimento->update([
@@ -270,16 +282,40 @@ class TransfersController extends Controller
             abort(403, 'Você não possui a permissão: Transferências - Excluir!');
         }
 
+        $falhas = [];
         foreach ($transferencia->movimentos as $movimento) {
             if ($movimento->id_ajuste !== null) {
                 $omieService = new OmieService($transferencia->loja);
-                $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+                $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+
+                if (! $excluido) {
+                    $falhas[] = $movimento->id_ajuste;
+                    Log::warning('Falha ao excluir ajuste no Omie ao deletar transferência', [
+                        'transferencia_id' => $transferencia->id,
+                        'movimento_id' => $movimento->id,
+                        'id_ajuste' => $movimento->id_ajuste,
+                    ]);
+                }
             }
             $movimento->delete();
         }
         $transferencia->delete();
 
-        return redirect()->route('transfers.index', ['data_inicio' => $transferencia->data->format('Y-m-d'), 'data_final' => $transferencia->data->format('Y-m-d')])->with('success', 'Transferência cancelada com sucesso!');
+        if (! empty($falhas)) {
+            return redirect()
+                ->route('transfers.index', [
+                    'data_inicio' => $transferencia->data->format('Y-m-d'),
+                    'data_final' => $transferencia->data->format('Y-m-d'),
+                ])
+                ->with('warning', 'Transferência cancelada, mas alguns ajustes não puderam ser excluídos no Omie. Verifique os logs.');
+        }
+
+        return redirect()
+            ->route('transfers.index', [
+                'data_inicio' => $transferencia->data->format('Y-m-d'),
+                'data_final' => $transferencia->data->format('Y-m-d'),
+            ])
+            ->with('success', 'Transferência cancelada com sucesso!');
     }
 
     public function destroyItem(Movimento $movimento)
@@ -290,7 +326,16 @@ class TransfersController extends Controller
 
         if ($movimento->id_ajuste !== null) {
             $omieService = new OmieService($movimento->transferencia->loja);
-            $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+            $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+
+            if (! $excluido) {
+                Log::warning('Falha ao excluir ajuste no Omie ao deletar item', [
+                    'movimento_id' => $movimento->id,
+                    'id_ajuste' => $movimento->id_ajuste,
+                ]);
+
+                return redirect()->back()->with('warning', 'Item excluído localmente, mas não foi possível excluir o ajuste no Omie. Verifique os logs.');
+            }
         }
         $movimento->delete();
 
