@@ -67,9 +67,9 @@
                                                         </p>
                                                     </div>
                                                     <div
-                                                        class="col-sm-4 col-8 d-flex justify-content-around align-items-center">
+                                                        class="col-sm-4 col-8 d-flex justify-content-center align-items-center">
                                                         <span class="me-1" style="font-size: .7rem;">
-                                                            Quantidade de produto por etiqueta
+                                                            Qtd. produ. na etiqueta
                                                         </span>
                                                         <div class="d-flex">
                                                             <button

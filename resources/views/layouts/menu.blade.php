@@ -29,7 +29,7 @@
 </div>
 
 <div class="d-grid gap-2 mb-4">
-    <a href="{{ route('transferencia.index') }}" class="text-start text-decoration-none fw-bold">
+    <a href="{{ route('transfers.index') }}" class="text-start text-decoration-none fw-bold">
         <img src="{{asset('images/transferencia.png')}}" alt=""> Transferências
     </a>
 </div>

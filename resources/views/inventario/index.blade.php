@@ -144,7 +144,7 @@
                                                         </span>
                                                     </div>
 
-                                                    <div class="col-md-6 col-5">
+                                                    <div class="col-md-3 col-5">
                                                         <small>Local</small><br>
                                                         <span class="fw-semibold">
                                                             {{$inventario->localEstoque->descricao ?? ''}}

@@ -9,6 +9,7 @@ use App\Models\LocalEstoque;
 use App\Models\Loja;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
+use App\Models\Transferencia;
 use App\Models\User;
 use App\Services\IntegrationAttemptsTrait;
 use App\Services\PosicaoEstoqueService;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Log;
 use stdClass;
 use Throwable;
 
-class InventarioJob implements ShouldQueue
+class TransferJob implements ShouldQueue
 {
     use Queueable, IntegrationAttemptsTrait;
 
@@ -30,7 +31,7 @@ class InventarioJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(protected Inventario $inventario, protected User $user)
+    public function __construct(protected Transferencia $inventario, protected User $user)
     {
         $this->posicaoService = new PosicaoEstoqueService($inventario->loja);
     }

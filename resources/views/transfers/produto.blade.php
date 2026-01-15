@@ -17,7 +17,7 @@
                 <div class="container">
                     <div class="row">
                         <div class="col">
-                            <table class="table table-hover table-borderless" id="tabelaResultados">
+                            <table class="table table-hover table-borderless" id="tabelaResultadosTransfers">
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -48,16 +48,15 @@
                 const resultado = response.data;
 
                 // Renderiza tabela
-                const tbody = document.querySelector("#tabelaResultados tbody");
+                const tbody = document.querySelector("#tabelaResultadosTransfers tbody");
                 tbody.innerHTML = "";
                 resultado.data.forEach(item => {
                     const tr = document.createElement("tr");
                     tr.style.borderBottom = "1px solid #ccc";
                     const tdCodigo = document.createElement("td");
-                    let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                    let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                     let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${item.codigo}"]`) ? 'disabled' : '';
                     let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
-
                     tdCodigo.innerHTML = `
                         <div class="container">
                             <div class="row">
@@ -83,7 +82,7 @@
 
                         button.disabled = true;
 
-                        let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                        let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                         let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${produto.id}"]`) ?? false;
                         if (jaExisteNaTabela) {
                             jaExisteNaTabela.disabled = true;

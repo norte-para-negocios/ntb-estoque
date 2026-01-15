@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('filtro')
-    <form id="filtrosForm" method="GET" action="{{ route('inventario.index') }}">
+    <form id="filtrosForm" method="GET" action="{{ route('transfers.index') }}">
         <div class="row">
             <div class="col-6">
                 <div class="mb-3">
@@ -97,34 +97,34 @@
             <a href="{{route('home.index')}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
-            <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventários de estoques">
-            {{ __('Inventários') }}
+            <img class="ms-0 p-0" src="{{asset('images/transferencia.png')}}" alt="Transferências entre estoques">
+            {{ __('Transferências') }}
         </p>
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;">
             <tbody>
-            @if (isset($inventarios) && !empty($inventarios))
-                @foreach ($inventarios as $inventario)
+            @if (isset($transferencias) && !empty($transferencias))
+                @foreach ($transferencias as $transferencia)
                     <tr style="background-color: #f4f4f4;">
                         <td class="m-0 px-0" style="background-color: #f4f4f4;">
                             <div class="container">
                                 <div class="row">
                                     <div class="col-12 p-0">
                                         <small class="text-muted">
-                                            Data: {{$inventario->data->format('d/m/Y')}}
+                                            Data: {{$transferencia->data->format('d/m/Y')}}
                                         </small>
                                         <div class="card m-0">
                                             <div class="card-header d-flex justify-content-between"
                                                  style="font-size: .7rem;
                                                  background-color:
-                                                 @if ($inventario->status !== 'Finalizado')
+                                                 @if ($transferencia->status !== 'Finalizado')
                                                     #F24646
                                                 @else
                                                     #2EB5C3
                                                 @endif;
                                                  ">
-                                                {{$inventario->status}}
-                                                @if($inventario->finalizado)
-                                                    | {{$inventario->finalizado->format('d/m/Y')}}
+                                                {{$transferencia->status}}
+                                                @if($transferencia->finalizado)
+                                                    | {{$transferencia->finalizado->format('d/m/Y')}}
                                                 @endif
                                             </div>
 
@@ -133,44 +133,44 @@
                                                     <div class="col-md-1 col-3">
                                                         <small>Estoque</small><br>
                                                         <span class="fw-semibold">
-                                                            #{{$inventario->id}}
+                                                            #{{$transferencia->id}}
                                                         </span>
                                                     </div>
 
                                                     <div class="col-md-3 col-4">
                                                         <small>Produtos contados</small><br>
                                                         <span class="fw-semibold">
-                                                            {{$inventario->items()->count() ?? 0}}
+                                                            {{$transferencia->movimentos()->count() ?? 0}}
                                                         </span>
                                                     </div>
 
-                                                    <div class="col-md-6 col-5">
+                                                    <div class="col-md-3 col-5">
                                                         <small>Local</small><br>
                                                         <span class="fw-semibold">
-                                                            {{$inventario->localEstoque->descricao ?? ''}}
+                                                            {{$transferencia->localEstoque->descricao ?? ''}}
                                                         </span>
                                                     </div>
 
                                                     <div
                                                         class="col-md-5 col-12 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
-                                                        <a href="{{ route('inventario.contagem', $inventario->id) }}"
+                                                        <a href="{{ route('transfers.contagem', $transferencia->id) }}"
                                                            class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                             <img src="{{asset('images/editar.png')}}"
                                                                  alt="Imprimir"
                                                                  class="me-1"> Editar
                                                         </a>
-                                                        @if($inventario->status === 'Finalizado')
+                                                        @if($transferencia->status === 'Finalizado')
                                                             <button type="button"
-                                                                    onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
+                                                                    onclick="duplicarInventario('{{route('transfers.duplicar', $transferencia->id)}}')"
                                                                     class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                    title="Duplicar Inventário">
+                                                                    title="Duplicar Transferência">
                                                                 <img src="{{asset('images/duplicar.png')}}"
                                                                      alt="Duplicar"
                                                                      class="me-1"> Duplicar
                                                             </button>
                                                         @endif
-                                                        @if($inventario->status !== 'Processando no Omie')
-                                                            <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                        @if($transferencia->status !== 'Processando no Omie')
+                                                            <a href="{{ route('transfers.pdf', $transferencia->id) }}"
                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                                 <img src="{{asset('images/imprimir.png')}}"
                                                                      alt="Imprimir"
@@ -178,7 +178,7 @@
                                                             </a>
 
                                                             <button type="button"
-                                                                    onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
+                                                                    onclick="deleteRegistro('{{ route('transfers.destroy', $transferencia->id) }}')"
                                                                     class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                                 <img src="{{asset('images/excluir.png')}}" alt=""
                                                                      class="me-1">Excluir
@@ -196,21 +196,21 @@
                 @endforeach
             @else
                 <tr>
-                    <td class="text-center">Nenhuma nota fiscal encontrada</td>
+                    <td class="text-center">Nenhuma transferência encontrada</td>
                 </tr>
             @endif
             </tbody>
         </table>
-        {{ $inventarios->links('pagination::bootstrap-5') }}
+        {{ $transferencias->links('pagination::bootstrap-5') }}
     </div>
-    @include('inventario.create')
+    @include('transfers.create')
 
     <div class="container-fluid fixed-bottom">
         <div class="row bg-white">
             <div class="col d-flex justify-content-end align-items-center py-3">
                 <button class="btn btn-success text-white" data-bs-toggle="modal"
                         data-bs-target="#createInventarioModal">
-                    <i class="fas fa-plus text-white"></i> Nova inventário
+                    <i class="fas fa-plus text-white"></i> Nova transferência
                 </button>
             </div>
         </div>
@@ -219,30 +219,12 @@
 
 @push('js')
     <script>
-        document.querySelectorAll('.accordion-collapse').forEach((item) => {
-            item.addEventListener('shown.bs.collapse', () => {
-                localStorage.setItem('accordionInventario', item.id);
-            });
-            item.addEventListener('hidden.bs.collapse', () => {
-                localStorage.removeItem('accordionInventario');
-            });
-        });
-
-        // Restaurar estado ao carregar
-        window.addEventListener('DOMContentLoaded', () => {
-            const aberto = localStorage.getItem('accordionInventario');
-            if (aberto) {
-                const el = document.getElementById(aberto);
-                new bootstrap.Collapse(el, {toggle: true});
-            }
-        });
-
         function duplicarInventario(baseurl) {
             const hoje = new Date().toISOString().split('T')[0];
             swal.fire({
-                title: 'Informe a data do inventário?',
+                title: 'Informe a data da transferência?',
                 input: 'date',
-                inputLabel: 'Data do inventário',
+                inputLabel: 'Data da transferência',
                 inputPlaceholder: 'Escolha uma data',
                 showCancelButton: true,
                 confirmButtonText: 'Duplicar',

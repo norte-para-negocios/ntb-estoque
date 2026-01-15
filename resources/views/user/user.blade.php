@@ -95,8 +95,6 @@
 @push('js')
     <script>
         function attachPermissao(userId, lojaId, permissaoId) {
-
-            console.log(userId, lojaId, permissaoId);
             axios.post(`/usuario/${userId}/permissao`, {
                 "loja_id": lojaId,
                 "permissao_id": permissaoId,
@@ -104,7 +102,6 @@
         }
 
         function detachPermissao(userId, lojaId, permissaoId) {
-            console.log(userId, lojaId, permissaoId);
             axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`);
         }
     </script>

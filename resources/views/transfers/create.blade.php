@@ -4,13 +4,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h1 class="modal-title fs-5" id="createInventarioModalLabel">
-                    Novo Inventário:
+                    Nova Transferência:
                     <small>{{ auth()->user()->loja->nome_fantasia }}</small>
                 </h1>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="POST" action="{{ route('inventario.store') }}" id="formInventario">
+                <form method="POST" action="{{ route('transfers.store') }}" id="formInventario">
                     @csrf
                     <div class="mb-3">
                         <label for="data" class="form-label">Data</label>
@@ -19,8 +19,8 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="estoque_origem" class="form-label">Local de Estoque</label>
-                        <select name="estoque_origem" id="estoque_origem" class="form-select" required>
+                        <label for="codigo_local_origem" class="form-label">Estoque de Origem</label>
+                        <select name="codigo_local_origem" id="codigo_local_origem" class="form-select" required>
                             @foreach ($locaisEstoque as $local)
                                 <option value="{{ $local->codigo_local_estoque }}">
                                     <small>{{ $local->codigo }}</small> -
@@ -30,13 +30,25 @@
                         </select>
                     </div>
 
-                    <div class="mb-3" hidden>
-                        <label for="motivo" class="form-label">Motivo do Inventário</label>
+                    <div class="mb-3">
+                        <label for="codigo_local_destino" class="form-label">Estoque de Destino</label>
+                        <select name="codigo_local_destino" id="codigo_local_destino" class="form-select" required>
+                            @foreach ($locaisEstoque as $local)
+                                <option value="{{ $local->codigo_local_estoque }}">
+                                    <small>{{ $local->codigo }}</small> -
+                                    {{ $local->descricao }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivo" class="form-label">Motivo</label>
                         <select name="motivo" id="motivo" class="form-select" required>
-                            <option value="INV" selected>Ajuste por Inventário</option>
-                            {{-- @foreach (\App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO as $key => $value)
+                            <option value="">Selecione o motivo</option>
+                            @foreach (\App\Helpers\Constants::TIPO_MOVIMENTO_TRANSFERENCIA as $key => $value)
                                 <option value="{{ $key }}">{{ $value }}</option>
-                            @endforeach --}}
+                            @endforeach
                         </select>
                     </div>
                 </form>

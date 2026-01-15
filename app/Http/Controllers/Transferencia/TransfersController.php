@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Http\Controllers\Inventario;
+namespace App\Http\Controllers\Transferencia;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\InventarioJob;
-use App\Models\Inventario;
-use App\Models\InventarioItem;
+use App\Jobs\TransferJob;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
+use App\Models\Movimento;
 use App\Models\PosicaoEstoque;
 use App\Models\Produto;
+use App\Models\Transferencia;
 use App\Services\CanService;
 use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
@@ -17,7 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use PDF;
 
-class InventarioController extends Controller
+class TransfersController extends Controller
 {
     public function __construct()
     {
@@ -26,11 +26,9 @@ class InventarioController extends Controller
 
     public function index(Request $request)
     {
-        // Lógica para exibir a lista de inventários
-        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Ver!");
+        if (! CanService::canPermissionLoja('Transferências - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Ver!');
         }
-
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio'));
         $data_final = Carbon::parse($request->has('data_final') ? $request->get('data_final') : session('final'));
         $tipo = $request->get('tipo', null);
@@ -41,15 +39,17 @@ class InventarioController extends Controller
             'familia' => $request->get('familia', null),
         ]);
 
-        $inventarios = Inventario::where('loja_id', auth()->user()->current_loja_id)
+        $transferencias = Transferencia::where('loja_id', auth()->user()->current_loja_id)
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
             ->when($request->get('familia'), function ($familia) use ($request) {
-                $familia->whereHas('items', function ($items) use($request) {
-                    $items->where('inventario_items.produto_familia', $request->get('familia'));
+                $familia->whereHas('movimentos', function ($items) use ($request) {
+                    $items->whereHas('produto', function ($produto) use ($request) {
+                        $produto->where('descricao_familia', $request->get('familia'));
+                    });
                 });
             })
             ->when($request->get('tipo'), function ($q) use ($request) {
-                $q->whereHas('items', function ($items) use ($request) {
+                $q->whereHas('movimentos', function ($items) use ($request) {
                     $items->whereHas('produto', function ($produto) use ($request) {
                         $produto->where('tipo_item', $request->get('tipo'));
                     });
@@ -61,46 +61,49 @@ class InventarioController extends Controller
 
         $locaisEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)->orderBy('descricao', 'asc')->get();
 
-        return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque', 'tipo'));
+        return view('transfers.index', compact('data_inicio', 'data_final', 'transferencias', 'locaisEstoque', 'tipo'));
     }
 
     public function store(Request $request)
     {
-        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
 
-        $emContagem = Inventario::where('status', 'Em contagem')
-            ->where('codigo_local_estoque', $request->input('estoque_origem'))
+        $emContagem = Transferencia::where('status', 'Processando')
+            ->where('codigo_local_origem', $request->input('codigo_local_origem'))
+            ->where('codigo_local_destino', $request->input('codigo_local_destino'))
             ->where('loja_id', auth()->user()->current_loja_id)
+            ->where('data', $request->input('data'))
             ->first();
 
         if ($emContagem) {
-            return redirect()->route('inventario.index')->with('info', "Inventário nº $emContagem->id ainda em contagem, finalize-o antes de iniciar um novo inventario!");
+            return redirect()->route('transfers.index')->with('info', "Transferência nº $emContagem->id ainda em processamento, finalize-o antes de iniciar nova transferência!");
         }
 
         $request->validate([
-            'estoque_origem' => 'required|integer',
+            'codigo_local_origem' => 'required|integer',
+            'codigo_local_destino' => 'required|integer',
             'data' => 'required|date',
-            'motivo' => 'required|in:INV,INI',
+            'motivo' => 'required|string|max:3|in:'.implode(',', array_keys(\App\Helpers\Constants::TIPO_MOVIMENTO_TRANSFERENCIA)),
         ]);
 
-        $inventario = Inventario::create([
+        $transferencia = Transferencia::create([
             'loja_id' => auth()->user()->current_loja_id,
-            'codigo_local_estoque' => $request->input('estoque_origem'),
+            'codigo_local_origem' => $request->input('codigo_local_origem'),
+            'codigo_local_destino' => $request->input('codigo_local_destino'),
             'data' => Carbon::parse($request->input('data')),
-            'tipo' => 'SLD',
-            'origem' => 'AJU',
+            'status' => 'Processando',
             'motivo' => $request->input('motivo'),
-            'status' => 'Em contagem',
         ]);
-        return redirect()->route('inventario.contagem', $inventario->id);
+
+        return redirect()->route('transfers.contagem', $transferencia->id);
     }
 
-    public function storeItem(Request $request, Inventario $inventario)
+    public function storeItem(Request $request, Transferencia $transferencia)
     {
-        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
         }
 
         $request->validate([
@@ -108,157 +111,163 @@ class InventarioController extends Controller
             'quantidade' => 'required|numeric',
         ]);
 
-        $produto = Produto::where('loja_id', $inventario->loja_id)
+        $produto = Produto::where('loja_id', $transferencia->loja_id)
             ->where('codigo', $request->get('codigo'))
             ->first();
 
-        $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
-            ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
+        $posicaoEstoque = PosicaoEstoque::where('loja_id', $transferencia->loja_id)
+            ->where('codigo_local_estoque', $transferencia->codigo_local_origem)
             ->where('n_cod_prod', $produto->codigo_produto)
-            ->where('data_posicao', $inventario->data->format('Y-m-d'))
+            ->where('data_posicao', $transferencia->data->format('Y-m-d'))
             ->first();
 
-        if (!$posicaoEstoque || ($posicaoEstoque->n_cmc === 0) || ($posicaoEstoque->n_cmc === null)) {
-            $posicaoService = new PosicaoEstoqueService($inventario->loja);
-            $posicaoProd = $posicaoService->fetchPosicaoProduto($inventario->codigo_local_estoque, $produto->codigo_produto, $inventario->data->format('d/m/Y'));
-            $posicaoService->savePosicao($posicaoProd, $inventario->data->format('d/m/Y'));
-            $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
-                ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
+        if (! $posicaoEstoque || ($posicaoEstoque->n_cmc === 0) || ($posicaoEstoque->n_cmc === null)) {
+            $posicaoService = new PosicaoEstoqueService($transferencia->loja);
+            $posicaoProd = $posicaoService->fetchPosicaoProduto($transferencia->codigo_local_origem, $produto->codigo_produto, $transferencia->data->format('d/m/Y'));
+            $posicaoService->savePosicao($posicaoProd, $transferencia->data->format('d/m/Y'));
+            $posicaoEstoque = PosicaoEstoque::where('loja_id', $transferencia->loja_id)
+                ->where('codigo_local_estoque', $transferencia->codigo_local_origem)
                 ->where('n_cod_prod', $produto->codigo_produto)
-                ->where('data_posicao', $inventario->data->format('Y-m-d'))
+                ->where('data_posicao', $transferencia->data->format('Y-m-d'))
                 ->first();
         }
 
         try {
 
-            $item = $inventario->items()->create([
-                'loja_id' => $inventario->loja_id,
-                'produto_codigo_produto' => $produto->codigo_produto,
-                'produto_codigo' => $produto->codigo ?? '',
-                'produto_descricao' => $produto->descricao ?? '',
-                'produto_familia' => $produto->descricao_familia ?? '',
-                'quan' => $request->get('quantidade'),
+            $item = $transferencia->movimentos()->create([
+
+                'loja_id' => $transferencia->loja_id,
+                'codigo_local_estoque' => $transferencia->codigo_local_origem,
+                'id_prod' => $produto->codigo_produto,
+                'data' => $transferencia->data,
+                'tipo' => $transferencia->motivo,
+                'quan' => $request->quantidade,
                 'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
-                'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
+                'obs' => 'NTB - Estoque|Usuário:'.auth()->user()->name,
+                'origem' => 'AJU',
+                'motivo' => $transferencia->motivo,
+                'codigo_local_estoque_destino' => $transferencia->codigo_local_destino,
+                'status' => 'Iniciado',
+
+                'codigo_status' => null,
+                'descricao_status' => null,
+                'id_movest' => null,
+                'id_ajuste' => null,
+                'response' => null,
             ]);
+
             return response([
-                "key" => $item->id,
-                "id" => $produto->codigo,
-                "nome" => $produto->descricao,
-                "unidade" => $produto->unidade,
+                'key' => $item->id,
+                'id' => $produto->codigo,
+                'nome' => $produto->descricao,
+                'unidade' => $produto->unidade,
             ], 201);
         } catch (\Exception $e) {
-            return response(["mensagem" => "Não foi possível inserir o item, erro: {$e->getMessage()}"], 500);
+            return response(['mensagem' => "Não foi possível inserir o item, erro: {$e->getMessage()}"], 500);
         }
     }
 
-    public function pdf(Request $request, Inventario $inventario)
+    public function pdf(Request $request, Transferencia $transferencia)
     {
-        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Ver!");
+        if (! CanService::canPermissionLoja('Transferencia - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Ver!');
         }
-        $pdf = PDF::loadView('inventario.pdf', ['inventario' => $inventario, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
-        return $pdf->inline("inventario-{$inventario->id}.pdf");
+        $pdf = PDF::loadView('transferencia.pdf', ['transferencia' => $transferencia, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
+
+        return $pdf->inline("inventario-{$transferencia->id}.pdf");
     }
 
-    public function finish(Request $request, Inventario $inventario)
+    public function finish(Request $request, Transferencia $transferencia)
     {
-        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
         }
-        (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
-        $inventario->status = 'Processando no Omie';
-        $inventario->save();
-
-        InventarioJob::dispatch($inventario, auth()->user())->delay(10);
+        (new PosicaoEstoqueService(Loja::find($transferencia->loja_id)))->fetchAll($transferencia->codigo_local_origem, $transferencia->data->format('d/m/Y'));
+        TransferJob::dispatch($transferencia, auth()->user())->delay(10);
 
         return redirect()
-            ->route('inventario.index', [
-                    'data_inicio' => $inventario->data->format('Y-m-d'),
-                    'data_final' => $inventario->data->format('Y-m-d')]
-            )->with('success', 'Inventário processando no Omie, só aguardar a finalização do processamento. :)');
+            ->route('transfers.index', [
+                'data_inicio' => $transferencia->data->format('Y-m-d'),
+                'data_final' => $transferencia->data->format('Y-m-d')]
+            )->with('success', 'Transferência processando no Omie, só aguardar a finalização do processamento. :)');
     }
 
-    public function contagem(Inventario $inventario)
+    public function contagem(Transferencia $transferencia)
     {
-        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
         }
 
-        $localEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)
-            ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
-            ->first();
-
-        return view('inventario.contagem', compact('inventario', 'localEstoque'));
+        return view('transfers.contagem', compact('transferencia'));
     }
 
-    public function setQuantidade(InventarioItem $inventarioItem, Request $request)
+    public function setQuantidade(Movimento $movimento, Request $request)
     {
-        if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Criar!");
+        if (! CanService::canPermissionLoja('Transferencia - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Criar!');
         }
 
         $request->validate([
             'quantidade' => 'required|numeric|min:0',
         ]);
 
-        $inventarioItem->update(['quan' => $request->input('quantidade')]);
+        $movimento->update(['quan' => $request->input('quantidade')]);
 
         return response()->json(['success' => true]);
     }
 
-    public function editQuantidade(InventarioItem $inventarioItem, Request $request)
+    public function editQuantidade(Movimento $movimento, Request $request)
     {
-        if (!CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Editar!");
+        if (! CanService::canPermissionLoja('Transferencia - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Editar!');
         }
 
         $request->validate([
             'quantidade' => 'required|numeric|min:0',
         ]);
 
-        if ($inventarioItem->id_ajuste !== null) {
-            $loja = $inventarioItem->inventario->loja;
+        if ($movimento->id_ajuste !== null) {
+            $loja = $movimento->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
             $data = [
-                "call" => "ExcluirAjusteEstoque",
-                "app_key" => $loja->omie_app_key,
-                "app_secret" => $loja->omie_app_secret,
-                "param" => [
+                'call' => 'ExcluirAjusteEstoque',
+                'app_key' => $loja->omie_app_key,
+                'app_secret' => $loja->omie_app_secret,
+                'param' => [
                     [
-                        "id_ajuste" => $inventarioItem->id_ajuste,
-                    ]
-                ]
+                        'id_ajuste' => $movimento->id_ajuste,
+                    ],
+                ],
             ];
             Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
         }
 
-        $inventarioItem->update([
+        $movimento->update([
             'response' => null,
             'codigo_status' => null,
             'descricao_status' => null,
             'id_movest' => null,
             'id_ajuste' => null,
             'status' => null,
-            'quan' => $request->input('quantidade')
+            'quan' => $request->input('quantidade'),
         ]);
 
-        InventarioJob::dispatch($inventarioItem->inventario, auth()->user());
+        TransferJob::dispatch($movimento->inventario, auth()->user());
 
         return response()->json(['success' => true]);
     }
 
-    public function duplicar(Request $request, Inventario $inventario)
+    public function duplicar(Request $request, Transferencia $transferencia)
     {
-        $clone = $inventario->replicate();
+        $clone = $transferencia->replicate();
         $clone->data = $request->get('data');
         $clone->finalizado = null;
         $clone->status = 'Em contagem';
         $clone->save();
 
-        foreach ($inventario->items as $item) {
+        foreach ($transferencia->items as $item) {
             $clonedItem = $item->replicate();
             $clonedItem->inventario_id = $clone->id;
             $clonedItem->quan = null;
@@ -271,68 +280,70 @@ class InventarioController extends Controller
             $clonedItem->status = null;
             $clonedItem->save();
         }
-        return redirect()->route('inventario.contagem', $clonedItem->inventario)
-            ->with('success', 'Inventario duplicado com sucesso!');
+
+        return redirect()->route('transfers.contagem', $clonedItem->inventario)
+            ->with('success', 'Tranferência duplicado com sucesso!');
     }
 
-    public function destroy(Inventario $inventario)
+    public function destroy(Transferencia $transferencia)
     {
-        if (!CanService::canPermissionLoja('Inventários - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Excluir!");
+        if (! CanService::canPermissionLoja('Transferencia - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Excluir!');
         }
 
-        foreach ($inventario->items as $inventarioItem) {
-            if ($inventarioItem->id_ajuste !== null) {
-                $loja = $inventario->loja;
+        foreach ($transferencia->movimentos as $movimento) {
+            if ($movimento->id_ajuste !== null) {
+                $loja = $transferencia->loja;
                 $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
                 $data = [
-                    "call" => "ExcluirAjusteEstoque",
-                    "app_key" => $loja->omie_app_key,
-                    "app_secret" => $loja->omie_app_secret,
-                    "param" => [
+                    'call' => 'ExcluirAjusteEstoque',
+                    'app_key' => $loja->omie_app_key,
+                    'app_secret' => $loja->omie_app_secret,
+                    'param' => [
                         [
-                            "id_ajuste" => $inventarioItem->id_ajuste,
-                        ]
-                    ]
+                            'id_ajuste' => $movimento->id_ajuste,
+                        ],
+                    ],
                 ];
                 Http::withHeaders([
-                    'Content-Type' => 'application/json'
+                    'Content-Type' => 'application/json',
                 ])->connectTimeout(60)
                     ->timeout(60)
                     ->post($url, $data);
             }
-            $inventarioItem->delete();
+            $movimento->delete();
         }
-        $inventario->delete();
-        return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')])->with('success', 'Inventário cancelado com sucesso!');
+        $transferencia->delete();
+
+        return redirect()->route('transfers.index', ['data_inicio' => $transferencia->data->format('Y-m-d'), 'data_final' => $transferencia->data->format('Y-m-d')])->with('success', 'Transferência cancelada com sucesso!');
     }
 
-    public function destroyItem(InventarioItem $inventarioItem)
+    public function destroyItem(Movimento $movimento)
     {
-        if (!CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Inventários - Editar!");
+        if (! CanService::canPermissionLoja('Transferencia - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferencia - Editar!');
         }
 
-        if ($inventarioItem->id_ajuste !== null) {
-            $loja = $inventarioItem->inventario->loja;
+        if ($movimento->id_ajuste !== null) {
+            $loja = $movimento->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
             $data = [
-                "call" => "ExcluirAjusteEstoque",
-                "app_key" => $loja->omie_app_key,
-                "app_secret" => $loja->omie_app_secret,
-                "param" => [
+                'call' => 'ExcluirAjusteEstoque',
+                'app_key' => $loja->omie_app_key,
+                'app_secret' => $loja->omie_app_secret,
+                'param' => [
                     [
-                        "id_ajuste" => $inventarioItem->id_ajuste,
-                    ]
-                ]
+                        'id_ajuste' => $movimento->id_ajuste,
+                    ],
+                ],
             ];
             Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->connectTimeout(60)
                 ->timeout(60)
                 ->post($url, $data);
         }
-        $inventarioItem->delete();
+        $movimento->delete();
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
     }

@@ -328,6 +328,11 @@
 
         $(document).ready(function () {
 
+            const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
+                backdrop: 'static',
+                keyboard: false
+            })
+
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
 
@@ -382,12 +387,8 @@
             }
 
             // Função chamada quando um QR Code é detectado
-            function onScanSuccess(decodedText, decodedResult) {
-                searchInput.value = decodedText;
-                searchInput.dispatchEvent(new Event('input', {
-                    bubbles: true
-                }));
-
+            function onScanSuccess(decodedText, decodedResult) {                
+                buscarProdutoPorQrCode(decodedText);
                 if (html5QrCode.isScanning) {
                     html5QrCode.stop()
                         .then(function () {
@@ -428,11 +429,6 @@
                     alert("Não foi possível iniciar a câmera: " + err);
                 });
             }
-
-            const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
-                backdrop: 'static',
-                keyboard: false
-            })
 
             document.getElementById('qrcodeModal').addEventListener('shown.bs.modal', event => {
                 usarCamera();

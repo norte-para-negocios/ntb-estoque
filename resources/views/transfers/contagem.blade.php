@@ -2,37 +2,45 @@
 @section('content')
     <div class="container pb-5">
         <p>
-            <a href="{{route('inventario.index')}}" class="btn m-0 p-0" title="Voltar">
+            <a href="{{route('transfers.contagem', $transferencia->id)}}" class="btn m-0 p-0" title="Voltar">
                 <img src="{{asset('images/voltar.png')}}" alt="<-">
             </a>
-            <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventário de estoque">
-            / + Novo Inventário #{{ $inventario->id }}
+            <img class="ms-0 p-0" src="{{asset('images/transferencia.png')}}" alt="Transferência entre estoques">
+            / + Nova Transferência #{{ $transferencia->id }}
         </p>
         <div class="row px-2">
             <div class="col-md-3 col-6 mb-3">
-                <label for="inventario_data" class="form-label mb-0"><small>Data</small></label>
-                <input id="inventario_data" type="date" class="form-control" readonly
-                       value="{{$inventario->data->format('Y-m-d')}}">
+                <label for="transferencia_data" class="form-label mb-0"><small>Data</small></label>
+                <input id="transferencia_data" type="date" class="form-control" readonly
+                       value="{{$transferencia->data->format('Y-m-d')}}">
             </div>
             <div class="col-md-3 col-6 mb-3">
-                <label for="inventario_estoque" class="form-label mb-0"><small>Local de Estoque</small></label>
-                <select id="inventario_estoque" class="form-select" readonly>
-                    <option value="{{ $localEstoque->codigo }}">
-                        {{ $localEstoque->descricao??'' }}
+                <label for="transferencia_estoque_origem" class="form-label mb-0"><small>Local de Estoque Origem</small></label>
+                <select id="transferencia_estoque_origem" class="form-select" readonly>
+                    <option value="{{ $transferencia->localOrigem->codigo }}">
+                        {{ $transferencia->localOrigem->descricao??'' }}
                     </option>
                 </select>
             </div>
             <div class="col-md-3 col-6 mb-3">
-                <label for="inventario_motivo" class="form-label mb-0"><small>Tipo de Inventário</small></label>
-                <select id="inventario_motivo" class="form-select" readonly>
-                    <option value="{{ $inventario->motivo }}">
-                        {{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$inventario->motivo] ?? 'Desconhecido' }}
+                <label for="transferencia_estoque_destino" class="form-label mb-0"><small>Local de Estoque Destino</small></label>
+                <select id="transferencia_estoque_destino" class="form-select" readonly>
+                    <option value="{{ $transferencia->localDestino->codigo }}">
+                        {{ $transferencia->localDestino->descricao??'' }}
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <label for="transferencia_motivo" class="form-label mb-0"><small>Tipo de Inventário</small></label>
+                <select id="transferencia_motivo" class="form-select" readonly>
+                    <option value="{{ $transferencia->motivo }}">
+                        {{ \App\Helpers\Constants::TIPO_MOVIMENTO_TRANSFERENCIA[$transferencia->motivo] ?? 'Desconhecido' }}
                     </option>
                 </select>
             </div>
         </div>
         <small class="text-muted px-2">
-            Adicionar produtos no inventário
+            Adicionar produtos para transferência
         </small>
 
         <div class="px-2">
@@ -79,10 +87,10 @@
 
 
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
-               id="produtos_inventario">
+               id="produtos_transferencia">
             <tbody>
-            @foreach ($inventario->items->sortBy('produto_descricao') as $item)
-                <tr data-id="{{$item->produto_codigo}}" data-nome="{{$item->produto_descricao}}"
+            @foreach ($transferencia->movimentos()->with('produto')->get()->sortBy('produto.descricao') as $item)            
+                <tr data-id="{{$item->produto->codigo}}" data-nome="{{$item->produto->descricao}}"
                     style="background-color: #f4f4f4;">
                     <td class="m-0 px-0" style="background-color: #f4f4f4;">
                         <div class="container">
@@ -90,13 +98,13 @@
                                 <div class="row">
                                     <div class="col-7 d-flex justify-content-start align-items-center">
                                         <button type="button" class="btn btn-outline-secondary btn-sm me-3"
-                                                onclick="deleteRegistro('{{ route('inventarioitem.destroy', $item->id) }}')">
+                                                onclick="deleteRegistro('{{ route('movimento.destroy', $item->id) }}')">
                                             <img src="/images/excluir-verde.png" alt="Excluir">
                                         </button>
                                         <span class="fw-semibold">
-                                            {{$item->produto_descricao}} <small>#{{$item->produto_codigo}}</small>
+                                            {{$item->produto->descricao}} <small>#{{$item->produto->codigo}}</small>
 
-                                            @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
+                                            @if ($transferencia->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
                                                 @if($item->status === 'Sem CMC')
                                                     <br><span class="badge text-bg-warning">
                                                         CMC Zerado para o Produto, a movimentação não foi realizada no Omie
@@ -122,23 +130,23 @@
                                             type="button"
                                             class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
                                             style="width: 40px;"
-                                            onclick="subtrai('{{$item->produto_codigo}}')"
+                                            onclick="subtrai('{{$item->produto->codigo}}')"
                                         >
                                             -
                                         </button>
 
                                         <input type="number"
                                                class="form-control rounded-0 validade mx-1"
-                                               id="quantidade-{{$item->produto_codigo}}"
+                                               id="quantidade-{{$item->produto->codigo}}"
                                                style="text-align: center;"
                                                min="0.000001"
                                                step="0.000001"
                                                value="{{$item->quan??1}}"
                                                required
-                                               @if ($inventario->status === 'Em contagem')
-                                                   onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
+                                               @if ($transferencia->status === 'Processando')
+                                                   onblur="setQuantidade('{{ route('transfers.setQuantidade', $item->id) }}', this.value)"
                                                @else
-                                                   onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
+                                                   onblur="editQuantidade(this, '{{ route('transfers.editQuantidade', $item->id) }}', this.value)"
                                             @endif
                                         >
 
@@ -146,7 +154,7 @@
                                             type="button"
                                             class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
                                             style="width: 40px;"
-                                            onclick="soma('{{$item->produto_codigo}}')"
+                                            onclick="soma('{{$item->produto->codigo}}')"
                                         >
                                             +
                                         </button>
@@ -159,23 +167,23 @@
             @endforeach
             </tbody>
         </table>
-        @include('inventario.qrcode')
-        @include('inventario.produto')
+        @include('transfers.qrcode')
+        @include('transfers.produto')
         <div class="container-fluid fixed-bottom">
             <div class="row bg-white">
                 <div class="col d-flex justify-content-end align-items-center py-3">
-                    @if($inventario->finalizado === null)
-                        <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                    @if($transferencia->finalizado === null)
+                        <a href="{{ route('transfers.pdf', $transferencia->id) }}"
                            class="btn btn-success text-white me-2">
                             <i class="fas fa-print text-white"></i>
                             Imprimir
                         </a>
                     @endif
-                    @if ($inventario->finalizado === null)
-                        <form method="POST" action="{{ route('inventario.finish', $inventario->id) }}"
-                              id="formInventario">
+                    @if ($transferencia->finalizado === null)
+                        <form method="POST" action="{{ route('transfers.finish', $transferencia->id) }}"
+                              id="formtransferencia">
                             @csrf
-                            <button type="submit" class="btn btn-success text-white" form="formInventario">
+                            <button type="submit" class="btn btn-success text-white" form="formtransferencia">
                                 <i class="fas fa-plus text-white"></i>
                                 Finalizar
                             </button>
@@ -248,12 +256,12 @@
         }
 
         function buscarProdutoPorQrCode(codigo) {
-            const produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+            const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
             const jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${codigo}"]`) ?? false;
             if (jaExisteNaTabela) {
                 return;
             }
-            axios.post(`/inventario/item/{{$inventario->id}}`, {
+            axios.post(`/transfers/item/{{$transferencia->id}}`, {
                 "codigo": codigo,
                 "quantidade": 1.0,
             }).then(function (r) {
@@ -262,7 +270,7 @@
         }
 
         function adicionarProdutoNaListagem(produto) {
-            const produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+            const produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
             const novaLinha =
                 `<tr data-id="${produto.id}" data-nome="${produto.nome}" style="background-color: #f4f4f4;">
                         <td class="m-0 px-0" style="background-color: #f4f4f4;">
@@ -270,7 +278,7 @@
                                 <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
                                     <div class="row">
                                         <div class="col-7 d-flex justify-content-start align-items-center">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="deleteRegistro('/inventario/item/${produto.key}')">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="deleteRegistro('/transferencia/item/${produto.key}')">
                                                 <img src="/images/excluir-verde.png" alt="Excluir">
                                             </button>
                                             <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
@@ -302,10 +310,10 @@
                                                    step="0.000001"
                                                    value="1"
                                                    required
-                                                   @if ($inventario->status === 'Em contagem')
-                onblur="setQuantidade('/inventario/quantidade/${produto.key}', this.value)"
+                                                   @if ($transferencia->status === 'Processando')
+                onblur="setQuantidade('/transfers/quantidade/${produto.key}', this.value)"
                                                    @else
-                onblur="editQuantidade(this, '/inventario/edit/quantidade/${produto.key}', this.value)"
+                onblur="editQuantidade(this, '/transfers/edit/quantidade/${produto.key}', this.value)"
                                                    @endif
                 >
 
@@ -327,6 +335,10 @@
         }
 
         $(document).ready(function () {
+            const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
+                backdrop: 'static',
+                keyboard: false
+            })
 
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
@@ -429,11 +441,6 @@
                 });
             }
 
-            const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
-                backdrop: 'static',
-                keyboard: false
-            })
-
             document.getElementById('qrcodeModal').addEventListener('shown.bs.modal', event => {
                 usarCamera();
             });
@@ -466,8 +473,8 @@
                         return '<div class="no-results">Nenhum produto encontrado</div>';
                     },
                     option: function (data, escape) {
-                        const tbody = document.querySelector("#produtos_inventario tbody");
-                        let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                        const tbody = document.querySelector("#produtos_transferencia tbody");
+                        let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                         let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
@@ -486,8 +493,8 @@
                         </div>`;
                     },
                     item: function (data, escape) {
-                        const tbody = document.querySelector("#produtos_inventario tbody");
-                        let produtosTable = document.getElementById('produtos_inventario').querySelector('tbody');
+                        const tbody = document.querySelector("#produtos_transferencia tbody");
+                        let produtosTable = document.getElementById('produtos_transferencia').querySelector('tbody');
                         let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${data.codigo}"]`) ? 'disabled' : '';
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 

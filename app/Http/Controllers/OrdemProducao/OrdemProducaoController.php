@@ -79,6 +79,20 @@ class OrdemProducaoController extends Controller
         $ordemProducao->save();
     }
 
+    public function setQuantidade(Request $request, OrdemProducao $ordemProducao)
+    {
+        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        }
+
+        if ($request->filled('quantidade')) {
+            $ordemProducao->quantidade = $request->get('quantidade');
+        } else {
+            $ordemProducao->quantidade = null;
+        }
+        $ordemProducao->save();
+    }
+
     public function syncOrdensProducao()
     {
         if (!CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
