@@ -76,7 +76,7 @@ class InventarioJob implements ShouldQueue
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
-                elseif(json_decode($inventarioItem->produto->full_object)->inativo === 'S') {                    
+                } elseif(json_decode($inventarioItem->produto->full_object)->inativo === 'S') {                    
                     $inventarioItem->status = 'Erro';
                     $inventarioItem->descricao_status = 'Produto INATIVO, não foi possível processar o ajuste no Omie!';
                     $inventarioItem->save();
