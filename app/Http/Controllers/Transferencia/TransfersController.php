@@ -149,12 +149,14 @@ class TransfersController extends Controller
                 'response' => null,
             ]);
 
+            $this->createAjuste($item);
+
             return response([
                 'key' => $item->id,
                 'id' => $produto->codigo,
                 'nome' => $produto->descricao,
                 'unidade' => $produto->unidade,
-            ], 201);
+            ], 201);            
         } catch (\Exception $e) {
             Log::error('Erro ao inserir item na transferência', [
                 'transferencia_id' => $transferencia->id,
@@ -164,6 +166,90 @@ class TransfersController extends Controller
 
             return response(['mensagem' => "Não foi possível inserir o item, erro: {$e->getMessage()}"], 500);
         }
+    }
+
+    private function createAjuste(Movimento $movimento): null|object
+    {
+        if (($movimento->quan >= 0)
+            && (in_array(!$movimento->status, [null, 'Erro']))
+            && ($movimento->id_ajuste === null)
+            && $movimento->valor > 0
+        ) {
+            $movimento->status = 'Iniciado';
+            $movimento->save();
+            $loja = $movimento->transferencia->loja;
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                "call" => "IncluirAjusteEstoque",
+                "app_key" => $loja->omie_app_key,
+                "app_secret" => $loja->omie_app_secret,
+                "param" => [
+                    [
+                        "codigo_local_estoque" => $movimento->transferencia->codigo_local_destino,
+                        "id_prod" => $movimento->produto->codigo_produto,
+                        "cod_int_ajuste" => 'MOVIMENTO' . $movimento->id,
+                        "data" => $movimento->transferencia->data->format('d/m/Y'),
+                        "quan" => $movimento->quan,
+                        "valor" => $movimento->valor,
+                        "obs" => 'NTB - Estoque|Usuário:' . $this->user->name,
+                        "origem" => $movimento->transferencia->codigo_local_origem,
+                        "tipo" => $movimento->tipo,
+                        "motivo" => $movimento->transferencia->motivo,
+                    ]
+                ]
+            ];
+
+            // Inicializando Log de integração
+            $this->loja_id = $loja->id;
+            $this->model = 'InventarioItem';
+            $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+            $this->beforeAttemptLog();
+
+            try {
+                try {
+                    $response = Http::withHeaders([
+                        'Content-Type' => 'application/json'
+                    ])->post($url, $data);
+
+                    // Log de integração
+                    $this->response = $response->getBody()->getContents();
+                    $this->code = $response->getStatusCode();
+
+                    if ($response->status() === 200) {
+                        return $response->object();
+                    } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
+                        preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
+                        $idAjuste = isset($matches[1]) ? $matches[1] : '';
+                        $obj = new stdClass();
+                        $obj->codigo_status = '0';
+                        $obj->descricao_status = 'Ajuste realizado';
+                        $obj->id_movest = '';
+                        $obj->id_ajuste = $idAjuste;
+                        return $obj;
+                    } else {
+                        $movimento->status = 'Erro';
+                        $movimento->response = $response->body();
+                        $movimento->save();
+                    }
+                } catch (Throwable $th) {
+                    $this->error_message = json_encode($th->getMessage());
+                    $this->code = $th->getCode();
+                    $this->error = true;
+                    Log::critical($th->getMessage(), [
+                        'Code' => $th->getCode(),
+                        'File' => $th->getFile(),
+                        'Line' => $th->getLine()
+                    ]);
+                }
+            } finally {
+                $this->afterAttemptLog();
+            }
+        } elseif ($movimento->valor <= 0 || $movimento->valor === null) {
+            $movimento->valor = 0;
+            $movimento->status = 'Erro';
+            $movimento->save();
+        }
+        return null;
     }
 
     public function pdf(Request $request, Transferencia $transferencia)
@@ -181,7 +267,7 @@ class TransfersController extends Controller
         if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
-        (new PosicaoEstoqueService($transferencia->loja))->fetchAll($transferencia->codigo_local_origem, $transferencia->data->format('d/m/Y'));
+        
         TransferJob::dispatch($transferencia, auth()->user())->delay(10);
 
         return redirect()
