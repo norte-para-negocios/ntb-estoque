@@ -106,8 +106,9 @@ class TransfersController extends Controller
             ->where('codigo', $request->get('codigo'))
             ->first();
 
-        if (! $produto) {
-            return response(['mensagem' => 'Produto não encontrado'], 404);
+
+        if (!$produto || json_decode($produto->full_object)->inativo === 'S') {
+            return response(["mensagem" => "Produto não encontrado ou INATIVO, não foi possível inserir o item na transferência!"], 400);
         }
 
         $posicaoEstoque = PosicaoEstoque::where('loja_id', $transferencia->loja_id)

@@ -27,7 +27,7 @@ class InventarioController extends Controller
     public function index(Request $request)
     {
         // Lógica para exibir a lista de inventários
-        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Ver!");
         }
 
@@ -112,6 +112,10 @@ class InventarioController extends Controller
             ->where('codigo', $request->get('codigo'))
             ->first();
 
+        if (!$produto || json_decode($produto->full_object)->inativo === 'S') {
+            return response(["mensagem" => "Produto não encontrado ou INATIVO, não foi possível inserir o item!"], 400);
+        }
+
         $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
             ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
             ->where('n_cod_prod', $produto->codigo_produto)
@@ -166,7 +170,7 @@ class InventarioController extends Controller
         if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Criar!");
         }
-        
+
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
