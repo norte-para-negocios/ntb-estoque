@@ -258,6 +258,8 @@
                 "quantidade": 1.0,
             }).then(function (r) {
                 adicionarProdutoNaListagem(r.data);
+            }).catch(function (error) {
+                swal.fire('Erro!', error.response.data.mensagem, 'error');
             });
         }
 
