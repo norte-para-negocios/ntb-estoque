@@ -27,7 +27,7 @@ class InventarioController extends Controller
     public function index(Request $request)
     {
         // Lógica para exibir a lista de inventários
-        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (!CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Ver!");
         }
 
