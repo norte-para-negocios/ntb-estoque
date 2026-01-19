@@ -147,6 +147,11 @@ class TransferenciaController extends Controller
             }
 
             $produto = Produto::where('loja_id', auth()->user()->current_loja_id)
+                ->where('full_object', '!=', null)
+                ->where(function ($query) {
+                    $query->where('full_object', 'like', '%"inativo":"N"%')
+                        ->orWhereNull('full_object');
+                })
                 ->where('codigo', $codigo)
                 ->first();
 
