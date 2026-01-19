@@ -210,11 +210,6 @@ class InventarioJob implements ShouldQueue
                         $obj->id_ajuste = $idAjuste;
 
                         return $obj;
-                    } elseif ($response->status() === 500) {
-                        $inventarioItem->status = 'Erro';
-                        $inventarioItem->response = $response->body();
-                        $inventarioItem->descricao_status = $response->body();
-                        $inventarioItem->save();
                     } else {
                         $inventarioItem->status = 'Erro';
                         $inventarioItem->response = $response->body();
@@ -222,6 +217,12 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->save();
                     }
                 } catch (Throwable $th) {
+
+                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->response = $response->body();
+                    $inventarioItem->descricao_status = $response->body();
+                    $inventarioItem->save();
+
                     $this->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;

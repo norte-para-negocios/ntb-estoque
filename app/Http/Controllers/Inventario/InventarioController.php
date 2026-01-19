@@ -166,7 +166,7 @@ class InventarioController extends Controller
         if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Criar!");
         }
-        (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
+        
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
