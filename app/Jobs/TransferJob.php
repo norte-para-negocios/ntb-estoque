@@ -59,21 +59,15 @@ class TransferJob implements ShouldQueue
             }
         }
 
-        while (Movimento::where('transferencia_id', $this->transferencia->id)
+        for ($i=0; $i < 3; $i++) {
+            $movimentos = Movimento::where('transferencia_id', $this->transferencia->id)
                 ->where(function ($q) {
                     $q->whereNull('status')
-                        ->orWhereIn('status', ['Iniciado']);
-                })
-                ->count() > 0) {
-
-            foreach (Movimento::where('transferencia_id', $this->transferencia->id)
-                         ->where(function ($q) {
-                             $q->whereNull('status')
-                                 ->orWhereIn('status', ['Iniciado']);
-                         })
-                         ->orderBy('quan')
-                         ->get() as $movimento) {
-
+                    ->orWhereIn('status', ['Iniciado']);
+            })
+            ->orderBy('quan')
+            ->get();         
+            foreach ($movimentos as $movimento) {
                 if ($movimento->quan === null) {
                     $movimento->delete();
                 } else {

@@ -21,7 +21,7 @@ use Throwable;
 
 class InventarioJob implements ShouldQueue
 {
-    use Queueable, IntegrationAttemptsTrait;
+    use IntegrationAttemptsTrait, Queueable;
 
     public $timeout = 0;
 
@@ -40,7 +40,7 @@ class InventarioJob implements ShouldQueue
      */
     public function handle(): void
     {
-        broadcast(new NotificaUserEvent($this->user, "info", "Estamos registrando toda a informação no Omie, outras mensagens como essa lhe atualizará em breve. Só aguardar! ;)"));
+        broadcast(new NotificaUserEvent($this->user, 'info', 'Estamos registrando toda a informação no Omie, outras mensagens como essa lhe atualizará em breve. Só aguardar! ;)'));
 
         $this->inventario->status = 'Processando no Omie';
         $this->inventario->save();
@@ -60,19 +60,19 @@ class InventarioJob implements ShouldQueue
         }
 
         while (InventarioItem::where('inventario_id', $this->inventario->id)
+            ->where(function ($q) {
+                $q->whereNull('inventario_items.status')
+                    ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+            })
+            ->count() > 0) {
+
+            foreach (InventarioItem::where('inventario_id', $this->inventario->id)
                 ->where(function ($q) {
                     $q->whereNull('inventario_items.status')
                         ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
                 })
-                ->count() > 0) {
-
-            foreach (InventarioItem::where('inventario_id', $this->inventario->id)
-                         ->where(function ($q) {
-                             $q->whereNull('inventario_items.status')
-                                 ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
-                         })
-                         ->orderBy('quan')
-                         ->get() as $inventarioItem) {
+                ->orderBy('quan')
+                ->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
@@ -106,7 +106,7 @@ class InventarioJob implements ShouldQueue
                                 }
                                 break;
                             } catch (Throwable $e) {
-                                Log::error("Não foi possível obter o CMC do Produto: " . $e->getMessage(),
+                                Log::error('Não foi possível obter o CMC do Produto: '.$e->getMessage(),
                                     [
                                         'inventarioItem' => $inventarioItem,
                                     ]
@@ -125,7 +125,7 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->id_movest = $response->id_movest;
                         $inventarioItem->id_ajuste = $response->id_ajuste;
                         $inventarioItem->status = 'Concluído';
-                        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
+                        broadcast(new NotificaUserEvent($this->user, 'success', "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
                         $inventarioItem->status = 'Erro';
                     }
@@ -138,13 +138,13 @@ class InventarioJob implements ShouldQueue
             'status' => 'Finalizado',
             'finalizado' => now(),
         ]);
-        broadcast(new NotificaUserEvent($this->user, "success", "Inventário do estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
+        broadcast(new NotificaUserEvent($this->user, 'success', "Inventário do estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
     }
 
-    private function createAjuste(InventarioItem $inventarioItem): null|object
+    private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (in_array(!$inventarioItem->status, [null, 'Erro', 'Sem CMC']))
+            && (in_array(! $inventarioItem->status, [null, 'Erro', 'Sem CMC']))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
@@ -153,23 +153,23 @@ class InventarioJob implements ShouldQueue
             $loja = $inventarioItem->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
             $data = [
-                "call" => "IncluirAjusteEstoque",
-                "app_key" => $loja->omie_app_key,
-                "app_secret" => $loja->omie_app_secret,
-                "param" => [
+                'call' => 'IncluirAjusteEstoque',
+                'app_key' => $loja->omie_app_key,
+                'app_secret' => $loja->omie_app_secret,
+                'param' => [
                     [
-                        "codigo_local_estoque" => $inventarioItem->inventario->codigo_local_estoque,
-                        "id_prod" => $inventarioItem->produto_codigo_produto,
-                        "cod_int_ajuste" => 'ITEM' . $inventarioItem->id,
-                        "data" => $inventarioItem->inventario->data->format('d/m/Y'),
-                        "quan" => $inventarioItem->quan,
-                        "valor" => $inventarioItem->valor,
-                        "obs" => 'NTB - Estoque|Usuário:' . $this->user->name,
-                        "origem" => $inventarioItem->inventario->origem,
-                        "tipo" => $inventarioItem->inventario->tipo,
-                        "motivo" => $inventarioItem->inventario->motivo,
-                    ]
-                ]
+                        'codigo_local_estoque' => $inventarioItem->inventario->codigo_local_estoque,
+                        'id_prod' => $inventarioItem->produto_codigo_produto,
+                        'cod_int_ajuste' => 'ITEM'.$inventarioItem->id,
+                        'data' => $inventarioItem->inventario->data->format('d/m/Y'),
+                        'quan' => $inventarioItem->quan,
+                        'valor' => $inventarioItem->valor,
+                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
+                        'origem' => $inventarioItem->inventario->origem,
+                        'tipo' => $inventarioItem->inventario->tipo,
+                        'motivo' => $inventarioItem->inventario->motivo,
+                    ],
+                ],
             ];
 
             // Inicializando Log de integração
@@ -181,7 +181,7 @@ class InventarioJob implements ShouldQueue
             try {
                 try {
                     $response = Http::withHeaders([
-                        'Content-Type' => 'application/json'
+                        'Content-Type' => 'application/json',
                     ])->connectTimeout(60)->timeout(60)->post($url, $data);
 
                     // Log de integração
@@ -192,24 +192,33 @@ class InventarioJob implements ShouldQueue
                         return $response->object();
                     } elseif ($response->status() === 429) {
                         sleep(60);
+
                         return $this->createAjuste($inventarioItem);
                     } elseif ($response->status() === 425) {
                         preg_match('/Tente novamente em \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
                         sleep(60);
+
                         return $this->createAjuste($inventarioItem);
                     } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
-                        $obj = new stdClass();
+                        $obj = new stdClass;
                         $obj->codigo_status = '0';
                         $obj->descricao_status = 'Ajuste realizado';
                         $obj->id_movest = '';
                         $obj->id_ajuste = $idAjuste;
+
                         return $obj;
+                    } elseif ($response->status() === 500) {
+                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->response = $response->body();
+                        $inventarioItem->descricao_status = $response->body();
+                        $inventarioItem->save();
                     } else {
                         $inventarioItem->status = 'Erro';
                         $inventarioItem->response = $response->body();
+                        $inventarioItem->descricao_status = $response->body();
                         $inventarioItem->save();
                     }
                 } catch (Throwable $th) {
@@ -219,7 +228,7 @@ class InventarioJob implements ShouldQueue
                     Log::critical($th->getMessage(), [
                         'Code' => $th->getCode(),
                         'File' => $th->getFile(),
-                        'Line' => $th->getLine()
+                        'Line' => $th->getLine(),
                     ]);
                 }
             } finally {
@@ -230,6 +239,7 @@ class InventarioJob implements ShouldQueue
             $inventarioItem->status = 'Sem CMC';
             $inventarioItem->save();
         }
+
         return null;
     }
 }
