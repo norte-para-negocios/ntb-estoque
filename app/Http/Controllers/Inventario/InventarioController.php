@@ -19,6 +19,8 @@ use PDF;
 
 class InventarioController extends Controller
 {
+    use IntegrationAttemptsTrait;
+    
     public function __construct()
     {
         $this->middleware('auth');
@@ -391,7 +393,7 @@ class InventarioController extends Controller
                         'data' => $inventarioItem->inventario->data->format('d/m/Y'),
                         'quan' => $inventarioItem->quan,
                         'valor' => $inventarioItem->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
+                        'obs' => 'NTB - Estoque|Usuário:'.auth()->user()->name,
                         'origem' => $inventarioItem->inventario->origem,
                         'tipo' => $inventarioItem->inventario->tipo,
                         'motivo' => $inventarioItem->inventario->motivo,
