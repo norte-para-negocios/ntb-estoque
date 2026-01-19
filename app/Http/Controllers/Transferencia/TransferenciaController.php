@@ -193,6 +193,11 @@ class TransferenciaController extends Controller
 
         // Consulta simples com filtro e limite
         return Produto::where('loja_id', auth()->user()->current_loja_id)
+            ->where('full_object', '!=', null)
+            ->where(function ($query) {
+                $query->where('full_object', 'like', '%"inativo":"N"%')
+                    ->orWhereNull('full_object');
+            })
             ->where(function ($query) use ($term) {
                 $query->where('descricao', 'LIKE', "%{$term}%")
                     ->orWhere('codigo', 'LIKE', "%{$term}%")
