@@ -219,6 +219,7 @@
                 axios.post(url, {
                     "quantidade": quantidade
                 })
+                window.location.reload();
             }
         }
 
@@ -240,6 +241,7 @@
                         }).catch(() => {
                             swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
                         });
+                        window.location.reload();
                     } else {
                         el.value = el.dataset.quan;
                     }
