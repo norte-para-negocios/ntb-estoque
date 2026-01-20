@@ -153,6 +153,18 @@ class InventarioController extends Controller
                 'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
                 'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
             ]);
+
+            $response = $this->createAjuste($item);
+            if ($response) {
+                $item->response = json_encode($response);
+                $item->codigo_status = $response->codigo_status;
+                $item->descricao_status = $response->descricao_status;
+                $item->id_movest = $response->id_movest;
+                $item->id_ajuste = $response->id_ajuste;
+                $item->status = 'Concluído';
+            }
+            $item->save();
+
             return response([
                 "key" => $item->id,
                 "id" => $produto->codigo,

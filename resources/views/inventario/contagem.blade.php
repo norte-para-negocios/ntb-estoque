@@ -218,8 +218,11 @@
             if (quantidade >= 0) {
                 axios.post(url, {
                     "quantidade": quantidade
-                })
-                window.location.reload();
+                }).then(() => {
+                    window.location.reload();
+                }).catch(() => {
+                    swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
+                });
             }
         }
 
@@ -238,10 +241,11 @@
                             "quantidade": quantidade
                         }).then(() => {
                             swal.fire('Editado!', 'A quantidade foi atualizada com sucesso.', 'success');
+                        }).then(() => {
+                            window.location.reload();
                         }).catch(() => {
                             swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
                         });
-                        window.location.reload();
                     } else {
                         el.value = el.dataset.quan;
                     }
@@ -260,6 +264,8 @@
                 "quantidade": 1.0,
             }).then(function (r) {
                 adicionarProdutoNaListagem(r.data);
+            }).then(() => {
+                window.location.reload();
             }).catch(function (error) {
                 swal.fire('Erro!', error.response.data.mensagem, 'error');
             });
