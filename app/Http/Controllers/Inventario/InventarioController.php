@@ -15,12 +15,13 @@ use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Services\IntegrationAttemptsTrait;
 use PDF;
 
 class InventarioController extends Controller
 {
     use IntegrationAttemptsTrait;
-    
+
     public function __construct()
     {
         $this->middleware('auth');
