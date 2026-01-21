@@ -106,17 +106,19 @@
                                                         {{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}
                                                     </span>
                                                 @endif
+
+                                                @if(in_array($item->status, ['Erro', 'Cancelado', 'Sem CMC']))
+                                                    <button 
+                                                        type="button" 
+                                                        class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2" 
+                                                        onclick="refreshItem('quantidade-{{$item->produto_codigo}}', '{{ route('inventario.editQuantidade', $item->id) }}')"
+                                                        >
+                                                        <img src="/images/refresh.png" alt="Refresh">
+                                                    </button>
+                                                @endif                                            
                                             @endif
                                         </span>
-                                    </div>
-
-                                    <div class="col-1 p-0">
-                                        <small>Medida</small><br>
-                                        <span class="fw-semibold">
-                                            {{$item->produto->unidade??'--'}}
-                                        </span>
-                                    </div>
-
+                                    </div>                                    
                                     <div class="col-md-4 col-8 d-flex">
                                         <button
                                             type="button"
@@ -251,6 +253,39 @@
                     }
                 });
             }
+        }
+
+        function refreshItem(elId, url) {
+            let el = document.getElementById(elId);
+            if (!el) {
+                swal.fire('Erro!', 'O campo com a quantidade não foi encontrado.', 'error');
+                return;
+            }
+            let quantidade = el.value;
+            if (quantidade <= 0 || isNaN(quantidade)) {
+                swal.fire('Erro!', 'A quantidade não pode ser menor que 0 ou não é um número.', 'error');
+                return;
+            }
+            swal.fire({
+                title: 'Tem certeza?',
+                text: 'Gostaria realmente de tentar processar no Omie novamente?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, tentar novamente',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    axios.post(url, {
+                        "quantidade": quantidade
+                    }).then(() => {
+                        swal.fire('Processado no Omie!', 'A transação foi processada no Omie com sucesso.', 'success');
+                    }).then(() => {
+                        window.location.reload();
+                    }).catch(() => {
+                        swal.fire('Erro!', 'Não foi possível processar no Omie.', 'error');
+                    });
+                }
+            });            
         }
 
         function buscarProdutoPorQrCode(codigo) {
