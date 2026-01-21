@@ -49,34 +49,39 @@ class InventarioJob implements ShouldQueue
             ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
             ->first();
 
-        $esperaPosicao = 0;
-        while (Loja::find($this->inventario->loja_id)->posicao_estoque_status !== 'Concluído') {
-            $esperaPosicao += 1;
-            sleep(1);
+        // $esperaPosicao = 0;
+        // while (Loja::find($this->inventario->loja_id)->posicao_estoque_status !== 'Concluído') {
+        //     $esperaPosicao += 1;
+        //     sleep(1);
 
-            if ($esperaPosicao >= 30) {
-                break;
-            }
-        }
+        //     if ($esperaPosicao >= 30) {
+        //         break;
+        //     }
+        // }
 
         while (InventarioItem::where('inventario_id', $this->inventario->id)
             ->where(function ($q) {
                 $q->whereNull('inventario_items.status')
-                    ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                    ->orWhereIn('inventario_items.status', ['Iniciado']);
             })
             ->count() > 0) {
 
             foreach (InventarioItem::where('inventario_id', $this->inventario->id)
                 ->where(function ($q) {
                     $q->whereNull('inventario_items.status')
-                        ->orWhereIn('inventario_items.status', ['Iniciado', 'Erro']);
+                        ->orWhereIn('inventario_items.status', ['Iniciado']);
                 })
                 ->orderBy('quan')
                 ->get() as $inventarioItem) {
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
+                } elseif(json_decode($inventarioItem->produto->full_object)->inativo === 'S') {                    
+                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->descricao_status = 'Produto INATIVO, não foi possível processar o ajuste no Omie!';
+                    $inventarioItem->save();
                 } else {
+                    
                     if ($inventarioItem->valor === null || $inventarioItem->valor <= 0) {
                         $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
                             ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
@@ -210,11 +215,6 @@ class InventarioJob implements ShouldQueue
                         $obj->id_ajuste = $idAjuste;
 
                         return $obj;
-                    } elseif ($response->status() === 500) {
-                        $inventarioItem->status = 'Erro';
-                        $inventarioItem->response = $response->body();
-                        $inventarioItem->descricao_status = $response->body();
-                        $inventarioItem->save();
                     } else {
                         $inventarioItem->status = 'Erro';
                         $inventarioItem->response = $response->body();
@@ -222,6 +222,12 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->save();
                     }
                 } catch (Throwable $th) {
+
+                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->response = $response->body();
+                    $inventarioItem->descricao_status = $response->body();
+                    $inventarioItem->save();
+
                     $this->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;

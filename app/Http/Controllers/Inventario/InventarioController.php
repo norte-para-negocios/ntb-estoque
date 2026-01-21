@@ -15,10 +15,13 @@ use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Services\IntegrationAttemptsTrait;
 use PDF;
 
 class InventarioController extends Controller
 {
+    use IntegrationAttemptsTrait;
+
     public function __construct()
     {
         $this->middleware('auth');
@@ -109,8 +112,17 @@ class InventarioController extends Controller
         ]);
 
         $produto = Produto::where('loja_id', $inventario->loja_id)
+            ->where('full_object', '!=', null)
+            ->where(function ($query) {
+                $query->where('full_object', 'like', '%"inativo":"N"%')
+                    ->orWhereNull('full_object');
+            })
             ->where('codigo', $request->get('codigo'))
             ->first();
+
+        if (!$produto || json_decode($produto->full_object)->inativo === 'S') {
+            return response(["mensagem" => "Produto não encontrado ou INATIVO, não foi possível inserir o item!"], 400);
+        }
 
         $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventario->loja_id)
             ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
@@ -141,6 +153,7 @@ class InventarioController extends Controller
                 'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
                 'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
             ]);
+
             return response([
                 "key" => $item->id,
                 "id" => $produto->codigo,
@@ -166,7 +179,7 @@ class InventarioController extends Controller
         if (!CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
             abort(403, "Você não possui a permissão: Inventários - Criar!");
         }
-        (new PosicaoEstoqueService(Loja::find($inventario->loja_id)))->fetchAll($inventario->codigo_local_estoque, $inventario->data->format('d/m/Y'));
+
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
@@ -203,6 +216,17 @@ class InventarioController extends Controller
         ]);
 
         $inventarioItem->update(['quan' => $request->input('quantidade')]);
+
+        $response = $this->createAjuste($inventarioItem);
+        if ($response) {
+            $inventarioItem->response = json_encode($response);
+            $inventarioItem->codigo_status = $response->codigo_status;
+            $inventarioItem->descricao_status = $response->descricao_status;
+            $inventarioItem->id_movest = $response->id_movest;
+            $inventarioItem->id_ajuste = $response->id_ajuste;
+            $inventarioItem->status = 'Concluído';
+        }
+        $inventarioItem->save();
 
         return response()->json(['success' => true]);
     }
@@ -245,7 +269,18 @@ class InventarioController extends Controller
             'quan' => $request->input('quantidade')
         ]);
 
-        InventarioJob::dispatch($inventarioItem->inventario, auth()->user());
+        $inventarioItem->update(['quan' => $request->input('quantidade')]);
+
+        $response = $this->createAjuste($inventarioItem);
+        if ($response) {
+            $inventarioItem->response = json_encode($response);
+            $inventarioItem->codigo_status = $response->codigo_status;
+            $inventarioItem->descricao_status = $response->descricao_status;
+            $inventarioItem->id_movest = $response->id_movest;
+            $inventarioItem->id_ajuste = $response->id_ajuste;
+            $inventarioItem->status = 'Concluído';
+        }
+        $inventarioItem->save();
 
         return response()->json(['success' => true]);
     }
@@ -335,5 +370,108 @@ class InventarioController extends Controller
         $inventarioItem->delete();
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
+    }
+
+    private function createAjuste(InventarioItem $inventarioItem): ?object
+    {
+        if (($inventarioItem->quan >= 0)
+            && (in_array(! $inventarioItem->status, [null, 'Erro', 'Sem CMC']))
+            && ($inventarioItem->id_ajuste === null)
+            && $inventarioItem->valor > 0
+        ) {
+            $inventarioItem->status = 'Iniciado';
+            $inventarioItem->save();
+            $loja = $inventarioItem->inventario->loja;
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                'call' => 'IncluirAjusteEstoque',
+                'app_key' => $loja->omie_app_key,
+                'app_secret' => $loja->omie_app_secret,
+                'param' => [
+                    [
+                        'codigo_local_estoque' => $inventarioItem->inventario->codigo_local_estoque,
+                        'id_prod' => $inventarioItem->produto_codigo_produto,
+                        'cod_int_ajuste' => 'ITEM'.$inventarioItem->id,
+                        'data' => $inventarioItem->inventario->data->format('d/m/Y'),
+                        'quan' => $inventarioItem->quan,
+                        'valor' => $inventarioItem->valor,
+                        'obs' => 'NTB - Estoque|Usuário:'.auth()->user()->name,
+                        'origem' => $inventarioItem->inventario->origem,
+                        'tipo' => $inventarioItem->inventario->tipo,
+                        'motivo' => $inventarioItem->inventario->motivo,
+                    ],
+                ],
+            ];
+
+            // Inicializando Log de integração
+            $this->loja_id = $loja->id;
+            $this->model = 'InventarioItem';
+            $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
+            $this->beforeAttemptLog();
+
+            try {
+                try {
+                    $response = Http::withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])->connectTimeout(60)->timeout(60)->post($url, $data);
+
+                    // Log de integração
+                    $this->response = $response->getBody()->getContents();
+                    $this->code = $response->getStatusCode();
+
+                    if ($response->status() === 200) {
+                        return $response->object();
+                    } elseif ($response->status() === 429) {
+                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->response = $response->body();
+                        $inventarioItem->descricao_status = "Rate limit atingido, aguarde 60 segundos e tente novamente!";
+                        $inventarioItem->save();
+                    } elseif ($response->status() === 425) {
+                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->response = $response->body();
+                        $inventarioItem->descricao_status = "Rate limit atingido, aguarde 60 segundos e tente novamente!";
+                        $inventarioItem->save();
+                        preg_match('/Tente novamente em \[(\d+)\]/', $response->object()->faultstring, $matches);
+                        $idAjuste = isset($matches[1]) ? $matches[1] : '';                        
+                    } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
+                        preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
+                        $idAjuste = isset($matches[1]) ? $matches[1] : '';
+                        $obj = new stdClass;
+                        $obj->codigo_status = '0';
+                        $obj->descricao_status = 'Ajuste realizado';
+                        $obj->id_movest = '';
+                        $obj->id_ajuste = $idAjuste;
+                        return $obj;
+                    } else {
+                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->response = $response->body();
+                        $inventarioItem->descricao_status = $response->body();
+                        $inventarioItem->save();
+                    }
+                } catch (Throwable $th) {
+
+                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->response = $response->body();
+                    $inventarioItem->descricao_status = $response->body();
+                    $inventarioItem->save();
+
+                    $this->error_message = json_encode($th->getMessage());
+                    $this->code = $th->getCode();
+                    $this->error = true;
+                    Log::critical($th->getMessage(), [
+                        'Code' => $th->getCode(),
+                        'File' => $th->getFile(),
+                        'Line' => $th->getLine(),
+                    ]);
+                }
+            } finally {
+                $this->afterAttemptLog();
+            }
+        } elseif ($inventarioItem->valor <= 0 || $inventarioItem->valor === null) {
+            $inventarioItem->valor = 0;
+            $inventarioItem->status = 'Sem CMC';
+            $inventarioItem->save();
+        }
+        return null;
     }
 }

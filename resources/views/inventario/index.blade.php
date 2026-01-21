@@ -177,13 +177,14 @@
                                                                      class="me-1"> Imprimir
                                                             </a>
 
-                                                            <button type="button"
-                                                                    onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                <img src="{{asset('images/excluir.png')}}" alt=""
-                                                                     class="me-1">Excluir
-                                                            </button>
+                                                            
                                                         @endif
+                                                        <button type="button"
+                                                                onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                            <img src="{{asset('images/excluir.png')}}" alt=""
+                                                                    class="me-1">Excluir
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>

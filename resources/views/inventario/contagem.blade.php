@@ -81,7 +81,7 @@
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
                id="produtos_inventario">
             <tbody>
-            @foreach ($inventario->items->sortBy('produto_descricao') as $item)
+            @foreach ($inventario->items->sortByDesc('created_at') as $item)
                 <tr data-id="{{$item->produto_codigo}}" data-nome="{{$item->produto_descricao}}"
                     style="background-color: #f4f4f4;">
                     <td class="m-0 px-0" style="background-color: #f4f4f4;">
@@ -218,7 +218,11 @@
             if (quantidade >= 0) {
                 axios.post(url, {
                     "quantidade": quantidade
-                })
+                }).then(() => {
+                    window.location.reload();
+                }).catch(() => {
+                    swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
+                });
             }
         }
 
@@ -237,6 +241,8 @@
                             "quantidade": quantidade
                         }).then(() => {
                             swal.fire('Editado!', 'A quantidade foi atualizada com sucesso.', 'success');
+                        }).then(() => {
+                            window.location.reload();
                         }).catch(() => {
                             swal.fire('Erro!', 'Não foi possível atualizar a quantidade.', 'error');
                         });
@@ -258,6 +264,10 @@
                 "quantidade": 1.0,
             }).then(function (r) {
                 adicionarProdutoNaListagem(r.data);
+            }).then(() => {
+                window.location.reload();
+            }).catch(function (error) {
+                swal.fire('Erro!', error.response.data.mensagem, 'error');
             });
         }
 
