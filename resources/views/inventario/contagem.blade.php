@@ -88,14 +88,16 @@
                         <div class="container">
                             <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
                                 <div class="row">
-                                    <div class="col-7 d-flex justify-content-start align-items-center">
+                                    <div class="col-7 d-flex justify-content-start align-items-center mb-2">
                                         <button type="button" class="btn btn-outline-secondary btn-sm me-3"
                                                 onclick="deleteRegistro('{{ route('inventarioitem.destroy', $item->id) }}')">
                                             <img src="/images/excluir-verde.png" alt="Excluir">
                                         </button>
                                         <span class="fw-semibold">
                                             {{$item->produto_descricao}} <small>#{{$item->produto_codigo}}</small>
-
+                                            <span class="fw-semibold">
+                                                [{{$item->produto->unidade??'--'}}]
+                                            </span>
                                             @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
                                                 @if($item->status === 'Sem CMC')
                                                     <br>
@@ -119,7 +121,9 @@
                                                 @endif                                            
                                             @endif
                                         </span>
-                                    </div>                                    
+                                        
+                                    </div>    
+                                                               
                                     <div class="col-md-4 col-8 d-flex">
                                         <button
                                             type="button"
@@ -154,11 +158,7 @@
                                             +
                                         </button>                                        
                                     </div>
-                                    <div class="col-1 text-start align-self-center">                                        
-                                        <span class="fw-semibold">
-                                            {{$item->produto->unidade??'--'}}
-                                        </span>
-                                    </div>
+                                    
                                 </div>
                             </div>
                         </div>
