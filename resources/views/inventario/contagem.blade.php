@@ -98,12 +98,13 @@
 
                                             @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
                                                 @if($item->status === 'Sem CMC')
-                                                    <br><span class="badge text-bg-warning">
-                                                        CMC Zerado para o Produto, a movimentação não foi realizada no Omie
+                                                    <br>
+                                                    <span class="badge text-bg-warning">
+                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 50) }}
                                                     </span>
                                                 @else
-                                                    <br><span class="badge text-bg-success">
-                                                        {{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}
+                                                    <br><span class="badge text-bg-success" title="{{ (($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status) }}">
+                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 50)  }}
                                                     </span>
                                                 @endif
 
@@ -151,7 +152,12 @@
                                             onclick="soma('{{$item->produto_codigo}}')"
                                         >
                                             +
-                                        </button>
+                                        </button>                                        
+                                    </div>
+                                    <div class="col-1 text-start align-self-center">                                        
+                                        <span class="fw-semibold">
+                                            {{$item->produto->unidade??'--'}}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
