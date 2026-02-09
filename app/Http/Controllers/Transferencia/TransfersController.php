@@ -156,8 +156,6 @@ class TransfersController extends Controller
                 'response' => null,
             ]);
 
-            $this->createAjuste($item);
-
             return response([
                 'key' => $item->id,
                 'id' => $produto->codigo,
@@ -178,7 +176,7 @@ class TransfersController extends Controller
     private function createAjuste(Movimento $movimento): ?object
     {
         if (($movimento->quan >= 0)
-            && (in_array(! $movimento->status, [null, 'Erro']))
+            && (! in_array($movimento->status, ['Erro', 'Sem CMC']))
             && ($movimento->id_ajuste === null)
             && $movimento->valor > 0
         ) {
@@ -192,7 +190,7 @@ class TransfersController extends Controller
                 'app_secret' => $loja->omie_app_secret,
                 'param' => [
                     [
-                        'codigo_local_estoque' => $movimento->transferencia->codigo_local_destino,
+                        'codigo_local_estoque' => $movimento->codigo_local_estoque,
                         'id_prod' => $movimento->produto->codigo_produto,
                         'cod_int_ajuste' => 'MOV-'.$movimento->id,
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
@@ -202,6 +200,7 @@ class TransfersController extends Controller
                         'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
+                        'codigo_local_estoque_destino' => $movimento->codigo_local_estoque_destino,
                     ],
                 ],
             ];
@@ -304,6 +303,19 @@ class TransfersController extends Controller
 
         $movimento->update(['quan' => $request->input('quantidade')]);
 
+        $response = $this->createAjuste($movimento);
+        if ($response) {
+            $movimento->response = json_encode($response);
+            $movimento->codigo_status = $response->codigo_status;
+            $movimento->descricao_status = $response->descricao_status;
+            $movimento->id_movest = $response->id_movest;
+            $movimento->id_ajuste = $response->id_ajuste;
+            $movimento->status = 'Concluído';
+        } else {
+            $movimento->status = 'Erro';
+        }
+        $movimento->save();
+
         return response()->json(['success' => true]);
     }
 
@@ -340,7 +352,18 @@ class TransfersController extends Controller
             'quan' => $request->input('quantidade'),
         ]);
 
-        TransferJob::dispatch($movimento->transferencia, Auth::user());
+        $response = $this->createAjuste($movimento);
+        if ($response) {
+            $movimento->response = json_encode($response);
+            $movimento->codigo_status = $response->codigo_status;
+            $movimento->descricao_status = $response->descricao_status;
+            $movimento->id_movest = $response->id_movest;
+            $movimento->id_ajuste = $response->id_ajuste;
+            $movimento->status = 'Concluído';
+        } else {
+            $movimento->status = 'Erro';
+        }
+        $movimento->save();
 
         return response()->json(['success' => true]);
     }
