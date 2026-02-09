@@ -194,7 +194,7 @@ class TransfersController extends Controller
                     [
                         'codigo_local_estoque' => $movimento->transferencia->codigo_local_destino,
                         'id_prod' => $movimento->produto->codigo_produto,
-                        'cod_int_ajuste' => 'MOVIMENTO'.$movimento->id,
+                        'cod_int_ajuste' => 'MOV-'.$movimento->id,
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,

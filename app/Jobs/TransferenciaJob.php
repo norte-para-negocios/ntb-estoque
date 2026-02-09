@@ -64,7 +64,7 @@ class TransferenciaJob implements ShouldQueue
                 [
                     'codigo_local_estoque' => $movimento->codigo_local_estoque,
                     'id_prod' => $movimento->id_prod,
-                    'cod_int_ajuste' => $movimento->id,
+                    'cod_int_ajuste' => 'MOV-'.$movimento->id,
                     'data' => $movimento->data->format('d/m/Y'),
                     'quan' => $movimento->quan,
                     'valor' => $movimento->valor == 0 ? 0.01 : $movimento->valor,
