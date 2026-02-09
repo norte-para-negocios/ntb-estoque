@@ -14,8 +14,11 @@ use App\Services\IntegrationAttemptsTrait;
 use App\Services\PosicaoEstoqueService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use PDF;
+use Throwable;
 
 class InventarioController extends Controller
 {
@@ -29,7 +32,7 @@ class InventarioController extends Controller
     public function index(Request $request)
     {
         // Lógica para exibir a lista de inventários
-        if (! CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Ver', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Ver!');
         }
 
@@ -43,7 +46,7 @@ class InventarioController extends Controller
             'familia' => $request->get('familia', null),
         ]);
 
-        $inventarios = Inventario::where('loja_id', auth()->user()->current_loja_id)
+        $inventarios = Inventario::where('loja_id', Auth::user()->current_loja_id)
             ->whereBetween('data', [Carbon::parse($data_inicio)->startOfDay(), Carbon::parse($data_final)->endOfDay()])
             ->when($request->get('familia'), function ($familia) use ($request) {
                 $familia->whereHas('items', function ($items) use ($request) {
@@ -61,20 +64,20 @@ class InventarioController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $locaisEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)->orderBy('descricao', 'asc')->get();
+        $locaisEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)->orderBy('descricao', 'asc')->get();
 
         return view('inventario.index', compact('data_inicio', 'data_final', 'inventarios', 'locaisEstoque', 'tipo'));
     }
 
     public function store(Request $request)
     {
-        if (! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
         $emContagem = Inventario::where('status', 'Em contagem')
             ->where('codigo_local_estoque', $request->input('estoque_origem'))
-            ->where('loja_id', auth()->user()->current_loja_id)
+            ->where('loja_id', Auth::user()->current_loja_id)
             ->first();
 
         if ($emContagem) {
@@ -88,7 +91,7 @@ class InventarioController extends Controller
         ]);
 
         $inventario = Inventario::create([
-            'loja_id' => auth()->user()->current_loja_id,
+            'loja_id' => Auth::user()->current_loja_id,
             'codigo_local_estoque' => $request->input('estoque_origem'),
             'data' => Carbon::parse($request->input('data')),
             'tipo' => 'SLD',
@@ -102,7 +105,7 @@ class InventarioController extends Controller
 
     public function storeItem(Request $request, Inventario $inventario)
     {
-        if (! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
@@ -167,24 +170,24 @@ class InventarioController extends Controller
 
     public function pdf(Request $request, Inventario $inventario)
     {
-        if (! CanService::canPermissionLoja('Inventários - Ver', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Ver', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Ver!');
         }
-        $pdf = PDF::loadView('inventario.pdf', ['inventario' => $inventario, 'loja' => auth()->user()->loja, 'params' => $request->all()]);
+        $pdf = PDF::loadView('inventario.pdf', ['inventario' => $inventario, 'loja' => Auth::user()->loja, 'params' => $request->all()]);
 
         return $pdf->inline("inventario-{$inventario->id}.pdf");
     }
 
     public function finish(Request $request, Inventario $inventario)
     {
-        if (! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
-        InventarioJob::dispatch($inventario, auth()->user())->delay(10);
+        InventarioJob::dispatch($inventario, Auth::user())->delay(10);
 
         return redirect()
             ->route('inventario.index', [
@@ -195,11 +198,11 @@ class InventarioController extends Controller
 
     public function contagem(Inventario $inventario)
     {
-        if (! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
-        $localEstoque = LocalEstoque::where('loja_id', auth()->user()->current_loja_id)
+        $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
             ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
             ->first();
 
@@ -208,7 +211,7 @@ class InventarioController extends Controller
 
     public function setQuantidade(InventarioItem $inventarioItem, Request $request)
     {
-        if (! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
@@ -234,7 +237,7 @@ class InventarioController extends Controller
 
     public function editQuantidade(InventarioItem $inventarioItem, Request $request)
     {
-        if (! CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Editar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Editar!');
         }
 
@@ -260,24 +263,68 @@ class InventarioController extends Controller
             ])->connectTimeout(60)->timeout(60)->post($url, $data);
         }
 
-        $inventarioItem->update([
-            'response' => null,
-            'codigo_status' => null,
-            'descricao_status' => null,
-            'id_movest' => null,
-            'id_ajuste' => null,
-            'status' => null,
-            'quan' => $request->input('quantidade'),
-        ]);
+        if ($inventarioItem->valor === null || $inventarioItem->valor <= 0) {
+            $produto = Produto::where('loja_id', $inventarioItem->inventario->loja_id)
+                ->where('full_object', '!=', null)
+                ->where(function ($query) {
+                    $query->where('full_object', 'like', '%"inativo":"N"%')
+                        ->orWhereNull('full_object');
+                })
+                ->where('codigo', $inventarioItem->produto_codigo)
+                ->first();
+
+            if (! $produto || json_decode($produto->full_object)->inativo === 'S') {
+                $inventarioItem->status = 'Erro';
+                $inventarioItem->response = 'Produto não encontrado ou INATIVO, não foi possível inserir o item!';
+                $inventarioItem->descricao_status = 'Produto não encontrado ou INATIVO, não foi possível inserir o item!';
+                $inventarioItem->save();
+
+                return response(['mensagem' => 'Produto não encontrado ou INATIVO, não foi possível inserir o item!'], 400);
+            }
+
+            $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventarioItem->inventario->loja_id)
+                ->where('codigo_local_estoque', $inventarioItem->inventario->codigo_local_estoque)
+                ->where('n_cod_prod', $produto->codigo_produto)
+                ->where('data_posicao', $inventarioItem->inventario->data->format('Y-m-d'))
+                ->first();
+
+            if (! $posicaoEstoque || ($posicaoEstoque->n_cmc === 0) || ($posicaoEstoque->n_cmc === null)) {
+                $posicaoService = new PosicaoEstoqueService($inventarioItem->inventario->loja);
+                $posicaoProd = $posicaoService->fetchPosicaoProduto($inventarioItem->inventario->codigo_local_estoque, $produto->codigo_produto, $inventarioItem->inventario->data->format('d/m/Y'));
+                $posicaoService->savePosicao($posicaoProd, $inventarioItem->inventario->data->format('d/m/Y'));
+                $posicaoEstoque = PosicaoEstoque::where('loja_id', $inventarioItem->inventario->loja_id)
+                    ->where('codigo_local_estoque', $inventarioItem->inventario->codigo_local_estoque)
+                    ->where('n_cod_prod', $produto->codigo_produto)
+                    ->where('data_posicao', $inventarioItem->inventario->data->format('Y-m-d'))
+                    ->first();
+            }
+
+            if ($posicaoEstoque?->n_cmc > 0) {
+                $inventarioItem->valor = $posicaoEstoque->n_cmc;
+                $inventarioItem->save();
+            } else {
+                $inventarioItem->valor = 0;
+                $inventarioItem->status = 'Sem CMC';
+                $inventarioItem->save();
+            }
+        }
+
+        $inventarioItem->response = null;
+        $inventarioItem->codigo_status = null;
+        $inventarioItem->descricao_status = null;
+        $inventarioItem->id_movest = null;
+        $inventarioItem->id_ajuste = null;
+        $inventarioItem->status = null;
+        $inventarioItem->quan = $request->input('quantidade');
+        $inventarioItem->save();
 
         $response = $this->createAjuste($inventarioItem);
-
         if ($response) {
             $inventarioItem->response = json_encode($response);
             $inventarioItem->codigo_status = $response->codigo_status;
             $inventarioItem->descricao_status = $response->descricao_status;
-            $inventarioItem->id_movest = $response->id_movest;
-            $inventarioItem->id_ajuste = $response->id_ajuste;
+            $inventarioItem->id_movest = $response->id_movest ?? null;
+            $inventarioItem->id_ajuste = $response->id_ajuste ?? null;
             $inventarioItem->status = 'Concluído';
             $inventarioItem->save();
         }
@@ -313,7 +360,7 @@ class InventarioController extends Controller
 
     public function destroy(Inventario $inventario)
     {
-        if (! CanService::canPermissionLoja('Inventários - Excluir', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Excluir', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Excluir!');
         }
 
@@ -346,7 +393,7 @@ class InventarioController extends Controller
 
     public function destroyItem(InventarioItem $inventarioItem)
     {
-        if (! CanService::canPermissionLoja('Inventários - Editar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+        if (! CanService::canPermissionLoja('Inventários - Editar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Editar!');
         }
 
@@ -397,7 +444,7 @@ class InventarioController extends Controller
                         'data' => $inventarioItem->inventario->data->format('d/m/Y'),
                         'quan' => $inventarioItem->quan,
                         'valor' => $inventarioItem->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.auth()->user()->name,
+                        'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
                         'origem' => $inventarioItem->inventario->origem,
                         'tipo' => $inventarioItem->inventario->tipo,
                         'motivo' => $inventarioItem->inventario->motivo,
@@ -438,7 +485,7 @@ class InventarioController extends Controller
                     } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
-                        $obj = new stdClass;
+                        $obj = new \stdClass;
                         $obj->codigo_status = '0';
                         $obj->descricao_status = 'Ajuste realizado';
                         $obj->id_movest = '';
@@ -458,7 +505,7 @@ class InventarioController extends Controller
                     $inventarioItem->descricao_status = $response->body();
                     $inventarioItem->save();
 
-                    $this->error_message = json_encode($th->getMessage());
+                    $this->integrationAttempt->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;
                     Log::critical($th->getMessage(), [

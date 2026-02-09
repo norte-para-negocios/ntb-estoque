@@ -10,18 +10,25 @@ trait IntegrationAttemptsTrait
      *  Logs the integration attempt before it completes.
      */
     private $integrationAttempt;
+
     private $loja_id;
+
     private $model;
+
     private $model_id;
+
     private $request;
+
     private $response;
+
     private $code;
+
     private $error;
 
     private function beforeAttemptLog()
     {
         $this->error = false;
-        $integration_attempt = new IntegrationAttempt();
+        $integration_attempt = new IntegrationAttempt;
         $integration_attempt->loja_id = $this->loja_id;
         $integration_attempt->model = $this->model;
         $integration_attempt->error = $this->error;

@@ -19,11 +19,9 @@ class NotaFiscalService
 {
     use IntegrationAttemptsTrait;
 
-    private $urlBase = "https://app.omie.com.br/api/";
+    private $urlBase = 'https://app.omie.com.br/api/';
 
-    public function __construct(protected Loja $loja)
-    {
-    }
+    public function __construct(protected Loja $loja) {}
 
     public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
@@ -45,7 +43,7 @@ class NotaFiscalService
                     $this->loja->nota_fiscal_status = 'Concluído';
                     $this->loja->save();
                     if (auth()->check()) {
-                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {
@@ -64,23 +62,23 @@ class NotaFiscalService
 
     public function fetchPage($pagina = 1, $dataIni = '', $dataFim = ''): object
     {
-        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+        $url = $this->urlBase.'v1/produtos/recebimentonfe/';
         $data = [
-            "call" => "ListarRecebimentos",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
+            'call' => 'ListarRecebimentos',
+            'app_key' => $this->loja->omie_app_key,
+            'app_secret' => $this->loja->omie_app_secret,
+            'param' => [
                 [
-                    "nPagina" => $pagina,
-                    "nRegistrosPorPagina" => 100,
-                    "cExibirDetalhes" => "S"
-                ]
-            ]
+                    'nPagina' => $pagina,
+                    'nRegistrosPorPagina' => 100,
+                    'cExibirDetalhes' => 'S',
+                ],
+            ],
         ];
 
         if (($dataIni !== '') && ($dataFim !== '')) {
-            $data["param"]["dtAltDe"] = $dataIni;
-            $data["param"]["dtAltAte"] = $dataFim;
+            $data['param']['dtAltDe'] = $dataIni;
+            $data['param']['dtAltAte'] = $dataFim;
         }
 
         // Inicializando Log de integração
@@ -89,10 +87,9 @@ class NotaFiscalService
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
-
         try {
             $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->post($url, $data);
 
             // Log de integração
@@ -105,37 +102,37 @@ class NotaFiscalService
                 $data = $response->object();
                 preg_match('/em (\d+) segundos/', $data->faultstring, $matches);
                 if (isset($matches[1])) {
-                    sleep((int)$matches[1]);
+                    sleep((int) $matches[1]);
                     foreach (User::where('perfil', 'Admin')->get() as $user) {
-                        broadcast(new NotificaUserEvent($user, "error", "A API de Notas Fiscais da loja: {$this->loja->nome}, retorno a seguinte mensagem de erro: {$data->faultstring}!"));
+                        broadcast(new NotificaUserEvent($user, 'error', "A API de Notas Fiscais da loja: {$this->loja->nome}, retorno a seguinte mensagem de erro: {$data->faultstring}!"));
                     }
                 }
             }
         } catch (Throwable $th) {
             // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
+            $this->integrationAttempt->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
             $this->error = true;
         } finally {
             $this->afterAttemptLog();
         }
 
-        return new StdClass();
+        return new StdClass;
     }
 
     public function fetchNotaFiscal(int $nIdReceb): object
     {
-        $url = $this->urlBase . 'v1/produtos/recebimentonfe/';
+        $url = $this->urlBase.'v1/produtos/recebimentonfe/';
         $data = [
-            "call" => "ConsultarRecebimento",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
+            'call' => 'ConsultarRecebimento',
+            'app_key' => $this->loja->omie_app_key,
+            'app_secret' => $this->loja->omie_app_secret,
+            'param' => [
                 [
-                    "nIdReceb" => $nIdReceb,
-                    "cChaveNfe" => ""
-                ]
-            ]
+                    'nIdReceb' => $nIdReceb,
+                    'cChaveNfe' => '',
+                ],
+            ],
         ];
 
         // Inicializando Log de integração
@@ -146,7 +143,7 @@ class NotaFiscalService
 
         try {
             $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->post($url, $data);
 
             // Log de integração
@@ -156,23 +153,24 @@ class NotaFiscalService
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500) {
-                return new stdClass();
+                return new stdClass;
             }
         } catch (Throwable $th) {
             // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
+            $this->integrationAttempt->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
             $this->error = true;
         } finally {
             $this->afterAttemptLog();
         }
-        return new stdClass();
+
+        return new stdClass;
     }
 
     public function saveNotasFiscais(array $notasFiscais): void
     {
         foreach ($notasFiscais as $notaFiscal) {
-            $this->saveNotaFiscal((object)$notaFiscal);
+            $this->saveNotaFiscal((object) $notaFiscal);
         }
     }
 
@@ -203,7 +201,7 @@ class NotaFiscalService
                     [
                         'loja_id' => $this->loja->id,
                         'n_id_receb' => $item['n_id_receb'],
-                        'n_id_fornecedor' => $item['n_id_fornecedor']
+                        'n_id_fornecedor' => $item['n_id_fornecedor'],
                     ],
                     $item
                 );
@@ -215,7 +213,7 @@ class NotaFiscalService
                             'nota_fiscal_id' => $nf->id,
 
                             'n_id_receb' => $item['n_id_receb'],
-                            'n_sequencia' => $nfItem->itensCabec->nSequencia ?? null
+                            'n_sequencia' => $nfItem->itensCabec->nSequencia ?? null,
                         ],
                         [
                             'loja_id' => $this->loja->id,
@@ -250,7 +248,7 @@ class NotaFiscalService
                 }
             } catch (Throwable $th) {
                 Log::error(
-                    "Erro ao salvar nota fiscal" . $th->getMessage(),
+                    'Erro ao salvar nota fiscal'.$th->getMessage(),
                     $item
                 );
             }

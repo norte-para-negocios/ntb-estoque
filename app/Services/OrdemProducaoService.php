@@ -8,7 +8,6 @@ use App\Jobs\UpdateOmieLocalData\OrdemProducaoUpdateJob;
 use App\Models\Loja;
 use App\Models\OrdemProducao;
 use App\Models\Produto;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -20,11 +19,9 @@ class OrdemProducaoService
 {
     use IntegrationAttemptsTrait;
 
-    private string $urlBase = "https://app.omie.com.br/api/";
+    private string $urlBase = 'https://app.omie.com.br/api/';
 
-    public function __construct(protected Loja $loja)
-    {
-    }
+    public function __construct(protected Loja $loja) {}
 
     public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
@@ -46,7 +43,7 @@ class OrdemProducaoService
                     $this->loja->ordem_producao_status = 'Concluído';
                     $this->loja->save();
                     if (auth()->check()) {
-                        broadcast(new NotificaUserEvent(auth()->user(), "success", "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
                     }
                 })
                 ->catch(function (Throwable $e) {
@@ -68,24 +65,24 @@ class OrdemProducaoService
 
     public function fetchPage($pagina = 1, $dataIni = '', $dataFim = ''): object
     {
-        $url = $this->urlBase . 'v1/produtos/op/';
+        $url = $this->urlBase.'v1/produtos/op/';
         $data = [
-            "call" => "ListarOrdemProducao",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
+            'call' => 'ListarOrdemProducao',
+            'app_key' => $this->loja->omie_app_key,
+            'app_secret' => $this->loja->omie_app_secret,
+            'param' => [
                 [
-                    "pagina" => $pagina,
-                    "registros_por_pagina" => 500,
-                    "ordem_decrescente" => "S",
-                    "ordenar_por" => "dConclusao"
-                ]
-            ]
+                    'pagina' => $pagina,
+                    'registros_por_pagina' => 500,
+                    'ordem_decrescente' => 'S',
+                    'ordenar_por' => 'dConclusao',
+                ],
+            ],
         ];
 
         if (($dataIni !== '') && ($dataFim !== '')) {
-            $data["param"]["dDtConclusaoDe"] = $dataIni;
-            $data["param"]["dDtConclusaoAte"] = $dataFim;
+            $data['param']['dDtConclusaoDe'] = $dataIni;
+            $data['param']['dDtConclusaoAte'] = $dataFim;
         }
 
         // Inicializando Log de integração
@@ -94,10 +91,9 @@ class OrdemProducaoService
         $this->request = json_encode(['method' => 'POST', 'path' => $url, 'payload' => $data]);
         $this->beforeAttemptLog();
 
-
         try {
             $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->post($url, $data);
 
             // Log de integração
@@ -107,33 +103,34 @@ class OrdemProducaoService
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500) {
-                return new stdClass();
+                return new stdClass;
             }
         } catch (Throwable $th) {
             // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
+            $this->integrationAttempt->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
             $this->error = true;
 
         } finally {
             $this->afterAttemptLog();
         }
-        return new stdClass();
+
+        return new stdClass;
     }
 
     public function fetchOrdemProducao(int $nCodOP): object
     {
-        $url = $this->urlBase . 'v1/produtos/op/';
+        $url = $this->urlBase.'v1/produtos/op/';
         $data = [
-            "call" => "ConsultarOrdemProducao",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
+            'call' => 'ConsultarOrdemProducao',
+            'app_key' => $this->loja->omie_app_key,
+            'app_secret' => $this->loja->omie_app_secret,
+            'param' => [
                 [
-                    "cCodIntOP" => "",
-                    "nCodOP" => $nCodOP
-                ]
-            ]
+                    'cCodIntOP' => '',
+                    'nCodOP' => $nCodOP,
+                ],
+            ],
         ];
 
         // Inicializando Log de integração
@@ -144,7 +141,7 @@ class OrdemProducaoService
 
         try {
             $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->post($url, $data);
 
             // Log de integração
@@ -154,35 +151,36 @@ class OrdemProducaoService
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500) {
-                return new stdClass();
+                return new stdClass;
             }
         } catch (Throwable $th) {
             // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
+            $this->integrationAttempt->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
             $this->error = true;
         } finally {
             $this->afterAttemptLog();
         }
-        return new stdClass();
+
+        return new stdClass;
     }
 
     public function concluirOrdemProducao(int $nCodOP, string $dataConclusao, float $quantidade, string $observacao): object
     {
-        $url = $this->urlBase . 'v1/produtos/op/';
+        $url = $this->urlBase.'v1/produtos/op/';
         $data = [
-            "call" => "ConcluirOrdemProducao",
-            "app_key" => $this->loja->omie_app_key,
-            "app_secret" => $this->loja->omie_app_secret,
-            "param" => [
+            'call' => 'ConcluirOrdemProducao',
+            'app_key' => $this->loja->omie_app_key,
+            'app_secret' => $this->loja->omie_app_secret,
+            'param' => [
                 [
-                    "cCodIntOP" => "",
-                    "nCodOP" => $nCodOP,
-                    "dDtConclusao" => $dataConclusao,
-                    "nQtdeProduzida" => $quantidade,
-                    "cObsConclusao" => $observacao,
-                ]
-            ]
+                    'cCodIntOP' => '',
+                    'nCodOP' => $nCodOP,
+                    'dDtConclusao' => $dataConclusao,
+                    'nQtdeProduzida' => $quantidade,
+                    'cObsConclusao' => $observacao,
+                ],
+            ],
         ];
 
         // Inicializando Log de integração
@@ -193,7 +191,7 @@ class OrdemProducaoService
 
         try {
             $response = Http::withHeaders([
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
             ])->post($url, $data);
 
             // Log de integração
@@ -203,23 +201,24 @@ class OrdemProducaoService
             if ($response->status() === 200) {
                 return $response->object();
             } elseif ($response->status() === 500) {
-                return new stdClass();
+                return new stdClass;
             }
         } catch (Throwable $th) {
             // Log de erro.
-            $this->error_message = json_encode($th->getMessage());
+            $this->integrationAttempt->error_message = json_encode($th->getMessage());
             $this->code = $th->getCode();
             $this->error = true;
         } finally {
             $this->afterAttemptLog();
         }
-        return new stdClass();
+
+        return new stdClass;
     }
 
     public function saveOrdensProducao(array $ordens): void
     {
         foreach ($ordens as $ordem) {
-            $this->saveOrdemProducao((object)$ordem);
+            $this->saveOrdemProducao((object) $ordem);
         }
     }
 
@@ -254,12 +253,12 @@ class OrdemProducaoService
                 OrdemProducao::updateOrCreate(
                     [
                         'loja_id' => $this->loja->id,
-                        'identificacao_n_cod_op' => $op['identificacao_n_cod_op']
+                        'identificacao_n_cod_op' => $op['identificacao_n_cod_op'],
                     ],
                     $op
                 );
             } catch (Throwable $th) {
-                Log::error("Erro ao salvar ordem de produção nº: " . $op['num_ordem'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
+                Log::error('Erro ao salvar ordem de produção nº: '.$op['num_ordem'].', Loja: '.$this->loja->nome.$th->getMessage());
             }
         }
     }
@@ -271,7 +270,7 @@ class OrdemProducaoService
                 ->where('identificacao_n_cod_op', $ordem['nCodOP'])
                 ->delete();
         } catch (Throwable $th) {
-            Log::error("Erro ao excluir ordem de produção nº: " . $ordem['nCodOP'] . ', Loja: ' . $this->loja->nome . $th->getMessage());
+            Log::error('Erro ao excluir ordem de produção nº: '.$ordem['nCodOP'].', Loja: '.$this->loja->nome.$th->getMessage());
         }
     }
 }

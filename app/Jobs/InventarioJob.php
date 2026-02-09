@@ -76,12 +76,12 @@ class InventarioJob implements ShouldQueue
 
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
-                } elseif(json_decode($inventarioItem->produto->full_object)->inativo === 'S') {                    
+                } elseif (json_decode($inventarioItem->produto->full_object)->inativo === 'S') {
                     $inventarioItem->status = 'Erro';
                     $inventarioItem->descricao_status = 'Produto INATIVO, não foi possível processar o ajuste no Omie!';
                     $inventarioItem->save();
                 } else {
-                    
+
                     if ($inventarioItem->valor === null || $inventarioItem->valor <= 0) {
                         $posicaoEstoque = PosicaoEstoque::where('loja_id', $this->inventario->loja_id)
                             ->where('codigo_local_estoque', $this->inventario->codigo_local_estoque)
@@ -228,7 +228,7 @@ class InventarioJob implements ShouldQueue
                     $inventarioItem->descricao_status = $response->body();
                     $inventarioItem->save();
 
-                    $this->error_message = json_encode($th->getMessage());
+                    $this->integrationAttempt->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;
                     Log::critical($th->getMessage(), [

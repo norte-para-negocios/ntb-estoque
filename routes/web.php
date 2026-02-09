@@ -10,7 +10,6 @@ use App\Http\Controllers\NotaFiscal\RelatorioNotaFiscalController;
 use App\Http\Controllers\OrdemProducao\OrdemProducaoController;
 use App\Http\Controllers\OrdemProducao\RelatorioOrdemProducaoController;
 use App\Http\Controllers\ProdutoController;
-use App\Http\Controllers\Transferencia\RelatorioTransferenciaController;
 use App\Http\Controllers\Transferencia\TransferenciaController;
 use App\Http\Controllers\Transferencia\TransfersController;
 use App\Http\Controllers\User\PermissaoController;
@@ -60,7 +59,6 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     // Relatório de Notas Fiscais
     Route::prefix('nota-fiscal/relatorio')->group(function () {
         Route::post('/imprimir', [RelatorioNotaFiscalController::class, 'imprimir'])->name('notafiscal.relatorio.imprimir');
-//        Route::post('/excel', [RelatorioNotaFiscalController::class, 'excel'])->name('notafiscal.relatorio.excel');
     });
 
     // Ordens de produção
@@ -76,15 +74,10 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
     // Relatório Ordem Produção
     Route::prefix('ordem-producao/relatorio')->group(function () {
         Route::post('/imprimir', [RelatorioOrdemProducaoController::class, 'imprimir'])->name('ordemproducao.relatorio.imprimir');
-//        Route::post('/excel', [RelatorioOrdemProducaoController::class, 'excel'])->name('relatorio.ordemproducao.excel');
     });
 
     // Transferência
-//    Route::resource('transferencia', TransferenciaController::class)->only(['index', 'create', 'store', 'destroy'])->parameter('transferencia', 'movimento');
-//    Route::get('/transferencia/local-estoque/{local}/produto/{codigo}/data/{data}', [TransferenciaController::class, 'produto'])->name('transferencia.produto');
-   Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
-//    Route::get('/transferencia/reprocess/{movimento}', [TransferenciaController::class, 'reprocess'])->name('transferencia.reprocess');
-//    Route::post('/transferencia/pdf', [RelatorioTransferenciaController::class, 'pdf'])->name('transferencia.pdf');
+    Route::get('/transferencia/produtos', [TransferenciaController::class, 'produtos'])->name('transferencia.produtos');
 
     // Inventário
     Route::prefix('inventario')->group(function () {
