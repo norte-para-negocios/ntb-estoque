@@ -14,7 +14,6 @@ use App\Services\IntegrationAttemptsTrait;
 use App\Services\PosicaoEstoqueService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -158,7 +157,7 @@ class TransferJob implements ShouldQueue
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
+                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
                         'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
