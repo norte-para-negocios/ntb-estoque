@@ -16,7 +16,9 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use PDF;
+use Throwable;
 
 class InventarioController extends Controller
 {
@@ -483,7 +485,7 @@ class InventarioController extends Controller
                     } elseif ($response->status() === 500 && stripos($response->object()->faultcode, 'SOAP-ENV:Client-1035') !== false) {
                         preg_match('/com o ID \[(\d+)\]/', $response->object()->faultstring, $matches);
                         $idAjuste = isset($matches[1]) ? $matches[1] : '';
-                        $obj = new stdClass;
+                        $obj = new \stdClass;
                         $obj->codigo_status = '0';
                         $obj->descricao_status = 'Ajuste realizado';
                         $obj->id_movest = '';
@@ -503,7 +505,7 @@ class InventarioController extends Controller
                     $inventarioItem->descricao_status = $response->body();
                     $inventarioItem->save();
 
-                    $this->error_message = json_encode($th->getMessage());
+                    $this->integrationAttempt->error_message = json_encode($th->getMessage());
                     $this->code = $th->getCode();
                     $this->error = true;
                     Log::critical($th->getMessage(), [

@@ -127,7 +127,7 @@ class OmieService
                         $result = false;
                     } catch (Throwable $th) {
                         // Log de erro
-                        $this->error_message = json_encode($th->getMessage());
+                        $this->integrationAttempt->error_message = json_encode($th->getMessage());
                         $this->code = $th->getCode();
                         $this->error = true;
 
