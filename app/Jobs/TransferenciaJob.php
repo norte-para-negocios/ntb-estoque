@@ -69,7 +69,7 @@ class TransferenciaJob implements ShouldQueue
                     'quan' => $movimento->quan,
                     'valor' => $movimento->valor == 0 ? 0.01 : $movimento->valor,
                     'obs' => $movimento->obs ?? "NTB - Estoque #{$movimento->id}",
-                    'origem' => $movimento->origem,
+                    'origem' => 'AJU',
                     'tipo' => $movimento->tipo,
                     'motivo' => $movimento->motivo,
                     'codigo_local_estoque_destino' => $movimento->codigo_local_estoque_destino,

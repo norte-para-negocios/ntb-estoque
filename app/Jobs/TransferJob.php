@@ -158,7 +158,7 @@ class TransferJob implements ShouldQueue
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
-                        'origem' => $movimento->transferencia->codigo_local_origem,
+                        'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
                     ],

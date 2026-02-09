@@ -199,7 +199,7 @@ class TransfersController extends Controller
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
-                        'origem' => $movimento->transferencia->codigo_local_origem,
+                        'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
                     ],

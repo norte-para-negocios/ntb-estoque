@@ -445,7 +445,7 @@ class InventarioController extends Controller
                         'quan' => $inventarioItem->quan,
                         'valor' => $inventarioItem->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
-                        'origem' => $inventarioItem->inventario->origem,
+                        'origem' => 'AJU',
                         'tipo' => $inventarioItem->inventario->tipo,
                         'motivo' => $inventarioItem->inventario->motivo,
                     ],
