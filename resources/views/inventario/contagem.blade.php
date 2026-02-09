@@ -1,13 +1,21 @@
 @extends('layouts.app')
 @section('content')
     <div class="container pb-5">
-        <p>
-            <a href="{{route('inventario.index')}}" class="btn m-0 p-0" title="Voltar">
-                <img src="{{asset('images/voltar.png')}}" alt="<-">
-            </a>
-            <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventário de estoque">
-            / + Novo Inventário #{{ $inventario->id }}
-        </p>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <span>
+                <a href="{{route('inventario.index')}}" class="btn m-0 p-0" title="Voltar">
+                    <img src="{{asset('images/voltar.png')}}" alt="<-">
+                </a>
+                <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventário de estoque">
+                / + Novo Inventário #{{ $inventario->id }}
+            </span>
+            <a href="{{ route('inventario.force-sync', $inventario->id) }}"
+                    class="btn btn-sm btn-outline-secondary text-dark-emphasis fw-bold px-1 py-2"
+                    title="Tentar processar no Omie novamente">
+                    <img src="{{ asset('images/refresh.png') }}" alt="" class="me-1">
+                    Forçar atualização
+                </a>
+        </div>
         <div class="row px-2">
             <div class="col-md-3 col-6 mb-3">
                 <label for="inventario_data" class="form-label mb-0"><small>Data</small></label>

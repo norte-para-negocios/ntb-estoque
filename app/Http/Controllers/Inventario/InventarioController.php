@@ -534,4 +534,27 @@ class InventarioController extends Controller
 
         return null;
     }
+
+    public function forceSync(Inventario $inventario)
+    {
+        if (! CanService::canPermissionLoja('Inventários - Editar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Inventários - Editar!');
+        }
+
+        $inventario->status = 'Processando no Omie';
+        $inventario->save();
+
+        InventarioItem::where('inventario_id', $inventario->id)
+            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->update([
+                'status' => null,
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+            ]);
+
+        InventarioJob::dispatch($inventario, Auth::user());
+
+        return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')])->with('success', 'Inventário processado com sucesso!');
+    }
 }

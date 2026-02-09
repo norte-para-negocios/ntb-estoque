@@ -88,7 +88,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::delete('/destroy/{inventario}', [InventarioController::class, 'destroy'])->name('inventario.destroy');
         Route::get('/pdf/{inventario}', [InventarioController::class, 'pdf'])->name('inventario.pdf');
         Route::get('/{inventario}/duplicar', [InventarioController::class, 'duplicar'])->name('inventario.duplicar');
-
+        Route::get('/{inventario}/force-sync', [InventarioController::class, 'forceSync'])->name('inventario.force-sync');
         Route::post('/quantidade/{inventarioItem}', [InventarioController::class, 'setQuantidade'])->name('inventario.setQuantidade');
         Route::post('/edit/quantidade/{inventarioItem}', [InventarioController::class, 'editQuantidade'])->name('inventario.editQuantidade');
         Route::post('/item/{inventario}', [InventarioController::class, 'storeItem'])->name('inventarioitem.store');
