@@ -13,21 +13,22 @@
 
 <body>
     <div class="container">
-        <h2 class="mb-4">
-            {{ 'Inventário: ' . $transferencia->id }} - <small>{{ $loja->nome_fantasia ?? '' }}</small>
+        <h2 class="mb-4 text-center">
+            Transferências: <small>{{ $loja->nome_fantasia ?? '' }}</small>
         </h2>
         <p class="mb-0">
             <span class="fw-bold">Data:</span>
-            <span>{{ $transferencia->data->format('d/m/Y') }}</span>
-            <br>
-            <span class="fw-bold">Local de Estoque:</span>
-            <span>{{ $transferencia->localEstoque->codigo_local_estoque }} -
-                {{ $transferencia->localEstoque->descricao }}</span>
-            <br>
-            <span class="fw-bold">Tipo de Inventário:</span>
-            <span>
-                {{ \App\Helpers\Constants::TIPO_MOVIMENTO_INVENTARIO[$transferencia->motivo] ?? 'Desconhecido' }}
-            </span>
+            <span>{{ \Carbon\Carbon::parse($transferencia->data)->format('d/m/Y') }}</span>
+        </p>
+        <p class="mb-0">
+            <span class="fw-bold">Estoque Origem:</span>
+            <span>{{ $transferencia->localOrigem->codigo ?? '' }} -
+                {{ $transferencia->localOrigem->descricao ?? '' }}</span>
+        </p>
+        <p class="mb-0">
+            <span class="fw-bold">Estoque Destino:</span>
+            <span>{{ $transferencia->localDestino->codigo ?? '' }} -
+                {{ $transferencia->localDestino->descricao ?? '' }}</span>
         </p>
     </div>
     <div class="container" style="padding-top: 20px;">
@@ -36,7 +37,7 @@
                 <table class="table table-bordered table-condensed table-fixed">
                     <thead style="font-size: 9px; font-weight: 700;">
                         <tr>
-                            <th>Código do Produto</th>
+                            <th>Cód.</th>
                             <th>Descrição do Produto</th>
                             <th>Unidade</th>
                             <th style="text-align: right;">Quantidade</th>
@@ -44,22 +45,22 @@
                         </tr>
                     </thead>
                     <tbody style="font-size: 9px; font-weight: 500;">
-                        @foreach ($transferencia->items()->where('quan', '>=', 0)->get() as $item)
+                        @foreach($transferencia->movimentos as $movimento)
                             <tr>
                                 <td style="width: 100px;">
-                                    {{ $item->produto->codigo ?? '' }}
+                                    {{ $movimento->produto->codigo ?? '' }}
                                 </td>
-                                <td style="width: 800px;">
-                                    {{ $item->produto->descricao ?? '' }}
+                                <td style="width: 700px;">
+                                    {{ $movimento->produto->descricao ?? '' }}
                                 </td>
-                                <td style="width: 100px;">
-                                    {{ $item->produto->unidade ?? '' }}
+                                <td style="width: 90px;">
+                                    {{ $movimento->produto->unidade ?? '' }}
                                 </td>
-                                <td style="text-align: right; width: 160px;">
-                                    {{ number_format($item->quan, 2, ',', '.') }}
+                                <td style="text-align: right; width: 120px;">
+                                    {{ $movimento->quan ?? '-' }}
                                 </td>
                                 <td style="width: 120px; text-align: center;">
-                                    {{ $item->status ?? 'N/A' }}
+                                    {{ $movimento->status ?? 'N/A' }}
                                 </td>
                             </tr>
                         @endforeach
