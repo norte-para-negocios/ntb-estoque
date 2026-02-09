@@ -187,7 +187,16 @@ class InventarioController extends Controller
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
-        InventarioJob::dispatch($inventario, Auth::user())->delay(10);
+        InventarioItem::where('inventario_id', $inventario->id)
+            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->update([
+                'status' => null,
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+            ]);
+
+        InventarioJob::dispatch($inventario, Auth::user());
 
         return redirect()
             ->route('inventario.index', [
