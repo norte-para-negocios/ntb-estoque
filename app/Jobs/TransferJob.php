@@ -14,6 +14,7 @@ use App\Services\IntegrationAttemptsTrait;
 use App\Services\PosicaoEstoqueService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -151,16 +152,17 @@ class TransferJob implements ShouldQueue
                 'app_secret' => $loja->omie_app_secret,
                 'param' => [
                     [
-                        'codigo_local_estoque' => $movimento->transferencia->codigo_local_destino,
+                        'codigo_local_estoque' => $movimento->codigo_local_estoque,
                         'id_prod' => $movimento->produto->codigo_produto,
                         'cod_int_ajuste' => 'MOV-'.$movimento->id,
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
+                        'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
                         'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
+                        'codigo_local_estoque_destino' => $movimento->codigo_local_estoque_destino,
                     ],
                 ],
             ];
