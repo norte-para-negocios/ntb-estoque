@@ -198,7 +198,7 @@ class TransfersController extends Controller
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
+                        'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
                         'origem' => $movimento->transferencia->codigo_local_origem,
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
