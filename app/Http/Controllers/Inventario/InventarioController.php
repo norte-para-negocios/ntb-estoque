@@ -154,7 +154,7 @@ class InventarioController extends Controller
                 'produto_familia' => $produto->descricao_familia ?? '',
                 'quan' => $request->get('quantidade'),
                 'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
-                'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
+                'status' => null,
             ]);
 
             return response([
@@ -424,7 +424,7 @@ class InventarioController extends Controller
     private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (in_array(! $inventarioItem->status, [null, 'Erro', 'Sem CMC']))
+            && (! in_array($inventarioItem->status, ['Erro', 'Sem CMC']))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
