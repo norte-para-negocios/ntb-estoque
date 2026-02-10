@@ -418,7 +418,7 @@ class TransfersController extends Controller
                     'Content-Type' => 'application/json',
                 ])->post($url, $data);
 
-                if ($response->status() !== 200) {
+                if ($response->status() !== 200 && $response->object()->faultcode !== 'SOAP-ENV:Client-105') {
                     $falhas[] = $movimento->id_ajuste;
                     Log::warning('Falha ao excluir ajuste no Omie ao deletar transferência', [
                         'transferencia_id' => $transferencia->id,
@@ -474,7 +474,8 @@ class TransfersController extends Controller
                 'Content-Type' => 'application/json',
             ])->post($url, $data);
 
-            if ($response->status() !== 200) {
+            if ($response->status() !== 200 && $response->object()->faultcode !== 'SOAP-ENV:Client-105') {
+
                 Log::warning('Falha ao excluir ajuste no Omie ao deletar item', [
                     'movimento_id' => $movimento->id,
                     'id_ajuste' => $movimento->id_ajuste,
