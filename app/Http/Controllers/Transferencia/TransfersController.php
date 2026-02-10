@@ -403,21 +403,37 @@ class TransfersController extends Controller
         $falhas = [];
         foreach ($transferencia->movimentos as $movimento) {
             if ($movimento->id_ajuste !== null) {
-                $omieService = new OmieService($transferencia->loja);
-                $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+                $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+                $data = [
+                    'call' => 'ExcluirAjusteEstoque',
+                    'app_key' => $movimento->transferencia->loja->omie_app_key,
+                    'app_secret' => $movimento->transferencia->loja->omie_app_secret,
+                    'param' => [
+                        [
+                            'id_ajuste' => $movimento->id_ajuste,
+                        ],
+                    ],
+                ];
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json',
+                ])->post($url, $data);
 
-                if (! $excluido) {
+                if ($response->status() !== 200) {
                     $falhas[] = $movimento->id_ajuste;
                     Log::warning('Falha ao excluir ajuste no Omie ao deletar transferência', [
                         'transferencia_id' => $transferencia->id,
                         'movimento_id' => $movimento->id,
                         'id_ajuste' => $movimento->id_ajuste,
                     ]);
+                } else {
+                    $movimento->delete();
                 }
             }
-            $movimento->delete();
         }
-        $transferencia->delete();
+
+        if ($transferencia->movimentos->count() === 0) {
+            $transferencia->delete();
+        }
 
         if (! empty($falhas)) {
             return redirect()
@@ -425,7 +441,7 @@ class TransfersController extends Controller
                     'data_inicio' => $transferencia->data->format('Y-m-d'),
                     'data_final' => $transferencia->data->format('Y-m-d'),
                 ])
-                ->with('warning', 'Transferência cancelada, mas alguns ajustes não puderam ser excluídos no Omie. Verifique os logs.');
+                ->with('warning', 'Transferência não cancelada, alguns ajustes não puderam ser excluídos no Omie. Verifique os itens com erro.');
         }
 
         return redirect()
