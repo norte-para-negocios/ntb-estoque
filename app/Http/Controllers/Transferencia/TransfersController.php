@@ -459,19 +459,32 @@ class TransfersController extends Controller
         }
 
         if ($movimento->id_ajuste !== null) {
-            $omieService = new OmieService($movimento->transferencia->loja);
-            $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                'call' => 'ExcluirAjusteEstoque',
+                'app_key' => $movimento->transferencia->loja->omie_app_key,
+                'app_secret' => $movimento->transferencia->loja->omie_app_secret,
+                'param' => [
+                    [
+                        'id_ajuste' => $movimento->id_ajuste,
+                    ],
+                ],
+            ];
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post($url, $data);
 
-            if (! $excluido) {
+            if ($response->status() !== 200) {
                 Log::warning('Falha ao excluir ajuste no Omie ao deletar item', [
                     'movimento_id' => $movimento->id,
                     'id_ajuste' => $movimento->id_ajuste,
                 ]);
 
-                return redirect()->back()->with('warning', 'Item excluído localmente, mas não foi possível excluir o ajuste no Omie. Verifique os logs.');
+                return redirect()->back()->with('warning', 'Não foi possível excluir o ajuste no Omie. Tente novamente.'.$response->body());
+            } else {
+                $movimento->delete();
             }
         }
-        $movimento->delete();
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
     }
