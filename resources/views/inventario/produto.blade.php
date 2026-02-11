@@ -53,22 +53,21 @@
                     let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${item.codigo}"]`) ? 'disabled' : '';
                     let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
-                    tdCodigo.innerHTML = `
-                                                                            <div class="container">
-                                                                                <div class="row">
-                                                                                    <div class="col-1 py-3 d-flex justify-content-center align-items-center">
-                                                                                        <button class="btn m-0 p-0 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                                                                            <img src="${imag}" alt="+" class="m-0 p-0">
-                                                                                            </button>
-                                                                                            </div>
-                                                                                            <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
-                                                                                        <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${item.descricao}</span>
-                                                                                    </div>
-                                                                                    <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
-                                                                                        ${item.unidade}
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>`;
+                    tdCodigo.innerHTML = `<div class="container">
+        <div class="row">
+            <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                <button class="btn m-0 p-0 add-product border-0" type="button" ${jaExisteNaTabela}>
+                    <img src="${imag}" alt="+" class="m-0 p-0">
+                    </button>
+                    </div>
+                    <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${item.descricao}</span>
+            </div>
+            <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
+                ${item.unidade}
+            </div>
+        </div>
+        </div>`;
 
                     const button = tdCodigo.querySelector("button.add-product");
                     button.addEventListener("click", (event) => {

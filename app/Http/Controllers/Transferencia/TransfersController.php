@@ -489,4 +489,27 @@ class TransfersController extends Controller
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
     }
+
+    public function forceSync(Transferencia $transferencia)
+    {
+        if (! CanService::canPermissionLoja('Transferências - Editar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Transferências - Editar!');
+        }
+
+        $transferencia->status = 'Processando no Omie';
+        $transferencia->save();
+
+        Movimento::where('transferencia_id', $transferencia->id)
+            ->whereIn('status', ['Sem CMC', 'Erro'])
+            ->update([
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+                'status' => null,
+            ]);
+
+        TransferJob::dispatch($transferencia, Auth::user());
+
+        return redirect()->route('transfers.index')->with('success', 'Transferência processando no Omie!');
+    }
 }

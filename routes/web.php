@@ -109,5 +109,7 @@ Route::middleware(['auth', CheckCurrentLoja::class])->group(function () {
         Route::post('/edit/quantidade/{movimento}', [TransfersController::class, 'editQuantidade'])->name('transfers.editQuantidade');
         Route::post('/item/{transferencia}', [TransfersController::class, 'storeItem'])->name('movimento.store');
         Route::delete('/item/{movimento}', [TransfersController::class, 'destroyItem'])->name('movimento.destroy');
+
+        Route::get('/{transferencia}/force-sync', [TransfersController::class, 'forceSync'])->name('transfers.force-sync');
     });
 });
