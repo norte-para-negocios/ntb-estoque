@@ -145,24 +145,23 @@
                                                                 <img src="{{asset('images/editar.png')}}" alt="Imprimir"
                                                                     class="me-1"> Editar
                                                             </a>
-                                                            @if($inventario->status === 'Finalizado')
-                                                                <button type="button"
-                                                                    onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                    title="Duplicar Inventário">
-                                                                    <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
-                                                                        class="me-1"> Duplicar
-                                                                </button>
-                                                            @endif
-                                                            @if($inventario->status !== 'Processando no Omie')
-                                                                <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                    <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
-                                                                        class="me-1"> Imprimir
-                                                                </a>
 
+                                                            <button type="button"
+                                                                onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
+                                                                title="Duplicar Inventário" @if($inventario->status !== 'Finalizado')
+                                                                disabled @endif>
+                                                                <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
+                                                                    class="me-1"> Duplicar
+                                                            </button>
 
-                                                            @endif
+                                                            <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                                @if($inventario->status !== 'Finalizado') disabled @endif
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($inventario->status !== 'Finalizado') disabled @endif">
+                                                                <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
+                                                                    class="me-1"> Imprimir
+                                                            </a>
+
                                                             <button type="button"
                                                                 onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">

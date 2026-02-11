@@ -109,14 +109,15 @@
                                                 </div>
                                                 <div class="card-footer">
                                                     <div class="row">
-                                                        
-                                                        <div class="col-md-2 col-sm-3 col-3 d-flex justify-content-start align-items-center">
+
+                                                        <div
+                                                            class="col-md-2 col-sm-3 col-3 d-flex justify-content-start align-items-center">
                                                             <div>
                                                                 <small>Estoque</small><br>
                                                                 <span class="fw-semibold">#{{$transferencia->id}}</span>
                                                             </div>
                                                         </div>
-                                                        
+
                                                         <div
                                                             class="col-md-2 col-sm-3 col-9 d-flex justify-content-start align-items-center">
                                                             <div>
@@ -126,9 +127,10 @@
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                            
 
-                                                        <div class="col-md-3 col-sm-6 col-12 d-flex justify-content-start align-items-center">
+
+                                                        <div
+                                                            class="col-md-3 col-sm-6 col-12 d-flex justify-content-start align-items-center">
                                                             <div>
                                                                 <small>Local</small><br>
                                                                 <span class="fw-semibold">
@@ -143,32 +145,39 @@
                                                             class="col-md-5 col-12 mt-3 mt-md-0 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
                                                             <a href="{{ route('transfers.contagem', $transferencia->id) }}"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                <img src="{{asset('images/editar.png')}}" alt="Imprimir" class="me-1">
+                                                                <img src="{{asset('images/editar.png')}}" alt="Imprimir"
+                                                                    class="me-1">
                                                                 Editar
                                                             </a>
-                                                            @if($transferencia->status === 'Finalizado')
-                                                                <button type="button"
-                                                                    onclick="duplicarInventario('{{route('transfers.duplicar', $transferencia->id)}}')"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                    title="Duplicar Transferência">
-                                                                    <img src="{{asset('images/duplicar.png')}}" alt="Duplicar" class="me-1">
-                                                                    Duplicar
-                                                                </button>
-                                                            @endif
-                                                            @if($transferencia->status !== 'Processando no Omie')
-                                                                <a href="{{ route('transfers.pdf', $transferencia->id) }}"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                    <img src="{{asset('images/imprimir.png')}}" alt="Imprimir" class="me-1">
-                                                                    Imprimir
-                                                                </a>
 
-                                                                <button type="button"
-                                                                    onclick="deleteRegistro('{{ route('transfers.destroy', $transferencia->id) }}')"
-                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                    <img src="{{asset('images/excluir.png')}}" alt="" class="me-1">Excluir
-                                                                </button>
-                                                            @endif
-                                                        </div>  
+                                                            <button type="button"
+                                                                onclick="duplicarInventario('{{route('transfers.duplicar', $transferencia->id)}}')"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
+                                                                title="Duplicar Transferência"
+                                                                @if($transferencia->status == 'Processando') disabled @endif>
+                                                                <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
+                                                                    class="me-1">
+                                                                Duplicar
+                                                            </button>
+
+
+                                                            <a href="{{ route('transfers.pdf', $transferencia->id) }}"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($transferencia->status !== 'Concluído') disabled @endif"
+                                                                @if($transferencia->status !== 'Concluído') disabled @endif>
+                                                                <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
+                                                                    class="me-1">
+                                                                Imprimir
+                                                            </a>
+
+                                                            <button type="button"
+                                                                onclick="deleteRegistro('{{ route('transfers.destroy', $transferencia->id) }}')"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
+                                                                @if($transferencia->status !== 'Concluído') disabled @endif>
+                                                                <img src="{{asset('images/excluir.png')}}" alt=""
+                                                                    class="me-1">Excluir
+                                                            </button>
+
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
