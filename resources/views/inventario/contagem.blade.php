@@ -110,11 +110,11 @@
                                                 @if($item->status === 'Sem CMC')
                                                     <br>
                                                     <span class="badge text-bg-warning">
-                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 50) }}
+                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 29) }}
                                                     </span>
                                                 @else
                                                     <br><span class="badge text-bg-success" title="{{ (($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status) }}">
-                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 50)  }}
+                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 29)  }}
                                                     </span>
                                                 @endif
 
@@ -619,6 +619,10 @@
     <style>
         body {
             background-color: #F4F4F4;
+        }
+
+        .ts-dropdown-content {
+            max-height: 400px !important;
         }
 
         .search {
