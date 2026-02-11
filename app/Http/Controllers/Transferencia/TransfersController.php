@@ -156,8 +156,6 @@ class TransfersController extends Controller
                 'response' => null,
             ]);
 
-            $this->createAjuste($item);
-
             return response([
                 'key' => $item->id,
                 'id' => $produto->codigo,
@@ -178,7 +176,7 @@ class TransfersController extends Controller
     private function createAjuste(Movimento $movimento): ?object
     {
         if (($movimento->quan >= 0)
-            && (in_array(! $movimento->status, [null, 'Erro']))
+            && (! in_array($movimento->status, ['Erro', 'Sem CMC']))
             && ($movimento->id_ajuste === null)
             && $movimento->valor > 0
         ) {
@@ -192,16 +190,17 @@ class TransfersController extends Controller
                 'app_secret' => $loja->omie_app_secret,
                 'param' => [
                     [
-                        'codigo_local_estoque' => $movimento->transferencia->codigo_local_destino,
+                        'codigo_local_estoque' => $movimento->codigo_local_estoque,
                         'id_prod' => $movimento->produto->codigo_produto,
-                        'cod_int_ajuste' => 'MOVIMENTO'.$movimento->id,
+                        'cod_int_ajuste' => 'MOV-'.$movimento->id,
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
-                        'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
-                        'origem' => $movimento->transferencia->codigo_local_origem,
+                        'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
+                        'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
+                        'codigo_local_estoque_destino' => $movimento->codigo_local_estoque_destino,
                     ],
                 ],
             ];
@@ -304,6 +303,19 @@ class TransfersController extends Controller
 
         $movimento->update(['quan' => $request->input('quantidade')]);
 
+        $response = $this->createAjuste($movimento);
+        if ($response) {
+            $movimento->response = json_encode($response);
+            $movimento->codigo_status = $response->codigo_status;
+            $movimento->descricao_status = $response->descricao_status;
+            $movimento->id_movest = $response->id_movest;
+            $movimento->id_ajuste = $response->id_ajuste;
+            $movimento->status = 'Concluído';
+        } else {
+            $movimento->status = 'Erro';
+        }
+        $movimento->save();
+
         return response()->json(['success' => true]);
     }
 
@@ -340,7 +352,18 @@ class TransfersController extends Controller
             'quan' => $request->input('quantidade'),
         ]);
 
-        TransferJob::dispatch($movimento->transferencia, Auth::user());
+        $response = $this->createAjuste($movimento);
+        if ($response) {
+            $movimento->response = json_encode($response);
+            $movimento->codigo_status = $response->codigo_status;
+            $movimento->descricao_status = $response->descricao_status;
+            $movimento->id_movest = $response->id_movest;
+            $movimento->id_ajuste = $response->id_ajuste;
+            $movimento->status = 'Concluído';
+        } else {
+            $movimento->status = 'Erro';
+        }
+        $movimento->save();
 
         return response()->json(['success' => true]);
     }
@@ -380,21 +403,37 @@ class TransfersController extends Controller
         $falhas = [];
         foreach ($transferencia->movimentos as $movimento) {
             if ($movimento->id_ajuste !== null) {
-                $omieService = new OmieService($transferencia->loja);
-                $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+                $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+                $data = [
+                    'call' => 'ExcluirAjusteEstoque',
+                    'app_key' => $movimento->transferencia->loja->omie_app_key,
+                    'app_secret' => $movimento->transferencia->loja->omie_app_secret,
+                    'param' => [
+                        [
+                            'id_ajuste' => $movimento->id_ajuste,
+                        ],
+                    ],
+                ];
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json',
+                ])->post($url, $data);
 
-                if (! $excluido) {
+                if ($response->status() !== 200 && $response->object()->faultcode !== 'SOAP-ENV:Client-105') {
                     $falhas[] = $movimento->id_ajuste;
                     Log::warning('Falha ao excluir ajuste no Omie ao deletar transferência', [
                         'transferencia_id' => $transferencia->id,
                         'movimento_id' => $movimento->id,
                         'id_ajuste' => $movimento->id_ajuste,
                     ]);
+                } else {
+                    $movimento->delete();
                 }
             }
-            $movimento->delete();
         }
-        $transferencia->delete();
+
+        if ($transferencia->movimentos->count() === 0) {
+            $transferencia->delete();
+        }
 
         if (! empty($falhas)) {
             return redirect()
@@ -402,7 +441,7 @@ class TransfersController extends Controller
                     'data_inicio' => $transferencia->data->format('Y-m-d'),
                     'data_final' => $transferencia->data->format('Y-m-d'),
                 ])
-                ->with('warning', 'Transferência cancelada, mas alguns ajustes não puderam ser excluídos no Omie. Verifique os logs.');
+                ->with('warning', 'Transferência não cancelada, alguns ajustes não puderam ser excluídos no Omie. Verifique os itens com erro.');
         }
 
         return redirect()
@@ -420,19 +459,33 @@ class TransfersController extends Controller
         }
 
         if ($movimento->id_ajuste !== null) {
-            $omieService = new OmieService($movimento->transferencia->loja);
-            $excluido = $omieService->excluirAjusteEstoque($movimento->id_ajuste);
+            $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
+            $data = [
+                'call' => 'ExcluirAjusteEstoque',
+                'app_key' => $movimento->transferencia->loja->omie_app_key,
+                'app_secret' => $movimento->transferencia->loja->omie_app_secret,
+                'param' => [
+                    [
+                        'id_ajuste' => $movimento->id_ajuste,
+                    ],
+                ],
+            ];
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post($url, $data);
 
-            if (! $excluido) {
+            if ($response->status() !== 200 && $response->object()->faultcode !== 'SOAP-ENV:Client-105') {
+
                 Log::warning('Falha ao excluir ajuste no Omie ao deletar item', [
                     'movimento_id' => $movimento->id,
                     'id_ajuste' => $movimento->id_ajuste,
                 ]);
 
-                return redirect()->back()->with('warning', 'Item excluído localmente, mas não foi possível excluir o ajuste no Omie. Verifique os logs.');
+                return redirect()->back()->with('warning', 'Não foi possível excluir o ajuste no Omie. Tente novamente.'.$response->body());
+            } else {
+                $movimento->delete();
             }
         }
-        $movimento->delete();
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
     }

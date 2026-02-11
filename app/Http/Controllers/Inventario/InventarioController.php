@@ -154,7 +154,7 @@ class InventarioController extends Controller
                 'produto_familia' => $produto->descricao_familia ?? '',
                 'quan' => $request->get('quantidade'),
                 'valor' => ($posicaoEstoque?->n_cmc > 0) ? $posicaoEstoque->n_cmc : 0,
-                'status' => ($posicaoEstoque?->n_cmc > 0) ? null : 'Sem CMC',
+                'status' => null,
             ]);
 
             return response([
@@ -187,7 +187,16 @@ class InventarioController extends Controller
         $inventario->status = 'Processando no Omie';
         $inventario->save();
 
-        InventarioJob::dispatch($inventario, Auth::user())->delay(10);
+        InventarioItem::where('inventario_id', $inventario->id)
+            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->update([
+                'status' => null,
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+            ]);
+
+        InventarioJob::dispatch($inventario, Auth::user());
 
         return redirect()
             ->route('inventario.index', [
@@ -424,7 +433,7 @@ class InventarioController extends Controller
     private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (in_array(! $inventarioItem->status, [null, 'Erro', 'Sem CMC']))
+            && (! in_array($inventarioItem->status, ['Erro', 'Sem CMC']))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
@@ -445,7 +454,7 @@ class InventarioController extends Controller
                         'quan' => $inventarioItem->quan,
                         'valor' => $inventarioItem->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.Auth::user()->name,
-                        'origem' => $inventarioItem->inventario->origem,
+                        'origem' => 'AJU',
                         'tipo' => $inventarioItem->inventario->tipo,
                         'motivo' => $inventarioItem->inventario->motivo,
                     ],
@@ -524,5 +533,28 @@ class InventarioController extends Controller
         }
 
         return null;
+    }
+
+    public function forceSync(Inventario $inventario)
+    {
+        if (! CanService::canPermissionLoja('Inventários - Editar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Inventários - Editar!');
+        }
+
+        $inventario->status = 'Processando no Omie';
+        $inventario->save();
+
+        InventarioItem::where('inventario_id', $inventario->id)
+            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->update([
+                'status' => null,
+                'response' => null,
+                'codigo_status' => null,
+                'descricao_status' => null,
+            ]);
+
+        InventarioJob::dispatch($inventario, Auth::user());
+
+        return redirect()->route('inventario.index', ['data_inicio' => $inventario->data->format('Y-m-d'), 'data_final' => $inventario->data->format('Y-m-d')])->with('success', 'Inventário processado com sucesso!');
     }
 }

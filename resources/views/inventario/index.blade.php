@@ -6,16 +6,15 @@
             <div class="col-6">
                 <div class="mb-3">
                     <label for="data_inicio" class="form-label">Início</label>
-                    <input title="Data criação Omie" type="date" class="form-control"
-                           id="data_inicio" name="data_inicio"
-                           value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
+                    <input title="Data criação Omie" type="date" class="form-control" id="data_inicio" name="data_inicio"
+                        value="{{ request('data_inicio', $data_inicio ? $data_inicio->format('Y-m-d') : date('Y-m-d')) }}">
                 </div>
             </div>
             <div class="col-6">
                 <div class="mb-3">
                     <label for="data_final" class="form-label">Final</label>
                     <input type="date" class="form-control" id="data_final" name="data_final"
-                           value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
+                        value="{{ request('data_final', $data_final ? $data_final->format('Y-m-d') : date('Y-m-d')) }}">
                 </div>
             </div>
             <div class="col-12">
@@ -36,52 +35,40 @@
                     <label for="tipo" class="form-label">Tipo</label>
                     <select id="tipo" name="tipo" class="form-control">
                         <option value="">Todos os tipos</option>
-                        <option
-                            value="00" {{ request('tipo', $tipo ?? '') == '00' ? 'selected' : '' }}>
+                        <option value="00" {{ request('tipo', $tipo ?? '') == '00' ? 'selected' : '' }}>
                             Mercadoria para Revenda
                         </option>
-                        <option
-                            value="01" {{ request('tipo', $tipo ?? '') == '01' ? 'selected' : '' }}>
+                        <option value="01" {{ request('tipo', $tipo ?? '') == '01' ? 'selected' : '' }}>
                             Matéria Prima
                         </option>
-                        <option
-                            value="02" {{ request('tipo', $tipo ?? '') == '02' ? 'selected' : '' }}>
+                        <option value="02" {{ request('tipo', $tipo ?? '') == '02' ? 'selected' : '' }}>
                             Embalagem
                         </option>
-                        <option
-                            value="03" {{ request('tipo', $tipo ?? '') == '03' ? 'selected' : '' }}>
+                        <option value="03" {{ request('tipo', $tipo ?? '') == '03' ? 'selected' : '' }}>
                             Produto em Processo
                         </option>
-                        <option
-                            value="04" {{ request('tipo', $tipo ?? '') == '04' ? 'selected' : '' }}>
+                        <option value="04" {{ request('tipo', $tipo ?? '') == '04' ? 'selected' : '' }}>
                             Produto Acabado
                         </option>
-                        <option
-                            value="05" {{ request('tipo', $tipo ?? '') == '05' ? 'selected' : '' }}>
+                        <option value="05" {{ request('tipo', $tipo ?? '') == '05' ? 'selected' : '' }}>
                             Subproduto
                         </option>
-                        <option
-                            value="06" {{ request('tipo', $tipo ?? '') == '06' ? 'selected' : '' }}>
+                        <option value="06" {{ request('tipo', $tipo ?? '') == '06' ? 'selected' : '' }}>
                             Produto Intermediário
                         </option>
-                        <option
-                            value="07" {{ request('tipo', $tipo ?? '') == '07' ? 'selected' : '' }}>
+                        <option value="07" {{ request('tipo', $tipo ?? '') == '07' ? 'selected' : '' }}>
                             Material de Uso e Consumo
                         </option>
-                        <option
-                            value="08" {{ request('tipo', $tipo ?? '') == '08' ? 'selected' : '' }}>
+                        <option value="08" {{ request('tipo', $tipo ?? '') == '08' ? 'selected' : '' }}>
                             Ativo Imobilizado
                         </option>
-                        <option
-                            value="09" {{ request('tipo', $tipo ?? '') == '09' ? 'selected' : '' }}>
+                        <option value="09" {{ request('tipo', $tipo ?? '') == '09' ? 'selected' : '' }}>
                             Serviços
                         </option>
-                        <option
-                            value="10" {{ request('tipo', $tipo ?? '') == '10' ? 'selected' : '' }}>
+                        <option value="10" {{ request('tipo', $tipo ?? '') == '10' ? 'selected' : '' }}>
                             Outros Insumos
                         </option>
-                        <option
-                            value="99" {{ request('tipo', $tipo ?? '') == '99' ? 'selected' : '' }}>
+                        <option value="99" {{ request('tipo', $tipo ?? '') == '99' ? 'selected' : '' }}>
                             Outras
                         </option>
                     </select>
@@ -100,106 +87,113 @@
             <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventários de estoques">
             {{ __('Inventários') }}
         </p>
-        <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;">
+        <table class="table table-borderless mb-5" style="background-color: #f4f4f4;">
             <tbody>
-            @if (isset($inventarios) && !empty($inventarios))
-                @foreach ($inventarios as $inventario)
-                    <tr style="background-color: #f4f4f4;">
-                        <td class="m-0 px-0" style="background-color: #f4f4f4;">
-                            <div class="container">
-                                <div class="row">
-                                    <div class="col-12 p-0">
-                                        <small class="text-muted">
-                                            Data: {{$inventario->data->format('d/m/Y')}}
-                                        </small>
-                                        <div class="card m-0">
-                                            <div class="card-header d-flex justify-content-between"
-                                                 style="font-size: .7rem;
-                                                 background-color:
-                                                 @if ($inventario->status !== 'Finalizado')
-                                                    #F24646
-                                                @else
-                                                    #2EB5C3
-                                                @endif;
-                                                 ">
-                                                {{$inventario->status}}
-                                                @if($inventario->finalizado)
-                                                    | {{$inventario->finalizado->format('d/m/Y')}}
-                                                @endif
-                                            </div>
+                @if (isset($inventarios) && !empty($inventarios))
+                    @foreach ($inventarios as $inventario)
+                        <tr style="background-color: #f4f4f4;">
+                            <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                                <div class="container">
+                                    <div class="row">
+                                        <div class="col-12 p-0">
+                                            <small class="text-muted">
+                                                Data: {{$inventario->data->format('d/m/Y')}}
+                                            </small>
+                                            <div class="card m-0">
+                                                <div class="card-header d-flex justify-content-between"
+                                                    style="font-size: .7rem;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             background-color:
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @if ($inventario->status !== 'Finalizado')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                #F24646
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @else
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                #2EB5C3
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @endif;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ">
+                                                    {{$inventario->status}}
+                                                    @if($inventario->finalizado)
+                                                        | {{$inventario->finalizado->format('d/m/Y')}}
+                                                    @endif
+                                                </div>
 
-                                            <div class="card-footer">
-                                                <div class="row">
-                                                    <div class="col-md-1 col-3">
-                                                        <small>Estoque</small><br>
-                                                        <span class="fw-semibold">
-                                                            #{{$inventario->id}}
-                                                        </span>
-                                                    </div>
+                                                <div class="card-footer">
+                                                    <div class="row">
+                                                        <div class="col-md-2 col-3 d-flex justify-content-start align-items-center">
+                                                            <div>
+                                                                <small>Estoque</small><br>
+                                                                <span class="fw-semibold">
+                                                                    #{{$inventario->id}}
+                                                                </span>
+                                                            </div>
+                                                        </div>
 
-                                                    <div class="col-md-3 col-4">
-                                                        <small>Produtos contados</small><br>
-                                                        <span class="fw-semibold">
-                                                            {{$inventario->items()->count() ?? 0}}
-                                                        </span>
-                                                    </div>
+                                                        <div class="col-md-2 col-9 d-flex justify-content-start align-items-center">
+                                                            <div>
 
-                                                    <div class="col-md-3 col-5">
-                                                        <small>Local</small><br>
-                                                        <span class="fw-semibold">
-                                                            {{$inventario->localEstoque->descricao ?? ''}}
-                                                        </span>
-                                                    </div>
+                                                                <small>Produtos</small><br>
+                                                                <span class="fw-semibold">
+                                                                    {{ $inventario->items()->where('status', 'Concluído')->count() ?? 0 }}
+                                                                    de
+                                                                    {{$inventario->items()->count() ?? 0}}
+                                                                </span>
+                                                            </div>
+                                                        </div>
 
-                                                    <div
-                                                        class="col-md-5 col-12 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
-                                                        <a href="{{ route('inventario.contagem', $inventario->id) }}"
-                                                           class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                            <img src="{{asset('images/editar.png')}}"
-                                                                 alt="Imprimir"
-                                                                 class="me-1"> Editar
-                                                        </a>
-                                                        @if($inventario->status === 'Finalizado')
-                                                            <button type="button"
+                                                        <div
+                                                            class="col-md-3 col-12 d-flex justify-content-start align-items-center">
+                                                            <div>
+                                                                <small>Local</small><br>
+                                                                <span class="fw-semibold">
+                                                                    {{$inventario->localEstoque->descricao ?? ''}}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div
+                                                            class="col-md-5 col-12 mt-3 mt-md-0 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
+                                                            <a href="{{ route('inventario.contagem', $inventario->id) }}"
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                                <img src="{{asset('images/editar.png')}}" alt="Imprimir"
+                                                                    class="me-1"> Editar
+                                                            </a>
+                                                            @if($inventario->status === 'Finalizado')
+                                                                <button type="button"
                                                                     onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
                                                                     class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
                                                                     title="Duplicar Inventário">
-                                                                <img src="{{asset('images/duplicar.png')}}"
-                                                                     alt="Duplicar"
-                                                                     class="me-1"> Duplicar
-                                                            </button>
-                                                        @endif
-                                                        @if($inventario->status !== 'Processando no Omie')
-                                                            <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                               class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                                <img src="{{asset('images/imprimir.png')}}"
-                                                                     alt="Imprimir"
-                                                                     class="me-1"> Imprimir
-                                                            </a>
+                                                                    <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
+                                                                        class="me-1"> Duplicar
+                                                                </button>
+                                                            @endif
+                                                            @if($inventario->status !== 'Processando no Omie')
+                                                                <a href="{{ route('inventario.pdf', $inventario->id) }}"
+                                                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
+                                                                    <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
+                                                                        class="me-1"> Imprimir
+                                                                </a>
 
-                                                            
-                                                        @endif
-                                                        <button type="button"
+
+                                                            @endif
+                                                            <button type="button"
                                                                 onclick="deleteRegistro('{{ route('inventario.destroy', $inventario->id) }}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
-                                                            <img src="{{asset('images/excluir.png')}}" alt=""
+                                                                <img src="{{asset('images/excluir.png')}}" alt=""
                                                                     class="me-1">Excluir
-                                                        </button>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </td>
+                            </td>
+                        </tr>
+                    @endforeach
+                @else
+                    <tr>
+                        <td class="text-center">Nenhuma nota fiscal encontrada</td>
                     </tr>
-                @endforeach
-            @else
-                <tr>
-                    <td class="text-center">Nenhuma nota fiscal encontrada</td>
-                </tr>
-            @endif
+                @endif
             </tbody>
         </table>
         {{ $inventarios->links('pagination::bootstrap-5') }}
@@ -209,8 +203,7 @@
     <div class="container-fluid fixed-bottom">
         <div class="row bg-white">
             <div class="col d-flex justify-content-end align-items-center py-3">
-                <button class="btn btn-success text-white" data-bs-toggle="modal"
-                        data-bs-target="#createInventarioModal">
+                <button class="btn btn-success text-white" data-bs-toggle="modal" data-bs-target="#createInventarioModal">
                     <i class="fas fa-plus text-white"></i> Nova inventário
                 </button>
             </div>
@@ -234,7 +227,7 @@
             const aberto = localStorage.getItem('accordionInventario');
             if (aberto) {
                 const el = document.getElementById(aberto);
-                new bootstrap.Collapse(el, {toggle: true});
+                new bootstrap.Collapse(el, { toggle: true });
             }
         });
 

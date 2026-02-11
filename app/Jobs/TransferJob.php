@@ -151,16 +151,17 @@ class TransferJob implements ShouldQueue
                 'app_secret' => $loja->omie_app_secret,
                 'param' => [
                     [
-                        'codigo_local_estoque' => $movimento->transferencia->codigo_local_destino,
+                        'codigo_local_estoque' => $movimento->codigo_local_estoque,
                         'id_prod' => $movimento->produto->codigo_produto,
-                        'cod_int_ajuste' => 'MOVIMENTO'.$movimento->id,
+                        'cod_int_ajuste' => 'MOV-'.$movimento->id,
                         'data' => $movimento->transferencia->data->format('d/m/Y'),
                         'quan' => $movimento->quan,
                         'valor' => $movimento->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
-                        'origem' => $movimento->transferencia->codigo_local_origem,
+                        'origem' => 'AJU',
                         'tipo' => $movimento->tipo,
                         'motivo' => $movimento->transferencia->motivo,
+                        'codigo_local_estoque_destino' => $movimento->codigo_local_estoque_destino,
                     ],
                 ],
             ];

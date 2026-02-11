@@ -52,110 +52,121 @@
 </head>
 
 <body>
-@foreach ($etiquetas as $etiqueta)
-    <div class="container">
-        <table aria-hidden="true">
-            <tbody>
-            <tr>
-                <td style="margin:0 !important; padding: 0 !important; width: 70%;">
-                    <table>
-                        <tbody>
-                        <tr>
-                            <td colspan="2">
-                                <p style="margin:0 0 10px 0 !important; padding: 0 !important; text-align: left !important; font-weight: bold; font-size: 11px;">
-                                    {{ substr(trim($etiqueta['descricao']), 0, 38) }}
-                                </p>
-                            </td>
-                        </tr>
+    @foreach ($etiquetas as $etiqueta)
+        <div class="container">
+            <table aria-hidden="true">
+                <tbody>
+                    <tr>
+                        <td style="margin:0 !important; padding: 0 !important; width: 70%;">
+                            <table>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="3">
+                                            <p
+                                                style="margin:0 0 10px 0 !important; padding: 0 !important; text-align: left !important; font-weight: bold; font-size: 11px;">
+                                                {{ substr(trim($etiqueta['descricao']), 0, 38) }}
+                                            </p>
+                                        </td>
+                                    </tr>
 
-                        @if (($etiqueta['produzido'] !== '') && ($etiqueta['validade'] !== ''))
-                            <tr style="padding-bottom: 10px;">
-                                <td style="padding-bottom: 10px; width: 50%;">
-                                    Fabricação:<br>
-                                    <span
-                                        style="font-size: 11px; font-weight: bold;">{{ substr(trim($etiqueta['produzido']), 0, 14) }}</span>
-                                </td>
+                                    @if (($etiqueta['produzido'] !== '') && ($etiqueta['validade'] !== ''))
+                                        <tr style="padding-bottom: 10px;">
+                                            <td style="padding: 0 0 10px 0; width: 30%">
+                                                Fabricação:<br>
+                                                <span style="font-size: 11px; font-weight: bold;">
+                                                    {{trim($etiqueta['produzido'])}}
+                                                </span>
+                                            </td>
 
-                                <td style="padding-bottom: 10px; width: 50%;">
-                                    Validade:<br>
-                                    <span
-                                        style="font-size: 11px; font-weight: bold;">{{ substr(trim($etiqueta['validade']), 0, 15) }}</span>
-                                </td>
-                            </tr>
-                        @endif
+                                            <td style="padding-bottom: 10px; width: 30%;">
+                                                Validade:<br>
+                                                <span
+                                                    style="font-size: 11px; font-weight: bold;">{{ substr(trim($etiqueta['validade']), 0, 10) }}</span>
+                                            </td>
 
-                        @if (($etiqueta['qtde_nf'] !== '') && ($etiqueta['qtde_etiqueta'] !== ''))
-                            <tr>
-                                <td style="padding-bottom: 10px; width: 50%;">
-                                    Qtde NF<br>
-                                    <span style="font-size: 11px; font-weight: bold;">
-                                        {{ substr(trim($etiqueta['qtde_nf']), 0, 17) }}
-                                    </span>
-                                </td>
-                                <td style="padding-bottom: 10px; width: 50%;">
-                                    Qtde Etiqueta<br>
-                                    <span style="font-size: 11px; font-weight: bold;">
-                                        {{substr(trim($etiqueta['qtde_etiqueta']), 0, 17)}}
-                                    </span>
-                                </td>
-                            </tr>
-                        @endif
+                                            <td style="padding-bottom: 10px; width: 40%;">
+                                                @if(($etiqueta['qtde_etiqueta'] !== '') && ($etiqueta['qtde_nf'] === ''))
+                                                    Qtde Etiqueta:<br>
+                                                    <span style="font-size: 11px; font-weight: bold;">
+                                                        {{ substr(trim($etiqueta['qtde_etiqueta']), 0, 15) }}
+                                                    </span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endif
 
-                        <tr>
-                            <td style="padding-bottom: 10px; width: 50%;">
-                                Produto:{{ substr(trim($etiqueta['codigo_produto']), 0, 6) }}
-                            </td>
+                                    @if (($etiqueta['qtde_nf'] !== '') && ($etiqueta['qtde_etiqueta'] !== ''))
+                                        <tr>
+                                            <td style="padding-bottom: 10px; width: 50%;">
+                                                Qtde NF<br>
+                                                <span style="font-size: 11px; font-weight: bold;">
+                                                    {{ substr(trim($etiqueta['qtde_nf']), 0, 17) }}
+                                                </span>
+                                            </td>
+                                            <td colspan="2" style="padding-bottom: 10px; width: 50%;">
+                                                Qtde Etiqueta<br>
+                                                <span style="font-size: 11px; font-weight: bold;">
+                                                    {{substr(trim($etiqueta['qtde_etiqueta']), 0, 17)}}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endif
 
-                            <td style="padding-bottom: 10px; width: 50%;">
-                                @if($etiqueta['quantidade'] !== "")
-                                    {{ substr(trim($etiqueta['quantidade']), 0, 14) }}
-                                @endif
-                            </td>
-                        </tr>
+                                    <tr>
+                                        <td style="padding-bottom: 10px; width: 50%;" colspan="2">
+                                            Produto:{{ substr(trim($etiqueta['codigo_produto']), 0, 6) }}
+                                        </td>
 
-                        <tr>
-                            <td colspan="2">
-                                @if ($etiqueta['lote'] !== '')
-                                    <p style="text-align: left; margin-bottom: 4px;">
-                                        Lote: {{ substr(trim($etiqueta['lote']), 0, 22) }}
-                                    </p>
-                                @endif
+                                        <td style="padding-bottom: 10px; width: 50%;">
+                                            @if($etiqueta['quantidade'] !== "")
+                                                {{ substr(trim($etiqueta['quantidade']), 0, 14) }}
+                                            @endif
+                                        </td>
+                                    </tr>
 
-                                @if ($etiqueta['inclusao'] !== '')
-                                    <p style="text-align: left; margin-bottom: 4px;">
-                                        Recebido em: {{ substr(trim($etiqueta['inclusao']), 0, 10) }}
-                                    </p>
-                                @endif
+                                    <tr>
+                                        <td colspan="3">
+                                            @if ($etiqueta['lote'] !== '')
+                                                <p style="text-align: left; margin-bottom: 4px;">
+                                                    Lote: {{ substr(trim($etiqueta['lote']), 0, 22) }}
+                                                </p>
+                                            @endif
 
-                                @if ($etiqueta['fornecedor'] !== '')
-                                    <p style="text-align: left; margin-bottom: 4px;">
-                                        {{ substr(trim($etiqueta['fornecedor']), 0, 28) }}
-                                    </p>
-                                @endif
+                                            @if ($etiqueta['inclusao'] !== '')
+                                                <p style="text-align: left; margin-bottom: 4px;">
+                                                    Recebido em: {{ substr(trim($etiqueta['inclusao']), 0, 10) }}
+                                                </p>
+                                            @endif
 
-                                CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}
-                            </td>
-                        </tr>
+                                            @if ($etiqueta['fornecedor'] !== '')
+                                                <p style="text-align: left; margin-bottom: 4px;">
+                                                    {{ substr(trim($etiqueta['fornecedor']), 0, 28) }}
+                                                </p>
+                                            @endif
 
-                        </tbody>
-                    </table>
-                </td>
+                                            CNPJ:{{ trim(Auth::user()->loja->cnpj) ?? '-' }}
+                                        </td>
+                                    </tr>
 
-                <td>
-                    <p style="margin-bottom: 16px !important; padding-bottom: 0 !important;">
-                        {{--QRCODE--}}
-                        {!! QrCode::size(100)->generate($etiqueta['codigo_produto']) !!}
-                    </p>
-                    <p style="text-align: right;">
-                        {{--MARCA--}}
-                        <img src="{{asset('images/ntb.png')}}" alt="NTB" style="height: 28px; width: auto;">
-                    </p>
-                </td>
-            </tr>
-            </tbody>
-        </table>
-    </div>
-@endforeach
+                                </tbody>
+                            </table>
+                        </td>
+
+                        <td>
+                            <p style="margin-bottom: 16px !important; padding-bottom: 0 !important;">
+                                {{--QRCODE--}}
+                                {!! QrCode::size(100)->generate($etiqueta['codigo_produto']) !!}
+                            </p>
+                            <p style="text-align: right;">
+                                {{--MARCA--}}
+                                <img src="{{asset('images/ntb.png')}}" alt="NTB" style="height: 28px; width: auto;">
+                            </p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    @endforeach
 </body>
 
 </html>

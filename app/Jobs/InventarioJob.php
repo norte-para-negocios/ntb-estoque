@@ -149,7 +149,7 @@ class InventarioJob implements ShouldQueue
     private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (in_array(! $inventarioItem->status, [null, 'Erro', 'Sem CMC']))
+            && (! in_array($inventarioItem->status, ['Erro', 'Sem CMC']))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
@@ -170,7 +170,7 @@ class InventarioJob implements ShouldQueue
                         'quan' => $inventarioItem->quan,
                         'valor' => $inventarioItem->valor,
                         'obs' => 'NTB - Estoque|Usuário:'.$this->user->name,
-                        'origem' => $inventarioItem->inventario->origem,
+                        'origem' => 'AJU',
                         'tipo' => $inventarioItem->inventario->tipo,
                         'motivo' => $inventarioItem->inventario->motivo,
                     ],
