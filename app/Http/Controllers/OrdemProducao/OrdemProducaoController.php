@@ -20,8 +20,8 @@ class OrdemProducaoController extends Controller
 
     public function index(Request $request)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        if (! CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção!');
         }
 
         $data_inicio = Carbon::parse($request->has('data_inicio') ? $request->get('data_inicio') : session('inicio', Carbon::now()->subDays(30)));
@@ -43,16 +43,16 @@ class OrdemProducaoController extends Controller
 
         $ordensProducao = OrdemProducao::where('loja_id', Auth::user()->current_loja_id)
             ->whereBetween('adicionais_d_dt_conclusao', [
-                    $data_inicio->startOfDay()->format('Y-m-d H:i:s'),
-                    $data_final->endOfDay()->format('Y-m-d H:i:s')]
+                $data_inicio->startOfDay()->format('Y-m-d H:i:s'),
+                $data_final->endOfDay()->format('Y-m-d H:i:s')]
             )->when($ordem_producao, function ($query) use ($ordem_producao) {
                 $query->where('num_ordem', $ordem_producao);
             })->when($tipo_produto, function ($query) use ($tipo_produto) {
                 $query->where('produto_tipo_item', $tipo_produto);
             })->when($op_produto, function ($query) use ($op_produto) {
                 $query->where(function ($q) use ($op_produto) {
-                    $q->where('produto_codigo', 'like', '%' . $op_produto . '%')
-                        ->orWhere('produto_descricao', 'like', '%' . $op_produto . '%');
+                    $q->where('produto_codigo', 'like', '%'.$op_produto.'%')
+                        ->orWhere('produto_descricao', 'like', '%'.$op_produto.'%');
                 });
             })->when(in_array($op_concluido, ['S', 'N']), function ($query) use ($op_concluido) {
                 $query->where(function ($query) use ($op_concluido) {
@@ -62,13 +62,14 @@ class OrdemProducaoController extends Controller
             ->orderBy('adicionais_d_dt_conclusao', 'desc')
             ->paginate(20)
             ->withQueryString();
+
         return view('ordemproducao.index', compact('ordensProducao', 'ordem_producao', 'data_inicio', 'data_final', 'tipo_produto', 'op_produto'));
     }
 
     public function setValidade(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        if (! CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção!');
         }
 
         if ($request->filled('validade')) {
@@ -81,8 +82,8 @@ class OrdemProducaoController extends Controller
 
     public function setQuantidade(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        if (! CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção!');
         }
 
         if ($request->filled('quantidade')) {
@@ -95,17 +96,18 @@ class OrdemProducaoController extends Controller
 
     public function syncOrdensProducao()
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção - Sincronizar!");
+        if (! CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção - Sincronizar!');
         }
         (new OrdemProducaoService(auth()->user()->loja))->fetchAll(0, Carbon::now()->subDays(7)->format('d/m/Y'), Carbon::now()->addDays(2)->format('d/m/Y'));
+
         return redirect()->route('ordemproducao.index')->with('success', 'Sincronizando Ordens de Produção!');
     }
 
     public function imprimir(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        if (! CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção!');
         }
 
         $etiquetas = [];
@@ -113,9 +115,9 @@ class OrdemProducaoController extends Controller
 
         for ($i = 1; $i <= $qtde; $i++) {
             if ($ordemProducao->produto_unidade == 'UN') {
-                $quantidade = $i . ' de ' . number_format($qtde, 0, '', '') . ' (UN)';
+                $quantidade = $i.' de '.number_format($qtde, 0, '', '').' (UN)';
             } else {
-                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',', '.') . ' (' . ($ordemProducao->produto_unidade ?? '') . ')';
+                $quantidade = number_format($ordemProducao->identificacao_n_qtde, 3, ',', '.').' ('.($ordemProducao->produto_unidade ?? '').')';
             }
 
             $etiquetas[] = [
@@ -124,10 +126,10 @@ class OrdemProducaoController extends Controller
                 'lote' => $ordemProducao->identificacao_c_num_op ?? '',
                 'quantidade' => $quantidade,
                 'qtde_nf' => '',
-                'qtde_etiqueta' => '',
+                'qtde_etiqueta' => number_format($ordemProducao->quantidade, 3, ',', '.') ?? '',
                 'inclusao' => '',
                 'validade' => $ordemProducao->validade !== null ? $ordemProducao->validade->format('d/m/Y') : '-',
-                'produzido' => json_decode($ordemProducao->full_object)->outrasInf->dConclusao !== "" ? json_decode($ordemProducao->full_object)->outrasInf->dConclusao : Carbon::now()->format('d/m/Y'),
+                'produzido' => json_decode($ordemProducao->full_object)->outrasInf->dConclusao !== '' ? json_decode($ordemProducao->full_object)->outrasInf->dConclusao : Carbon::now()->format('d/m/Y'),
                 'fornecedor' => '',
                 'nfe' => '',
             ];
@@ -143,19 +145,19 @@ class OrdemProducaoController extends Controller
             ->setOption('margin-right', 0)
             ->setOption('page-width', '72.56')
             ->setOption('page-height', '40.04')
-            ->setOption('orientation', 'portrait');//            ->setOption('disable-smart-shrinking', true);
-        ;
+            ->setOption('orientation', 'portrait'); //            ->setOption('disable-smart-shrinking', true);
 
         if (config('app.env') === 'local') {
             return $pdf->inline('etiquetas_op.pdf');
         }
+
         return $pdf->download('etiquetas_op.pdf');
     }
 
     public function finish(Request $request, OrdemProducao $ordemProducao)
     {
-        if (!CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não possui a permissão: Ordens de Produção!");
+        if (! CanService::canPermissionLoja('Ordens de Produção', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
+            abort(403, 'Você não possui a permissão: Ordens de Produção!');
         }
         $opService = new OrdemProducaoService(auth()->user()->loja);
         $op = $opService->fetchOrdemProducao($ordemProducao->identificacao_n_cod_op);
@@ -168,6 +170,7 @@ class OrdemProducaoController extends Controller
                 $request->get('observacao') ?? ''
             );
         }
+
         return redirect()->route('ordemproducao.index')->with('success', 'Ordem produção concluída com sucesso!');
     }
 }

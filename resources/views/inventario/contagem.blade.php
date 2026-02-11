@@ -13,7 +13,7 @@
                     class="btn btn-sm btn-outline-secondary text-dark-emphasis fw-bold px-1 py-2"
                     title="Tentar processar no Omie novamente">
                     <img src="{{ asset('images/refresh.png') }}" alt="" class="me-1">
-                    Forçar atualização
+                    Atualizar
                 </a>
         </div>
         <div class="row px-2">
@@ -46,7 +46,7 @@
         <div class="px-2">
             <div class="card card-body mb-3">
                 <div class="row">
-                    <div class="col-md-7 col-12">
+                    <div class="col-md-7 col-12 pb-4">
                         <select class="search form-control fw-semibold rounded-0"
                                 placeholder="Digite para buscar..."
                                 id="search">
@@ -77,7 +77,7 @@
                         <button type="button"
                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
                                 data-bs-toggle="modal"
-                                data-bs-target="#produtoModal" title="Buscar na lista">
+                                data-bs-target="#produtoModal" title="Buscar na lista" id="botaoBuscarLista">
                             <img src="{{asset('images/lista.png')}}" alt="+" class="me-1">Buscar na lista
                         </button>
                     </div>
@@ -96,7 +96,7 @@
                         <div class="container">
                             <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
                                 <div class="row">
-                                    <div class="col-7 d-flex justify-content-start align-items-center mb-2">
+                                    <div class="col-md-9 col-12 d-flex justify-content-start align-items-center mb-2">
                                         <button type="button" class="btn btn-outline-secondary btn-sm me-3"
                                                 onclick="deleteRegistro('{{ route('inventarioitem.destroy', $item->id) }}')">
                                             <img src="/images/excluir-verde.png" alt="Excluir">
@@ -132,7 +132,7 @@
                                         
                                     </div>    
                                                                
-                                    <div class="col-md-4 col-8 d-flex">
+                                    <div class="col-md-3 col-12 d-flex">
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
@@ -206,6 +206,29 @@
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
+        function isMobile() {
+            const largura = window.innerWidth;
+            const userAgentMobile = /Mobi|Android/i.test(navigator.userAgent);
+            return largura <= 768 || userAgentMobile;
+        }
+
+        const botaoBuscarLista1 = document.getElementById("botaoBuscarLista");
+        const search1 = document.getElementById("search");
+
+        search1.addEventListener("focus", function() {
+            console.log(isMobile(), 'isMobile');
+            if (isMobile()) {
+                botaoBuscarLista1.click();
+            }
+        });
+
+        // search1.getElementById("search").addEventListener("mouseover", function() {
+        //     console.log(isMobile(), 'isMobile');
+        //     if (isMobile()) {
+        //         botaoBuscarLista1.click();
+        //     }
+        // });
+
         function subtrai(opId) {
             const inputValidade = document.getElementById(`quantidade-${opId}`);
             if (!inputValidade) {
@@ -528,13 +551,17 @@
 
                         return `<div class="container">
                             <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
-                                     </button>
-                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                                    <button class="btn add-product border-0 m-0 p-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+" class="m-0 p-0">
+                                    </button>
                                 </div>
-                                <div class="col-2 fw-medium text-end">
+                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                                    <span class="fw-semibold m-0 p-0" style="color: #2EB5C3;" ${jaExisteNaTabela}>
+                                        ${data.descricao}
+                                    </span>
+                                </div>
+                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
                                     ${data.unidade}
                                 </div>
                             </div>
@@ -548,14 +575,17 @@
 
                         return `<div class="container">
                             <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
+                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                                    <button class="btn add-product border-0 m-0 p-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+" class="m-0 p-0">
                                      </button>
-                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                     </div>
+                                     <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                                    <span class="fw-semibold m-0 p-0" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
                                 </div>
-                                <div class="col-2 fw-medium text-end">
+                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
                                     ${data.unidade}
+                                </div>
                                 </div>
                             </div>
                         </div>`;

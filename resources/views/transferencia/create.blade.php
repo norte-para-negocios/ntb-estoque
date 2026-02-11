@@ -55,7 +55,7 @@
                 <div class="col-md-3 col-6 mb-3">
                     <label for="data" class="form-label mb-0"><small>Data</small></label>
                     <input type="date" name="data" id="data" class="form-control"
-                           value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" required>
+                        value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" required>
                 </div>
             </div>
 
@@ -67,38 +67,36 @@
                 <div class="card card-body mb-3">
                     <div class="row">
                         <div class="col-md-7 col-12">
-                            <select class="search form-control fw-semibold rounded-0"
-                                    placeholder="Digite para buscar..."
-                                    id="search">
+                            <select class="search form-control fw-semibold rounded-0" placeholder="Digite para buscar..."
+                                id="search">
                             </select>
                         </div>
 
                         <div
                             class="col-md-5 col-12 d-flex justify-content-md-start justify-content-around align-items-center gap-1 pt-2">
                             <button type="button" id="botaoPermissao"
-                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
-                                    style="display: none;">
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;">
                                 <img src="{{asset('images/concluir.png')}}" alt="+" class="me-1">
                                 Conceder Acesso a Câmera
                             </button>
 
                             <button type="button" id="botaoUsarCamera"
-                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
-                                    style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal"
-                                    title="Scanear QRCode">
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;" data-bs-toggle="modal" data-bs-target="#qrcodeModal"
+                                title="Scanear QRCode">
                                 <img src="{{asset('images/qrcode.png')}}" alt="+" class="me-1">Ler QRcode
                             </button>
 
                             <button type="button" id="botaoPararCamera"
-                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
-                                    style="display: none;">
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                style="display: none;">
                                 Parar Leitura
                             </button>
 
                             <button type="button"
-                                    class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#produtoModal" title="Buscar na lista">
+                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
+                                data-bs-toggle="modal" data-bs-target="#produtoModal" title="Buscar na lista">
                                 <img src="{{asset('images/lista.png')}}" alt="+" class="me-1">Buscar na lista
                             </button>
                         </div>
@@ -106,7 +104,7 @@
                 </div>
             </div>
             <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
-                   id="produtos_transferencia">
+                id="produtos_transferencia">
                 <tbody></tbody>
             </table>
         </form>
@@ -246,59 +244,59 @@
                 }
                 const novaLinha =
                     `<tr data-id="${produto.id}" data-nome="${produto.nome}" style="background-color: #f4f4f4;">
-                        <td class="m-0 px-0" style="background-color: #f4f4f4;">
-                            <div class="container">
-                                <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
-                                    <div class="row">
-                                        <div class="col-7 d-flex justify-content-start align-items-center">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="removeProduto(this)">
-                                                <img src="/images/excluir-verde.png" alt="Excluir">
-                                            </button>
-                                            <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
+                                    <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                                        <div class="container">
+                                            <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
+                                                <div class="row">
+                                                    <div class="col-7 d-flex justify-content-start align-items-center">
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="removeProduto(this)">
+                                                            <img src="/images/excluir-verde.png" alt="Excluir">
+                                                        </button>
+                                                        <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
+                                                    </div>
+
+                                                    <div class="col-1 p-0">
+                                                        <small>Medida</small><br>
+                                                        <span class="fw-semibold">
+                                                            ${produto.unidade}
+                                                            <input type="hidden" name="produtos[]" value="${produto.id}">
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="col-md-4 col-8 d-flex">
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
+                                                            style="width: 40px;"
+                                                            onclick="subtrai('${produto.id}')"
+                                                        >
+                                                            -
+                                                        </button>
+
+                                                        <input type="number"
+                                                               class="form-control rounded-0 validade mx-1"
+                                                               id="quantidade-${produto.id}"
+                                                               name="quantidades[]"
+                                                               style="text-align: center;"
+                                                               min="0.000001"
+                                                               step="0.000001"
+                                                               required
+                                                        >
+
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
+                                                            style="width: 40px;"
+                                                            onclick="soma('${produto.id}')"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-
-                                        <div class="col-1 p-0">
-                                            <small>Medida</small><br>
-                                            <span class="fw-semibold">
-                                                ${produto.unidade}
-                                                <input type="hidden" name="produtos[]" value="${produto.id}">
-                                            </span>
-                                        </div>
-
-                                        <div class="col-md-4 col-8 d-flex">
-                                            <button
-                                                type="button"
-                                                class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
-                                                style="width: 40px;"
-                                                onclick="subtrai('${produto.id}')"
-                                            >
-                                                -
-                                            </button>
-
-                                            <input type="number"
-                                                   class="form-control rounded-0 validade mx-1"
-                                                   id="quantidade-${produto.id}"
-                                                   name="quantidades[]"
-                                                   style="text-align: center;"
-                                                   min="0.000001"
-                                                   step="0.000001"
-                                                   required
-                                            >
-
-                                            <button
-                                                type="button"
-                                                class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
-                                                style="width: 40px;"
-                                                onclick="soma('${produto.id}')"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>`;
+                                    </td>
+                                </tr>`;
                 produtosTable.insertAdjacentHTML('beforeend', novaLinha);
                 let produtosSalvos = JSON.parse(localStorage.getItem('produtos')) || [];
                 const jaExisteNoStorage = produtosSalvos.some(p => p.id === produto.id);
@@ -317,14 +315,14 @@
                 document.getElementById('botaoPararCamera').style.display = 'inline-block';
 
                 html5QrCode.start({
-                        facingMode: "environment"
-                    }, {
-                        fps: 10,
-                        qrbox: {
-                            width: 250,
-                            height: 250
-                        }
-                    },
+                    facingMode: "environment"
+                }, {
+                    fps: 10,
+                    qrbox: {
+                        width: 250,
+                        height: 250
+                    }
+                },
                     onScanSuccess
                     // ,onScanError
                 ).catch(err => {
@@ -415,18 +413,18 @@
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
                         return `<div class="container">
-                            <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
-                                     </button>
-                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
-                                </div>
-                                <div class="col-2 fw-medium text-end">
-                                    ${data.unidade}
-                                </div>
-                            </div>
-                        </div>`;
+                                        <div class="row">
+                                            <div class="col-10">
+                                                <button class="btn add-product border-0" type="button" ${jaExisteNaTabela}>
+                                                    <img src="${imag}" alt="+" class="m-0">
+                                                 </button>
+                                                <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                            </div>
+                                            <div class="col-2 fw-medium text-end">
+                                                ${data.unidade}
+                                            </div>
+                                        </div>
+                                    </div>`;
                     },
                     item: function (data, escape) {
                         const tbody = document.querySelector("#tabelaResultados tbody");
@@ -435,18 +433,18 @@
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
                         return `<div class="container">
-                            <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
-                                     </button>
-                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
-                                </div>
-                                <div class="col-2 fw-medium text-end">
-                                    ${data.unidade}
-                                </div>
-                            </div>
-                        </div>`;
+                                        <div class="row">
+                                            <div class="col-10">
+                                                <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                                    <img src="${imag}" alt="+">
+                                                 </button>
+                                                <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                            </div>
+                                            <div class="col-2 fw-medium text-end">
+                                                ${data.unidade}
+                                            </div>
+                                        </div>
+                                    </div>`;
                     }
                 },
                 valueField: 'codigo',
@@ -458,8 +456,8 @@
                         .then(json => {
                             callback(json.data);
                         }).catch(() => {
-                        callback();
-                    });
+                            callback();
+                        });
                 }
             });
 

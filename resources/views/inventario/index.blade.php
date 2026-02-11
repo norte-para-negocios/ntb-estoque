@@ -87,7 +87,7 @@
             <img class="ms-0 p-0" src="{{asset('images/inventario.png')}}" alt="Inventários de estoques">
             {{ __('Inventários') }}
         </p>
-        <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;">
+        <table class="table table-borderless mb-5" style="background-color: #f4f4f4;">
             <tbody>
                 @if (isset($inventarios) && !empty($inventarios))
                     @foreach ($inventarios as $inventario)
@@ -100,14 +100,15 @@
                                                 Data: {{$inventario->data->format('d/m/Y')}}
                                             </small>
                                             <div class="card m-0">
-                                                <div class="card-header d-flex justify-content-between" style="font-size: .7rem;
-                                                             background-color:
-                                                             @if ($inventario->status !== 'Finalizado')
-                                                                #F24646
-                                                            @else
-                                                                #2EB5C3
-                                                            @endif;
-                                                             ">
+                                                <div class="card-header d-flex justify-content-between"
+                                                    style="font-size: .7rem;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             background-color:
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @if ($inventario->status !== 'Finalizado')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                #F24646
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @else
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                #2EB5C3
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @endif;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ">
                                                     {{$inventario->status}}
                                                     @if($inventario->finalizado)
                                                         | {{$inventario->finalizado->format('d/m/Y')}}
@@ -116,31 +117,39 @@
 
                                                 <div class="card-footer">
                                                     <div class="row">
-                                                        <div class="col-md-1 col-3">
-                                                            <small>Estoque</small><br>
-                                                            <span class="fw-semibold">
-                                                                #{{$inventario->id}}
-                                                            </span>
+                                                        <div class="col-md-2 col-3 d-flex justify-content-start align-items-center">
+                                                            <div>
+                                                                <small>Estoque</small><br>
+                                                                <span class="fw-semibold">
+                                                                    #{{$inventario->id}}
+                                                                </span>
+                                                            </div>
                                                         </div>
 
-                                                        <div class="col-md-3 col-4">
-                                                            <small>Produtos Processados</small><br>
-                                                            <span class="fw-semibold">
-                                                                {{ $inventario->items()->where('status', 'Concluído')->count() ?? 0 }}
-                                                                de
-                                                                {{$inventario->items()->count() ?? 0}}
-                                                            </span>
-                                                        </div>
+                                                        <div class="col-md-2 col-9 d-flex justify-content-start align-items-center">
+                                                            <div>
 
-                                                        <div class="col-md-3 col-5">
-                                                            <small>Local</small><br>
-                                                            <span class="fw-semibold">
-                                                                {{$inventario->localEstoque->descricao ?? ''}}
-                                                            </span>
+                                                                <small>Produtos</small><br>
+                                                                <span class="fw-semibold">
+                                                                    {{ $inventario->items()->where('status', 'Concluído')->count() ?? 0 }}
+                                                                    de
+                                                                    {{$inventario->items()->count() ?? 0}}
+                                                                </span>
+                                                            </div>
                                                         </div>
 
                                                         <div
-                                                            class="col-md-5 col-12 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
+                                                            class="col-md-3 col-12 d-flex justify-content-start align-items-center">
+                                                            <div>
+                                                                <small>Local</small><br>
+                                                                <span class="fw-semibold">
+                                                                    {{$inventario->localEstoque->descricao ?? ''}}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div
+                                                            class="col-md-5 col-12 mt-3 mt-md-0 text-end ps-0 d-flex justify-content-end align-items-center p-0 pe-md-2 gap-1">
                                                             <a href="{{ route('inventario.contagem', $inventario->id) }}"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                                 <img src="{{asset('images/editar.png')}}" alt="Imprimir"
