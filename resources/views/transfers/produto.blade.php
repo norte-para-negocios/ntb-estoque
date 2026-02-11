@@ -1,15 +1,15 @@
 <div class="modal fade" id="produtoModal" tabindex="-1" aria-labelledby="produtoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
-            <div class="modal-header px-0 pe-1">
+            <div class="modal-header px-1">
                 <button type="button" class="btn" data-bs-dismiss="modal" aria-label="Close">
                     <img src="{{asset('images/voltar.png')}}" alt="<-">
                 </button>
                 <input class="search form-control fw-semibold rounded-0" type="search"
                     placeholder="Digite para buscar..." id="productSearch" autofocus onkeyup="buscarProdutos()" />
             </div>
-            <div class="modal-body p-0">
-                <div class="container p-0">
+            <div class="modal-body px-1">
+                <div class="container">
                     <div class="row">
                         <div class="col">
                             <table class="table table-hover table-borderless" id="tabelaResultadosTransfers">
@@ -19,7 +19,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer d-flex justify-content-center align-items-center">
+            <div class="modal-footer px-1 d-flex justify-content-center align-items-center">
                 <div class="container">
                     <div class="row pt-3">
                         <div class="col-12 d-flex justify-content-center align-items-center">
@@ -53,21 +53,21 @@
                     let jaExisteNaTabela = produtosTable.querySelector(`tr[data-id="${item.codigo}"]`) ? 'disabled' : '';
                     let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
                     tdCodigo.innerHTML = `
-                                        <div class="container">
-                                            <div class="row">
-                                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
-                                                    <button class="btn m-0 p-0 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                                        <img src="${imag}" alt="+" class="m-0 p-0">
-                                                     </button>
-                                                </div>
-                                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
-                                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${item.descricao}</span>
-                                                </div>
-                                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
-                                                    ${item.unidade}
-                                                </div>
-                                            </div>
-                                        </div>`;
+                                                        <div class="container">
+                                                            <div class="row">
+                                                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                                                                    <button class="btn m-0 p-0 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                                                        <img src="${imag}" alt="+" class="m-0 p-0">
+                                                                     </button>
+                                                                </div>
+                                                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                                                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${item.descricao}</span>
+                                                                </div>
+                                                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
+                                                                    ${item.unidade}
+                                                                </div>
+                                                            </div>
+                                                        </div>`;
 
                     const button = tdCodigo.querySelector("button.add-product");
                     button.addEventListener("click", (event) => {
@@ -131,7 +131,5 @@
                 console.error("Erro na busca:", error);
             }
         }
-
     </script>
-
 @endpush

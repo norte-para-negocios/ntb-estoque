@@ -286,13 +286,31 @@ class TransfersController extends Controller
             ->with('success', 'Transferência processando no Omie, só aguardar a finalização do processamento. :)');
     }
 
-    public function contagem(Transferencia $transferencia)
+    public function contagem(Request $request, Transferencia $transferencia)
     {
         if (! CanService::canPermissionLoja('Transferências - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
 
-        return view('transfers.contagem', compact('transferencia'));
+        $produto = $request->get('produto', null);
+        $familia = $request->get('familia', null);
+        $tipo = $request->get('tipo', null);
+
+        $movimentos = Movimento::where('transferencia_id', $transferencia->id)
+            ->leftJoin('produtos', 'movimentos.id_prod', '=', 'produtos.codigo_produto')
+            ->when($produto, function ($query) use ($produto) {
+                $query->where('produtos.descricao', 'like', "%{$produto}%");
+            })
+            ->when($familia, function ($query) use ($familia) {
+                $query->where('produtos.descricao_familia', 'like', "%{$familia}%");
+            })
+            ->when($tipo, function ($query) use ($tipo) {
+                $query->where('produtos.tipo_item', $tipo);
+            })
+            ->orderBy('produtos.descricao', 'asc')
+            ->get();
+
+        return view('transfers.contagem', compact('transferencia', 'produto', 'familia', 'tipo', 'movimentos'));
     }
 
     public function setQuantidade(Movimento $movimento, UpdateQuantidadeRequest $request)

@@ -110,7 +110,7 @@
                                                 <div class="card-footer">
                                                     <div class="row">
                                                         
-                                                        <div class="col-md-2 col-3 d-flex justify-content-start align-items-center">
+                                                        <div class="col-md-2 col-sm-3 col-3 d-flex justify-content-start align-items-center">
                                                             <div>
                                                                 <small>Estoque</small><br>
                                                                 <span class="fw-semibold">#{{$transferencia->id}}</span>
@@ -118,7 +118,7 @@
                                                         </div>
                                                         
                                                         <div
-                                                            class="col-md-2 col-9 d-flex justify-content-start align-items-center">
+                                                            class="col-md-2 col-sm-3 col-9 d-flex justify-content-start align-items-center">
                                                             <div>
                                                                 <small>Produtos</small><br>
                                                                 <span class="fw-semibold">
@@ -128,7 +128,7 @@
                                                         </div>
                                                             
 
-                                                        <div class="col-md-3 col-12 d-flex justify-content-start align-items-center">
+                                                        <div class="col-md-3 col-sm-6 col-12 d-flex justify-content-start align-items-center">
                                                             <div>
                                                                 <small>Local</small><br>
                                                                 <span class="fw-semibold">

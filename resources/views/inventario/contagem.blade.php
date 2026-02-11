@@ -1,4 +1,76 @@
 @extends('layouts.app')
+
+@section('filtro')
+    <form id="filtrosForm" method="GET" action="{{ route('inventario.contagem', $inventario->id) }}">
+        <div class="row">
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="nome" class="form-label">Produto</label>
+                    <input title="Descrição do produto" type="text" class="form-control" id="produto" name="produto"
+                        value="{{ request('produto', ($produto ?? '')) }}">
+                </div>
+            </div>            
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="familia" class="form-label">Família</label>
+                    <select id="familia" name="familia" class="form-control">
+                        <option value="">Todas as famílias</option>
+                        @foreach(\App\Models\Produto::where('loja_id', auth()->user()->current_loja_id)->select('descricao_familia')->orderBy('descricao_familia')->distinct()->get() as $familia)
+                            <option value="{{$familia->descricao_familia}}" {{ session('familia') === $familia->descricao_familia ? 'selected' : '' }}>
+                                {{$familia->descricao_familia}}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo</label>
+                    <select id="tipo" name="tipo" class="form-control">
+                        <option value="">Todos os tipos</option>
+                        <option value="00" {{ request('tipo', $tipo ?? '') == '00' ? 'selected' : '' }}>
+                            Mercadoria para Revenda
+                        </option>
+                        <option value="01" {{ request('tipo', $tipo ?? '') == '01' ? 'selected' : '' }}>
+                            Matéria Prima
+                        </option>
+                        <option value="02" {{ request('tipo', $tipo ?? '') == '02' ? 'selected' : '' }}>
+                            Embalagem
+                        </option>
+                        <option value="03" {{ request('tipo', $tipo ?? '') == '03' ? 'selected' : '' }}>
+                            Produto em Processo
+                        </option>
+                        <option value="04" {{ request('tipo', $tipo ?? '') == '04' ? 'selected' : '' }}>
+                            Produto Acabado
+                        </option>
+                        <option value="05" {{ request('tipo', $tipo ?? '') == '05' ? 'selected' : '' }}>
+                            Subproduto
+                        </option>
+                        <option value="06" {{ request('tipo', $tipo ?? '') == '06' ? 'selected' : '' }}>
+                            Produto Intermediário
+                        </option>
+                        <option value="07" {{ request('tipo', $tipo ?? '') == '07' ? 'selected' : '' }}>
+                            Material de Uso e Consumo
+                        </option>
+                        <option value="08" {{ request('tipo', $tipo ?? '') == '08' ? 'selected' : '' }}>
+                            Ativo Imobilizado
+                        </option>
+                        <option value="09" {{ request('tipo', $tipo ?? '') == '09' ? 'selected' : '' }}>
+                            Serviços
+                        </option>
+                        <option value="10" {{ request('tipo', $tipo ?? '') == '10' ? 'selected' : '' }}>
+                            Outros Insumos
+                        </option>
+                        <option value="99" {{ request('tipo', $tipo ?? '') == '99' ? 'selected' : '' }}>
+                            Outras
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </form>
+@endsection
+
 @section('content')
     <div class="container pb-5">
         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -89,7 +161,7 @@
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
                id="produtos_inventario">
             <tbody>
-            @foreach ($inventario->items->sortByDesc('created_at') as $item)
+            @foreach ($items as $item)
                 <tr data-id="{{$item->produto_codigo}}" data-nome="{{$item->produto_descricao}}"
                     style="background-color: #f4f4f4;">
                     <td class="m-0 px-0" style="background-color: #f4f4f4;">
@@ -396,6 +468,13 @@
                 backdrop: 'static',
                 keyboard: false
             })
+
+            const produtoModal = document.getElementById('produtoModal')
+            if(produtoModal !== null) {
+                produtoModal.addEventListener('hidden.bs.modal', event => {
+                    document.querySelector('#produtoModal #productSearch').value = '';
+                })
+            }
 
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');

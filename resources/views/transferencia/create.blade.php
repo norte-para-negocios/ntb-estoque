@@ -244,59 +244,59 @@
                 }
                 const novaLinha =
                     `<tr data-id="${produto.id}" data-nome="${produto.nome}" style="background-color: #f4f4f4;">
-                                    <td class="m-0 px-0" style="background-color: #f4f4f4;">
-                                        <div class="container">
-                                            <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
-                                                <div class="row">
-                                                    <div class="col-7 d-flex justify-content-start align-items-center">
-                                                        <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="removeProduto(this)">
-                                                            <img src="/images/excluir-verde.png" alt="Excluir">
-                                                        </button>
-                                                        <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
-                                                    </div>
+                                                            <td class="m-0 px-0" style="background-color: #f4f4f4;">
+                                                                <div class="container">
+                                                                    <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
+                                                                        <div class="row">
+                                                                            <div class="col-7 d-flex justify-content-start align-items-center">
+                                                                                <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="removeProduto(this)">
+                                                                                    <img src="/images/excluir-verde.png" alt="Excluir">
+                                                                                </button>
+                                                                                <span class="fw-semibold">${produto.nome} <small>#${produto.id}</small></span>
+                                                                            </div>
 
-                                                    <div class="col-1 p-0">
-                                                        <small>Medida</small><br>
-                                                        <span class="fw-semibold">
-                                                            ${produto.unidade}
-                                                            <input type="hidden" name="produtos[]" value="${produto.id}">
-                                                        </span>
-                                                    </div>
+                                                                            <div class="col-1 p-0">
+                                                                                <small>Medida</small><br>
+                                                                                <span class="fw-semibold">
+                                                                                    ${produto.unidade}
+                                                                                    <input type="hidden" name="produtos[]" value="${produto.id}">
+                                                                                </span>
+                                                                            </div>
 
-                                                    <div class="col-md-4 col-8 d-flex">
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
-                                                            style="width: 40px;"
-                                                            onclick="subtrai('${produto.id}')"
-                                                        >
-                                                            -
-                                                        </button>
+                                                                            <div class="col-md-4 col-8 d-flex">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
+                                                                                    style="width: 40px;"
+                                                                                    onclick="subtrai('${produto.id}')"
+                                                                                >
+                                                                                    -
+                                                                                </button>
 
-                                                        <input type="number"
-                                                               class="form-control rounded-0 validade mx-1"
-                                                               id="quantidade-${produto.id}"
-                                                               name="quantidades[]"
-                                                               style="text-align: center;"
-                                                               min="0.000001"
-                                                               step="0.000001"
-                                                               required
-                                                        >
+                                                                                <input type="number"
+                                                                                       class="form-control rounded-0 validade mx-1"
+                                                                                       id="quantidade-${produto.id}"
+                                                                                       name="quantidades[]"
+                                                                                       style="text-align: center;"
+                                                                                       min="0.000001"
+                                                                                       step="0.000001"
+                                                                                       required
+                                                                                >
 
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
-                                                            style="width: 40px;"
-                                                            onclick="soma('${produto.id}')"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>`;
+                                                                                <button
+                                                                                    type="button"
+                                                                                    class="btn btn-sm btn-outline-primary btn-validade fw-semibold px-2"
+                                                                                    style="width: 40px;"
+                                                                                    onclick="soma('${produto.id}')"
+                                                                                >
+                                                                                    +
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>`;
                 produtosTable.insertAdjacentHTML('beforeend', novaLinha);
                 let produtosSalvos = JSON.parse(localStorage.getItem('produtos')) || [];
                 const jaExisteNoStorage = produtosSalvos.some(p => p.id === produto.id);
@@ -360,13 +360,6 @@
 
             verificarPermissaoCamera();
 
-            // document.getElementById('addProdutoButton').addEventListener('click', event => {
-            //     event.preventDefault();
-            //     const produto = document.getElementById('selectProduto');
-            //     buscarProdutoPorQrCode(produto.value);
-            //     produtoModal.hide();
-            // })
-
             $('#produtoModal').on('shown.bs.modal', function () {
                 $('#selectProduto').select2({
                     dropdownParent: $(this),
@@ -413,18 +406,18 @@
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
                         return `<div class="container">
-                                        <div class="row">
-                                            <div class="col-10">
-                                                <button class="btn add-product border-0" type="button" ${jaExisteNaTabela}>
-                                                    <img src="${imag}" alt="+" class="m-0">
-                                                 </button>
-                                                <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
-                                            </div>
-                                            <div class="col-2 fw-medium text-end">
-                                                ${data.unidade}
-                                            </div>
-                                        </div>
-                                    </div>`;
+                                                                <div class="row">
+                                                                    <div class="col-10">
+                                                                        <button class="btn add-product border-0" type="button" ${jaExisteNaTabela}>
+                                                                            <img src="${imag}" alt="+" class="m-0">
+                                                                         </button>
+                                                                        <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                                                    </div>
+                                                                    <div class="col-2 fw-medium text-end">
+                                                                        ${data.unidade}
+                                                                    </div>
+                                                                </div>
+                                                            </div>`;
                     },
                     item: function (data, escape) {
                         const tbody = document.querySelector("#tabelaResultados tbody");
@@ -433,18 +426,18 @@
                         let imag = (jaExisteNaTabela === '') ? '/images/plus.png' : '/images/check-verde.svg';
 
                         return `<div class="container">
-                                        <div class="row">
-                                            <div class="col-10">
-                                                <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                                    <img src="${imag}" alt="+">
-                                                 </button>
-                                                <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
-                                            </div>
-                                            <div class="col-2 fw-medium text-end">
-                                                ${data.unidade}
-                                            </div>
-                                        </div>
-                                    </div>`;
+                                                                <div class="row">
+                                                                    <div class="col-10">
+                                                                        <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
+                                                                            <img src="${imag}" alt="+">
+                                                                         </button>
+                                                                        <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
+                                                                    </div>
+                                                                    <div class="col-2 fw-medium text-end">
+                                                                        ${data.unidade}
+                                                                    </div>
+                                                                </div>
+                                                            </div>`;
                     }
                 },
                 valueField: 'codigo',
