@@ -1,4 +1,76 @@
 @extends('layouts.app')
+
+@section('filtro')
+    <form id="filtrosForm" method="GET" action="{{ route('inventario.contagem', $inventario->id) }}">
+        <div class="row">
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="nome" class="form-label">Produto</label>
+                    <input title="Descrição do produto" type="text" class="form-control" id="produto" name="produto"
+                        value="{{ request('produto', ($produto ?? '')) }}">
+                </div>
+            </div>            
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="familia" class="form-label">Família</label>
+                    <select id="familia" name="familia" class="form-control">
+                        <option value="">Todas as famílias</option>
+                        @foreach(\App\Models\Produto::where('loja_id', auth()->user()->current_loja_id)->select('descricao_familia')->orderBy('descricao_familia')->distinct()->get() as $familia)
+                            <option value="{{$familia->descricao_familia}}" {{ session('familia') === $familia->descricao_familia ? 'selected' : '' }}>
+                                {{$familia->descricao_familia}}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo</label>
+                    <select id="tipo" name="tipo" class="form-control">
+                        <option value="">Todos os tipos</option>
+                        <option value="00" {{ request('tipo', $tipo ?? '') == '00' ? 'selected' : '' }}>
+                            Mercadoria para Revenda
+                        </option>
+                        <option value="01" {{ request('tipo', $tipo ?? '') == '01' ? 'selected' : '' }}>
+                            Matéria Prima
+                        </option>
+                        <option value="02" {{ request('tipo', $tipo ?? '') == '02' ? 'selected' : '' }}>
+                            Embalagem
+                        </option>
+                        <option value="03" {{ request('tipo', $tipo ?? '') == '03' ? 'selected' : '' }}>
+                            Produto em Processo
+                        </option>
+                        <option value="04" {{ request('tipo', $tipo ?? '') == '04' ? 'selected' : '' }}>
+                            Produto Acabado
+                        </option>
+                        <option value="05" {{ request('tipo', $tipo ?? '') == '05' ? 'selected' : '' }}>
+                            Subproduto
+                        </option>
+                        <option value="06" {{ request('tipo', $tipo ?? '') == '06' ? 'selected' : '' }}>
+                            Produto Intermediário
+                        </option>
+                        <option value="07" {{ request('tipo', $tipo ?? '') == '07' ? 'selected' : '' }}>
+                            Material de Uso e Consumo
+                        </option>
+                        <option value="08" {{ request('tipo', $tipo ?? '') == '08' ? 'selected' : '' }}>
+                            Ativo Imobilizado
+                        </option>
+                        <option value="09" {{ request('tipo', $tipo ?? '') == '09' ? 'selected' : '' }}>
+                            Serviços
+                        </option>
+                        <option value="10" {{ request('tipo', $tipo ?? '') == '10' ? 'selected' : '' }}>
+                            Outros Insumos
+                        </option>
+                        <option value="99" {{ request('tipo', $tipo ?? '') == '99' ? 'selected' : '' }}>
+                            Outras
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </form>
+@endsection
+
 @section('content')
     <div class="container pb-5">
         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -12,9 +84,9 @@
             <a href="{{ route('inventario.force-sync', $inventario->id) }}"
                     class="btn btn-sm btn-outline-secondary text-dark-emphasis fw-bold px-1 py-2"
                     title="Tentar processar no Omie novamente">
-                    <img src="{{ asset('images/refresh.png') }}" alt="" class="me-1">
-                    Atualizar
-                </a>
+                <img src="{{ asset('images/refresh.png') }}" alt="" class="me-1">
+                Atualizar
+            </a>
         </div>
         <div class="row px-2">
             <div class="col-md-3 col-6 mb-3">
@@ -46,7 +118,7 @@
         <div class="px-2">
             <div class="card card-body mb-3">
                 <div class="row">
-                    <div class="col-md-7 col-12 pb-4">
+                    <div class="col-md-7 col-12 pb-md-1 pb-4">
                         <select class="search form-control fw-semibold rounded-0"
                                 placeholder="Digite para buscar..."
                                 id="search">
@@ -89,7 +161,7 @@
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
                id="produtos_inventario">
             <tbody>
-            @foreach ($inventario->items->sortByDesc('created_at') as $item)
+            @foreach ($items as $item)
                 <tr data-id="{{$item->produto_codigo}}" data-nome="{{$item->produto_descricao}}"
                     style="background-color: #f4f4f4;">
                     <td class="m-0 px-0" style="background-color: #f4f4f4;">
@@ -110,11 +182,11 @@
                                                 @if($item->status === 'Sem CMC')
                                                     <br>
                                                     <span class="badge text-bg-warning">
-                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 50) }}
+                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 29) }}
                                                     </span>
                                                 @else
                                                     <br><span class="badge text-bg-success" title="{{ (($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status) }}">
-                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 50)  }}
+                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 29)  }}
                                                     </span>
                                                 @endif
 
@@ -128,8 +200,7 @@
                                                     </button>
                                                 @endif                                            
                                             @endif
-                                        </span>
-                                        
+                                        </span>                                        
                                     </div>    
                                                                
                                     <div class="col-md-3 col-12 d-flex">
@@ -208,26 +279,9 @@
     <script>
         function isMobile() {
             const largura = window.innerWidth;
-            const userAgentMobile = /Mobi|Android/i.test(navigator.userAgent);
+            const userAgentMobile = /Mobi|Android/i.test(navigator.userAgent);            
             return largura <= 768 || userAgentMobile;
         }
-
-        const botaoBuscarLista1 = document.getElementById("botaoBuscarLista");
-        const search1 = document.getElementById("search");
-
-        search1.addEventListener("focus", function() {
-            console.log(isMobile(), 'isMobile');
-            if (isMobile()) {
-                botaoBuscarLista1.click();
-            }
-        });
-
-        // search1.getElementById("search").addEventListener("mouseover", function() {
-        //     console.log(isMobile(), 'isMobile');
-        //     if (isMobile()) {
-        //         botaoBuscarLista1.click();
-        //     }
-        // });
 
         function subtrai(opId) {
             const inputValidade = document.getElementById(`quantidade-${opId}`);
@@ -415,6 +469,13 @@
                 keyboard: false
             })
 
+            const produtoModal = document.getElementById('produtoModal')
+            if(produtoModal !== null) {
+                produtoModal.addEventListener('hidden.bs.modal', event => {
+                    document.querySelector('#produtoModal #productSearch').value = '';
+                })
+            }
+
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
 
@@ -579,14 +640,13 @@
                                     <button class="btn add-product border-0 m-0 p-0" type="button" ${jaExisteNaTabela}>
                                         <img src="${imag}" alt="+" class="m-0 p-0">
                                      </button>
-                                     </div>
-                                     <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                                </div>
+                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
                                     <span class="fw-semibold m-0 p-0" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
                                 </div>
                                 <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
                                     ${data.unidade}
-                                </div>
-                                </div>
+                                </div>                                
                             </div>
                         </div>`;
                     }
@@ -611,6 +671,12 @@
                     this.clear()
                 }
             });
+
+            selectSearch.on("focus", function () {
+                if (isMobile()) {
+                    document.getElementById("botaoBuscarLista").click();
+                }
+            });
         });
     </script>
 @endpush
@@ -619,6 +685,10 @@
     <style>
         body {
             background-color: #F4F4F4;
+        }
+
+        .ts-dropdown-content {
+            max-height: 400px !important;
         }
 
         .search {

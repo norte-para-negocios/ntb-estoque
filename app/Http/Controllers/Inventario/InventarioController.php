@@ -205,17 +205,36 @@ class InventarioController extends Controller
             )->with('success', 'Inventário processando no Omie, só aguardar a finalização do processamento. :)');
     }
 
-    public function contagem(Inventario $inventario)
+    public function contagem(Request $request, Inventario $inventario)
     {
         if (! CanService::canPermissionLoja('Inventários - Criar', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
+        $produto = $request->get('produto', null);
+        $familia = $request->get('familia', null);
+        $tipo = $request->get('tipo', null);
+
+        $items = InventarioItem::where('inventario_id', $inventario->id)
+            ->when($produto, function ($query) use ($produto) {
+                $query->where('produto_descricao', 'like', "%{$produto}%");
+            })
+            ->when($familia, function ($query) use ($familia) {
+                $query->where('produto_familia', 'like', "%{$familia}%");
+            })
+            ->when($tipo, function ($query) use ($tipo) {
+                $query->whereHas('produto', function ($produto) use ($tipo) {
+                    $produto->where('tipo_item', $tipo);
+                });
+            })
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         $localEstoque = LocalEstoque::where('loja_id', Auth::user()->current_loja_id)
             ->where('codigo_local_estoque', $inventario->codigo_local_estoque)
             ->first();
 
-        return view('inventario.contagem', compact('inventario', 'localEstoque'));
+        return view('inventario.contagem', compact('inventario', 'localEstoque', 'produto', 'familia', 'tipo', 'items'));
     }
 
     public function setQuantidade(InventarioItem $inventarioItem, Request $request)

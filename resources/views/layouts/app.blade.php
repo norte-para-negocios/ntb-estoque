@@ -57,7 +57,7 @@
                     </a>
                 </div>
                 @auth
-                    @if(in_array(Route::currentRouteName(), ['notafiscal.index', 'ordemproducao.index', 'transferencia.index', 'transfers.index', 'inventario.index']))
+                    @if(in_array(Route::currentRouteName(), ['notafiscal.index', 'ordemproducao.index', 'transferencia.index', 'transfers.index', 'inventario.index', 'transfers.contagem', 'inventario.contagem']))
                         <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasFiltro"
                             aria-controls="offcanvasFiltro" class="btn fw-semibold" id="btn-filtrar">
                             <img src="{{asset('images/filtrar.png')}}" alt="Botão Filtrar"> Filtrar

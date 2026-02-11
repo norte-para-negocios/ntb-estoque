@@ -1,13 +1,93 @@
 @extends('layouts.app')
+
+@section('filtro')
+    <form id="filtrosForm" method="GET" action="{{ route('transfers.contagem', $transferencia->id) }}">
+        <div class="row">
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="nome" class="form-label">Produto</label>
+                    <input title="Descrição do produto" type="text" class="form-control" id="produto" name="produto"
+                        value="{{ request('produto', ($produto ?? '')) }}">
+                </div>
+            </div>            
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="familia" class="form-label">Família</label>
+                    <select id="familia" name="familia" class="form-control">
+                        <option value="">Todas as famílias</option>
+                        @foreach(\App\Models\Produto::where('loja_id', auth()->user()->current_loja_id)->select('descricao_familia')->orderBy('descricao_familia')->distinct()->get() as $familia)
+                            <option value="{{$familia->descricao_familia}}" {{ session('familia') === $familia->descricao_familia ? 'selected' : '' }}>
+                                {{$familia->descricao_familia}}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo</label>
+                    <select id="tipo" name="tipo" class="form-control">
+                        <option value="">Todos os tipos</option>
+                        <option value="00" {{ request('tipo', $tipo ?? '') == '00' ? 'selected' : '' }}>
+                            Mercadoria para Revenda
+                        </option>
+                        <option value="01" {{ request('tipo', $tipo ?? '') == '01' ? 'selected' : '' }}>
+                            Matéria Prima
+                        </option>
+                        <option value="02" {{ request('tipo', $tipo ?? '') == '02' ? 'selected' : '' }}>
+                            Embalagem
+                        </option>
+                        <option value="03" {{ request('tipo', $tipo ?? '') == '03' ? 'selected' : '' }}>
+                            Produto em Processo
+                        </option>
+                        <option value="04" {{ request('tipo', $tipo ?? '') == '04' ? 'selected' : '' }}>
+                            Produto Acabado
+                        </option>
+                        <option value="05" {{ request('tipo', $tipo ?? '') == '05' ? 'selected' : '' }}>
+                            Subproduto
+                        </option>
+                        <option value="06" {{ request('tipo', $tipo ?? '') == '06' ? 'selected' : '' }}>
+                            Produto Intermediário
+                        </option>
+                        <option value="07" {{ request('tipo', $tipo ?? '') == '07' ? 'selected' : '' }}>
+                            Material de Uso e Consumo
+                        </option>
+                        <option value="08" {{ request('tipo', $tipo ?? '') == '08' ? 'selected' : '' }}>
+                            Ativo Imobilizado
+                        </option>
+                        <option value="09" {{ request('tipo', $tipo ?? '') == '09' ? 'selected' : '' }}>
+                            Serviços
+                        </option>
+                        <option value="10" {{ request('tipo', $tipo ?? '') == '10' ? 'selected' : '' }}>
+                            Outros Insumos
+                        </option>
+                        <option value="99" {{ request('tipo', $tipo ?? '') == '99' ? 'selected' : '' }}>
+                            Outras
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </form>
+@endsection
+
 @section('content')
     <div class="container pb-5">
-        <p>
-            <a href="{{route('transfers.index')}}" class="btn m-0 p-0" title="Voltar">
-                <img src="{{asset('images/voltar.png')}}" alt="<-">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <span>
+                <a href="{{route('transfers.index')}}" class="btn m-0 p-0" title="Voltar">
+                    <img src="{{asset('images/voltar.png')}}" alt="<-">
+                </a>
+                <img class="ms-0 p-0" src="{{asset('images/transferencia.png')}}" alt="Transferência entre estoques">
+                / + Nova Transferência #{{ $transferencia->id }}
+            </span>
+            <a href="{{ route('transfers.force-sync', $transferencia->id) }}"
+                class="btn btn-sm btn-outline-secondary text-dark-emphasis fw-bold px-1 py-2"
+                title="Tentar processar no Omie novamente">
+                <img src="{{ asset('images/refresh.png') }}" alt="" class="me-1">
+                Atualizar
             </a>
-            <img class="ms-0 p-0" src="{{asset('images/transferencia.png')}}" alt="Transferência entre estoques">
-            / + Nova Transferência #{{ $transferencia->id }}
-        </p>
+        </div>
         <div class="row px-2">
             <div class="col-md-3 col-6 mb-3">
                 <label for="transferencia_data" class="form-label mb-0"><small>Data</small></label>
@@ -46,7 +126,7 @@
         <div class="px-2">
             <div class="card card-body mb-3">
                 <div class="row">
-                    <div class="col-md-7 col-12">
+                    <div class="col-md-7 col-12 pb-md-1 pb-4">
                         <select class="search form-control fw-semibold rounded-0"
                                 placeholder="Digite para buscar..."
                                 id="search">
@@ -77,7 +157,7 @@
                         <button type="button"
                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold"
                                 data-bs-toggle="modal"
-                                data-bs-target="#produtoModal" title="Buscar na lista">
+                                data-bs-target="#produtoModal" title="Buscar na lista" id="botaoBuscarLista">
                             <img src="{{asset('images/lista.png')}}" alt="+" class="me-1">Buscar na lista
                         </button>
                     </div>
@@ -89,43 +169,51 @@
         <table class="table table-hover table-borderless mb-5" style="background-color: #f4f4f4;"
                id="produtos_transferencia">
             <tbody>
-            @foreach ($transferencia->movimentos()->with('produto')->get()->sortBy('produto.descricao') as $item)            
+            @foreach ($movimentos as $item)            
                 <tr data-id="{{$item->produto->codigo}}" data-nome="{{$item->produto->descricao}}"
                     style="background-color: #f4f4f4;">
                     <td class="m-0 px-0" style="background-color: #f4f4f4;">
                         <div class="container">
                             <div class="card card-body rounded-0 border-0" style="background-color: #ffffff;">
                                 <div class="row">
-                                    <div class="col-7 d-flex justify-content-start align-items-center">
+                                    <div class="col-md-9 col-12 d-flex justify-content-start align-items-center mb-2">
                                         <button type="button" class="btn btn-outline-secondary btn-sm me-3"
                                                 onclick="deleteRegistro('{{ route('movimento.destroy', $item->id) }}')">
                                             <img src="/images/excluir-verde.png" alt="Excluir">
                                         </button>
                                         <span class="fw-semibold">
                                             {{$item->produto->descricao}} <small>#{{$item->produto->codigo}}</small>
+                                            <span class="fw-semibold">
+                                                {{$item->produto->unidade??'--'}}
+                                            </span>
 
                                             @if ($transferencia->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
                                                 @if($item->status === 'Sem CMC')
-                                                    <br><span class="badge text-bg-warning">
-                                                        CMC Zerado para o Produto, a movimentação não foi realizada no Omie
+                                                    <br>
+                                                    <span class="badge text-bg-warning">
+                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 29) }}
                                                     </span>
                                                 @else
-                                                    <br><span class="badge text-bg-success">
-                                                        {{ $item->codigo_status ? $item->codigo_status . ' - ' : '' }} {{ $item->descricao_status }}
+                                                    <br>
+                                                    <span class="badge text-bg-success">
+                                                        {{ Str::limit((($item->codigo_status ? $item->codigo_status . ' - ' : '') . $item->descricao_status), 29) }}
                                                     </span>
                                                 @endif
+
+                                                @if(in_array($item->status, ['Erro', 'Cancelado', 'Sem CMC']))
+                                                    <button 
+                                                        type="button" 
+                                                        class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2" 
+                                                        onclick="refreshItem('quantidade-{{$item->produto->codigo}}', '{{ route('transfers.editQuantidade', $item->id) }}')"
+                                                        >
+                                                        <img src="/images/refresh.png" alt="Refresh">
+                                                    </button>
+                                                @endif  
                                             @endif
                                         </span>
-                                    </div>
+                                    </div>                                    
 
-                                    <div class="col-1 p-0">
-                                        <small>Medida</small><br>
-                                        <span class="fw-semibold">
-                                            {{$item->produto->unidade??'--'}}
-                                        </span>
-                                    </div>
-
-                                    <div class="col-md-4 col-8 d-flex">
+                                    <div class="col-md-3 col-12 d-flex">
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2"
@@ -159,6 +247,7 @@
                                             +
                                         </button>
                                     </div>
+                                    
                                 </div>
                             </div>
                         </div>
@@ -198,6 +287,39 @@
 @push('js')
     <script src="{{ asset('vendor/html5-qrcode.min.js') }}"></script>
     <script>
+        function refreshItem(elId, url) {
+            let el = document.getElementById(elId);
+            if (!el) {
+                swal.fire('Erro!', 'O campo com a quantidade não foi encontrado.', 'error');
+                return;
+            }
+            let quantidade = el.value;
+            if (quantidade <= 0 || isNaN(quantidade)) {
+                swal.fire('Erro!', 'A quantidade não pode ser menor que 0 ou não é um número.', 'error');
+                return;
+            }
+            swal.fire({
+                title: 'Tem certeza?',
+                text: 'Gostaria realmente de tentar processar no Omie novamente?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, tentar novamente',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    axios.post(url, {
+                        "quantidade": quantidade
+                    }).then(() => {
+                        swal.fire('Processado no Omie!', 'A transação foi processada no Omie com sucesso.', 'success');
+                    }).then(() => {
+                        window.location.reload();
+                    }).catch(() => {
+                        swal.fire('Erro!', 'Não foi possível processar no Omie.', 'error');
+                    });
+                }
+            });            
+        }
+
         function subtrai(opId) {
             const inputValidade = document.getElementById(`quantidade-${opId}`);
             if (!inputValidade) {
@@ -334,11 +456,24 @@
             produtosTable.insertAdjacentHTML('afterbegin', novaLinha);
         }
 
+        function isMobile() {
+            const largura = window.innerWidth;
+            const userAgentMobile = /Mobi|Android/i.test(navigator.userAgent);
+            return largura <= 768 || userAgentMobile;
+        }
+
         $(document).ready(function () {
             const qrcodeModal = new bootstrap.Modal(document.getElementById('qrcodeModal'), {
                 backdrop: 'static',
                 keyboard: false
             })
+
+            const produtoModal = document.getElementById('produtoModal')
+            if(produtoModal !== null) {
+                produtoModal.addEventListener('hidden.bs.modal', event => {
+                    document.querySelector('#produtoModal #productSearch').value = '';
+                })
+            }
 
             async function verificarPermissaoCamera() {
                 const jaPermitido = localStorage.getItem('cameraPermitida');
@@ -475,13 +610,17 @@
 
                         return `<div class="container">
                             <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
+                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                                    <button class="btn add-product border-0 m-0 p-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+" class="m-0 p-0">
                                      </button>
-                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
                                 </div>
-                                <div class="col-2 fw-medium text-end">
+                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
+                                    <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>
+                                        ${data.descricao}
+                                    </span>
+                                </div>
+                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
                                     ${data.unidade}
                                 </div>
                             </div>
@@ -495,13 +634,15 @@
 
                         return `<div class="container">
                             <div class="row">
-                                <div class="col-10">
-                                    <button class="btn me-2 add-product border-0" type="button" ${jaExisteNaTabela}>
-                                        <img src="${imag}" alt="+">
+                                <div class="col-1 py-3 d-flex justify-content-center align-items-center">
+                                    <button class="btn me-2 add-product border-0 m-0 p-0" type="button" ${jaExisteNaTabela}>
+                                        <img src="${imag}" alt="+" class="m-0 p-0">
                                      </button>
+                                </div>
+                                <div class="col-9 py-3 d-flex justify-content-start align-items-center px-0">
                                     <span class="fw-semibold" style="color: #2EB5C3;" ${jaExisteNaTabela}>${data.descricao}</span>
                                 </div>
-                                <div class="col-2 fw-medium text-end">
+                                <div class="col-2 fw-medium text-end py-3 d-flex justify-content-center align-items-center">
                                     ${data.unidade}
                                 </div>
                             </div>
@@ -528,6 +669,12 @@
                     this.clear()
                 }
             });
+
+            selectSearch.on("focus", function () {
+                if (isMobile()) {
+                    document.getElementById("botaoBuscarLista").click();
+                }
+            });
         });
     </script>
 @endpush
@@ -536,6 +683,10 @@
     <style>
         body {
             background-color: #F4F4F4;
+        }
+        
+        .ts-dropdown-content {
+            max-height: 400px !important;
         }
 
         .search {
