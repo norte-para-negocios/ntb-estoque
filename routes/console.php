@@ -10,28 +10,30 @@ use Illuminate\Support\Facades\Schedule;
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
         (new LocalEstoqueService($loja))->fetchAll();
+        sleep(60);
     }
-})->dailyAt('00:05:00');
+})->dailyAt('00:00:00');
 
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
         (new ProdutoService($loja))->fetchAll();
+        sleep(120);
     }
-})->dailyAt('00:10:00');
+})->dailyAt('00:30:00');
 
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
         (new OrdemProducaoService($loja))->fetchAll();
+        sleep(120);
     }
-})->dailyAt('00:15:00');
+})->dailyAt('01:00:00');
 
 Schedule::call(function () {
     foreach (Loja::all() as $loja) {
         (new NotaFiscalService($loja))->fetchAll();
+        sleep(120);
     }
-})->dailyAt('01:00:00');
-
-Schedule::command('model:prune')->daily();
+})->dailyAt('01:30:00');
 
 Schedule::call(function () {
     \App\Models\InventarioItem::where('status', 'Erro')
@@ -43,5 +45,6 @@ Schedule::call(function () {
         ->update(['status' => 'Finalizado']);
 })->everyTenMinutes();
 
+Schedule::command('model:prune')->daily();
 Schedule::command('queue:prune-batches')->daily();
 Schedule::command('queue:prune-failed')->daily();

@@ -3,7 +3,8 @@
     <select class="form-select" onchange="changeLoja(this)">
         <option value="">Seleciona uma loja</option>
         @foreach (Auth::user()->lojas as $loja)
-            <option class="select-option" value="{{ $loja->id }}" @if (Auth::user()->current_loja_id == $loja->id) selected @endif>
+            <option class="select-option" value="{{ $loja->id }}" @if (Auth::user()->current_loja_id == $loja->id) selected
+            @endif>
                 {{ $loja->nome_fantasia }}
             </option>
         @endforeach
@@ -73,8 +74,7 @@
 @endif
 
 <div class="d-grid gap-2 mb-4">
-    <a href="{{ route('logout') }}" class="text-start text-decoration-none fw-bold"
-       onclick="event.preventDefault();
+    <a href="{{ route('logout') }}" class="text-start text-decoration-none fw-bold" onclick="event.preventDefault();
         document.getElementById('logout-form').submit();">
         <img src="{{asset('images/sair.png')}}" alt=""> Sair
     </a>
@@ -85,7 +85,7 @@
 
 @push('js')
     <script>
-        let usuarioLogado = '';
+        // let usuarioLogado = '';
 
         window.onload = function () {
             usuarioLogado = '{{ Auth::id() }}';
