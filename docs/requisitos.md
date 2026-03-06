@@ -3,9 +3,6 @@
 ## Visão geral
 Aplicação web em Laravel (PHP) para suporte a processos de **estoque** com integração ao **Omie**. Os principais módulos expostos no menu e rotas incluem: Notas Fiscais, Ordens de Produção, Transferências, Inventário, Produtos, Locais de Estoque, Lojas, Usuários e Logs de Integração.
 
-## Escopo de evidência
-Este documento foi elaborado a partir dos artefatos do código-fonte (rotas, controllers, models, jobs, services e views). Onde possível, cada requisito inclui **rastreamento** para arquivos/pontos do sistema.
-
 ## Requisitos funcionais (RF)
 
 ### RF-01 — Autenticação de usuários
@@ -207,8 +204,3 @@ Este documento foi elaborado a partir dos artefatos do código-fonte (rotas, con
 ### RNF-10 — Internacionalização/idioma
 - O sistema deve operar com textos em PT-BR.
 - **Evidência**: diretórios `lang/pt_BR`, `lang/pt_BR.json`; mensagens e UI em português.
-
-## Limitações e observações (para evitar “requisitos inventados”)
-- **Sanctum** está instalado, mas **não foi identificado** uso ativo de autenticação via token nas rotas atuais (as rotas principais são web com sessão).
-- O endpoint `/api/webhook` **não apresenta autenticação adicional** além de verificar `appKey` do payload; recomenda-se proteção adicional (assinatura/secret, allowlist de IP ou validação forte) se isso fizer parte do requisito de segurança.
-
