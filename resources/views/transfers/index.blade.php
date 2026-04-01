@@ -101,8 +101,8 @@
                                             </small>
                                             <div class="card m-0">
                                                 <div class="card-header d-flex justify-content-between"
-                                                    style="font-size: .7rem; background-color: @if ($transferencia->status !== 'Concluído') #F24646 @else #2EB5C3 @endif;">
-                                                    {{$transferencia->status}}
+                                                    style="font-size: .7rem; background-color: @if ($transferencia->status !== \App\Enums\TransferenciaStatus::Concluido) #F24646 @else #2EB5C3 @endif;">
+                                                    {{$transferencia->status->value}}
                                                     @if($transferencia->finalizado)
                                                         | {{$transferencia->finalizado->format('d/m/Y')}}
                                                     @endif
@@ -154,7 +154,7 @@
                                                                 onclick="duplicarInventario('{{route('transfers.duplicar', $transferencia->id)}}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
                                                                 title="Duplicar Transferência"
-                                                                @if($transferencia->status == 'Processando') disabled @endif>
+                                                                @if($transferencia->status == \App\Enums\TransferenciaStatus::Processando) disabled @endif>
                                                                 <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
                                                                     class="me-1">
                                                                 Duplicar
@@ -162,8 +162,8 @@
 
 
                                                             <a href="{{ route('transfers.pdf', $transferencia->id) }}"
-                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($transferencia->status !== 'Concluído') disabled @endif"
-                                                                @if($transferencia->status !== 'Concluído') disabled @endif>
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($transferencia->status !== \App\Enums\TransferenciaStatus::Concluido) disabled @endif"
+                                                                @if($transferencia->status !== \App\Enums\TransferenciaStatus::Concluido) disabled @endif>
                                                                 <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
                                                                     class="me-1">
                                                                 Imprimir
@@ -172,7 +172,7 @@
                                                             <button type="button"
                                                                 onclick="deleteRegistro('{{ route('transfers.destroy', $transferencia->id) }}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                @if($transferencia->status !== 'Concluído') disabled @endif>
+                                                                @if($transferencia->status !== \App\Enums\TransferenciaStatus::Concluido) disabled @endif>
                                                                 <img src="{{asset('images/excluir.png')}}" alt=""
                                                                     class="me-1">Excluir
                                                             </button>

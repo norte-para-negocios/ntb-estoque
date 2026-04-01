@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__laravel-boost__application-info",
+      "Bash(xargs grep:*)",
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(vendor/bin/pint:*)",
+      "Bash(grep -v \"//.*'\")",
+      "Bash(php artisan:*)",
+      "mcp__laravel-boost__database-schema",
+      "Bash(python -m json.tool)",
+      "Bash(git worktree:*)",
+      "Bash(grep -r \"instanceof\\\\\\\\|throw\\\\\\\\|try\\\\\\\\|catch\" /c/Sources/BahiaSH/ntb-estoque/app/Services/OmieService.php)",
+      "Bash(grep -r '$response\\\\|->save\\(\\)\\\\|->update\\(\\)' /c/Sources/BahiaSH/ntb-estoque/app/Jobs/InventarioJob.php)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "laravel-boost"
+  ]
+}

@@ -16,8 +16,8 @@
                     Atualizado
                     em: {{\Carbon\Carbon::parse(auth()->user()->loja->produto_ultima_atualizacao)->format('d/m/y H:i:s')}}
                 @endif
-                | Status: {{auth()->user()->loja->produto_status??'N/A'}}
-                @if(in_array(auth()->user()->loja->produto_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Produtos - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                | Status: {{auth()->user()->loja->produto_status?->value ?? 'N/A'}}
+                @if(in_array(auth()->user()->loja->produto_status, [null, \App\Enums\SincronizacaoStatus::Concluido]) && (\App\Services\CanService::canPermissionLoja('Produtos - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
                     <button class="btn btn-sm btn-outline-secondary text-dark-emphasis" onclick="update()">
                         <i class="fa-solid fa-arrows-rotate"></i>
                     </button>

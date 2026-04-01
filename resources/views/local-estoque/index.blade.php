@@ -15,8 +15,8 @@
                     Atualizado
                     em: {{\Carbon\Carbon::parse(auth()->user()->loja->local_estoque_ultima_atualizacao)->format('d/m/y H:i:s')}}
                 @endif
-                | Status: {{auth()->user()->loja->local_estoque_status??'N/A'}}
-                @if(in_array(auth()->user()->loja->local_estoque_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                | Status: {{auth()->user()->loja->local_estoque_status?->value ?? 'N/A'}}
+                @if(in_array(auth()->user()->loja->local_estoque_status, [null, \App\Enums\SincronizacaoStatus::Concluido]) && (\App\Services\CanService::canPermissionLoja('Locais de Estoque - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
                     <button class="btn btn-sm btn-outline-secondary text-dark-emphasis" onclick="update()">
                         <i class="fa-solid fa-arrows-rotate"></i>
                     </button>

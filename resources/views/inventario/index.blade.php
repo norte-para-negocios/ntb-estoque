@@ -101,8 +101,8 @@
                                             </small>
                                             <div class="card m-0">
                                                 <div class="card-header d-flex justify-content-between"
-                                                    style="font-size: .7rem; background-color: @if ($inventario->status !== 'Finalizado') #F24646 @else #2EB5C3 @endif;                        ">
-                                                    {{$inventario->status . ($inventario->finalizado ? ' ' . $inventario->finalizado->format('d/m/Y') : '')}}
+                                                    style="font-size: .7rem; background-color: @if ($inventario->status !== \App\Enums\InventarioStatus::Finalizado) #F24646 @else #2EB5C3 @endif;                        ">
+                                                    {{$inventario->status->value . ($inventario->finalizado ? ' ' . $inventario->finalizado->format('d/m/Y') : '')}}
                                                 </div>
 
                                                 <div class="card-footer">
@@ -121,7 +121,7 @@
 
                                                                 <small>Produtos</small><br>
                                                                 <span class="fw-semibold">
-                                                                    {{ $inventario->items()->where('status', 'Concluído')->count() ?? 0 }}
+                                                                    {{ $inventario->items()->where('status', \App\Enums\InventarioItemStatus::Concluido->value)->count() ?? 0 }}
                                                                     de
                                                                     {{$inventario->items()->count() ?? 0}}
                                                                 </span>
@@ -149,15 +149,15 @@
                                                             <button type="button"
                                                                 onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                title="Duplicar Inventário" @if($inventario->status !== 'Finalizado')
+                                                                title="Duplicar Inventário" @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado)
                                                                 disabled @endif>
                                                                 <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
                                                                     class="me-1"> Duplicar
                                                             </button>
 
                                                             <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                                @if($inventario->status !== 'Finalizado') disabled @endif
-                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($inventario->status !== 'Finalizado') disabled @endif">
+                                                                @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado) disabled @endif
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado) disabled @endif">
                                                                 <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
                                                                     class="me-1"> Imprimir
                                                             </a>

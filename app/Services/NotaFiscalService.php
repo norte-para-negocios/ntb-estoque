@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SincronizacaoStatus;
 use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\NotaFiscalUpdateJob;
 use App\Models\Loja;
@@ -25,9 +26,9 @@ class NotaFiscalService
 
     public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
-        if ($this->loja->nota_fiscal_status !== 'Processando') {
+        if ($this->loja->nota_fiscal_status !== SincronizacaoStatus::Processando) {
             // Aciona a Variavel de Controle
-            $this->loja->nota_fiscal_status = 'Processando';
+            $this->loja->nota_fiscal_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
@@ -40,7 +41,7 @@ class NotaFiscalService
                 ->then(function () {
                     // Todos os Jobs concluídos com sucesso
                     $this->loja->nota_fiscal_ultima_atualizacao = date('Y-m-d H:i:s');
-                    $this->loja->nota_fiscal_status = 'Concluído';
+                    $this->loja->nota_fiscal_status = SincronizacaoStatus::Concluido;
                     $this->loja->save();
                     if (auth()->check()) {
                         broadcast(new NotificaUserEvent(auth()->user(), 'success', "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
@@ -48,7 +49,7 @@ class NotaFiscalService
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
-                    $this->loja->nota_fiscal_status = 'Erro';
+                    $this->loja->nota_fiscal_status = SincronizacaoStatus::Erro;
                     $this->loja->save();
                 })
                 ->finally(function () {
@@ -117,7 +118,7 @@ class NotaFiscalService
             $this->afterAttemptLog();
         }
 
-        return new StdClass;
+        return new stdClass;
     }
 
     public function fetchNotaFiscal(int $nIdReceb): object

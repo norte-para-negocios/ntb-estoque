@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\MovimentoStatus;
 use App\Events\NotificaUserEvent;
 use App\Models\LocalEstoque;
 use App\Models\Movimento;
@@ -22,7 +23,7 @@ class TransferenciaJob implements ShouldQueue
      */
     public function __construct(protected User $user, protected Movimento $movimento)
     {
-        $this->movimento->status = 'Processando';
+        $this->movimento->status = MovimentoStatus::Processando;
         $this->movimento->save();
     }
 
@@ -42,11 +43,11 @@ class TransferenciaJob implements ShouldQueue
             $this->movimento->descricao_status = $response->descricao_status;
             $this->movimento->id_movest = $response->id_movest;
             $this->movimento->id_ajuste = $response->id_ajuste;
-            $this->movimento->status = 'Concluído';
+            $this->movimento->status = MovimentoStatus::Concluido;
 
             broadcast(new NotificaUserEvent($this->user, 'success', "Transferência do produto {$produto->descricao}, do estoque {$localOrigem->descricao} para {$localDestino->descricao}, concluída!"));
         } else {
-            $this->movimento->status = 'Erro';
+            $this->movimento->status = MovimentoStatus::Erro;
             broadcast(new NotificaUserEvent($this->user, 'error', "Não foi possível concluir a transferência do produto {$produto->descricao}, do estoque {$localOrigem->descricao} para {$localDestino->descricao}, tentaremos novamente logo mais, só aguardar!"));
         }
         $this->movimento->save();

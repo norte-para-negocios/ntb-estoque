@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Inventario;
 
+use App\Enums\InventarioItemStatus;
+use App\Enums\InventarioStatus;
 use App\Http\Controllers\Controller;
 use App\Jobs\InventarioJob;
 use App\Models\Inventario;
@@ -75,7 +77,7 @@ class InventarioController extends Controller
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
-        $emContagem = Inventario::where('status', 'Em contagem')
+        $emContagem = Inventario::where('status', InventarioStatus::EmContagem->value)
             ->where('codigo_local_estoque', $request->input('estoque_origem'))
             ->where('loja_id', Auth::user()->current_loja_id)
             ->first();
@@ -97,7 +99,7 @@ class InventarioController extends Controller
             'tipo' => 'SLD',
             'origem' => 'AJU',
             'motivo' => $request->input('motivo'),
-            'status' => 'Em contagem',
+            'status' => InventarioStatus::EmContagem,
         ]);
 
         return redirect()->route('inventario.contagem', $inventario->id);
@@ -184,11 +186,11 @@ class InventarioController extends Controller
             abort(403, 'Você não possui a permissão: Inventários - Criar!');
         }
 
-        $inventario->status = 'Processando no Omie';
+        $inventario->status = InventarioStatus::ProcessandoNoOmie;
         $inventario->save();
 
         InventarioItem::where('inventario_id', $inventario->id)
-            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->whereIn('inventario_items.status', [InventarioItemStatus::SemCmc->value, InventarioItemStatus::Erro->value])
             ->update([
                 'status' => null,
                 'response' => null,
@@ -256,7 +258,7 @@ class InventarioController extends Controller
             $inventarioItem->descricao_status = $response->descricao_status;
             $inventarioItem->id_movest = $response->id_movest;
             $inventarioItem->id_ajuste = $response->id_ajuste;
-            $inventarioItem->status = 'Concluído';
+            $inventarioItem->status = InventarioItemStatus::Concluido;
         }
         $inventarioItem->save();
 
@@ -302,7 +304,7 @@ class InventarioController extends Controller
                 ->first();
 
             if (! $produto || json_decode($produto->full_object)->inativo === 'S') {
-                $inventarioItem->status = 'Erro';
+                $inventarioItem->status = InventarioItemStatus::Erro;
                 $inventarioItem->response = 'Produto não encontrado ou INATIVO, não foi possível inserir o item!';
                 $inventarioItem->descricao_status = 'Produto não encontrado ou INATIVO, não foi possível inserir o item!';
                 $inventarioItem->save();
@@ -332,7 +334,7 @@ class InventarioController extends Controller
                 $inventarioItem->save();
             } else {
                 $inventarioItem->valor = 0;
-                $inventarioItem->status = 'Sem CMC';
+                $inventarioItem->status = InventarioItemStatus::SemCmc;
                 $inventarioItem->save();
             }
         }
@@ -353,7 +355,7 @@ class InventarioController extends Controller
             $inventarioItem->descricao_status = $response->descricao_status;
             $inventarioItem->id_movest = $response->id_movest ?? null;
             $inventarioItem->id_ajuste = $response->id_ajuste ?? null;
-            $inventarioItem->status = 'Concluído';
+            $inventarioItem->status = InventarioItemStatus::Concluido;
             $inventarioItem->save();
         }
 
@@ -365,7 +367,7 @@ class InventarioController extends Controller
         $clone = $inventario->replicate();
         $clone->data = $request->get('data');
         $clone->finalizado = null;
-        $clone->status = 'Em contagem';
+        $clone->status = InventarioStatus::EmContagem;
         $clone->save();
 
         foreach ($inventario->items as $item) {
@@ -452,11 +454,11 @@ class InventarioController extends Controller
     private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (! in_array($inventarioItem->status, ['Erro', 'Sem CMC']))
+            && (! in_array($inventarioItem->status, [InventarioItemStatus::Erro, InventarioItemStatus::SemCmc]))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
-            $inventarioItem->status = 'Iniciado';
+            $inventarioItem->status = InventarioItemStatus::Iniciado;
             $inventarioItem->save();
             $loja = $inventarioItem->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
@@ -499,12 +501,12 @@ class InventarioController extends Controller
                     if ($response->status() === 200) {
                         return $response->object();
                     } elseif ($response->status() === 429) {
-                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->status = InventarioItemStatus::Erro;
                         $inventarioItem->response = $response->body();
                         $inventarioItem->descricao_status = 'Rate limit atingido, aguarde 60 segundos e tente novamente!';
                         $inventarioItem->save();
                     } elseif ($response->status() === 425) {
-                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->status = InventarioItemStatus::Erro;
                         $inventarioItem->response = $response->body();
                         $inventarioItem->descricao_status = 'Rate limit atingido, aguarde 60 segundos e tente novamente!';
                         $inventarioItem->save();
@@ -521,14 +523,14 @@ class InventarioController extends Controller
 
                         return $obj;
                     } else {
-                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->status = InventarioItemStatus::Erro;
                         $inventarioItem->response = $response->body();
                         $inventarioItem->descricao_status = $response->body();
                         $inventarioItem->save();
                     }
                 } catch (Throwable $th) {
 
-                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->status = InventarioItemStatus::Erro;
                     $inventarioItem->response = $response->body();
                     $inventarioItem->descricao_status = $response->body();
                     $inventarioItem->save();
@@ -547,7 +549,7 @@ class InventarioController extends Controller
             }
         } elseif ($inventarioItem->valor <= 0 || $inventarioItem->valor === null) {
             $inventarioItem->valor = 0;
-            $inventarioItem->status = 'Sem CMC';
+            $inventarioItem->status = InventarioItemStatus::SemCmc;
             $inventarioItem->save();
         }
 
@@ -560,11 +562,11 @@ class InventarioController extends Controller
             abort(403, 'Você não possui a permissão: Inventários - Editar!');
         }
 
-        $inventario->status = 'Processando no Omie';
+        $inventario->status = InventarioStatus::ProcessandoNoOmie;
         $inventario->save();
 
         InventarioItem::where('inventario_id', $inventario->id)
-            ->whereIn('inventario_items.status', ['Sem CMC', 'Erro'])
+            ->whereIn('inventario_items.status', [InventarioItemStatus::SemCmc->value, InventarioItemStatus::Erro->value])
             ->update([
                 'status' => null,
                 'response' => null,

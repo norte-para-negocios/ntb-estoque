@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\InventarioStatus;
 use Illuminate\Database\Eloquent\Model;
 
 class Inventario extends Model
@@ -14,7 +15,7 @@ class Inventario extends Model
         'origem',
         'motivo',
         'finalizado',
-        'status'
+        'status',
     ];
 
     protected function casts(): array
@@ -22,6 +23,7 @@ class Inventario extends Model
         return [
             'data' => 'date',
             'finalizado' => 'date',
+            'status' => InventarioStatus::class,
         ];
     }
 

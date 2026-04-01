@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\MovimentoStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -28,13 +29,14 @@ class Movimento extends Model
         'id_ajuste',
         'response',
 
-        'status'
+        'status',
     ];
 
     protected function casts(): array
     {
         return [
             'data' => 'date',
+            'status' => MovimentoStatus::class,
         ];
     }
 
@@ -48,19 +50,19 @@ class Movimento extends Model
         return $this->belongsTo(Transferencia::class);
     }
 
-    public function produto(): hasOne
+    public function produto(): HasOne
     {
         return $this->hasOne(Produto::class, 'codigo_produto', 'id_prod');
     }
 
-    public function estoqueOrigem(): hasOne
+    public function estoqueOrigem(): HasOne
     {
         return $this->hasOne(LocalEstoque::class, 'codigo_local_estoque', 'codigo_local_estoque')
             ->where('loja_id', '=', $this->loja_id);
 
     }
 
-    public function estoqueDestino(): hasOne
+    public function estoqueDestino(): HasOne
     {
         return $this->hasOne(LocalEstoque::class, 'codigo_local_estoque', 'codigo_local_estoque_destino')
             ->where('loja_id', '=', $this->loja_id);

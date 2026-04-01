@@ -2,6 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Enums\MovimentoStatus;
+use App\Enums\SincronizacaoStatus;
+use App\Enums\TransferenciaStatus;
 use App\Events\NotificaUserEvent;
 use App\Models\LocalEstoque;
 use App\Models\Loja;
@@ -23,7 +26,7 @@ class TransferJob implements ShouldQueue
 {
     use IntegrationAttemptsTrait, Queueable;
 
-    public $timeout = 0;
+    public $timeout = 180;
 
     protected PosicaoEstoqueService $posicaoService;
 
@@ -42,7 +45,7 @@ class TransferJob implements ShouldQueue
     {
         broadcast(new NotificaUserEvent($this->user, 'info', 'Estamos registrando toda a informação no Omie, outras mensagens como essa lhe atualizará em breve. Só aguardar! ;)'));
 
-        $this->transferencia->status = 'Processando';
+        $this->transferencia->status = TransferenciaStatus::Processando;
         $this->transferencia->save();
 
         $localOrigem = LocalEstoque::where('loja_id', $this->transferencia->loja_id)
@@ -50,7 +53,7 @@ class TransferJob implements ShouldQueue
             ->first();
 
         $esperaPosicao = 0;
-        while (Loja::find($this->transferencia->loja_id)->posicao_estoque_status !== 'Concluído') {
+        while (Loja::find($this->transferencia->loja_id)->posicao_estoque_status !== SincronizacaoStatus::Concluido) {
             $esperaPosicao += 1;
             sleep(1);
 
@@ -63,7 +66,7 @@ class TransferJob implements ShouldQueue
             $movimentos = Movimento::where('transferencia_id', $this->transferencia->id)
                 ->where(function ($q) {
                     $q->whereNull('status')
-                        ->orWhereIn('status', ['Iniciado']);
+                        ->orWhereIn('status', [MovimentoStatus::Iniciado->value]);
                 })
                 ->orderBy('quan')
                 ->get();
@@ -95,7 +98,7 @@ class TransferJob implements ShouldQueue
                                     $movimento->save();
                                 } else {
                                     $movimento->valor = 0;
-                                    $movimento->status = 'Erro';
+                                    $movimento->status = MovimentoStatus::Erro;
                                     $movimento->save();
                                 }
                                 break;
@@ -118,10 +121,10 @@ class TransferJob implements ShouldQueue
                         $movimento->descricao_status = $response->descricao_status;
                         $movimento->id_movest = $response->id_movest;
                         $movimento->id_ajuste = $response->id_ajuste;
-                        $movimento->status = 'Concluído';
+                        $movimento->status = MovimentoStatus::Concluido;
                         broadcast(new NotificaUserEvent($this->user, 'success', "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
-                        $movimento->status = 'Erro';
+                        $movimento->status = MovimentoStatus::Erro;
                     }
                     $movimento->save();
                 }
@@ -129,7 +132,7 @@ class TransferJob implements ShouldQueue
         }
 
         $this->transferencia->update([
-            'status' => 'Concluído',
+            'status' => TransferenciaStatus::Concluido,
         ]);
         broadcast(new NotificaUserEvent($this->user, 'success', "Transferência de estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
     }
@@ -137,11 +140,11 @@ class TransferJob implements ShouldQueue
     private function createAjuste(Movimento $movimento): ?object
     {
         if (($movimento->quan >= 0)
-            && (in_array(! $movimento->status, [null, 'Erro']))
+            && (in_array(! $movimento->status, [null, MovimentoStatus::Erro]))
             && ($movimento->id_ajuste === null)
             && $movimento->valor > 0
         ) {
-            $movimento->status = 'Iniciado';
+            $movimento->status = MovimentoStatus::Iniciado;
             $movimento->save();
             $loja = $movimento->transferencia->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
@@ -195,7 +198,7 @@ class TransferJob implements ShouldQueue
 
                         return $obj;
                     } else {
-                        $movimento->status = 'Erro';
+                        $movimento->status = MovimentoStatus::Erro;
                         $movimento->response = $response->body();
                         $movimento->save();
                     }
@@ -214,7 +217,7 @@ class TransferJob implements ShouldQueue
             }
         } elseif ($movimento->valor <= 0 || $movimento->valor === null) {
             $movimento->valor = 0;
-            $movimento->status = 'Erro';
+            $movimento->status = MovimentoStatus::Erro;
             $movimento->save();
         }
 

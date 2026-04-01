@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Enums\InventarioItemStatus;
+use App\Enums\InventarioStatus;
 use App\Events\NotificaUserEvent;
 use App\Models\Inventario;
 use App\Models\InventarioItem;
@@ -23,7 +25,7 @@ class InventarioJob implements ShouldQueue
 {
     use IntegrationAttemptsTrait, Queueable;
 
-    public $timeout = 0;
+    public $timeout = 300;
 
     protected PosicaoEstoqueService $posicaoService;
 
@@ -42,7 +44,7 @@ class InventarioJob implements ShouldQueue
     {
         broadcast(new NotificaUserEvent($this->user, 'info', 'Estamos registrando toda a informação no Omie, outras mensagens como essa lhe atualizará em breve. Só aguardar! ;)'));
 
-        $this->inventario->status = 'Processando no Omie';
+        $this->inventario->status = InventarioStatus::ProcessandoNoOmie;
         $this->inventario->save();
 
         $localOrigem = LocalEstoque::where('loja_id', $this->inventario->loja_id)
@@ -62,14 +64,14 @@ class InventarioJob implements ShouldQueue
         while (InventarioItem::where('inventario_id', $this->inventario->id)
             ->where(function ($q) {
                 $q->whereNull('inventario_items.status')
-                    ->orWhereIn('inventario_items.status', ['Iniciado']);
+                    ->orWhereIn('inventario_items.status', [InventarioItemStatus::Iniciado->value]);
             })
             ->count() > 0) {
 
             foreach (InventarioItem::where('inventario_id', $this->inventario->id)
                 ->where(function ($q) {
                     $q->whereNull('inventario_items.status')
-                        ->orWhereIn('inventario_items.status', ['Iniciado']);
+                        ->orWhereIn('inventario_items.status', [InventarioItemStatus::Iniciado->value]);
                 })
                 ->orderBy('quan')
                 ->get() as $inventarioItem) {
@@ -77,7 +79,7 @@ class InventarioJob implements ShouldQueue
                 if ($inventarioItem->quan === null) {
                     $inventarioItem->delete();
                 } elseif (json_decode($inventarioItem->produto->full_object)->inativo === 'S') {
-                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->status = InventarioItemStatus::Erro;
                     $inventarioItem->descricao_status = 'Produto INATIVO, não foi possível processar o ajuste no Omie!';
                     $inventarioItem->save();
                 } else {
@@ -106,7 +108,7 @@ class InventarioJob implements ShouldQueue
                                     $inventarioItem->save();
                                 } else {
                                     $inventarioItem->valor = 0;
-                                    $inventarioItem->status = 'Sem CMC';
+                                    $inventarioItem->status = InventarioItemStatus::SemCmc;
                                     $inventarioItem->save();
                                 }
                                 break;
@@ -129,10 +131,10 @@ class InventarioJob implements ShouldQueue
                         $inventarioItem->descricao_status = $response->descricao_status;
                         $inventarioItem->id_movest = $response->id_movest;
                         $inventarioItem->id_ajuste = $response->id_ajuste;
-                        $inventarioItem->status = 'Concluído';
+                        $inventarioItem->status = InventarioItemStatus::Concluido;
                         broadcast(new NotificaUserEvent($this->user, 'success', "Inventário do produto $produto->descricao <br> No estoque $localOrigem->descricao <br>Processado com sucesso no Omie!"));
                     } else {
-                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->status = InventarioItemStatus::Erro;
                     }
                     $inventarioItem->save();
                 }
@@ -140,7 +142,7 @@ class InventarioJob implements ShouldQueue
         }
 
         Inventario::where('id', $this->inventario->id)->update([
-            'status' => 'Finalizado',
+            'status' => InventarioStatus::Finalizado->value,
             'finalizado' => now(),
         ]);
         broadcast(new NotificaUserEvent($this->user, 'success', "Inventário do estoque $localOrigem->descricao,<br>concluído processamento com sucesso no Omie!"));
@@ -149,11 +151,11 @@ class InventarioJob implements ShouldQueue
     private function createAjuste(InventarioItem $inventarioItem): ?object
     {
         if (($inventarioItem->quan >= 0)
-            && (! in_array($inventarioItem->status, ['Erro', 'Sem CMC']))
+            && (! in_array($inventarioItem->status, [InventarioItemStatus::Erro, InventarioItemStatus::SemCmc]))
             && ($inventarioItem->id_ajuste === null)
             && $inventarioItem->valor > 0
         ) {
-            $inventarioItem->status = 'Iniciado';
+            $inventarioItem->status = InventarioItemStatus::Iniciado;
             $inventarioItem->save();
             $loja = $inventarioItem->inventario->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
@@ -216,14 +218,14 @@ class InventarioJob implements ShouldQueue
 
                         return $obj;
                     } else {
-                        $inventarioItem->status = 'Erro';
+                        $inventarioItem->status = InventarioItemStatus::Erro;
                         $inventarioItem->response = $response->body();
                         $inventarioItem->descricao_status = $response->body();
                         $inventarioItem->save();
                     }
                 } catch (Throwable $th) {
 
-                    $inventarioItem->status = 'Erro';
+                    $inventarioItem->status = InventarioItemStatus::Erro;
                     $inventarioItem->response = $response->body();
                     $inventarioItem->descricao_status = $response->body();
                     $inventarioItem->save();
@@ -242,7 +244,7 @@ class InventarioJob implements ShouldQueue
             }
         } elseif ($inventarioItem->valor <= 0 || $inventarioItem->valor === null) {
             $inventarioItem->valor = 0;
-            $inventarioItem->status = 'Sem CMC';
+            $inventarioItem->status = InventarioItemStatus::SemCmc;
             $inventarioItem->save();
         }
 

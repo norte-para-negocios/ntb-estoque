@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Transferencia;
 
+use App\Enums\MovimentoStatus;
+use App\Enums\TransferenciaStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTransferenciaItemRequest;
 use App\Http\Requests\StoreTransferenciaRequest;
@@ -80,7 +82,7 @@ class TransfersController extends Controller
             abort(403, 'Você não possui a permissão: Transferências - Criar!');
         }
 
-        $emContagem = Transferencia::where('status', 'Processando')
+        $emContagem = Transferencia::where('status', TransferenciaStatus::Processando->value)
             ->where('codigo_local_origem', $request->input('codigo_local_origem'))
             ->where('codigo_local_destino', $request->input('codigo_local_destino'))
             ->where('loja_id', Auth::user()->current_loja_id)
@@ -96,7 +98,7 @@ class TransfersController extends Controller
             'codigo_local_origem' => $request->input('codigo_local_origem'),
             'codigo_local_destino' => $request->input('codigo_local_destino'),
             'data' => Carbon::parse($request->input('data')),
-            'status' => 'Processando',
+            'status' => TransferenciaStatus::Processando,
             'motivo' => $request->input('motivo'),
         ]);
 
@@ -147,7 +149,7 @@ class TransfersController extends Controller
                 'origem' => 'AJU',
                 'motivo' => $transferencia->motivo,
                 'codigo_local_estoque_destino' => $transferencia->codigo_local_destino,
-                'status' => 'Iniciado',
+                'status' => MovimentoStatus::Iniciado,
 
                 'codigo_status' => null,
                 'descricao_status' => null,
@@ -176,11 +178,11 @@ class TransfersController extends Controller
     private function createAjuste(Movimento $movimento): ?object
     {
         if (($movimento->quan >= 0)
-            && (! in_array($movimento->status, ['Erro', 'Sem CMC']))
+            && (! in_array($movimento->status, [MovimentoStatus::Erro, MovimentoStatus::Iniciado]))
             && ($movimento->id_ajuste === null)
             && $movimento->valor > 0
         ) {
-            $movimento->status = 'Iniciado';
+            $movimento->status = MovimentoStatus::Iniciado;
             $movimento->save();
             $loja = $movimento->transferencia->loja;
             $url = 'https://app.omie.com.br/api/v1/estoque/ajuste/';
@@ -234,7 +236,7 @@ class TransfersController extends Controller
 
                         return $obj;
                     } else {
-                        $movimento->status = 'Erro';
+                        $movimento->status = MovimentoStatus::Erro;
                         $movimento->response = $response->body();
                         $movimento->save();
                     }
@@ -253,7 +255,7 @@ class TransfersController extends Controller
             }
         } elseif ($movimento->valor <= 0 || $movimento->valor === null) {
             $movimento->valor = 0;
-            $movimento->status = 'Erro';
+            $movimento->status = MovimentoStatus::Erro;
             $movimento->save();
         }
 
@@ -265,7 +267,7 @@ class TransfersController extends Controller
         if (! CanService::canPermissionLoja('Transferências - Ver', Auth::user()->current_loja_id) && Auth::user()->perfil !== 'Admin') {
             abort(403, 'Você não possui a permissão: Transferências - Ver!');
         }
-        $pdf = Pdf::loadView('transfers.pdf', ['transferencia' => $transferencia, 'loja' => Auth::user()->loja, 'params' => $request->all()]);
+        $pdf = PDF::loadView('transfers.pdf', ['transferencia' => $transferencia, 'loja' => Auth::user()->loja, 'params' => $request->all()]);
 
         return $pdf->inline("transferencia-{$transferencia->id}.pdf");
     }
@@ -328,9 +330,9 @@ class TransfersController extends Controller
             $movimento->descricao_status = $response->descricao_status;
             $movimento->id_movest = $response->id_movest;
             $movimento->id_ajuste = $response->id_ajuste;
-            $movimento->status = 'Concluído';
+            $movimento->status = MovimentoStatus::Concluido;
         } else {
-            $movimento->status = 'Erro';
+            $movimento->status = MovimentoStatus::Erro;
         }
         $movimento->save();
 
@@ -377,9 +379,9 @@ class TransfersController extends Controller
             $movimento->descricao_status = $response->descricao_status;
             $movimento->id_movest = $response->id_movest;
             $movimento->id_ajuste = $response->id_ajuste;
-            $movimento->status = 'Concluído';
+            $movimento->status = MovimentoStatus::Concluido;
         } else {
-            $movimento->status = 'Erro';
+            $movimento->status = MovimentoStatus::Erro;
         }
         $movimento->save();
 
@@ -391,7 +393,7 @@ class TransfersController extends Controller
         $clone = $transferencia->replicate();
         $clone->data = $request->get('data');
         $clone->finalizado = null;
-        $clone->status = 'Em contagem';
+        $clone->status = TransferenciaStatus::EmContagem;
         $clone->save();
 
         foreach ($transferencia->movimentos as $item) {
@@ -514,11 +516,11 @@ class TransfersController extends Controller
             abort(403, 'Você não possui a permissão: Transferências - Editar!');
         }
 
-        $transferencia->status = 'Processando no Omie';
+        $transferencia->status = TransferenciaStatus::ProcessandoNoOmie;
         $transferencia->save();
 
         Movimento::where('transferencia_id', $transferencia->id)
-            ->whereIn('status', ['Sem CMC', 'Erro'])
+            ->whereIn('status', [MovimentoStatus::Erro->value])
             ->update([
                 'response' => null,
                 'codigo_status' => null,
