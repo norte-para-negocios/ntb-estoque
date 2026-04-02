@@ -52,7 +52,7 @@
                     <h4>LOJAS</h4>
                     <ul class="list-group">
                         @foreach (\App\Models\Loja::orderBy('nome_fantasia')->get() as $loja)
-                            <li class="list-group-item">
+                            <li class="list-group-item mb-4">
                                 <div class="form-check form-switch text-success fs-5">
                                     <input class="form-check-input" type="checkbox" name="lojas[]"
                                            value="{{ $loja->id }}" id="loja-{{ $loja->id }}"
@@ -61,25 +61,72 @@
                                         {{ $loja->nome_fantasia }}
                                     </label>
                                 </div>
-                                <ul class="list-group mt-2 ms-3">
-                                    @foreach (\App\Models\Permissao::orderBy('nome')->get() as $permissao)
-                                        <li class="list-group-item">
-                                            <div class="form-check form-switch fs-5">
-                                                <input class="form-check-input" type="checkbox" name="permissao[]"
-                                                       value="{{ $loja->id }}|{{ $permissao->id }}"
-                                                       id="permissao-{{ $permissao->id }}"
-                                                       @if ($user->canPermissao($loja->id, $permissao->id)) checked
-                                                       onchange="detachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')"
-                                                       @else
-                                                           onchange="attachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')" @endif>
-                                                <label class="form-check-label" for="loja-{{ $permissao->id }}">
-                                                    {{ $permissao->nome }}
-                                                </label>
-                                            </div>
-                                        </li>
-                                    @endforeach
-                                </ul>
+
+                                <div class="row">
+                                    <div class="col">
+                                        <h4 class="mt-3">Permissões</h4>
+                                        <div class="form-check form-switch fs-5 ms-3 mb-1 text-primary">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="all-permissoes-{{ $loja->id }}"
+                                                   onchange="toggleAllPermissoes(this, '{{ $user->id }}', '{{ $loja->id }}')">
+                                            <label class="form-check-label fw-semibold" for="all-permissoes-{{ $loja->id }}">
+                                                Marcar/Desmarcar todas
+                                            </label>
+                                        </div>
+                                        <ul class="list-group ms-3" id="permissoes-{{ $loja->id }}">
+                                            @foreach (\App\Models\Permissao::orderBy('nome')->get() as $permissao)
+                                                <li class="list-group-item">
+                                                    <div class="form-check form-switch fs-5">
+                                                        <input class="form-check-input" type="checkbox" name="permissao[]"
+                                                               value="{{ $loja->id }}|{{ $permissao->id }}"
+                                                               id="permissao-{{ $loja->id }}-{{ $permissao->id }}"
+                                                               @if ($user->canPermissao($loja->id, $permissao->id)) checked
+                                                               onchange="detachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')"
+                                                               @else
+                                                                   onchange="attachPermissao('{{ $user->id }}', '{{ $loja->id }}', '{{ $permissao->id }}')" @endif>
+                                                        <label class="form-check-label" for="permissao-{{ $loja->id }}-{{ $permissao->id }}">
+                                                            {{ $permissao->nome }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+
+                                    <div class="col">
+                                        <h4 class="mt-3">Locais de Estoque</h4>
+                                        <div class="form-check form-switch fs-5 ms-3 mb-1 text-primary">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="all-locais-{{ $loja->id }}"
+                                                   onchange="toggleAllLocais(this, '{{ $user->id }}', '{{ $loja->id }}')">
+                                            <label class="form-check-label fw-semibold" for="all-locais-{{ $loja->id }}">
+                                                Marcar/Desmarcar todos
+                                            </label>
+                                        </div>
+                                        <ul class="list-group ms-3" id="locais-{{ $loja->id }}">
+                                            @foreach (\App\Models\LocalEstoque::withoutGlobalScopes()->where('loja_id', $loja->id)->orderBy('descricao')->get() as $local)
+                                                <li class="list-group-item">
+                                                    <div class="form-check form-switch fs-5">
+                                                        <input class="form-check-input" type="checkbox" name="local[]"
+                                                               value="{{ $loja->id }}|{{ $local->id }}"
+                                                               id="local-{{ $loja->id }}-{{ $local->id }}"
+                                                               @if ($user->locais()->where('local_estoque_user.loja_id', $loja->id)->where('local_estoque_user.local_estoque_id', $local->id)->exists())
+                                                                   checked onchange="detachLocal('{{ $user->id }}', '{{ $loja->id }}', '{{ $local->id }}')"
+                                                               @else
+                                                                   onchange="attachLocal('{{ $user->id }}', '{{ $loja->id }}', '{{ $local->id }}')"
+                                                               @endif
+                                                        >
+                                                        <label class="form-check-label" for="local-{{ $loja->id }}-{{ $local->id }}">
+                                                            {{ $local->descricao }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
                             </li>
+                            <hr>
                         @endforeach
                     </ul>
                 </div>
@@ -103,6 +150,41 @@
 
         function detachPermissao(userId, lojaId, permissaoId) {
             axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`);
+        }
+
+        function attachLocal(userId, lojaId, localId) {
+            axios.post(`/usuario/${userId}/local`, {
+                "loja_id": lojaId,
+                "local_id": localId,
+            })
+        }
+
+        function detachLocal(userId, lojaId, localId) {
+            axios.delete(`/usuario/${userId}/loja/${lojaId}/local/${localId}`);
+        }
+
+        function toggleAllPermissoes(masterEl, userId, lojaId) {
+            const checkboxes = document.querySelectorAll(`#permissoes-${lojaId} input[type="checkbox"]`);
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked === masterEl.checked) return;
+                checkbox.checked = masterEl.checked;
+                const permissaoId = checkbox.value.split('|')[1];
+                masterEl.checked
+                    ? attachPermissao(userId, lojaId, permissaoId)
+                    : detachPermissao(userId, lojaId, permissaoId);
+            });
+        }
+
+        function toggleAllLocais(masterEl, userId, lojaId) {
+            const checkboxes = document.querySelectorAll(`#locais-${lojaId} input[type="checkbox"]`);
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked === masterEl.checked) return;
+                checkbox.checked = masterEl.checked;
+                const localId = checkbox.value.split('|')[1];
+                masterEl.checked
+                    ? attachLocal(userId, lojaId, localId)
+                    : detachLocal(userId, lojaId, localId);
+            });
         }
     </script>
 @endpush

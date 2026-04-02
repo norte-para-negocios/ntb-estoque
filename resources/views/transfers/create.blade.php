@@ -21,7 +21,7 @@
                     <div class="mb-3">
                         <label for="codigo_local_origem" class="form-label">Estoque de Origem</label>
                         <select name="codigo_local_origem" id="codigo_local_origem" class="form-select" required>
-                            @foreach ($locaisEstoque as $local)
+                            @foreach (auth()->user()->locais()->orderBy('descricao')->get() as $local)
                                 <option value="{{ $local->codigo_local_estoque }}">
                                     <small>{{ $local->codigo }}</small> -
                                     {{ $local->descricao }}
@@ -33,7 +33,7 @@
                     <div class="mb-3">
                         <label for="codigo_local_destino" class="form-label">Estoque de Destino</label>
                         <select name="codigo_local_destino" id="codigo_local_destino" class="form-select" required>
-                            @foreach ($locaisEstoque as $local)
+                            @foreach (auth()->user()->locais()->orderBy('descricao')->get() as $local)
                                 <option value="{{ $local->codigo_local_estoque }}">
                                     <small>{{ $local->codigo }}</small> -
                                     {{ $local->descricao }}

@@ -13,7 +13,8 @@
       "Bash(grep -r \"instanceof\\\\\\\\|throw\\\\\\\\|try\\\\\\\\|catch\" /c/Sources/BahiaSH/ntb-estoque/app/Services/OmieService.php)",
       "Bash(grep -r '$response\\\\|->save\\(\\)\\\\|->update\\(\\)' /c/Sources/BahiaSH/ntb-estoque/app/Jobs/InventarioJob.php)",
       "Bash(grep:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(python -c \"import sys,json; tables=[t['name'] for t in json.load\\(sys.stdin\\).get\\('tables',[]\\)]; print\\('\\\\n'.join\\(tables\\)\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
