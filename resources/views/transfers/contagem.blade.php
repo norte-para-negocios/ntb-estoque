@@ -187,11 +187,11 @@
                                                 {{$item->produto->unidade??'--'}}
                                             </span>
 
-                                            @if ($transferencia->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
-                                                @if($item->status === 'Sem CMC')
+                                            @if ($transferencia->finalizado !== null || (in_array($item->status, [\App\Enums\MovimentoStatus::Concluido, \App\Enums\MovimentoStatus::Erro])))
+                                                @if($item->status === \App\Enums\MovimentoStatus::Erro)
                                                     <br>
-                                                    <span class="badge text-bg-warning">
-                                                        {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 29) }}
+                                                    <span class="badge text-bg-danger">
+                                                        {{ Str::limit(($item->descricao_status ?? 'Erro ao processar no Omie'), 29) }}
                                                     </span>
                                                 @else
                                                     <br>
@@ -200,7 +200,7 @@
                                                     </span>
                                                 @endif
 
-                                                @if(in_array($item->status, ['Erro', 'Cancelado', 'Sem CMC']))
+                                                @if(in_array($item->status, [\App\Enums\MovimentoStatus::Erro]))
                                                     <button 
                                                         type="button" 
                                                         class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2" 
@@ -231,7 +231,7 @@
                                                step="0.000001"
                                                value="{{$item->quan??1}}"
                                                required
-                                               @if ($transferencia->status === 'Processando')
+                                               @if ($transferencia->status === \App\Enums\TransferenciaStatus::Processando)
                                                    onblur="setQuantidade('{{ route('transfers.setQuantidade', $item->id) }}', this.value)"
                                                @else
                                                    onblur="editQuantidade(this, '{{ route('transfers.editQuantidade', $item->id) }}', this.value)"
@@ -432,7 +432,7 @@
                                                    step="0.000001"
                                                    value="1"
                                                    required
-                                                   @if ($transferencia->status === 'Processando')
+                                                   @if ($transferencia->status === \App\Enums\TransferenciaStatus::Processando)
                 onblur="setQuantidade('/transfers/quantidade/${produto.key}', this.value)"
                                                    @else
                 onblur="editQuantidade(this, '/transfers/edit/quantidade/${produto.key}', this.value)"

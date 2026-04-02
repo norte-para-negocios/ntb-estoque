@@ -103,10 +103,10 @@
                     em:
                     {{ \Carbon\Carbon::parse(auth()->user()->loja->ordem_producao_ultima_atualizacao)->format('d/m/y H:i:s') }}
                 @endif
-                | Status: {{ auth()->user()->loja->ordem_producao_status ?? 'N/A' }}
+                | Status: {{ auth()->user()->loja->ordem_producao_status?->value ?? 'N/A' }}
             </span>
 
-            @if (in_array(auth()->user()->loja->ordem_producao_status, [null, 'Concluído']) &&
+            @if (in_array(auth()->user()->loja->ordem_producao_status, [null, \App\Enums\SincronizacaoStatus::Concluido]) &&
                     (\App\Services\CanService::canPermissionLoja('Ordens de Produção - Sincronizar', auth()->user()->loja->id) ||
                         auth()->user()->perfil == 'Admin'))
                 <a href="{{ route('ordemproducao.sync') }}"

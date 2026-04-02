@@ -54,7 +54,7 @@
                             Para: {{ $transferencia->estoqueDestino->descricao ?? '' }}
                         </td>
                         <td style="width: 120px; text-align: center;">
-                            {{ $transferencia->status??'N/A' }}
+                            {{ $transferencia->status?->value ?? 'N/A' }}
                         </td>
                     </tr>
                 @endforeach

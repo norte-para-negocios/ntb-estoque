@@ -56,7 +56,7 @@
                             {{ number_format($item->quan, 2, ',', '.') }}
                         </td>
                         <td style="width: 120px; text-align: center;">
-                            {{ $item->status??'N/A' }}
+                            {{ $item->status?->value ?? 'N/A' }}
                         </td>
                     </tr>
                 @endforeach

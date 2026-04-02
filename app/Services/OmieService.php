@@ -58,6 +58,17 @@ class OmieService
         $appKey = $this->loja->omie_app_key;
         $isSingleRequestMethod = in_array($method, $this->singleRequestMethods, true);
 
+        $circuitBreaker = new CircuitBreakerService("omie:{$appKey}:{$method}");
+
+        if (! $circuitBreaker->isAvailable()) {
+            Log::warning('Circuit breaker open for OMIE API', [
+                'loja_id' => $this->loja->id,
+                'call' => $method,
+            ]);
+
+            return false;
+        }
+
         // Aguardar rate limits antes de fazer a requisição
         $this->waitForRateLimit($ip, $appKey, $method, $isSingleRequestMethod);
 
@@ -78,7 +89,7 @@ class OmieService
 
             try {
                 // Tentar adquirir lock, aguardando até 30 segundos
-                $lock->block(30, function () use ($url, $data, $method, $context, $ip, $appKey, $concurrentKey, &$result) {
+                $lock->block(30, function () use ($url, $data, $method, $context, $ip, $appKey, $concurrentKey, $circuitBreaker, &$result) {
                     // Verificar se ainda está dentro dos limites antes de fazer a requisição
                     $this->checkRateLimits($ip, $appKey, $method);
 
@@ -95,6 +106,7 @@ class OmieService
                         $this->code = $response->getStatusCode();
 
                         if ($response->status() === 200) {
+                            $circuitBreaker->recordSuccess();
                             $result = true;
 
                             return;
@@ -116,6 +128,10 @@ class OmieService
                             }
                         }
 
+                        if ($response->status() !== 425) {
+                            $circuitBreaker->recordFailure();
+                        }
+
                         Log::warning('Falha na requisição à API Omie', [
                             'loja_id' => $this->loja->id,
                             'method' => $method,
@@ -130,6 +146,8 @@ class OmieService
                         $this->integrationAttempt->error_message = json_encode($th->getMessage());
                         $this->code = $th->getCode();
                         $this->error = true;
+
+                        $circuitBreaker->recordFailure();
 
                         Log::error('Erro na requisição à API Omie', [
                             'loja_id' => $this->loja->id,

@@ -60,7 +60,7 @@
                                     {{ $movimento->quan ?? '-' }}
                                 </td>
                                 <td style="width: 120px; text-align: center;">
-                                    {{ $movimento->status ?? 'N/A' }}
+                                    {{ $movimento->status?->value ?? 'N/A' }}
                                 </td>
                             </tr>
                         @endforeach

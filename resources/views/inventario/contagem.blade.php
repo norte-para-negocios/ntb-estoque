@@ -178,8 +178,8 @@
                                             <span class="fw-semibold">
                                                 [{{$item->produto->unidade??'--'}}]
                                             </span>
-                                            @if ($inventario->finalizado !== null || (in_array($item->status, ['Concluído', 'Erro', 'Cancelado', 'Sem CMC'])))
-                                                @if($item->status === 'Sem CMC')
+                                            @if ($inventario->finalizado !== null || (in_array($item->status, [\App\Enums\InventarioItemStatus::Concluido, \App\Enums\InventarioItemStatus::Erro, \App\Enums\InventarioItemStatus::SemCmc])))
+                                                @if($item->status === \App\Enums\InventarioItemStatus::SemCmc)
                                                     <br>
                                                     <span class="badge text-bg-warning">
                                                         {{ Str::limit('CMC Zerado para o Produto, a movimentação não foi realizada no Omie', 29) }}
@@ -190,7 +190,7 @@
                                                     </span>
                                                 @endif
 
-                                                @if(in_array($item->status, ['Erro', 'Cancelado', 'Sem CMC']))
+                                                @if(in_array($item->status, [\App\Enums\InventarioItemStatus::Erro, \App\Enums\InventarioItemStatus::SemCmc]))
                                                     <button 
                                                         type="button" 
                                                         class="btn btn-sm btn-outline-primary mx-0 btn-validade fw-semibold px-2" 
@@ -221,7 +221,7 @@
                                                step="0.000001"
                                                value="{{$item->quan??1}}"
                                                required
-                                               @if ($inventario->status === 'Em contagem')
+                                               @if ($inventario->status === \App\Enums\InventarioStatus::EmContagem)
                                                    onblur="setQuantidade('{{ route('inventario.setQuantidade', $item->id) }}', this.value)"
                                                @else
                                                    onblur="editQuantidade(this, '{{ route('inventario.editQuantidade', $item->id) }}', this.value)"
@@ -438,7 +438,7 @@
                                                    step="0.000001"
                                                    value="1"
                                                    required
-                                                   @if ($inventario->status === 'Em contagem')
+                                                   @if ($inventario->status === \App\Enums\InventarioStatus::EmContagem)
                 onblur="setQuantidade('/inventario/quantidade/${produto.key}', this.value)"
                                                    @else
                 onblur="editQuantidade(this, '/inventario/edit/quantidade/${produto.key}', this.value)"

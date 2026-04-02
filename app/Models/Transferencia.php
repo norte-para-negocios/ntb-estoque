@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TransferenciaStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,6 +22,7 @@ class Transferencia extends Model
     {
         return [
             'data' => 'date',
+            'status' => TransferenciaStatus::class,
         ];
     }
 
@@ -28,6 +30,7 @@ class Transferencia extends Model
     {
         return $this->belongsTo(Loja::class);
     }
+
     public function movimentos(): HasMany
     {
         return $this->hasMany(Movimento::class);

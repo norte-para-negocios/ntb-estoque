@@ -22,7 +22,7 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "laravel/boost": "^2.1",
+        "laravel/boost": "^2.4",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.41",
@@ -65,11 +65,11 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:work\" \"npm run dev\" --names='server,queue,vite'"
         ],
         "queues": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#86efac,#f9a8d4,#fde68a,#bfdbfe,#fcd34d,#fca5a5,#a5b4fc\" \"php artisan queue:listen --queue=notafiscal --tries=1\" \"php artisan queue:listen --queue=ordemproducao --tries=1\" \"php artisan queue:listen --queue=posicaoestoque --tries=1\" \"php artisan queue:listen --queue=produto --tries=1\" \"php artisan queue:listen --queue=notifications --tries=1\" \"php artisan queue:listen --queue=default --tries=1\" \"php artisan reverb:start\" --names='notafiscal,ordemproducao,posicaoestoque,produto,notifications,default,reverb'"
+            "npx concurrently -c \"#86efac,#f9a8d4,#fde68a,#bfdbfe,#fcd34d,#fca5a5,#a5b4fc\" \"php artisan queue:work --queue=notafiscal\" \"php artisan queue:work --queue=ordemproducao\" \"php artisan queue:work --queue=posicaoestoque\" \"php artisan queue:work --queue=produto\" \"php artisan queue:work --queue=notifications\" \"php artisan queue:work --queue=default\" \"php artisan reverb:start\" --names='notafiscal,ordemproducao,posicaoestoque,produto,notifications,default,reverb'"
         ]
     },
     "extra": {

@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use App\Enums\SincronizacaoStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Loja extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'cnpj',
         'nome',
@@ -40,10 +44,18 @@ class Loja extends Model
         'ordem_producao_status',
     ];
 
-    protected $casts = [
-        // 'omie_app_key' => 'encrypted',
-        'omie_app_secret' => 'encrypted',
-    ];
+    protected function casts(): array
+    {
+        return [
+            // 'omie_app_key' => 'encrypted',
+            'omie_app_secret' => 'encrypted',
+            'local_estoque_status' => SincronizacaoStatus::class,
+            'produto_status' => SincronizacaoStatus::class,
+            'posicao_estoque_status' => SincronizacaoStatus::class,
+            'nota_fiscal_status' => SincronizacaoStatus::class,
+            'ordem_producao_status' => SincronizacaoStatus::class,
+        ];
+    }
 
     public function users(): BelongsToMany
     {

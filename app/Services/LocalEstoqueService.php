@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SincronizacaoStatus;
 use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\LocalEstoqueUpdateJob;
 use App\Models\LocalEstoque;
@@ -22,9 +23,9 @@ class LocalEstoqueService
 
     public function fetchAll($lastPages = 0): void
     {
-        if ($this->loja->local_estoque_status !== 'Processando') {
+        if ($this->loja->local_estoque_status !== SincronizacaoStatus::Processando) {
             // Aciona a Variavel de Controle
-            $this->loja->local_estoque_status = 'Processando';
+            $this->loja->local_estoque_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             $first = $this->fetchPage(1);
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
@@ -37,7 +38,7 @@ class LocalEstoqueService
                 ->then(function () {
                     // Todos os Jobs concluídos com sucesso
                     $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
-                    $this->loja->local_estoque_status = 'Concluído';
+                    $this->loja->local_estoque_status = SincronizacaoStatus::Concluido;
                     $this->loja->save();
                     if (auth()->check()) {
                         broadcast(new NotificaUserEvent(auth()->user(), 'success', "Locais de Estoque da loja {$this->loja->nome},  atualizados com sucesso!"));
@@ -45,7 +46,7 @@ class LocalEstoqueService
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
-                    $this->loja->local_estoque_status = 'Erro';
+                    $this->loja->local_estoque_status = SincronizacaoStatus::Erro;
                     $this->loja->save();
                 })
                 ->finally(function () {

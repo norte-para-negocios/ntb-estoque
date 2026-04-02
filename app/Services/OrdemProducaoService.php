@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SincronizacaoStatus;
 use App\Events\NotificaUserEvent;
 use App\Helpers\Constants;
 use App\Jobs\UpdateOmieLocalData\OrdemProducaoUpdateJob;
@@ -25,9 +26,9 @@ class OrdemProducaoService
 
     public function fetchAll($lastPages = 0, $dataIni = '', $dataFim = ''): void
     {
-        if ($this->loja->ordem_producao_status !== 'Processando') {
+        if ($this->loja->ordem_producao_status !== SincronizacaoStatus::Processando) {
             // Aciona a Variavel de Controle
-            $this->loja->ordem_producao_status = 'Processando';
+            $this->loja->ordem_producao_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             $first = $this->fetchPage(1, $dataIni, $dataFim);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
@@ -40,7 +41,7 @@ class OrdemProducaoService
                 ->then(function () {
                     // Todos os Jobs concluídos com sucesso
                     $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
-                    $this->loja->ordem_producao_status = 'Concluído';
+                    $this->loja->ordem_producao_status = SincronizacaoStatus::Concluido;
                     $this->loja->save();
                     if (auth()->check()) {
                         broadcast(new NotificaUserEvent(auth()->user(), 'success', "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
@@ -51,7 +52,7 @@ class OrdemProducaoService
                         'erro' => $e->getMessage(),
                         'Loja' => $this->loja->nome,
                     ]);
-                    $this->loja->ordem_producao_status = 'Erro';
+                    $this->loja->ordem_producao_status = SincronizacaoStatus::Erro;
                     $this->loja->save();
                 })
                 ->finally(function () {

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SincronizacaoStatus;
 use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\PosicaoEstoqueUpdateJob;
 use App\Models\Loja;
@@ -23,12 +24,12 @@ class PosicaoEstoqueService
 
     public function fetchAll(int $codigoLocalEstoque, $dataPosicao, $lastPages = 0): void
     {
-        if ($this->loja->posicao_estoque_status !== 'Processando') {
+        if ($this->loja->posicao_estoque_status !== SincronizacaoStatus::Processando) {
             // Aciona a Variavel de Controle
             PosicaoEstoque::where('loja_id', $this->loja->id)
                 ->where('data_posicao', Carbon::createFromFormat('d/m/Y', $dataPosicao)->format('Y-m-d'))
                 ->delete();
-            $this->loja->posicao_estoque_status = 'Processando';
+            $this->loja->posicao_estoque_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             $first = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
@@ -41,7 +42,7 @@ class PosicaoEstoqueService
                 ->then(function () {
                     // Todos os Jobs concluídos com sucesso
                     $this->loja->posicao_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
-                    $this->loja->posicao_estoque_status = 'Concluído';
+                    $this->loja->posicao_estoque_status = SincronizacaoStatus::Concluido;
                     $this->loja->save();
                     if (auth()->check()) {
                         broadcast(new NotificaUserEvent(auth()->user(), 'success', "Posição de Estoque da loja {$this->loja->nome}, atualizada com sucesso!"));
@@ -49,7 +50,7 @@ class PosicaoEstoqueService
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
-                    $this->loja->posicao_estoque_status = 'Erro';
+                    $this->loja->posicao_estoque_status = SincronizacaoStatus::Erro;
                     $this->loja->save();
                 })
                 ->finally(function () {

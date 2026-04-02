@@ -7,12 +7,15 @@ use App\Services\NotaFiscalService;
 use App\Services\OrdemProducaoService;
 use App\Services\ProdutoService;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\MassPrunable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class Webhook extends Model
 {
+    use HasFactory;
     use MassPrunable;
 
     public function prunable(): Builder
@@ -42,16 +45,16 @@ class Webhook extends Model
                     /*
                      * Identificar se deseja fazer algo quando houver movimento de estoque, não remover sem adicionar Produto.Inclusao, Edicao, Etc
                      * */
-//                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
-//                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
-//                    $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
+                    //                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
+                    //                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['codigo_produto'], date('d/m/Y'));
+                    //                    $posicaoEstoqueService->savePosicao($posicao, date('d/m/Y'));
                 } elseif (stripos($message['topic'], 'Produto.AjusteEstoque') !== false) {
                     /*
                      * Identificar se deseja fazer algo quando houver movimento de estoque, não remover sem adicionar Produto.Inclusao, Edicao, Etc
                      * */
-//                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
-//                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
-//                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
+                    //                    $posicaoEstoqueService = new PosicaoEstoqueService($webhook->loja);
+                    //                    $posicao = $posicaoEstoqueService->fetchPosicaoProduto($message['event']['codigo_local_estoque'], $message['event']['id_prod'], $message['event']['data']);
+                    //                    $posicaoEstoqueService->savePosicao($posicao, Carbon::parse($message['event']['data'])->format('d/m/Y'));
                 } elseif (stripos($message['topic'], 'RecebimentoProduto') !== false) {
                     $notaFiscalService = new NotaFiscalService($webhook->loja);
                     $notafiscal = $notaFiscalService->fetchNotaFiscal($message['event']['cabecalho']['nIdReceb']);
@@ -59,8 +62,9 @@ class Webhook extends Model
                 } elseif (stripos($message['topic'], 'Produto.') !== false) {
                     $produtoService = new ProdutoService($webhook->loja);
                     if ($message['topic'] === 'Produto.Excluido') {
-                        $produtoService->deleteProduto((object)$message['event']);
+                        $produtoService->deleteProduto((object) $message['event']);
                     } else {
+                        Cache::forget("omie:produto:{$webhook->loja_id}:{$message['event']['codigo_produto']}");
                         $produto = $produtoService->fetchProduto($message['event']['codigo_produto']);
                         $produtoService->saveProduto($produto);
                     }
@@ -74,7 +78,7 @@ class Webhook extends Model
                     }
                 }
             } else {
-                Log::error("A mensagem recebida no webhook não é um json:", ['message' => $message]);
+                Log::error('A mensagem recebida no webhook não é um json:', ['message' => $message]);
             }
         });
     }

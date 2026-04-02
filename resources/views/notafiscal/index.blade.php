@@ -146,8 +146,8 @@
                     Atualizado
                     em: {{\Carbon\Carbon::parse(auth()->user()->loja->nota_fiscal_ultima_atualizacao)->format('d/m/y H:i:s')}}
                 @endif
-                | Status: {{auth()->user()->loja->nota_fiscal_status??'N/A'}}
-                @if(in_array(auth()->user()->loja->nota_fiscal_status, [null, 'Concluído']) && (\App\Services\CanService::canPermissionLoja('Notas Fiscais - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
+                | Status: {{auth()->user()->loja->nota_fiscal_status?->value ?? 'N/A'}}
+                @if(in_array(auth()->user()->loja->nota_fiscal_status, [null, \App\Enums\SincronizacaoStatus::Concluido]) && (\App\Services\CanService::canPermissionLoja('Notas Fiscais - Sincronizar', auth()->user()->loja->id) || auth()->user()->perfil == 'Admin'))
                     <a href="{{route('notafiscal.sync')}}" title="Sinclonizar Notas Fiscais com o Omie"
                        class="btn btn-sm btn-outline-secondary text-dark-emphasis">
                         <i class="fa-solid fa-arrows-rotate"></i>

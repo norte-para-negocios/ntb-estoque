@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\SincronizacaoStatus;
 use App\Events\NotificaUserEvent;
 use App\Jobs\UpdateOmieLocalData\ProdutoUpdateJob;
 use App\Models\Loja;
 use App\Models\Produto;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -23,9 +25,9 @@ class ProdutoService
 
     public function fetchAll($lastPages = 0): void
     {
-        if ($this->loja->produto_status !== 'Processando') {
+        if ($this->loja->produto_status !== SincronizacaoStatus::Processando) {
             // Aciona a Variavel de Controle
-            $this->loja->produto_status = 'Processando';
+            $this->loja->produto_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             $first = $this->fetchPage(1);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
@@ -39,7 +41,7 @@ class ProdutoService
                 ->then(function () {
                     // Todos os Jobs concluídos com sucesso
                     $this->loja->produto_ultima_atualizacao = date('Y-m-d H:i:s');
-                    $this->loja->produto_status = 'Concluído';
+                    $this->loja->produto_status = SincronizacaoStatus::Concluido;
                     $this->loja->save();
                     if (Auth::check()) {
                         broadcast(new NotificaUserEvent(Auth::user(), 'success', "Produtos da loja {$this->loja->nome}, atualizados com sucesso!"));
@@ -47,7 +49,7 @@ class ProdutoService
                 })
                 ->catch(function (Throwable $e) {
                     // Algum Job falhou — você pode logar ou tratar aqui
-                    $this->loja->produto_status = 'Erro';
+                    $this->loja->produto_status = SincronizacaoStatus::Erro;
                     $this->loja->save();
                 })
                 ->finally(function () {
@@ -148,6 +150,12 @@ class ProdutoService
 
     public function fetchProduto(string $codigo_produto): object
     {
+        $cacheKey = "omie:produto:{$this->loja->id}:{$codigo_produto}";
+
+        if (Cache::has($cacheKey)) {
+            return new stdClass;
+        }
+
         $url = $this->urlBase.'v1/geral/produtos/';
         $data = [
             'call' => 'ConsultarProduto',
@@ -179,6 +187,8 @@ class ProdutoService
                 $this->code = $response->getStatusCode();
 
                 if ($response->status() === 200) {
+                    Cache::put($cacheKey, true, now()->addMinutes(30));
+
                     return $response->object();
                 }
             } catch (Throwable $th) {
