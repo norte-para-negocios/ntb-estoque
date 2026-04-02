@@ -96,6 +96,10 @@ class ProdutoService
 
                 if ($response->status() === 200) {
                     return $response->object();
+                } elseif ($response->status() === 429) {
+                    $this->error = true;
+                    $this->code = 429;
+                    throw new \RuntimeException("Omie API rate limited (HTTP 429) na página {$pagina}");
                 } elseif ($response->status() === 500) {
                     return new stdClass;
                 }

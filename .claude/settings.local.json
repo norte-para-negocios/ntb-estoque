@@ -11,7 +11,8 @@
       "Bash(python -m json.tool)",
       "Bash(git worktree:*)",
       "Bash(grep -r \"instanceof\\\\\\\\|throw\\\\\\\\|try\\\\\\\\|catch\" /c/Sources/BahiaSH/ntb-estoque/app/Services/OmieService.php)",
-      "Bash(grep -r '$response\\\\|->save\\(\\)\\\\|->update\\(\\)' /c/Sources/BahiaSH/ntb-estoque/app/Jobs/InventarioJob.php)"
+      "Bash(grep -r '$response\\\\|->save\\(\\)\\\\|->update\\(\\)' /c/Sources/BahiaSH/ntb-estoque/app/Jobs/InventarioJob.php)",
+      "Bash(grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
