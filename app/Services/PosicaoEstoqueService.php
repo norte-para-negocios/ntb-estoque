@@ -33,8 +33,11 @@ class PosicaoEstoqueService
             $this->loja->save();
             $first = $this->fetchPage($codigoLocalEstoque, $dataPosicao, 1);
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
+            if (! empty($first->produtos)) {
+                $this->savePosicoes((array) $first->produtos, $dataPosicao);
+            }
             $jobs = [];
-            for ($i = 1; $i <= $total; $i++) {
+            for ($i = 2; $i <= $total; $i++) {
                 $jobs[] = new PosicaoEstoqueUpdateJob($this->loja, $codigoLocalEstoque, $dataPosicao, $i);
             }
             // Dispara o batch

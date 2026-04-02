@@ -31,7 +31,7 @@ class NotaFiscalService
             $this->loja->nota_fiscal_status = SincronizacaoStatus::Processando;
             $this->loja->save();
             try {
-                $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
+                $first = $this->fetchPage(1, $dataIni, $dataFim);
             } catch (\RuntimeException $e) {
                 $this->loja->nota_fiscal_status = SincronizacaoStatus::Erro;
                 $this->loja->save();
@@ -39,9 +39,12 @@ class NotaFiscalService
                 return;
             }
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
+            if (! empty($first->recebimentos)) {
+                $this->saveNotasFiscais((array) $first->recebimentos);
+            }
             $jobs = [];
-            for ($i = 1; $i <= $total; $i++) {
-                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i, $dataIni = '', $dataFim = '');
+            for ($i = 2; $i <= $total; $i++) {
+                $jobs[] = new NotaFiscalUpdateJob($this->loja, $i, $dataIni, $dataFim);
             }
             // Dispara o batch
             Bus::batch($jobs)
