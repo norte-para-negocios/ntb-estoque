@@ -33,6 +33,14 @@ class ProdutoService
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             if (! empty($first->produto_servico_cadastro)) {
                 $this->saveProdutos((array) $first->produto_servico_cadastro);
+                if ($total === 1) {
+                    $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->ordem_producao_status = SincronizacaoStatus::Concluido;
+                    $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
+                    }
+                }
             }
             $jobs = [];
             for ($i = 2; $i <= $total; $i++) {

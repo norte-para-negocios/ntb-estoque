@@ -31,6 +31,14 @@ class LocalEstoqueService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotPaginas ?? 1);
             if (! empty($first->locaisEncontrados)) {
                 $this->saveLocais((array) $first->locaisEncontrados);
+                if ($total === 1) {
+                    $this->loja->local_estoque_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->local_estoque_status = SincronizacaoStatus::Concluido;
+                    $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Locais de Estoque da loja {$this->loja->nome},  atualizados com sucesso!"));
+                    }
+                }
             }
             $jobs = [];
             for ($i = 2; $i <= $total; $i++) {
