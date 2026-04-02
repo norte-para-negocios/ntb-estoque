@@ -88,8 +88,8 @@ class NotaFiscalService
         ];
 
         if (($dataIni !== '') && ($dataFim !== '')) {
-            $data['param']['dtAltDe'] = $dataIni;
-            $data['param']['dtAltAte'] = $dataFim;
+            $data['param'][0]['dtAltDe'] = $dataIni;
+            $data['param'][0]['dtAltAte'] = $dataFim;
         }
 
         // Inicializando Log de integração
