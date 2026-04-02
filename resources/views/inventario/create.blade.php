@@ -21,7 +21,7 @@
                     <div class="mb-3">
                         <label for="estoque_origem" class="form-label">Local de Estoque</label>
                         <select name="estoque_origem" id="estoque_origem" class="form-select" required>
-                            @foreach ($locaisEstoque as $local)
+                            @foreach (auth()->user()->locais()->orderBy('descricao')->get() as $local)
                                 <option value="{{ $local->codigo_local_estoque }}">
                                     <small>{{ $local->codigo }}</small> -
                                     {{ $local->descricao }}

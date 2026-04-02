@@ -30,6 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/usuario/{user}/loja/{loja}', [UserController::class, 'setCurrentLoja'])->name('usuario.loja');
     Route::post('/usuario/{user}/permissao', [PermissaoController::class, 'attach'])->name('usuario.permissao.attach');
     Route::delete('/usuario/{user}/loja/{loja}/permissao/{permissao}', [PermissaoController::class, 'detach'])->name('usuario.permissao.detach');
+    Route::post('/usuario/{user}/local', [PermissaoController::class, 'attachLocal'])->name('usuario.local.attach');
+    Route::delete('/usuario/{user}/loja/{loja}/local/{local}', [PermissaoController::class, 'detachLocal'])->name('usuario.local.detach');
 
     // Locais de Estoque e Produtos
     Route::get('/local-estoque', [LocalEstoqueController::class, 'index'])->name('locais-estoque.index');

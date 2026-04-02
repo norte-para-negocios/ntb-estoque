@@ -34,6 +34,14 @@ class OrdemProducaoService
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
             if (! empty($first->cadastros)) {
                 $this->saveOrdensProducao((array) $first->cadastros);
+                if ($total === 1 ) {
+                    $this->loja->ordem_producao_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->ordem_producao_status = SincronizacaoStatus::Concluido;
+                    $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Ordens de Produção da loja {$this->loja->nome}, atualizadas com sucesso!"));
+                    }
+                }
             }
             $jobs = [];
             for ($i = 2; $i <= $total; $i++) {
@@ -75,12 +83,10 @@ class OrdemProducaoService
             'app_key' => $this->loja->omie_app_key,
             'app_secret' => $this->loja->omie_app_secret,
             'param' => [
-                [
-                    'pagina' => $pagina,
-                    'registros_por_pagina' => 500,
-                    'ordem_decrescente' => 'S',
-                    'ordenar_por' => 'dConclusao',
-                ],
+                'pagina' => $pagina,
+                'registros_por_pagina' => 100,
+                'ordem_decrescente' => 'S',
+                'ordenar_por' => 'dConclusao',
             ],
         ];
 
@@ -111,6 +117,12 @@ class OrdemProducaoService
                 $this->code = 429;
                 throw new \RuntimeException("Omie API rate limited (HTTP 429) na página {$pagina}");
             } elseif ($response->status() === 500) {
+                $body = $response->object();
+                if (isset($body->faultcode) && str_contains($body->faultstring ?? '', '8020')) {
+                    $this->error = true;
+                    throw new \RuntimeException("Omie requisição simultânea bloqueada (8020) na página {$pagina}");
+                }
+
                 return new stdClass;
             }
         } catch (Throwable $th) {

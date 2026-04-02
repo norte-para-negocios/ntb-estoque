@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 
 class ProdutoUpdateJob implements ShouldQueue
@@ -27,7 +28,10 @@ class ProdutoUpdateJob implements ShouldQueue
 
     public function middleware(): array
     {
-        return [new RateLimited('omie-api')];
+        return [
+            new RateLimited('omie-api'),
+            (new WithoutOverlapping($this->loja->id))->releaseAfter(10),
+        ];
     }
 
     public function handle(): void

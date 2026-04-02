@@ -41,6 +41,14 @@ class NotaFiscalService
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
             if (! empty($first->recebimentos)) {
                 $this->saveNotasFiscais((array) $first->recebimentos);
+                if ($total === 1) {
+                    $this->loja->nota_fiscal_ultima_atualizacao = date('Y-m-d H:i:s');
+                    $this->loja->nota_fiscal_status = SincronizacaoStatus::Concluido;
+                    $this->loja->save();
+                    if (auth()->check()) {
+                        broadcast(new NotificaUserEvent(auth()->user(), 'success', "Notas fiscais da loja {$this->loja->nome}, atualizada com sucesso!"));
+                    }
+                }
             }
             $jobs = [];
             for ($i = 2; $i <= $total; $i++) {

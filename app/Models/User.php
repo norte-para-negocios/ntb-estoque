@@ -4,7 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
-use App\Mail\UserMailAfterCreate;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -26,7 +26,7 @@ class User extends Authenticatable
         'email',
         'password',
         'current_loja_id',
-        'perfil'
+        'perfil',
     ];
 
     /**
@@ -73,5 +73,14 @@ class User extends Authenticatable
             ->where('permissao_id', $permissaoId)
             ->where('user_id', $this->id)
             ->count() > 0;
+    }
+
+    public function locais(): BelongsToMany
+    {
+        if (auth()->check()) {
+            return $this->belongsToMany(LocalEstoque::class)->where('local_estoque_user.loja_id', auth()->user()->current_loja_id);
+        } else {
+            return $this->belongsToMany(LocalEstoque::class);
+        }
     }
 }
