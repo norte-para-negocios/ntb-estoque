@@ -58,14 +58,13 @@
                 </div>
                 @auth
                     <div>
-                        @if(in_array(Route::currentRouteName(), ['inventario.contagem']))
+                        @if(in_array(Route::currentRouteName(), ['transfers.contagem', 'inventario.contagem']))
                             <button type="button" aria-label="Limpar Filtro(s)" class="btn fw-semibold" id="btn-limpar-filtro"
                                 onclick="limparFiltros()">
                                 <img src="{{asset('images/excluir.png')}}" alt="Botão Limpar Filtro(s)"> Limpar Filtro
                             </button>
                         @endif
                         @if(in_array(Route::currentRouteName(), ['notafiscal.index', 'ordemproducao.index', 'transferencia.index', 'transfers.index', 'inventario.index', 'transfers.contagem', 'inventario.contagem']))
-
                             <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasFiltro"
                                 aria-controls="offcanvasFiltro" class="btn fw-semibold" id="btn-filtrar">
                                 <img src="{{asset('images/filtrar.png')}}" alt="Botão Filtrar"> Filtrar
@@ -164,6 +163,8 @@
 
         function limparFiltros() {
             document.getElementById('filtrosForm').reset();
+            document.querySelectorAll('#filtrosForm input, #filtrosForm select, #filtrosForm textarea').forEach(el => el.value = '');
+            document.querySelectorAll('#filtrosForm input[type=checkbox], #filtrosForm input[type=radio]').forEach(el => el.checked = false);
             document.getElementById('filtrosForm').submit();
             notyf.open({ type: 'info', message: 'Filtro(s) limpo(s) com sucesso!' });
         }
