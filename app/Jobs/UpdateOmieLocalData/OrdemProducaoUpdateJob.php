@@ -9,22 +9,25 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 
 class OrdemProducaoUpdateJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    // Tentativas antes de falhar de vez
-    public int $tries = 5;
+    public int $tries = 15;
 
     public array|int $backoff = [10, 30, 60, 120];
 
     public function __construct(
-        protected Loja $loja,
-        protected int  $pagina
-    )
+        public Loja $loja,
+        protected int $pagina
+    ) {}
+
+    public function middleware(): array
     {
+        return [new RateLimited('omie-api')];
     }
 
     public function handle(): void
@@ -32,8 +35,8 @@ class OrdemProducaoUpdateJob implements ShouldQueue
         $service = new OrdemProducaoService($this->loja);
         $response = $service->fetchPage($this->pagina);
 
-        if (!empty($response->cadastros)) {
-            $service->saveOrdensProducao((array)$response->cadastros);
+        if (! empty($response->cadastros)) {
+            $service->saveOrdensProducao((array) $response->cadastros);
         }
     }
 
@@ -42,5 +45,4 @@ class OrdemProducaoUpdateJob implements ShouldQueue
         // Logue a falha ou dispare alerta
         \Log::error("Job falhou na página {$this->pagina}: {$exception->getMessage()}");
     }
-
 }

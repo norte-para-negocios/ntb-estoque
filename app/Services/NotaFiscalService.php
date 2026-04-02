@@ -30,7 +30,14 @@ class NotaFiscalService
             // Aciona a Variavel de Controle
             $this->loja->nota_fiscal_status = SincronizacaoStatus::Processando;
             $this->loja->save();
-            $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
+            try {
+                $first = $this->fetchPage(1, $dataIni = '', $dataFim = '');
+            } catch (\RuntimeException $e) {
+                $this->loja->nota_fiscal_status = SincronizacaoStatus::Erro;
+                $this->loja->save();
+
+                return;
+            }
             $total = $lastPages > 0 ? $lastPages : ($first->nTotalPaginas ?? 1);
             $jobs = [];
             for ($i = 1; $i <= $total; $i++) {
@@ -99,6 +106,10 @@ class NotaFiscalService
 
             if ($response->status() === 200) {
                 return $response->object();
+            } elseif ($response->status() === 429) {
+                $this->error = true;
+                $this->code = 429;
+                throw new \RuntimeException("Omie API rate limited (HTTP 429) na página {$pagina}");
             } elseif ($response->status() === 425) {
                 $data = $response->object();
                 preg_match('/em (\d+) segundos/', $data->faultstring, $matches);

@@ -9,24 +9,27 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 
 class PosicaoEstoqueUpdateJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 5;
+    public int $tries = 15;
 
-    // Intervalos em segundos para cada retry
     public array|int $backoff = [10, 30, 60, 120];
 
     public function __construct(
-        protected Loja $loja,
+        public Loja $loja,
         protected int $codigoLocalEstoque,
         protected string $dataPosicao,
-        protected int  $pagina
-    )
+        protected int $pagina
+    ) {}
+
+    public function middleware(): array
     {
+        return [new RateLimited('omie-api')];
     }
 
     public function handle(): void
@@ -34,8 +37,8 @@ class PosicaoEstoqueUpdateJob implements ShouldQueue
         $service = new PosicaoEstoqueService($this->loja);
         $response = $service->fetchPage($this->codigoLocalEstoque, $this->dataPosicao, $this->pagina);
 
-        if (!empty($response->produtos)) {
-            $service->savePosicoes((array)$response->produtos, $this->dataPosicao);
+        if (! empty($response->produtos)) {
+            $service->savePosicoes((array) $response->produtos, $this->dataPosicao);
         }
     }
 
@@ -44,5 +47,4 @@ class PosicaoEstoqueUpdateJob implements ShouldQueue
         // Logue a falha ou dispare alerta
         \Log::error("Job falhou na página {$this->pagina}: {$exception->getMessage()}");
     }
-
 }
