@@ -109,6 +109,12 @@ class OrdemProducaoService
                 $this->code = 429;
                 throw new \RuntimeException("Omie API rate limited (HTTP 429) na página {$pagina}");
             } elseif ($response->status() === 500) {
+                $body = $response->object();
+                if (isset($body->faultcode) && str_contains($body->faultstring ?? '', '8020')) {
+                    $this->error = true;
+                    throw new \RuntimeException("Omie requisição simultânea bloqueada (8020) na página {$pagina}");
+                }
+
                 return new stdClass;
             }
         } catch (Throwable $th) {
