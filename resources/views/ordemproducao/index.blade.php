@@ -141,7 +141,7 @@
                                                         Data:
                                                         {{ \Carbon\Carbon::parse($op->adicionais_d_dt_conclusao)->format('d/m/Y') }}
                                                         |
-                                                        {{ \App\Helpers\Constants::PRODUTO_TIPO_ITEM[$op->produto_tipo_item] }}
+                                                        {{ \App\Helpers\Constants::PRODUTO_TIPO_ITEM[$op->produto_tipo_item] ?? $op->produto_tipo_item ?? '-' }}
                                                         {{ $op->produto_codigo ?? '-' }}
                                                     </span>
 
