@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('omie-api', function (object $job) {
-            return Limit::perMinute(200)->by($job->loja->omie_app_key);
+            return Limit::perMinute(120)->by($job->loja->omie_app_key);
         });
     }
 }
