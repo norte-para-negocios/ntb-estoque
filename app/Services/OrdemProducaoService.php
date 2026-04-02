@@ -75,12 +75,10 @@ class OrdemProducaoService
             'app_key' => $this->loja->omie_app_key,
             'app_secret' => $this->loja->omie_app_secret,
             'param' => [
-                [
-                    'pagina' => $pagina,
-                    'registros_por_pagina' => 500,
-                    'ordem_decrescente' => 'S',
-                    'ordenar_por' => 'dConclusao',
-                ],
+                'pagina' => $pagina,
+                'registros_por_pagina' => 500,
+                'ordem_decrescente' => 'S',
+                'ordenar_por' => 'dConclusao',
             ],
         ];
 
