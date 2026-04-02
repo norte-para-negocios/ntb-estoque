@@ -31,8 +31,11 @@ class ProdutoService
             $this->loja->save();
             $first = $this->fetchPage(1);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            if (! empty($first->produto_servico_cadastro)) {
+                $this->saveProdutos((array) $first->produto_servico_cadastro);
+            }
             $jobs = [];
-            for ($i = 1; $i <= $total; $i++) {
+            for ($i = 2; $i <= $total; $i++) {
                 $jobs[] = new ProdutoUpdateJob($this->loja, $i);
             }
 

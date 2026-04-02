@@ -32,8 +32,11 @@ class OrdemProducaoService
             $this->loja->save();
             $first = $this->fetchPage(1, $dataIni, $dataFim);
             $total = $lastPages > 0 ? $lastPages : ($first->total_de_paginas ?? 1);
+            if (! empty($first->cadastros)) {
+                $this->saveOrdensProducao((array) $first->cadastros);
+            }
             $jobs = [];
-            for ($i = 1; $i <= $total; $i++) {
+            for ($i = 2; $i <= $total; $i++) {
                 $jobs[] = new OrdemProducaoUpdateJob($this->loja, $i);
             }
             // Dispara o batch
