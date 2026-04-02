@@ -76,7 +76,7 @@ class OrdemProducaoService
             'app_secret' => $this->loja->omie_app_secret,
             'param' => [
                 'pagina' => $pagina,
-                'registros_por_pagina' => 500,
+                'registros_por_pagina' => 100,
                 'ordem_decrescente' => 'S',
                 'ordenar_por' => 'dConclusao',
             ],
