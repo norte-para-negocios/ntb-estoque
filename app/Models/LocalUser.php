@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Scopes\CurrentLojaScope;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 
@@ -15,11 +14,6 @@ class LocalUser extends Pivot
         'local_estoque_id',
         'user_id',
     ];
-
-    protected static function booted(): void
-    {
-        static::addGlobalScope(new CurrentLojaScope);
-    }
 
     public function localEstoque(): BelongsTo
     {
