@@ -75,6 +75,29 @@ class User extends Authenticatable
             ->count() > 0;
     }
 
+    public function hasAllPermissoes($lojaId): bool
+    {
+        $totalPermissoes = Permissao::count();
+        $userPermissoes = PermissaoUser::where('loja_id', $lojaId)
+            ->where('user_id', $this->id)
+            ->count();
+
+        return $totalPermissoes > 0 && $totalPermissoes === $userPermissoes;
+    }
+
+    public function hasAllLocais($lojaId): bool
+    {
+        $totalLocais = LocalEstoque::withoutGlobalScopes()
+            ->where('loja_id', $lojaId)
+            ->count();
+        $userLocais = LocalUser::withoutGlobalScopes()
+            ->where('loja_id', $lojaId)
+            ->where('user_id', $this->id)
+            ->count();
+
+        return $totalLocais > 0 && $totalLocais === $userLocais;
+    }
+
     public function locais(): BelongsToMany
     {
         if (auth()->check()) {
