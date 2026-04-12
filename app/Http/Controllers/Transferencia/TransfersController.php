@@ -298,10 +298,15 @@ class TransfersController extends Controller
         $familia = $request->get('familia', null);
         $tipo = $request->get('tipo', null);
 
-        $movimentos = Movimento::where('transferencia_id', $transferencia->id)
-            ->leftJoin('produtos', 'movimentos.id_prod', '=', 'produtos.codigo_produto')
+        $movimentos = Movimento::leftJoin('produtos', 'movimentos.id_prod', '=', 'produtos.codigo_produto')
+            ->where('movimentos.loja_id', Auth::user()->current_loja_id)
+            ->where('produtos.loja_id', Auth::user()->current_loja_id)
+            ->where('movimentos.transferencia_id', $transferencia->id)
             ->when($produto, function ($query) use ($produto) {
-                $query->where('produtos.descricao', 'like', "%{$produto}%");
+                $query->where(function ($queryProduto) use ($produto) {
+                    $queryProduto->where('produtos.descricao', 'like', "%{$produto}%")
+                        ->orWhere('produtos.codigo', 'like', "%{$produto}%");
+                });
             })
             ->when($familia, function ($query) use ($familia) {
                 $query->where('produtos.descricao_familia', 'like', "%{$familia}%");
@@ -310,7 +315,7 @@ class TransfersController extends Controller
                 $query->where('produtos.tipo_item', $tipo);
             })
             ->orderBy('produtos.descricao', 'asc')
-            ->get();
+            ->dd();
 
         return view('transfers.contagem', compact('transferencia', 'produto', 'familia', 'tipo', 'movimentos'));
     }

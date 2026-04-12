@@ -219,7 +219,11 @@ class InventarioController extends Controller
 
         $items = InventarioItem::where('inventario_id', $inventario->id)
             ->when($produto, function ($query) use ($produto) {
-                $query->where('produto_descricao', 'like', "%{$produto}%");
+                $query->where(function ($q) use ($produto) {
+                    $q->where('produto_descricao', 'like', "%{$produto}%")
+                        ->orWhere('produto_codigo', 'like', "%{$produto}%")
+                        ->orWhere('produto_codigo_produto', 'like', "%{$produto}%");
+                });
             })
             ->when($familia, function ($query) use ($familia) {
                 $query->where('produto_familia', 'like', "%{$familia}%");
