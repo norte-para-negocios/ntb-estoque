@@ -67,6 +67,15 @@ class TransfersController extends Controller
                     });
                 });
             })
+            ->when($request->get('produto'), function ($q) use ($request) {
+                $q->whereHas('movimentos', function ($items) use ($request) {
+                    $items->whereHas('produto', function ($produto) use ($request) {
+                        $produto->where('codigo', $request->get('produto'))
+                        ->orWhere('descricao', $request->get('produto'))
+                        ->orWhere('codigo_produto', $request->get('produto'));
+                    });
+                });
+            })
             ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
