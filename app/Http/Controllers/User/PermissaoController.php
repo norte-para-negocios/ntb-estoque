@@ -60,7 +60,7 @@ class PermissaoController extends Controller
         try {
             $localUserExists = LocalUser::where('loja_id', $request->get('loja_id'))
                 ->where('user_id', $user->id)
-                ->where('local_id', $request->get('local_id'))
+                ->where('local_estoque_id', $request->get('local_id'))
                 ->exists();
 
             if (! $localUserExists) {
