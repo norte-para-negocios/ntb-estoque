@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Mail\UserMailAfterCreate;
 use App\Models\Loja;
 use App\Models\User;
-use App\Services\CanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -25,7 +24,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
         $query = User::orderBy('name');
@@ -34,6 +33,7 @@ class UserController extends Controller
                 ->orWhere('email', 'like', "%{$request->get('search')}%");
         }
         $usuarios = $query->get();
+
         return view('user.index', compact('usuarios'));
     }
 
@@ -43,11 +43,12 @@ class UserController extends Controller
     public function create()
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
-        $user = new User();
+        $user = new User;
         $action = 'create';
+
         return view('user.user', compact('action', 'user'));
     }
 
@@ -57,12 +58,12 @@ class UserController extends Controller
     public function store(Request $request)
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
         try {
             $pass = Str::random('20');
-            $user = new User();
+            $user = new User;
             $user->name = $request->get('name');
             $user->email = $request->get('email');
             $user->password = $pass;
@@ -80,6 +81,7 @@ class UserController extends Controller
             }
 
             Mail::to($user->email)->send(new UserMailAfterCreate($user, $pass));
+
             return redirect()->route('usuario.index')->with('success', 'Registro cadastrado com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
@@ -92,10 +94,11 @@ class UserController extends Controller
     public function edit(User $user)
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
         $action = 'edit';
+
         return view('user.user', compact('action', 'user'));
     }
 
@@ -105,7 +108,7 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
         try {
@@ -115,6 +118,7 @@ class UserController extends Controller
             ];
             $user->update($update);
             $user->lojas()->sync($request->get('lojas'));
+
             return redirect()->route('usuario.index')->with('success', 'Registro atualizado com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
@@ -127,16 +131,17 @@ class UserController extends Controller
     public function destroy(User $user)
     {
         if (auth()->user()->perfil !== 'Admin') {
-            abort(403, "Você não é um usuário Administrador!");
+            abort(403, 'Você não é um usuário Administrador!');
         }
 
         try {
             if ($user->id === Auth::user()->id) {
-                abort(403, "Você não pode excluir a si mesmo!");
+                abort(403, 'Você não pode excluir a si mesmo!');
             }
             $user->lojas()->detach();
             $user->permissoes()->detach();
             $user->delete();
+
             return redirect()->route('usuario.index')->with('success', 'Registro excluído com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->route('usuario.index')->with('error', $th->getMessage());
@@ -148,6 +153,7 @@ class UserController extends Controller
         try {
             $user->current_loja_id = $loja->id;
             $user->save();
+
             return response(['success', 'Registro atualizado com sucesso!']);
         } catch (\Throwable $th) {
             return response(['error', $th->getMessage()]);
