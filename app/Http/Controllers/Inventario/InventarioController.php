@@ -62,15 +62,6 @@ class InventarioController extends Controller
                     });
                 });
             })
-            ->when($request->get('produto'), function ($q) use ($request) {
-                $q->whereHas('movimentos', function ($items) use ($request) {
-                    $items->whereHas('produto', function ($produto) use ($request) {
-                        $produto->where('codigo', $request->get('produto'))
-                            ->orWhere('descricao', $request->get('produto'))
-                            ->orWhere('codigo_produto', $request->get('produto'));
-                    });
-                });
-            })
             ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
@@ -228,7 +219,11 @@ class InventarioController extends Controller
 
         $items = InventarioItem::where('inventario_id', $inventario->id)
             ->when($produto, function ($query) use ($produto) {
-                $query->where('produto_descricao', 'like', "%{$produto}%");
+                $query->where(function ($q) use ($produto) {
+                    $q->where('produto_descricao', 'like', "%{$produto}%")
+                        ->orWhere('produto_codigo', 'like', "%{$produto}%")
+                        ->orWhere('produto_codigo_produto', 'like', "%{$produto}%");
+                });
             })
             ->when($familia, function ($query) use ($familia) {
                 $query->where('produto_familia', 'like', "%{$familia}%");
