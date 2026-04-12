@@ -68,6 +68,7 @@
                                         <div class="form-check form-switch fs-5 ms-3 mb-1 text-primary">
                                             <input class="form-check-input" type="checkbox"
                                                    id="all-permissoes-{{ $loja->id }}"
+                                                   @if ($user->hasAllPermissoes($loja->id)) checked @endif
                                                    onchange="toggleAllPermissoes(this, '{{ $user->id }}', '{{ $loja->id }}')">
                                             <label class="form-check-label fw-semibold" for="all-permissoes-{{ $loja->id }}">
                                                 Marcar/Desmarcar todas
@@ -98,6 +99,7 @@
                                         <div class="form-check form-switch fs-5 ms-3 mb-1 text-primary">
                                             <input class="form-check-input" type="checkbox"
                                                    id="all-locais-{{ $loja->id }}"
+                                                   @if ($user->hasAllLocais($loja->id)) checked @endif
                                                    onchange="toggleAllLocais(this, '{{ $user->id }}', '{{ $loja->id }}')">
                                             <label class="form-check-label fw-semibold" for="all-locais-{{ $loja->id }}">
                                                 Marcar/Desmarcar todos
@@ -141,26 +143,52 @@
 
 @push('js')
     <script>
+        function updateSelectAllToggle(lojaId) {
+            const checkboxes = document.querySelectorAll(`#permissoes-${lojaId} input[type="checkbox"]`);
+            const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+            const masterToggle = document.getElementById(`all-permissoes-${lojaId}`);
+            if (masterToggle) {
+                masterToggle.checked = allChecked;
+            }
+        }
+
         function attachPermissao(userId, lojaId, permissaoId) {
             axios.post(`/usuario/${userId}/permissao`, {
                 "loja_id": lojaId,
                 "permissao_id": permissaoId,
+            }).then(() => {
+                updateSelectAllToggle(lojaId);
             })
         }
 
         function detachPermissao(userId, lojaId, permissaoId) {
-            axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`);
+            axios.delete(`/usuario/${userId}/loja/${lojaId}/permissao/${permissaoId}`).then(() => {
+                updateSelectAllToggle(lojaId);
+            });
+        }
+
+        function updateSelectAllLocaisToggle(lojaId) {
+            const checkboxes = document.querySelectorAll(`#locais-${lojaId} input[type="checkbox"]`);
+            const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+            const masterToggle = document.getElementById(`all-locais-${lojaId}`);
+            if (masterToggle) {
+                masterToggle.checked = allChecked;
+            }
         }
 
         function attachLocal(userId, lojaId, localId) {
             axios.post(`/usuario/${userId}/local`, {
                 "loja_id": lojaId,
                 "local_id": localId,
+            }).then(() => {
+                updateSelectAllLocaisToggle(lojaId);
             })
         }
 
         function detachLocal(userId, lojaId, localId) {
-            axios.delete(`/usuario/${userId}/loja/${lojaId}/local/${localId}`);
+            axios.delete(`/usuario/${userId}/loja/${lojaId}/local/${localId}`).then(() => {
+                updateSelectAllLocaisToggle(lojaId);
+            });
         }
 
         function toggleAllPermissoes(masterEl, userId, lojaId) {
