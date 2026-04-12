@@ -315,7 +315,7 @@ class TransfersController extends Controller
                 $query->where('produtos.tipo_item', $tipo);
             })
             ->orderBy('produtos.descricao', 'asc')
-            ->dd();
+            ->get();
 
         return view('transfers.contagem', compact('transferencia', 'produto', 'familia', 'tipo', 'movimentos'));
     }
