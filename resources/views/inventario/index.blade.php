@@ -149,15 +149,13 @@
                                                             <button type="button"
                                                                 onclick="duplicarInventario('{{route('inventario.duplicar', $inventario->id)}}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                title="Duplicar Inventário" @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado)
-                                                                disabled @endif>
+                                                                title="Duplicar Inventário">
                                                                 <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
                                                                     class="me-1"> Duplicar
                                                             </button>
 
                                                             <a href="{{ route('inventario.pdf', $inventario->id) }}"
-                                                                @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado) disabled @endif
-                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2 @if($inventario->status !== \App\Enums\InventarioStatus::Finalizado) disabled @endif">
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                                 <img src="{{asset('images/imprimir.png')}}" alt="Imprimir"
                                                                     class="me-1"> Imprimir
                                                             </a>
