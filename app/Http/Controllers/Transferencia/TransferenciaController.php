@@ -187,7 +187,7 @@ class TransferenciaController extends Controller
 
     public function produtos(Request $request)
     {
-        if ((! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) ||
+        if ((! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) &&
             ! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id)) &&
             auth()->user()->perfil !== 'Admin'
         ) {
