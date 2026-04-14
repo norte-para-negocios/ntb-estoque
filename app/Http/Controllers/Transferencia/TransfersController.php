@@ -506,6 +506,8 @@ class TransfersController extends Controller
             } else {
                 $movimento->delete();
             }
+        } else {
+            $movimento->delete();
         }
 
         return redirect()->back()->with('success', 'Item excluído com sucesso!');
