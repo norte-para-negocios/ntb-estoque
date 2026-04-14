@@ -87,11 +87,9 @@ class User extends Authenticatable
 
     public function hasAllLocais($lojaId): bool
     {
-        $totalLocais = LocalEstoque::withoutGlobalScopes()
-            ->where('loja_id', $lojaId)
+        $totalLocais = LocalEstoque::where('loja_id', $lojaId)
             ->count();
-        $userLocais = LocalUser::withoutGlobalScopes()
-            ->where('loja_id', $lojaId)
+        $userLocais = LocalUser::where('loja_id', $lojaId)
             ->where('user_id', $this->id)
             ->count();
 
@@ -100,10 +98,6 @@ class User extends Authenticatable
 
     public function locais(): BelongsToMany
     {
-        if (auth()->check()) {
-            return $this->belongsToMany(LocalEstoque::class)->where('local_estoque_user.loja_id', auth()->user()->current_loja_id);
-        } else {
-            return $this->belongsToMany(LocalEstoque::class);
-        }
+        return $this->belongsToMany(LocalEstoque::class);
     }
 }

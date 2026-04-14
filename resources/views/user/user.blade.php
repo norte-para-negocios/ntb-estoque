@@ -106,7 +106,7 @@
                                             </label>
                                         </div>
                                         <ul class="list-group ms-3" id="locais-{{ $loja->id }}">
-                                            @foreach (\App\Models\LocalEstoque::withoutGlobalScopes()->where('loja_id', $loja->id)->orderBy('descricao')->get() as $local)
+                                            @foreach (\App\Models\LocalEstoque::where('loja_id', $loja->id)->orderBy('descricao')->get() as $local)
                                                 <li class="list-group-item">
                                                     <div class="form-check form-switch fs-5">
                                                         <input class="form-check-input" type="checkbox" name="local[]"
