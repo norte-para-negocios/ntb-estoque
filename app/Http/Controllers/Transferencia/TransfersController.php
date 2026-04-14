@@ -298,23 +298,19 @@ class TransfersController extends Controller
         $familia = $request->get('familia', null);
         $tipo = $request->get('tipo', null);
 
-        $movimentos = Movimento::leftJoin('produtos', 'movimentos.id_prod', '=', 'produtos.codigo_produto')
-            ->where('movimentos.loja_id', Auth::user()->current_loja_id)
-            ->where('produtos.loja_id', Auth::user()->current_loja_id)
-            ->where('movimentos.transferencia_id', $transferencia->id)
-            ->when($produto, function ($query) use ($produto) {
-                $query->where(function ($queryProduto) use ($produto) {
-                    $queryProduto->where('produtos.descricao', 'like', "%{$produto}%")
-                        ->orWhere('produtos.codigo', 'like', "%{$produto}%");
+        $movimentos = Movimento::where('transferencia_id', $transferencia->id)
+            ->where('loja_id', Auth::user()->current_loja_id)
+            ->when($produto || $familia || $tipo, function ($query) use ($produto, $familia, $tipo) {
+                $query->whereHas('produto', function ($q) use ($produto, $familia, $tipo) {
+                    $q->where('loja_id', Auth::user()->current_loja_id)
+                        ->when($produto, fn ($q) => $q->where(fn ($q) => $q->where('descricao', 'like', "%{$produto}%")
+                            ->orWhere('codigo', 'like', "%{$produto}%")
+                        ))
+                        ->when($familia, fn ($q) => $q->where('descricao_familia', 'like', "%{$familia}%"))
+                        ->when($tipo, fn ($q) => $q->where('tipo_item', $tipo));
                 });
             })
-            ->when($familia, function ($query) use ($familia) {
-                $query->where('produtos.descricao_familia', 'like', "%{$familia}%");
-            })
-            ->when($tipo, function ($query) use ($tipo) {
-                $query->where('produtos.tipo_item', $tipo);
-            })
-            ->orderBy('produtos.descricao', 'asc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         return view('transfers.contagem', compact('transferencia', 'produto', 'familia', 'tipo', 'movimentos'));
