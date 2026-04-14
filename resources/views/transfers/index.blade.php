@@ -153,8 +153,7 @@
                                                             <button type="button"
                                                                 onclick="duplicarInventario('{{route('transfers.duplicar', $transferencia->id)}}')"
                                                                 class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                title="Duplicar Transferência"
-                                                                @if($transferencia->status == \App\Enums\TransferenciaStatus::Processando) disabled @endif>
+                                                                title="Duplicar Transferência">
                                                                 <img src="{{asset('images/duplicar.png')}}" alt="Duplicar"
                                                                     class="me-1">
                                                                 Duplicar
@@ -171,8 +170,7 @@
 
                                                             <button type="button"
                                                                 onclick="deleteRegistro('{{ route('transfers.destroy', $transferencia->id) }}')"
-                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2"
-                                                                @if($transferencia->status !== \App\Enums\TransferenciaStatus::Concluido) disabled @endif>
+                                                                class="btn btn-sm btn-outline-secondary text-center text-muted fw-semibold pt-2">
                                                                 <img src="{{asset('images/excluir.png')}}" alt=""
                                                                     class="me-1">Excluir
                                                             </button>
