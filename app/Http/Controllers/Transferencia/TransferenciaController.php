@@ -187,8 +187,11 @@ class TransferenciaController extends Controller
 
     public function produtos(Request $request)
     {
-        if (! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) && auth()->user()->perfil !== 'Admin') {
-            abort(403, 'Você não possui a permissão: Transferências - Criar!');
+        if ((! CanService::canPermissionLoja('Transferências - Criar', auth()->user()->current_loja_id) ||
+            ! CanService::canPermissionLoja('Inventários - Criar', auth()->user()->current_loja_id)) &&
+            auth()->user()->perfil !== 'Admin'
+        ) {
+            abort(403, 'Você não possui a permissão necessária para acessar o recurso!');
         }
 
         // Termo de busca vindo do Select2 (parâmetro "q")
