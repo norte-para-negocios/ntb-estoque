@@ -80,6 +80,7 @@ class Constants
         "Inventários - Excluir",
         "Transferências - Ver",
         "Transferências - Criar",
+        "Transferências - Editar",
         "Transferências - Excluir",
         "Produtos",
         "Produtos - Sincronizar",
