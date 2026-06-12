@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { getProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { LojaSelector } from '@/components/loja/LojaSelector'
@@ -43,14 +44,15 @@ export async function AppSidebar() {
 
   return (
     <aside className="w-64 shrink-0 bg-sidebar text-sidebar-foreground min-h-screen flex flex-col">
-      <div className="px-5 h-16 flex items-center gap-2.5 border-b border-sidebar-border">
-        <div className="size-8 rounded-lg bg-brand flex items-center justify-center text-brand-foreground font-bold text-sm">
-          NTB
-        </div>
-        <div className="leading-tight">
-          <div className="font-semibold text-sm text-white">Estoque</div>
-          <div className="text-[11px] text-sidebar-foreground/50">Norte Para Negocios</div>
-        </div>
+      <div className="px-5 h-16 flex items-center border-b border-sidebar-border">
+        <Image
+          src="/ntb-logo.png"
+          alt="NTB Stock"
+          width={120}
+          height={40}
+          priority
+          className="h-7 w-auto brightness-0 invert"
+        />
       </div>
 
       <div className="px-3 py-3 border-b border-sidebar-border">

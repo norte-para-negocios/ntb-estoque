@@ -58,11 +58,11 @@
   --card-foreground: oklch(0.21 0.006 286);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.21 0.006 286);
-  /* Acento esmeralda como primario (CTAs, foco, estados ativos) */
-  --primary: oklch(0.58 0.13 163);
-  --primary-foreground: oklch(0.99 0.01 160);
-  --brand: oklch(0.58 0.13 163);
-  --brand-foreground: oklch(0.99 0.01 160);
+  /* Marca NTB: preto (botoes) + teal #2EB5C3 (acento, igual a logo) */
+  --primary: oklch(0.21 0.006 286);
+  --primary-foreground: oklch(0.985 0 0);
+  --brand: #2eb5c3;
+  --brand-foreground: oklch(1 0 0);
   --secondary: oklch(0.967 0.001 286);
   --secondary-foreground: oklch(0.21 0.006 286);
   --muted: oklch(0.967 0.001 286);
@@ -72,22 +72,22 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.004 286);
   --input: oklch(0.92 0.004 286);
-  --ring: oklch(0.58 0.13 163);
-  --chart-1: oklch(0.58 0.13 163);
+  --ring: #2eb5c3;
+  --chart-1: #2eb5c3;
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.6rem;
-  /* Sidebar escura (contraste premium com o conteudo claro) */
-  --sidebar: oklch(0.21 0.006 286);
+  /* Sidebar preta (igual a logo NTB) */
+  --sidebar: oklch(0.16 0.004 286);
   --sidebar-foreground: oklch(0.92 0.004 286);
-  --sidebar-primary: oklch(0.58 0.13 163);
-  --sidebar-primary-foreground: oklch(0.99 0.01 160);
-  --sidebar-accent: oklch(0.27 0.006 286);
+  --sidebar-primary: #2eb5c3;
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.26 0.006 286);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.58 0.13 163);
+  --sidebar-ring: #2eb5c3;
 }
 
 .dark {

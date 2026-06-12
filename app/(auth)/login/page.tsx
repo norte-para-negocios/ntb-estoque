@@ -1,25 +1,19 @@
 'use client'
 
+import Image from 'next/image'
 import { useActionState } from 'react'
 import { login } from '@/lib/actions/auth'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Boxes } from 'lucide-react'
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, null)
 
   return (
     <div className="w-full max-w-sm">
-      <div className="flex items-center gap-2.5 mb-8">
-        <div className="size-10 rounded-xl bg-brand flex items-center justify-center text-brand-foreground">
-          <Boxes className="size-5" strokeWidth={2} />
-        </div>
-        <div className="leading-tight">
-          <div className="font-semibold">NTB Estoque</div>
-          <div className="text-xs text-muted-foreground">Norte Para Negocios</div>
-        </div>
+      <div className="mb-8 flex justify-center">
+        <Image src="/ntb-logo.png" alt="NTB Stock" width={160} height={54} priority className="h-12 w-auto" />
       </div>
 
       <div className="rounded-xl border bg-card p-6 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.12)]">
