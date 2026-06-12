@@ -1,0 +1,9 @@
+{
+  "crons": [
+    { "path": "/api/cron/sync-locais", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/sync-produtos", "schedule": "30 0 * * *" },
+    { "path": "/api/cron/sync-ops", "schedule": "0 1 * * *" },
+    { "path": "/api/cron/sync-nfs", "schedule": "30 1 * * *" },
+    { "path": "/api/cron/prune", "schedule": "0 2 * * *" }
+  ]
+}
