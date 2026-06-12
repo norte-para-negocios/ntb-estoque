@@ -1,8 +1,8 @@
-import Link from 'next/link'
 import { getProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { LojaSelector } from '@/components/loja/LojaSelector'
 import { LogoutButton } from '@/components/sidebar/LogoutButton'
+import { SidebarNav } from '@/components/sidebar/SidebarNav'
 
 export async function AppSidebar() {
   const profile = await getProfile()
@@ -15,42 +15,58 @@ export async function AppSidebar() {
     .eq('ativo', true)
     .order('nome_fantasia')
 
-  const links = [
-    { href: '/home', label: 'Inicio' },
-    { href: '/nota-fiscal', label: 'Notas Fiscais' },
-    { href: '/ordem-producao', label: 'Ordens de Producao' },
-    { href: '/transferencia', label: 'Transferencias' },
-    { href: '/inventario', label: 'Inventarios' },
-    { href: '/produto', label: 'Produtos' },
-    { href: '/local-estoque', label: 'Locais de Estoque' },
-    { href: '/log', label: 'Logs de Integracao' },
-    ...(isAdmin
-      ? [
-          { href: '/loja', label: 'Lojas' },
-          { href: '/usuario', label: 'Usuarios' },
-        ]
-      : []),
+  const operacao = [
+    { href: '/home', label: 'Inicio', icon: 'LayoutDashboard' },
+    { href: '/nota-fiscal', label: 'Notas Fiscais', icon: 'FileText' },
+    { href: '/ordem-producao', label: 'Ordens de Producao', icon: 'Factory' },
+    { href: '/transferencia', label: 'Transferencias', icon: 'ArrowLeftRight' },
+    { href: '/inventario', label: 'Inventarios', icon: 'ClipboardList' },
   ]
+  const cadastros = [
+    { href: '/produto', label: 'Produtos', icon: 'Package' },
+    { href: '/local-estoque', label: 'Locais de Estoque', icon: 'Warehouse' },
+    { href: '/log', label: 'Logs de Integracao', icon: 'ScrollText' },
+  ]
+  const admin = isAdmin
+    ? [
+        { href: '/loja', label: 'Lojas', icon: 'Store' },
+        { href: '/usuario', label: 'Usuarios', icon: 'Users' },
+      ]
+    : []
+
+  const iniciais = profile.name
+    .split(' ')
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join('')
+    .toUpperCase()
 
   return (
-    <aside className="w-64 shrink-0 bg-white border-r min-h-screen flex flex-col">
-      <div className="p-4 border-b font-bold text-lg">NTB - Estoque</div>
-      <div className="p-4 border-b">
+    <aside className="w-64 shrink-0 bg-sidebar text-sidebar-foreground min-h-screen flex flex-col">
+      <div className="px-5 h-16 flex items-center gap-2.5 border-b border-sidebar-border">
+        <div className="size-8 rounded-lg bg-brand flex items-center justify-center text-brand-foreground font-bold text-sm">
+          NTB
+        </div>
+        <div className="leading-tight">
+          <div className="font-semibold text-sm text-white">Estoque</div>
+          <div className="text-[11px] text-sidebar-foreground/50">Norte Para Negocios</div>
+        </div>
+      </div>
+
+      <div className="px-3 py-3 border-b border-sidebar-border">
         <LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />
       </div>
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="block px-3 py-2 rounded-md hover:bg-gray-100 text-sm text-gray-700"
-          >
-            {link.label}
-          </Link>
-        ))}
-      </nav>
-      <div className="p-4 border-t text-sm text-gray-600 flex items-center justify-between">
-        <span className="truncate">{profile.name}</span>
+
+      <SidebarNav operacao={operacao} cadastros={cadastros} admin={admin} />
+
+      <div className="px-3 py-3 border-t border-sidebar-border flex items-center gap-2.5">
+        <div className="size-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-medium text-white shrink-0">
+          {iniciais}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-white truncate">{profile.name}</div>
+          <div className="text-[11px] text-sidebar-foreground/50">{profile.perfil}</div>
+        </div>
         <LogoutButton />
       </div>
     </aside>

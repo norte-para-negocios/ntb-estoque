@@ -7,7 +7,7 @@ export function LogoutButton() {
   return (
     <button
       onClick={() => logout()}
-      className="text-gray-400 hover:text-gray-700"
+      className="text-sidebar-foreground/50 hover:text-white transition-colors shrink-0"
       title="Sair"
       aria-label="Sair"
     >
