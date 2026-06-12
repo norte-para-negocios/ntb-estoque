@@ -6,7 +6,7 @@ import { buscarProdutos, type ProdutoBusca } from '@/lib/actions/produtos-search
 
 export function ProdutoSearch({
   onSelect,
-  placeholder = 'Buscar produto por nome ou codigo...',
+  placeholder = 'Buscar produto por nome ou código...',
 }: {
   onSelect: (produto: ProdutoBusca) => void
   placeholder?: string

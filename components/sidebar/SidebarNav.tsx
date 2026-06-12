@@ -77,9 +77,9 @@ export function SidebarNav({
   const pathname = usePathname()
   return (
     <nav className="flex-1 py-4 overflow-y-auto">
-      <NavGroup titulo="Operacao" itens={operacao} pathname={pathname} />
+      <NavGroup titulo="Operação" itens={operacao} pathname={pathname} />
       <NavGroup titulo="Cadastros" itens={cadastros} pathname={pathname} />
-      <NavGroup titulo="Administracao" itens={admin} pathname={pathname} />
+      <NavGroup titulo="Administração" itens={admin} pathname={pathname} />
     </nav>
   )
 }

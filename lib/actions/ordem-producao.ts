@@ -44,7 +44,7 @@ export async function finishOP(opId: number) {
     }>()
 
   if (!op?.identificacao_n_cod_op || !op.loja) {
-    return { error: 'Ordem de producao nao encontrada' }
+    return { error: 'Ordem de produção não encontrada' }
   }
 
   try {

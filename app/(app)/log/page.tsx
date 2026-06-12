@@ -28,7 +28,7 @@ export default async function LogPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Logs de Integracao</h1>
+      <h1 className="text-2xl font-bold">Logs de Integração</h1>
 
       <div className="flex gap-2 text-sm">
         <a href="/log" className="px-3 py-1 rounded border hover:bg-gray-50">Todos</a>
@@ -59,7 +59,7 @@ export default async function LogPage({
             </Card>
           ))
         ) : (
-          <Card className="p-8 text-center text-gray-500">Nenhum log de integracao.</Card>
+          <Card className="p-8 text-center text-gray-500">Nenhum log de integração.</Card>
         )}
       </div>
     </div>

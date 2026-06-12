@@ -73,7 +73,7 @@ export default async function NotaFiscalPage({
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50">
             <tr>
-              <th className="text-left p-3 font-medium">Emissao</th>
+              <th className="text-left p-3 font-medium">Emissão</th>
               <th className="text-left p-3 font-medium">NFe</th>
               <th className="text-left p-3 font-medium">Fornecedor</th>
               <th className="text-right p-3 font-medium">Valor</th>
@@ -91,7 +91,7 @@ export default async function NotaFiscalPage({
                   <td className="p-3 text-right">{fmtMoeda(nf.n_valor_nfe)}</td>
                   <td className="p-3 text-center">
                     <Badge variant={nf.c_etapa === '50' ? 'default' : 'secondary'}>
-                      {nf.c_etapa === '50' ? 'Concluida' : 'Pendente'}
+                      {nf.c_etapa === '50' ? 'Concluída' : 'Pendente'}
                     </Badge>
                   </td>
                   <td className="p-3 text-right">
@@ -107,7 +107,7 @@ export default async function NotaFiscalPage({
             ) : (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-gray-500">
-                  Nenhuma nota fiscal no periodo. Sincronize com o Omie ou ajuste os filtros.
+                  Nenhuma nota fiscal no período. Sincronize com o Omie ou ajuste os filtros.
                 </td>
               </tr>
             )}

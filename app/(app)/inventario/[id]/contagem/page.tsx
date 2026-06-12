@@ -42,7 +42,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
           ← Voltar
         </Link>
         <h1 className="text-2xl font-bold mt-1">
-          Inventario · {local?.descricao || inventario.codigo_local_estoque}
+          Inventário · {local?.descricao || inventario.codigo_local_estoque}
         </h1>
         <p className="text-sm text-gray-500">
           {new Date(inventario.data).toLocaleDateString('pt-BR')} · {inventario.status}

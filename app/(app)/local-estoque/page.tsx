@@ -41,9 +41,9 @@ export default async function LocalEstoquePage({
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50">
             <tr>
-              <th className="text-left p-3 font-medium">Codigo Omie</th>
-              <th className="text-left p-3 font-medium">Codigo</th>
-              <th className="text-left p-3 font-medium">Descricao</th>
+              <th className="text-left p-3 font-medium">Código Omie</th>
+              <th className="text-left p-3 font-medium">Código</th>
+              <th className="text-left p-3 font-medium">Descrição</th>
               <th className="text-center p-3 font-medium">Ativo</th>
             </tr>
           </thead>
@@ -54,7 +54,7 @@ export default async function LocalEstoquePage({
                   <td className="p-3">{l.codigo_local_estoque}</td>
                   <td className="p-3">{l.codigo}</td>
                   <td className="p-3">{l.descricao}</td>
-                  <td className="p-3 text-center">{l.inativo === 'S' ? 'Nao' : 'Sim'}</td>
+                  <td className="p-3 text-center">{l.inativo === 'S' ? 'Não' : 'Sim'}</td>
                 </tr>
               ))
             ) : (

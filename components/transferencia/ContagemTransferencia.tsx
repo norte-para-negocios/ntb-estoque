@@ -40,7 +40,7 @@ export function ContagemTransferencia({
 
   function adicionar(p: ProdutoBusca) {
     if (itens.some((i) => i.id_prod === p.codigo_produto)) {
-      toast.info('Produto ja esta na transferencia')
+      toast.info('Produto já está na transferência')
       return
     }
     startTransition(async () => {
@@ -53,7 +53,7 @@ export function ContagemTransferencia({
   function salvarQtd(movId: number, valor: string) {
     const num = valor === '' ? null : Number(valor)
     if (num != null && (Number.isNaN(num) || num < 0)) {
-      toast.error('Quantidade invalida')
+      toast.error('Quantidade inválida')
       return
     }
     startTransition(() => setQuantidadeMovimento(movId, num))
@@ -72,7 +72,7 @@ export function ContagemTransferencia({
       const res = await finishTransferencia(transferenciaId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Transferencia enviada ao Omie')
+        toast.success('Transferência enviada ao Omie')
         router.refresh()
       }
     })

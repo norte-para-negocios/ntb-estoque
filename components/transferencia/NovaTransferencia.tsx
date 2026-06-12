@@ -54,7 +54,7 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
         return
       }
       if (res?.id) {
-        toast.success('Transferencia criada')
+        toast.success('Transferência criada')
         setOpen(false)
         router.push(`/transferencia/${res.id}/contagem`)
       }
@@ -66,13 +66,13 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
       <DialogTrigger
         render={
           <Button>
-            <Plus className="size-4" /> Nova transferencia
+            <Plus className="size-4" /> Nova transferência
           </Button>
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova transferencia</DialogTitle>
+          <DialogTitle>Nova transferência</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

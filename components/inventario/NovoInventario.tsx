@@ -39,7 +39,7 @@ export function NovoInventario({ locais }: { locais: Local[] }) {
     startTransition(async () => {
       const inv = await createInventario(Number(local))
       if (inv?.id) {
-        toast.success('Inventario criado')
+        toast.success('Inventário criado')
         setOpen(false)
         router.push(`/inventario/${inv.id}/contagem`)
       }
@@ -51,13 +51,13 @@ export function NovoInventario({ locais }: { locais: Local[] }) {
       <DialogTrigger
         render={
           <Button>
-            <Plus className="size-4" /> Novo inventario
+            <Plus className="size-4" /> Novo inventário
           </Button>
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo inventario</DialogTitle>
+          <DialogTitle>Novo inventário</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           <Label>Local de estoque</Label>

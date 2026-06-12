@@ -59,8 +59,8 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success('Usuario criado', {
-        description: `Senha provisoria: ${res.senha}`,
+      toast.success('Usuário criado', {
+        description: `Senha provisória: ${res.senha}`,
         duration: 15000,
       })
       setOpen(false)
@@ -76,13 +76,13 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
       <DialogTrigger
         render={
           <Button>
-            <Plus className="size-4" /> Novo usuario
+            <Plus className="size-4" /> Novo usuário
           </Button>
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo usuario</DialogTitle>
+          <DialogTitle>Novo usuário</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -100,7 +100,7 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Usuario">Usuario</SelectItem>
+                <SelectItem value="Usuario">Usuário</SelectItem>
                 <SelectItem value="Admin">Administrador</SelectItem>
               </SelectContent>
             </Select>
@@ -125,7 +125,7 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
         </div>
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
-            {pending ? 'Criando...' : 'Criar usuario'}
+            {pending ? 'Criando...' : 'Criar usuário'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -40,7 +40,7 @@ export function ContagemInventario({
 
   function adicionar(p: ProdutoBusca) {
     if (itens.some((i) => i.produto_codigo === p.codigo)) {
-      toast.info('Produto ja esta na contagem')
+      toast.info('Produto já está na contagem')
       return
     }
     startTransition(async () => {
@@ -58,7 +58,7 @@ export function ContagemInventario({
   function salvarQtd(itemId: number, valor: string) {
     const num = valor === '' ? null : Number(valor)
     if (num != null && (Number.isNaN(num) || num < 0)) {
-      toast.error('Quantidade invalida')
+      toast.error('Quantidade inválida')
       return
     }
     setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: num } : i)))
@@ -78,7 +78,7 @@ export function ContagemInventario({
       const res = await finishInventario(inventarioId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Inventario enviado ao Omie')
+        toast.success('Inventário enviado ao Omie')
         router.refresh()
       }
     })
@@ -97,7 +97,7 @@ export function ContagemInventario({
           <thead className="border-b bg-gray-50">
             <tr>
               <th className="text-left p-3 font-medium">Produto</th>
-              <th className="text-left p-3 font-medium">Familia</th>
+              <th className="text-left p-3 font-medium">Família</th>
               <th className="text-right p-3 font-medium w-32">Quantidade</th>
               <th className="text-center p-3 font-medium">Status</th>
               {!finalizado && <th className="p-3 w-12"></th>}

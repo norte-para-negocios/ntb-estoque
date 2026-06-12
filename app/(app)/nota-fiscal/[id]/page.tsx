@@ -59,7 +59,7 @@ export default async function NotaFiscalItensPage({
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50">
             <tr>
-              <th className="text-left p-3 font-medium">Codigo</th>
+              <th className="text-left p-3 font-medium">Código</th>
               <th className="text-left p-3 font-medium">Produto</th>
               <th className="text-right p-3 font-medium">Qtd NFe</th>
               <th className="text-left p-3 font-medium">Un</th>

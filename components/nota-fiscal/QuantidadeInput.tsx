@@ -18,7 +18,7 @@ export function QuantidadeInput({
   function salvar() {
     const num = valor === '' ? null : Number(valor)
     if (num != null && (Number.isNaN(num) || num < 0)) {
-      toast.error('Quantidade invalida')
+      toast.error('Quantidade inválida')
       return
     }
     startTransition(async () => {

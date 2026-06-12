@@ -39,15 +39,15 @@ export default async function ProdutoPage({
         {podeSync && <SyncButton endpoint="/api/sync/produtos" label="Sincronizar com Omie" />}
       </div>
 
-      <BuscaSimples basePath="/produto" placeholder="Buscar por nome ou codigo..." defaultValue={params.q ?? ''} />
+      <BuscaSimples basePath="/produto" placeholder="Buscar por nome ou código..." defaultValue={params.q ?? ''} />
 
       <Card className="overflow-hidden p-0">
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50">
             <tr>
-              <th className="text-left p-3 font-medium">Codigo</th>
-              <th className="text-left p-3 font-medium">Descricao</th>
-              <th className="text-left p-3 font-medium">Familia</th>
+              <th className="text-left p-3 font-medium">Código</th>
+              <th className="text-left p-3 font-medium">Descrição</th>
+              <th className="text-left p-3 font-medium">Família</th>
               <th className="text-left p-3 font-medium">Un</th>
               <th className="text-right p-3 font-medium">Valor</th>
             </tr>

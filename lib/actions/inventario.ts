@@ -97,7 +97,7 @@ export async function finishInventario(inventarioId: number) {
       loja: LojaOmie
     }>()
 
-  if (!inventario?.loja) return { error: 'Inventario nao encontrado' }
+  if (!inventario?.loja) return { error: 'Inventário não encontrado' }
 
   const hoje = new Date().toLocaleDateString('pt-BR')
 

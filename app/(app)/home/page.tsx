@@ -10,7 +10,7 @@ export default async function HomePage() {
   if (!profile.current_loja_id) {
     return (
       <div className="space-y-6">
-        <PageHeader title={`Ola, ${profile.name.split(' ')[0]}`} />
+        <PageHeader title={`Olá, ${profile.name.split(' ')[0]}`} />
         <div className="rounded-xl border border-dashed bg-card p-12 text-center">
           <p className="text-muted-foreground">
             Selecione uma loja no menu lateral para ver o painel.
@@ -49,9 +49,9 @@ export default async function HomePage() {
 
   const metrics = [
     { label: 'Produtos', value: produtos.count ?? 0, icon: Package, href: '/produto', hint: 'cadastrados' },
-    { label: 'Notas Fiscais', value: nfs.count ?? 0, icon: FileText, href: '/nota-fiscal', hint: 'ultimos 30 dias' },
-    { label: 'Ordens de Producao', value: opsAbertas.count ?? 0, icon: Factory, href: '/ordem-producao', hint: 'no total' },
-    { label: 'Inventarios abertos', value: invAbertos.count ?? 0, icon: ClipboardList, href: '/inventario', hint: 'em contagem' },
+    { label: 'Notas Fiscais', value: nfs.count ?? 0, icon: FileText, href: '/nota-fiscal', hint: 'últimos 30 dias' },
+    { label: 'Ordens de Produção', value: opsAbertas.count ?? 0, icon: Factory, href: '/ordem-producao', hint: 'no total' },
+    { label: 'Inventários abertos', value: invAbertos.count ?? 0, icon: ClipboardList, href: '/inventario', hint: 'em contagem' },
   ]
 
   const ultimaSync = loja.data?.produto_ultima_atualizacao
@@ -61,8 +61,8 @@ export default async function HomePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`Ola, ${profile.name.split(' ')[0]}`}
-        description={`${profile.loja?.nome_fantasia || profile.loja?.nome} · ultima sincronizacao ${ultimaSync}`}
+        title={`Olá, ${profile.name.split(' ')[0]}`}
+        description={`${profile.loja?.nome_fantasia || profile.loja?.nome} · última sincronização ${ultimaSync}`}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -85,12 +85,12 @@ export default async function HomePage() {
 
       <div className="rounded-xl border bg-card divide-y">
         <div className="px-5 py-3">
-          <span className="eyebrow">Acoes rapidas</span>
+          <span className="eyebrow">Ações rápidas</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
           {[
-            { label: 'Nova contagem de inventario', href: '/inventario' },
-            { label: 'Nova transferencia', href: '/transferencia' },
+            { label: 'Nova contagem de inventário', href: '/inventario' },
+            { label: 'Nova transferência', href: '/transferencia' },
             { label: 'Imprimir etiquetas de NF', href: '/nota-fiscal' },
           ].map((a) => (
             <Link

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { CopyWebhook } from '@/components/loja/CopyWebhook'
 
 function statusBadge(status: string | null) {
-  if (status === 'Concluido') return <Badge>Concluido</Badge>
+  if (status === 'Concluido') return <Badge>Concluído</Badge>
   if (status === 'Processando') return <Badge variant="secondary">Processando</Badge>
   if (status === 'Erro') return <Badge variant="destructive">Erro</Badge>
   return <Badge variant="secondary">-</Badge>
@@ -38,7 +38,7 @@ export default async function LojaPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600 mb-2">
-            Configure esta URL no Omie (Seguranca {'>'} My Apps {'>'} Webhook) de cada loja:
+            Configure esta URL no Omie (Segurança {'>'} My Apps {'>'} Webhook) de cada loja:
           </p>
           <CopyWebhook url={webhookUrl} />
         </CardContent>
@@ -79,14 +79,14 @@ export default async function LojaPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Ordens de Producao</span>
+                <span className="text-gray-600">Ordens de Produção</span>
                 <span className="flex items-center gap-2">
                   {statusBadge(loja.ordem_producao_status)}
                   <span className="text-xs text-gray-400">{fmt(loja.ordem_producao_ultima_atualizacao)}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1">
-                <span className="text-gray-600">Integracao Omie</span>
+                <span className="text-gray-600">Integração Omie</span>
                 <Badge variant={loja.omie_app_key ? 'default' : 'destructive'}>
                   {loja.omie_app_key ? 'Conectada' : 'Sem chave'}
                 </Badge>

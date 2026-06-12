@@ -21,7 +21,7 @@ export async function criarUsuario(input: {
   lojaIds: number[]
 }) {
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
-  if (!input.name || !input.email) return { error: 'Nome e e-mail obrigatorios' }
+  if (!input.name || !input.email) return { error: 'Nome e e-mail obrigatórios' }
 
   const supabase = createServiceClient()
   const senha = senhaAleatoria()
@@ -34,7 +34,7 @@ export async function criarUsuario(input: {
   })
 
   if (error || !created.user) {
-    return { error: error?.message || 'Falha ao criar usuario' }
+    return { error: error?.message || 'Falha ao criar usuário' }
   }
 
   const userId = created.user.id

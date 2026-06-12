@@ -9,7 +9,7 @@ export async function login(_prevState: unknown, formData: FormData) {
     email: formData.get('email') as string,
     password: formData.get('password') as string,
   })
-  if (error) return { error: 'E-mail ou senha invalidos.' }
+  if (error) return { error: 'E-mail ou senha inválidos.' }
   redirect('/home')
 }
 

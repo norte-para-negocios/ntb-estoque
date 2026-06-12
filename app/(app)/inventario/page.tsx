@@ -38,7 +38,7 @@ export default async function InventarioPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Inventarios</h1>
+        <h1 className="text-2xl font-bold">Inventários</h1>
         {podeCriar && <NovoInventario locais={locais ?? []} />}
       </div>
 
@@ -81,7 +81,7 @@ export default async function InventarioPage() {
             ) : (
               <tr>
                 <td colSpan={5} className="p-8 text-center text-gray-500">
-                  Nenhum inventario. Crie um novo para comecar a contagem.
+                  Nenhum inventário. Crie um novo para começar a contagem.
                 </td>
               </tr>
             )}

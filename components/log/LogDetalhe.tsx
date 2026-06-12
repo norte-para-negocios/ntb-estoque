@@ -31,7 +31,7 @@ export function LogDetalhe({
       {aberto && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
           <div>
-            <div className="text-xs font-medium text-gray-500 mb-1">Requisicao</div>
+            <div className="text-xs font-medium text-gray-500 mb-1">Requisição</div>
             <pre className="text-xs bg-gray-50 border rounded p-2 overflow-x-auto max-h-64">
               {formatar(request)}
             </pre>

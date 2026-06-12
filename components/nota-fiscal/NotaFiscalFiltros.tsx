@@ -34,11 +34,11 @@ export function NotaFiscalFiltros({
           <Input id="data_inicio" name="data_inicio" type="date" defaultValue={defaults.data_inicio} />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="data_final">Ate</Label>
+          <Label htmlFor="data_final">Até</Label>
           <Input id="data_final" name="data_final" type="date" defaultValue={defaults.data_final} />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="num_nfe">Numero NFe</Label>
+          <Label htmlFor="num_nfe">Número NFe</Label>
           <Input id="num_nfe" name="num_nfe" defaultValue={defaults.num_nfe} />
         </div>
         <div className="space-y-1">

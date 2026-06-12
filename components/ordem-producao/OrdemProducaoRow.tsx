@@ -32,7 +32,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   function salvarQuantidade() {
     const num = quantidade === '' ? null : Number(quantidade)
     if (num != null && (Number.isNaN(num) || num < 0)) {
-      toast.error('Quantidade invalida')
+      toast.error('Quantidade inválida')
       return
     }
     startTransition(async () => {
@@ -45,7 +45,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
     startTransition(async () => {
       const res = await finishOP(op.id)
       if (res?.error) toast.error('Erro ao concluir', { description: res.error })
-      else toast.success('Ordem concluida no Omie')
+      else toast.success('Ordem concluída no Omie')
     })
   }
 

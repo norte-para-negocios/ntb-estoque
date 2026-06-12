@@ -12,7 +12,7 @@ export async function createTransferencia(data: {
   motivo: string
 }) {
   if (data.codigoLocalOrigem === data.codigoLocalDestino) {
-    return { error: 'Origem e destino nao podem ser o mesmo local' }
+    return { error: 'Origem e destino não podem ser o mesmo local' }
   }
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
@@ -116,7 +116,7 @@ export async function finishTransferencia(transferenciaId: number) {
       loja: LojaOmie
     }>()
 
-  if (!trans?.loja) return { error: 'Transferencia nao encontrada' }
+  if (!trans?.loja) return { error: 'Transferência não encontrada' }
 
   const hoje = new Date().toLocaleDateString('pt-BR')
 

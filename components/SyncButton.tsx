@@ -15,8 +15,8 @@ export function SyncButton({ endpoint, label }: { endpoint: string; label: strin
     try {
       const res = await fetch(endpoint, { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Falha na sincronizacao')
-      toast.success('Sincronizacao concluida', {
+      if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
+      toast.success('Sincronização concluída', {
         description: data.registros != null ? `${data.registros} registros atualizados` : undefined,
       })
       router.refresh()

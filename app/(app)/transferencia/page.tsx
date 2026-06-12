@@ -38,7 +38,7 @@ export default async function TransferenciaPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Transferencias</h1>
+        <h1 className="text-2xl font-bold">Transferências</h1>
         {podeCriar && <NovaTransferencia locais={locais ?? []} />}
       </div>
 
@@ -85,7 +85,7 @@ export default async function TransferenciaPage() {
             ) : (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-gray-500">
-                  Nenhuma transferencia. Crie uma nova para comecar.
+                  Nenhuma transferência. Crie uma nova para começar.
                 </td>
               </tr>
             )}

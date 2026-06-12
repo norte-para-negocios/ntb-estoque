@@ -17,21 +17,21 @@ export async function AppSidebar() {
     .order('nome_fantasia')
 
   const operacao = [
-    { href: '/home', label: 'Inicio', icon: 'LayoutDashboard' },
+    { href: '/home', label: 'Início', icon: 'LayoutDashboard' },
     { href: '/nota-fiscal', label: 'Notas Fiscais', icon: 'FileText' },
-    { href: '/ordem-producao', label: 'Ordens de Producao', icon: 'Factory' },
-    { href: '/transferencia', label: 'Transferencias', icon: 'ArrowLeftRight' },
-    { href: '/inventario', label: 'Inventarios', icon: 'ClipboardList' },
+    { href: '/ordem-producao', label: 'Ordens de Produção', icon: 'Factory' },
+    { href: '/transferencia', label: 'Transferências', icon: 'ArrowLeftRight' },
+    { href: '/inventario', label: 'Inventários', icon: 'ClipboardList' },
   ]
   const cadastros = [
     { href: '/produto', label: 'Produtos', icon: 'Package' },
     { href: '/local-estoque', label: 'Locais de Estoque', icon: 'Warehouse' },
-    { href: '/log', label: 'Logs de Integracao', icon: 'ScrollText' },
+    { href: '/log', label: 'Logs de Integração', icon: 'ScrollText' },
   ]
   const admin = isAdmin
     ? [
         { href: '/loja', label: 'Lojas', icon: 'Store' },
-        { href: '/usuario', label: 'Usuarios', icon: 'Users' },
+        { href: '/usuario', label: 'Usuários', icon: 'Users' },
       ]
     : []
 

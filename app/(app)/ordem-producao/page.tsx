@@ -35,7 +35,7 @@ export default async function OrdemProducaoPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Ordens de Producao</h1>
+        <h1 className="text-2xl font-bold">Ordens de Produção</h1>
         <SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar com Omie" />
       </div>
 
@@ -73,7 +73,7 @@ export default async function OrdemProducaoPage() {
             ) : (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-gray-500">
-                  Nenhuma ordem de producao. Sincronize com o Omie.
+                  Nenhuma ordem de produção. Sincronize com o Omie.
                 </td>
               </tr>
             )}
