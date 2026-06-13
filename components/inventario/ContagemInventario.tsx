@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import type { ProdutoBusca } from '@/lib/actions/produtos-search'
 import {
   addInventarioItem,
-  setQuantidadeInventarioItem,
+  editQuantidadeInventarioItem,
   removeInventarioItem,
   finishInventario,
 } from '@/lib/actions/inventario'
@@ -62,7 +62,9 @@ export function ContagemInventario({
       return
     }
     setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quan: num } : i)))
-    startTransition(() => setQuantidadeInventarioItem(itemId, num))
+    startTransition(() => {
+      editQuantidadeInventarioItem(itemId, num)
+    })
   }
 
   function remover(itemId: number) {

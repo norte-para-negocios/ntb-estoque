@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CopyWebhook } from '@/components/loja/CopyWebhook'
+import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
 
 function statusBadge(status: string | null) {
   if (status === 'Concluido') return <Badge>Concluído</Badge>
@@ -90,6 +91,9 @@ export default async function LojaPage() {
                 <Badge variant={loja.omie_app_key ? 'default' : 'destructive'}>
                   {loja.omie_app_key ? 'Conectada' : 'Sem chave'}
                 </Badge>
+              </div>
+              <div className="flex justify-end pt-2">
+                <ForceSyncLoja lojaId={loja.id} />
               </div>
             </CardContent>
           </Card>

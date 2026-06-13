@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
+import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' {
   if (status === 'Finalizado') return 'default'
@@ -18,10 +19,13 @@ export default async function InventarioPage() {
 
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Inventarios - Criar')
+  const podeExcluir = await requirePermissao(lojaId, 'Inventarios - Excluir')
 
   const { data: inventarios } = await supabase
     .from('inventarios')
-    .select('id, data, codigo_local_estoque, status, finalizado, items:inventario_items(count)')
+    .select(
+      'id, data, codigo_local_estoque, status, finalizado, items:inventario_items(count), itensStatus:inventario_items(status)'
+    )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
     .limit(50)
@@ -57,6 +61,11 @@ export default async function InventarioPage() {
             {inventarios?.length ? (
               inventarios.map((inv) => {
                 const count = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
+                const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
+                const temErro = itensStatus.some(
+                  (i: { status: string | null }) =>
+                    i.status === 'Erro' || i.status === 'Sem CMC'
+                )
                 return (
                   <tr key={inv.id} className="border-b hover:bg-gray-50">
                     <td className="p-3">{new Date(inv.data).toLocaleDateString('pt-BR')}</td>
@@ -68,12 +77,19 @@ export default async function InventarioPage() {
                       <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
                     </td>
                     <td className="p-3 text-right">
-                      <Link
-                        href={`/inventario/${inv.id}/contagem`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {inv.status === 'Finalizado' ? 'Ver' : 'Contar'}
-                      </Link>
+                      <span className="inline-flex items-center gap-4">
+                        <Link
+                          href={`/inventario/${inv.id}/contagem`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {inv.status === 'Finalizado' ? 'Ver' : 'Contar'}
+                        </Link>
+                        <AcoesInventario
+                          inventarioId={inv.id}
+                          temErro={temErro}
+                          podeExcluir={podeExcluir}
+                        />
+                      </span>
                     </td>
                   </tr>
                 )

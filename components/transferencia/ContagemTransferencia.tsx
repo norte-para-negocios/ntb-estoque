@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import type { ProdutoBusca } from '@/lib/actions/produtos-search'
 import {
   addMovimento,
-  setQuantidadeMovimento,
+  editQuantidadeMovimento,
   removeMovimento,
   finishTransferencia,
 } from '@/lib/actions/transferencia'
@@ -56,7 +56,9 @@ export function ContagemTransferencia({
       toast.error('Quantidade inválida')
       return
     }
-    startTransition(() => setQuantidadeMovimento(movId, num))
+    startTransition(() => {
+      editQuantidadeMovimento(movId, num)
+    })
   }
 
   function remover(movId: number) {

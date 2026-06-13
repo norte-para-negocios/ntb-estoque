@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
+import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' {
   if (status === 'Concluido') return 'default'
@@ -18,10 +19,13 @@ export default async function TransferenciaPage() {
 
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Transferencias - Criar')
+  const podeExcluir = await requirePermissao(lojaId, 'Transferencias - Excluir')
 
   const { data: transferencias } = await supabase
     .from('transferencias')
-    .select('id, data, codigo_local_origem, codigo_local_destino, status, movimentos(count)')
+    .select(
+      'id, data, codigo_local_origem, codigo_local_destino, status, movimentos(count), movStatus:movimentos(status)'
+    )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
     .limit(50)
@@ -58,6 +62,10 @@ export default async function TransferenciaPage() {
             {transferencias?.length ? (
               transferencias.map((t) => {
                 const count = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
+                const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
+                const temErro = movStatus.some(
+                  (m: { status: string | null }) => m.status === 'Erro'
+                )
                 return (
                   <tr key={t.id} className="border-b hover:bg-gray-50">
                     <td className="p-3">{new Date(t.data).toLocaleDateString('pt-BR')}</td>
@@ -72,12 +80,19 @@ export default async function TransferenciaPage() {
                       <Badge variant={statusVariant(t.status)}>{t.status}</Badge>
                     </td>
                     <td className="p-3 text-right">
-                      <Link
-                        href={`/transferencia/${t.id}/contagem`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {t.status === 'Concluido' ? 'Ver' : 'Contar'}
-                      </Link>
+                      <span className="inline-flex items-center gap-4">
+                        <Link
+                          href={`/transferencia/${t.id}/contagem`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {t.status === 'Concluido' ? 'Ver' : 'Contar'}
+                        </Link>
+                        <AcoesTransferencia
+                          transferenciaId={t.id}
+                          temErro={temErro}
+                          podeExcluir={podeExcluir}
+                        />
+                      </span>
                     </td>
                   </tr>
                 )
