@@ -19,7 +19,7 @@ export default function LoginPage() {
         style={{ boxShadow: 'var(--shadow-md)' }}
       >
         <div className="mb-8 flex justify-center">
-          <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="h-14 w-auto" />
+          <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="h-14 w-auto dark:brightness-0 dark:invert" />
         </div>
 
         <form action={formAction} className="space-y-4">

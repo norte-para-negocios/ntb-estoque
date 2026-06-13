@@ -39,7 +39,7 @@ export function MobileNav({
         >
           <Menu className="size-5" />
         </button>
-        <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto" />
+        <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto dark:brightness-0 dark:invert" />
       </header>
 
       {open && (
@@ -53,7 +53,7 @@ export function MobileNav({
         style={{ transitionTimingFunction: 'var(--ease)' }}
       >
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
-          <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto" />
+          <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto dark:brightness-0 dark:invert" />
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar"

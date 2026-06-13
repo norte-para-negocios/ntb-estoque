@@ -21,7 +21,7 @@ export function Sidebar({
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-surface">
       <div className="flex h-16 items-center px-5 border-b border-border">
-        <Image src="/ntb-logo.png" alt="NTB" width={110} height={36} priority className="h-7 w-auto" />
+        <Image src="/ntb-logo.png" alt="NTB" width={110} height={36} priority className="h-7 w-auto dark:brightness-0 dark:invert" />
       </div>
       <div className="px-3 py-3 border-b border-border">{lojaSelector}</div>
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">

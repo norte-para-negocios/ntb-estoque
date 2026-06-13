@@ -38,9 +38,9 @@ export function Lista<T>({
   return (
     <>
       {/* Desktop: tabela (largura automática, sem estourar) */}
-      <div className="hidden lg:block overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="hidden lg:block rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-2/50">
+          <thead className="sticky top-0 z-10 border-b border-border bg-surface-2 shadow-[0_1px_0_var(--border)]">
             <tr>
               {colunas.map((c, i) => (
                 <th
