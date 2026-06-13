@@ -67,18 +67,28 @@ export default async function ContagemTransferenciaPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/transferencia" className="text-sm text-blue-600 hover:underline">
-          ← Voltar
-        </Link>
-        <h1 className="text-2xl font-bold mt-1">
-          {localMap.get(trans.codigo_local_origem) || trans.codigo_local_origem}
-          {' → '}
-          {localMap.get(trans.codigo_local_destino) || trans.codigo_local_destino}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {new Date(trans.data).toLocaleDateString('pt-BR')} · {trans.status}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/transferencia" className="text-sm text-blue-600 hover:underline">
+            ← Voltar
+          </Link>
+          <h1 className="text-2xl font-bold mt-1">
+            {localMap.get(trans.codigo_local_origem) || trans.codigo_local_origem}
+            {' → '}
+            {localMap.get(trans.codigo_local_destino) || trans.codigo_local_destino}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {new Date(trans.data).toLocaleDateString('pt-BR')} · {trans.status}
+          </p>
+        </div>
+        <a
+          href={`/transferencia/${trans.id}/imprimir`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline whitespace-nowrap mt-5"
+        >
+          Imprimir PDF
+        </a>
       </div>
 
       <ContagemTransferencia

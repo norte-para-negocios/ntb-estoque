@@ -37,16 +37,26 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/inventario" className="text-sm text-blue-600 hover:underline">
-          ← Voltar
-        </Link>
-        <h1 className="text-2xl font-bold mt-1">
-          Inventário · {local?.descricao || inventario.codigo_local_estoque}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {new Date(inventario.data).toLocaleDateString('pt-BR')} · {inventario.status}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/inventario" className="text-sm text-blue-600 hover:underline">
+            ← Voltar
+          </Link>
+          <h1 className="text-2xl font-bold mt-1">
+            Inventário · {local?.descricao || inventario.codigo_local_estoque}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {new Date(inventario.data).toLocaleDateString('pt-BR')} · {inventario.status}
+          </p>
+        </div>
+        <a
+          href={`/inventario/${inventario.id}/imprimir`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline whitespace-nowrap mt-5"
+        >
+          Imprimir PDF
+        </a>
       </div>
 
       <ContagemInventario

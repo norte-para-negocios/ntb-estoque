@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CopyWebhook } from '@/components/loja/CopyWebhook'
 import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
+import { LojaForm } from '@/components/loja/LojaForm'
+import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 
 function statusBadge(status: string | null) {
   if (status === 'Concluido') return <Badge>Concluído</Badge>
@@ -31,7 +33,10 @@ export default async function LojaPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Lojas</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Lojas</h1>
+        <LojaForm />
+      </div>
 
       <Card>
         <CardHeader>
@@ -92,8 +97,10 @@ export default async function LojaPage() {
                   {loja.omie_app_key ? 'Conectada' : 'Sem chave'}
                 </Badge>
               </div>
-              <div className="flex justify-end pt-2">
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
                 <ForceSyncLoja lojaId={loja.id} />
+                <LojaForm loja={loja} />
+                <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome} />
               </div>
             </CardContent>
           </Card>

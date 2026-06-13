@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { NotaFiscalFiltros } from '@/components/nota-fiscal/NotaFiscalFiltros'
 import { SyncButton } from '@/components/SyncButton'
+import { buttonVariants } from '@/components/ui/button'
+import { FileText } from 'lucide-react'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -53,11 +55,27 @@ export default async function NotaFiscalPage({
 
   const { data: notas } = await query
 
+  const relatorioParams = new URLSearchParams()
+  relatorioParams.set('data_inicio', dataInicio)
+  relatorioParams.set('data_final', dataFinal)
+  if (params.num_nfe) relatorioParams.set('num_nfe', params.num_nfe)
+  if (params.fornecedor) relatorioParams.set('fornecedor', params.fornecedor)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Notas Fiscais</h1>
-        <SyncButton endpoint="/api/sync/notas-fiscais" label="Sincronizar com Omie" />
+        <div className="flex items-center gap-2">
+          <a
+            href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            <FileText className="size-4" /> Relatório PDF
+          </a>
+          <SyncButton endpoint="/api/sync/notas-fiscais" label="Sincronizar com Omie" />
+        </div>
       </div>
 
       <NotaFiscalFiltros

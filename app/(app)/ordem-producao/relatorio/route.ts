@@ -1,0 +1,95 @@
+import { NextResponse } from 'next/server'
+import { renderToBuffer } from '@react-pdf/renderer'
+import { createElement } from 'react'
+import { createClient } from '@/lib/supabase/server'
+import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { RelatorioOPPDF, type RelatorioOPItem } from '@/components/relatorio/RelatorioOPPDF'
+
+function num(v: unknown): string {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+export async function GET(request: Request) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const opProduto = searchParams.get('op_produto') || ''
+  const ordemProducao = searchParams.get('ordem_producao') || ''
+
+  const supabase = await createClient()
+
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('nome, nome_fantasia')
+    .eq('id', lojaId)
+    .single()
+
+  let query = supabase
+    .from('ordens_producao')
+    .select(
+      'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, full_object'
+    )
+    .eq('loja_id', lojaId)
+    .order('updated_at', { ascending: false })
+
+  if (ordemProducao) query = query.eq('num_ordem', ordemProducao)
+  if (opProduto) {
+    query = query.or(
+      `produto_codigo.ilike.%${opProduto}%,produto_descricao.ilike.%${opProduto}%`
+    )
+  }
+
+  const { data: ordens } = await query
+
+  const ordensList = ordens ?? []
+  // Resolve descricoes dos produtos quando produto_descricao estiver vazio
+  const codigos = [
+    ...new Set(
+      ordensList
+        .filter((o) => !o.produto_descricao)
+        .map((o) => o.identificacao_n_cod_produto)
+        .filter(Boolean)
+    ),
+  ]
+  const { data: produtos } = codigos.length
+    ? await supabase
+        .from('produtos')
+        .select('codigo_produto, descricao')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigos)
+    : { data: [] }
+  const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.descricao]))
+
+  const itens: RelatorioOPItem[] = ordensList.map((o) => {
+    const fo = (o.full_object ?? {}) as { outrasInf?: { cConcluida?: string } }
+    const concluida = fo.outrasInf?.cConcluida === 'S'
+    return {
+      numOP: o.identificacao_c_num_op || o.num_ordem || '-',
+      produto:
+        o.produto_descricao ||
+        prodMap.get(o.identificacao_n_cod_produto) ||
+        `Produto ${o.identificacao_n_cod_produto}`,
+      quantidade: `${num(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
+      validade: o.validade || '-',
+      status: concluida ? 'Concluída' : 'Pendente',
+    }
+  })
+
+  const element = createElement(RelatorioOPPDF, {
+    loja: loja?.nome_fantasia || loja?.nome || '',
+    periodo: `${itens.length} ordens`,
+    ordens: itens,
+  }) as Parameters<typeof renderToBuffer>[0]
+  const buffer = await renderToBuffer(element)
+
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="relatorio-ordens-producao.pdf"',
+    },
+  })
+}

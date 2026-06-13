@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow } from '@/components/ordem-producao/OrdemProducaoRow'
+import { buttonVariants } from '@/components/ui/button'
+import { FileText } from 'lucide-react'
 
 export default async function OrdemProducaoPage() {
   const lojaId = await getCurrentLojaId()
