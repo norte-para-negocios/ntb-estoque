@@ -11,7 +11,8 @@ import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Money } from '@/components/ui-kit/Money'
 import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
-import { Package } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { Package, Download } from 'lucide-react'
 
 const POR_PAGINA = 100
 
@@ -69,12 +70,29 @@ export default async function ProdutoPage({
   const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
   const produtos = temProxima ? produtosRaw!.slice(0, POR_PAGINA) : produtosRaw
 
+  const exportParams = new URLSearchParams()
+  if (params.q) exportParams.set('q', params.q)
+  if (params.familia) exportParams.set('familia', params.familia)
+  if (params.tipo) exportParams.set('tipo', params.tipo)
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Produtos"
         icon={Package}
-        actions={podeSync ? <SyncButton endpoint="/api/sync/produtos" label="Atualizar agora" /> : undefined}
+        actions={
+          <>
+            <a
+              href={`/produto/export?${exportParams.toString()}`}
+              className={btnClass('outline')}
+            >
+              <Download className="size-4" /> Exportar
+            </a>
+            {podeSync && (
+              <SyncButton endpoint="/api/sync/produtos" label="Atualizar agora" />
+            )}
+          </>
+        }
       />
 
       <div className="flex items-center gap-2 text-[13px] text-text-muted">

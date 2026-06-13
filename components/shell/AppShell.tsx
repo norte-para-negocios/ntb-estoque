@@ -1,7 +1,11 @@
 'use client'
 
+import * as React from 'react'
+import { Search } from 'lucide-react'
+
 import { Sidebar } from './Sidebar'
 import { MobileNav } from './MobileNav'
+import { BuscaGlobal } from './BuscaGlobal'
 
 export function AppShell({
   isAdmin,
@@ -14,15 +18,62 @@ export function AppShell({
   userMenu: React.ReactNode
   children: React.ReactNode
 }) {
+  const [buscaAberta, setBuscaAberta] = React.useState(false)
+
+  React.useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Escape fecha a busca.
+      if (e.key === 'Escape') {
+        setBuscaAberta(false)
+        return
+      }
+
+      // "/" abre a busca, desde que o foco nao esteja num campo editavel
+      // e nao haja modificadores ativos.
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const alvo = e.target as HTMLElement | null
+        const tag = alvo?.tagName
+        const editavel =
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          alvo?.isContentEditable === true
+        if (editavel) return
+
+        e.preventDefault()
+        setBuscaAberta(true)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   return (
     <div className="flex min-h-screen bg-bg">
       <Sidebar isAdmin={isAdmin} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileNav isAdmin={isAdmin} lojaSelector={lojaSelector} userMenu={userMenu} />
         <main className="flex-1 min-w-0 pb-20 lg:pb-0">
-          <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">{children}</div>
+          <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
+            <div className="mb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setBuscaAberta(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+              >
+                <Search className="size-4" aria-hidden />
+                <span>Buscar</span>
+                <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted">
+                  /
+                </kbd>
+              </button>
+            </div>
+            {children}
+          </div>
         </main>
       </div>
+      <BuscaGlobal open={buscaAberta} onOpenChange={setBuscaAberta} />
     </div>
   )
 }

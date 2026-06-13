@@ -10,7 +10,8 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
-import { Factory } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { Factory, Download } from 'lucide-react'
 
 const POR_PAGINA = 50
 
@@ -115,12 +116,30 @@ export default async function OrdemProducaoPage({
 
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
 
+  const exportParams = new URLSearchParams()
+  if (sp.data_inicio) exportParams.set('data_inicio', sp.data_inicio)
+  if (sp.data_final) exportParams.set('data_final', sp.data_final)
+  if (sp.ordem_producao) exportParams.set('ordem_producao', sp.ordem_producao)
+  if (sp.op_produto) exportParams.set('op_produto', sp.op_produto)
+  if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
+  if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Ordens de Produção"
         icon={Factory}
-        actions={<SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
+        actions={
+          <>
+            <a
+              href={`/ordem-producao/export?${exportParams.toString()}`}
+              className={btnClass('outline')}
+            >
+              <Download className="size-4" /> Exportar
+            </a>
+            <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />
+          </>
+        }
       />
 
       <Filtros

@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import QRCode from 'qrcode'
-import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
 
 function num(v: unknown, dec: number): string {
@@ -100,6 +100,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const element = createElement(EtiquetaPDF, { etiquetas }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
+
+  // Registra a impressao no historico (aditivo, nao quebra o PDF em caso de erro)
+  try {
+    const service = createServiceClient()
+    await service.from('impressao_etiquetas').insert({
+      loja_id: lojaId,
+      origem: 'NF',
+      referencia_id: Number(id),
+      qtd_etiquetas: etiquetas.length,
+      user_id: (await getUser())?.id ?? null,
+    })
+  } catch {
+    // ignora falha de registro de historico
+  }
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

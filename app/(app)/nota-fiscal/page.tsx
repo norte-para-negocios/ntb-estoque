@@ -12,7 +12,7 @@ import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
-import { FileText } from 'lucide-react'
+import { FileText, Download } from 'lucide-react'
 
 const POR_PAGINA = 50
 
@@ -139,6 +139,12 @@ export default async function NotaFiscalPage({
               className={btnClass('outline')}
             >
               <FileText className="size-4" /> Relatório PDF
+            </a>
+            <a
+              href={`/nota-fiscal/export?${relatorioParams.toString()}`}
+              className={btnClass('outline')}
+            >
+              <Download className="size-4" /> Exportar
             </a>
             <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />
           </>
