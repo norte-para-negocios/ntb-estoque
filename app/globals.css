@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-outfit);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-outfit);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -46,82 +46,52 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-  /* Neutros zinc levemente frios */
-  --background: oklch(0.985 0.001 286);
-  --foreground: oklch(0.21 0.006 286);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.006 286);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.006 286);
-  /* Marca NTB: preto (botoes) + teal #2EB5C3 (acento, igual a logo) */
-  --primary: oklch(0.21 0.006 286);
-  --primary-foreground: oklch(0.985 0 0);
-  --brand: #2eb5c3;
-  --brand-foreground: oklch(1 0 0);
-  --secondary: oklch(0.967 0.001 286);
-  --secondary-foreground: oklch(0.21 0.006 286);
-  --muted: oklch(0.967 0.001 286);
-  --muted-foreground: oklch(0.552 0.014 286);
-  --accent: oklch(0.967 0.001 286);
-  --accent-foreground: oklch(0.21 0.006 286);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286);
-  --input: oklch(0.92 0.004 286);
-  --ring: #2eb5c3;
-  --chart-1: #2eb5c3;
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.6rem;
-  /* Sidebar preta (igual a logo NTB) */
-  --sidebar: oklch(0.16 0.004 286);
-  --sidebar-foreground: oklch(0.92 0.004 286);
-  --sidebar-primary: #2eb5c3;
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.26 0.006 286);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: #2eb5c3;
-}
+  /* Fundo escuro unificado — acabou o contraste sidebar-preta × conteúdo branco */
+  --background: #0d0e12;
+  --foreground: #eceef2;
+  --card: #13151a;
+  --card-foreground: #eceef2;
+  --popover: #1a1c23;
+  --popover-foreground: #eceef2;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Teal como primary — a cor da marca agora dita o sistema */
+  --primary: #2eb5c3;
+  --primary-foreground: #0d0e12;
+  --brand: #2eb5c3;
+  --brand-foreground: #0d0e12;
+
+  --secondary: #1a1c23;
+  --secondary-foreground: #9ba4b0;
+  --muted: #161820;
+  --muted-foreground: #6b7685;
+  --accent: #1a2628;
+  --accent-foreground: #2eb5c3;
+  --destructive: #ef4444;
+
+  --border: rgba(255,255,255,0.07);
+  --input: rgba(255,255,255,0.06);
+  --ring: #2eb5c3;
+
+  --chart-1: #2eb5c3;
+  --chart-2: #5b8def;
+  --chart-3: #a78bfa;
+  --chart-4: #34d399;
+  --chart-5: #f59e0b;
+
+  --radius: 0.75rem;
+
+  /* Sidebar — camada mais escura */
+  --sidebar: #090a0d;
+  --sidebar-foreground: #9ba4b0;
+  --sidebar-primary: #2eb5c3;
+  --sidebar-primary-foreground: #0d0e12;
+  --sidebar-accent: rgba(46, 181, 195, 0.1);
+  --sidebar-accent-foreground: #eceef2;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
+  --sidebar-ring: #2eb5c3;
 }
 
 @layer base {
@@ -136,13 +106,37 @@
   html {
     @apply font-sans;
   }
-  /* Numeros sempre tabulares e em mono (padrao de dashboards de dados) */
+
+  /* Números tabulares em mono */
   .tabular {
     font-variant-numeric: tabular-nums;
     font-family: var(--font-mono);
   }
-  /* Header de secao em caixa alta discreta */
+
+  /* Label de seção discreta */
   .eyebrow {
-    @apply text-[11px] font-medium uppercase tracking-wider text-muted-foreground;
+    @apply text-[10px] font-semibold uppercase tracking-widest text-muted-foreground;
+  }
+
+  /* Tabelas de dados — estilo global */
+  .data-table {
+    @apply w-full text-sm;
+  }
+  .data-table thead tr {
+    @apply border-b border-white/5;
+  }
+  .data-table thead th {
+    @apply text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .data-table tbody tr {
+    @apply border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3;
+  }
+
+  /* Card de dados — fundo escuro com borda sutil */
+  .data-card {
+    @apply rounded-xl border border-white/[0.07] bg-card overflow-hidden;
   }
 }

@@ -1,18 +1,29 @@
 import { getProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { PageHeader } from '@/components/PageHeader'
-import { Package, FileText, ClipboardList, Factory, ArrowRight } from 'lucide-react'
+import {
+  Package,
+  FileText,
+  ClipboardList,
+  Factory,
+  ArrowRight,
+  Plus,
+  ArrowLeftRight,
+} from 'lucide-react'
 import Link from 'next/link'
+
+const ACCENT_COLORS = ['#2eb5c3', '#5b8def', '#a78bfa', '#f59e0b']
 
 export default async function HomePage() {
   const profile = await getProfile()
 
   if (!profile.current_loja_id) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={`Olá, ${profile.name.split(' ')[0]}`} />
-        <div className="rounded-xl border border-dashed bg-card p-12 text-center">
-          <p className="text-muted-foreground">
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="size-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+            <Package className="size-5 text-muted-foreground" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm text-muted-foreground">
             Selecione uma loja no menu lateral para ver o painel.
           </p>
         </div>
@@ -48,58 +59,143 @@ export default async function HomePage() {
   ])
 
   const metrics = [
-    { label: 'Produtos', value: produtos.count ?? 0, icon: Package, href: '/produto', hint: 'cadastrados' },
-    { label: 'Notas Fiscais', value: nfs.count ?? 0, icon: FileText, href: '/nota-fiscal', hint: 'últimos 30 dias' },
-    { label: 'Ordens de Produção', value: opsAbertas.count ?? 0, icon: Factory, href: '/ordem-producao', hint: 'no total' },
-    { label: 'Inventários abertos', value: invAbertos.count ?? 0, icon: ClipboardList, href: '/inventario', hint: 'em contagem' },
+    {
+      label: 'Produtos',
+      value: produtos.count ?? 0,
+      icon: Package,
+      href: '/produto',
+      hint: 'cadastrados',
+      color: ACCENT_COLORS[0],
+    },
+    {
+      label: 'Notas Fiscais',
+      value: nfs.count ?? 0,
+      icon: FileText,
+      href: '/nota-fiscal',
+      hint: 'últimos 30 dias',
+      color: ACCENT_COLORS[1],
+    },
+    {
+      label: 'Ordens de Produção',
+      value: opsAbertas.count ?? 0,
+      icon: Factory,
+      href: '/ordem-producao',
+      hint: 'no total',
+      color: ACCENT_COLORS[2],
+    },
+    {
+      label: 'Inventários abertos',
+      value: invAbertos.count ?? 0,
+      icon: ClipboardList,
+      href: '/inventario',
+      hint: 'em contagem',
+      color: ACCENT_COLORS[3],
+    },
   ]
 
   const ultimaSync = loja.data?.produto_ultima_atualizacao
     ? new Date(loja.data.produto_ultima_atualizacao).toLocaleString('pt-BR')
     : 'nunca'
 
+  const nome = profile.name.split(' ')[0]
+  const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
+
+  const quickActions = [
+    {
+      label: 'Novo inventário',
+      desc: 'Contagem de estoque',
+      href: '/inventario',
+      icon: ClipboardList,
+    },
+    {
+      label: 'Nova transferência',
+      desc: 'Entre locais de estoque',
+      href: '/transferencia',
+      icon: ArrowLeftRight,
+    },
+    {
+      label: 'Etiquetas de NF',
+      desc: 'Imprimir por nota fiscal',
+      href: '/nota-fiscal',
+      icon: FileText,
+    },
+  ]
+
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={`Olá, ${profile.name.split(' ')[0]}`}
-        description={`${profile.loja?.nome_fantasia || profile.loja?.nome} · última sincronização ${ultimaSync}`}
-      />
+      {/* Cabeçalho */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Olá, {nome}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            <span className="text-foreground/70">{lojaNome}</span>
+            <span className="mx-2 opacity-20">·</span>
+            <span>sync {ultimaSync}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-brand animate-pulse" />
+          ao vivo
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Métricas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {metrics.map((m) => (
           <Link
             key={m.label}
             href={m.href}
-            className="group rounded-xl border bg-card p-5 transition-all hover:border-brand/40 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]"
+            className="group relative overflow-hidden rounded-xl border border-white/[0.07] bg-card p-5 transition-all hover:border-white/[0.13] hover:bg-white/[0.02]"
           >
+            {/* Linha de acento no topo */}
+            <div
+              className="absolute inset-x-0 top-0 h-[2px] opacity-60 group-hover:opacity-100 transition-opacity"
+              style={{ background: m.color }}
+            />
+
             <div className="flex items-center justify-between">
-              <m.icon className="size-5 text-muted-foreground group-hover:text-brand transition-colors" strokeWidth={2} />
-              <ArrowRight className="size-4 text-transparent group-hover:text-muted-foreground transition-colors" />
+              <div
+                className="size-8 rounded-lg flex items-center justify-center"
+                style={{ background: `${m.color}18` }}
+              >
+                <m.icon className="size-4" style={{ color: m.color }} strokeWidth={2} />
+              </div>
+              <ArrowRight
+                className="size-4 text-white/10 transition-all group-hover:text-white/40 group-hover:translate-x-0.5"
+                strokeWidth={2}
+              />
             </div>
-            <div className="mt-4 tabular text-3xl font-semibold tracking-tight">{m.value.toLocaleString('pt-BR')}</div>
-            <div className="mt-1 text-sm font-medium">{m.label}</div>
-            <div className="text-xs text-muted-foreground">{m.hint}</div>
+
+            <div className="mt-5 font-mono text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums">
+              {m.value.toLocaleString('pt-BR')}
+            </div>
+            <div className="mt-2 text-sm font-medium text-foreground/80">{m.label}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{m.hint}</div>
           </Link>
         ))}
       </div>
 
-      <div className="rounded-xl border bg-card divide-y">
-        <div className="px-5 py-3">
-          <span className="eyebrow">Ações rápidas</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
-          {[
-            { label: 'Nova contagem de inventário', href: '/inventario' },
-            { label: 'Nova transferência', href: '/transferencia' },
-            { label: 'Imprimir etiquetas de NF', href: '/nota-fiscal' },
-          ].map((a) => (
+      {/* Ações rápidas */}
+      <div>
+        <p className="eyebrow mb-3">Ações rápidas</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {quickActions.map((a) => (
             <Link
               key={a.href}
               href={a.href}
-              className="flex items-center justify-between px-5 py-4 text-sm hover:bg-muted/50 transition-colors"
+              className="group flex items-center gap-4 rounded-xl border border-white/[0.07] bg-card px-5 py-4 transition-all hover:border-white/[0.13] hover:bg-white/[0.02]"
             >
-              {a.label}
-              <ArrowRight className="size-4 text-muted-foreground" />
+              <div className="size-9 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
+                <a.icon className="size-4 text-brand" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground/90">{a.label}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{a.desc}</div>
+              </div>
+              <Plus
+                className="size-4 text-white/15 transition-all group-hover:text-brand group-hover:rotate-90 shrink-0"
+                strokeWidth={2}
+              />
             </Link>
           ))}
         </div>

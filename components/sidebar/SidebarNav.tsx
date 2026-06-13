@@ -34,8 +34,8 @@ type Item = { href: string; label: string; icon: string }
 function NavGroup({ titulo, itens, pathname }: { titulo: string; itens: Item[]; pathname: string }) {
   if (!itens.length) return null
   return (
-    <div className="px-3 mb-4">
-      <div className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+    <div className="px-3 mb-5">
+      <div className="px-2 mb-2 text-[9px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/30">
         {titulo}
       </div>
       <div className="space-y-0.5">
@@ -46,17 +46,23 @@ function NavGroup({ titulo, itens, pathname }: { titulo: string; itens: Item[]; 
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+              className={`group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all ${
                 ativo
-                  ? 'bg-sidebar-accent text-white'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/55 hover:text-sidebar-foreground/90 hover:bg-white/[0.04]'
               }`}
             >
+              {/* Barra teal à esquerda no item ativo */}
+              {ativo && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-brand" />
+              )}
               <Icon
-                className={`size-4 shrink-0 ${ativo ? 'text-brand' : 'text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80'}`}
+                className={`size-[15px] shrink-0 transition-colors ${
+                  ativo ? 'text-brand' : 'text-sidebar-foreground/35 group-hover:text-sidebar-foreground/60'
+                }`}
                 strokeWidth={2}
               />
-              {item.label}
+              <span className={ativo ? 'font-medium' : ''}>{item.label}</span>
             </Link>
           )
         })}
