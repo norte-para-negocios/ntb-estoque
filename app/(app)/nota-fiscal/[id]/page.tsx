@@ -2,10 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Card } from '@/components/ui/card'
-import { buttonVariants } from '@/components/ui/button'
 import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
-import { Printer } from 'lucide-react'
+import { Printer, ArrowLeft, FileText } from 'lucide-react'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -34,53 +32,49 @@ export default async function NotaFiscalItensPage({
     .order('n_sequencia')
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link href="/nota-fiscal" className="text-sm text-blue-600 hover:underline">
-            ← Voltar
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/nota-fiscal" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
           </Link>
-          <h1 className="text-2xl font-bold mt-1">
-            NFe {nf.c_numero_nfe} - {nf.c_razao_social || nf.c_nome}
+          <FileText className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">
+            NFe {nf.c_numero_nfe} · {nf.c_razao_social || nf.c_nome}
           </h1>
         </div>
         <a
           href={`/nota-fiscal/${id}/imprimir`}
           target="_blank"
           rel="noopener noreferrer"
-          className={buttonVariants()}
+          className="ntb-btn-teal"
         >
-          <Printer className="size-4" />
-          Imprimir etiquetas
+          <Printer className="size-4" /> Imprimir etiquetas
         </a>
       </div>
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">Código</th>
-              <th className="text-left p-3 font-medium">Produto</th>
-              <th className="text-right p-3 font-medium">Qtd NFe</th>
-              <th className="text-left p-3 font-medium">Un</th>
-              <th className="text-right p-3 font-medium w-48">Qtd p/ etiqueta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens?.map((item) => (
-              <tr key={item.id} className="border-b">
-                <td className="p-3">{item.c_codigo_produto}</td>
-                <td className="p-3">{item.c_descricao_produto}</td>
-                <td className="p-3 text-right">{item.n_qtde_nfe}</td>
-                <td className="p-3">{item.c_unidade_nfe}</td>
-                <td className="p-3">
-                  <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      <div className="space-y-4">
+        {itens?.map((item) => (
+          <div key={item.id} className="ntb-card">
+            <div className="ntb-card-header flex items-center justify-between">
+              <span>{item.c_codigo_produto}</span>
+              <span className="text-sm font-normal text-white/90">
+                {item.n_qtde_nfe} {item.c_unidade_nfe}
+              </span>
+            </div>
+            <div className="ntb-card-body flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <small className="text-[#8a8a8a]">Produto</small>
+                <p className="font-semibold text-[#5d5d5d]">{item.c_descricao_produto}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <small className="mb-1 block text-[#8a8a8a]">Qtd p/ etiqueta</small>
+                <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
