@@ -1,9 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Printer, Check } from 'lucide-react'
+import { Printer, Check, Minus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP } from '@/lib/actions/ordem-producao'
+import { Num } from '@/components/ui-kit/Num'
+
+const stepBtnClass =
+  'flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60'
+const fieldClass =
+  'w-28 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60'
 
 interface OPData {
   id: number
@@ -13,17 +19,6 @@ interface OPData {
   qtdOP: number | null
   validade: string | null
   quantidade: number | null
-}
-
-function fmtData(d: string | null): string {
-  if (!d) return ''
-  const [y, m, day] = d.split('T')[0].split('-')
-  return `${day}/${m}/${y}`
-}
-
-function fmtQtd(v: number | null): string {
-  if (v == null) return ''
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
 export function OrdemProducaoRow({ op }: { op: OPData }) {
@@ -82,114 +77,98 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   }
 
   return (
-    <div className="ntb-card">
-      <div className="ntb-card-header flex items-center justify-between">
-        <span>OP {op.numOP}</span>
-        {validade && (
-          <span className="text-sm font-normal text-white/90">Validade {fmtData(validade)}</span>
-        )}
-      </div>
-      <div className="ntb-card-body">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 space-y-2">
-            <div>
-              <small className="text-[#8a8a8a]">Nome do produto</small>
-              <p className="font-semibold text-[#5d5d5d]">{op.produto}</p>
-            </div>
-            <div className="flex gap-8">
-              <div>
-                <small className="text-[#8a8a8a]">Ordem de produção</small>
-                <p className="font-semibold text-[#5d5d5d]">{op.numOP}</p>
-              </div>
-              <div>
-                <small className="text-[#8a8a8a]">Quantidade</small>
-                <p className="font-semibold text-[#5d5d5d]">
-                  {fmtQtd(op.qtdOP)} ({op.unidade})
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 md:w-80 md:shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-20 text-right text-sm font-semibold text-[#5d5d5d]">Validade</span>
-              <button
-                type="button"
-                onClick={() => ajustarValidade(-1)}
-                disabled={pending}
-                className="ntb-btn-outline px-2 text-[#2eb5c3]"
-              >
-                -
-              </button>
-              <input
-                type="date"
-                value={validade}
-                onChange={(e) => setValidade(e.target.value)}
-                onBlur={salvarValidade}
-                disabled={pending}
-                className="ntb-input flex-1 text-center"
-              />
-              <button
-                type="button"
-                onClick={() => ajustarValidade(1)}
-                disabled={pending}
-                className="ntb-btn-outline px-2 text-[#2eb5c3]"
-              >
-                +
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="w-20 text-right text-sm font-semibold text-[#5d5d5d]">Quantidade</span>
-              <button
-                type="button"
-                onClick={() => ajustarQuantidade(-1)}
-                disabled={pending}
-                className="ntb-btn-outline px-2 text-[#2eb5c3]"
-              >
-                -
-              </button>
-              <input
-                type="number"
-                min={0}
-                value={quantidade}
-                onChange={(e) => setQuantidade(e.target.value)}
-                onBlur={salvarQuantidade}
-                disabled={pending}
-                placeholder="0"
-                className="ntb-input flex-1 text-center"
-              />
-              <button
-                type="button"
-                onClick={() => ajustarQuantidade(1)}
-                disabled={pending}
-                className="ntb-btn-outline px-2 text-[#2eb5c3]"
-              >
-                +
-              </button>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <a
-                href={`/ordem-producao/${op.id}/imprimir`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ntb-btn-outline"
-              >
-                <Printer className="size-4" /> Imprimir
-              </a>
-              <button
-                type="button"
-                onClick={concluir}
-                disabled={pending}
-                className="ntb-btn-outline disabled:opacity-60"
-              >
-                <Check className="size-4" /> Concluir
-              </button>
-            </div>
-          </div>
+    <tr>
+      <td className="num font-medium text-text align-top">{op.numOP}</td>
+      <td className="max-w-xs align-top">
+        <div className="truncate font-medium text-text">{op.produto}</div>
+        <div className="text-[11px] text-text-muted">{op.unidade}</div>
+      </td>
+      <td className="text-right align-top">
+        <Num value={op.qtdOP} frac={3} />{' '}
+        <span className="text-text-muted">{op.unidade}</span>
+      </td>
+      <td className="align-top">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => ajustarValidade(-1)}
+            disabled={pending}
+            aria-label="Diminuir validade"
+            className={stepBtnClass}
+          >
+            <Minus className="size-3.5" />
+          </button>
+          <input
+            type="date"
+            value={validade}
+            onChange={(e) => setValidade(e.target.value)}
+            onBlur={salvarValidade}
+            disabled={pending}
+            className={fieldClass}
+          />
+          <button
+            type="button"
+            onClick={() => ajustarValidade(1)}
+            disabled={pending}
+            aria-label="Aumentar validade"
+            className={stepBtnClass}
+          >
+            <Plus className="size-3.5" />
+          </button>
         </div>
-      </div>
-    </div>
+      </td>
+      <td className="align-top">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => ajustarQuantidade(-1)}
+            disabled={pending}
+            aria-label="Diminuir quantidade"
+            className={stepBtnClass}
+          >
+            <Minus className="size-3.5" />
+          </button>
+          <input
+            type="number"
+            min={0}
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            onBlur={salvarQuantidade}
+            disabled={pending}
+            placeholder="0"
+            className="w-20 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={() => ajustarQuantidade(1)}
+            disabled={pending}
+            aria-label="Aumentar quantidade"
+            className={stepBtnClass}
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+      </td>
+      <td className="text-right align-top">
+        <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+          <a
+            href={`/ordem-producao/${op.id}/imprimir`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-brand hover:underline"
+          >
+            <Printer className="size-3.5" /> Imprimir
+          </a>
+          <button
+            type="button"
+            onClick={concluir}
+            disabled={pending}
+            className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
+          >
+            <Check className="size-3.5" /> Concluir
+          </button>
+        </div>
+      </td>
+    </tr>
   )
 }

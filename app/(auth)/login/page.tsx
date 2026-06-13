@@ -3,20 +3,28 @@
 import Image from 'next/image'
 import { useActionState } from 'react'
 import { login } from '@/lib/actions/auth'
+import { btnClass } from '@/components/ui-kit/Button'
+
+const inputClass =
+  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, null)
 
   return (
     <div className="w-full max-w-md">
-      <div className="rounded-lg bg-white p-8 shadow-[0_4px_6px_rgba(0,0,0,0.1)]">
+      <div
+        className="rounded-lg border border-border bg-surface p-8"
+        style={{ boxShadow: 'var(--shadow-md)' }}
+      >
         <div className="mb-8 flex justify-center">
           <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="h-14 w-auto" />
         </div>
 
         <form action={formAction} className="space-y-4">
           <div>
-            <label htmlFor="email" className="ntb-label">E-mail</label>
+            <label htmlFor="email" className={labelClass}>E-mail</label>
             <input
               id="email"
               name="email"
@@ -25,11 +33,11 @@ export default function LoginPage() {
               autoComplete="email"
               autoFocus
               placeholder="voce@norteparanegocios.com.br"
-              className="ntb-input"
+              className={inputClass}
             />
           </div>
           <div>
-            <label htmlFor="password" className="ntb-label">Senha</label>
+            <label htmlFor="password" className={labelClass}>Senha</label>
             <input
               id="password"
               name="password"
@@ -37,12 +45,12 @@ export default function LoginPage() {
               required
               autoComplete="current-password"
               placeholder="••••••••"
-              className="ntb-input"
+              className={inputClass}
             />
           </div>
 
           {state?.error && (
-            <div className="rounded border border-[#ff595e]/30 bg-[#ff595e]/10 px-3 py-2 text-sm text-[#ff595e]">
+            <div className="rounded-md border border-[var(--err)]/30 bg-[var(--err)]/10 px-3 py-2 text-sm text-[var(--err)]">
               {state.error}
             </div>
           )}
@@ -50,7 +58,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={pending}
-            className="ntb-btn-teal w-full justify-center py-2.5 disabled:opacity-60"
+            className={`${btnClass('primary')} w-full py-2.5`}
           >
             {pending ? 'Entrando...' : 'Entrar'}
           </button>

@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { btnClass } from '@/components/ui-kit/Button'
 import {
   duplicarInventario,
   excluirInventario,
@@ -62,7 +63,7 @@ export function AcoesInventario({
       <button
         onClick={duplicar}
         disabled={pending}
-        className="ntb-btn-outline disabled:opacity-50"
+        className={btnClass('outline')}
         aria-label="Duplicar"
         title="Duplicar"
       >
@@ -72,7 +73,7 @@ export function AcoesInventario({
         <button
           onClick={reprocessar}
           disabled={pending}
-          className="ntb-btn-outline disabled:opacity-50"
+          className={btnClass('outline')}
           aria-label="Reprocessar"
           title="Reprocessar itens com erro"
         >
@@ -83,7 +84,7 @@ export function AcoesInventario({
         <button
           onClick={excluir}
           disabled={pending}
-          className="ntb-btn-outline disabled:opacity-50"
+          className={btnClass('danger')}
           aria-label="Excluir"
           title="Excluir"
         >

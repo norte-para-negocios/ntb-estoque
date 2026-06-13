@@ -1,6 +1,12 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Toolbar } from '@/components/ui-kit/Toolbar'
+import { btnClass } from '@/components/ui-kit/Button'
+
+const fieldClass =
+  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand'
+const labelClass = 'mb-1 block text-[11px] font-medium text-text-muted'
 
 export function NotaFiscalFiltros({
   defaults,
@@ -23,28 +29,26 @@ export function NotaFiscalFiltros({
   }
 
   return (
-    <div className="ntb-card">
-      <div className="ntb-card-body">
-        <form onSubmit={onSubmit} className="grid grid-cols-1 items-end gap-3 md:grid-cols-5">
-          <div>
-            <label htmlFor="data_inicio" className="ntb-label">Data Início</label>
-            <input id="data_inicio" name="data_inicio" type="date" defaultValue={defaults.data_inicio} className="ntb-input" />
-          </div>
-          <div>
-            <label htmlFor="data_final" className="ntb-label">Data Final</label>
-            <input id="data_final" name="data_final" type="date" defaultValue={defaults.data_final} className="ntb-input" />
-          </div>
-          <div>
-            <label htmlFor="num_nfe" className="ntb-label">Nº NFe</label>
-            <input id="num_nfe" name="num_nfe" defaultValue={defaults.num_nfe} className="ntb-input" />
-          </div>
-          <div>
-            <label htmlFor="fornecedor" className="ntb-label">Fornecedor</label>
-            <input id="fornecedor" name="fornecedor" defaultValue={defaults.fornecedor} className="ntb-input" />
-          </div>
-          <button type="submit" className="ntb-btn-success justify-center">Filtrar</button>
-        </form>
-      </div>
-    </div>
+    <Toolbar>
+      <form onSubmit={onSubmit} className="grid grid-cols-1 items-end gap-3 md:grid-cols-5">
+        <div>
+          <label htmlFor="data_inicio" className={labelClass}>Data Início</label>
+          <input id="data_inicio" name="data_inicio" type="date" defaultValue={defaults.data_inicio} className={fieldClass} />
+        </div>
+        <div>
+          <label htmlFor="data_final" className={labelClass}>Data Final</label>
+          <input id="data_final" name="data_final" type="date" defaultValue={defaults.data_final} className={fieldClass} />
+        </div>
+        <div>
+          <label htmlFor="num_nfe" className={labelClass}>Nº NFe</label>
+          <input id="num_nfe" name="num_nfe" defaultValue={defaults.num_nfe} className={fieldClass} />
+        </div>
+        <div>
+          <label htmlFor="fornecedor" className={labelClass}>Fornecedor</label>
+          <input id="fornecedor" name="fornecedor" defaultValue={defaults.fornecedor} className={fieldClass} />
+        </div>
+        <button type="submit" className={btnClass('primary')}>Filtrar</button>
+      </form>
+    </Toolbar>
   )
 }

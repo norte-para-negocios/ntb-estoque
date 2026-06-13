@@ -14,6 +14,11 @@ import {
   togglePermissao,
   toggleLocal,
 } from '@/lib/actions/usuario'
+import { btnClass } from '@/components/ui-kit/Button'
+
+const inputClass =
+  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 type Permissao = { id: number; nome: string }
@@ -120,23 +125,25 @@ export function EditarUsuario({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <button type="button" className="ntb-btn-outline shrink-0">
+          <button type="button" className={`${btnClass('outline')} shrink-0`}>
             <Pencil className="size-4" /> Editar
           </button>
         }
       />
-      <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-lg" showCloseButton={false}>
-        <div className="ntb-card-header text-base">Editar usuário</div>
+      <SheetContent className="w-full overflow-y-auto bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
+        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+          Editar usuário
+        </div>
 
         <div className="space-y-4 px-4 py-3">
           <div>
-            <label className="ntb-label">Nome</label>
-            <input className="ntb-input" value={name} onChange={(e) => setName(e.target.value)} />
+            <label className={labelClass}>Nome</label>
+            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <label className="ntb-label">Perfil</label>
+            <label className={labelClass}>Perfil</label>
             <select
-              className="ntb-input"
+              className={inputClass}
               value={perfil}
               onChange={(e) => setPerfil((e.target.value as 'Admin' | 'Usuario') ?? 'Usuario')}
             >
@@ -147,20 +154,21 @@ export function EditarUsuario({
 
           {perfil === 'Usuario' && (
             <div>
-              <label className="ntb-label">Lojas com acesso</label>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-[#d5d5d5] p-2">
+              <label className={labelClass}>Lojas com acesso</label>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
                 {lojas.map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm text-[#5d5d5d]">
+                  <label key={l.id} className="flex items-center gap-2 text-sm text-text">
                     <input
                       type="checkbox"
                       checked={lojaIds.includes(l.id)}
                       onChange={() => toggleLoja(l.id)}
+                      className="accent-[var(--brand)]"
                     />
                     {l.nome_fantasia || l.nome}
                   </label>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-[#8a8a8a]">
+              <p className="mt-1 text-xs text-text-muted">
                 Salve os dados antes de ajustar permissões e locais das lojas recém-adicionadas.
               </p>
             </div>
@@ -171,7 +179,7 @@ export function EditarUsuario({
               type="button"
               onClick={salvarDados}
               disabled={pending}
-              className="ntb-btn-teal disabled:opacity-60"
+              className={btnClass('primary')}
             >
               {pending ? 'Salvando...' : 'Salvar dados'}
             </button>
@@ -181,23 +189,24 @@ export function EditarUsuario({
             lojasSelecionadas.map((loja) => {
               const locaisLoja = locais.filter((lo) => lo.loja_id === loja.id)
               return (
-                <div key={loja.id} className="space-y-3 rounded border border-[#e2e2e2] p-3">
-                  <p className="text-sm font-medium text-[#5d5d5d]">
+                <div key={loja.id} className="space-y-3 rounded-md border border-border bg-surface-2/40 p-3">
+                  <p className="text-sm font-medium text-text">
                     {loja.nome_fantasia || loja.nome}
                   </p>
 
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-[#8a8a8a]">Permissões</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Permissões</p>
                     <div className="grid grid-cols-1 gap-1">
                       {permissoes.map((p) => (
                         <label
                           key={p.id}
-                          className="flex items-center gap-2 text-sm text-[#5d5d5d]"
+                          className="flex items-center gap-2 text-sm text-text"
                         >
                           <input
                             type="checkbox"
                             checked={permAtivas.has(`${loja.id}:${p.id}`)}
                             onChange={() => alternarPermissao(loja.id, p.id)}
+                            className="accent-[var(--brand)]"
                           />
                           {p.nome}
                         </label>
@@ -206,25 +215,26 @@ export function EditarUsuario({
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-[#8a8a8a]">Locais de estoque</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Locais de estoque</p>
                     {locaisLoja.length ? (
                       <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto">
                         {locaisLoja.map((lo) => (
                           <label
                             key={lo.id}
-                            className="flex items-center gap-2 text-sm text-[#5d5d5d]"
+                            className="flex items-center gap-2 text-sm text-text"
                           >
                             <input
                               type="checkbox"
                               checked={locaisAtivos.has(`${loja.id}:${lo.id}`)}
                               onChange={() => alternarLocal(loja.id, lo.id)}
+                              className="accent-[var(--brand)]"
                             />
                             {lo.descricao || `Local ${lo.id}`}
                           </label>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-[#8a8a8a]">
+                      <p className="text-xs text-text-muted">
                         Nenhum local de estoque cadastrado.
                       </p>
                     )}

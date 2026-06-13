@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { forceSyncLoja } from '@/lib/actions/loja'
+import { btnClass } from '@/components/ui-kit/Button'
 
 export function ForceSyncLoja({ lojaId }: { lojaId: number }) {
   const [pending, startTransition] = useTransition()
@@ -23,8 +24,8 @@ export function ForceSyncLoja({ lojaId }: { lojaId: number }) {
   }
 
   return (
-    <button type="button" onClick={sincronizar} disabled={pending} className="ntb-btn-outline">
-      <RefreshCw className="size-4" />
+    <button type="button" onClick={sincronizar} disabled={pending} className={btnClass('outline')}>
+      <RefreshCw className={`size-4 ${pending ? 'animate-spin' : ''}`} />
       {pending ? 'Forçando...' : 'Forçar liberação p/ atualização'}
     </button>
   )

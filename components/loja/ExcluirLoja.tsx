@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { excluirLoja } from '@/lib/actions/loja'
+import { btnClass } from '@/components/ui-kit/Button'
 
 export function ExcluirLoja({ lojaId, nome }: { lojaId: number; nome: string }) {
   const [pending, startTransition] = useTransition()
@@ -28,12 +29,7 @@ export function ExcluirLoja({ lojaId, nome }: { lojaId: number; nome: string }) 
   }
 
   return (
-    <button
-      type="button"
-      onClick={excluir}
-      disabled={pending}
-      className="inline-flex items-center gap-1.5 rounded bg-[#ff595e] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#e8484d] disabled:opacity-60"
-    >
+    <button type="button" onClick={excluir} disabled={pending} className={btnClass('danger')}>
       <Trash2 className="size-4" /> Excluir
     </button>
   )

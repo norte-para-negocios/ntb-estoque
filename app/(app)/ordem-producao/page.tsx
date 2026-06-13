@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow } from '@/components/ordem-producao/OrdemProducaoRow'
-import { Factory, ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { DataTable } from '@/components/ui-kit/DataTable'
+import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { Factory } from 'lucide-react'
 
 export default async function OrdemProducaoPage() {
   const lojaId = await getCurrentLojaId()
@@ -35,46 +37,51 @@ export default async function OrdemProducaoPage() {
 
   return (
     <div className="space-y-4">
-      {/* Título estilo original: voltar + ícone + nome */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
-            <ArrowLeft className="size-5" strokeWidth={2} />
-          </Link>
-          <Factory className="size-5 text-[#2eb5c3]" strokeWidth={2} />
-          <h1 className="text-lg font-semibold text-[#5d5d5d]">Ordens de Produção</h1>
-        </div>
-        <SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar" />
-      </div>
+      <PageHeader
+        title="Ordens de Produção"
+        icon={Factory}
+        actions={<SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar" />}
+      />
 
-      {/* Lista de cards empilhados (fiel ao original) */}
-      <div className="space-y-4">
-        {ordens?.length ? (
-          ordens.map((op) => {
-            const prod = prodMap.get(op.identificacao_n_cod_produto)
-            return (
-              <OrdemProducaoRow
-                key={op.id}
-                op={{
-                  id: op.id,
-                  numOP: op.identificacao_c_num_op || op.num_ordem || '-',
-                  produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
-                  unidade: prod?.unidade || 'UN',
-                  qtdOP: op.identificacao_n_qtde,
-                  validade: op.validade,
-                  quantidade: op.quantidade,
-                }}
-              />
-            )
-          })
-        ) : (
-          <div className="ntb-card">
-            <div className="ntb-card-body text-center text-[#8a8a8a]">
-              Nenhuma ordem de produção. Sincronize com o Omie.
-            </div>
-          </div>
-        )}
-      </div>
+      {ordens?.length ? (
+        <DataTable>
+          <thead>
+            <tr>
+              <th>OP</th>
+              <th>Produto</th>
+              <th className="text-right">Qtd OP</th>
+              <th>Validade</th>
+              <th>Quantidade</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordens.map((op) => {
+              const prod = prodMap.get(op.identificacao_n_cod_produto)
+              return (
+                <OrdemProducaoRow
+                  key={op.id}
+                  op={{
+                    id: op.id,
+                    numOP: op.identificacao_c_num_op || op.num_ordem || '-',
+                    produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
+                    unidade: prod?.unidade || 'UN',
+                    qtdOP: op.identificacao_n_qtde,
+                    validade: op.validade,
+                    quantidade: op.quantidade,
+                  }}
+                />
+              )
+            })}
+          </tbody>
+        </DataTable>
+      ) : (
+        <EmptyState
+          icon={Factory}
+          title="Nenhuma ordem de produção"
+          hint="Sincronize com o Omie."
+        />
+      )}
     </div>
   )
 }

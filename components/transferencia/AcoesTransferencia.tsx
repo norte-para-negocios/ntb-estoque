@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { btnClass } from '@/components/ui-kit/Button'
 import {
   duplicarTransferencia,
   excluirTransferencia,
@@ -66,7 +67,7 @@ export function AcoesTransferencia({
       <button
         onClick={duplicar}
         disabled={pending}
-        className="ntb-btn-outline disabled:opacity-50"
+        className={btnClass('outline')}
         aria-label="Duplicar"
         title="Duplicar"
       >
@@ -76,7 +77,7 @@ export function AcoesTransferencia({
         <button
           onClick={reprocessar}
           disabled={pending}
-          className="ntb-btn-outline disabled:opacity-50"
+          className={btnClass('outline')}
           aria-label="Reprocessar"
           title="Reprocessar itens com erro"
         >
@@ -87,7 +88,7 @@ export function AcoesTransferencia({
         <button
           onClick={excluir}
           disabled={pending}
-          className="ntb-btn-outline disabled:opacity-50"
+          className={btnClass('danger')}
           aria-label="Excluir"
           title="Excluir"
         >

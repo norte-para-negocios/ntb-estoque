@@ -10,6 +10,11 @@ import {
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarLoja, editarLoja, type LojaInput } from '@/lib/actions/loja'
+import { btnClass } from '@/components/ui-kit/Button'
+
+const inputClass =
+  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 export type LojaExistente = {
   id: number
@@ -95,97 +100,100 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
       <DialogTrigger
         render={
           editando ? (
-            <button type="button" className="ntb-btn-outline">
+            <button type="button" className={btnClass('outline')}>
               <Pencil className="size-4" /> Editar
             </button>
           ) : (
-            <button type="button" className="ntb-btn-success">
+            <button type="button" className={btnClass('primary')}>
               <Plus className="size-4" /> Nova loja
             </button>
           )
         }
       />
-      <DialogContent className="overflow-hidden p-0 sm:max-w-lg" showCloseButton={false}>
-        <div className="ntb-card-header text-base">{editando ? 'Editar loja' : 'Nova loja'}</div>
+      <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
+        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+          {editando ? 'Editar loja' : 'Nova loja'}
+        </div>
         <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-4 py-3">
           <div>
-            <label className="ntb-label">CNPJ</label>
-            <input className="ntb-input" value={form.cnpj} onChange={(e) => set('cnpj', e.target.value)} />
+            <label className={labelClass}>CNPJ</label>
+            <input className={inputClass} value={form.cnpj} onChange={(e) => set('cnpj', e.target.value)} />
           </div>
           <div>
-            <label className="ntb-label">Nome</label>
-            <input className="ntb-input" value={form.nome} onChange={(e) => set('nome', e.target.value)} />
+            <label className={labelClass}>Nome</label>
+            <input className={inputClass} value={form.nome} onChange={(e) => set('nome', e.target.value)} />
           </div>
           <div className="col-span-2">
-            <label className="ntb-label">Nome fantasia</label>
+            <label className={labelClass}>Nome fantasia</label>
             <input
-              className="ntb-input"
+              className={inputClass}
               value={form.nome_fantasia}
               onChange={(e) => set('nome_fantasia', e.target.value)}
             />
           </div>
           <div>
-            <label className="ntb-label">CEP</label>
-            <input className="ntb-input" value={form.cep} onChange={(e) => set('cep', e.target.value)} />
+            <label className={labelClass}>CEP</label>
+            <input className={inputClass} value={form.cep} onChange={(e) => set('cep', e.target.value)} />
           </div>
           <div>
-            <label className="ntb-label">UF</label>
+            <label className={labelClass}>UF</label>
             <input
-              className="ntb-input"
+              className={inputClass}
               value={form.uf}
               maxLength={2}
               onChange={(e) => set('uf', e.target.value)}
             />
           </div>
           <div>
-            <label className="ntb-label">Cidade</label>
-            <input className="ntb-input" value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
+            <label className={labelClass}>Cidade</label>
+            <input className={inputClass} value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
           </div>
           <div>
-            <label className="ntb-label">Bairro</label>
-            <input className="ntb-input" value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
+            <label className={labelClass}>Bairro</label>
+            <input className={inputClass} value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
           </div>
           <div>
-            <label className="ntb-label">Logradouro</label>
+            <label className={labelClass}>Logradouro</label>
             <input
-              className="ntb-input"
+              className={inputClass}
               value={form.logradouro}
               onChange={(e) => set('logradouro', e.target.value)}
             />
           </div>
           <div>
-            <label className="ntb-label">Número</label>
-            <input className="ntb-input" value={form.numero} onChange={(e) => set('numero', e.target.value)} />
+            <label className={labelClass}>Número</label>
+            <input className={inputClass} value={form.numero} onChange={(e) => set('numero', e.target.value)} />
           </div>
           <div className="col-span-2">
-            <label className="ntb-label">Omie App Key</label>
+            <label className={labelClass}>Omie App Key</label>
             <input
-              className="ntb-input"
+              className={inputClass}
               value={form.omie_app_key}
               onChange={(e) => set('omie_app_key', e.target.value)}
               placeholder="Deixe vazio para loja fora do Omie"
             />
           </div>
           <div className="col-span-2">
-            <label className="ntb-label">Omie App Secret</label>
+            <label className={labelClass}>Omie App Secret</label>
             <input
-              className="ntb-input"
+              className={inputClass}
               value={form.omie_app_secret}
               onChange={(e) => set('omie_app_secret', e.target.value)}
               placeholder="Deixe vazio para loja fora do Omie"
             />
           </div>
-          <label className="col-span-2 flex items-center gap-2 text-sm text-[#5d5d5d]">
+          <label className="col-span-2 flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
               checked={form.ativo}
               onChange={(e) => set('ativo', e.target.checked)}
+              className="accent-[var(--brand)]"
             />
             Loja ativa
           </label>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#e2e2e2] px-4 py-3">
-          <button type="button" onClick={salvar} disabled={pending} className="ntb-btn-teal disabled:opacity-60">
+        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
             {pending ? 'Salvando...' : editando ? 'Salvar' : 'Criar loja'}
           </button>
         </div>

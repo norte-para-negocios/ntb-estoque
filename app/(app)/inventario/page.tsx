@@ -2,9 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ClipboardList, Pencil } from 'lucide-react'
+import { ClipboardList, Pencil } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
+import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { DataTable } from '@/components/ui-kit/DataTable'
+import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { btnClass } from '@/components/ui-kit/Button'
 
 export default async function InventarioPage() {
   const lojaId = await getCurrentLojaId()
@@ -38,56 +43,52 @@ export default async function InventarioPage() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Título estilo original: voltar + ícone + nome */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
-            <ArrowLeft className="size-5" strokeWidth={2} />
-          </Link>
-          <ClipboardList className="size-5 text-[#2eb5c3]" strokeWidth={2} />
-          <h1 className="text-lg font-semibold text-[#5d5d5d]">Inventários</h1>
-        </div>
-        {podeCriar && <NovoInventario locais={locais ?? []} />}
-      </div>
+    <div>
+      <PageHeader
+        title="Inventários"
+        icon={ClipboardList}
+        description="Contagens de estoque por local"
+        actions={podeCriar ? <NovoInventario locais={locais ?? []} /> : undefined}
+      />
 
-      {/* Lista de cards empilhados (fiel ao original) */}
-      <div className="space-y-4">
-        {inventarios?.length ? (
-          inventarios.map((inv) => {
-            const count = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
-            const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
-            const temErro = itensStatus.some(
-              (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
-            )
-            const finalizado = inv.status === 'Finalizado'
-            const local = localMap.get(inv.codigo_local_estoque) || inv.codigo_local_estoque
-            return (
-              <div key={inv.id}>
-                <span className="text-sm text-[#8a8a8a]">Data: {fmtData(inv.data)}</span>
-                <div className="ntb-card mt-1">
-                  <div
-                    className="flex items-center justify-between px-4 py-2 text-xs font-medium text-white"
-                    style={{ backgroundColor: finalizado ? '#2eb5c3' : '#f24646' }}
-                  >
-                    <span>{inv.status}</span>
-                    {inv.finalizado && <span>| {fmtData(inv.finalizado)}</span>}
-                  </div>
-                  <div className="ntb-card-body flex flex-wrap items-center gap-y-3">
-                    <div className="w-1/4 min-w-[90px]">
-                      <small className="text-[#8a8a8a]">Estoque</small>
-                      <p className="font-semibold text-[#5d5d5d]">#{inv.id}</p>
-                    </div>
-                    <div className="w-1/4 min-w-[90px]">
-                      <small className="text-[#8a8a8a]">Produtos</small>
-                      <p className="font-semibold text-[#5d5d5d]">{count}</p>
-                    </div>
-                    <div className="w-1/2 min-w-[160px]">
-                      <small className="text-[#8a8a8a]">Local</small>
-                      <p className="truncate font-semibold text-[#5d5d5d]">{local}</p>
-                    </div>
-                    <div className="ml-auto flex items-center gap-2">
-                      <Link href={`/inventario/${inv.id}/contagem`} className="ntb-btn-outline">
+      {inventarios?.length ? (
+        <DataTable>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Data</th>
+              <th>Local</th>
+              <th className="text-right">Produtos</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {inventarios.map((inv) => {
+              const count = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
+              const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
+              const temErro = itensStatus.some(
+                (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
+              )
+              const finalizado = inv.status === 'Finalizado'
+              const local = localMap.get(inv.codigo_local_estoque) || inv.codigo_local_estoque
+              return (
+                <tr key={inv.id}>
+                  <td className="num font-medium text-text">#{inv.id}</td>
+                  <td className="num text-text-muted">{fmtData(inv.data)}</td>
+                  <td className="max-w-xs truncate text-text">{local}</td>
+                  <td className="text-right">
+                    <span className="num">{count}</span>
+                  </td>
+                  <td>
+                    <StatusPill status={inv.status} />
+                  </td>
+                  <td>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/inventario/${inv.id}/contagem`}
+                        className={btnClass('outline')}
+                      >
                         <Pencil className="size-4" /> {finalizado ? 'Ver' : 'Contar'}
                       </Link>
                       <AcoesInventario
@@ -96,19 +97,19 @@ export default async function InventarioPage() {
                         podeExcluir={podeExcluir}
                       />
                     </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })
-        ) : (
-          <div className="ntb-card">
-            <div className="ntb-card-body text-center text-[#8a8a8a]">
-              Nenhum inventário. Crie um novo para começar a contagem.
-            </div>
-          </div>
-        )}
-      </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </DataTable>
+      ) : (
+        <EmptyState
+          icon={ClipboardList}
+          title="Nenhum inventário"
+          hint="Crie um novo para começar a contagem."
+        />
+      )}
     </div>
   )
 }

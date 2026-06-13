@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 
 export function BuscaSimples({
   basePath,
@@ -22,20 +23,19 @@ export function BuscaSimples({
   }
 
   return (
-    <div className="ntb-card">
-      <div className="ntb-card-body">
-        <form onSubmit={onSubmit} className="flex gap-3">
-          <input
-            name="q"
-            defaultValue={defaultValue}
-            placeholder={placeholder}
-            className="ntb-input"
-          />
-          <button type="submit" className="ntb-btn-success shrink-0">
-            <Search className="size-4" /> Buscar
-          </button>
-        </form>
+    <form onSubmit={onSubmit} className="flex gap-2">
+      <div className="relative flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+        <input
+          name="q"
+          defaultValue={defaultValue}
+          placeholder={placeholder}
+          className="w-full rounded-md border border-border bg-surface py-1.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+        />
       </div>
-    </div>
+      <button type="submit" className={`${btnClass('primary')} shrink-0`}>
+        <Search className="size-4" /> Buscar
+      </button>
+    </form>
   )
 }

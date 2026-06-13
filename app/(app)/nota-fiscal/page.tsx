@@ -4,16 +4,18 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { NotaFiscalFiltros } from '@/components/nota-fiscal/NotaFiscalFiltros'
 import { SyncButton } from '@/components/SyncButton'
-import { FileText, ArrowLeft, Eye } from 'lucide-react'
+import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { DataTable } from '@/components/ui-kit/DataTable'
+import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { Money } from '@/components/ui-kit/Money'
+import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { btnClass } from '@/components/ui-kit/Button'
+import { FileText } from 'lucide-react'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
-}
-
-function fmtMoeda(v: number | null): string {
-  return (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 export default async function NotaFiscalPage({
@@ -60,27 +62,23 @@ export default async function NotaFiscalPage({
 
   return (
     <div className="space-y-4">
-      {/* Título estilo original: voltar + ícone + nome */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
-            <ArrowLeft className="size-5" strokeWidth={2} />
-          </Link>
-          <FileText className="size-5 text-[#2eb5c3]" strokeWidth={2} />
-          <h1 className="text-lg font-semibold text-[#5d5d5d]">Notas Fiscais</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ntb-btn-outline"
-          >
-            <FileText className="size-4" /> Relatório PDF
-          </a>
-          <SyncButton endpoint="/api/sync/notas-fiscais" label="Sincronizar" />
-        </div>
-      </div>
+      <PageHeader
+        title="Notas Fiscais"
+        icon={FileText}
+        actions={
+          <>
+            <a
+              href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={btnClass('outline')}
+            >
+              <FileText className="size-4" /> Relatório PDF
+            </a>
+            <SyncButton endpoint="/api/sync/notas-fiscais" label="Sincronizar" />
+          </>
+        }
+      />
 
       <NotaFiscalFiltros
         defaults={{
@@ -91,39 +89,49 @@ export default async function NotaFiscalPage({
         }}
       />
 
-      {/* Lista de cards empilhados (fiel ao original) */}
-      <div className="space-y-4">
-        {notas?.length ? (
-          notas.map((nf) => (
-            <div key={nf.id}>
-              <span className="text-sm text-[#5d5d5d]">Emissão: {fmtData(nf.d_emissao_nfe)}</span>
-              <div className="ntb-card mt-1">
-                <div className="ntb-card-header flex items-center justify-between">
-                  <span>NF nº {nf.c_numero_nfe ?? '-'}</span>
-                  <span className="text-sm font-normal text-white/90">{fmtMoeda(nf.n_valor_nfe)}</span>
-                </div>
-                <div className="ntb-card-body flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <small className="text-[#8a8a8a]">Fornecedor</small>
-                    <p className="truncate font-semibold text-[#5d5d5d]">
-                      {nf.c_razao_social || nf.c_nome || '-'}
-                    </p>
-                  </div>
-                  <Link href={`/nota-fiscal/${nf.id}`} className="ntb-btn-outline shrink-0">
-                    <Eye className="size-4" /> Ver
+      {notas?.length ? (
+        <DataTable>
+          <thead>
+            <tr>
+              <th>Emissão</th>
+              <th>NFe</th>
+              <th>Fornecedor</th>
+              <th>Etapa</th>
+              <th className="text-right">Valor</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {notas.map((nf) => (
+              <tr key={nf.id}>
+                <td className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</td>
+                <td className="num">{nf.c_numero_nfe ?? '-'}</td>
+                <td className="max-w-xs truncate">{nf.c_razao_social || nf.c_nome || '-'}</td>
+                <td>
+                  <StatusPill status={nf.c_etapa} />
+                </td>
+                <td className="text-right">
+                  <Money value={nf.n_valor_nfe} />
+                </td>
+                <td className="text-right">
+                  <Link
+                    href={`/nota-fiscal/${nf.id}`}
+                    className="text-brand hover:underline whitespace-nowrap"
+                  >
+                    Ver
                   </Link>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="ntb-card">
-            <div className="ntb-card-body text-center text-[#8a8a8a]">
-              Nenhuma nota fiscal no período. Sincronize com o Omie ou ajuste os filtros.
-            </div>
-          </div>
-        )}
-      </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      ) : (
+        <EmptyState
+          icon={FileText}
+          title="Nenhuma nota fiscal no período"
+          hint="Sincronize com o Omie ou ajuste os filtros."
+        />
+      )}
     </div>
   )
 }

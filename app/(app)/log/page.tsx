@@ -2,7 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId } from '@/lib/auth'
 import Link from 'next/link'
 import { LogDetalhe } from '@/components/log/LogDetalhe'
-import { ScrollText, ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { DataTable } from '@/components/ui-kit/DataTable'
+import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { ScrollText } from 'lucide-react'
 
 export default async function LogPage({
   searchParams,
@@ -34,67 +37,49 @@ export default async function LogPage({
 
   return (
     <div className="space-y-4">
-      {/* Título estilo original: voltar + ícone + nome */}
-      <div className="flex items-center gap-2">
-        <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
-          <ArrowLeft className="size-5" strokeWidth={2} />
-        </Link>
-        <ScrollText className="size-5 text-[#2eb5c3]" strokeWidth={2} />
-        <h1 className="text-lg font-semibold text-[#5d5d5d]">Logs de Integracao com APIs</h1>
-      </div>
+      <PageHeader
+        title="Logs de Integracao com APIs"
+        icon={ScrollText}
+        description="Ultimas 50 tentativas de integracao"
+      />
 
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         {filtros.map((f) => (
           <Link
             key={f.label}
             href={f.href}
-            className={f.ativo ? 'ntb-btn-teal' : 'ntb-btn-outline'}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              f.ativo
+                ? 'bg-brand text-white'
+                : 'border border-border bg-surface text-text-muted hover:bg-surface-2 hover:text-text'
+            }`}
           >
             {f.label}
           </Link>
         ))}
       </div>
 
-      {/* Lista de cards empilhados (fiel ao original) */}
-      <div className="space-y-4">
-        {logs?.length ? (
-          logs.map((log) => (
-            <div key={log.id} className="ntb-card">
-              <div className="ntb-card-header flex items-center justify-between gap-3">
-                <span>
-                  #{log.id} {log.model ? `- ${log.model}` : ''}
-                </span>
-                <span className="flex items-center gap-2 text-sm font-normal text-white/90">
-                  {log.code ? `HTTP ${log.code}` : ''}
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                      log.error ? 'bg-[#ff595e] text-white' : 'bg-[#2bd84a] text-white'
-                    }`}
-                  >
-                    {log.error ? 'Erro' : 'OK'}
-                  </span>
-                </span>
-              </div>
-              <div className="ntb-card-body">
-                <small className="text-[#8a8a8a]">Data</small>
-                <p className="font-semibold text-[#5d5d5d]">
-                  {new Date(log.created_at).toLocaleString('pt-BR')}
-                </p>
-                {log.error_message && (
-                  <p className="mt-2 text-sm text-[#ff595e]">{log.error_message}</p>
-                )}
-                <LogDetalhe request={log.request} response={log.response} />
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="ntb-card">
-            <div className="ntb-card-body text-center text-[#8a8a8a]">
-              Nenhum log de integracao.
-            </div>
-          </div>
-        )}
-      </div>
+      {logs?.length ? (
+        <DataTable>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Model</th>
+              <th>HTTP</th>
+              <th>Resultado</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <LogDetalhe key={log.id} log={log} />
+            ))}
+          </tbody>
+        </DataTable>
+      ) : (
+        <EmptyState icon={ScrollText} title="Nenhum log de integracao" hint="As tentativas de integracao aparecerao aqui." />
+      )}
     </div>
   )
 }

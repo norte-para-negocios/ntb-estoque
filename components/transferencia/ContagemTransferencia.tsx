@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
-import { Trash2, CheckCircle } from 'lucide-react'
+import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
+import { btnClass } from '@/components/ui-kit/Button'
+import { EmptyState } from '@/components/ui-kit/EmptyState'
 import type { ProdutoBusca } from '@/lib/actions/produtos-search'
 import {
   addMovimento,
@@ -35,8 +34,20 @@ export function ContagemTransferencia({
   finalizado: boolean
 }) {
   const [itens] = useState(itensIniciais)
+  const [quans, setQuans] = useState<Record<number, number | null>>(() =>
+    Object.fromEntries(itensIniciais.map((i) => [i.id, i.quan]))
+  )
+  const [filtro, setFiltro] = useState('')
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  const visiveis = useMemo(() => {
+    const q = filtro.trim().toLowerCase()
+    if (!q) return itens
+    return itens.filter(
+      (i) => i.descricao.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q)
+    )
+  }, [itens, filtro])
 
   function adicionar(p: ProdutoBusca) {
     if (itens.some((i) => i.id_prod === p.codigo_produto)) {
@@ -50,12 +61,12 @@ export function ContagemTransferencia({
     })
   }
 
-  function salvarQtd(movId: number, valor: string) {
-    const num = valor === '' ? null : Number(valor)
+  function salvarQtd(movId: number, num: number | null) {
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
       return
     }
+    setQuans((prev) => ({ ...prev, [movId]: num }))
     startTransition(() => {
       editQuantidadeMovimento(movId, num)
     })
@@ -81,73 +92,122 @@ export function ContagemTransferencia({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="pb-28 lg:pb-20">
       {!finalizado && (
-        <Card className="p-4">
+        <div className="sticky top-0 z-10 -mx-4 mb-4 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           <ProdutoSearch onSelect={adicionar} />
-        </Card>
+        </div>
       )}
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">Produto</th>
-              <th className="text-right p-3 font-medium w-32">Quantidade</th>
-              <th className="text-center p-3 font-medium">Status</th>
-              {!finalizado && <th className="p-3 w-12"></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {itens.length ? (
-              itens.map((item) => (
-                <tr key={item.id} className="border-b">
-                  <td className="p-3">
-                    <div className="font-medium">{item.descricao}</div>
-                    <div className="text-xs text-gray-500">{item.codigo}</div>
-                  </td>
-                  <td className="p-3">
-                    <Input
-                      type="number"
-                      min={0}
-                      defaultValue={item.quan ?? ''}
-                      disabled={finalizado || pending}
-                      onBlur={(e) => salvarQtd(item.id, e.target.value)}
-                      className="text-right"
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className="p-3 text-center text-xs">{item.status}</td>
+      {itens.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            placeholder="Filtrar itens da lista"
+            className="w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+          />
+        </div>
+      )}
+
+      {visiveis.length ? (
+        <ul className="space-y-2.5">
+          {visiveis.map((item) => {
+            const q = quans[item.id]
+            return (
+              <li
+                key={item.id}
+                className="rounded-lg border border-border bg-surface p-3.5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-text">{item.descricao}</div>
+                    <div className="num mt-0.5 text-xs text-text-muted">{item.codigo}</div>
+                    {item.status && (
+                      <div className="mt-1 text-[11px] text-text-muted">{item.status}</div>
+                    )}
+                  </div>
                   {!finalizado && (
-                    <td className="p-3">
-                      <button
-                        onClick={() => remover(item.id)}
-                        className="text-gray-400 hover:text-red-600"
-                        aria-label="Remover"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </td>
+                    <button
+                      onClick={() => remover(item.id)}
+                      disabled={pending}
+                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)] disabled:opacity-50"
+                      aria-label="Remover"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                   )}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={finalizado ? 3 : 4} className="p-8 text-center text-gray-500">
-                  Nenhum item. Use a busca acima para adicionar produtos.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="eyebrow">Quantidade</span>
+                  {finalizado ? (
+                    <span className="num text-lg font-semibold text-text">{q ?? 0}</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => salvarQtd(item.id, Math.max(0, (q ?? 0) - 1))}
+                        disabled={pending}
+                        className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        aria-label="Diminuir"
+                      >
+                        <Minus className="size-4" />
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={q ?? ''}
+                        disabled={pending}
+                        onChange={(e) =>
+                          setQuans((prev) => ({
+                            ...prev,
+                            [item.id]: e.target.value === '' ? null : Number(e.target.value),
+                          }))
+                        }
+                        onBlur={(e) =>
+                          salvarQtd(item.id, e.target.value === '' ? null : Number(e.target.value))
+                        }
+                        className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                        placeholder="0"
+                      />
+                      <button
+                        onClick={() => salvarQtd(item.id, (q ?? 0) + 1)}
+                        disabled={pending}
+                        className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        aria-label="Aumentar"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Search}
+          title={filtro ? 'Nenhum item encontrado' : 'Nenhum item'}
+          hint={filtro ? 'Ajuste o filtro de busca.' : 'Use a busca acima para adicionar produtos.'}
+        />
+      )}
 
       {!finalizado && itens.length > 0 && (
-        <div className="flex justify-end">
-          <Button onClick={finalizar} disabled={pending}>
-            <CheckCircle className="size-4" />
-            {pending ? 'Enviando ao Omie...' : 'Finalizar e enviar ao Omie'}
-          </Button>
+        <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
+          <div className="flex justify-end">
+            <button
+              onClick={finalizar}
+              disabled={pending}
+              className={`${btnClass('primary')} w-full sm:w-auto`}
+            >
+              <CheckCircle className="size-4" />
+              {pending ? 'Enviando ao Omie...' : 'Finalizar e enviar ao Omie'}
+            </button>
+          </div>
         </div>
       )}
     </div>
