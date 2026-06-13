@@ -5,102 +5,77 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-inter);
-  --font-heading: var(--font-inter);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-sans-src);
+  --font-mono: var(--font-mono-src);
   --color-brand: var(--brand);
-  --color-brand-foreground: var(--brand-foreground);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
+  --color-brand-soft: var(--brand-soft);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--brand);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--err);
   --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: 0.2rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.5rem;
-  --radius-2xl: 0.5rem;
-  /* gray-50/100 do Tailwind usados em alguns componentes herdados */
-  --color-gray-50: #f4f4f4;
-  --color-gray-100: #ececec;
+  --color-input: var(--border);
+  --color-ring: var(--brand);
+  --color-sidebar: var(--surface);
+  --color-sidebar-foreground: var(--text);
+  --color-sidebar-accent: var(--surface-2);
+  --color-sidebar-accent-foreground: var(--text);
+  --color-sidebar-border: var(--border);
+  --color-gray-50: var(--surface-2);
+  --color-gray-100: var(--surface-2);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-lg);
 }
 
 :root {
-  /* Paleta fiel ao original (Bootstrap NTB) */
-  --background: #f4f4f4;
-  --foreground: #5d5d5d;
-  --card: #ffffff;
-  --card-foreground: #5d5d5d;
-  --popover: #ffffff;
-  --popover-foreground: #5d5d5d;
-
-  /* Primary cinza (igual $primary: #5D5D5D), teal é o accent da marca */
-  --primary: #5d5d5d;
-  --primary-foreground: #ffffff;
+  /* Neutros slate frios */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f4f8;
+  --text: #1f2733;
+  --text-muted: #64748b;
+  --border: #e6e9ef;
+  /* Marca */
   --brand: #2eb5c3;
-  --brand-foreground: #ffffff;
-
-  --secondary: #d5d5d5;
-  --secondary-foreground: #5d5d5d;
-  --muted: #ececec;
-  --muted-foreground: #8a8a8a;
-  --accent: #2eb5c3;
-  --accent-foreground: #ffffff;
-  --destructive: #ff595e;
-  --success: #2bd84a;
-  --warning: #ffca3a;
-
-  --border: #e2e2e2;
-  --input: #d5d5d5;
-  --ring: #2eb5c3;
-
-  --chart-1: #2eb5c3;
-  --chart-2: #5b8def;
-  --chart-3: #2bd84a;
-  --chart-4: #ffca3a;
-  --chart-5: #ff595e;
-
-  --radius: 0.5rem;
-
-  --sidebar: #f4f4f4;
-  --sidebar-foreground: #5d5d5d;
-  --sidebar-primary: #2eb5c3;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ececec;
-  --sidebar-accent-foreground: #5d5d5d;
-  --sidebar-border: #e2e2e2;
-  --sidebar-ring: #2eb5c3;
+  --brand-strong: #1c8d99;
+  --brand-soft: #e6f7f9;
+  /* Semânticas */
+  --ok: #10b981;
+  --warn: #f59e0b;
+  --err: #ef4444;
+  --info: #3b82f6;
+  /* Raios */
+  --r-sm: 0.375rem;
+  --r-md: 0.625rem;
+  --r-lg: 0.875rem;
+  /* Sombras suaves difusas */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 6px -2px rgba(16, 24, 40, 0.05);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --radius: 0.625rem;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/40;
   }
   body {
     @apply bg-background text-foreground;
@@ -111,50 +86,11 @@
   html {
     @apply font-sans;
   }
-
-  .tabular {
+  .num {
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
-
   .eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
-  }
-}
-
-@layer components {
-  /* === Componentes fiéis ao Bootstrap do original === */
-
-  /* Card branco com header teal, igual ao .card / .card-header do original */
-  .ntb-card {
-    @apply bg-white rounded-lg overflow-hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-  .ntb-card-header {
-    background-color: #2eb5c3;
-    @apply text-white px-4 py-2.5 font-medium;
-  }
-  .ntb-card-body {
-    @apply bg-white px-4 py-3;
-  }
-
-  /* Botão outline cinza (btn-outline-secondary text-muted) */
-  .ntb-btn-outline {
-    @apply inline-flex items-center gap-1.5 rounded border border-[#d5d5d5] bg-white px-3 py-1.5 text-sm font-semibold text-[#8a8a8a] transition-colors hover:bg-[#f4f4f4];
-  }
-  /* Botão teal preenchido */
-  .ntb-btn-teal {
-    @apply inline-flex items-center gap-1.5 rounded bg-[#2eb5c3] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#28a3b0];
-  }
-  /* Botão de sucesso (verde, igual btn-success do filtro) */
-  .ntb-btn-success {
-    @apply inline-flex items-center gap-1.5 rounded bg-[#2bd84a] px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#26c043];
-  }
-
-  /* Inputs estilo original: borda cinza, texto teal */
-  .ntb-input {
-    @apply w-full rounded border border-[#d5d5d5] bg-white px-3 py-2 text-[#2eb5c3] outline-none focus:border-[#2eb5c3];
-  }
-  .ntb-label {
-    @apply mb-1 block text-sm text-[#5d5d5d];
   }
 }

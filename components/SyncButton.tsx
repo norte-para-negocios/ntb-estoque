@@ -29,7 +29,11 @@ export function SyncButton({ endpoint, label }: { endpoint: string; label: strin
   }
 
   return (
-    <button onClick={handleSync} disabled={loading} className="ntb-btn-teal disabled:opacity-60">
+    <button
+      onClick={handleSync}
+      disabled={loading}
+      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-all duration-200 hover:bg-[var(--brand-strong)] active:scale-[0.98] disabled:opacity-60"
+    >
       <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
       {loading ? 'Sincronizando...' : label}
     </button>
