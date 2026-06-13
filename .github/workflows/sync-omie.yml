@@ -1,0 +1,34 @@
+name: Sync Omie
+
+# Mantem o sistema sincronizado com o Omie automaticamente, sem clicar.
+# Camada 1 (tempo real): webhook do Omie (configurado nas lojas).
+# Camada 2 (rede de seguranca): este cron frequente.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # a cada 10 min
+  workflow_dispatch: {}
+
+concurrency:
+  group: sync-omie
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar sincronizacoes
+        env:
+          BASE: https://ntb-estoque.vercel.app
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then echo "CRON_SECRET nao configurado nos secrets do repo"; exit 1; fi
+          min=$(date -u +%M)
+          hit() { echo "-> $1"; curl -s -m 120 -o /dev/null -w "   http %{http_code}\n" -H "Authorization: Bearer $SECRET" "$BASE$1" || true; }
+          # Sempre: notas fiscais e ordens de producao (mudam ao longo do dia)
+          hit /api/cron/sync-nfs
+          hit /api/cron/sync-ops
+          # Locais de estoque: 2x por hora
+          if [ "$min" = "15" ] || [ "$min" = "45" ]; then hit /api/cron/sync-locais; fi
+          # Produtos: 1x por hora (mudam pouco)
+          if [ "$min" = "05" ]; then hit /api/cron/sync-produtos; fi

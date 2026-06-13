@@ -140,7 +140,7 @@ export default async function NotaFiscalPage({
             >
               <FileText className="size-4" /> Relatório PDF
             </a>
-            <SyncButton endpoint="/api/sync/notas-fiscais" label="Sincronizar" />
+            <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />
           </>
         }
       />

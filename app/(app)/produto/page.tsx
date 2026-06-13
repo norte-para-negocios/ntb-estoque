@@ -74,7 +74,7 @@ export default async function ProdutoPage({
       <PageHeader
         title="Produtos"
         icon={Package}
-        actions={podeSync ? <SyncButton endpoint="/api/sync/produtos" label="Sincronizar" /> : undefined}
+        actions={podeSync ? <SyncButton endpoint="/api/sync/produtos" label="Atualizar agora" /> : undefined}
       />
 
       <div className="flex items-center gap-2 text-[13px] text-text-muted">

@@ -120,7 +120,7 @@ export default async function OrdemProducaoPage({
       <PageHeader
         title="Ordens de Produção"
         icon={Factory}
-        actions={<SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar" />}
+        actions={<SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
       />
 
       <Filtros
