@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { Factory } from 'lucide-react'
 
 const POR_PAGINA = 50
@@ -34,31 +35,73 @@ export default async function OrdemProducaoPage({
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
 
+  // Filtro op_concluido em memoria: a unica fonte confiavel de conclusao e
+  // full_object.outrasInf.cConcluida ('S'/'N'), alem do marcador local
+  // adicionais_d_dt_conclusao gravado por finishOP. Como nao da pra filtrar
+  // JSON aninhado no PostgREST, fazemos isso apos buscar. Por isso, quando o
+  // filtro op_concluido esta ativo, buscamos sem range e paginamos em memoria.
+  const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
+
+  // Filtros op_produto / tipo_produto: as colunas produto_* em ordens_producao
+  // sao 100% NULL. Cruzamos via a tabela produtos para obter os codigo_produto
+  // e filtramos por identificacao_n_cod_produto (campo preenchido).
+  let codigosFiltro: number[] | null = null
+  if (sp.op_produto || sp.tipo_produto) {
+    let prodQuery = supabase
+      .from('produtos')
+      .select('codigo_produto')
+      .eq('loja_id', lojaId)
+    if (sp.op_produto) {
+      const termo = escapeIlikeOr(sp.op_produto)
+      prodQuery = prodQuery.or(`codigo.ilike.%${termo}%,descricao.ilike.%${termo}%`)
+    }
+    if (sp.tipo_produto) prodQuery = prodQuery.eq('tipo_item', sp.tipo_produto)
+    const { data: prods } = await prodQuery
+    codigosFiltro = [
+      ...new Set((prods ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null)),
+    ]
+  }
+
   let query = supabase
     .from('ordens_producao')
     .select(
-      'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade'
+      'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade, adicionais_d_dt_conclusao, full_object'
     )
     .eq('loja_id', lojaId)
     .order('updated_at', { ascending: false })
 
   if (sp.data_inicio) query = query.gte('identificacao_d_dt_previsao', sp.data_inicio)
   if (sp.data_final) query = query.lte('identificacao_d_dt_previsao', sp.data_final)
-  if (sp.ordem_producao) query = query.ilike('identificacao_c_num_op', `%${sp.ordem_producao}%`)
-  if (sp.op_produto) {
-    query = query.or(
-      `produto_codigo.ilike.%${sp.op_produto}%,produto_descricao.ilike.%${sp.op_produto}%`
-    )
+  if (sp.ordem_producao) {
+    query = query.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
   }
-  if (sp.tipo_produto) query = query.eq('produto_tipo_item', sp.tipo_produto)
-  if (sp.op_concluido === 'S') query = query.not('adicionais_d_dt_conclusao', 'is', null)
-  if (sp.op_concluido === 'N') query = query.is('adicionais_d_dt_conclusao', null)
+  if (codigosFiltro !== null) {
+    query = query.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+  }
 
-  query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
+  if (!filtraConclusao) {
+    query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
+  }
 
   const { data: ordensRaw } = await query
-  const temProxima = (ordensRaw?.length ?? 0) > POR_PAGINA
-  const ordens = temProxima ? ordensRaw!.slice(0, POR_PAGINA) : ordensRaw
+
+  function isConcluida(o: { adicionais_d_dt_conclusao?: string | null; full_object?: unknown }): boolean {
+    if (o.adicionais_d_dt_conclusao) return true
+    const fo = (o.full_object ?? {}) as { outrasInf?: { cConcluida?: string } }
+    return fo.outrasInf?.cConcluida === 'S'
+  }
+
+  let ordens: typeof ordensRaw
+  let temProxima: boolean
+  if (filtraConclusao) {
+    const querConcluida = sp.op_concluido === 'S'
+    const filtradas = (ordensRaw ?? []).filter((o) => isConcluida(o) === querConcluida)
+    temProxima = filtradas.length > page * POR_PAGINA
+    ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
+  } else {
+    temProxima = (ordensRaw?.length ?? 0) > POR_PAGINA
+    ordens = temProxima ? ordensRaw!.slice(0, POR_PAGINA) : ordensRaw
+  }
 
   // Buscar descricoes dos produtos relacionados
   const codigos = [...new Set((ordens ?? []).map((o) => o.identificacao_n_cod_produto).filter(Boolean))]

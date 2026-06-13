@@ -33,19 +33,33 @@ export async function GET(request: Request) {
     .eq('id', lojaId)
     .single()
 
-  let query = supabase
-    .from('notas_fiscais')
-    .select('d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe')
-    .eq('loja_id', lojaId)
-    .gte('d_emissao_nfe', dataInicio)
-    .lte('d_emissao_nfe', dataFinal)
-    .is('deleted_at', null)
-    .order('d_emissao_nfe', { ascending: true })
+  // Paginacao interna: PostgREST limita a 1000 linhas por request. Buscamos
+  // em paginas ate esgotar para nao truncar silenciosamente o relatorio.
+  const PAGE_SIZE = 1000
+  const notas: NonNullable<Awaited<ReturnType<typeof buildQuery>>['data']> = []
 
-  if (numNfe) query = query.ilike('c_numero_nfe', `%${numNfe}%`)
-  if (fornecedor) query = query.ilike('c_razao_social', `%${fornecedor}%`)
+  function buildQuery(from: number, to: number) {
+    let q = supabase
+      .from('notas_fiscais')
+      .select('d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe')
+      .eq('loja_id', lojaId)
+      .gte('d_emissao_nfe', dataInicio)
+      .lte('d_emissao_nfe', dataFinal)
+      .is('deleted_at', null)
+      .order('d_emissao_nfe', { ascending: true })
+      .range(from, to)
+    if (numNfe) q = q.ilike('c_numero_nfe', `%${numNfe}%`)
+    if (fornecedor) q = q.ilike('c_razao_social', `%${fornecedor}%`)
+    return q
+  }
 
-  const { data: notas } = await query
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * PAGE_SIZE
+    const { data: bloco } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (!bloco?.length) break
+    notas.push(...bloco)
+    if (bloco.length < PAGE_SIZE) break
+  }
 
   const itens: RelatorioNFItem[] = (notas ?? []).map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),

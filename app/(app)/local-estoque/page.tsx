@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { escapeIlike } from '@/lib/utils-busca'
 import { Warehouse } from 'lucide-react'
 
 function fmtTimestamp(d: string | null): string {
@@ -39,7 +40,7 @@ export default async function LocalEstoquePage({
     .order('descricao')
     .limit(200)
 
-  if (params.q) query = query.ilike('descricao', `%${params.q}%`)
+  if (params.q) query = query.ilike('descricao', `%${escapeIlike(params.q)}%`)
 
   const { data: locais } = await query
 

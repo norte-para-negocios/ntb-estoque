@@ -9,7 +9,7 @@ interface OmieNFCabec {
   cRazaoSocial: string
   cInscricao: string
   cCNPJ_CPF: string
-  cChaveNfe: string
+  cChaveNFe: string
   cEtapa: string
   cNumeroNFe: string
   cSerieNFe: string
@@ -68,7 +68,7 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
         c_razao_social: nf.cabec.cRazaoSocial,
         c_inscricao: nf.cabec.cInscricao,
         c_cnpj_cpf: nf.cabec.cCNPJ_CPF,
-        c_chave_nfe: nf.cabec.cChaveNfe,
+        c_chave_nfe: nf.cabec.cChaveNFe,
         c_etapa: nf.cabec.cEtapa,
         c_numero_nfe: nf.cabec.cNumeroNFe,
         c_serie_nfe: nf.cabec.cSerieNFe,

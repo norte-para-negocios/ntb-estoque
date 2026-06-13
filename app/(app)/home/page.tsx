@@ -35,6 +35,28 @@ export default async function HomePage() {
   const lojaId = profile.current_loja_id
   const supabase = await createClient()
 
+  // Multi-tenant: nao-admin so pode ver dados de lojas que tem em loja_user.
+  // Se a current_loja_id nao estiver entre as lojas do usuario, pede pra
+  // selecionar uma loja valida em vez de exibir dados sem permissao.
+  const isAdmin = profile.perfil === 'Admin'
+  if (!isAdmin) {
+    const { data: vinculo } = await supabase
+      .from('loja_user')
+      .select('id')
+      .eq('loja_id', lojaId)
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    if (!vinculo) {
+      return (
+        <EmptyState
+          icon={Package}
+          title="Selecione uma loja válida"
+          hint="Você não tem acesso à loja atual. Escolha uma loja no menu lateral."
+        />
+      )
+    }
+  }
+
   const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const head = { count: 'exact' as const, head: true }
 

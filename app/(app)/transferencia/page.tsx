@@ -75,7 +75,7 @@ export default async function TransferenciaPage({
   let query = supabase
     .from('transferencias')
     .select(
-      'id, data, codigo_local_origem, codigo_local_destino, status, finalizado, movimentos(count), movStatus:movimentos(status)'
+      'id, data, codigo_local_origem, codigo_local_destino, status, movimentos(count), movStatus:movimentos(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
+import { toast } from 'sonner'
 import {
   Select,
   SelectContent,
@@ -24,7 +25,12 @@ export function LojaSelector({
   return (
     <Select
       value={currentLojaId ? String(currentLojaId) : undefined}
-      onValueChange={(val) => startTransition(() => setCurrentLoja(Number(val)))}
+      onValueChange={(val) =>
+        startTransition(async () => {
+          const res = await setCurrentLoja(Number(val))
+          if (res?.error) toast.error('Erro', { description: res.error })
+        })
+      }
       disabled={pending}
     >
       <SelectTrigger className="w-full bg-surface border-border font-medium text-text data-[placeholder]:text-text-muted">

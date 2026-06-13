@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 import { Store } from 'lucide-react'
 
 function fmt(d: string | null): string {
@@ -31,7 +32,10 @@ export default async function LojaPage({
     .select('*')
     .order('id')
 
-  if (q) query = query.or(`nome.ilike.%${q}%,nome_fantasia.ilike.%${q}%`)
+  if (q) {
+    const t = escapeIlikeOr(q)
+    query = query.or(`nome.ilike.%${t}%,nome_fantasia.ilike.%${t}%`)
+  }
 
   const { data: lojas } = await query
 

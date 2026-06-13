@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
+import { escapeIlike } from '@/lib/utils-busca'
 import { Users } from 'lucide-react'
 
 type UsuarioRow = {
@@ -36,7 +37,7 @@ export default async function UsuarioPage({
     )
     .order('name')
 
-  if (q) usuariosQuery = usuariosQuery.ilike('name', `%${q}%`)
+  if (q) usuariosQuery = usuariosQuery.ilike('name', `%${escapeIlike(q)}%`)
 
   const { data: usuarios } = await usuariosQuery.returns<UsuarioRow[]>()
 

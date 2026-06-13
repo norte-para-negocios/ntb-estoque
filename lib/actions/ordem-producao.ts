@@ -50,6 +50,19 @@ export async function finishOP(opId: number) {
   try {
     const hoje = new Date().toLocaleDateString('pt-BR')
     await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, hoje, op.quantidade ?? 1, '')
+
+    // Marca conclusao localmente para a OP nao reaparecer como pendente
+    // (o sync nem sempre traz cConcluida de imediato). O filtro op_concluido
+    // da pagina considera este campo como verdade de conclusao.
+    await supabase
+      .from('ordens_producao')
+      .update({
+        adicionais_d_dt_conclusao: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', opId)
+      .eq('loja_id', lojaId)
+
     revalidatePath('/ordem-producao')
     return { ok: true }
   } catch (e) {

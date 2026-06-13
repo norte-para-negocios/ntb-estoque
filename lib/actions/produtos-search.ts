@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId } from '@/lib/auth'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 
 export type ProdutoBusca = {
   codigo_produto: number
@@ -21,7 +22,8 @@ export async function buscarProdutos(termo: string): Promise<ProdutoBusca[]> {
     .limit(20)
 
   if (termo.trim()) {
-    query = query.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+    const t = escapeIlikeOr(termo)
+    query = query.or(`descricao.ilike.%${t}%,codigo.ilike.%${t}%`)
   }
 
   const { data } = await query.order('descricao')

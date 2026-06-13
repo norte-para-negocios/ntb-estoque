@@ -142,6 +142,8 @@ export function ContagemInventario({
         <ul className="space-y-2.5">
           {visiveis.map((item) => {
             const q = item.quan
+            // base finita para os botoes +/- (evita NaN propagando)
+            const base = Number.isFinite(q as number) ? (q as number) : 0
             return (
               <li
                 key={item.id}
@@ -177,7 +179,7 @@ export function ContagemInventario({
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => salvarQtd(item.id, Math.max(0, (q ?? 0) - 1))}
+                        onClick={() => salvarQtd(item.id, Math.max(0, base - 1))}
                         disabled={pending}
                         className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
                         aria-label="Diminuir"
@@ -190,23 +192,25 @@ export function ContagemInventario({
                         inputMode="numeric"
                         value={q ?? ''}
                         disabled={pending}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          const parsed = raw === '' ? null : Number(raw)
+                          const val = parsed != null && Number.isFinite(parsed) ? parsed : null
                           setItens((prev) =>
-                            prev.map((i) =>
-                              i.id === item.id
-                                ? { ...i, quan: e.target.value === '' ? null : Number(e.target.value) }
-                                : i
-                            )
+                            prev.map((i) => (i.id === item.id ? { ...i, quan: val } : i))
                           )
-                        }
-                        onBlur={(e) =>
-                          salvarQtd(item.id, e.target.value === '' ? null : Number(e.target.value))
-                        }
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value
+                          const parsed = raw === '' ? null : Number(raw)
+                          const val = parsed != null && Number.isFinite(parsed) ? parsed : null
+                          salvarQtd(item.id, val)
+                        }}
                         className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
                         placeholder="0"
                       />
                       <button
-                        onClick={() => salvarQtd(item.id, (q ?? 0) + 1)}
+                        onClick={() => salvarQtd(item.id, base + 1)}
                         disabled={pending}
                         className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
                         aria-label="Aumentar"

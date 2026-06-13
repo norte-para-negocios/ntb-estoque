@@ -10,6 +10,7 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Money } from '@/components/ui-kit/Money'
 import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 import { Package } from 'lucide-react'
 
 const POR_PAGINA = 100
@@ -57,7 +58,10 @@ export default async function ProdutoPage({
     .order('descricao')
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
-  if (params.q) query = query.or(`descricao.ilike.%${params.q}%,codigo.ilike.%${params.q}%`)
+  if (params.q) {
+    const q = escapeIlikeOr(params.q)
+    query = query.or(`descricao.ilike.%${q}%,codigo.ilike.%${q}%`)
+  }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
 

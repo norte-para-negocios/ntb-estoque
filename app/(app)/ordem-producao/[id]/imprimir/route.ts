@@ -55,7 +55,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const qr = await QRCode.toDataURL(String(codigoProduto), { margin: 1, width: 160 })
 
   // Se unidade é "UN": uma etiqueta por unidade ("i de N (UN)"). Senão: uma só (kg etc).
-  const total = unidade === 'UN' ? Number(qtdeOP) || 1 : 1
+  const total =
+    unidade === 'UN' ? Math.min(Math.max(1, Math.floor(Number(qtdeOP) || 1)), 1000) : 1
   const etiquetas: Etiqueta[] = []
   for (let i = 1; i <= total; i++) {
     const quantidade =

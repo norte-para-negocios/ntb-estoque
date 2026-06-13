@@ -11,6 +11,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
+import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { FileText } from 'lucide-react'
 
 const POR_PAGINA = 50
@@ -56,9 +57,9 @@ export default async function NotaFiscalPage({
     .order('d_emissao_nfe', { ascending: false })
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
-  if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${params.num_nfe}%`)
+  if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
   // Fornecedor: o controller original filtra por c_nome
-  if (params.fornecedor) query = query.ilike('c_nome', `%${params.fornecedor}%`)
+  if (params.fornecedor) query = query.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
 
   // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
   if (params.status === 'C') query = query.eq('c_etapa', '60')
@@ -86,8 +87,9 @@ export default async function NotaFiscalPage({
           .eq('loja_id', lojaId)
           .in('produto_codigo', codigos)
         if (params.produto) {
+          const p = escapeIlikeOr(params.produto)
           itemQuery = itemQuery.or(
-            `c_descricao_produto.ilike.%${params.produto}%,c_codigo_produto.ilike.%${params.produto}%`,
+            `c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`,
           )
         }
         const { data: itemRows } = await itemQuery
@@ -97,11 +99,12 @@ export default async function NotaFiscalPage({
         query = query.in('id', notaIds.length ? notaIds : [-1])
       }
     } else if (params.produto) {
+      const p = escapeIlikeOr(params.produto)
       const { data: itemRows } = await supabase
         .from('nota_fiscal_items')
         .select('nota_fiscal_id')
         .eq('loja_id', lojaId)
-        .or(`c_descricao_produto.ilike.%${params.produto}%,c_codigo_produto.ilike.%${params.produto}%`)
+        .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
       const notaIds = Array.from(
         new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
       )

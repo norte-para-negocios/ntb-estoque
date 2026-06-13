@@ -7,7 +7,7 @@ interface OmieProduto {
   descricao: string
   codigo_familia: number
   descricao_familia: string
-  tipo_item: string | null
+  tipoItem: string | null
   unidade: string
   valor_unitario: number
 }
@@ -54,7 +54,7 @@ export async function syncProdutos(loja: LojaOmie) {
           descricao: p.descricao,
           codigo_familia: p.codigo_familia,
           descricao_familia: p.descricao_familia,
-          tipo_item: p.tipo_item,
+          tipo_item: p.tipoItem,
           unidade: p.unidade,
           valor_unitario: p.valor_unitario,
           full_object: p,

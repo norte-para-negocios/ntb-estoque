@@ -9,11 +9,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isAdmin = profile.perfil === 'Admin'
 
   const supabase = await createClient()
-  const { data: lojas } = await supabase
+
+  let lojasQuery = supabase
     .from('lojas')
     .select('id, nome, nome_fantasia')
     .eq('ativo', true)
     .order('nome_fantasia')
+
+  // Nao-admin so enxerga as lojas que tem em loja_user.
+  if (!isAdmin) {
+    const { data: vinculos } = await supabase
+      .from('loja_user')
+      .select('loja_id')
+      .eq('user_id', profile.id)
+    const lojaIds = [
+      ...new Set((vinculos ?? []).map((v) => v.loja_id).filter((v): v is number => v != null)),
+    ]
+    lojasQuery = lojasQuery.in('id', lojaIds.length ? lojaIds : [-1])
+  }
+
+  const { data: lojas } = await lojasQuery
 
   return (
     <AppShell
