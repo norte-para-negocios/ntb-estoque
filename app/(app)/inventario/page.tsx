@@ -6,12 +6,23 @@ import { ClipboardList, Pencil } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { Filtros } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
-export default async function InventarioPage() {
+export default async function InventarioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    data_inicio?: string
+    data_final?: string
+    familia?: string
+    tipo?: string
+  }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Ver'))) notFound()
 
@@ -19,14 +30,63 @@ export default async function InventarioPage() {
   const podeCriar = await requirePermissao(lojaId, 'Inventarios - Criar')
   const podeExcluir = await requirePermissao(lojaId, 'Inventarios - Excluir')
 
-  const { data: inventarios } = await supabase
+  const sp = await searchParams
+  const temData = Boolean(sp.data_inicio || sp.data_final)
+
+  // Familias distintas para o select (melhor esforco)
+  const { data: produtosFamilia } = await supabase
+    .from('produtos')
+    .select('descricao_familia')
+    .eq('loja_id', lojaId)
+    .not('descricao_familia', 'is', null)
+
+  const familias = [
+    ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
+  ].sort() as string[]
+
+  // Filtro de familia/tipo via inventario_items -> inventario_id
+  let idsFiltrados: number[] | null = null
+  if (sp.familia || sp.tipo) {
+    let codigosTipo: number[] | null = null
+    if (sp.tipo) {
+      const { data: prods } = await supabase
+        .from('produtos')
+        .select('codigo_produto')
+        .eq('loja_id', lojaId)
+        .eq('tipo_item', sp.tipo)
+      codigosTipo = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+    }
+
+    if (codigosTipo !== null && codigosTipo.length === 0) {
+      idsFiltrados = []
+    } else {
+      let itemQuery = supabase
+        .from('inventario_items')
+        .select('inventario_id')
+        .eq('loja_id', lojaId)
+      if (sp.familia) itemQuery = itemQuery.eq('produto_familia', sp.familia)
+      if (codigosTipo !== null) itemQuery = itemQuery.in('produto_codigo_produto', codigosTipo)
+      const { data: items } = await itemQuery
+      idsFiltrados = [
+        ...new Set((items ?? []).map((i) => i.inventario_id).filter((v): v is number => v != null)),
+      ]
+    }
+  }
+
+  let query = supabase
     .from('inventarios')
     .select(
       'id, data, codigo_local_estoque, status, finalizado, items:inventario_items(count), itensStatus:inventario_items(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
-    .limit(50)
+
+  if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
+  if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
+  if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
+  if (!temData) query = query.limit(50)
+
+  const { data: inventarios } = await query
 
   const { data: locais } = await supabase
     .from('local_estoques')
@@ -49,6 +109,27 @@ export default async function InventarioPage() {
         icon={ClipboardList}
         description="Contagens de estoque por local"
         actions={podeCriar ? <NovoInventario locais={locais ?? []} /> : undefined}
+      />
+
+      <Filtros
+        basePath="/inventario"
+        campos={[
+          { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+          { tipo: 'data', nome: 'data_final', label: 'Data final' },
+          {
+            tipo: 'select',
+            nome: 'familia',
+            label: 'Família',
+            opcoes: familias.map((f) => ({ value: f, label: f })),
+          },
+          { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+        ]}
+        defaults={{
+          data_inicio: sp.data_inicio ?? '',
+          data_final: sp.data_final ?? '',
+          familia: sp.familia ?? '',
+          tipo: sp.tipo ?? '',
+        }}
       />
 
       {inventarios?.length ? (

@@ -6,6 +6,7 @@ import { EditarUsuario, type UsuarioEditavel } from '@/components/usuario/Editar
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { BuscaSimples } from '@/components/BuscaSimples'
 import { Users } from 'lucide-react'
 
 type UsuarioRow = {
@@ -17,17 +18,27 @@ type UsuarioRow = {
   local_estoque_user: { loja_id: number; local_estoque_id: number }[]
 }
 
-export default async function UsuarioPage() {
+export default async function UsuarioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
   if (!(await isAdmin())) notFound()
 
+  const params = await searchParams
+  const q = (params.q ?? '').trim()
+
   const supabase = await createClient()
-  const { data: usuarios } = await supabase
+  let usuariosQuery = supabase
     .from('profiles')
     .select(
       'id, name, perfil, loja_user(loja_id), permissao_user(loja_id, permissao_id), local_estoque_user(loja_id, local_estoque_id)'
     )
     .order('name')
-    .returns<UsuarioRow[]>()
+
+  if (q) usuariosQuery = usuariosQuery.ilike('name', `%${q}%`)
+
+  const { data: usuarios } = await usuariosQuery.returns<UsuarioRow[]>()
 
   const { data: lojas } = await supabase
     .from('lojas')
@@ -54,6 +65,8 @@ export default async function UsuarioPage() {
         description="Acessos, permissoes e locais por loja"
         actions={<NovoUsuario lojas={lojas ?? []} />}
       />
+
+      <BuscaSimples basePath="/usuario" placeholder="Buscar por nome" defaultValue={q} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {usuarios?.length ? (

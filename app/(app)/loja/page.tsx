@@ -8,20 +8,32 @@ import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { BuscaSimples } from '@/components/BuscaSimples'
 import { Store } from 'lucide-react'
 
 function fmt(d: string | null): string {
   return d ? new Date(d).toLocaleString('pt-BR') : 'dd/mm/aa hh:mm:ss'
 }
 
-export default async function LojaPage() {
+export default async function LojaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
   if (!(await isAdmin())) notFound()
 
+  const params = await searchParams
+  const q = (params.q ?? '').trim()
+
   const supabase = await createClient()
-  const { data: lojas } = await supabase
+  let query = supabase
     .from('lojas')
     .select('*')
     .order('id')
+
+  if (q) query = query.or(`nome.ilike.%${q}%,nome_fantasia.ilike.%${q}%`)
+
+  const { data: lojas } = await query
 
   const webhookUrl =
     (process.env.NEXT_PUBLIC_APP_URL || 'https://ntb-estoque.vercel.app') + '/api/webhook'
@@ -41,6 +53,8 @@ export default async function LojaPage() {
         description="Cadastro de lojas e integracao Omie"
         actions={<LojaForm />}
       />
+
+      <BuscaSimples basePath="/loja" placeholder="Buscar por nome ou nome fantasia" defaultValue={q} />
 
       {/* Aviso do webhook do Omie */}
       <div className="rounded-lg border border-border bg-surface p-4">

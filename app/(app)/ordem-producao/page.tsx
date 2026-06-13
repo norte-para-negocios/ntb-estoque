@@ -4,24 +4,55 @@ import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow } from '@/components/ordem-producao/OrdemProducaoRow'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { Filtros } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { Factory } from 'lucide-react'
 
-export default async function OrdemProducaoPage() {
+export default async function OrdemProducaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    data_inicio?: string
+    data_final?: string
+    ordem_producao?: string
+    op_produto?: string
+    tipo_produto?: string
+    op_concluido?: string
+  }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
 
   const supabase = await createClient()
 
-  const { data: ordens } = await supabase
+  const sp = await searchParams
+  const temData = Boolean(sp.data_inicio || sp.data_final)
+
+  let query = supabase
     .from('ordens_producao')
     .select(
       'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade'
     )
     .eq('loja_id', lojaId)
     .order('updated_at', { ascending: false })
-    .limit(50)
+
+  if (sp.data_inicio) query = query.gte('identificacao_d_dt_previsao', sp.data_inicio)
+  if (sp.data_final) query = query.lte('identificacao_d_dt_previsao', sp.data_final)
+  if (sp.ordem_producao) query = query.ilike('identificacao_c_num_op', `%${sp.ordem_producao}%`)
+  if (sp.op_produto) {
+    query = query.or(
+      `produto_codigo.ilike.%${sp.op_produto}%,produto_descricao.ilike.%${sp.op_produto}%`
+    )
+  }
+  if (sp.tipo_produto) query = query.eq('produto_tipo_item', sp.tipo_produto)
+  if (sp.op_concluido === 'S') query = query.not('adicionais_d_dt_conclusao', 'is', null)
+  if (sp.op_concluido === 'N') query = query.is('adicionais_d_dt_conclusao', null)
+
+  if (!temData) query = query.limit(50)
+
+  const { data: ordens } = await query
 
   // Buscar descricoes dos produtos relacionados
   const codigos = [...new Set((ordens ?? []).map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
@@ -41,6 +72,34 @@ export default async function OrdemProducaoPage() {
         title="Ordens de Produção"
         icon={Factory}
         actions={<SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar" />}
+      />
+
+      <Filtros
+        basePath="/ordem-producao"
+        campos={[
+          { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+          { tipo: 'data', nome: 'data_final', label: 'Data final' },
+          { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
+          { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
+          { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+          {
+            tipo: 'select',
+            nome: 'op_concluido',
+            label: 'Concluído',
+            opcoes: [
+              { value: 'S', label: 'Sim' },
+              { value: 'N', label: 'Não' },
+            ],
+          },
+        ]}
+        defaults={{
+          data_inicio: sp.data_inicio ?? '',
+          data_final: sp.data_final ?? '',
+          ordem_producao: sp.ordem_producao ?? '',
+          op_produto: sp.op_produto ?? '',
+          tipo_produto: sp.tipo_produto ?? '',
+          op_concluido: sp.op_concluido ?? '',
+        }}
       />
 
       {ordens?.length ? (

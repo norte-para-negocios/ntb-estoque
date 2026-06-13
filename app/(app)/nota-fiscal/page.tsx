@@ -26,6 +26,8 @@ export default async function NotaFiscalPage({
     data_final?: string
     num_nfe?: string
     fornecedor?: string
+    status?: string
+    tipo?: string
     produto?: string
   }>
 }) {
@@ -50,7 +52,57 @@ export default async function NotaFiscalPage({
     .limit(50)
 
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${params.num_nfe}%`)
-  if (params.fornecedor) query = query.ilike('c_razao_social', `%${params.fornecedor}%`)
+  // Fornecedor: o controller original filtra por c_nome
+  if (params.fornecedor) query = query.ilike('c_nome', `%${params.fornecedor}%`)
+
+  // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
+  if (params.status === 'C') query = query.eq('c_etapa', '60')
+  else if (params.status === 'P') query = query.neq('c_etapa', '60')
+
+  // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
+  // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
+  // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items e filtram notas_fiscais.id in (...).
+  if (params.tipo || params.produto) {
+    if (params.tipo) {
+      const { data: prodCodigos } = await supabase
+        .from('produtos')
+        .select('codigo_produto')
+        .eq('loja_id', lojaId)
+        .eq('tipo_item', params.tipo)
+
+      const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
+
+      if (codigos.length === 0) {
+        query = query.in('id', [-1])
+      } else {
+        let itemQuery = supabase
+          .from('nota_fiscal_items')
+          .select('nota_fiscal_id')
+          .eq('loja_id', lojaId)
+          .in('produto_codigo', codigos)
+        if (params.produto) {
+          itemQuery = itemQuery.or(
+            `c_descricao_produto.ilike.%${params.produto}%,c_codigo_produto.ilike.%${params.produto}%`,
+          )
+        }
+        const { data: itemRows } = await itemQuery
+        const notaIds = Array.from(
+          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+        )
+        query = query.in('id', notaIds.length ? notaIds : [-1])
+      }
+    } else if (params.produto) {
+      const { data: itemRows } = await supabase
+        .from('nota_fiscal_items')
+        .select('nota_fiscal_id')
+        .eq('loja_id', lojaId)
+        .or(`c_descricao_produto.ilike.%${params.produto}%,c_codigo_produto.ilike.%${params.produto}%`)
+      const notaIds = Array.from(
+        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+      )
+      query = query.in('id', notaIds.length ? notaIds : [-1])
+    }
+  }
 
   const { data: notas } = await query
 
@@ -59,6 +111,9 @@ export default async function NotaFiscalPage({
   relatorioParams.set('data_final', dataFinal)
   if (params.num_nfe) relatorioParams.set('num_nfe', params.num_nfe)
   if (params.fornecedor) relatorioParams.set('fornecedor', params.fornecedor)
+  if (params.status) relatorioParams.set('status', params.status)
+  if (params.tipo) relatorioParams.set('tipo', params.tipo)
+  if (params.produto) relatorioParams.set('produto', params.produto)
 
   return (
     <div className="space-y-4">
@@ -86,6 +141,9 @@ export default async function NotaFiscalPage({
           data_final: dataFinal,
           num_nfe: params.num_nfe ?? '',
           fornecedor: params.fornecedor ?? '',
+          status: params.status ?? '',
+          tipo: params.tipo ?? '',
+          produto: params.produto ?? '',
         }}
       />
 

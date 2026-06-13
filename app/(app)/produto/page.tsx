@@ -5,15 +5,15 @@ import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Toolbar } from '@/components/ui-kit/Toolbar'
+import { Filtros } from '@/components/ui-kit/Filtros'
 import { Money } from '@/components/ui-kit/Money'
-import { btnClass } from '@/components/ui-kit/Button'
-import { Package, Search } from 'lucide-react'
+import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
+import { Package } from 'lucide-react'
 
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -21,6 +21,18 @@ export default async function ProdutoPage({
   const params = await searchParams
   const supabase = await createClient()
   const podeSync = await requirePermissao(lojaId, 'Produtos - Sincronizar')
+
+  // Famílias distintas da loja para o select de filtro
+  const { data: familiasRows } = await supabase
+    .from('produtos')
+    .select('descricao_familia')
+    .eq('loja_id', lojaId)
+    .not('descricao_familia', 'is', null)
+    .order('descricao_familia')
+
+  const familiasOpcoes = Array.from(
+    new Set((familiasRows ?? []).map((r) => r.descricao_familia).filter(Boolean) as string[]),
+  ).map((f) => ({ value: f, label: f }))
 
   let query = supabase
     .from('produtos')
@@ -30,6 +42,8 @@ export default async function ProdutoPage({
     .limit(100)
 
   if (params.q) query = query.or(`descricao.ilike.%${params.q}%,codigo.ilike.%${params.q}%`)
+  if (params.familia) query = query.eq('descricao_familia', params.familia)
+  if (params.tipo) query = query.eq('tipo_item', params.tipo)
 
   const { data: produtos } = await query
 
@@ -41,20 +55,19 @@ export default async function ProdutoPage({
         actions={podeSync ? <SyncButton endpoint="/api/sync/produtos" label="Sincronizar" /> : undefined}
       />
 
-      <Toolbar>
-        <form method="GET" action="/produto" className="flex items-end gap-2">
-          <input
-            type="search"
-            name="q"
-            defaultValue={params.q ?? ''}
-            placeholder="Pesquisar por nome ou código"
-            className="flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand"
-          />
-          <button type="submit" className={btnClass('primary')}>
-            <Search className="size-4" /> Pesquisar
-          </button>
-        </form>
-      </Toolbar>
+      <Filtros
+        basePath="/produto"
+        campos={[
+          { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
+          { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
+          { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+        ]}
+        defaults={{
+          q: params.q ?? '',
+          familia: params.familia ?? '',
+          tipo: params.tipo ?? '',
+        }}
+      />
 
       {produtos?.length ? (
         <DataTable>
@@ -63,6 +76,7 @@ export default async function ProdutoPage({
               <th>Código</th>
               <th>Descrição</th>
               <th>Família</th>
+              <th>Tipo</th>
               <th>Unidade</th>
               <th className="text-right">Valor unitário</th>
             </tr>
@@ -73,6 +87,7 @@ export default async function ProdutoPage({
                 <td className="num text-text-muted">{p.codigo || '-'}</td>
                 <td className="max-w-md truncate font-medium text-text">{p.descricao}</td>
                 <td className="text-text-muted">{p.descricao_familia || '-'}</td>
+                <td className="text-text-muted">{labelTipoItem(p.tipo_item)}</td>
                 <td className="text-text-muted">{p.unidade || '-'}</td>
                 <td className="text-right">
                   <Money value={p.valor_unitario} />
