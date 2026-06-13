@@ -5,8 +5,9 @@ export type Coluna<T> = {
   render: (row: T) => React.ReactNode
   alinhar?: 'right'
   primaria?: boolean // vira o título do card no mobile
+  flexivel?: boolean // no desktop, absorve o espaço restante e trunca (texto longo)
   ocultarMobile?: boolean // não aparece no card
-  larguraDesktop?: string // classe tailwind opcional p/ <th> (ex.: 'w-28')
+  larguraDesktop?: string // aceito por compatibilidade (largura é automática agora)
 }
 
 export function Lista<T>({
@@ -24,13 +25,21 @@ export function Lista<T>({
 }) {
   if (!linhas.length) return <>{vazio ?? null}</>
   const primaria = colunas.find((c) => c.primaria) ?? colunas[0]
+  // A coluna flexível absorve o espaço e trunca; se nenhuma marcada, usa a primária.
+  const flexivel = colunas.find((c) => c.flexivel) ?? primaria
   const demais = colunas.filter((c) => c !== primaria && !c.ocultarMobile)
+
+  // Classes da célula no desktop: flexível encolhe e trunca; o resto fica natural (nowrap).
+  const tdClasse = (c: Coluna<T>) =>
+    c === flexivel
+      ? 'w-full max-w-0 truncate'
+      : 'whitespace-nowrap'
 
   return (
     <>
-      {/* Desktop: tabela */}
+      {/* Desktop: tabela (largura automática, sem estourar) */}
       <div className="hidden lg:block overflow-hidden rounded-lg border border-border bg-surface">
-        <table className="w-full table-fixed text-sm">
+        <table className="w-full text-sm">
           <thead className="border-b border-border bg-surface-2/50">
             <tr>
               {colunas.map((c, i) => (
@@ -38,12 +47,12 @@ export function Lista<T>({
                   key={i}
                   className={`px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
                     c.alinhar === 'right' ? 'text-right' : 'text-left'
-                  } ${c.larguraDesktop ?? ''}`}
+                  } ${c === flexivel ? '' : 'whitespace-nowrap'}`}
                 >
                   {c.label}
                 </th>
               ))}
-              {acao && <th className="px-4 py-2.5 w-24" />}
+              {acao && <th className="px-4 py-2.5" />}
             </tr>
           </thead>
           <tbody>
@@ -55,12 +64,14 @@ export function Lista<T>({
                 {colunas.map((c, i) => (
                   <td
                     key={i}
-                    className={`px-4 py-2.5 truncate ${c.alinhar === 'right' ? 'text-right' : ''}`}
+                    className={`px-4 py-2.5 ${c.alinhar === 'right' ? 'text-right' : ''} ${tdClasse(c)}`}
                   >
                     {c.render(row)}
                   </td>
                 ))}
-                {acao && <td className="px-4 py-2.5 text-right whitespace-nowrap">{acao(row)}</td>}
+                {acao && (
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">{acao(row)}</td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -78,11 +89,11 @@ export function Lista<T>({
             {demais.length > 0 && (
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
                 {demais.map((c, i) => (
-                  <div key={i} className={c.alinhar === 'right' ? 'text-right' : ''}>
+                  <div key={i} className={`min-w-0 ${c.alinhar === 'right' ? 'text-right' : ''}`}>
                     <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                       {c.label}
                     </dt>
-                    <dd className="text-sm text-text truncate">{c.render(row)}</dd>
+                    <dd className="text-sm text-text break-words">{c.render(row)}</dd>
                   </div>
                 ))}
               </dl>

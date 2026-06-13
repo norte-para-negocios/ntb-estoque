@@ -119,9 +119,9 @@ export default async function LogPage({
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Logs de Integracao com APIs"
+        title="Logs de Integração com APIs"
         icon={ScrollText}
-        description="Tentativas de integracao com APIs"
+        description="Tentativas de integração com APIs"
       />
 
       <Filtros basePath="/log" campos={campos} defaults={defaults} />
@@ -172,7 +172,7 @@ export default async function LogPage({
           </div>
         </>
       ) : (
-        <EmptyState icon={ScrollText} title="Nenhum log de integracao" hint="As tentativas de integracao aparecerao aqui." />
+        <EmptyState icon={ScrollText} title="Nenhum log de integração" hint="As tentativas de integração aparecerão aqui." />
       )}
 
       {(page > 1 || temProxima) && (

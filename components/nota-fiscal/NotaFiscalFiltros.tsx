@@ -64,7 +64,7 @@ export function NotaFiscalFiltros({
           <select id="status" name="status" defaultValue={defaults.status} className={fieldClass}>
             <option value="">Todos</option>
             <option value="P">Pendente</option>
-            <option value="C">Concluida</option>
+            <option value="C">Concluída</option>
           </select>
         </div>
         <div>

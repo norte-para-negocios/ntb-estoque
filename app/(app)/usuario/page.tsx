@@ -63,7 +63,7 @@ export default async function UsuarioPage({
       <PageHeader
         title="Usuários"
         icon={Users}
-        description="Acessos, permissoes e locais por loja"
+        description="Acessos, permissões e locais por loja"
         actions={<NovoUsuario lojas={lojas ?? []} />}
       />
 

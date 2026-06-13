@@ -26,7 +26,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${sans.variable} ${mono.variable} h-full`}>
+    <html lang="pt-BR" className={`${sans.variable} ${mono.variable} h-full`} suppressHydrationWarning>
+      <head>
+        {/* Aplica o tema salvo antes do render, evitando flash claro→escuro */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('tema')==='dark')document.documentElement.classList.add('dark')}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full antialiased">
         {children}
         <Toaster richColors position="top-right" />

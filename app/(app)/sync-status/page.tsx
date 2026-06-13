@@ -135,11 +135,11 @@ export default async function SyncStatusPage({
     {
       tipo: 'select',
       nome: 'dias',
-      label: 'Periodo',
+      label: 'Período',
       opcoes: [
-        { value: '1', label: 'Ultimas 24h' },
-        { value: '7', label: 'Ultimos 7 dias' },
-        { value: '30', label: 'Ultimos 30 dias' },
+        { value: '1', label: 'Últimas 24h' },
+        { value: '7', label: 'Últimos 7 dias' },
+        { value: '30', label: 'Últimos 30 dias' },
       ],
     },
     {
@@ -158,16 +158,16 @@ export default async function SyncStatusPage({
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Saude da integracao"
+        title="Saúde da integração"
         icon={Activity}
-        description="Painel de erros de sincronizacao com o Omie"
+        description="Painel de erros de sincronização com o Omie"
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          label="Erros nas ultimas 24h"
+          label="Erros nas últimas 24h"
           value={erros24h ?? 0}
-          hint="Tentativas com falha no periodo"
+          hint="Tentativas com falha no período"
           icon={AlertTriangle}
           accent={erros24h ? '#ef4444' : '#10b981'}
         />
@@ -176,7 +176,7 @@ export default async function SyncStatusPage({
       {/* Status de sincronizacao por loja */}
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border px-4 py-2.5">
-          <h2 className="text-[13px] font-semibold text-text">Status de sincronizacao</h2>
+          <h2 className="text-[13px] font-semibold text-text">Status de sincronização</h2>
         </div>
         {lojas.length ? (
           <ul className="divide-y divide-border">
@@ -239,6 +239,7 @@ export default async function SyncStatusPage({
           },
           {
             label: 'Erro',
+            flexivel: true,
             render: (erro) => (
               <span className="text-text-muted">{trecho(erro.error_message || erro.response)}</span>
             ),
@@ -252,7 +253,7 @@ export default async function SyncStatusPage({
           <EmptyState
             icon={Activity}
             title="Tudo certo"
-            hint="Nenhum erro de integracao no periodo."
+            hint="Nenhum erro de integração no período."
           />
         }
       />

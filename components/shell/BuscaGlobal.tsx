@@ -13,7 +13,7 @@ import { buscaGlobal, type BuscaItem } from '@/lib/actions/busca-global'
 const GRUPOS: { tipo: BuscaItem['tipo']; titulo: string }[] = [
   { tipo: 'Produto', titulo: 'Produtos' },
   { tipo: 'Nota', titulo: 'Notas fiscais' },
-  { tipo: 'OP', titulo: 'Ordens de producao' },
+  { tipo: 'OP', titulo: 'Ordens de produção' },
 ]
 
 export function BuscaGlobal({

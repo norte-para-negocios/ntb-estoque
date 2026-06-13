@@ -54,7 +54,7 @@ export default async function LojaPage({
       <PageHeader
         title="Lojas"
         icon={Store}
-        description="Cadastro de lojas e integracao Omie"
+        description="Cadastro de lojas e integração Omie"
         actions={<LojaForm />}
       />
 

@@ -73,6 +73,25 @@
   --radius: 0.625rem;
 }
 
+/* Modo escuro: sobrescreve os tokens. Ativado por .dark no <html>. */
+.dark {
+  --bg: #0d0e12;
+  --surface: #15171d;
+  --surface-2: #1c1f27;
+  --text: #e6e8ec;
+  --text-muted: #8b93a1;
+  --border: rgba(255, 255, 255, 0.09);
+  --brand: #2eb5c3;
+  --brand-strong: #3fc6d4;
+  --brand-soft: rgba(46, 181, 195, 0.14);
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --info: #60a5fa;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/40;
