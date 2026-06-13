@@ -17,11 +17,23 @@ interface OmieWebhookBody {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as OmieWebhookBody | null
+
+  const supabase = createServiceClient()
+
+  // Observabilidade: registra TODA batida recebida do Omie (mesmo as que nao casam
+  // com loja), para diagnostico de conectividade do webhook.
+  await supabase.from('integration_attempts').insert({
+    loja_id: null,
+    model: 'Webhook-IN',
+    request: JSON.stringify(body).slice(0, 4000),
+    response: null,
+    code: '200',
+    error: false,
+  })
+
   if (!body?.messageId || !body?.appKey) {
     return NextResponse.json({ ok: true })
   }
-
-  const supabase = createServiceClient()
 
   const { data: loja } = await supabase
     .from('lojas')
