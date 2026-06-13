@@ -1,22 +1,39 @@
 import { NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
+import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { EtiquetaProdutoPDF, type EtiquetaItem } from '@/components/etiqueta/EtiquetaProdutoPDF'
+import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
+
+function num(v: unknown, dec: number): string {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
-    return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
   const { id } = await params
   const supabase = await createClient()
 
+  const { data: nf } = await supabase
+    .from('notas_fiscais')
+    .select('c_numero_nfe, c_nome')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .single()
+  if (!nf) return NextResponse.json({ error: 'Nota fiscal não encontrada' }, { status: 404 })
+
+  const { data: loja } = await supabase.from('lojas').select('cnpj').eq('id', lojaId).single()
+
+  // Itens com quantidade definida + produto associado
   const { data: itens } = await supabase
     .from('nota_fiscal_items')
-    .select('c_codigo_produto, c_descricao_produto, c_unidade_nfe, quantidade')
+    .select('c_descricao_produto, quantidade, n_qtde_nfe, c_unidade_nfe, produto_codigo, full_object')
     .eq('nota_fiscal_id', id)
     .eq('loja_id', lojaId)
     .not('quantidade', 'is', null)
@@ -30,31 +47,54 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     )
   }
 
-  // Uma etiqueta por unidade de quantidade (igual ao Laravel)
-  const etiquetas: EtiquetaItem[] = []
+  // Resolver código do produto (o QR e "Produto:" usam o codigo do cadastro)
+  const codigosProd = [...new Set(itens.map((i) => i.produto_codigo).filter(Boolean))]
+  const { data: produtos } = codigosProd.length
+    ? await supabase
+        .from('produtos')
+        .select('codigo_produto, codigo, unidade')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigosProd)
+    : { data: [] }
+  const prodMap = new Map((produtos ?? []).map((p) => [String(p.codigo_produto), p]))
+
+  const etiquetas: Etiqueta[] = []
   for (const item of itens) {
-    const qtd = item.quantidade ?? 1
-    for (let n = 1; n <= qtd; n++) {
-      etiquetas.push({
-        descricao: item.c_descricao_produto ?? '',
-        quantidade: 1,
-        unidade: item.c_unidade_nfe ?? 'UN',
-        codigo: item.c_codigo_produto ?? undefined,
-        index: n,
-        total: qtd,
-      })
+    const prod = prodMap.get(String(item.produto_codigo))
+    const unidade = prod?.unidade || item.c_unidade_nfe || ''
+    const fo = (item.full_object ?? {}) as {
+      itensAjustes?: { nQtdeRecebida?: number }
+      itensCabec?: { nIdValidade?: string }
+      infoCadastro?: { dRec?: string }
     }
+    const qtdeRecebida = fo.itensAjustes?.nQtdeRecebida ?? 0
+    const codigoProduto = prod?.codigo || item.produto_codigo || ''
+
+    const qr = await QRCode.toDataURL(String(codigoProduto), { margin: 1, width: 160 })
+
+    etiquetas.push({
+      codigo_produto: String(codigoProduto),
+      descricao: item.c_descricao_produto ?? '',
+      lote: '',
+      quantidade: '',
+      qtde_nf: `${num(qtdeRecebida, 0)}(${unidade})`,
+      qtde_etiqueta: `${num(item.quantidade, 0)}(${unidade})`,
+      validade: fo.itensCabec?.nIdValidade ?? '',
+      inclusao: fo.infoCadastro?.dRec ?? '',
+      produzido: '',
+      fornecedor: nf.c_nome ?? '',
+      cnpj: loja?.cnpj ?? '',
+      qr,
+    })
   }
 
-  const element = createElement(EtiquetaProdutoPDF, { itens: etiquetas }) as Parameters<
-    typeof renderToBuffer
-  >[0]
+  const element = createElement(EtiquetaPDF, { etiquetas }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="etiquetas-nf-${id}.pdf"`,
+      'Content-Disposition': `inline; filename="etiquetas-nfe-${nf.c_numero_nfe}.pdf"`,
     },
   })
 }

@@ -1,20 +1,26 @@
 import { NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
+import QRCode from 'qrcode'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { EtiquetaOPPDF, type EtiquetaOPItem } from '@/components/etiqueta/EtiquetaOPPDF'
+import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
 
-function fmtData(d: string | null): string | undefined {
-  if (!d) return undefined
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
+function num(v: unknown, dec: number): string {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+}
+
+function fmtData(d: string | null): string {
+  if (!d) return '-'
+  const [y, m, dia] = d.split('-')
+  return `${dia}/${m}/${y}`
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
-    return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
+  if (!(await requirePermissao(lojaId, 'Ordens de Produção'))) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
   const { id } = await params
@@ -23,46 +29,60 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { data: op } = await supabase
     .from('ordens_producao')
     .select(
-      'identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, validade, quantidade, identificacao_n_qtde'
+      'identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade, full_object'
     )
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
+  if (!op) return NextResponse.json({ error: 'Ordem não encontrada' }, { status: 404 })
 
-  if (!op) {
-    return NextResponse.json({ error: 'Ordem nao encontrada' }, { status: 404 })
-  }
-
+  const { data: loja } = await supabase.from('lojas').select('cnpj').eq('id', lojaId).single()
   const { data: prod } = await supabase
     .from('produtos')
-    .select('descricao, unidade')
+    .select('codigo, descricao, unidade')
     .eq('loja_id', lojaId)
     .eq('codigo_produto', op.identificacao_n_cod_produto)
     .maybeSingle()
 
-  const total = op.quantidade ?? op.identificacao_n_qtde ?? 1
-  const etiquetas: EtiquetaOPItem[] = []
-  for (let n = 1; n <= total; n++) {
+  const unidade = prod?.unidade || 'UN'
+  const codigoProduto = prod?.codigo || String(op.identificacao_n_cod_produto)
+  const descricao = prod?.descricao || ''
+  const qtdeOP = op.identificacao_n_qtde ?? 1
+  const fo = (op.full_object ?? {}) as { outrasInf?: { dConclusao?: string } }
+  const produzido = fo.outrasInf?.dConclusao || new Date().toLocaleDateString('pt-BR')
+  const validade = op.validade ? fmtData(op.validade) : '-'
+  const numOP = op.identificacao_c_num_op || op.num_ordem || ''
+  const qr = await QRCode.toDataURL(String(codigoProduto), { margin: 1, width: 160 })
+
+  // Se unidade é "UN": uma etiqueta por unidade ("i de N (UN)"). Senão: uma só (kg etc).
+  const total = unidade === 'UN' ? Number(qtdeOP) || 1 : 1
+  const etiquetas: Etiqueta[] = []
+  for (let i = 1; i <= total; i++) {
+    const quantidade =
+      unidade === 'UN' ? `${i} de ${num(qtdeOP, 0)} (UN)` : `${num(qtdeOP, 3)} (${unidade})`
     etiquetas.push({
-      produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
-      numOP: op.identificacao_c_num_op || op.num_ordem || '-',
-      quantidade: 1,
-      unidade: prod?.unidade || 'UN',
-      validade: fmtData(op.validade),
-      index: n,
-      total,
+      codigo_produto: String(codigoProduto),
+      descricao,
+      lote: String(numOP),
+      quantidade,
+      qtde_nf: '',
+      qtde_etiqueta: num(op.quantidade ?? 0, 3),
+      inclusao: '',
+      validade,
+      produzido,
+      fornecedor: '',
+      cnpj: loja?.cnpj ?? '',
+      qr,
     })
   }
 
-  const element = createElement(EtiquetaOPPDF, { itens: etiquetas }) as Parameters<
-    typeof renderToBuffer
-  >[0]
+  const element = createElement(EtiquetaPDF, { etiquetas }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="etiquetas-op-${id}.pdf"`,
+      'Content-Disposition': `inline; filename="etiquetas-op-${numOP}.pdf"`,
     },
   })
 }
