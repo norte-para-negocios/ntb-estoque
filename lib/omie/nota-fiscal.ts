@@ -35,9 +35,9 @@ interface OmieNFItemCabec {
   cNCM: string
   cEAN: string
   cCFOP: string
-  nQtde: number
-  cUnidade: string
-  nValorUnitario: number
+  nQtdeNFe: number
+  cUnidadeNfe: string
+  nPrecoUnit: number
 }
 
 interface OmieNF {
@@ -106,9 +106,9 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
       c_ncm: it.itensCabec.cNCM,
       c_ean: it.itensCabec.cEAN,
       c_cfop: it.itensCabec.cCFOP,
-      n_qtde_nfe: it.itensCabec.nQtde,
-      c_unidade_nfe: it.itensCabec.cUnidade,
-      n_preco_unit: it.itensCabec.nValorUnitario,
+      n_qtde_nfe: it.itensCabec.nQtdeNFe,
+      c_unidade_nfe: it.itensCabec.cUnidadeNfe,
+      n_preco_unit: it.itensCabec.nPrecoUnit,
       full_object: it,
       updated_at: new Date().toISOString(),
     }))
