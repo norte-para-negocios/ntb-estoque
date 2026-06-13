@@ -3,7 +3,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Filtros } from '@/components/ui-kit/Filtros'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -115,40 +115,25 @@ export default async function ProdutoPage({
         }}
       />
 
-      {produtos?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Família</th>
-              <th>Tipo</th>
-              <th>Unidade</th>
-              <th className="text-right">Valor unitário</th>
-            </tr>
-          </thead>
-          <tbody>
-            {produtos.map((p) => (
-              <tr key={p.id}>
-                <td className="num text-text-muted">{p.codigo || '-'}</td>
-                <td className="max-w-md truncate font-medium text-text">{p.descricao}</td>
-                <td className="text-text-muted">{p.descricao_familia || '-'}</td>
-                <td className="text-text-muted">{labelTipoItem(p.tipo_item)}</td>
-                <td className="text-text-muted">{p.unidade || '-'}</td>
-                <td className="text-right">
-                  <Money value={p.valor_unitario} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={Package}
-          title="Nenhum produto"
-          hint="Sincronize com o Omie ou ajuste a busca."
-        />
-      )}
+      <Lista
+        linhas={produtos ?? []}
+        chaveLinha={(p) => p.id}
+        colunas={[
+          { label: 'Descrição', primaria: true, render: (p) => p.descricao },
+          { label: 'Código', larguraDesktop: 'w-28', render: (p) => <span className="num text-text-muted">{p.codigo || '-'}</span> },
+          { label: 'Família', render: (p) => <span className="text-text-muted">{p.descricao_familia || '-'}</span> },
+          { label: 'Tipo', render: (p) => <span className="text-text-muted">{labelTipoItem(p.tipo_item)}</span> },
+          { label: 'Unidade', larguraDesktop: 'w-24', render: (p) => <span className="text-text-muted">{p.unidade || '-'}</span> },
+          { label: 'Valor', alinhar: 'right', larguraDesktop: 'w-32', render: (p) => <Money value={p.valor_unitario} /> },
+        ]}
+        vazio={
+          <EmptyState
+            icon={Package}
+            title="Nenhum produto"
+            hint="Sincronize com o Omie ou ajuste a busca."
+          />
+        }
+      />
 
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/produto" page={page} temProxima={temProxima} />

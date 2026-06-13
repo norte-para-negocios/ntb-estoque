@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import Link from 'next/link'
-import { LogDetalhe } from '@/components/log/LogDetalhe'
+import { LogDetalhe, LogCard } from '@/components/log/LogDetalhe'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -143,23 +143,34 @@ export default async function LogPage({
       </div>
 
       {logs?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Model</th>
-              <th>HTTP</th>
-              <th>Resultado</th>
-              <th>Data</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          {/* Desktop: tabela com linhas expansiveis */}
+          <div className="hidden lg:block">
+            <DataTable>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Model</th>
+                  <th>HTTP</th>
+                  <th>Resultado</th>
+                  <th>Data</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <LogDetalhe key={log.id} log={log} />
+                ))}
+              </tbody>
+            </DataTable>
+          </div>
+          {/* Mobile: cards com detalhe expansivel */}
+          <div className="space-y-3 lg:hidden">
             {logs.map((log) => (
-              <LogDetalhe key={log.id} log={log} />
+              <LogCard key={log.id} log={log} />
             ))}
-          </tbody>
-        </DataTable>
+          </div>
+        </>
       ) : (
         <EmptyState icon={ScrollText} title="Nenhum log de integracao" hint="As tentativas de integracao aparecerao aqui." />
       )}

@@ -3,7 +3,7 @@ import { getProfile } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { StatCard } from '@/components/ui-kit/StatCard'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Filtros, type CampoFiltro } from '@/components/ui-kit/Filtros'
 import { ReprocessarErro } from '@/components/sync/ReprocessarErro'
@@ -208,49 +208,54 @@ export default async function SyncStatusPage({
 
       <Filtros basePath="/sync-status" campos={campos} defaults={defaults} />
 
-      {erros.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Data/hora</th>
-              <th>Loja</th>
-              <th>Model</th>
-              <th>Code</th>
-              <th>Erro</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {erros.map((erro) => {
-              const sync = erro.model ? MODEL_PARA_SYNC[erro.model] : undefined
-              return (
-                <tr key={erro.id}>
-                  <td className="whitespace-nowrap text-text-muted">
-                    {formatarData(erro.created_at)}
-                  </td>
-                  <td>{nomePorLoja.get(erro.loja_id) ?? `Loja ${erro.loja_id}`}</td>
-                  <td className="font-medium">{erro.model ?? '-'}</td>
-                  <td className="text-text-muted">{erro.code ?? '-'}</td>
-                  <td className="max-w-[28rem] text-text-muted">
-                    {trecho(erro.error_message || erro.response)}
-                  </td>
-                  <td>
-                    {sync && (
-                      <ReprocessarErro lojaId={erro.loja_id} model={sync} />
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={Activity}
-          title="Tudo certo"
-          hint="Nenhum erro de integracao no periodo."
-        />
-      )}
+      <Lista
+        linhas={erros}
+        chaveLinha={(erro) => erro.id}
+        colunas={[
+          {
+            label: 'Model',
+            primaria: true,
+            larguraDesktop: 'w-32',
+            render: (erro) => <span className="font-medium">{erro.model ?? '-'}</span>,
+          },
+          {
+            label: 'Data/hora',
+            larguraDesktop: 'w-44',
+            render: (erro) => (
+              <span className="whitespace-nowrap text-text-muted">
+                {formatarData(erro.created_at)}
+              </span>
+            ),
+          },
+          {
+            label: 'Loja',
+            larguraDesktop: 'w-40',
+            render: (erro) => nomePorLoja.get(erro.loja_id) ?? `Loja ${erro.loja_id}`,
+          },
+          {
+            label: 'Code',
+            larguraDesktop: 'w-20',
+            render: (erro) => <span className="text-text-muted">{erro.code ?? '-'}</span>,
+          },
+          {
+            label: 'Erro',
+            render: (erro) => (
+              <span className="text-text-muted">{trecho(erro.error_message || erro.response)}</span>
+            ),
+          },
+        ]}
+        acao={(erro) => {
+          const sync = erro.model ? MODEL_PARA_SYNC[erro.model] : undefined
+          return sync ? <ReprocessarErro lojaId={erro.loja_id} model={sync} /> : null
+        }}
+        vazio={
+          <EmptyState
+            icon={Activity}
+            title="Tudo certo"
+            hint="Nenhum erro de integracao no periodo."
+          />
+        }
+      />
     </div>
   )
 }

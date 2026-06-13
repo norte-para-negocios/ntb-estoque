@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
-import { OrdemProducaoRow } from '@/components/ordem-producao/OrdemProducaoRow'
+import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Filtros } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
@@ -171,37 +171,50 @@ export default async function OrdemProducaoPage({
       />
 
       {ordens?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>OP</th>
-              <th>Produto</th>
-              <th className="text-right">Qtd OP</th>
-              <th>Validade</th>
-              <th>Quantidade</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordens.map((op) => {
-              const prod = prodMap.get(op.identificacao_n_cod_produto)
-              return (
-                <OrdemProducaoRow
-                  key={op.id}
-                  op={{
-                    id: op.id,
-                    numOP: op.identificacao_c_num_op || op.num_ordem || '-',
-                    produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
-                    unidade: prod?.unidade || 'UN',
-                    qtdOP: op.identificacao_n_qtde,
-                    validade: op.validade,
-                    quantidade: op.quantidade,
-                  }}
-                />
-              )
-            })}
-          </tbody>
-        </DataTable>
+        (() => {
+          const linhas = ordens.map((op) => {
+            const prod = prodMap.get(op.identificacao_n_cod_produto)
+            return {
+              id: op.id,
+              numOP: op.identificacao_c_num_op || op.num_ordem || '-',
+              produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
+              unidade: prod?.unidade || 'UN',
+              qtdOP: op.identificacao_n_qtde,
+              validade: op.validade,
+              quantidade: op.quantidade,
+            }
+          })
+          return (
+            <>
+              {/* Desktop: tabela com steppers na linha */}
+              <div className="hidden lg:block">
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>OP</th>
+                      <th>Produto</th>
+                      <th className="text-right">Qtd OP</th>
+                      <th>Validade</th>
+                      <th>Quantidade</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhas.map((op) => (
+                      <OrdemProducaoRow key={op.id} op={op} />
+                    ))}
+                  </tbody>
+                </DataTable>
+              </div>
+              {/* Mobile: cards empilhados com steppers em bloco vertical */}
+              <div className="space-y-3 lg:hidden">
+                {linhas.map((op) => (
+                  <OrdemProducaoCard key={op.id} op={op} />
+                ))}
+              </div>
+            </>
+          )
+        })()
       ) : (
         <EmptyState
           icon={Factory}

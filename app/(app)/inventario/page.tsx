@@ -7,7 +7,7 @@ import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Filtros } from '@/components/ui-kit/Filtros'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -138,65 +138,60 @@ export default async function InventarioPage({
         }}
       />
 
-      {inventarios?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Estoque</th>
-              <th>Data</th>
-              <th>Local</th>
-              <th className="text-right">Produtos</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventarios.map((inv) => {
-              const count = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
-              const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
-              const temErro = itensStatus.some(
-                (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
-              )
-              const finalizado = inv.status === 'Finalizado'
+      <Lista
+        linhas={inventarios ?? []}
+        chaveLinha={(inv) => inv.id}
+        colunas={[
+          {
+            label: 'Local',
+            primaria: true,
+            render: (inv) => {
               const local = localMap.get(inv.codigo_local_estoque) || inv.codigo_local_estoque
               return (
-                <tr key={inv.id}>
-                  <td className="num font-medium text-text">#{inv.id}</td>
-                  <td className="num text-text-muted">{fmtData(inv.data)}</td>
-                  <td className="max-w-xs truncate text-text">{local}</td>
-                  <td className="text-right">
-                    <span className="num">{count}</span>
-                  </td>
-                  <td>
-                    <StatusPill status={inv.status} />
-                  </td>
-                  <td>
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/inventario/${inv.id}/contagem`}
-                        className={btnClass('outline')}
-                      >
-                        <Pencil className="size-4" /> {finalizado ? 'Ver' : 'Contar'}
-                      </Link>
-                      <AcoesInventario
-                        inventarioId={inv.id}
-                        temErro={temErro}
-                        podeExcluir={podeExcluir}
-                      />
-                    </div>
-                  </td>
-                </tr>
+                <span>
+                  <span className="num text-text-muted">#{inv.id}</span> {local}
+                </span>
               )
-            })}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={ClipboardList}
-          title="Nenhum inventário"
-          hint="Crie um novo para começar a contagem."
-        />
-      )}
+            },
+          },
+          { label: 'Data', larguraDesktop: 'w-28', render: (inv) => <span className="num text-text-muted">{fmtData(inv.data)}</span> },
+          {
+            label: 'Produtos',
+            alinhar: 'right',
+            larguraDesktop: 'w-28',
+            render: (inv) => (
+              <span className="num">{Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0}</span>
+            ),
+          },
+          { label: 'Status', larguraDesktop: 'w-32', render: (inv) => <StatusPill status={inv.status} /> },
+        ]}
+        acao={(inv) => {
+          const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
+          const temErro = itensStatus.some(
+            (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
+          )
+          const finalizado = inv.status === 'Finalizado'
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <Link href={`/inventario/${inv.id}/contagem`} className={btnClass('outline')}>
+                <Pencil className="size-4" /> {finalizado ? 'Ver' : 'Contar'}
+              </Link>
+              <AcoesInventario
+                inventarioId={inv.id}
+                temErro={temErro}
+                podeExcluir={podeExcluir}
+              />
+            </div>
+          )
+        }}
+        vazio={
+          <EmptyState
+            icon={ClipboardList}
+            title="Nenhum inventário"
+            hint="Crie um novo para começar a contagem."
+          />
+        }
+      />
 
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/inventario" page={page} temProxima={temProxima} />

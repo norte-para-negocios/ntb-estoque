@@ -24,6 +24,33 @@ export type LogRowData = {
   response: string | null
 }
 
+function Detalhe({ log }: { log: LogRowData }) {
+  return (
+    <>
+      {log.error_message && <p className="mb-2 text-sm text-[var(--err)]">{log.error_message}</p>}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div>
+          <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+            Requisição
+          </div>
+          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
+            {formatar(log.request)}
+          </pre>
+        </div>
+        <div>
+          <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+            Resposta
+          </div>
+          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
+            {formatar(log.response)}
+          </pre>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Linha da tabela (desktop). Mantida para o modo tabela com detalhe expansível.
 export function LogDetalhe({ log }: { log: LogRowData }) {
   const [aberto, setAberto] = useState(false)
 
@@ -51,30 +78,56 @@ export function LogDetalhe({ log }: { log: LogRowData }) {
       {aberto && (
         <tr className="!bg-surface-2/40 hover:!bg-surface-2/40">
           <td colSpan={6} className="!py-3">
-            {log.error_message && (
-              <p className="mb-2 text-sm text-[var(--err)]">{log.error_message}</p>
-            )}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                  Requisição
-                </div>
-                <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
-                  {formatar(log.request)}
-                </pre>
-              </div>
-              <div>
-                <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                  Resposta
-                </div>
-                <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
-                  {formatar(log.response)}
-                </pre>
-              </div>
-            </div>
+            <Detalhe log={log} />
           </td>
         </tr>
       )}
     </>
+  )
+}
+
+// Card (mobile) com o mesmo detalhe expansível.
+export function LogCard({ log }: { log: LogRowData }) {
+  const [aberto, setAberto] = useState(false)
+
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold text-text">{log.model || '-'}</div>
+          <div className="num text-[11px] text-text-muted">#{log.id}</div>
+        </div>
+        <StatusPill status={log.error ? 'Erro' : 'OK'} />
+      </div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <div>
+          <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Data/hora
+          </dt>
+          <dd className="num text-sm text-text">
+            {new Date(log.created_at).toLocaleString('pt-BR')}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            HTTP
+          </dt>
+          <dd className="num text-sm text-text">{log.code ? `HTTP ${log.code}` : '-'}</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand"
+      >
+        {aberto ? 'Ocultar detalhe' : 'Ver detalhe'}
+        <ChevronDown className={`size-3.5 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+      </button>
+      {aberto && (
+        <div className="mt-3">
+          <Detalhe log={log} />
+        </div>
+      )}
+    </div>
   )
 }

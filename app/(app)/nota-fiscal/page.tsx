@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { NotaFiscalFiltros } from '@/components/nota-fiscal/NotaFiscalFiltros'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -163,49 +163,29 @@ export default async function NotaFiscalPage({
         }}
       />
 
-      {notas?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Emissão</th>
-              <th>NFe</th>
-              <th>Fornecedor</th>
-              <th>Etapa</th>
-              <th className="text-right">Valor</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {notas.map((nf) => (
-              <tr key={nf.id}>
-                <td className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</td>
-                <td className="num">{nf.c_numero_nfe ?? '-'}</td>
-                <td className="max-w-xs truncate">{nf.c_razao_social || nf.c_nome || '-'}</td>
-                <td>
-                  <StatusPill status={nf.c_etapa} />
-                </td>
-                <td className="text-right">
-                  <Money value={nf.n_valor_nfe} />
-                </td>
-                <td className="text-right">
-                  <Link
-                    href={`/nota-fiscal/${nf.id}`}
-                    className="text-brand hover:underline whitespace-nowrap"
-                  >
-                    Ver
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={FileText}
-          title="Nenhuma nota fiscal no período"
-          hint="Sincronize com o Omie ou ajuste os filtros."
-        />
-      )}
+      <Lista
+        linhas={notas ?? []}
+        chaveLinha={(nf) => nf.id}
+        colunas={[
+          { label: 'Fornecedor', primaria: true, render: (nf) => nf.c_razao_social || nf.c_nome || '-' },
+          { label: 'Emissão', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
+          { label: 'NFe', larguraDesktop: 'w-28', render: (nf) => <span className="num">{nf.c_numero_nfe ?? '-'}</span> },
+          { label: 'Etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa} /> },
+          { label: 'Valor', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
+        ]}
+        acao={(nf) => (
+          <Link href={`/nota-fiscal/${nf.id}`} className="text-brand hover:underline whitespace-nowrap">
+            Ver
+          </Link>
+        )}
+        vazio={
+          <EmptyState
+            icon={FileText}
+            title="Nenhuma nota fiscal no período"
+            hint="Sincronize com o Omie ou ajuste os filtros."
+          />
+        }
+      />
 
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} />

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Printer } from 'lucide-react'
 
@@ -56,73 +56,78 @@ export default async function ImpressoesPage() {
         description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
       />
 
-      {impressoes?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Data/hora</th>
-              <th>Origem</th>
-              <th>Referência</th>
-              <th>Qtd etiquetas</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {impressoes.map((imp) => {
+      <Lista
+        linhas={impressoes ?? []}
+        chaveLinha={(imp) => imp.id}
+        colunas={[
+          {
+            label: 'Referência',
+            primaria: true,
+            render: (imp) => {
               const isNF = imp.origem === 'NF'
-              const refHref = isNF
-                ? `/nota-fiscal/${imp.referencia_id}`
-                : `/ordem-producao`
-              const imprimirHref = isNF
-                ? `/nota-fiscal/${imp.referencia_id}/imprimir`
-                : `/ordem-producao/${imp.referencia_id}/imprimir`
+              const refHref = isNF ? `/nota-fiscal/${imp.referencia_id}` : `/ordem-producao`
               return (
-                <tr key={imp.id}>
-                  <td className="text-text-muted">{fmtDataHora(imp.created_at)}</td>
-                  <td>
-                    <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-                      style={
-                        isNF
-                          ? { color: '#3b82f6', background: '#3b82f61a' }
-                          : { color: '#10b981', background: '#10b9811a' }
-                      }
-                    >
-                      {isNF ? 'Nota Fiscal' : 'Ordem de Produção'}
-                    </span>
-                  </td>
-                  <td>
-                    <Link
-                      href={refHref}
-                      className="font-medium text-brand hover:underline"
-                    >
-                      #{imp.referencia_id}
-                    </Link>
-                  </td>
-                  <td>{imp.qtd_etiquetas}</td>
-                  <td className="text-right">
-                    <a
-                      href={imprimirHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
-                    >
-                      <Printer className="size-3.5" strokeWidth={2} />
-                      Reimprimir
-                    </a>
-                  </td>
-                </tr>
+                <Link href={refHref} className="font-medium text-brand hover:underline">
+                  #{imp.referencia_id}
+                </Link>
               )
-            })}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={Printer}
-          title="Nenhuma impressão ainda"
-          hint="As impressões de etiquetas aparecerão aqui."
-        />
-      )}
+            },
+          },
+          {
+            label: 'Data/hora',
+            larguraDesktop: 'w-44',
+            render: (imp) => <span className="text-text-muted">{fmtDataHora(imp.created_at)}</span>,
+          },
+          {
+            label: 'Origem',
+            larguraDesktop: 'w-44',
+            render: (imp) => {
+              const isNF = imp.origem === 'NF'
+              return (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  style={
+                    isNF
+                      ? { color: '#3b82f6', background: '#3b82f61a' }
+                      : { color: '#10b981', background: '#10b9811a' }
+                  }
+                >
+                  {isNF ? 'Nota Fiscal' : 'Ordem de Produção'}
+                </span>
+              )
+            },
+          },
+          {
+            label: 'Qtd',
+            larguraDesktop: 'w-28',
+            render: (imp) => imp.qtd_etiquetas,
+          },
+        ]}
+        acao={(imp) => {
+          const isNF = imp.origem === 'NF'
+          const imprimirHref = isNF
+            ? `/nota-fiscal/${imp.referencia_id}/imprimir`
+            : `/ordem-producao/${imp.referencia_id}/imprimir`
+          return (
+            <a
+              href={imprimirHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            >
+              <Printer className="size-3.5" strokeWidth={2} />
+              Reimprimir
+            </a>
+          )
+        }}
+        vazio={
+          <EmptyState
+            icon={Printer}
+            title="Nenhuma impressão ainda"
+            hint="As impressões de etiquetas aparecerão aqui."
+          />
+        }
+      />
     </div>
   )
 }

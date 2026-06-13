@@ -2,12 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeftRight, Pencil } from 'lucide-react'
+import { ArrowLeftRight, Pencil, FileText } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Filtros } from '@/components/ui-kit/Filtros'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -103,13 +103,32 @@ export default async function TransferenciaPage({
     return new Date(d).toLocaleDateString('pt-BR')
   }
 
+  const relatorioParams = new URLSearchParams()
+  if (sp.data_inicio) relatorioParams.set('data_inicio', sp.data_inicio)
+  if (sp.data_final) relatorioParams.set('data_final', sp.data_final)
+  if (sp.familia) relatorioParams.set('familia', sp.familia)
+  if (sp.tipo) relatorioParams.set('tipo', sp.tipo)
+  const relatorioHref = `/transferencia/relatorio?${relatorioParams.toString()}`
+
   return (
     <div>
       <PageHeader
         title="Transferências"
         icon={ArrowLeftRight}
         description="Movimentações entre locais de estoque"
-        actions={podeCriar ? <NovaTransferencia locais={locais ?? []} /> : undefined}
+        actions={
+          <>
+            <a
+              href={relatorioHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={btnClass('outline')}
+            >
+              <FileText className="size-4" /> Relatório PDF
+            </a>
+            {podeCriar ? <NovaTransferencia locais={locais ?? []} /> : null}
+          </>
+        }
       />
 
       <Filtros
@@ -133,68 +152,59 @@ export default async function TransferenciaPage({
         }}
       />
 
-      {transferencias?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Estoque</th>
-              <th>Data</th>
-              <th>Local</th>
-              <th className="text-right">Produtos</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {transferencias.map((t) => {
-              const count = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
-              const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
-              const temErro = movStatus.some(
-                (m: { status: string | null }) => m.status === 'Erro'
-              )
-              const concluido = t.status === 'Concluido'
+      <Lista
+        linhas={transferencias ?? []}
+        chaveLinha={(t) => t.id}
+        colunas={[
+          {
+            label: 'Estoque',
+            primaria: true,
+            render: (t) => {
               const origem = localMap.get(t.codigo_local_origem) || t.codigo_local_origem
               const destino = localMap.get(t.codigo_local_destino) || t.codigo_local_destino
               return (
-                <tr key={t.id}>
-                  <td className="num font-medium text-text">#{t.id}</td>
-                  <td className="num text-text-muted">{fmtData(t.data)}</td>
-                  <td className="max-w-xs truncate text-text">
-                    {origem} {' → '} {destino}
-                  </td>
-                  <td className="text-right">
-                    <span className="num">{count}</span>
-                  </td>
-                  <td>
-                    <StatusPill status={t.status} />
-                  </td>
-                  <td>
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/transferencia/${t.id}/contagem`}
-                        className={btnClass('outline')}
-                      >
-                        <Pencil className="size-4" /> {concluido ? 'Ver' : 'Contar'}
-                      </Link>
-                      <AcoesTransferencia
-                        transferenciaId={t.id}
-                        temErro={temErro}
-                        podeExcluir={podeExcluir}
-                      />
-                    </div>
-                  </td>
-                </tr>
+                <span>
+                  <span className="num text-text-muted">#{t.id}</span> {origem} {' → '} {destino}
+                </span>
               )
-            })}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={ArrowLeftRight}
-          title="Nenhuma transferência"
-          hint="Crie uma nova para começar."
-        />
-      )}
+            },
+          },
+          { label: 'Data', larguraDesktop: 'w-28', render: (t) => <span className="num text-text-muted">{fmtData(t.data)}</span> },
+          {
+            label: 'Produtos',
+            alinhar: 'right',
+            larguraDesktop: 'w-28',
+            render: (t) => (
+              <span className="num">{Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0}</span>
+            ),
+          },
+          { label: 'Status', larguraDesktop: 'w-32', render: (t) => <StatusPill status={t.status} /> },
+        ]}
+        acao={(t) => {
+          const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
+          const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
+          const concluido = t.status === 'Concluido'
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <Link href={`/transferencia/${t.id}/contagem`} className={btnClass('outline')}>
+                <Pencil className="size-4" /> {concluido ? 'Ver' : 'Contar'}
+              </Link>
+              <AcoesTransferencia
+                transferenciaId={t.id}
+                temErro={temErro}
+                podeExcluir={podeExcluir}
+              />
+            </div>
+          )
+        }}
+        vazio={
+          <EmptyState
+            icon={ArrowLeftRight}
+            title="Nenhuma transferência"
+            hint="Crie uma nova para começar."
+          />
+        }
+      />
 
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/transferencia" page={page} temProxima={temProxima} />

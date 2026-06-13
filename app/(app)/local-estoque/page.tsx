@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { escapeIlike } from '@/lib/utils-busca'
@@ -65,36 +65,28 @@ export default async function LocalEstoquePage({
         defaultValue={params.q ?? ''}
       />
 
-      {locais?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th>Descrição</th>
-              <th>Código Local Estoque</th>
-              <th>Código</th>
-              <th className="text-right">Situação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {locais.map((l) => (
-              <tr key={l.id}>
-                <td className="font-medium text-text">{l.descricao || '-'}</td>
-                <td className="num text-text-muted">{l.codigo_local_estoque || '-'}</td>
-                <td className="num text-text-muted">{l.codigo || '-'}</td>
-                <td className="text-right">
-                  <StatusPill status={l.inativo === 'S' ? 'Inativo' : 'Ativo'} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={Warehouse}
-          title="Nenhum local de estoque"
-          hint="Sincronize com o Omie para ver os locais."
-        />
-      )}
+      <Lista
+        linhas={locais ?? []}
+        chaveLinha={(l) => l.id}
+        colunas={[
+          { label: 'Descrição', primaria: true, render: (l) => l.descricao || '-' },
+          { label: 'Código local', render: (l) => <span className="num text-text-muted">{l.codigo_local_estoque || '-'}</span> },
+          { label: 'Código', larguraDesktop: 'w-28', render: (l) => <span className="num text-text-muted">{l.codigo || '-'}</span> },
+          {
+            label: 'Situação',
+            alinhar: 'right',
+            larguraDesktop: 'w-32',
+            render: (l) => <StatusPill status={l.inativo === 'S' ? 'Inativo' : 'Ativo'} />,
+          },
+        ]}
+        vazio={
+          <EmptyState
+            icon={Warehouse}
+            title="Nenhum local de estoque"
+            hint="Sincronize com o Omie para ver os locais."
+          />
+        }
+      />
     </div>
   )
 }

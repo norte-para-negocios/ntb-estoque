@@ -62,61 +62,125 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
         </button>
       </div>
 
-      <DataTable>
-        <thead>
-          <tr>
-            <th className="w-10">
-              <input
-                type="checkbox"
-                checked={todosMarcados}
-                onChange={toggleTodos}
-                aria-label="Selecionar todos"
-                className="size-4 accent-[var(--brand)]"
-              />
-            </th>
-            <th>Código</th>
-            <th>Produto</th>
-            <th className="text-right">Qtd NFe</th>
-            <th className="text-right">Qtd p/ etiqueta</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {itens.map((item) => (
-            <tr key={item.id} className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
-              <td>
+      {/* Desktop: tabela */}
+      <div className="hidden lg:block">
+        <DataTable>
+          <thead>
+            <tr>
+              <th className="w-10">
                 <input
                   type="checkbox"
-                  checked={sel.has(item.id)}
-                  onChange={() => toggle(item.id)}
-                  aria-label={`Selecionar ${item.c_codigo_produto}`}
+                  checked={todosMarcados}
+                  onChange={toggleTodos}
+                  aria-label="Selecionar todos"
                   className="size-4 accent-[var(--brand)]"
                 />
-              </td>
-              <td className="num text-text-muted">{item.c_codigo_produto}</td>
-              <td className="max-w-md truncate">{item.c_descricao_produto}</td>
-              <td className="text-right">
-                <Num value={item.n_qtde_nfe} frac={3} />{' '}
-                <span className="text-text-muted">{item.c_unidade_nfe}</span>
-              </td>
-              <td className="text-right">
-                <div className="flex justify-end">
-                  <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
-                </div>
-              </td>
-              <td className="text-right">
-                <button
-                  type="button"
-                  onClick={() => imprimir([item.id])}
-                  className="text-brand hover:underline whitespace-nowrap"
-                >
-                  Imprimir
-                </button>
-              </td>
+              </th>
+              <th>Código</th>
+              <th>Produto</th>
+              <th className="text-right">Qtd NFe</th>
+              <th className="text-right">Qtd p/ etiqueta</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </DataTable>
+          </thead>
+          <tbody>
+            {itens.map((item) => (
+              <tr key={item.id} className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={sel.has(item.id)}
+                    onChange={() => toggle(item.id)}
+                    aria-label={`Selecionar ${item.c_codigo_produto}`}
+                    className="size-4 accent-[var(--brand)]"
+                  />
+                </td>
+                <td className="num text-text-muted">{item.c_codigo_produto}</td>
+                <td className="max-w-md truncate">{item.c_descricao_produto}</td>
+                <td className="text-right">
+                  <Num value={item.n_qtde_nfe} frac={3} />{' '}
+                  <span className="text-text-muted">{item.c_unidade_nfe}</span>
+                </td>
+                <td className="text-right">
+                  <div className="flex justify-end">
+                    <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
+                  </div>
+                </td>
+                <td className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => imprimir([item.id])}
+                    className="text-brand hover:underline whitespace-nowrap"
+                  >
+                    Imprimir
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
+      </div>
+
+      {/* Mobile: cards */}
+      <div className="space-y-3 lg:hidden">
+        <label className="flex items-center gap-2 px-1 text-sm text-text-muted">
+          <input
+            type="checkbox"
+            checked={todosMarcados}
+            onChange={toggleTodos}
+            aria-label="Selecionar todos"
+            className="size-4 accent-[var(--brand)]"
+          />
+          Selecionar todos
+        </label>
+        {itens.map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-lg border border-border bg-surface p-4 ${
+              sel.has(item.id) ? 'bg-brand-soft/40' : ''
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={sel.has(item.id)}
+                onChange={() => toggle(item.id)}
+                aria-label={`Selecionar ${item.c_codigo_produto}`}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="num text-[11px] text-text-muted">{item.c_codigo_produto}</div>
+                <div className="font-medium text-text break-words">{item.c_descricao_produto}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 text-sm">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                Qtd NFe{' '}
+              </span>
+              <Num value={item.n_qtde_nfe} frac={3} />{' '}
+              <span className="text-text-muted">{item.c_unidade_nfe}</span>
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                Qtd p/ etiqueta
+              </div>
+              <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
+            </div>
+
+            <div className="mt-4 border-t border-border/60 pt-3">
+              <button
+                type="button"
+                onClick={() => imprimir([item.id])}
+                className="inline-flex items-center gap-1 text-brand hover:underline"
+              >
+                <Printer className="size-3.5" /> Imprimir
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { DataTable } from '@/components/ui-kit/DataTable'
+import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
 import { CalendarClock } from 'lucide-react'
@@ -105,57 +105,74 @@ export default async function ValidadePage({
         })}
       </div>
 
-      {ordens?.length ? (
-        <DataTable>
-          <thead>
-            <tr>
-              <th className="w-40">Validade</th>
-              <th>Produto</th>
-              <th className="w-40">OP</th>
-              <th className="w-28 text-right">Qtd</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordens.map((o) => {
+      <Lista
+        linhas={ordens ?? []}
+        chaveLinha={(o) => o.id}
+        colunas={[
+          {
+            label: 'Produto',
+            primaria: true,
+            render: (o) => {
               const prod = prodMap.get(o.identificacao_n_cod_produto)
-              const cor = tom(o.validade as string)
               return (
-                <tr key={o.id}>
-                  <td>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="size-2 rounded-full shrink-0" style={{ background: cor }} />
-                      <span className="num text-text">{formataData(o.validade as string)}</span>
-                    </span>
-                  </td>
-                  <td>
-                    <span className="text-text">
-                      {prod?.descricao || `Produto ${o.identificacao_n_cod_produto}`}
-                    </span>
-                    {prod?.codigo && (
-                      <span className="ml-1.5 text-[12px] text-text-muted">{prod.codigo}</span>
-                    )}
-                  </td>
-                  <td className="text-text-muted">
-                    {o.identificacao_c_num_op || o.num_ordem || '-'}
-                  </td>
-                  <td className="text-right">
-                    <Num value={o.quantidade ?? o.identificacao_n_qtde} frac={0} />
-                    {prod?.unidade && (
-                      <span className="ml-1 text-[12px] text-text-muted">{prod.unidade}</span>
-                    )}
-                  </td>
-                </tr>
+                <span>
+                  <span className="text-text">
+                    {prod?.descricao || `Produto ${o.identificacao_n_cod_produto}`}
+                  </span>
+                  {prod?.codigo && (
+                    <span className="ml-1.5 text-[12px] text-text-muted">{prod.codigo}</span>
+                  )}
+                </span>
               )
-            })}
-          </tbody>
-        </DataTable>
-      ) : (
-        <EmptyState
-          icon={CalendarClock}
-          title="Nada vencendo"
-          hint="Nenhum produto vence nesse período."
-        />
-      )}
+            },
+          },
+          {
+            label: 'Validade',
+            larguraDesktop: 'w-40',
+            render: (o) => (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="size-2 rounded-full shrink-0"
+                  style={{ background: tom(o.validade as string) }}
+                />
+                <span className="num text-text">{formataData(o.validade as string)}</span>
+              </span>
+            ),
+          },
+          {
+            label: 'OP',
+            larguraDesktop: 'w-40',
+            render: (o) => (
+              <span className="text-text-muted">
+                {o.identificacao_c_num_op || o.num_ordem || '-'}
+              </span>
+            ),
+          },
+          {
+            label: 'Qtd',
+            alinhar: 'right',
+            larguraDesktop: 'w-28',
+            render: (o) => {
+              const prod = prodMap.get(o.identificacao_n_cod_produto)
+              return (
+                <>
+                  <Num value={o.quantidade ?? o.identificacao_n_qtde} frac={0} />
+                  {prod?.unidade && (
+                    <span className="ml-1 text-[12px] text-text-muted">{prod.unidade}</span>
+                  )}
+                </>
+              )
+            },
+          },
+        ]}
+        vazio={
+          <EmptyState
+            icon={CalendarClock}
+            title="Nada vencendo"
+            hint="Nenhum produto vence nesse período."
+          />
+        }
+      />
     </div>
   )
 }
