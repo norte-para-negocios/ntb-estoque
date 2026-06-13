@@ -19,7 +19,7 @@ export function Sidebar({
   const pathname = usePathname()
   const itens = NAV_ITEMS.filter((i) => !i.admin || isAdmin)
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-surface">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-surface sticky top-0 h-screen self-start">
       <div className="flex h-16 items-center px-5 border-b border-border">
         <Image src="/ntb-logo.png" alt="NTB" width={110} height={36} priority className="h-7 w-auto dark:brightness-0 dark:invert" />
       </div>
