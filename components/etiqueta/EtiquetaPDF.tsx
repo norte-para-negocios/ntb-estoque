@@ -8,17 +8,17 @@ const H = 40.04 * MM
 
 const s = StyleSheet.create({
   page: { paddingTop: 3 * MM, paddingHorizontal: 3 * MM, fontSize: 8, color: '#000' },
-  row: { flexDirection: 'row' },
-  left: { width: '68%', paddingRight: 4 },
-  right: { width: '32%', alignItems: 'center' },
-  descricao: { fontSize: 9, fontFamily: 'Helvetica-Bold', marginBottom: 5 },
-  campoRow: { flexDirection: 'row', marginBottom: 5 },
-  campo: { flex: 1 },
-  label: { fontSize: 7, color: '#000' },
-  valor: { fontSize: 9, fontFamily: 'Helvetica-Bold' },
-  linha: { fontSize: 7.5, marginBottom: 2 },
-  qr: { width: 58, height: 58, marginBottom: 6 },
-  logo: { width: 44, height: 'auto' },
+  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  left: { width: '64%', flexShrink: 0, flexGrow: 0, paddingRight: 6, overflow: 'hidden' },
+  right: { width: '36%', flexShrink: 0, flexGrow: 0, alignItems: 'center', overflow: 'hidden' },
+  descricao: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
+  campoRow: { flexDirection: 'row', marginBottom: 4 },
+  campo: { flex: 1, minWidth: 0 },
+  label: { fontSize: 6.5, color: '#000' },
+  valor: { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
+  linha: { fontSize: 7, marginBottom: 1.5 },
+  qr: { width: 50, height: 50, marginBottom: 5 },
+  logo: { width: 40, height: 'auto' },
 })
 
 export interface Etiqueta {
@@ -44,7 +44,7 @@ export function EtiquetaPDF({ etiquetas }: { etiquetas: Etiqueta[] }) {
           <View style={s.row}>
             {/* Coluna esquerda: dados */}
             <View style={s.left}>
-              <Text style={s.descricao}>{e.descricao.trim().slice(0, 38)}</Text>
+              <Text style={s.descricao} wrap={false}>{e.descricao.trim().slice(0, 40)}</Text>
 
               {e.produzido !== '' && e.validade !== '' && (
                 <View style={s.campoRow}>

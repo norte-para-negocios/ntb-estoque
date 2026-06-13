@@ -11,7 +11,7 @@ function num(v: unknown, dec: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
@@ -19,6 +19,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params
   const supabase = await createClient()
+
+  // Subconjunto opcional de itens (impressão individual/selecionada)
+  const itensParam = new URL(request.url).searchParams.get('itens')
+  const itensIds = itensParam
+    ? itensParam.split(',').map((n) => Number(n)).filter((n) => Number.isFinite(n))
+    : null
 
   const { data: nf } = await supabase
     .from('notas_fiscais')
@@ -31,14 +37,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { data: loja } = await supabase.from('lojas').select('cnpj').eq('id', lojaId).single()
 
   // Itens com quantidade definida + produto associado
-  const { data: itens } = await supabase
+  let itensQuery = supabase
     .from('nota_fiscal_items')
-    .select('c_descricao_produto, quantidade, n_qtde_nfe, c_unidade_nfe, produto_codigo, full_object')
+    .select('id, c_descricao_produto, quantidade, n_qtde_nfe, c_unidade_nfe, produto_codigo, full_object')
     .eq('nota_fiscal_id', id)
     .eq('loja_id', lojaId)
     .not('quantidade', 'is', null)
     .gt('quantidade', 0)
     .order('n_sequencia')
+
+  if (itensIds?.length) itensQuery = itensQuery.in('id', itensIds)
+
+  const { data: itens } = await itensQuery
 
   if (!itens?.length) {
     return NextResponse.json(
