@@ -27,7 +27,7 @@ export function LojaSelector({
       onValueChange={(val) => startTransition(() => setCurrentLoja(Number(val)))}
       disabled={pending}
     >
-      <SelectTrigger className="w-full bg-sidebar-accent border-sidebar-border text-white data-[placeholder]:text-sidebar-foreground/50">
+      <SelectTrigger className="w-full bg-white border-[#d5d5d5] font-medium text-[#2eb5c3] data-[placeholder]:text-[#8a8a8a]">
         <SelectValue placeholder="Selecione a loja">
           {(value: string | null) => {
             const loja = lojas.find((l) => String(l.id) === value)

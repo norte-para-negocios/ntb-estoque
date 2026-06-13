@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -30,9 +29,9 @@ export function SyncButton({ endpoint, label }: { endpoint: string; label: strin
   }
 
   return (
-    <Button onClick={handleSync} disabled={loading} variant="outline">
+    <button onClick={handleSync} disabled={loading} className="ntb-btn-teal disabled:opacity-60">
       <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
       {loading ? 'Sincronizando...' : label}
-    </Button>
+    </button>
   )
 }

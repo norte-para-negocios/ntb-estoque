@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { excluirLoja } from '@/lib/actions/loja'
@@ -29,8 +28,13 @@ export function ExcluirLoja({ lojaId, nome }: { lojaId: number; nome: string }) 
   }
 
   return (
-    <Button variant="destructive" size="sm" onClick={excluir} disabled={pending}>
+    <button
+      type="button"
+      onClick={excluir}
+      disabled={pending}
+      className="inline-flex items-center gap-1.5 rounded bg-[#ff595e] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#e8484d] disabled:opacity-60"
+    >
       <Trash2 className="size-4" /> Excluir
-    </Button>
+    </button>
   )
 }

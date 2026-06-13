@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { Card } from '@/components/ui/card'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { BuscaSimples } from '@/components/BuscaSimples'
+import { Warehouse, ArrowLeft } from 'lucide-react'
 
 export default async function LocalEstoquePage({
   searchParams,
@@ -29,44 +30,56 @@ export default async function LocalEstoquePage({
   const { data: locais } = await query
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Locais de Estoque</h1>
+    <div className="space-y-4">
+      {/* Título estilo original: voltar + ícone + nome */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
+          </Link>
+          <Warehouse className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">Locais de Estoque</h1>
+        </div>
         {podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
       </div>
 
-      <BuscaSimples basePath="/local-estoque" placeholder="Buscar local..." defaultValue={params.q ?? ''} />
+      <BuscaSimples
+        basePath="/local-estoque"
+        placeholder="Buscar local..."
+        defaultValue={params.q ?? ''}
+      />
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">Código Omie</th>
-              <th className="text-left p-3 font-medium">Código</th>
-              <th className="text-left p-3 font-medium">Descrição</th>
-              <th className="text-center p-3 font-medium">Ativo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {locais?.length ? (
-              locais.map((l) => (
-                <tr key={l.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3">{l.codigo_local_estoque}</td>
-                  <td className="p-3">{l.codigo}</td>
-                  <td className="p-3">{l.descricao}</td>
-                  <td className="p-3 text-center">{l.inativo === 'S' ? 'Não' : 'Sim'}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="p-8 text-center text-gray-500">
-                  Nenhum local de estoque. Sincronize com o Omie.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+      {/* Lista de cards empilhados (fiel ao original) */}
+      <div className="space-y-4">
+        {locais?.length ? (
+          locais.map((l) => (
+            <div key={l.id} className="ntb-card">
+              <div className="ntb-card-header flex items-center justify-between">
+                <span>{l.descricao || '-'}</span>
+                <span className="text-sm font-normal text-white/90">
+                  {l.inativo === 'S' ? 'Inativo' : 'Ativo'}
+                </span>
+              </div>
+              <div className="ntb-card-body flex flex-wrap items-center gap-x-8 gap-y-2">
+                <div>
+                  <small className="text-[#8a8a8a]">Codigo Local Estoque</small>
+                  <p className="font-semibold text-[#5d5d5d]">{l.codigo_local_estoque || '-'}</p>
+                </div>
+                <div>
+                  <small className="text-[#8a8a8a]">Codigo</small>
+                  <p className="font-semibold text-[#5d5d5d]">{l.codigo || '-'}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="ntb-card">
+            <div className="ntb-card-body text-center text-[#8a8a8a]">
+              Nenhum local de estoque. Sincronize com o Omie.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

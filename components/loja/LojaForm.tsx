@@ -2,17 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarLoja, editarLoja, type LojaInput } from '@/lib/actions/loja'
@@ -101,77 +95,87 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
       <DialogTrigger
         render={
           editando ? (
-            <Button variant="outline" size="sm">
+            <button type="button" className="ntb-btn-outline">
               <Pencil className="size-4" /> Editar
-            </Button>
+            </button>
           ) : (
-            <Button>
+            <button type="button" className="ntb-btn-success">
               <Plus className="size-4" /> Nova loja
-            </Button>
+            </button>
           )
         }
       />
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editando ? 'Editar loja' : 'Nova loja'}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          <div className="space-y-2">
-            <Label>CNPJ</Label>
-            <Input value={form.cnpj} onChange={(e) => set('cnpj', e.target.value)} />
+      <DialogContent className="overflow-hidden p-0 sm:max-w-lg" showCloseButton={false}>
+        <div className="ntb-card-header text-base">{editando ? 'Editar loja' : 'Nova loja'}</div>
+        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-4 py-3">
+          <div>
+            <label className="ntb-label">CNPJ</label>
+            <input className="ntb-input" value={form.cnpj} onChange={(e) => set('cnpj', e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>Nome</Label>
-            <Input value={form.nome} onChange={(e) => set('nome', e.target.value)} />
+          <div>
+            <label className="ntb-label">Nome</label>
+            <input className="ntb-input" value={form.nome} onChange={(e) => set('nome', e.target.value)} />
           </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Nome fantasia</Label>
-            <Input
+          <div className="col-span-2">
+            <label className="ntb-label">Nome fantasia</label>
+            <input
+              className="ntb-input"
               value={form.nome_fantasia}
               onChange={(e) => set('nome_fantasia', e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label>CEP</Label>
-            <Input value={form.cep} onChange={(e) => set('cep', e.target.value)} />
+          <div>
+            <label className="ntb-label">CEP</label>
+            <input className="ntb-input" value={form.cep} onChange={(e) => set('cep', e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>UF</Label>
-            <Input value={form.uf} maxLength={2} onChange={(e) => set('uf', e.target.value)} />
+          <div>
+            <label className="ntb-label">UF</label>
+            <input
+              className="ntb-input"
+              value={form.uf}
+              maxLength={2}
+              onChange={(e) => set('uf', e.target.value)}
+            />
           </div>
-          <div className="space-y-2">
-            <Label>Cidade</Label>
-            <Input value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
+          <div>
+            <label className="ntb-label">Cidade</label>
+            <input className="ntb-input" value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>Bairro</Label>
-            <Input value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
+          <div>
+            <label className="ntb-label">Bairro</label>
+            <input className="ntb-input" value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>Logradouro</Label>
-            <Input value={form.logradouro} onChange={(e) => set('logradouro', e.target.value)} />
+          <div>
+            <label className="ntb-label">Logradouro</label>
+            <input
+              className="ntb-input"
+              value={form.logradouro}
+              onChange={(e) => set('logradouro', e.target.value)}
+            />
           </div>
-          <div className="space-y-2">
-            <Label>Número</Label>
-            <Input value={form.numero} onChange={(e) => set('numero', e.target.value)} />
+          <div>
+            <label className="ntb-label">Número</label>
+            <input className="ntb-input" value={form.numero} onChange={(e) => set('numero', e.target.value)} />
           </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Omie App Key</Label>
-            <Input
+          <div className="col-span-2">
+            <label className="ntb-label">Omie App Key</label>
+            <input
+              className="ntb-input"
               value={form.omie_app_key}
               onChange={(e) => set('omie_app_key', e.target.value)}
               placeholder="Deixe vazio para loja fora do Omie"
             />
           </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Omie App Secret</Label>
-            <Input
+          <div className="col-span-2">
+            <label className="ntb-label">Omie App Secret</label>
+            <input
+              className="ntb-input"
               value={form.omie_app_secret}
               onChange={(e) => set('omie_app_secret', e.target.value)}
               placeholder="Deixe vazio para loja fora do Omie"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm col-span-2">
+          <label className="col-span-2 flex items-center gap-2 text-sm text-[#5d5d5d]">
             <input
               type="checkbox"
               checked={form.ativo}
@@ -180,11 +184,11 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
             Loja ativa
           </label>
         </div>
-        <DialogFooter>
-          <Button onClick={salvar} disabled={pending}>
+        <div className="flex justify-end gap-2 border-t border-[#e2e2e2] px-4 py-3">
+          <button type="button" onClick={salvar} disabled={pending} className="ntb-btn-teal disabled:opacity-60">
             {pending ? 'Salvando...' : editando ? 'Salvar' : 'Criar loja'}
-          </Button>
-        </DialogFooter>
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   )

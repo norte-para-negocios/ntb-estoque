@@ -1,11 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { Card } from '@/components/ui/card'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow } from '@/components/ordem-producao/OrdemProducaoRow'
-import { buttonVariants } from '@/components/ui/button'
-import { FileText } from 'lucide-react'
+import { Factory, ArrowLeft } from 'lucide-react'
 
 export default async function OrdemProducaoPage() {
   const lojaId = await getCurrentLojaId()
@@ -35,53 +34,47 @@ export default async function OrdemProducaoPage() {
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Ordens de Produção</h1>
-        <SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar com Omie" />
+    <div className="space-y-4">
+      {/* Título estilo original: voltar + ícone + nome */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
+          </Link>
+          <Factory className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">Ordens de Produção</h1>
+        </div>
+        <SyncButton endpoint="/api/sync/ordens-producao" label="Sincronizar" />
       </div>
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">OP</th>
-              <th className="text-left p-3 font-medium">Produto</th>
-              <th className="text-right p-3 font-medium">Qtd OP</th>
-              <th className="text-left p-3 font-medium w-40">Validade</th>
-              <th className="text-left p-3 font-medium w-32">Qtd etiqueta</th>
-              <th className="p-3 w-56"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordens?.length ? (
-              ordens.map((op) => {
-                const prod = prodMap.get(op.identificacao_n_cod_produto)
-                return (
-                  <OrdemProducaoRow
-                    key={op.id}
-                    op={{
-                      id: op.id,
-                      numOP: op.identificacao_c_num_op || op.num_ordem || '-',
-                      produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
-                      unidade: prod?.unidade || 'UN',
-                      qtdOP: op.identificacao_n_qtde,
-                      validade: op.validade,
-                      quantidade: op.quantidade,
-                    }}
-                  />
-                )
-              })
-            ) : (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500">
-                  Nenhuma ordem de produção. Sincronize com o Omie.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+      {/* Lista de cards empilhados (fiel ao original) */}
+      <div className="space-y-4">
+        {ordens?.length ? (
+          ordens.map((op) => {
+            const prod = prodMap.get(op.identificacao_n_cod_produto)
+            return (
+              <OrdemProducaoRow
+                key={op.id}
+                op={{
+                  id: op.id,
+                  numOP: op.identificacao_c_num_op || op.num_ordem || '-',
+                  produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
+                  unidade: prod?.unidade || 'UN',
+                  qtdOP: op.identificacao_n_qtde,
+                  validade: op.validade,
+                  quantidade: op.quantidade,
+                }}
+              />
+            )
+          })
+        ) : (
+          <div className="ntb-card">
+            <div className="ntb-card-body text-center text-[#8a8a8a]">
+              Nenhuma ordem de produção. Sincronize com o Omie.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

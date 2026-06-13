@@ -1,22 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
 import { CopyWebhook } from '@/components/loja/CopyWebhook'
 import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
-
-function statusBadge(status: string | null) {
-  if (status === 'Concluido') return <Badge>Concluído</Badge>
-  if (status === 'Processando') return <Badge variant="secondary">Processando</Badge>
-  if (status === 'Erro') return <Badge variant="destructive">Erro</Badge>
-  return <Badge variant="secondary">-</Badge>
-}
+import { Store, ArrowLeft } from 'lucide-react'
 
 function fmt(d: string | null): string {
-  return d ? new Date(d).toLocaleString('pt-BR') : '-'
+  return d ? new Date(d).toLocaleString('pt-BR') : 'dd/mm/aa hh:mm:ss'
+}
+
+function status(s: string | null): string {
+  return s ?? 'N/A'
 }
 
 export default async function LojaPage() {
@@ -32,79 +29,116 @@ export default async function LojaPage() {
     (process.env.NEXT_PUBLIC_APP_URL || 'https://ntb-estoque.vercel.app') + '/api/webhook'
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Lojas</h1>
+    <div className="space-y-4">
+      {/* Título estilo original: voltar + ícone + nome */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
+          </Link>
+          <Store className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">Lojas</h1>
+        </div>
         <LojaForm />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Webhook do Omie</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600 mb-2">
-            Configure esta URL no Omie (Segurança {'>'} My Apps {'>'} Webhook) de cada loja:
+      {/* Aviso do webhook do Omie */}
+      <div className="ntb-card">
+        <div className="ntb-card-header">Webhook do Omie</div>
+        <div className="ntb-card-body space-y-2">
+          <p className="text-sm text-[#5d5d5d]">
+            Importante: cadastre o webhook abaixo nos seus aplicativos Omie no endereço{' '}
+            <a
+              href="https://developer.omie.com.br/my-apps/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-[#2eb5c3] hover:underline"
+            >
+              developer.omie.com.br/my-apps
+            </a>{' '}
+            e ative todas as opções.
           </p>
           <CopyWebhook url={webhookUrl} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {lojas?.map((loja) => (
-          <Card key={loja.id}>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center justify-between">
-                <span>{loja.nome_fantasia || loja.nome}</span>
-                <Badge variant={loja.ativo ? 'default' : 'secondary'}>
+      {/* Lista de cards empilhados (fiel ao original) */}
+      <div className="space-y-4">
+        {lojas?.length ? (
+          lojas.map((loja) => (
+            <div key={loja.id} className="ntb-card">
+              <div className="ntb-card-header flex items-center justify-between gap-3">
+                <span className="truncate">
+                  {loja.cnpj ? `${loja.cnpj}: ` : ''}
+                  {loja.nome_fantasia || loja.nome}
+                  {loja.nome_fantasia && loja.nome ? (
+                    <span className="font-normal text-white/90"> | {loja.nome}</span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-sm font-normal text-white/90">
                   {loja.ativo ? 'Ativa' : 'Inativa'}
-                </Badge>
-              </CardTitle>
-              <p className="text-xs text-gray-500">{loja.cnpj}</p>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Produtos</span>
-                <span className="flex items-center gap-2">
-                  {statusBadge(loja.produto_status)}
-                  <span className="text-xs text-gray-400">{fmt(loja.produto_ultima_atualizacao)}</span>
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Locais</span>
-                <span className="flex items-center gap-2">
-                  {statusBadge(loja.local_estoque_status)}
-                  <span className="text-xs text-gray-400">{fmt(loja.local_estoque_ultima_atualizacao)}</span>
-                </span>
+              <div className="ntb-card-body space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-[#5d5d5d]">Atualizações:</span>
+                  <ForceSyncLoja lojaId={loja.id} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <small className="text-[#8a8a8a]">Local de Estoque</small>
+                    <p className="text-sm font-semibold text-[#5d5d5d]">
+                      {fmt(loja.local_estoque_ultima_atualizacao)}
+                    </p>
+                    <small className="text-[#8a8a8a]">({status(loja.local_estoque_status)})</small>
+                  </div>
+                  <div>
+                    <small className="text-[#8a8a8a]">Produto</small>
+                    <p className="text-sm font-semibold text-[#5d5d5d]">
+                      {fmt(loja.produto_ultima_atualizacao)}
+                    </p>
+                    <small className="text-[#8a8a8a]">({status(loja.produto_status)})</small>
+                  </div>
+                  <div>
+                    <small className="text-[#8a8a8a]">Ordem de Produção</small>
+                    <p className="text-sm font-semibold text-[#5d5d5d]">
+                      {fmt(loja.ordem_producao_ultima_atualizacao)}
+                    </p>
+                    <small className="text-[#8a8a8a]">({status(loja.ordem_producao_status)})</small>
+                  </div>
+                  <div>
+                    <small className="text-[#8a8a8a]">Nota Fiscal</small>
+                    <p className="text-sm font-semibold text-[#5d5d5d]">
+                      {fmt(loja.nota_fiscal_ultima_atualizacao)}
+                    </p>
+                    <small className="text-[#8a8a8a]">({status(loja.nota_fiscal_status)})</small>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 border-t border-[#e2e2e2] pt-3">
+                  <span className="text-xs text-[#8a8a8a]">
+                    OMIE KEY: {loja.omie_app_key ? loja.omie_app_key.slice(0, 6) : '-'}
+                  </span>
+                  <span className="text-xs text-[#8a8a8a]">
+                    OMIE SECRET: {loja.omie_app_secret ? loja.omie_app_secret.slice(0, 6) : '-'}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2 border-t border-[#e2e2e2] pt-3">
+                  <LojaForm loja={loja} />
+                  <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome} />
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Notas Fiscais</span>
-                <span className="flex items-center gap-2">
-                  {statusBadge(loja.nota_fiscal_status)}
-                  <span className="text-xs text-gray-400">{fmt(loja.nota_fiscal_ultima_atualizacao)}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Ordens de Produção</span>
-                <span className="flex items-center gap-2">
-                  {statusBadge(loja.ordem_producao_status)}
-                  <span className="text-xs text-gray-400">{fmt(loja.ordem_producao_ultima_atualizacao)}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-gray-600">Integração Omie</span>
-                <Badge variant={loja.omie_app_key ? 'default' : 'destructive'}>
-                  {loja.omie_app_key ? 'Conectada' : 'Sem chave'}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <ForceSyncLoja lojaId={loja.id} />
-                <LojaForm loja={loja} />
-                <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome} />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          ))
+        ) : (
+          <div className="ntb-card">
+            <div className="ntb-card-body text-center text-[#8a8a8a]">
+              Nenhuma loja cadastrada. Clique em &quot;Nova loja&quot; para começar.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

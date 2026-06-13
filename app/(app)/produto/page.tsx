@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { Card } from '@/components/ui/card'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
-import { BuscaSimples } from '@/components/BuscaSimples'
+import { Package, ArrowLeft, Search } from 'lucide-react'
 
 function fmtMoeda(v: number | null): string {
   return (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -33,46 +33,74 @@ export default async function ProdutoPage({
   const { data: produtos } = await query
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Produtos</h1>
-        {podeSync && <SyncButton endpoint="/api/sync/produtos" label="Sincronizar com Omie" />}
+    <div className="space-y-4">
+      {/* Título estilo original: voltar + ícone + nome */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
+          </Link>
+          <Package className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">Produtos</h1>
+        </div>
+        {podeSync && <SyncButton endpoint="/api/sync/produtos" label="Sincronizar" />}
       </div>
 
-      <BuscaSimples basePath="/produto" placeholder="Buscar por nome ou código..." defaultValue={params.q ?? ''} />
+      {/* Busca (fiel ao formulário do original) */}
+      <div className="ntb-card">
+        <div className="ntb-card-body">
+          <form method="GET" action="/produto" className="flex items-end gap-2">
+            <input
+              type="search"
+              name="q"
+              defaultValue={params.q ?? ''}
+              placeholder="Pesquisar por nome ou código"
+              className="ntb-input"
+            />
+            <button type="submit" className="ntb-btn-success shrink-0">
+              <Search className="size-4" /> Pesquisar
+            </button>
+          </form>
+        </div>
+      </div>
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">Código</th>
-              <th className="text-left p-3 font-medium">Descrição</th>
-              <th className="text-left p-3 font-medium">Família</th>
-              <th className="text-left p-3 font-medium">Un</th>
-              <th className="text-right p-3 font-medium">Valor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {produtos?.length ? (
-              produtos.map((p) => (
-                <tr key={p.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3">{p.codigo}</td>
-                  <td className="p-3">{p.descricao}</td>
-                  <td className="p-3 text-gray-600">{p.descricao_familia}</td>
-                  <td className="p-3">{p.unidade}</td>
-                  <td className="p-3 text-right">{fmtMoeda(p.valor_unitario)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-gray-500">
-                  Nenhum produto. Sincronize com o Omie.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+      {/* Lista de cards empilhados (fiel ao original) */}
+      <div className="space-y-4">
+        {produtos?.length ? (
+          produtos.map((p) => (
+            <div key={p.id} className="ntb-card">
+              <div className="ntb-card-header flex items-center justify-between">
+                <span>{p.codigo || '-'}</span>
+                <span className="text-sm font-normal text-white/90">{fmtMoeda(p.valor_unitario)}</span>
+              </div>
+              <div className="ntb-card-body">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <small className="text-[#8a8a8a]">Descrição</small>
+                    <p className="font-semibold text-[#5d5d5d]">{p.descricao}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-8">
+                    <div>
+                      <small className="text-[#8a8a8a]">Família</small>
+                      <p className="text-[#5d5d5d]">{p.descricao_familia || '-'}</p>
+                    </div>
+                    <div>
+                      <small className="text-[#8a8a8a]">Unidade</small>
+                      <p className="text-[#5d5d5d]">{p.unidade || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="ntb-card">
+            <div className="ntb-card-body text-center text-[#8a8a8a]">
+              Nenhum produto. Sincronize com o Omie ou ajuste a busca.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { forceSyncLoja } from '@/lib/actions/loja'
@@ -24,9 +23,9 @@ export function ForceSyncLoja({ lojaId }: { lojaId: number }) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={sincronizar} disabled={pending}>
+    <button type="button" onClick={sincronizar} disabled={pending} className="ntb-btn-outline">
       <RefreshCw className="size-4" />
-      {pending ? 'Forçando...' : 'Forçar sync'}
-    </Button>
+      {pending ? 'Forçando...' : 'Forçar liberação p/ atualização'}
+    </button>
   )
 }

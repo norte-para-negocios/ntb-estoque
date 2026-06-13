@@ -2,16 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, ArrowLeftRight, Pencil } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
-
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' {
-  if (status === 'Concluido') return 'default'
-  if (status === 'Processando no Omie') return 'secondary'
-  return 'destructive'
-}
 
 export default async function TransferenciaPage() {
   const lojaId = await getCurrentLojaId()
@@ -24,7 +17,7 @@ export default async function TransferenciaPage() {
   const { data: transferencias } = await supabase
     .from('transferencias')
     .select(
-      'id, data, codigo_local_origem, codigo_local_destino, status, movimentos(count), movStatus:movimentos(status)'
+      'id, data, codigo_local_origem, codigo_local_destino, status, finalizado, movimentos(count), movStatus:movimentos(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
@@ -39,74 +32,84 @@ export default async function TransferenciaPage() {
 
   const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
+  function fmtData(d: string | null): string {
+    if (!d) return ''
+    return new Date(d).toLocaleDateString('pt-BR')
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Transferências</h1>
+    <div className="space-y-4">
+      {/* Título estilo original: voltar + ícone + nome */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Link href="/home" className="text-[#8a8a8a] hover:text-[#5d5d5d]" title="Voltar">
+            <ArrowLeft className="size-5" strokeWidth={2} />
+          </Link>
+          <ArrowLeftRight className="size-5 text-[#2eb5c3]" strokeWidth={2} />
+          <h1 className="text-lg font-semibold text-[#5d5d5d]">Transferências</h1>
+        </div>
         {podeCriar && <NovaTransferencia locais={locais ?? []} />}
       </div>
 
-      <Card className="overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="text-left p-3 font-medium">Data</th>
-              <th className="text-left p-3 font-medium">Origem</th>
-              <th className="text-left p-3 font-medium">Destino</th>
-              <th className="text-right p-3 font-medium">Itens</th>
-              <th className="text-center p-3 font-medium">Status</th>
-              <th className="p-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {transferencias?.length ? (
-              transferencias.map((t) => {
-                const count = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
-                const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
-                const temErro = movStatus.some(
-                  (m: { status: string | null }) => m.status === 'Erro'
-                )
-                return (
-                  <tr key={t.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">{new Date(t.data).toLocaleDateString('pt-BR')}</td>
-                    <td className="p-3">
-                      {localMap.get(t.codigo_local_origem) || t.codigo_local_origem}
-                    </td>
-                    <td className="p-3">
-                      {localMap.get(t.codigo_local_destino) || t.codigo_local_destino}
-                    </td>
-                    <td className="p-3 text-right">{count}</td>
-                    <td className="p-3 text-center">
-                      <Badge variant={statusVariant(t.status)}>{t.status}</Badge>
-                    </td>
-                    <td className="p-3 text-right">
-                      <span className="inline-flex items-center gap-4">
-                        <Link
-                          href={`/transferencia/${t.id}/contagem`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {t.status === 'Concluido' ? 'Ver' : 'Contar'}
-                        </Link>
-                        <AcoesTransferencia
-                          transferenciaId={t.id}
-                          temErro={temErro}
-                          podeExcluir={podeExcluir}
-                        />
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })
-            ) : (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500">
-                  Nenhuma transferência. Crie uma nova para começar.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+      {/* Lista de cards empilhados (fiel ao original) */}
+      <div className="space-y-4">
+        {transferencias?.length ? (
+          transferencias.map((t) => {
+            const count = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
+            const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
+            const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
+            const concluido = t.status === 'Concluido'
+            const origem = localMap.get(t.codigo_local_origem) || t.codigo_local_origem
+            const destino = localMap.get(t.codigo_local_destino) || t.codigo_local_destino
+            return (
+              <div key={t.id}>
+                <span className="text-sm text-[#8a8a8a]">Data: {fmtData(t.data)}</span>
+                <div className="ntb-card mt-1">
+                  <div
+                    className="flex items-center justify-between px-4 py-2 text-xs font-medium text-white"
+                    style={{ backgroundColor: concluido ? '#2eb5c3' : '#f24646' }}
+                  >
+                    <span>{t.status}</span>
+                    {t.finalizado && <span>| {fmtData(t.finalizado)}</span>}
+                  </div>
+                  <div className="ntb-card-body flex flex-wrap items-center gap-y-3">
+                    <div className="w-1/4 min-w-[90px]">
+                      <small className="text-[#8a8a8a]">Estoque</small>
+                      <p className="font-semibold text-[#5d5d5d]">#{t.id}</p>
+                    </div>
+                    <div className="w-1/4 min-w-[90px]">
+                      <small className="text-[#8a8a8a]">Produtos</small>
+                      <p className="font-semibold text-[#5d5d5d]">{count}</p>
+                    </div>
+                    <div className="w-1/2 min-w-[160px]">
+                      <small className="text-[#8a8a8a]">Local</small>
+                      <p className="truncate font-semibold text-[#5d5d5d]">
+                        {origem} - {destino}
+                      </p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      <Link href={`/transferencia/${t.id}/contagem`} className="ntb-btn-outline">
+                        <Pencil className="size-4" /> {concluido ? 'Ver' : 'Contar'}
+                      </Link>
+                      <AcoesTransferencia
+                        transferenciaId={t.id}
+                        temErro={temErro}
+                        podeExcluir={podeExcluir}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          <div className="ntb-card">
+            <div className="ntb-card-body text-center text-[#8a8a8a]">
+              Nenhuma transferência. Crie uma nova para começar.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

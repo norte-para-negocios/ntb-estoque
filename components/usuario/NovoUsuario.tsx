@@ -2,24 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarUsuario } from '@/lib/actions/usuario'
@@ -75,42 +62,44 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button>
+          <button type="button" className="ntb-btn-success">
             <Plus className="size-4" /> Novo usuário
-          </Button>
+          </button>
         }
       />
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Novo usuário</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+      <DialogContent className="overflow-hidden p-0" showCloseButton={false}>
+        <div className="ntb-card-header text-base">Novo usuário</div>
+        <div className="space-y-4 px-4 py-3">
+          <div>
+            <label className="ntb-label">Nome</label>
+            <input className="ntb-input" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>E-mail</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div>
+            <label className="ntb-label">E-mail</label>
+            <input
+              className="ntb-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-          <div className="space-y-2">
-            <Label>Perfil</Label>
-            <Select value={perfil} onValueChange={(v) => setPerfil((v as 'Admin' | 'Usuario') ?? 'Usuario')}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Usuario">Usuário</SelectItem>
-                <SelectItem value="Admin">Administrador</SelectItem>
-              </SelectContent>
-            </Select>
+          <div>
+            <label className="ntb-label">Perfil</label>
+            <select
+              className="ntb-input"
+              value={perfil}
+              onChange={(e) => setPerfil((e.target.value as 'Admin' | 'Usuario') ?? 'Usuario')}
+            >
+              <option value="Usuario">Usuário</option>
+              <option value="Admin">Administrador</option>
+            </select>
           </div>
           {perfil === 'Usuario' && (
-            <div className="space-y-2">
-              <Label>Lojas com acesso</Label>
-              <div className="space-y-1 max-h-40 overflow-y-auto border rounded p-2">
+            <div>
+              <label className="ntb-label">Lojas com acesso</label>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-[#d5d5d5] p-2">
                 {lojas.map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm">
+                  <label key={l.id} className="flex items-center gap-2 text-sm text-[#5d5d5d]">
                     <input
                       type="checkbox"
                       checked={lojaIds.includes(l.id)}
@@ -123,11 +112,11 @@ export function NovoUsuario({ lojas }: { lojas: Loja[] }) {
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button onClick={criar} disabled={pending}>
+        <div className="flex justify-end gap-2 border-t border-[#e2e2e2] px-4 py-3">
+          <button type="button" onClick={criar} disabled={pending} className="ntb-btn-teal disabled:opacity-60">
             {pending ? 'Criando...' : 'Criar usuário'}
-          </Button>
-        </DialogFooter>
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -1,9 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Search } from 'lucide-react'
 
 export function BuscaSimples({
   basePath,
@@ -24,11 +22,20 @@ export function BuscaSimples({
   }
 
   return (
-    <Card className="p-4">
-      <form onSubmit={onSubmit} className="flex gap-3">
-        <Input name="q" defaultValue={defaultValue} placeholder={placeholder} />
-        <Button type="submit">Buscar</Button>
-      </form>
-    </Card>
+    <div className="ntb-card">
+      <div className="ntb-card-body">
+        <form onSubmit={onSubmit} className="flex gap-3">
+          <input
+            name="q"
+            defaultValue={defaultValue}
+            placeholder={placeholder}
+            className="ntb-input"
+          />
+          <button type="submit" className="ntb-btn-success shrink-0">
+            <Search className="size-4" /> Buscar
+          </button>
+        </form>
+      </div>
+    </div>
   )
 }

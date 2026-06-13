@@ -21,24 +21,24 @@ export function LogDetalhe({
   const [aberto, setAberto] = useState(false)
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       <button
         onClick={() => setAberto((a) => !a)}
-        className="text-xs text-blue-600 hover:underline"
+        className="text-xs font-semibold text-[#2eb5c3] hover:underline"
       >
         {aberto ? 'Ocultar detalhes' : 'Ver detalhes'}
       </button>
       {aberto && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+        <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <div className="text-xs font-medium text-gray-500 mb-1">Requisição</div>
-            <pre className="text-xs bg-gray-50 border rounded p-2 overflow-x-auto max-h-64">
+            <div className="mb-1 text-xs font-medium text-[#8a8a8a]">Requisição</div>
+            <pre className="max-h-64 overflow-x-auto rounded border border-[#d5d5d5] bg-[#f4f4f4] p-2 text-xs text-[#5d5d5d]">
               {formatar(request)}
             </pre>
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-500 mb-1">Resposta</div>
-            <pre className="text-xs bg-gray-50 border rounded p-2 overflow-x-auto max-h-64">
+            <div className="mb-1 text-xs font-medium text-[#8a8a8a]">Resposta</div>
+            <pre className="max-h-64 overflow-x-auto rounded border border-[#d5d5d5] bg-[#f4f4f4] p-2 text-xs text-[#5d5d5d]">
               {formatar(response)}
             </pre>
           </div>

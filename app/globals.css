@@ -7,12 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit);
-  --font-mono: var(--font-mono);
-  --font-heading: var(--font-outfit);
-  /* Remap gray-50/100 para escuro — usado em bg de thead e hover de linhas */
-  --color-gray-50: rgba(255, 255, 255, 0.025);
-  --color-gray-100: rgba(255, 255, 255, 0.04);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-inter);
+  --font-heading: var(--font-inter);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -44,56 +41,60 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-sm: 0.2rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  /* gray-50/100 do Tailwind usados em alguns componentes herdados */
+  --color-gray-50: #f4f4f4;
+  --color-gray-100: #ececec;
 }
 
 :root {
-  /* Fundo escuro unificado — acabou o contraste sidebar-preta × conteúdo branco */
-  --background: #0d0e12;
-  --foreground: #eceef2;
-  --card: #13151a;
-  --card-foreground: #eceef2;
-  --popover: #1a1c23;
-  --popover-foreground: #eceef2;
+  /* Paleta fiel ao original (Bootstrap NTB) */
+  --background: #f4f4f4;
+  --foreground: #5d5d5d;
+  --card: #ffffff;
+  --card-foreground: #5d5d5d;
+  --popover: #ffffff;
+  --popover-foreground: #5d5d5d;
 
-  /* Teal como primary — a cor da marca agora dita o sistema */
-  --primary: #2eb5c3;
-  --primary-foreground: #0d0e12;
+  /* Primary cinza (igual $primary: #5D5D5D), teal é o accent da marca */
+  --primary: #5d5d5d;
+  --primary-foreground: #ffffff;
   --brand: #2eb5c3;
-  --brand-foreground: #0d0e12;
+  --brand-foreground: #ffffff;
 
-  --secondary: #1a1c23;
-  --secondary-foreground: #9ba4b0;
-  --muted: #161820;
-  --muted-foreground: #6b7685;
-  --accent: #1a2628;
-  --accent-foreground: #2eb5c3;
-  --destructive: #ef4444;
+  --secondary: #d5d5d5;
+  --secondary-foreground: #5d5d5d;
+  --muted: #ececec;
+  --muted-foreground: #8a8a8a;
+  --accent: #2eb5c3;
+  --accent-foreground: #ffffff;
+  --destructive: #ff595e;
+  --success: #2bd84a;
+  --warning: #ffca3a;
 
-  --border: rgba(255,255,255,0.07);
-  --input: rgba(255,255,255,0.06);
+  --border: #e2e2e2;
+  --input: #d5d5d5;
   --ring: #2eb5c3;
 
   --chart-1: #2eb5c3;
   --chart-2: #5b8def;
-  --chart-3: #a78bfa;
-  --chart-4: #34d399;
-  --chart-5: #f59e0b;
+  --chart-3: #2bd84a;
+  --chart-4: #ffca3a;
+  --chart-5: #ff595e;
 
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 
-  /* Sidebar — camada mais escura */
-  --sidebar: #090a0d;
-  --sidebar-foreground: #9ba4b0;
+  --sidebar: #f4f4f4;
+  --sidebar-foreground: #5d5d5d;
   --sidebar-primary: #2eb5c3;
-  --sidebar-primary-foreground: #0d0e12;
-  --sidebar-accent: rgba(46, 181, 195, 0.1);
-  --sidebar-accent-foreground: #eceef2;
-  --sidebar-border: rgba(255, 255, 255, 0.05);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ececec;
+  --sidebar-accent-foreground: #5d5d5d;
+  --sidebar-border: #e2e2e2;
   --sidebar-ring: #2eb5c3;
 }
 
@@ -103,6 +104,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 0.9rem;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -110,36 +112,49 @@
     @apply font-sans;
   }
 
-  /* Números tabulares em mono */
   .tabular {
     font-variant-numeric: tabular-nums;
-    font-family: var(--font-mono);
   }
 
-  /* Label de seção discreta */
   .eyebrow {
-    @apply text-[10px] font-semibold uppercase tracking-widest text-muted-foreground;
+    @apply text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+}
+
+@layer components {
+  /* === Componentes fiéis ao Bootstrap do original === */
+
+  /* Card branco com header teal, igual ao .card / .card-header do original */
+  .ntb-card {
+    @apply bg-white rounded-lg overflow-hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  .ntb-card-header {
+    background-color: #2eb5c3;
+    @apply text-white px-4 py-2.5 font-medium;
+  }
+  .ntb-card-body {
+    @apply bg-white px-4 py-3;
   }
 
-  /* Tabelas de dados — estilo global */
-  .data-table {
-    @apply w-full text-sm;
+  /* Botão outline cinza (btn-outline-secondary text-muted) */
+  .ntb-btn-outline {
+    @apply inline-flex items-center gap-1.5 rounded border border-[#d5d5d5] bg-white px-3 py-1.5 text-sm font-semibold text-[#8a8a8a] transition-colors hover:bg-[#f4f4f4];
   }
-  .data-table thead tr {
-    @apply border-b border-white/5;
+  /* Botão teal preenchido */
+  .ntb-btn-teal {
+    @apply inline-flex items-center gap-1.5 rounded bg-[#2eb5c3] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#28a3b0];
   }
-  .data-table thead th {
-    @apply text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
-  }
-  .data-table tbody tr {
-    @apply border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors;
-  }
-  .data-table tbody td {
-    @apply px-4 py-3;
+  /* Botão de sucesso (verde, igual btn-success do filtro) */
+  .ntb-btn-success {
+    @apply inline-flex items-center gap-1.5 rounded bg-[#2bd84a] px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#26c043];
   }
 
-  /* Card de dados — fundo escuro com borda sutil */
-  .data-card {
-    @apply rounded-xl border border-white/[0.07] bg-card overflow-hidden;
+  /* Inputs estilo original: borda cinza, texto teal */
+  .ntb-input {
+    @apply w-full rounded border border-[#d5d5d5] bg-white px-3 py-2 text-[#2eb5c3] outline-none focus:border-[#2eb5c3];
+  }
+  .ntb-label {
+    @apply mb-1 block text-sm text-[#5d5d5d];
   }
 }

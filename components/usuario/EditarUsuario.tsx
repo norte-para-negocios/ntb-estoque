@@ -2,24 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
-  SheetTitle,
   SheetTrigger,
-  SheetFooter,
 } from '@/components/ui/sheet'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -133,43 +120,37 @@ export function EditarUsuario({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button variant="outline" size="sm">
+          <button type="button" className="ntb-btn-outline shrink-0">
             <Pencil className="size-4" /> Editar
-          </Button>
+          </button>
         }
       />
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Editar usuário</SheetTitle>
-        </SheetHeader>
+      <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-lg" showCloseButton={false}>
+        <div className="ntb-card-header text-base">Editar usuário</div>
 
-        <div className="space-y-4 px-4">
-          <div className="space-y-2">
-            <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="space-y-4 px-4 py-3">
+          <div>
+            <label className="ntb-label">Nome</label>
+            <input className="ntb-input" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label>Perfil</Label>
-            <Select
+          <div>
+            <label className="ntb-label">Perfil</label>
+            <select
+              className="ntb-input"
               value={perfil}
-              onValueChange={(v) => setPerfil((v as 'Admin' | 'Usuario') ?? 'Usuario')}
+              onChange={(e) => setPerfil((e.target.value as 'Admin' | 'Usuario') ?? 'Usuario')}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Usuario">Usuário</SelectItem>
-                <SelectItem value="Admin">Administrador</SelectItem>
-              </SelectContent>
-            </Select>
+              <option value="Usuario">Usuário</option>
+              <option value="Admin">Administrador</option>
+            </select>
           </div>
 
           {perfil === 'Usuario' && (
-            <div className="space-y-2">
-              <Label>Lojas com acesso</Label>
-              <div className="space-y-1 max-h-40 overflow-y-auto border rounded p-2">
+            <div>
+              <label className="ntb-label">Lojas com acesso</label>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-[#d5d5d5] p-2">
                 {lojas.map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm">
+                  <label key={l.id} className="flex items-center gap-2 text-sm text-[#5d5d5d]">
                     <input
                       type="checkbox"
                       checked={lojaIds.includes(l.id)}
@@ -179,30 +160,40 @@ export function EditarUsuario({
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-[#8a8a8a]">
                 Salve os dados antes de ajustar permissões e locais das lojas recém-adicionadas.
               </p>
             </div>
           )}
 
-          <SheetFooter className="px-0">
-            <Button onClick={salvarDados} disabled={pending}>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={salvarDados}
+              disabled={pending}
+              className="ntb-btn-teal disabled:opacity-60"
+            >
               {pending ? 'Salvando...' : 'Salvar dados'}
-            </Button>
-          </SheetFooter>
+            </button>
+          </div>
 
           {perfil === 'Usuario' &&
             lojasSelecionadas.map((loja) => {
               const locaisLoja = locais.filter((lo) => lo.loja_id === loja.id)
               return (
-                <div key={loja.id} className="border rounded p-3 space-y-3">
-                  <p className="font-medium text-sm">{loja.nome_fantasia || loja.nome}</p>
+                <div key={loja.id} className="space-y-3 rounded border border-[#e2e2e2] p-3">
+                  <p className="text-sm font-medium text-[#5d5d5d]">
+                    {loja.nome_fantasia || loja.nome}
+                  </p>
 
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Permissões</p>
+                    <p className="text-xs font-medium text-[#8a8a8a]">Permissões</p>
                     <div className="grid grid-cols-1 gap-1">
                       {permissoes.map((p) => (
-                        <label key={p.id} className="flex items-center gap-2 text-sm">
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 text-sm text-[#5d5d5d]"
+                        >
                           <input
                             type="checkbox"
                             checked={permAtivas.has(`${loja.id}:${p.id}`)}
@@ -215,11 +206,14 @@ export function EditarUsuario({
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Locais de estoque</p>
+                    <p className="text-xs font-medium text-[#8a8a8a]">Locais de estoque</p>
                     {locaisLoja.length ? (
-                      <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto">
+                      <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto">
                         {locaisLoja.map((lo) => (
-                          <label key={lo.id} className="flex items-center gap-2 text-sm">
+                          <label
+                            key={lo.id}
+                            className="flex items-center gap-2 text-sm text-[#5d5d5d]"
+                          >
                             <input
                               type="checkbox"
                               checked={locaisAtivos.has(`${loja.id}:${lo.id}`)}
@@ -230,7 +224,7 @@ export function EditarUsuario({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-[#8a8a8a]">
                         Nenhum local de estoque cadastrado.
                       </p>
                     )}

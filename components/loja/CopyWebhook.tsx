@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Copy, Check } from 'lucide-react'
 
 export function CopyWebhook({ url }: { url: string }) {
@@ -16,11 +14,11 @@ export function CopyWebhook({ url }: { url: string }) {
 
   return (
     <div className="flex gap-2">
-      <Input value={url} readOnly className="font-mono text-sm" />
-      <Button variant="outline" onClick={copiar}>
+      <input value={url} readOnly className="ntb-input font-mono" />
+      <button type="button" onClick={copiar} className="ntb-btn-outline shrink-0">
         {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
         {copiado ? 'Copiado' : 'Copiar'}
-      </Button>
+      </button>
     </div>
   )
 }

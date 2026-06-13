@@ -62,36 +62,36 @@ export function AcoesTransferencia({
   }
 
   return (
-    <span className="inline-flex items-center gap-3">
+    <span className="inline-flex items-center gap-2">
       <button
         onClick={duplicar}
         disabled={pending}
-        className="text-gray-400 hover:text-blue-600 disabled:opacity-50"
+        className="ntb-btn-outline disabled:opacity-50"
         aria-label="Duplicar"
         title="Duplicar"
       >
-        <Copy className="size-4" />
+        <Copy className="size-4" /> Duplicar
       </button>
       {temErro && (
         <button
           onClick={reprocessar}
           disabled={pending}
-          className="text-gray-400 hover:text-amber-600 disabled:opacity-50"
+          className="ntb-btn-outline disabled:opacity-50"
           aria-label="Reprocessar"
           title="Reprocessar itens com erro"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className="size-4" /> Reprocessar
         </button>
       )}
       {podeExcluir && (
         <button
           onClick={excluir}
           disabled={pending}
-          className="text-gray-400 hover:text-red-600 disabled:opacity-50"
+          className="ntb-btn-outline disabled:opacity-50"
           aria-label="Excluir"
           title="Excluir"
         >
-          <Trash2 className="size-4" />
+          <Trash2 className="size-4" /> Excluir
         </button>
       )}
     </span>
