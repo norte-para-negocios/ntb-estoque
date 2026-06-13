@@ -1,13 +1,19 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import type { ProdutoBusca } from '@/lib/actions/produtos-search'
+import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
+
+const QrScanner = dynamic(
+  () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
+  { ssr: false }
+)
 import {
   addInventarioItem,
   editQuantidadeInventarioItem,
@@ -66,6 +72,17 @@ export function ContagemInventario({
     })
   }
 
+  function onLeituraQr(codigo: string) {
+    startTransition(async () => {
+      const p = await buscarProdutoPorCodigo(codigo)
+      if (!p) {
+        toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
+        return
+      }
+      adicionar(p)
+    })
+  }
+
   function salvarQtd(itemId: number, num: number | null) {
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
@@ -99,8 +116,12 @@ export function ContagemInventario({
   return (
     <div className="pb-28 lg:pb-20">
       {!finalizado && (
-        <div className="sticky top-0 z-10 -mx-4 mb-4 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
-          <ProdutoSearch onSelect={adicionar} />
+        <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+          <ProdutoSearch
+            onSelect={adicionar}
+            codigosAdicionados={itens.map((i) => i.produto_codigo)}
+          />
+          <QrScanner onLeitura={onLeituraQr} />
         </div>
       )}
 

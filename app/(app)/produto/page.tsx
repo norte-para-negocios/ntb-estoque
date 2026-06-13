@@ -6,21 +6,37 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Filtros } from '@/components/ui-kit/Filtros'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
+import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Money } from '@/components/ui-kit/Money'
 import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
 import { Package } from 'lucide-react'
 
+const POR_PAGINA = 100
+
+function fmtTimestamp(d: string | null): string {
+  if (!d) return '-'
+  return new Date(d).toLocaleString('pt-BR')
+}
+
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
 
   const params = await searchParams
+  const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
   const podeSync = await requirePermissao(lojaId, 'Produtos - Sincronizar')
+
+  const { data: lojaSync } = await supabase
+    .from('lojas')
+    .select('produto_ultima_atualizacao, produto_status')
+    .eq('id', lojaId)
+    .single()
 
   // Famílias distintas da loja para o select de filtro
   const { data: familiasRows } = await supabase
@@ -39,13 +55,15 @@ export default async function ProdutoPage({
     .select('id, codigo, descricao, descricao_familia, tipo_item, unidade, valor_unitario')
     .eq('loja_id', lojaId)
     .order('descricao')
-    .limit(100)
+    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
   if (params.q) query = query.or(`descricao.ilike.%${params.q}%,codigo.ilike.%${params.q}%`)
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
 
-  const { data: produtos } = await query
+  const { data: produtosRaw } = await query
+  const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
+  const produtos = temProxima ? produtosRaw!.slice(0, POR_PAGINA) : produtosRaw
 
   return (
     <div className="space-y-4">
@@ -54,6 +72,12 @@ export default async function ProdutoPage({
         icon={Package}
         actions={podeSync ? <SyncButton endpoint="/api/sync/produtos" label="Sincronizar" /> : undefined}
       />
+
+      <div className="flex items-center gap-2 text-[13px] text-text-muted">
+        <span>Atualizado em {fmtTimestamp(lojaSync?.produto_ultima_atualizacao ?? null)}</span>
+        <span>·</span>
+        <StatusPill status={lojaSync?.produto_status ?? null} />
+      </div>
 
       <Filtros
         basePath="/produto"
@@ -102,6 +126,10 @@ export default async function ProdutoPage({
           title="Nenhum produto"
           hint="Sincronize com o Omie ou ajuste a busca."
         />
+      )}
+
+      {(page > 1 || temProxima) && (
+        <Paginacao basePath="/produto" page={page} temProxima={temProxima} />
       )}
     </div>
   )

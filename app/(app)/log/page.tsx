@@ -6,7 +6,10 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Filtros, type CampoFiltro } from '@/components/ui-kit/Filtros'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { ScrollText } from 'lucide-react'
+
+const POR_PAGINA = 50
 
 export default async function LogPage({
   searchParams,
@@ -18,11 +21,13 @@ export default async function LogPage({
     data_final?: string
     loja_id?: string
     code?: string
+    page?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
   const admin = await isAdmin()
   const params = await searchParams
+  const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
 
   // Loja base: usuario fica restrito a sua loja atual.
@@ -34,7 +39,7 @@ export default async function LogPage({
     .select('id, model, request, response, code, error, error_message, created_at')
     .eq('loja_id', lojaFiltro)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
   if (params.model) query = query.eq('model', params.model)
   if (params.status === 'erro') query = query.eq('error', true)
@@ -43,7 +48,9 @@ export default async function LogPage({
   if (params.data_inicio) query = query.gte('created_at', params.data_inicio)
   if (params.data_final) query = query.lte('created_at', `${params.data_final} 23:59:59`)
 
-  const { data: logs } = await query
+  const { data: logsRaw } = await query
+  const temProxima = (logsRaw?.length ?? 0) > POR_PAGINA
+  const logs = temProxima ? logsRaw!.slice(0, POR_PAGINA) : logsRaw
 
   // Opcoes de model: distintos das tentativas da loja em escopo.
   const { data: modelRows } = await supabase
@@ -114,7 +121,7 @@ export default async function LogPage({
       <PageHeader
         title="Logs de Integracao com APIs"
         icon={ScrollText}
-        description="Ultimas 50 tentativas de integracao"
+        description="Tentativas de integracao com APIs"
       />
 
       <Filtros basePath="/log" campos={campos} defaults={defaults} />
@@ -155,6 +162,10 @@ export default async function LogPage({
         </DataTable>
       ) : (
         <EmptyState icon={ScrollText} title="Nenhum log de integracao" hint="As tentativas de integracao aparecerao aqui." />
+      )}
+
+      {(page > 1 || temProxima) && (
+        <Paginacao basePath="/log" page={page} temProxima={temProxima} />
       )}
     </div>
   )

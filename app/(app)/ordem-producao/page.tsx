@@ -7,8 +7,11 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Filtros } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { Factory } from 'lucide-react'
+
+const POR_PAGINA = 50
 
 export default async function OrdemProducaoPage({
   searchParams,
@@ -20,6 +23,7 @@ export default async function OrdemProducaoPage({
     op_produto?: string
     tipo_produto?: string
     op_concluido?: string
+    page?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -28,7 +32,7 @@ export default async function OrdemProducaoPage({
   const supabase = await createClient()
 
   const sp = await searchParams
-  const temData = Boolean(sp.data_inicio || sp.data_final)
+  const page = Math.max(1, Number(sp.page) || 1)
 
   let query = supabase
     .from('ordens_producao')
@@ -50,9 +54,11 @@ export default async function OrdemProducaoPage({
   if (sp.op_concluido === 'S') query = query.not('adicionais_d_dt_conclusao', 'is', null)
   if (sp.op_concluido === 'N') query = query.is('adicionais_d_dt_conclusao', null)
 
-  if (!temData) query = query.limit(50)
+  query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
-  const { data: ordens } = await query
+  const { data: ordensRaw } = await query
+  const temProxima = (ordensRaw?.length ?? 0) > POR_PAGINA
+  const ordens = temProxima ? ordensRaw!.slice(0, POR_PAGINA) : ordensRaw
 
   // Buscar descricoes dos produtos relacionados
   const codigos = [...new Set((ordens ?? []).map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
@@ -140,6 +146,10 @@ export default async function OrdemProducaoPage({
           title="Nenhuma ordem de produção"
           hint="Sincronize com o Omie."
         />
+      )}
+
+      {(page > 1 || temProxima) && (
+        <Paginacao basePath="/ordem-producao" page={page} temProxima={temProxima} />
       )}
     </div>
   )

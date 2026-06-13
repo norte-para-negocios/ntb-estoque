@@ -9,8 +9,11 @@ import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { FileText } from 'lucide-react'
+
+const POR_PAGINA = 50
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -29,12 +32,14 @@ export default async function NotaFiscalPage({
     status?: string
     tipo?: string
     produto?: string
+    page?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) notFound()
 
   const params = await searchParams
+  const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
 
   const dataInicio =
@@ -49,7 +54,7 @@ export default async function NotaFiscalPage({
     .lte('d_emissao_nfe', dataFinal)
     .is('deleted_at', null)
     .order('d_emissao_nfe', { ascending: false })
-    .limit(50)
+    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${params.num_nfe}%`)
   // Fornecedor: o controller original filtra por c_nome
@@ -104,7 +109,9 @@ export default async function NotaFiscalPage({
     }
   }
 
-  const { data: notas } = await query
+  const { data: notasRaw } = await query
+  const temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
+  const notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
 
   const relatorioParams = new URLSearchParams()
   relatorioParams.set('data_inicio', dataInicio)
@@ -189,6 +196,10 @@ export default async function NotaFiscalPage({
           title="Nenhuma nota fiscal no período"
           hint="Sincronize com o Omie ou ajuste os filtros."
         />
+      )}
+
+      {(page > 1 || temProxima) && (
+        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} />
       )}
     </div>
   )

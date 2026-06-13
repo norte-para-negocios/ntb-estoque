@@ -9,6 +9,11 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Warehouse } from 'lucide-react'
 
+function fmtTimestamp(d: string | null): string {
+  if (!d) return '-'
+  return new Date(d).toLocaleString('pt-BR')
+}
+
 export default async function LocalEstoquePage({
   searchParams,
 }: {
@@ -20,6 +25,12 @@ export default async function LocalEstoquePage({
   const params = await searchParams
   const supabase = await createClient()
   const podeSync = await requirePermissao(lojaId, 'Locais de Estoque - Sincronizar')
+
+  const { data: lojaSync } = await supabase
+    .from('lojas')
+    .select('local_estoque_ultima_atualizacao, local_estoque_status')
+    .eq('id', lojaId)
+    .single()
 
   let query = supabase
     .from('local_estoques')
@@ -40,6 +51,12 @@ export default async function LocalEstoquePage({
         description="Locais sincronizados do Omie"
         actions={podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
       />
+
+      <div className="flex items-center gap-2 text-[13px] text-text-muted">
+        <span>Atualizado em {fmtTimestamp(lojaSync?.local_estoque_ultima_atualizacao ?? null)}</span>
+        <span>·</span>
+        <StatusPill status={lojaSync?.local_estoque_status ?? null} />
+      </div>
 
       <BuscaSimples
         basePath="/local-estoque"

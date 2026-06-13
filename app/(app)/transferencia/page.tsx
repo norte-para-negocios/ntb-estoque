@@ -10,8 +10,11 @@ import { Filtros } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+
+const POR_PAGINA = 50
 
 export default async function TransferenciaPage({
   searchParams,
@@ -21,6 +24,7 @@ export default async function TransferenciaPage({
     data_final?: string
     familia?: string
     tipo?: string
+    page?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -31,7 +35,7 @@ export default async function TransferenciaPage({
   const podeExcluir = await requirePermissao(lojaId, 'Transferencias - Excluir')
 
   const sp = await searchParams
-  const temData = Boolean(sp.data_inicio || sp.data_final)
+  const page = Math.max(1, Number(sp.page) || 1)
 
   // Familias distintas para o select (melhor esforco)
   const { data: produtosFamilia } = await supabase
@@ -79,9 +83,11 @@ export default async function TransferenciaPage({
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
   if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
-  if (!temData) query = query.limit(50)
+  query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
-  const { data: transferencias } = await query
+  const { data: transferenciasRaw } = await query
+  const temProxima = (transferenciasRaw?.length ?? 0) > POR_PAGINA
+  const transferencias = temProxima ? transferenciasRaw!.slice(0, POR_PAGINA) : transferenciasRaw
 
   const { data: locais } = await supabase
     .from('local_estoques')
@@ -188,6 +194,10 @@ export default async function TransferenciaPage({
           title="Nenhuma transferência"
           hint="Crie uma nova para começar."
         />
+      )}
+
+      {(page > 1 || temProxima) && (
+        <Paginacao basePath="/transferencia" page={page} temProxima={temProxima} />
       )}
     </div>
   )
