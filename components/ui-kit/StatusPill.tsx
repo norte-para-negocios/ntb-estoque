@@ -7,6 +7,8 @@ const MAP: Record<string, { label: string; color: string }> = {
   Iniciado: { label: 'Iniciado', color: '#64748b' },
   'Sem CMC': { label: 'Sem CMC', color: '#f59e0b' },
   Erro: { label: 'Erro', color: '#ef4444' },
+  Concluida: { label: 'Concluída', color: '#10b981' },
+  Pendente: { label: 'Pendente', color: '#f59e0b' },
 }
 
 export function StatusPill({ status }: { status: string | null }) {

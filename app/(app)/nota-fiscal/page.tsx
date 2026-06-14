@@ -189,7 +189,7 @@ export default async function NotaFiscalPage({
           { label: 'Fornecedor', primaria: true, render: (nf) => nf.c_razao_social || nf.c_nome || '-' },
           { label: 'Emissão', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
           { label: 'NFe', larguraDesktop: 'w-28', render: (nf) => <span className="num">{nf.c_numero_nfe ?? '-'}</span> },
-          { label: 'Etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa} /> },
+          { label: 'Etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa === '60' ? 'Concluida' : 'Pendente'} /> },
           { label: 'Valor', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
         ]}
         acao={(nf) => (
