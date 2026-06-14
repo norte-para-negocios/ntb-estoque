@@ -1,4 +1,5 @@
 import { omieRequest, type LojaOmie } from './client'
+import { createServiceClient } from '@/lib/supabase/server'
 
 interface OmiePosicao {
   codigo_local_estoque: number
@@ -48,4 +49,64 @@ export async function getPosicaoProduto(
   const p = res.produtos?.[0]
   if (!p) return null
   return { n_cmc: p.nCMC ?? 0, n_saldo: p.nSaldo ?? 0 }
+}
+
+/**
+ * Sincroniza a posição de estoque (CMC, saldo, preço) de TODA a loja para a
+ * tabela posicao_estoques, percorrendo cada local de estoque ativo. Só leitura
+ * do Omie. Usado para alimentar custo/margem na tela de produtos.
+ */
+export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
+  const supabase = createServiceClient()
+  const hoje = new Date().toLocaleDateString('pt-BR') // d/m/Y
+  const dataISO = new Date().toISOString().split('T')[0]
+
+  const { data: locais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque')
+    .eq('loja_id', loja.id)
+    .neq('inativo', 'S')
+
+  let gravados = 0
+  for (const local of locais ?? []) {
+    let pagina = 1
+    let total = 1
+    do {
+      const res = await omieRequest<OmiePosResponse>({
+        loja_id: loja.id,
+        omie_app_key: loja.omie_app_key,
+        omie_app_secret: loja.omie_app_secret,
+        endpoint: 'v1/estoque/consulta',
+        call: 'ListarPosEstoque',
+        data: {
+          nPagina: pagina,
+          nRegPorPagina: 500,
+          dDataPosicao: hoje,
+          codigo_local_estoque: local.codigo_local_estoque,
+          cExibeTodos: 'S',
+        },
+      })
+      total = res.nTotPaginas || 1
+      const rows = (res.produtos ?? []).map((p) => ({
+        loja_id: loja.id,
+        codigo_local_estoque: local.codigo_local_estoque,
+        n_cod_prod: p.nCodProd,
+        data_posicao: dataISO,
+        c_codigo: p.cCodigo,
+        c_descricao: p.cDescricao,
+        n_preco_unitario: p.nPrecoUnitario,
+        n_saldo: p.nSaldo,
+        n_cmc: p.nCMC,
+        n_pendente: p.nPendente,
+      }))
+      if (rows.length) {
+        await supabase
+          .from('posicao_estoques')
+          .upsert(rows, { onConflict: 'loja_id,codigo_local_estoque,n_cod_prod,data_posicao' })
+        gravados += rows.length
+      }
+      pagina++
+    } while (pagina <= total)
+  }
+  return gravados
 }
