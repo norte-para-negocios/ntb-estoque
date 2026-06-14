@@ -4,6 +4,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Printer } from 'lucide-react'
 
 type Impressao = {
@@ -11,6 +12,7 @@ type Impressao = {
   origem: string
   referencia_id: number
   qtd_etiquetas: number
+  user_id: string | null
   created_at: string
 }
 
@@ -25,7 +27,11 @@ function fmtDataHora(iso: string): string {
   })
 }
 
-export default async function ImpressoesPage() {
+export default async function ImpressoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; origem?: string }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
     return (
@@ -40,14 +46,28 @@ export default async function ImpressoesPage() {
     )
   }
 
+  const sp = await searchParams
   const supabase = await createClient()
-  const { data: impressoes } = await supabase
+
+  let query = supabase
     .from('impressao_etiquetas')
-    .select('id, origem, referencia_id, qtd_etiquetas, created_at')
+    .select('id, origem, referencia_id, qtd_etiquetas, user_id, created_at')
     .eq('loja_id', lojaId)
     .order('created_at', { ascending: false })
     .limit(100)
-    .returns<Impressao[]>()
+
+  if (sp.data_inicio) query = query.gte('created_at', sp.data_inicio)
+  if (sp.data_final) query = query.lte('created_at', `${sp.data_final}T23:59:59`)
+  if (sp.origem === 'NF' || sp.origem === 'OP') query = query.eq('origem', sp.origem)
+
+  const { data: impressoes } = await query.returns<Impressao[]>()
+
+  // Resolve o nome de quem imprimiu.
+  const userIds = [...new Set((impressoes ?? []).map((i) => i.user_id).filter(Boolean) as string[])]
+  const { data: perfis } = userIds.length
+    ? await supabase.from('profiles').select('id, name').in('id', userIds)
+    : { data: [] }
+  const nomeMap = new Map((perfis ?? []).map((p) => [p.id, p.name]))
 
   return (
     <div className="space-y-4">
@@ -55,6 +75,29 @@ export default async function ImpressoesPage() {
         title="Histórico de impressão de etiquetas"
         icon={Printer}
         description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
+        actions={
+          <FiltrosGaveta
+            basePath="/impressoes"
+            campos={[
+              { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+              { tipo: 'data', nome: 'data_final', label: 'Data final' },
+              {
+                tipo: 'select',
+                nome: 'origem',
+                label: 'Origem',
+                opcoes: [
+                  { value: 'NF', label: 'Nota Fiscal' },
+                  { value: 'OP', label: 'Ordem de Produção' },
+                ],
+              },
+            ]}
+            defaults={{
+              data_inicio: sp.data_inicio ?? '',
+              data_final: sp.data_final ?? '',
+              origem: sp.origem ?? '',
+            }}
+          />
+        }
       />
 
       <Lista
@@ -97,6 +140,13 @@ export default async function ImpressoesPage() {
                 </span>
               )
             },
+          },
+          {
+            label: 'Usuário',
+            larguraDesktop: 'w-40',
+            render: (imp) => (
+              <span className="text-text-muted">{imp.user_id ? nomeMap.get(imp.user_id) ?? '-' : '-'}</span>
+            ),
           },
           {
             label: 'Qtd',
