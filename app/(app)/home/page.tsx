@@ -8,6 +8,10 @@ import {
   FileText,
   ArrowRight,
   TrendingUp,
+  CalendarClock,
+  AlertTriangle,
+  CheckCircle2,
+  type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
@@ -36,8 +40,6 @@ export default async function HomePage() {
   const supabase = await createClient()
 
   // Multi-tenant: nao-admin so pode ver dados de lojas que tem em loja_user.
-  // Se a current_loja_id nao estiver entre as lojas do usuario, pede pra
-  // selecionar uma loja valida em vez de exibir dados sem permissao.
   const isAdmin = profile.perfil === 'Admin'
   if (!isAdmin) {
     const { data: vinculo } = await supabase
@@ -58,31 +60,48 @@ export default async function HomePage() {
   }
 
   const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
+  const seteDias = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+  const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
-  const [produtos, nfs, ops, invAbertos, loja, ultimasNotas] = await Promise.all([
-    supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
-    supabase
-      .from('notas_fiscais')
-      .select('id', head)
-      .eq('loja_id', lojaId)
-      .gte('d_emissao_nfe', trintaDias)
-      .is('deleted_at', null),
-    supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId),
-    supabase
-      .from('inventarios')
-      .select('id', head)
-      .eq('loja_id', lojaId)
-      .neq('status', 'Finalizado'),
-    supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
-    supabase
-      .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe')
-      .eq('loja_id', lojaId)
-      .is('deleted_at', null)
-      .order('d_emissao_nfe', { ascending: false })
-      .limit(5),
-  ])
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas] =
+    await Promise.all([
+      supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
+      supabase
+        .from('notas_fiscais')
+        .select('id', head)
+        .eq('loja_id', lojaId)
+        .gte('d_emissao_nfe', trintaDias)
+        .is('deleted_at', null),
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId),
+      supabase
+        .from('inventarios')
+        .select('id', head)
+        .eq('loja_id', lojaId)
+        .neq('status', 'Finalizado'),
+      // Produtos (OPs) vencendo nos proximos 7 dias
+      supabase
+        .from('ordens_producao')
+        .select('id', head)
+        .eq('loja_id', lojaId)
+        .not('validade', 'is', null)
+        .lte('validade', seteDias),
+      // Erros de sincronizacao da loja nas ultimas 24h
+      supabase
+        .from('integration_attempts')
+        .select('id', head)
+        .eq('loja_id', lojaId)
+        .eq('error', true)
+        .gte('created_at', desde24h),
+      supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
+      supabase
+        .from('notas_fiscais')
+        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe')
+        .eq('loja_id', lojaId)
+        .is('deleted_at', null)
+        .order('d_emissao_nfe', { ascending: false })
+        .limit(5),
+    ])
 
   const ultimaSync = loja.data?.produto_ultima_atualizacao
     ? new Date(loja.data.produto_ultima_atualizacao).toLocaleTimeString('pt-BR', {
@@ -92,6 +111,31 @@ export default async function HomePage() {
     : 'nunca'
 
   const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
+
+  // Fila "Precisa de atenção": só itens com contagem > 0.
+  type Alerta = { icon: LucideIcon; cor: string; texto: string; href: string }
+  const alertas: Alerta[] = []
+  if ((errosSync.count ?? 0) > 0)
+    alertas.push({
+      icon: AlertTriangle,
+      cor: '#ef4444',
+      texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`,
+      href: '/sync-status',
+    })
+  if ((vencendo.count ?? 0) > 0)
+    alertas.push({
+      icon: CalendarClock,
+      cor: '#f59e0b',
+      texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
+      href: '/validade?dias=7',
+    })
+  if ((invAbertos.count ?? 0) > 0)
+    alertas.push({
+      icon: ClipboardList,
+      cor: '#2eb5c3',
+      texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`,
+      href: '/inventario',
+    })
 
   const secundarios = [
     { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal' },
@@ -106,8 +150,8 @@ export default async function HomePage() {
   ]
 
   return (
-    <div className="space-y-9">
-      {/* Hero: bloco escuro com número gigante + barra teal */}
+    <div className="space-y-8">
+      {/* Hero */}
       <section className="relative overflow-hidden rounded-2xl bg-[#10151c] text-white p-7 lg:p-9">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.5]"
@@ -133,7 +177,42 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 3 secundários com régua teal lateral no hover */}
+      {/* Precisa de atenção — fila acionável */}
+      <section>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">
+          Precisa de atenção
+        </h2>
+        {alertas.length ? (
+          <div className="space-y-2">
+            {alertas.map((a, i) => (
+              <Link
+                key={i}
+                href={a.href}
+                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 transition-all duration-200 hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
+                style={{ transitionTimingFunction: 'var(--ease)' }}
+              >
+                <span
+                  className="flex size-8 items-center justify-center rounded-md shrink-0"
+                  style={{ background: `${a.cor}1a`, color: a.cor }}
+                >
+                  <a.icon className="size-4" strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
+                <ArrowRight className="size-4 shrink-0 text-text-muted/40 transition-all group-hover:text-text-muted group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
+            <span className="flex size-8 items-center justify-center rounded-md bg-[#10b981]/10 text-[#10b981] shrink-0">
+              <CheckCircle2 className="size-4" strokeWidth={2} />
+            </span>
+            <span className="text-sm text-text">Tudo em ordem. Nada pendente na loja.</span>
+          </div>
+        )}
+      </section>
+
+      {/* KPIs secundários */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {secundarios.map((k) => (
           <Link
