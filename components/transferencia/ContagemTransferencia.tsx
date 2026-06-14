@@ -19,6 +19,7 @@ import {
   editQuantidadeMovimento,
   removeMovimento,
   finishTransferencia,
+  forceSyncTransferencia,
 } from '@/lib/actions/transferencia'
 
 export type ItemMovimento = {
@@ -120,8 +121,42 @@ export function ContagemTransferencia({
     })
   }
 
+  function reenviar() {
+    startTransition(async () => {
+      const res = await forceSyncTransferencia(transferenciaId)
+      if (res?.error) toast.error('Erro', { description: res.error })
+      else {
+        toast.success('Reenviado ao Omie')
+        router.refresh()
+      }
+    })
+  }
+
+  // Resumo de integracao apos finalizar.
+  const total = itens.length
+  const integrados = itens.filter((i) => i.status === 'Concluido').length
+  const comErro = itens.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
+
   return (
     <div className="pb-28 lg:pb-20">
+      {finalizado && total > 0 && (
+        <div
+          className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
+            comErro ? 'border-[var(--err,#ef4444)]/40 bg-[var(--err,#ef4444)]/5' : 'border-[#10b981]/40 bg-[#10b981]/5'
+          }`}
+        >
+          <span className="text-sm font-medium text-text">
+            <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
+            {comErro > 0 && <span className="text-[var(--err,#ef4444)]"> · {comErro} com erro</span>}
+          </span>
+          {comErro > 0 && (
+            <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
+              {pending ? 'Reenviando...' : 'Reenviar pendentes'}
+            </button>
+          )}
+        </div>
+      )}
+
       {!finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           <ProdutoSearch
