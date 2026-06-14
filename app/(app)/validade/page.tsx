@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Num } from '@/components/ui-kit/Num'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
@@ -43,7 +45,7 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
@@ -55,7 +57,19 @@ export default async function ValidadePage({
 
   const supabase = await createClient()
 
-  const { data: ordens } = await supabase
+  // Filtro por tipo de produto: resolve os codigos do tipo escolhido (produto acabado
+  // nao controla validade; em processo sim). null = sem filtro.
+  let codigosTipo: number[] | null = null
+  if (sp.tipo) {
+    const { data: prodsTipo } = await supabase
+      .from('produtos')
+      .select('codigo_produto')
+      .eq('loja_id', lojaId)
+      .eq('tipo_item', sp.tipo)
+    codigosTipo = [...new Set((prodsTipo ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+  }
+
+  let ordensQuery = supabase
     .from('ordens_producao')
     .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
     .eq('loja_id', lojaId)
@@ -63,6 +77,12 @@ export default async function ValidadePage({
     .lte('validade', hojeMais(dias))
     .order('validade', { ascending: true })
     .limit(LIMITE)
+
+  if (codigosTipo !== null) {
+    ordensQuery = ordensQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
+  }
+
+  const { data: ordens } = await ordensQuery
 
   // Resolver descrição/código/unidade dos produtos relacionados.
   const codigos = [
@@ -84,15 +104,25 @@ export default async function ValidadePage({
         title="Validade"
         icon={CalendarClock}
         description="Produtos que vencem no período"
+        actions={
+          <FiltrosGaveta
+            basePath="/validade"
+            campos={[
+              { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+            ]}
+            defaults={{ tipo: sp.tipo ?? '' }}
+          />
+        }
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
         {PERIODOS.map((p) => {
           const ativo = p === dias
+          const sufixoTipo = sp.tipo ? `&tipo=${sp.tipo}` : ''
           return (
             <Link
               key={p}
-              href={`/validade?dias=${p}`}
+              href={`/validade?dias=${p}${sufixoTipo}`}
               className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
                 ativo
                   ? 'border-brand bg-brand-soft text-brand'
