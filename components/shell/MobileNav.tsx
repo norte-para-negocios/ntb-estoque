@@ -31,7 +31,10 @@ export function MobileNav({
   const itens = NAV_ITEMS.filter((i) => !i.admin || isAdmin)
   return (
     <>
-      <header className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 backdrop-blur px-3">
+      <header
+        className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 backdrop-blur px-3"
+        style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
+      >
         <button
           onClick={() => setOpen(true)}
           aria-label="Menu"
@@ -84,7 +87,10 @@ export function MobileNav({
         <div className="border-t border-border p-3">{userMenu}</div>
       </aside>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 border-t border-border bg-surface/95 backdrop-blur">
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 border-t border-border bg-surface/95 backdrop-blur"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         {BOTTOM.map((b) => {
           const Icon = b.icon
           const active = pathname.startsWith(b.href)

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -18,6 +18,13 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "NTB - Estoque",
   description: "Sistema de gestão de estoque integrado ao Omie",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "NTB Estoque" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2eb5c3",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

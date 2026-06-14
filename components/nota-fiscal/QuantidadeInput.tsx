@@ -48,6 +48,7 @@ export function QuantidadeInput({
       </button>
       <input
         type="number"
+        inputMode="decimal"
         min={0}
         value={valor}
         onChange={(e) => setValor(e.target.value)}

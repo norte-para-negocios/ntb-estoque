@@ -143,6 +143,7 @@ function StepperQuantidade({ ctrl }: StepperProps) {
       </button>
       <input
         type="number"
+        inputMode="decimal"
         min={0}
         value={ctrl.quantidade}
         onChange={(e) => ctrl.setQuantidade(e.target.value)}
