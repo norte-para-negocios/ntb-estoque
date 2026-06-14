@@ -10,6 +10,7 @@ interface OmieProduto {
   tipoItem: string | null
   unidade: string
   valor_unitario: number
+  inativo?: string
 }
 
 interface OmieListarProdutosResponse {
@@ -57,6 +58,7 @@ export async function syncProdutos(loja: LojaOmie) {
           tipo_item: p.tipoItem,
           unidade: p.unidade,
           valor_unitario: p.valor_unitario,
+          inativo: p.inativo ?? '',
           full_object: p,
           updated_at: new Date().toISOString(),
         }))

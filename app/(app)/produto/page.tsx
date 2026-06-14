@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -13,10 +12,10 @@ import { Money } from '@/components/ui-kit/Money'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
+import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
 import { Package, Download } from 'lucide-react'
 
 const POR_PAGINA = 100
-const ALVOS = [40, 50, 60]
 
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
@@ -44,14 +43,15 @@ function corMargem(m: number): string {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; margem?: string; page?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
 
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
-  const alvoPct = ALVOS.includes(Number(params.margem)) ? Number(params.margem) : 50
+  const alvoPctRaw = Number(params.margem)
+  const alvoPct = alvoPctRaw >= 1 && alvoPctRaw <= 99 ? alvoPctRaw : 50
   const alvo = alvoPct / 100
   const supabase = await createClient()
   const podeSync = await requirePermissao(lojaId, 'Produtos - Sincronizar')
@@ -86,6 +86,9 @@ export default async function ProdutoPage({
   }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
+  // default: so ativos; 'inativos' mostra so inativos; 'todos' mostra ambos
+  if (!params.situacao || params.situacao === 'ativos') query = query.neq('inativo', 'S')
+  else if (params.situacao === 'inativos') query = query.eq('inativo', 'S')
 
   const { data: produtosRaw } = await query
   const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
@@ -114,8 +117,7 @@ export default async function ProdutoPage({
   if (params.familia) exportParams.set('familia', params.familia)
   if (params.tipo) exportParams.set('tipo', params.tipo)
 
-  // querystring base para os chips de margem (preserva filtros)
-  const chipParams = new URLSearchParams(exportParams.toString())
+  const margemParams = new URLSearchParams(exportParams.toString())
 
   return (
     <div className="space-y-4">
@@ -130,8 +132,18 @@ export default async function ProdutoPage({
                 { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
                 { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
                 { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+                {
+                  tipo: 'select',
+                  nome: 'situacao',
+                  label: 'Situação',
+                  opcoes: [
+                    { value: 'ativos', label: 'Somente ativos' },
+                    { value: 'inativos', label: 'Somente inativos' },
+                    { value: 'todos', label: 'Todos' },
+                  ],
+                },
               ]}
-              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '' }}
+              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos' }}
             />
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
               <Download className="size-4" /> Exportar
@@ -148,24 +160,7 @@ export default async function ProdutoPage({
           <span>·</span>
           <StatusPill status={lojaSync?.produto_status ?? null} />
         </div>
-        {/* Margem alvo para o preço sugerido */}
-        <div className="flex items-center gap-1.5 text-[12px] text-text-muted">
-          <span className="uppercase tracking-wider">Margem alvo</span>
-          {ALVOS.map((a) => {
-            const sp = new URLSearchParams(chipParams.toString())
-            sp.set('margem', String(a))
-            const ativo = a === alvoPct
-            return (
-              <Link
-                key={a}
-                href={`/produto?${sp.toString()}`}
-                className={`rounded-full px-2.5 py-1 ${ativo ? 'bg-brand text-white' : 'border border-border text-text-muted hover:bg-surface-2'}`}
-              >
-                {a}%
-              </Link>
-            )
-          })}
-        </div>
+        <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} />
       </div>
 
       <Lista
@@ -173,7 +168,8 @@ export default async function ProdutoPage({
         chaveLinha={(p) => p.id}
         colunas={[
           { label: 'Descrição', primaria: true, flexivel: true, render: (p) => p.descricao },
-          { label: 'Família', render: (p) => <span className="text-text-muted">{p.descricao_familia || '-'}</span> },
+          { label: 'Código', larguraDesktop: 'w-28', render: (p) => <span className="num text-text-muted">{p.codigo}</span> },
+          { label: 'Família', ocultarMobile: true, render: (p) => <span className="text-text-muted">{p.descricao_familia || '-'}</span> },
           {
             label: 'Custo',
             alinhar: 'right',
