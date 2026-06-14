@@ -34,13 +34,18 @@ export async function addInventarioItem(
 ) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
-  await supabase.from('inventario_items').insert({
-    loja_id: lojaId,
-    inventario_id: inventarioId,
-    ...produto,
-    status: 'Iniciado',
-  })
+  const { data } = await supabase
+    .from('inventario_items')
+    .insert({
+      loja_id: lojaId,
+      inventario_id: inventarioId,
+      ...produto,
+      status: 'Iniciado',
+    })
+    .select('id, produto_codigo, produto_descricao, produto_familia, quan, status')
+    .single()
   revalidatePath(`/inventario/${inventarioId}/contagem`)
+  return data
 }
 
 export async function setQuantidadeInventarioItem(itemId: number, quan: number | null) {

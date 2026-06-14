@@ -46,21 +46,26 @@ export async function addMovimento(
     .eq('loja_id', lojaId)
     .single()
 
-  if (!trans) return
+  if (!trans) return null
 
-  await supabase.from('movimentos').insert({
-    loja_id: lojaId,
-    transferencia_id: transferenciaId,
-    tipo: 'TRF',
-    origem: 'AJU',
-    motivo: 'TRF',
-    data: new Date().toISOString(),
-    id_prod: produto.id_prod,
-    codigo_local_estoque: trans.codigo_local_origem,
-    codigo_local_estoque_destino: trans.codigo_local_destino,
-    status: 'Iniciado',
-  })
+  const { data } = await supabase
+    .from('movimentos')
+    .insert({
+      loja_id: lojaId,
+      transferencia_id: transferenciaId,
+      tipo: 'TRF',
+      origem: 'AJU',
+      motivo: 'TRF',
+      data: new Date().toISOString(),
+      id_prod: produto.id_prod,
+      codigo_local_estoque: trans.codigo_local_origem,
+      codigo_local_estoque_destino: trans.codigo_local_destino,
+      status: 'Iniciado',
+    })
+    .select('id')
+    .single()
   revalidatePath(`/transferencia/${transferenciaId}/contagem`)
+  return data
 }
 
 export async function setQuantidadeMovimento(movimentoId: number, quan: number | null) {

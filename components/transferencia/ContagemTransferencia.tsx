@@ -39,7 +39,7 @@ export function ContagemTransferencia({
   itensIniciais: ItemMovimento[]
   finalizado: boolean
 }) {
-  const [itens] = useState(itensIniciais)
+  const [itens, setItens] = useState(itensIniciais)
   const [quans, setQuans] = useState<Record<number, number | null>>(() =>
     Object.fromEntries(itensIniciais.map((i) => [i.id, i.quan]))
   )
@@ -61,8 +61,19 @@ export function ContagemTransferencia({
       return
     }
     startTransition(async () => {
-      await addMovimento(transferenciaId, { id_prod: p.codigo_produto })
-      router.refresh()
+      const novo = await addMovimento(transferenciaId, { id_prod: p.codigo_produto })
+      if (novo) {
+        const novoItem: ItemMovimento = {
+          id: novo.id,
+          id_prod: p.codigo_produto,
+          descricao: p.descricao,
+          codigo: p.codigo,
+          quan: null,
+          status: 'Iniciado',
+        }
+        setItens((prev) => [novoItem, ...prev])
+        setQuans((prev) => ({ ...prev, [novo.id]: null }))
+      }
       toast.success('Produto adicionado')
     })
   }
@@ -90,9 +101,9 @@ export function ContagemTransferencia({
   }
 
   function remover(movId: number) {
+    setItens((prev) => prev.filter((i) => i.id !== movId))
     startTransition(async () => {
       await removeMovimento(movId)
-      router.refresh()
       toast.success('Item removido')
     })
   }

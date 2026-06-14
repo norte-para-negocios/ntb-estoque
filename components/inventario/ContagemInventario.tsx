@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation' // ainda usado no finalizar
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
@@ -61,13 +61,18 @@ export function ContagemInventario({
       return
     }
     startTransition(async () => {
-      await addInventarioItem(inventarioId, {
+      const novo = await addInventarioItem(inventarioId, {
         produto_codigo_produto: p.codigo_produto,
         produto_codigo: p.codigo,
         produto_descricao: p.descricao,
         produto_familia: p.descricao_familia,
       })
-      router.refresh()
+      if (novo) {
+        setItens((prev) => [
+          { ...novo, produto_familia: novo.produto_familia ?? p.descricao_familia } as ItemContagem,
+          ...prev,
+        ])
+      }
       toast.success('Produto adicionado')
     })
   }
