@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, getUser } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 function senhaAleatoria(): string {
@@ -198,6 +198,19 @@ export async function recusarUsuario(userId: string) {
   return { ok: true }
 }
 
+// Exclui um usuario ja existente: remove a conta de auth (cascade apaga profile,
+// vinculos de loja, permissoes e locais). O admin nao pode excluir a propria conta.
+export async function excluirUsuario(userId: string) {
+  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const me = await getUser()
+  if (me.id === userId) return { error: 'Você não pode excluir a própria conta' }
+  const supabase = createServiceClient()
+  const { error } = await supabase.auth.admin.deleteUser(userId)
+  if (error) return { error: 'Não foi possível excluir o usuário.' }
+  revalidatePath('/usuario')
+  return { ok: true }
+}
+
 export async function togglePermissao(
   userId: string,
   lojaId: number,
@@ -268,10 +281,3 @@ export async function toggleLocal(
   return { ok: true }
 }
 
-export async function excluirUsuario(userId: string) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
-  const supabase = createServiceClient()
-  await supabase.auth.admin.deleteUser(userId)
-  revalidatePath('/usuario')
-  return { ok: true }
-}

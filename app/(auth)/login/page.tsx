@@ -66,9 +66,9 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-center text-[13px] text-text-muted">
-          Não tem conta?{' '}
+          Não tem acesso?{' '}
           <Link href="/cadastro" className="font-medium text-brand hover:underline">
-            Criar conta
+            Pedir acesso
           </Link>
         </p>
       </div>

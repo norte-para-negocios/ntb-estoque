@@ -27,10 +27,10 @@ export default function CadastroPage() {
         {state?.ok ? (
           <div className="space-y-4 text-center">
             <CheckCircle2 className="mx-auto size-12 text-[#10b981]" />
-            <h1 className="text-lg font-semibold text-text">Cadastro enviado</h1>
+            <h1 className="text-lg font-semibold text-text">Acesso solicitado</h1>
             <p className="text-sm text-text-muted">
-              Sua conta foi criada e está aguardando a aprovação de um administrador.
-              Assim que for liberada, você poderá entrar com seu e-mail e senha.
+              Seu pedido de acesso foi enviado e está aguardando a aprovação de um administrador.
+              Assim que for liberado, você poderá entrar com seu e-mail e senha.
             </p>
             <Link href="/login" className={`${btnClass('outline')} w-full justify-center`}>
               Voltar para o login
@@ -38,9 +38,9 @@ export default function CadastroPage() {
           </div>
         ) : (
           <>
-            <h1 className="mb-1 text-center text-lg font-semibold text-text">Criar conta</h1>
+            <h1 className="mb-1 text-center text-lg font-semibold text-text">Pedir acesso</h1>
             <p className="mb-6 text-center text-[13px] text-text-muted">
-              Cadastre-se e aguarde a liberação do administrador.
+              Preencha seus dados e aguarde a liberação do administrador.
             </p>
             <form action={formAction} className="space-y-4">
               <div>
@@ -63,7 +63,7 @@ export default function CadastroPage() {
               )}
 
               <button type="submit" disabled={pending} className={`${btnClass('primary')} w-full py-2.5`}>
-                {pending ? 'Enviando...' : 'Criar conta'}
+                {pending ? 'Enviando...' : 'Pedir acesso'}
               </button>
             </form>
 

@@ -7,10 +7,11 @@ import {
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Pencil } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   editarUsuario,
+  excluirUsuario,
   togglePermissao,
   toggleLocal,
 } from '@/lib/actions/usuario'
@@ -39,13 +40,16 @@ export function EditarUsuario({
   lojas,
   permissoes,
   locais,
+  podeExcluir = true,
 }: {
   usuario: UsuarioEditavel
   lojas: Loja[]
   permissoes: Permissao[]
   locais: Local[]
+  podeExcluir?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [name, setName] = useState(usuario.name)
   const [perfil, setPerfil] = useState<'Admin' | 'Usuario'>(
     usuario.perfil === 'Admin' ? 'Admin' : 'Usuario'
@@ -101,6 +105,19 @@ export function EditarUsuario({
     startTransition(async () => {
       const res = await togglePermissao(usuario.id, lojaId, permissaoId, ativar)
       if (res?.error) toast.error('Erro', { description: res.error })
+    })
+  }
+
+  function excluir() {
+    startTransition(async () => {
+      const res = await excluirUsuario(usuario.id)
+      if (res?.error) {
+        toast.error('Erro', { description: res.error })
+        return
+      }
+      toast.success('Usuário excluído')
+      setOpen(false)
+      router.refresh()
     })
   }
 
@@ -242,6 +259,41 @@ export function EditarUsuario({
                 </div>
               )
             })}
+
+          {podeExcluir && (
+            <div className="mt-2 rounded-md border border-[var(--err)]/30 bg-[var(--err)]/5 p-3">
+              <p className="mb-2 text-[13px] font-medium text-text">Zona de risco</p>
+              {confirmarExclusao ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] text-text-muted">Excluir este usuário em definitivo?</span>
+                  <button
+                    type="button"
+                    onClick={excluir}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[var(--err)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    <Trash2 className="size-4" /> {pending ? 'Excluindo...' : 'Confirmar exclusão'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmarExclusao(false)}
+                    disabled={pending}
+                    className={btnClass('ghost')}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmarExclusao(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--err)]/40 px-3 py-1.5 text-sm font-medium text-[var(--err)] transition-colors hover:bg-[var(--err)]/10"
+                >
+                  <Trash2 className="size-4" /> Excluir usuário
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

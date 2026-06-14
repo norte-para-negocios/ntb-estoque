@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, getUser } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { NovoUsuario } from '@/components/usuario/NovoUsuario'
 import { EditarUsuario, type UsuarioEditavel } from '@/components/usuario/EditarUsuario'
@@ -28,6 +28,8 @@ export default async function UsuarioPage({
   searchParams: Promise<{ q?: string }>
 }) {
   if (!(await isAdmin())) notFound()
+
+  const me = await getUser()
 
   const params = await searchParams
   const q = (params.q ?? '').trim()
@@ -135,6 +137,7 @@ export default async function UsuarioPage({
                     lojas={lojas ?? []}
                     permissoes={permissoes ?? []}
                     locais={locais ?? []}
+                    podeExcluir={u.id !== me.id}
                   />
                 </div>
               </div>
