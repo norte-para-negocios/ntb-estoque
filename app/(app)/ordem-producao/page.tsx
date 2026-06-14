@@ -3,6 +3,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
+import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { DataTable } from '@/components/ui-kit/DataTable'
@@ -116,6 +117,14 @@ export default async function OrdemProducaoPage({
 
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
 
+  // Locais de estoque ativos da loja para o seletor de "Criar OP"
+  const { data: locais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+    .neq('inativo', 'S')
+    .order('descricao')
+
   const exportParams = new URLSearchParams()
   if (sp.data_inicio) exportParams.set('data_inicio', sp.data_inicio)
   if (sp.data_final) exportParams.set('data_final', sp.data_final)
@@ -165,6 +174,7 @@ export default async function OrdemProducaoPage({
               <Download className="size-4" /> Exportar
             </a>
             <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />
+            <CriarOrdemProducao locais={locais ?? []} />
           </>
         }
       />
@@ -173,6 +183,7 @@ export default async function OrdemProducaoPage({
         (() => {
           const linhas = ordens.map((op) => {
             const prod = prodMap.get(op.identificacao_n_cod_produto)
+            const fo = (op.full_object ?? {}) as { outrasInf?: { dInclusao?: string } }
             return {
               id: op.id,
               numOP: op.identificacao_c_num_op || op.num_ordem || '-',
@@ -181,6 +192,7 @@ export default async function OrdemProducaoPage({
               qtdOP: op.identificacao_n_qtde,
               validade: op.validade,
               quantidade: op.quantidade,
+              inclusao: fo.outrasInf?.dInclusao || null,
             }
           })
           return (

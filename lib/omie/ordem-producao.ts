@@ -125,6 +125,48 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
   }
 }
 
+/**
+ * Cria uma Ordem de Producao no Omie (IncluirOrdemProducao). Usa a MESMA data para
+ * inicio, conclusao e previsao (no Omie as tres datas devem ser iguais; a validade
+ * fica so no nosso sistema). Nao envia `itens`: o Omie monta a malha a partir da
+ * ficha tecnica/estrutura do produto. Retorna { nCodOP, cNumOP } da OP criada.
+ */
+export async function incluirOrdemProducao(
+  loja: LojaOmie,
+  params: {
+    cCodIntOP: string
+    nCodProduto: number
+    dData: string // d/m/Y (usada para inicio, conclusao e previsao)
+    nQtde: number
+    codigoLocalEstoque?: number | null
+    obs?: string
+  }
+) {
+  const data: Record<string, unknown> = {
+    identificacao: {
+      cCodIntOP: params.cCodIntOP,
+      nCodProduto: params.nCodProduto,
+      dDtPrevisao: params.dData,
+      nQtde: params.nQtde,
+      ...(params.codigoLocalEstoque ? { codigo_local_estoque: params.codigoLocalEstoque } : {}),
+    },
+    infAdicionais: {
+      dDtInicio: params.dData,
+      dDtConclusao: params.dData,
+    },
+    ...(params.obs ? { observacoes: { cObs: params.obs } } : {}),
+  }
+
+  return omieRequest<{ nCodOP?: number; cCodIntOP?: string; cNumOP?: string }>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/op',
+    call: 'IncluirOrdemProducao',
+    data,
+  })
+}
+
 export async function concluirOrdemProducao(
   loja: LojaOmie,
   nCodOP: number,

@@ -17,6 +17,7 @@ interface OPData {
   qtdOP: number | null
   validade: string | null
   quantidade: number | null
+  inclusao?: string | null // data de inclusao da OP no Omie (dd/mm/aaaa)
 }
 
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
@@ -194,7 +195,12 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
 
   return (
     <tr>
-      <td className="num font-medium text-text align-top">{op.numOP}</td>
+      <td className="num font-medium text-text align-top">
+        {op.numOP}
+        {op.inclusao && (
+          <div className="text-[11px] font-normal text-text-muted">Incl. {op.inclusao}</div>
+        )}
+      </td>
       <td className="max-w-xs align-top">
         <div className="truncate font-medium text-text">{op.produto}</div>
         <div className="text-[11px] text-text-muted">{op.unidade}</div>
@@ -231,6 +237,7 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
         <div className="shrink-0 text-right">
           <div className="num text-[11px] font-semibold text-text-muted">OP</div>
           <div className="num font-medium text-text">{op.numOP}</div>
+          {op.inclusao && <div className="text-[11px] text-text-muted">Incl. {op.inclusao}</div>}
         </div>
       </div>
 
