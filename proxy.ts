@@ -31,13 +31,16 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname
   const isPublic =
-    path.startsWith('/login') || path.startsWith('/api/webhook') || path.startsWith('/api/cron')
+    path.startsWith('/login') ||
+    path.startsWith('/cadastro') ||
+    path.startsWith('/api/webhook') ||
+    path.startsWith('/api/cron')
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && path.startsWith('/login')) {
+  if (user && (path.startsWith('/login') || path.startsWith('/cadastro'))) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 

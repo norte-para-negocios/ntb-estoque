@@ -3,17 +3,20 @@ import { isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { NovoUsuario } from '@/components/usuario/NovoUsuario'
 import { EditarUsuario, type UsuarioEditavel } from '@/components/usuario/EditarUsuario'
+import { AprovarUsuario } from '@/components/usuario/AprovarUsuario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { escapeIlike } from '@/lib/utils-busca'
-import { Users } from 'lucide-react'
+import { Users, UserPlus } from 'lucide-react'
 
 type UsuarioRow = {
   id: string
   name: string
+  email: string | null
   perfil: string | null
+  status: string | null
   loja_user: { loja_id: number }[]
   permissao_user: { loja_id: number; permissao_id: number }[]
   local_estoque_user: { loja_id: number; local_estoque_id: number }[]
@@ -33,13 +36,17 @@ export default async function UsuarioPage({
   let usuariosQuery = supabase
     .from('profiles')
     .select(
-      'id, name, perfil, loja_user(loja_id), permissao_user(loja_id, permissao_id), local_estoque_user(loja_id, local_estoque_id)'
+      'id, name, email, perfil, status, loja_user(loja_id), permissao_user(loja_id, permissao_id), local_estoque_user(loja_id, local_estoque_id)'
     )
     .order('name')
 
   if (q) usuariosQuery = usuariosQuery.ilike('name', `%${escapeIlike(q)}%`)
 
-  const { data: usuarios } = await usuariosQuery.returns<UsuarioRow[]>()
+  const { data: usuariosTodos } = await usuariosQuery.returns<UsuarioRow[]>()
+
+  // Separa cadastros pendentes (fila de aprovacao) dos usuarios ja aprovados.
+  const pendentes = (usuariosTodos ?? []).filter((u) => u.status === 'pendente')
+  const usuarios = (usuariosTodos ?? []).filter((u) => u.status !== 'pendente')
 
   const { data: lojas } = await supabase
     .from('lojas')
@@ -66,6 +73,31 @@ export default async function UsuarioPage({
         description="Acessos, permissões e locais por loja"
         actions={<NovoUsuario lojas={lojas ?? []} />}
       />
+
+      {pendentes.length > 0 && (
+        <div className="rounded-lg border border-brand/40 bg-brand-soft/40">
+          <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2.5">
+            <UserPlus className="size-4 text-brand" />
+            <h2 className="text-[13px] font-semibold text-text">
+              Aguardando aprovação ({pendentes.length})
+            </h2>
+          </div>
+          <ul className="divide-y divide-border">
+            {pendentes.map((u) => (
+              <li
+                key={u.id}
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-text">{u.name}</div>
+                  <div className="truncate text-[12px] text-text-muted">{u.email || '-'}</div>
+                </div>
+                <AprovarUsuario userId={u.id} nome={u.name} lojas={lojas ?? []} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <BuscaSimples basePath="/usuario" placeholder="Buscar por nome" defaultValue={q} />
 

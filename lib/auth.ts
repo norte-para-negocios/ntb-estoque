@@ -15,6 +15,7 @@ export type Profile = {
   name: string
   current_loja_id: number | null
   perfil: string | null
+  status: string | null
   loja: { id: number; nome: string; nome_fantasia: string | null } | null
 }
 
@@ -27,11 +28,13 @@ export async function getProfile(): Promise<Profile> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, name, current_loja_id, perfil, loja:lojas(id, nome, nome_fantasia)')
+    .select('id, name, current_loja_id, perfil, status, loja:lojas(id, nome, nome_fantasia)')
     .eq('id', user.id)
     .single<Profile>()
 
   if (!profile) redirect('/login')
+  // Conta recem-criada pelo cadastro publico: sem acesso ate o admin aprovar.
+  if (profile.status === 'pendente') redirect('/aguardando')
   return profile
 }
 

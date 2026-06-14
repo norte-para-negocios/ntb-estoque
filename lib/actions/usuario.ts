@@ -42,6 +42,7 @@ export async function criarUsuario(input: {
   await supabase.from('profiles').insert({
     id: userId,
     name: input.name,
+    email: input.email,
     perfil: input.perfil,
     current_loja_id: input.lojaIds[0] ?? null,
   })
@@ -138,6 +139,61 @@ export async function editarUsuario(
     }
   }
 
+  revalidatePath('/usuario')
+  return { ok: true }
+}
+
+// Aprova um cadastro pendente: define perfil, vincula lojas, concede permissoes e
+// muda o status para 'aprovado' (libera o acesso). Reusa a regra do criarUsuario.
+export async function aprovarUsuario(
+  userId: string,
+  input: { perfil: 'Admin' | 'Usuario'; lojaIds: number[] }
+) {
+  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+
+  const supabase = createServiceClient()
+
+  const lojaIds =
+    input.perfil === 'Admin'
+      ? ((await supabase.from('lojas').select('id').eq('ativo', true)).data ?? []).map((l) => l.id as number)
+      : input.lojaIds
+
+  if (input.perfil === 'Usuario' && lojaIds.length === 0) {
+    return { error: 'Selecione ao menos uma loja' }
+  }
+
+  await supabase
+    .from('profiles')
+    .update({ perfil: input.perfil, status: 'aprovado', current_loja_id: lojaIds[0] ?? null })
+    .eq('id', userId)
+
+  // Vincula as lojas (evita duplicar as ja existentes)
+  const { data: jaVinc } = await supabase.from('loja_user').select('loja_id').eq('user_id', userId)
+  const jaIds = (jaVinc ?? []).map((r) => r.loja_id as number)
+  const novas = lojaIds.filter((id) => !jaIds.includes(id))
+  if (novas.length) {
+    await supabase.from('loja_user').insert(novas.map((loja_id) => ({ loja_id, user_id: userId })))
+  }
+
+  // Concede todas as permissoes nas lojas vinculadas (granularidade fina ajustavel depois)
+  const { data: permissoes } = await supabase.from('permissoes').select('id')
+  const rows = lojaIds.flatMap((lojaId) =>
+    (permissoes ?? []).map((p) => ({ loja_id: lojaId, permissao_id: p.id, user_id: userId }))
+  )
+  if (rows.length) {
+    await supabase.from('permissao_user').upsert(rows, { onConflict: 'loja_id,permissao_id,user_id' })
+  }
+
+  revalidatePath('/usuario')
+  return { ok: true }
+}
+
+// Recusa um cadastro pendente: remove a conta de auth (cascade apaga o profile).
+export async function recusarUsuario(userId: string) {
+  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const supabase = createServiceClient()
+  const { error } = await supabase.auth.admin.deleteUser(userId)
+  if (error) return { error: 'Não foi possível recusar o cadastro.' }
   revalidatePath('/usuario')
   return { ok: true }
 }
