@@ -159,12 +159,21 @@ export default async function InventarioPage({
           },
           { label: 'Data', larguraDesktop: 'w-28', render: (inv) => <span className="num text-text-muted">{fmtData(inv.data)}</span> },
           {
-            label: 'Produtos',
+            label: 'Integrados',
             alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (inv) => (
-              <span className="num">{Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0}</span>
-            ),
+            larguraDesktop: 'w-32',
+            render: (inv) => {
+              const total = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
+              const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
+              const concluidos = itensStatus.filter((i: { status: string | null }) => i.status === 'Concluido').length
+              const temErro = itensStatus.some((i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC')
+              if (inv.status !== 'Finalizado') return <span className="num text-text-muted">{total}</span>
+              return (
+                <span className={`num font-medium ${temErro ? 'text-[var(--err,#ef4444)]' : 'text-[#10b981]'}`}>
+                  {concluidos}/{total}
+                </span>
+              )
+            },
           },
           { label: 'Status', larguraDesktop: 'w-32', render: (inv) => <StatusPill status={inv.status} /> },
         ]}

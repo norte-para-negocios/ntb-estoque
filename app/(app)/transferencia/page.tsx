@@ -170,12 +170,21 @@ export default async function TransferenciaPage({
           },
           { label: 'Data', larguraDesktop: 'w-28', render: (t) => <span className="num text-text-muted">{fmtData(t.data)}</span> },
           {
-            label: 'Produtos',
+            label: 'Integrados',
             alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (t) => (
-              <span className="num">{Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0}</span>
-            ),
+            larguraDesktop: 'w-32',
+            render: (t) => {
+              const total = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
+              const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
+              const concluidos = movStatus.filter((m: { status: string | null }) => m.status === 'Concluido').length
+              const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
+              if (t.status !== 'Concluido') return <span className="num text-text-muted">{total}</span>
+              return (
+                <span className={`num font-medium ${temErro ? 'text-[var(--err,#ef4444)]' : 'text-[#10b981]'}`}>
+                  {concluidos}/{total}
+                </span>
+              )
+            },
           },
           { label: 'Status', larguraDesktop: 'w-32', render: (t) => <StatusPill status={t.status} /> },
         ]}
