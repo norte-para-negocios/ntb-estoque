@@ -105,6 +105,7 @@ export default async function HomePage() {
 
   const ultimaSync = loja.data?.produto_ultima_atualizacao
     ? new Date(loja.data.produto_ultima_atualizacao).toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Bahia',
         hour: '2-digit',
         minute: '2-digit',
       })

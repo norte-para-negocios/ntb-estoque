@@ -20,7 +20,7 @@ const ALVOS = [40, 50, 60]
 
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
-  return new Date(d).toLocaleString('pt-BR')
+  return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 }
 
 // Margem real = (venda - custo) / venda

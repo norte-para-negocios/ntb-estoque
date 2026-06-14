@@ -13,7 +13,7 @@ import { escapeIlikeOr } from '@/lib/utils-busca'
 import { Store } from 'lucide-react'
 
 function fmt(d: string | null): string {
-  return d ? new Date(d).toLocaleString('pt-BR') : 'dd/mm/aa hh:mm:ss'
+  return d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : 'dd/mm/aa hh:mm:ss'
 }
 
 export default async function LojaPage({

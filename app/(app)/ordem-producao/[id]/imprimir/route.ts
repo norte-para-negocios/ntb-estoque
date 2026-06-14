@@ -49,7 +49,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const descricao = prod?.descricao || ''
   const qtdeOP = op.identificacao_n_qtde ?? 1
   const fo = (op.full_object ?? {}) as { outrasInf?: { dConclusao?: string } }
-  const produzido = fo.outrasInf?.dConclusao || new Date().toLocaleDateString('pt-BR')
+  const produzido = fo.outrasInf?.dConclusao || new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
   const validade = op.validade ? fmtData(op.validade) : '-'
   const numOP = op.identificacao_c_num_op || op.num_ordem || ''
   const qr = await QRCode.toDataURL(String(codigoProduto), { margin: 1, width: 160 })

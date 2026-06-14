@@ -84,7 +84,7 @@ export default async function ContagemTransferenciaPage({
           </h1>
           <div className="mt-1 flex items-center gap-2">
             <span className="num text-[13px] text-text-muted">
-              {new Date(trans.data).toLocaleDateString('pt-BR')}
+              {new Date(trans.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}
             </span>
             <StatusPill status={trans.status} />
           </div>

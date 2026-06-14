@@ -105,7 +105,7 @@ export default async function InventarioPage({
 
   function fmtData(d: string | null): string {
     if (!d) return ''
-    return new Date(d).toLocaleDateString('pt-BR')
+    return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
   }
 
   return (

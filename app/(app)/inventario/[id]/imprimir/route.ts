@@ -80,7 +80,7 @@ export async function GET(
   const element = createElement(ContagemInventarioPDF, {
     id: inventario.id,
     loja: loja?.nome_fantasia || loja?.nome || '',
-    data: new Date(inventario.data).toLocaleDateString('pt-BR'),
+    data: new Date(inventario.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }),
     local: `${local?.codigo_local_estoque ?? inventario.codigo_local_estoque} - ${local?.descricao ?? ''}`,
     tipo: TIPO_MOVIMENTO_INVENTARIO[inventario.motivo ?? ''] || 'Desconhecido',
     itens,

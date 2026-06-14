@@ -52,7 +52,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
           </h1>
           <div className="mt-1 flex items-center gap-2">
             <span className="num text-[13px] text-text-muted">
-              {new Date(inventario.data).toLocaleDateString('pt-BR')}
+              {new Date(inventario.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}
             </span>
             <StatusPill status={inventario.status} />
           </div>

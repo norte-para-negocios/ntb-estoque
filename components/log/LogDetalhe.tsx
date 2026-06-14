@@ -64,7 +64,7 @@ export function LogDetalhe({ log }: { log: LogRowData }) {
           <StatusPill status={log.error ? 'Erro' : 'OK'} />
         </td>
         <td className="num text-text-muted whitespace-nowrap">
-          {new Date(log.created_at).toLocaleString('pt-BR')}
+          {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}
         </td>
         <td className="text-right">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-brand">
@@ -105,7 +105,7 @@ export function LogCard({ log }: { log: LogRowData }) {
             Data/hora
           </dt>
           <dd className="num text-sm text-text">
-            {new Date(log.created_at).toLocaleString('pt-BR')}
+            {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}
           </dd>
         </div>
         <div>

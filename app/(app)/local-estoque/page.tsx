@@ -12,7 +12,7 @@ import { Warehouse } from 'lucide-react'
 
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
-  return new Date(d).toLocaleString('pt-BR')
+  return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 }
 
 export default async function LocalEstoquePage({
