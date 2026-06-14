@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
@@ -16,6 +16,7 @@ export async function createTransferencia(data: {
     return { error: 'Origem e destino não podem ser o mesmo local' }
   }
   const lojaId = await getCurrentLojaId()
+  const userId = (await getUser()).id
   const supabase = createServiceClient()
   const { data: trans } = await supabase
     .from('transferencias')
@@ -25,6 +26,7 @@ export async function createTransferencia(data: {
       codigo_local_destino: data.codigoLocalDestino,
       motivo: data.motivo,
       status: 'Em contagem',
+      user_id: userId,
     })
     .select('id')
     .single()

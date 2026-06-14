@@ -15,12 +15,16 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   const { data: inventario } = await supabase
     .from('inventarios')
-    .select('id, data, codigo_local_estoque, status')
+    .select('id, data, codigo_local_estoque, status, user_id')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
 
   if (!inventario) notFound()
+
+  const { data: responsavel } = inventario.user_id
+    ? await supabase.from('profiles').select('name').eq('id', inventario.user_id).maybeSingle()
+    : { data: null }
 
   const { data: itensRaw } = await supabase
     .from('inventario_items')
@@ -70,6 +74,9 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
               {new Date(inventario.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}
             </span>
             <StatusPill status={inventario.status} />
+            {responsavel?.name && (
+              <span className="text-[13px] text-text-muted">por {responsavel.name}</span>
+            )}
           </div>
         </div>
         <a

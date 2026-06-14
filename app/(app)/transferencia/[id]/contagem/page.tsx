@@ -22,12 +22,16 @@ export default async function ContagemTransferenciaPage({
 
   const { data: trans } = await supabase
     .from('transferencias')
-    .select('id, data, codigo_local_origem, codigo_local_destino, status')
+    .select('id, data, codigo_local_origem, codigo_local_destino, status, user_id')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
 
   if (!trans) notFound()
+
+  const { data: responsavel } = trans.user_id
+    ? await supabase.from('profiles').select('name').eq('id', trans.user_id).maybeSingle()
+    : { data: null }
 
   const { data: movimentos } = await supabase
     .from('movimentos')
@@ -88,6 +92,9 @@ export default async function ContagemTransferenciaPage({
               {new Date(trans.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}
             </span>
             <StatusPill status={trans.status} />
+            {responsavel?.name && (
+              <span className="text-[13px] text-text-muted">por {responsavel.name}</span>
+            )}
           </div>
         </div>
         <a

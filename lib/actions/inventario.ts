@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
@@ -9,6 +9,7 @@ import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 
 export async function createInventario(codigoLocalEstoque: number) {
   const lojaId = await getCurrentLojaId()
+  const userId = (await getUser()).id
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('inventarios')
@@ -16,6 +17,7 @@ export async function createInventario(codigoLocalEstoque: number) {
       loja_id: lojaId,
       codigo_local_estoque: codigoLocalEstoque,
       status: 'Em contagem',
+      user_id: userId,
     })
     .select('id')
     .single()
