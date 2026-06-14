@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { NotaFiscalFiltros } from '@/components/nota-fiscal/NotaFiscalFiltros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -132,6 +133,36 @@ export default async function NotaFiscalPage({
         icon={FileText}
         actions={
           <>
+            <FiltrosGaveta
+              basePath="/nota-fiscal"
+              naoContar={['data_inicio', 'data_final']}
+              campos={[
+                { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
+                { tipo: 'data', nome: 'data_final', label: 'Data Final' },
+                { tipo: 'texto', nome: 'num_nfe', label: 'Nº NFe' },
+                { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
+                {
+                  tipo: 'select',
+                  nome: 'status',
+                  label: 'Status',
+                  opcoes: [
+                    { value: 'P', label: 'Pendente' },
+                    { value: 'C', label: 'Concluída' },
+                  ],
+                },
+                { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+                { tipo: 'texto', nome: 'produto', label: 'Produto' },
+              ]}
+              defaults={{
+                data_inicio: dataInicio,
+                data_final: dataFinal,
+                num_nfe: params.num_nfe ?? '',
+                fornecedor: params.fornecedor ?? '',
+                status: params.status ?? '',
+                tipo: params.tipo ?? '',
+                produto: params.produto ?? '',
+              }}
+            />
             <a
               href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
               target="_blank"
@@ -149,18 +180,6 @@ export default async function NotaFiscalPage({
             <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />
           </>
         }
-      />
-
-      <NotaFiscalFiltros
-        defaults={{
-          data_inicio: dataInicio,
-          data_final: dataFinal,
-          num_nfe: params.num_nfe ?? '',
-          fornecedor: params.fornecedor ?? '',
-          status: params.status ?? '',
-          tipo: params.tipo ?? '',
-          produto: params.produto ?? '',
-        }}
       />
 
       <Lista

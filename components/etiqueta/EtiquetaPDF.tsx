@@ -9,13 +9,13 @@ const H = 40.04 * MM
 const s = StyleSheet.create({
   page: { paddingTop: 3 * MM, paddingHorizontal: 3 * MM, fontSize: 8, color: '#000' },
   row: { flexDirection: 'row', alignItems: 'flex-start' },
-  left: { width: '64%', flexShrink: 0, flexGrow: 0, paddingRight: 6, overflow: 'hidden' },
-  right: { width: '36%', flexShrink: 0, flexGrow: 0, alignItems: 'center', overflow: 'hidden' },
+  left: { width: '70%', flexShrink: 0, flexGrow: 0, paddingRight: 4, overflow: 'hidden' },
+  right: { width: '30%', flexShrink: 0, flexGrow: 0, alignItems: 'center', overflow: 'hidden' },
   descricao: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   campoRow: { flexDirection: 'row', marginBottom: 4 },
-  campo: { flex: 1, minWidth: 0 },
-  label: { fontSize: 6.5, color: '#000' },
-  valor: { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
+  campo: { flex: 1, minWidth: 0, paddingRight: 4, overflow: 'hidden' },
+  label: { fontSize: 6, color: '#000' },
+  valor: { fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
   linha: { fontSize: 7, marginBottom: 1.5 },
   qr: { width: 50, height: 50, marginBottom: 5 },
   logo: { width: 40, height: 'auto' },
@@ -50,11 +50,11 @@ export function EtiquetaPDF({ etiquetas }: { etiquetas: Etiqueta[] }) {
                 <View style={s.campoRow}>
                   <View style={s.campo}>
                     <Text style={s.label}>Fabricação:</Text>
-                    <Text style={s.valor}>{e.produzido.trim()}</Text>
+                    <Text style={s.valor} wrap={false}>{e.produzido.trim().slice(0, 10)}</Text>
                   </View>
                   <View style={s.campo}>
                     <Text style={s.label}>Validade:</Text>
-                    <Text style={s.valor}>{e.validade.trim().slice(0, 10)}</Text>
+                    <Text style={s.valor} wrap={false}>{e.validade.trim().slice(0, 10)}</Text>
                   </View>
                   {e.qtde_etiqueta !== '' && e.qtde_nf === '' && (
                     <View style={s.campo}>

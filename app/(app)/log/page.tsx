@@ -5,7 +5,8 @@ import { LogDetalhe, LogCard } from '@/components/log/LogDetalhe'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Filtros, type CampoFiltro } from '@/components/ui-kit/Filtros'
+import { type CampoFiltro } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { ScrollText } from 'lucide-react'
 
@@ -122,9 +123,8 @@ export default async function LogPage({
         title="Logs de Integração com APIs"
         icon={ScrollText}
         description="Tentativas de integração com APIs"
+        actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} />}
       />
-
-      <Filtros basePath="/log" campos={campos} defaults={defaults} />
 
       <div className="flex gap-1.5">
         {filtros.map((f) => (

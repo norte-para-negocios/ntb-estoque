@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { Filtros } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -131,6 +131,33 @@ export default async function OrdemProducaoPage({
         icon={Factory}
         actions={
           <>
+            <FiltrosGaveta
+              basePath="/ordem-producao"
+              campos={[
+                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+                { tipo: 'data', nome: 'data_final', label: 'Data final' },
+                { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
+                { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
+                { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+                {
+                  tipo: 'select',
+                  nome: 'op_concluido',
+                  label: 'Concluído',
+                  opcoes: [
+                    { value: 'S', label: 'Sim' },
+                    { value: 'N', label: 'Não' },
+                  ],
+                },
+              ]}
+              defaults={{
+                data_inicio: sp.data_inicio ?? '',
+                data_final: sp.data_final ?? '',
+                ordem_producao: sp.ordem_producao ?? '',
+                op_produto: sp.op_produto ?? '',
+                tipo_produto: sp.tipo_produto ?? '',
+                op_concluido: sp.op_concluido ?? '',
+              }}
+            />
             <a
               href={`/ordem-producao/export?${exportParams.toString()}`}
               className={btnClass('outline')}
@@ -140,34 +167,6 @@ export default async function OrdemProducaoPage({
             <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />
           </>
         }
-      />
-
-      <Filtros
-        basePath="/ordem-producao"
-        campos={[
-          { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-          { tipo: 'data', nome: 'data_final', label: 'Data final' },
-          { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
-          { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
-          { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-          {
-            tipo: 'select',
-            nome: 'op_concluido',
-            label: 'Concluído',
-            opcoes: [
-              { value: 'S', label: 'Sim' },
-              { value: 'N', label: 'Não' },
-            ],
-          },
-        ]}
-        defaults={{
-          data_inicio: sp.data_inicio ?? '',
-          data_final: sp.data_final ?? '',
-          ordem_producao: sp.ordem_producao ?? '',
-          op_produto: sp.op_produto ?? '',
-          tipo_produto: sp.tipo_produto ?? '',
-          op_concluido: sp.op_concluido ?? '',
-        }}
       />
 
       {ordens?.length ? (

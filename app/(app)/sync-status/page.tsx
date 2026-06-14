@@ -5,7 +5,8 @@ import { StatCard } from '@/components/ui-kit/StatCard'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Filtros, type CampoFiltro } from '@/components/ui-kit/Filtros'
+import { type CampoFiltro } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ReprocessarErro } from '@/components/sync/ReprocessarErro'
 import type { SyncModel } from '@/lib/actions/sync-status'
 import { Activity, AlertTriangle } from 'lucide-react'
@@ -161,6 +162,9 @@ export default async function SyncStatusPage({
         title="Saúde da integração"
         icon={Activity}
         description="Painel de erros de sincronização com o Omie"
+        actions={
+          <FiltrosGaveta basePath="/sync-status" campos={campos} defaults={defaults} naoContar={['dias']} />
+        }
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -205,8 +209,6 @@ export default async function SyncStatusPage({
           </div>
         )}
       </div>
-
-      <Filtros basePath="/sync-status" campos={campos} defaults={defaults} />
 
       <Lista
         linhas={erros}

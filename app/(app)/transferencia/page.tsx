@@ -6,7 +6,7 @@ import { ArrowLeftRight, Pencil, FileText } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { Filtros } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -118,6 +118,26 @@ export default async function TransferenciaPage({
         description="Movimentações entre locais de estoque"
         actions={
           <>
+            <FiltrosGaveta
+              basePath="/transferencia"
+              campos={[
+                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+                { tipo: 'data', nome: 'data_final', label: 'Data final' },
+                {
+                  tipo: 'select',
+                  nome: 'familia',
+                  label: 'Família',
+                  opcoes: familias.map((f) => ({ value: f, label: f })),
+                },
+                { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+              ]}
+              defaults={{
+                data_inicio: sp.data_inicio ?? '',
+                data_final: sp.data_final ?? '',
+                familia: sp.familia ?? '',
+                tipo: sp.tipo ?? '',
+              }}
+            />
             <a
               href={relatorioHref}
               target="_blank"
@@ -129,27 +149,6 @@ export default async function TransferenciaPage({
             {podeCriar ? <NovaTransferencia locais={locais ?? []} /> : null}
           </>
         }
-      />
-
-      <Filtros
-        basePath="/transferencia"
-        campos={[
-          { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-          { tipo: 'data', nome: 'data_final', label: 'Data final' },
-          {
-            tipo: 'select',
-            nome: 'familia',
-            label: 'Família',
-            opcoes: familias.map((f) => ({ value: f, label: f })),
-          },
-          { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-        ]}
-        defaults={{
-          data_inicio: sp.data_inicio ?? '',
-          data_final: sp.data_final ?? '',
-          familia: sp.familia ?? '',
-          tipo: sp.tipo ?? '',
-        }}
       />
 
       <Lista

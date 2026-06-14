@@ -6,7 +6,7 @@ import { ClipboardList, Pencil } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { Filtros } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -114,28 +114,31 @@ export default async function InventarioPage({
         title="Inventários"
         icon={ClipboardList}
         description="Contagens de estoque por local"
-        actions={podeCriar ? <NovoInventario locais={locais ?? []} /> : undefined}
-      />
-
-      <Filtros
-        basePath="/inventario"
-        campos={[
-          { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-          { tipo: 'data', nome: 'data_final', label: 'Data final' },
-          {
-            tipo: 'select',
-            nome: 'familia',
-            label: 'Família',
-            opcoes: familias.map((f) => ({ value: f, label: f })),
-          },
-          { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-        ]}
-        defaults={{
-          data_inicio: sp.data_inicio ?? '',
-          data_final: sp.data_final ?? '',
-          familia: sp.familia ?? '',
-          tipo: sp.tipo ?? '',
-        }}
+        actions={
+          <>
+            <FiltrosGaveta
+              basePath="/inventario"
+              campos={[
+                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+                { tipo: 'data', nome: 'data_final', label: 'Data final' },
+                {
+                  tipo: 'select',
+                  nome: 'familia',
+                  label: 'Família',
+                  opcoes: familias.map((f) => ({ value: f, label: f })),
+                },
+                { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+              ]}
+              defaults={{
+                data_inicio: sp.data_inicio ?? '',
+                data_final: sp.data_final ?? '',
+                familia: sp.familia ?? '',
+                tipo: sp.tipo ?? '',
+              }}
+            />
+            {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
+          </>
+        }
       />
 
       <Lista

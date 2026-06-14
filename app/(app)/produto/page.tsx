@@ -5,7 +5,7 @@ import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Filtros } from '@/components/ui-kit/Filtros'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Money } from '@/components/ui-kit/Money'
@@ -82,6 +82,19 @@ export default async function ProdutoPage({
         icon={Package}
         actions={
           <>
+            <FiltrosGaveta
+              basePath="/produto"
+              campos={[
+                { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
+                { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
+                { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+              ]}
+              defaults={{
+                q: params.q ?? '',
+                familia: params.familia ?? '',
+                tipo: params.tipo ?? '',
+              }}
+            />
             <a
               href={`/produto/export?${exportParams.toString()}`}
               className={btnClass('outline')}
@@ -100,20 +113,6 @@ export default async function ProdutoPage({
         <span>·</span>
         <StatusPill status={lojaSync?.produto_status ?? null} />
       </div>
-
-      <Filtros
-        basePath="/produto"
-        campos={[
-          { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
-          { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
-          { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
-        ]}
-        defaults={{
-          q: params.q ?? '',
-          familia: params.familia ?? '',
-          tipo: params.tipo ?? '',
-        }}
-      />
 
       <Lista
         linhas={produtos ?? []}
