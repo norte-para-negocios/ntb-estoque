@@ -47,12 +47,14 @@ export function Lista<T>({
                   key={i}
                   className={`px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
                     c.alinhar === 'right' ? 'text-right' : 'text-left'
-                  } ${c === flexivel ? '' : 'whitespace-nowrap'}`}
+                  } ${c === flexivel ? '' : 'whitespace-nowrap'} ${i === 0 ? 'rounded-tl-lg' : ''} ${
+                    i === colunas.length - 1 && !acao ? 'rounded-tr-lg' : ''
+                  }`}
                 >
                   {c.label}
                 </th>
               ))}
-              {acao && <th className="px-4 py-2.5" />}
+              {acao && <th className="rounded-tr-lg px-4 py-2.5" />}
             </tr>
           </thead>
           <tbody>
