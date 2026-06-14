@@ -131,5 +131,5 @@ movimentos) — base para futuros painéis de BI (margem, curva ABC, fluxo de ca
 ---
 
 <div align="center">
-<sub>Construído por <b>Triforce Auto</b> para a Norte Para Negócios.</sub>
+<sub>Construído por <b>Joaquim Salles</b> para a Norte Para Negócios.</sub>
 </div>
