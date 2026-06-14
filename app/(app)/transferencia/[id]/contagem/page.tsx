@@ -40,7 +40,7 @@ export default async function ContagemTransferenciaPage({
   const { data: produtos } = codigos.length
     ? await supabase
         .from('produtos')
-        .select('codigo_produto, codigo, descricao')
+        .select('codigo_produto, codigo, descricao, unidade')
         .eq('loja_id', lojaId)
         .in('codigo_produto', codigos)
     : { data: [] }
@@ -53,6 +53,7 @@ export default async function ContagemTransferenciaPage({
       id_prod: m.id_prod,
       descricao: p?.descricao || `Produto ${m.id_prod}`,
       codigo: p?.codigo || String(m.id_prod),
+      unidade: p?.unidade ?? null,
       quan: m.quan,
       status: m.status,
     }

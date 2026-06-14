@@ -22,11 +22,26 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   if (!inventario) notFound()
 
-  const { data: itens } = await supabase
+  const { data: itensRaw } = await supabase
     .from('inventario_items')
-    .select('id, produto_codigo, produto_descricao, produto_familia, quan, status')
+    .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
     .eq('inventario_id', id)
     .order('id')
+
+  const codigos = [...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean))]
+  const { data: prods } = codigos.length
+    ? await supabase
+        .from('produtos')
+        .select('codigo_produto, unidade')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigos)
+    : { data: [] }
+  const unidadeMap = new Map((prods ?? []).map((p) => [p.codigo_produto, p.unidade]))
+
+  const itens = (itensRaw ?? []).map((i) => ({
+    ...i,
+    unidade: unidadeMap.get(i.produto_codigo_produto) ?? null,
+  }))
 
   const { data: local } = await supabase
     .from('local_estoques')

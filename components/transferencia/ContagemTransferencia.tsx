@@ -26,6 +26,7 @@ export type ItemMovimento = {
   id_prod: number
   descricao: string
   codigo: string
+  unidade?: string | null
   quan: number | null
   status: string | null
 }
@@ -176,7 +177,7 @@ export function ContagemTransferencia({
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Quantidade</span>
+                  <span className="eyebrow">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   {finalizado ? (
                     <span className="num text-lg font-semibold text-text">{q ?? 0}</span>
                   ) : (

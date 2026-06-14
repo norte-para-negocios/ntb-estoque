@@ -26,6 +26,7 @@ export type ItemContagem = {
   produto_codigo: string
   produto_descricao: string
   produto_familia: string | null
+  unidade?: string | null
   quan: number | null
   status: string | null
 }
@@ -69,7 +70,11 @@ export function ContagemInventario({
       })
       if (novo) {
         setItens((prev) => [
-          { ...novo, produto_familia: novo.produto_familia ?? p.descricao_familia } as ItemContagem,
+          {
+            ...novo,
+            produto_familia: novo.produto_familia ?? p.descricao_familia,
+            unidade: p.unidade ?? null,
+          } as ItemContagem,
           ...prev,
         ])
       }
@@ -178,7 +183,7 @@ export function ContagemInventario({
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Quantidade</span>
+                  <span className="eyebrow">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   {finalizado ? (
                     <span className="num text-lg font-semibold text-text">{q ?? 0}</span>
                   ) : (
