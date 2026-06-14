@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     q: searchParams.get('q') || undefined,
     familia: searchParams.get('familia') || undefined,
     tipo: searchParams.get('tipo') || undefined,
+    situacao: searchParams.get('situacao') || undefined,
   }
 
   // Paginação interna para não truncar a exportação (PostgREST limita 1000 linhas).
@@ -45,6 +46,8 @@ export async function GET(request: Request) {
     }
     if (params.familia) q = q.eq('descricao_familia', params.familia)
     if (params.tipo) q = q.eq('tipo_item', params.tipo)
+    if (!params.situacao || params.situacao === 'ativos') q = q.neq('full_object->>inativo', 'S')
+    else if (params.situacao === 'inativos') q = q.eq('full_object->>inativo', 'S')
 
     return q
   }

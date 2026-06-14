@@ -86,9 +86,9 @@ export default async function ProdutoPage({
   }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
-  // default: so ativos; 'inativos' mostra so inativos; 'todos' mostra ambos
-  if (!params.situacao || params.situacao === 'ativos') query = query.neq('inativo', 'S')
-  else if (params.situacao === 'inativos') query = query.eq('inativo', 'S')
+  // situacao via full_object->>inativo ('S'/'N' do Omie). default: so ativos
+  if (!params.situacao || params.situacao === 'ativos') query = query.neq('full_object->>inativo', 'S')
+  else if (params.situacao === 'inativos') query = query.eq('full_object->>inativo', 'S')
 
   const { data: produtosRaw } = await query
   const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
@@ -116,6 +116,7 @@ export default async function ProdutoPage({
   if (params.q) exportParams.set('q', params.q)
   if (params.familia) exportParams.set('familia', params.familia)
   if (params.tipo) exportParams.set('tipo', params.tipo)
+  if (params.situacao) exportParams.set('situacao', params.situacao)
 
   const margemParams = new URLSearchParams(exportParams.toString())
 
