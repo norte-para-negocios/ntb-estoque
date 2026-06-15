@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -19,6 +20,18 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { Package, Download } from 'lucide-react'
 
 const POR_PAGINA = 100
+
+type ProdutoLinha = {
+  id: number
+  codigo_produto: number | null
+  codigo: string | null
+  descricao: string | null
+  descricao_familia: string | null
+  tipo_item: string | null
+  unidade: string | null
+  valor_unitario: number | null
+  estoque_minimo: number | null
+}
 
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
@@ -46,13 +59,15 @@ function corMargem(m: number): string {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; page?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
 
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
+  // Dois modos para a tabela nao estourar a largura: precos x compras.
+  const vista = params.vista === 'compras' ? 'compras' : 'precos'
   const alvoPctRaw = Number(params.margem)
   const alvoPct = alvoPctRaw >= 1 && alvoPctRaw <= 99 ? alvoPctRaw : 50
   const alvo = alvoPct / 100
@@ -195,7 +210,27 @@ export default async function ProdutoPage({
           <span>·</span>
           <StatusPill status={lojaSync?.produto_status ?? null} />
         </div>
-        <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} />
+        <div className="flex items-center gap-3">
+          {/* Modo da tabela: precos x compras (evita estourar a largura) */}
+          <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-[13px]">
+            {(['precos', 'compras'] as const).map((v) => {
+              const sp = new URLSearchParams(exportParams.toString())
+              if (params.margem) sp.set('margem', params.margem)
+              sp.set('vista', v)
+              const ativo = v === vista
+              return (
+                <Link
+                  key={v}
+                  href={`/produto?${sp.toString()}`}
+                  className={`rounded px-3 py-1 font-medium transition-colors ${ativo ? 'bg-brand text-white' : 'text-text-muted hover:text-text'}`}
+                >
+                  {v === 'precos' ? 'Preços' : 'Compras'}
+                </Link>
+              )
+            })}
+          </div>
+          {vista === 'precos' && <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} />}
+        </div>
       </div>
 
       <Lista
@@ -204,87 +239,87 @@ export default async function ProdutoPage({
         colunas={[
           { label: 'Descrição', primaria: true, flexivel: true, render: (p) => formatarNomeProduto(p.descricao) },
           { label: 'Código', larguraDesktop: 'w-28', render: (p) => <span className="num text-text-muted">{p.codigo}</span> },
-          { label: 'Família', ocultarMobile: true, render: (p) => <span className="text-text-muted">{p.descricao_familia || '-'}</span> },
-          {
-            label: 'Custo',
-            alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (p) => {
-              const c = custoDe(p.codigo_produto)
-              return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
-            },
-          },
-          { label: 'Venda', alinhar: 'right', larguraDesktop: 'w-28', render: (p) => <Money value={p.valor_unitario} /> },
-          {
-            label: 'Margem',
-            alinhar: 'right',
-            larguraDesktop: 'w-24',
-            render: (p) => {
-              const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
-              if (m == null) return <span className="text-text-muted">-</span>
-              return (
-                <span className="num font-medium" style={{ color: corMargem(m) }}>
-                  {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
-                </span>
-              )
-            },
-          },
-          {
-            label: `Sugerido (${alvoPct}%)`,
-            alinhar: 'right',
-            larguraDesktop: 'w-32',
-            render: (p) => {
-              const s = precoSugerido(custoDe(p.codigo_produto), alvo)
-              return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
-            },
-          },
-          {
-            label: 'Mínimo',
-            alinhar: 'right',
-            larguraDesktop: 'w-24',
-            ocultarMobile: true,
-            render: (p) => <EstoqueMinimoInput produtoId={p.id} valorInicial={p.estoque_minimo} />,
-          },
-          {
-            label: 'Atual',
-            alinhar: 'right',
-            larguraDesktop: 'w-20',
-            ocultarMobile: true,
-            render: (p) => {
-              const saldo = saldoDe(p.codigo_produto)
-              if (saldo == null) return <span className="text-text-muted">-</span>
-              const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
-              const baixo = min != null && saldo <= min
-              return <span className={`num ${baixo ? 'font-semibold text-[var(--err,#ef4444)]' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
-            },
-          },
-          {
-            label: 'Prev. venda',
-            alinhar: 'right',
-            larguraDesktop: 'w-24',
-            ocultarMobile: true,
-            render: (p) => {
-              const pv = prevVendaDe(p.codigo_produto)
-              if (pv == null) return <span className="text-text-muted">-</span>
-              return <span className="num text-text-muted"><Num value={pv} frac={0} /></span>
-            },
-          },
-          {
-            label: 'Comprar',
-            alinhar: 'right',
-            larguraDesktop: 'w-20',
-            ocultarMobile: true,
-            render: (p) => {
-              const saldo = saldoDe(p.codigo_produto)
-              const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
-              if (saldo == null || min == null) return <span className="text-text-muted">-</span>
-              // compra = minimo + previsao de venda - estoque atual
-              const prev = prevVendaDe(p.codigo_produto) ?? 0
-              const comprar = Math.max(0, min + prev - saldo)
-              if (comprar <= 0) return <span className="text-[#10b981]">ok</span>
-              return <span className="num font-semibold text-brand"><Num value={comprar} frac={0} /></span>
-            },
-          },
+          ...(vista === 'precos'
+            ? [
+                {
+                  label: 'Custo',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-28',
+                  render: (p: ProdutoLinha) => {
+                    const c = custoDe(p.codigo_produto)
+                    return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
+                  },
+                },
+                { label: 'Venda', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (p: ProdutoLinha) => <Money value={p.valor_unitario} /> },
+                {
+                  label: 'Margem',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-24',
+                  render: (p: ProdutoLinha) => {
+                    const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
+                    if (m == null) return <span className="text-text-muted">-</span>
+                    return (
+                      <span className="num font-medium" style={{ color: corMargem(m) }}>
+                        {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                      </span>
+                    )
+                  },
+                },
+                {
+                  label: `Sugerido (${alvoPct}%)`,
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-32',
+                  render: (p: ProdutoLinha) => {
+                    const s = precoSugerido(custoDe(p.codigo_produto), alvo)
+                    return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
+                  },
+                },
+              ]
+            : [
+                {
+                  label: 'Mínimo',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-24',
+                  render: (p: ProdutoLinha) => <EstoqueMinimoInput produtoId={p.id} valorInicial={p.estoque_minimo} />,
+                },
+                {
+                  label: 'Atual',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-20',
+                  render: (p: ProdutoLinha) => {
+                    const saldo = saldoDe(p.codigo_produto)
+                    if (saldo == null) return <span className="text-text-muted">-</span>
+                    const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
+                    const baixo = min != null && saldo <= min
+                    return <span className={`num ${baixo ? 'font-semibold text-[var(--err,#ef4444)]' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
+                  },
+                },
+                {
+                  label: 'Prev. venda',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-24',
+                  render: (p: ProdutoLinha) => {
+                    const pv = prevVendaDe(p.codigo_produto)
+                    if (pv == null) return <span className="text-text-muted">-</span>
+                    return <span className="num text-text-muted"><Num value={pv} frac={0} /></span>
+                  },
+                },
+                {
+                  label: 'Comprar',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-20',
+                  render: (p: ProdutoLinha) => {
+                    const saldo = saldoDe(p.codigo_produto)
+                    const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
+                    if (saldo == null || min == null) return <span className="text-text-muted">-</span>
+                    // compra = minimo + previsao de venda - estoque atual
+                    const prev = prevVendaDe(p.codigo_produto) ?? 0
+                    const comprar = Math.max(0, min + prev - saldo)
+                    if (comprar <= 0) return <span className="text-[#10b981]">ok</span>
+                    return <span className="num font-semibold text-brand"><Num value={comprar} frac={0} /></span>
+                  },
+                },
+              ]),
         ]}
         vazio={
           <EmptyState

@@ -23,7 +23,8 @@ interface OPData {
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
 function useOP(op: OPData) {
   const [validade, setValidade] = useState(op.validade ? op.validade.split('T')[0] : '')
-  const [quantidade, setQuantidade] = useState(op.quantidade != null ? String(op.quantidade) : '')
+  // Quantidade sempre comeca em 1 (nunca 0/vazio): no dia a dia a OP costuma ser de 1.
+  const [quantidade, setQuantidade] = useState(op.quantidade != null ? String(op.quantidade) : '1')
   const [pending, startTransition] = useTransition()
 
   function salvarValidade() {

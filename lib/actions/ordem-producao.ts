@@ -109,11 +109,12 @@ export async function finishOP(opId: number) {
 
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
       identificacao_n_cod_op: number | null
+      identificacao_d_dt_previsao: string | null
       quantidade: number | null
       loja: LojaOmie
     }>()
@@ -123,8 +124,12 @@ export async function finishOP(opId: number) {
   }
 
   try {
-    const hoje = new Date().toLocaleDateString('pt-BR')
-    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, hoje, op.quantidade ?? 1, '')
+    // Conclui na DATA DA OP (previsao/periodo dela), nao no dia de hoje.
+    // identificacao_d_dt_previsao vem 'YYYY-MM-DD'; o Omie espera 'DD/MM/YYYY'.
+    const prev = op.identificacao_d_dt_previsao
+    const m = prev?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    const dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
+    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, op.quantidade ?? 1, '')
 
     // Marca conclusao localmente para a OP nao reaparecer como pendente
     // (o sync nem sempre traz cConcluida de imediato). O filtro op_concluido
