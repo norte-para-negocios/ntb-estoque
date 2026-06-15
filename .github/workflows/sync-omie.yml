@@ -39,3 +39,6 @@ jobs:
           if [ "$bloco" -eq 0 ] || [ "$bloco" -eq 3 ]; then hit /api/cron/sync-locais; fi
           # Produtos: 1x por hora (bloco 0 = primeira execucao da hora)
           if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-produtos; fi
+          # Previsao de venda: 1 loja por hora (bloco 0); a janela muda devagar e
+          # cobre as lojas em rodizio ao longo do dia.
+          if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-previsao; fi
