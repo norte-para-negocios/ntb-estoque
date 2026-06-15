@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Num } from '@/components/ui-kit/Num'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
@@ -147,7 +148,7 @@ export default async function ValidadePage({
               return (
                 <span>
                   <span className="text-text">
-                    {prod?.descricao || `Produto ${o.identificacao_n_cod_produto}`}
+                    {formatarNomeProduto(prod?.descricao) || `Produto ${o.identificacao_n_cod_produto}`}
                   </span>
                   {prod?.codigo && (
                     <span className="ml-1.5 text-[12px] text-text-muted">{prod.codigo}</span>

@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 function num(v: unknown, dec: number): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
@@ -46,7 +47,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const unidade = prod?.unidade || 'UN'
   const codigoProduto = prod?.codigo || String(op.identificacao_n_cod_produto)
-  const descricao = prod?.descricao || ''
+  const descricao = formatarNomeProduto(prod?.descricao)
   const qtdeOP = op.identificacao_n_qtde ?? 1
   const fo = (op.full_object ?? {}) as { outrasInf?: { dConclusao?: string } }
   const produzido = fo.outrasInf?.dConclusao || new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })

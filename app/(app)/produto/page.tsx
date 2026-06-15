@@ -13,6 +13,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { Package, Download } from 'lucide-react'
 
 const POR_PAGINA = 100
@@ -168,7 +169,7 @@ export default async function ProdutoPage({
         linhas={produtos ?? []}
         chaveLinha={(p) => p.id}
         colunas={[
-          { label: 'Descrição', primaria: true, flexivel: true, render: (p) => p.descricao },
+          { label: 'Descrição', primaria: true, flexivel: true, render: (p) => formatarNomeProduto(p.descricao) },
           { label: 'Código', larguraDesktop: 'w-28', render: (p) => <span className="num text-text-muted">{p.codigo}</span> },
           { label: 'Família', ocultarMobile: true, render: (p) => <span className="text-text-muted">{p.descricao_familia || '-'}</span> },
           {

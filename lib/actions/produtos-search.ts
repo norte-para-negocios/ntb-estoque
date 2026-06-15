@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export type ProdutoBusca = {
   codigo_produto: number
@@ -27,7 +28,7 @@ export async function buscarProdutos(termo: string): Promise<ProdutoBusca[]> {
   }
 
   const { data } = await query.order('descricao')
-  return (data ?? []) as ProdutoBusca[]
+  return (data ?? []).map((p) => ({ ...p, descricao: formatarNomeProduto(p.descricao) })) as ProdutoBusca[]
 }
 
 export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBusca | null> {
@@ -42,5 +43,6 @@ export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBus
     .eq('codigo', termo)
     .limit(1)
     .maybeSingle()
-  return (data as ProdutoBusca | null) ?? null
+  if (!data) return null
+  return { ...data, descricao: formatarNomeProduto(data.descricao) } as ProdutoBusca
 }

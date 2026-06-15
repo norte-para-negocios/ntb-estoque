@@ -8,6 +8,7 @@ import {
   ContagemTransferencia,
   type ItemMovimento,
 } from '@/components/transferencia/ContagemTransferencia'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export default async function ContagemTransferenciaPage({
   params,
@@ -55,7 +56,7 @@ export default async function ContagemTransferenciaPage({
     return {
       id: m.id,
       id_prod: m.id_prod,
-      descricao: p?.descricao || `Produto ${m.id_prod}`,
+      descricao: formatarNomeProduto(p?.descricao) || `Produto ${m.id_prod}`,
       codigo: p?.codigo || String(m.id_prod),
       unidade: p?.unidade ?? null,
       quan: m.quan,

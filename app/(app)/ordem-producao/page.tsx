@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
 import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { DataTable } from '@/components/ui-kit/DataTable'
@@ -187,7 +188,7 @@ export default async function OrdemProducaoPage({
             return {
               id: op.id,
               numOP: op.identificacao_c_num_op || op.num_ordem || '-',
-              produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
+              produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
               unidade: prod?.unidade || 'UN',
               qtdOP: op.identificacao_n_qtde,
               validade: op.validade,

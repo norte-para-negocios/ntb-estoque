@@ -7,6 +7,7 @@ import {
   ContagemInventarioPDF,
   type ContagemInventarioItem,
 } from '@/components/relatorio/ContagemInventarioPDF'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 const TIPO_MOVIMENTO_INVENTARIO: Record<string, string> = {
   INV: 'Ajuste por Inventário',
@@ -71,7 +72,7 @@ export async function GET(
 
   const itens: ContagemInventarioItem[] = (itensRaw ?? []).map((it) => ({
     codigo: it.produto_codigo || '',
-    descricao: it.produto_descricao || '',
+    descricao: formatarNomeProduto(it.produto_descricao),
     unidade: unidadeMap.get(it.produto_codigo_produto) || '',
     quan: Number(it.quan ?? 0),
     status: it.status || 'N/A',

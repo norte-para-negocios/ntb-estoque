@@ -7,6 +7,7 @@ import {
   ContagemTransferenciaPDF,
   type ContagemTransferenciaItem,
 } from '@/components/relatorio/ContagemTransferenciaPDF'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export async function GET(
   _request: Request,
@@ -66,7 +67,7 @@ export async function GET(
     const p = prodMap.get(m.id_prod)
     return {
       codigo: p?.codigo || String(m.id_prod),
-      descricao: p?.descricao || `Produto ${m.id_prod}`,
+      descricao: formatarNomeProduto(p?.descricao) || `Produto ${m.id_prod}`,
       unidade: p?.unidade || '',
       quan: m.quan != null ? String(m.quan) : '-',
       status: m.status || 'N/A',

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
@@ -96,9 +97,9 @@ export async function GET(request: Request) {
     return {
       numOP: o.identificacao_c_num_op || o.num_ordem || '-',
       produto:
-        o.produto_descricao ||
-        prodMap.get(o.identificacao_n_cod_produto) ||
-        `Produto ${o.identificacao_n_cod_produto}`,
+        formatarNomeProduto(
+          o.produto_descricao || prodMap.get(o.identificacao_n_cod_produto)
+        ) || `Produto ${o.identificacao_n_cod_produto}`,
       quantidade: `${num(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
       validade: o.validade || '-',
       status: concluida ? 'Concluída' : 'Pendente',

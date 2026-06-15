@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { toCsv, csvResponse } from '@/lib/csv'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -111,7 +112,7 @@ export async function GET(request: Request) {
     const prod = prodMap.get(op.identificacao_n_cod_produto as number)
     return {
       op: op.identificacao_c_num_op || op.num_ordem || '-',
-      produto: prod?.descricao || `Produto ${op.identificacao_n_cod_produto}`,
+      produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
       qtd: op.identificacao_n_qtde ?? '',
       validade: op.validade ?? '-',
     }

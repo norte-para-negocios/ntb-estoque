@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { ContagemInventario, type ItemContagem } from '@/components/inventario/ContagemInventario'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export default async function ContagemPage({ params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -44,6 +45,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   const itens = (itensRaw ?? []).map((i) => ({
     ...i,
+    produto_descricao: formatarNomeProduto(i.produto_descricao),
     unidade: unidadeMap.get(i.produto_codigo_produto) ?? null,
   }))
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
 
   const rows = produtos.map((p) => ({
     codigo: p.codigo || '-',
-    descricao: p.descricao ?? '-',
+    descricao: formatarNomeProduto(p.descricao) || '-',
     familia: p.descricao_familia || '-',
     tipo: labelTipoItem(p.tipo_item),
     unidade: p.unidade || '-',

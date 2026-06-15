@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 function num(v: unknown, dec: number): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
@@ -84,7 +85,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     etiquetas.push({
       codigo_produto: String(codigoProduto),
-      descricao: item.c_descricao_produto ?? '',
+      descricao: formatarNomeProduto(item.c_descricao_produto),
       lote: '',
       quantidade: '',
       qtde_nf: `${num(qtdeRecebida, 0)}(${unidade})`,
