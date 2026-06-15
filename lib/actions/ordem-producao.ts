@@ -81,6 +81,79 @@ export async function criarOrdemProducao(input: {
   }
 }
 
+/**
+ * Cria VARIAS OPs de uma vez: uma por (produto x data). Permite listar produtos,
+ * escolher qualquer data e repetir semanalmente (recorrencia). Escreve no Omie.
+ */
+export async function criarOrdensProducao(input: {
+  itens: { nCodProduto: number; quantidade: number }[]
+  datas: string[] // 'YYYY-MM-DD'
+  codigoLocalEstoque?: number | null
+  validade?: string | null
+  obs?: string
+}) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) return { error: 'Sem permissão' }
+  if (!input.itens.length) return { error: 'Adicione ao menos um produto' }
+  if (!input.datas.length) return { error: 'Informe a data' }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret')
+    .eq('id', lojaId)
+    .single<LojaOmie>()
+  if (!loja) return { error: 'Loja não encontrada' }
+
+  let criadas = 0
+  const erros: string[] = []
+  let seq = 0
+
+  for (const dataISO of input.datas) {
+    const dData = dataParaBR(dataISO)
+    if (!dData) {
+      erros.push(`Data inválida: ${dataISO}`)
+      continue
+    }
+    for (const item of input.itens) {
+      if (!item.nCodProduto || !item.quantidade || item.quantidade <= 0) {
+        erros.push('Produto/quantidade inválidos')
+        continue
+      }
+      const cCodIntOP = `NTB-${Date.now()}-${seq++}`
+      try {
+        const res = await incluirOrdemProducao(loja, {
+          cCodIntOP,
+          nCodProduto: item.nCodProduto,
+          dData,
+          nQtde: item.quantidade,
+          codigoLocalEstoque: input.codigoLocalEstoque ?? undefined,
+          obs: input.obs,
+        })
+        const nCodOP = res?.nCodOP
+        if (!nCodOP) {
+          erros.push('O Omie não retornou a ordem criada.')
+          continue
+        }
+        await fetchOrdemProducao(loja, nCodOP)
+        if (input.validade) {
+          await supabase
+            .from('ordens_producao')
+            .update({ validade: input.validade, updated_at: new Date().toISOString() })
+            .eq('loja_id', lojaId)
+            .eq('identificacao_n_cod_op', nCodOP)
+        }
+        criadas++
+      } catch (e) {
+        erros.push(e instanceof Error ? e.message : 'Falha ao criar a OP')
+      }
+    }
+  }
+
+  revalidatePath('/ordem-producao')
+  return { ok: true, criadas, erros }
+}
+
 export async function setValidadeOP(opId: number, validade: string | null) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
