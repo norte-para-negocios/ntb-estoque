@@ -17,7 +17,21 @@ interface OPData {
   qtdOP: number | null
   validade: string | null
   quantidade: number | null
-  inclusao?: string | null // data de inclusao da OP no Omie (dd/mm/aaaa)
+  data?: string | null // data prevista/real da OP (dd/mm/aaaa)
+  concluida: boolean
+}
+
+// Selo de conclusao na listagem. Esconde o botao "Concluir" quando ja concluida.
+function ConclusaoBadge({ concluida }: { concluida: boolean }) {
+  const cor = concluida ? '#10b981' : '#f59e0b'
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={{ background: `${cor}1f`, color: cor }}
+    >
+      {concluida ? 'Concluída' : 'Pendente'}
+    </span>
+  )
 }
 
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
@@ -178,14 +192,16 @@ function Acoes({ op, ctrl }: StepperProps) {
       >
         <Printer className="size-3.5" /> Imprimir
       </a>
-      <button
-        type="button"
-        onClick={ctrl.concluir}
-        disabled={ctrl.pending}
-        className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
-      >
-        <Check className="size-3.5" /> Concluir
-      </button>
+      {!op.concluida && (
+        <button
+          type="button"
+          onClick={ctrl.concluir}
+          disabled={ctrl.pending}
+          className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
+        >
+          <Check className="size-3.5" /> Concluir
+        </button>
+      )}
     </>
   )
 }
@@ -197,9 +213,12 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   return (
     <tr>
       <td className="num font-medium text-text align-top">
-        {op.numOP}
-        {op.inclusao && (
-          <div className="text-[11px] font-normal text-text-muted">Incl. {op.inclusao}</div>
+        <div className="flex items-center gap-2">
+          <span>{op.numOP}</span>
+          <ConclusaoBadge concluida={op.concluida} />
+        </div>
+        {op.data && (
+          <div className="text-[11px] font-normal text-text-muted">{op.data}</div>
         )}
       </td>
       <td className="max-w-xs align-top">
@@ -238,7 +257,10 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
         <div className="shrink-0 text-right">
           <div className="num text-[11px] font-semibold text-text-muted">OP</div>
           <div className="num font-medium text-text">{op.numOP}</div>
-          {op.inclusao && <div className="text-[11px] text-text-muted">Incl. {op.inclusao}</div>}
+          {op.data && <div className="text-[11px] text-text-muted">{op.data}</div>}
+          <div className="mt-1 flex justify-end">
+            <ConclusaoBadge concluida={op.concluida} />
+          </div>
         </div>
       </div>
 

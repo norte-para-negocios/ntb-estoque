@@ -17,6 +17,14 @@ import { Factory, Download } from 'lucide-react'
 
 const POR_PAGINA = 50
 
+// Converte a data normalizada do banco (YYYY-MM-DD) para DD/MM/AAAA. E uma data
+// pura (sem hora), entao nao tem questao de fuso.
+function fmtDataBR(d: string | null): string | null {
+  if (!d) return null
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : d
+}
+
 export default async function OrdemProducaoPage({
   searchParams,
 }: {
@@ -65,28 +73,35 @@ export default async function OrdemProducaoPage({
     ]
   }
 
-  let query = supabase
-    .from('ordens_producao')
-    .select(
-      'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade, adicionais_d_dt_conclusao, full_object'
-    )
-    .eq('loja_id', lojaId)
-    .order('updated_at', { ascending: false })
-
-  if (sp.data_inicio) query = query.gte('identificacao_d_dt_previsao', sp.data_inicio)
-  if (sp.data_final) query = query.lte('identificacao_d_dt_previsao', sp.data_final)
-  if (sp.ordem_producao) {
-    query = query.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
-  }
-  if (codigosFiltro !== null) {
-    query = query.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+  type OPRow = {
+    id: number
+    num_ordem: string | null
+    identificacao_c_num_op: string | null
+    identificacao_n_cod_produto: number | null
+    identificacao_n_qtde: number | null
+    identificacao_d_dt_previsao: string | null
+    validade: string | null
+    quantidade: number | null
+    adicionais_d_dt_conclusao: string | null
+    full_object: unknown
   }
 
-  if (!filtraConclusao) {
-    query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
+  function baseQuery() {
+    let q = supabase
+      .from('ordens_producao')
+      .select(
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, adicionais_d_dt_conclusao, full_object'
+      )
+      .eq('loja_id', lojaId)
+      .order('updated_at', { ascending: false })
+    if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
+    if (sp.data_final) q = q.lte('identificacao_d_dt_previsao', sp.data_final)
+    if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
+    if (codigosFiltro !== null) {
+      q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+    }
+    return q
   }
-
-  const { data: ordensRaw } = await query
 
   function isConcluida(o: { adicionais_d_dt_conclusao?: string | null; full_object?: unknown }): boolean {
     if (o.adicionais_d_dt_conclusao) return true
@@ -94,16 +109,31 @@ export default async function OrdemProducaoPage({
     return fo.outrasInf?.cConcluida === 'S'
   }
 
-  let ordens: typeof ordensRaw
+  let ordens: OPRow[]
   let temProxima: boolean
   if (filtraConclusao) {
+    // Conclusao so da pra avaliar em memoria (full_object aninhado nao e filtravel
+    // no PostgREST). Busca o conjunto completo paginando em lote: sem isso a query
+    // batia no teto de 1000 linhas e o filtro operava sobre parte dos dados,
+    // parecendo que era ignorado e mostrava todos.
     const querConcluida = sp.op_concluido === 'S'
-    const filtradas = (ordensRaw ?? []).filter((o) => isConcluida(o) === querConcluida)
+    const todas: OPRow[] = []
+    const LOTE = 1000
+    for (let off = 0; ; off += LOTE) {
+      const { data } = await baseQuery().range(off, off + LOTE - 1)
+      const lote = (data ?? []) as OPRow[]
+      if (!lote.length) break
+      todas.push(...lote)
+      if (lote.length < LOTE) break
+    }
+    const filtradas = todas.filter((o) => isConcluida(o) === querConcluida)
     temProxima = filtradas.length > page * POR_PAGINA
     ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
   } else {
-    temProxima = (ordensRaw?.length ?? 0) > POR_PAGINA
-    ordens = temProxima ? ordensRaw!.slice(0, POR_PAGINA) : ordensRaw
+    const { data } = await baseQuery().range((page - 1) * POR_PAGINA, page * POR_PAGINA)
+    const ordensRaw = (data ?? []) as OPRow[]
+    temProxima = ordensRaw.length > POR_PAGINA
+    ordens = temProxima ? ordensRaw.slice(0, POR_PAGINA) : ordensRaw
   }
 
   // Buscar descricoes dos produtos relacionados
@@ -184,7 +214,6 @@ export default async function OrdemProducaoPage({
         (() => {
           const linhas = ordens.map((op) => {
             const prod = prodMap.get(op.identificacao_n_cod_produto)
-            const fo = (op.full_object ?? {}) as { outrasInf?: { dInclusao?: string } }
             return {
               id: op.id,
               numOP: op.identificacao_c_num_op || op.num_ordem || '-',
@@ -193,7 +222,10 @@ export default async function OrdemProducaoPage({
               qtdOP: op.identificacao_n_qtde,
               validade: op.validade,
               quantidade: op.quantidade,
-              inclusao: fo.outrasInf?.dInclusao || null,
+              // data real/agendada da OP (identificacao_d_dt_previsao), nao a de
+              // inclusao, que na recorrencia vem como hoje (bug que o cliente viu).
+              data: fmtDataBR(op.identificacao_d_dt_previsao),
+              concluida: isConcluida(op),
             }
           })
           return (
