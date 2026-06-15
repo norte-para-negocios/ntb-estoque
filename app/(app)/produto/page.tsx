@@ -13,6 +13,8 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
+import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
+import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { Package, Download } from 'lucide-react'
 
@@ -76,7 +78,7 @@ export default async function ProdutoPage({
 
   let query = supabase
     .from('produtos')
-    .select('id, codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, valor_unitario')
+    .select('id, codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, valor_unitario, estoque_minimo')
     .eq('loja_id', lojaId)
     .order('descricao')
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA)
@@ -112,6 +114,23 @@ export default async function ProdutoPage({
   }
   const custoDe = (codProd: number | null): number | null =>
     codProd != null ? cmcMap.get(codProd) ?? null : null
+
+  // Estoque atual = soma dos saldos dos locais na data de posicao mais recente de cada produto.
+  const dataMaxPorProduto = new Map<number, string>()
+  for (const pos of posicoes ?? []) {
+    const atual = dataMaxPorProduto.get(pos.n_cod_prod)
+    if (!atual || (pos.data_posicao && pos.data_posicao > atual)) {
+      dataMaxPorProduto.set(pos.n_cod_prod, pos.data_posicao)
+    }
+  }
+  const saldoMap = new Map<number, number>()
+  for (const pos of posicoes ?? []) {
+    if (pos.data_posicao === dataMaxPorProduto.get(pos.n_cod_prod)) {
+      saldoMap.set(pos.n_cod_prod, (saldoMap.get(pos.n_cod_prod) ?? 0) + Number(pos.n_saldo ?? 0))
+    }
+  }
+  const saldoDe = (codProd: number | null): number | null =>
+    codProd != null && saldoMap.has(codProd) ? saldoMap.get(codProd)! : null
 
   const exportParams = new URLSearchParams()
   if (params.q) exportParams.set('q', params.q)
@@ -203,6 +222,40 @@ export default async function ProdutoPage({
             render: (p) => {
               const s = precoSugerido(custoDe(p.codigo_produto), alvo)
               return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
+            },
+          },
+          {
+            label: 'Mínimo',
+            alinhar: 'right',
+            larguraDesktop: 'w-24',
+            ocultarMobile: true,
+            render: (p) => <EstoqueMinimoInput produtoId={p.id} valorInicial={p.estoque_minimo} />,
+          },
+          {
+            label: 'Atual',
+            alinhar: 'right',
+            larguraDesktop: 'w-20',
+            ocultarMobile: true,
+            render: (p) => {
+              const saldo = saldoDe(p.codigo_produto)
+              if (saldo == null) return <span className="text-text-muted">-</span>
+              const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
+              const baixo = min != null && saldo <= min
+              return <span className={`num ${baixo ? 'font-semibold text-[var(--err,#ef4444)]' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
+            },
+          },
+          {
+            label: 'Repor',
+            alinhar: 'right',
+            larguraDesktop: 'w-20',
+            ocultarMobile: true,
+            render: (p) => {
+              const saldo = saldoDe(p.codigo_produto)
+              const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
+              if (saldo == null || min == null) return <span className="text-text-muted">-</span>
+              const repor = Math.max(0, min - saldo)
+              if (repor <= 0) return <span className="text-[#10b981]">ok</span>
+              return <span className="num font-semibold text-brand"><Num value={repor} frac={0} /></span>
             },
           },
         ]}
