@@ -132,6 +132,19 @@ export default async function ProdutoPage({
   const saldoDe = (codProd: number | null): number | null =>
     codProd != null && saldoMap.has(codProd) ? saldoMap.get(codProd)! : null
 
+  // Previsao de venda (saidas no mesmo periodo do ano anterior) por produto
+  const { data: previsoes } = codigos.length
+    ? await supabase
+        .from('previsao_venda')
+        .select('n_cod_prod, qtde')
+        .eq('loja_id', lojaId)
+        .in('n_cod_prod', codigos)
+    : { data: [] }
+  const prevMap = new Map<number, number>()
+  for (const pv of previsoes ?? []) prevMap.set(pv.n_cod_prod, Number(pv.qtde ?? 0))
+  const prevVendaDe = (codProd: number | null): number | null =>
+    codProd != null && prevMap.has(codProd) ? prevMap.get(codProd)! : null
+
   const exportParams = new URLSearchParams()
   if (params.q) exportParams.set('q', params.q)
   if (params.familia) exportParams.set('familia', params.familia)
@@ -170,6 +183,7 @@ export default async function ProdutoPage({
               <Download className="size-4" /> Exportar
             </a>
             {podeSync && <SyncButton endpoint="/api/sync/posicao" label="Atualizar custos" />}
+            {podeSync && <SyncButton endpoint="/api/sync/previsao-venda" label="Atualizar previsão" />}
             {podeSync && <SyncButton endpoint="/api/sync/produtos" label="Atualizar agora" />}
           </>
         }
@@ -245,7 +259,18 @@ export default async function ProdutoPage({
             },
           },
           {
-            label: 'Repor',
+            label: 'Prev. venda',
+            alinhar: 'right',
+            larguraDesktop: 'w-24',
+            ocultarMobile: true,
+            render: (p) => {
+              const pv = prevVendaDe(p.codigo_produto)
+              if (pv == null) return <span className="text-text-muted">-</span>
+              return <span className="num text-text-muted"><Num value={pv} frac={0} /></span>
+            },
+          },
+          {
+            label: 'Comprar',
             alinhar: 'right',
             larguraDesktop: 'w-20',
             ocultarMobile: true,
@@ -253,9 +278,11 @@ export default async function ProdutoPage({
               const saldo = saldoDe(p.codigo_produto)
               const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
               if (saldo == null || min == null) return <span className="text-text-muted">-</span>
-              const repor = Math.max(0, min - saldo)
-              if (repor <= 0) return <span className="text-[#10b981]">ok</span>
-              return <span className="num font-semibold text-brand"><Num value={repor} frac={0} /></span>
+              // compra = minimo + previsao de venda - estoque atual
+              const prev = prevVendaDe(p.codigo_produto) ?? 0
+              const comprar = Math.max(0, min + prev - saldo)
+              if (comprar <= 0) return <span className="text-[#10b981]">ok</span>
+              return <span className="num font-semibold text-brand"><Num value={comprar} frac={0} /></span>
             },
           },
         ]}
