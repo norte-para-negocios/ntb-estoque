@@ -7,13 +7,23 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 
+// Tipos de movimento de transferencia aceitos pelo Omie (os unicos dois possiveis).
+export const TIPOS_TRANSFERENCIA = {
+  TRF: 'Transferência entre locais de estoque',
+  TPQ: 'Transferência por perda ou quebra',
+} as const
+export type TipoTransferencia = keyof typeof TIPOS_TRANSFERENCIA
+
 export async function createTransferencia(data: {
   codigoLocalOrigem: number
   codigoLocalDestino: number
-  motivo: string
+  tipo: TipoTransferencia
 }) {
   if (data.codigoLocalOrigem === data.codigoLocalDestino) {
     return { error: 'Origem e destino não podem ser o mesmo local' }
+  }
+  if (data.tipo !== 'TRF' && data.tipo !== 'TPQ') {
+    return { error: 'Tipo de transferência inválido' }
   }
   const lojaId = await getCurrentLojaId()
   const userId = (await getUser()).id
@@ -24,7 +34,7 @@ export async function createTransferencia(data: {
       loja_id: lojaId,
       codigo_local_origem: data.codigoLocalOrigem,
       codigo_local_destino: data.codigoLocalDestino,
-      motivo: data.motivo,
+      motivo: data.tipo, // guarda o tipo (TRF/TPQ); vira o `tipo` do ajuste no Omie
       status: 'Em contagem',
       user_id: userId,
     })
@@ -43,21 +53,24 @@ export async function addMovimento(
 
   const { data: trans } = await supabase
     .from('transferencias')
-    .select('codigo_local_origem, codigo_local_destino')
+    .select('codigo_local_origem, codigo_local_destino, motivo')
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
     .single()
 
   if (!trans) return null
 
+  // motivo da transferencia guarda o tipo escolhido (TRF/TPQ); fallback TRF.
+  const tipo = trans.motivo === 'TPQ' ? 'TPQ' : 'TRF'
+
   const { data } = await supabase
     .from('movimentos')
     .insert({
       loja_id: lojaId,
       transferencia_id: transferenciaId,
-      tipo: 'TRF',
+      tipo,
       origem: 'AJU',
-      motivo: 'TRF',
+      motivo: tipo,
       data: new Date().toISOString(),
       id_prod: produto.id_prod,
       codigo_local_estoque: trans.codigo_local_origem,
@@ -336,6 +349,7 @@ export async function duplicarTransferencia(transferenciaId: number) {
     .eq('transferencia_id', transferenciaId)
 
   if (movimentos?.length) {
+    const tipo = original.motivo === 'TPQ' ? 'TPQ' : 'TRF'
     await supabase.from('movimentos').insert(
       movimentos.map((m) => ({
         loja_id: lojaId,
@@ -343,9 +357,9 @@ export async function duplicarTransferencia(transferenciaId: number) {
         id_prod: m.id_prod,
         codigo_local_estoque: m.codigo_local_estoque,
         codigo_local_estoque_destino: m.codigo_local_estoque_destino,
-        tipo: 'TRF',
+        tipo,
         origem: 'AJU',
-        motivo: 'TRF',
+        motivo: tipo,
         data: new Date().toISOString(),
         quan: null,
         status: 'Iniciado',
