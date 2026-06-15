@@ -59,7 +59,33 @@ Fonte: Contas a Receber (faturamento), Contas a Pagar (compras), Movimento Finan
 - [ ] **8.1 Dashboard financeiro** — fluxo de caixa (`resumo`/`caixa`/`extrato`), DRE via categorias (têm `dadosDRE`).
 - [ ] **8.2 Análises** — curva ABC, top produtos/famílias/fornecedores, sazonalidade (mesmo período ano anterior).
 - [ ] **8.3 Fornecedores** — relatórios "compro mais de quem", por família/tipo (clientes/fornecedores: 3.350).
-- [ ] **8.4 Armazenamento de histórico** — opção de exportar histórico antigo para Google Drive/OneDrive (ideia do Ramon, free tier).
+
+> Backup em Drive/OneDrive (ideia do Ramon) removido do escopo por enquanto, a pedido do fundador (15/06).
+
+---
+
+## Skills por bloco (superpoderes)
+
+> Mapa real das skills instaladas (`~/.claude/skills` + plugin `superpowers`). Regra da casa: **antes de qualquer UI, invocar uma skill de taste** (`design-taste-frontend`/`frontend-design`).
+
+**Transversais (todo bloco):**
+- `superpowers:executing-plans` ou `superpowers:subagent-driven-development` — executar tarefa a tarefa.
+- `superpowers:systematic-debugging` — qualquer bug (estoque mínimo, filtros, recorrência).
+- `superpowers:verification-before-completion` + `code-review-excellence` / `superpowers:requesting-code-review` — fechar cada bloco com revisão.
+- `nextjs-typescript-supabase` — stack do projeto (Next 16 + Supabase + TS).
+- `api-testing` — validar cada chamada da API do Omie de verdade.
+
+| Bloco | Skills específicas |
+|---|---|
+| 1 Fundação/sync | `nextjs-typescript-supabase`, `systematic-debugging`, `api-testing`, `security-review` (chaves/segredos) |
+| 2 Estoque mínimo/sugestão | `systematic-debugging`, `nextjs-typescript-supabase` |
+| 3 Operação (datas/bugs) | `systematic-debugging`, `webapp-testing`, `nextjs-typescript-supabase` |
+| 4 Ordem de Produção | `nextjs-typescript-supabase`, `design-taste-frontend` (layout da criação) |
+| 5 Loja/Certificado/Sefaz | `security-review` (A1 + senha), `api-testing` |
+| 6 Entrada de NF | `api-testing`, `systematic-debugging` |
+| 7 Relatórios | `anthropics-xlsx` (planilhas do Ramon), `frontend-design` (dashboards), `nextjs-typescript-supabase` |
+| 8 Ampliações/Dashboards | `high-end-visual-design` / `frontend-design`, `web-performance-optimization` |
+| Reformulação visual | `design-taste-frontend` / `frontend-design`, `redesign-existing-projects`, `web-design-guidelines`, `accessibility-audit` |
 
 ---
 
