@@ -80,16 +80,13 @@ export default async function ProdutoPage({
     .eq('id', lojaId)
     .single()
 
-  const { data: familiasRows } = await supabase
-    .from('produtos')
-    .select('descricao_familia')
-    .eq('loja_id', lojaId)
-    .not('descricao_familia', 'is', null)
-    .order('descricao_familia')
-
-  const familiasOpcoes = Array.from(
-    new Set((familiasRows ?? []).map((r) => r.descricao_familia).filter(Boolean) as string[]),
-  ).map((f) => ({ value: f, label: f }))
+  // Familias via RPC com DISTINCT no banco: evita o teto de 1000 do PostgREST
+  // (que cortava familias do dropdown) e a varredura da tabela inteira a cada render.
+  const { data: familiasRows } = await supabase.rpc('familias_da_loja', { p_loja_id: lojaId })
+  const familiasOpcoes = ((familiasRows ?? []) as { descricao_familia: string }[]).map((r) => ({
+    value: r.descricao_familia,
+    label: r.descricao_familia,
+  }))
 
   let query = supabase
     .from('produtos')
