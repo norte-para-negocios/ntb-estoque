@@ -69,4 +69,4 @@ Puxar notas do Sefaz (certificado) e dar entrada em 2 cliques com validação fi
 4. **Operação fluida** (🟡).
 5. O resto entra junto com o plano gigante (financeiro, NF, Sefaz).
 
-> Observação: o Ramon já disse que **gostou do layout atual**. Então a recomendação é **elevar/refinar** (não jogar fora a identidade), a menos que você queira uma reformulação visual mais radical — aí a gente define uma nova direção de design antes.
+> **DECISÃO (15/06):** direção visual = **refinar e elevar**, mantendo a identidade atual (Linear/Vercel claro + ui-kit). Sem reformulação radical. O foco do visual é polish: tipografia, espaçamento, skeletons, micro-interações, dark mode mais fino, tabelas configuráveis — elevando o nível sem o Ramon estranhar (ele já aprovou o layout).
