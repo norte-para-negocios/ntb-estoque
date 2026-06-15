@@ -21,7 +21,7 @@ Legenda: ✅ funciona e retornou dados | 🔧 existe, só ajustar parâmetro | �
 ## ESTOQUE
 | Recurso | Endpoint / call | Volume | Pra que serve |
 |---|---|---|---|
-| Posição ✅ | `v1/estoque/consulta` ListarPosEstoque | 1.197 | Saldo, CMC, **estoque_minimo** (👈 fonte do mínimo!), reservado, pendente |
+| Posição ✅ | `v1/estoque/consulta` ListarPosEstoque | 1.197 | Campos reais (probe 15/06): `nSaldo`, `nCMC`, `nPrecoUnitario`, `nPendente`, **`estoque_minimo`** (👈 fonte do mínimo!), `reservado`, `fisico`, `nCodProd`, `cCodigo`, `cDescricao` |
 | Movimentos ✅ | `v1/estoque/movestoque` ListarMovimentos | 566 | Entradas/saídas por produto → **movimentações, rejeito, consumo** |
 | Locais ✅ | `v1/estoque/local` ListarLocaisEstoque | 12 | Locais de estoque |
 | Resumo de estoque ✅ | `v1/estoque/resumo` | — | Resumo por produto |

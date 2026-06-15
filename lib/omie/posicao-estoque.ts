@@ -11,6 +11,11 @@ interface OmiePosicao {
   nSaldo: number
   nCMC: number
   nPendente: number
+  // O Omie traz o minimo aqui (NAO no cadastro do produto, que vem 0). Fonte
+  // real do estoque minimo. fisico/reservado completam a fotografia do estoque.
+  estoque_minimo: number
+  fisico: number
+  reservado: number
 }
 
 interface OmiePosResponse {
@@ -98,6 +103,13 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
         n_saldo: p.nSaldo,
         n_cmc: p.nCMC,
         n_pendente: p.nPendente,
+        estoque_minimo: p.estoque_minimo ?? 0,
+        fisico: p.fisico ?? 0,
+        reservado: p.reservado ?? 0,
+        // Re-sync no mesmo dia colide na unique key (vira UPDATE). Sem setar
+        // updated_at aqui ele congelaria no 1o INSERT e o cron (que escolhe a
+        // loja por updated_at) distorceria o rodizio. Igual aos outros syncs.
+        updated_at: new Date().toISOString(),
       }))
       if (rows.length) {
         await supabase

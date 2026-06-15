@@ -112,17 +112,46 @@ export default async function ProdutoPage({
   const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
   const produtos = temProxima ? produtosRaw!.slice(0, POR_PAGINA) : produtosRaw
 
-  // CMC consolidado por produto (registro de maior saldo entre locais/datas)
+  // CMC consolidado por produto (registro de maior saldo entre locais)
   const codigos = [...new Set((produtos ?? []).map((p) => p.codigo_produto).filter(Boolean))]
-  const { data: posicoes } = codigos.length
-    ? await supabase
-        .from('posicao_estoques')
-        .select('n_cod_prod, n_cmc, n_saldo, data_posicao')
-        .eq('loja_id', lojaId)
-        .in('n_cod_prod', codigos)
-        .order('data_posicao', { ascending: false })
-        .order('n_saldo', { ascending: false })
-    : { data: [] }
+  type PosicaoRow = {
+    n_cod_prod: number
+    n_cmc: number | null
+    n_saldo: number | null
+    estoque_minimo: number | null
+    data_posicao: string
+  }
+  // So a foto mais recente: pega a ultima data_posicao da loja e filtra por ela.
+  // Sem isso, a consulta cresceria com o historico e bateria no teto de 1000
+  // linhas do PostgREST, truncando e subcontando saldo/minimo. Pagina por
+  // seguranca (uma loja pode ter muitos locais), igual ao /produto/export.
+  const posicoes: PosicaoRow[] = []
+  if (codigos.length) {
+    const { data: ultima } = await supabase
+      .from('posicao_estoques')
+      .select('data_posicao')
+      .eq('loja_id', lojaId)
+      .order('data_posicao', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const dataPos = ultima?.data_posicao as string | undefined
+    if (dataPos) {
+      const LOTE = 1000
+      for (let off = 0; ; off += LOTE) {
+        const { data } = await supabase
+          .from('posicao_estoques')
+          .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
+          .eq('loja_id', lojaId)
+          .eq('data_posicao', dataPos)
+          .in('n_cod_prod', codigos)
+          .order('n_saldo', { ascending: false })
+          .range(off, off + LOTE - 1)
+        if (!data || !data.length) break
+        posicoes.push(...(data as PosicaoRow[]))
+        if (data.length < LOTE) break
+      }
+    }
+  }
   const cmcMap = new Map<number, number>()
   for (const pos of posicoes ?? []) {
     if (!cmcMap.has(pos.n_cod_prod) && pos.n_cmc) cmcMap.set(pos.n_cod_prod, Number(pos.n_cmc))
@@ -146,6 +175,20 @@ export default async function ProdutoPage({
   }
   const saldoDe = (codProd: number | null): number | null =>
     codProd != null && saldoMap.has(codProd) ? saldoMap.get(codProd)! : null
+
+  // Estoque minimo do Omie = soma dos minimos por local na data de posicao mais
+  // recente (mesma logica do saldo). Fonte real do minimo; o campo manual e override.
+  const minOmieMap = new Map<number, number>()
+  for (const pos of posicoes ?? []) {
+    if (pos.data_posicao === dataMaxPorProduto.get(pos.n_cod_prod)) {
+      minOmieMap.set(pos.n_cod_prod, (minOmieMap.get(pos.n_cod_prod) ?? 0) + Number(pos.estoque_minimo ?? 0))
+    }
+  }
+  const minOmieDe = (codProd: number | null): number | null =>
+    codProd != null && minOmieMap.has(codProd) ? minOmieMap.get(codProd)! : null
+  // Minimo efetivo: override manual (produtos.estoque_minimo) tem prioridade; senao o do Omie.
+  const minEfetivo = (p: ProdutoLinha): number | null =>
+    p.estoque_minimo != null ? Number(p.estoque_minimo) : minOmieDe(p.codigo_produto)
 
   // Previsao de venda (saidas no mesmo periodo do ano anterior) por produto
   const { data: previsoes } = codigos.length
@@ -280,7 +323,13 @@ export default async function ProdutoPage({
                   label: 'Mínimo',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-24',
-                  render: (p: ProdutoLinha) => <EstoqueMinimoInput produtoId={p.id} valorInicial={p.estoque_minimo} />,
+                  render: (p: ProdutoLinha) => (
+                    <EstoqueMinimoInput
+                      produtoId={p.id}
+                      valorInicial={p.estoque_minimo}
+                      valorOmie={minOmieDe(p.codigo_produto)}
+                    />
+                  ),
                 },
                 {
                   label: 'Atual',
@@ -289,8 +338,9 @@ export default async function ProdutoPage({
                   render: (p: ProdutoLinha) => {
                     const saldo = saldoDe(p.codigo_produto)
                     if (saldo == null) return <span className="text-text-muted">-</span>
-                    const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
-                    const baixo = min != null && saldo <= min
+                    const min = minEfetivo(p)
+                    // min 0 (caso dominante no Omie) = sem politica de minimo: nao marca baixo.
+                    const baixo = min != null && min > 0 && saldo <= min
                     return <span className={`num ${baixo ? 'font-semibold text-[var(--err,#ef4444)]' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
                   },
                 },
@@ -310,8 +360,9 @@ export default async function ProdutoPage({
                   larguraDesktop: 'w-20',
                   render: (p: ProdutoLinha) => {
                     const saldo = saldoDe(p.codigo_produto)
-                    const min = p.estoque_minimo != null ? Number(p.estoque_minimo) : null
-                    if (saldo == null || min == null) return <span className="text-text-muted">-</span>
+                    const min = minEfetivo(p)
+                    // sem minimo (null) ou minimo 0 = nao sugere compra (evita poluir a base nao configurada).
+                    if (saldo == null || min == null || min <= 0) return <span className="text-text-muted">-</span>
                     // compra = minimo + previsao de venda - estoque atual
                     const prev = prevVendaDe(p.codigo_produto) ?? 0
                     const comprar = Math.max(0, min + prev - saldo)
