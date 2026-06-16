@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
 import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
@@ -202,6 +203,14 @@ export default async function OrdemProducaoPage({
   if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
 
+  // Ordenacao clicando no cabecalho da tabela (mantem os filtros atuais).
+  const ordHref = (novoOrd: string) => {
+    const s = new URLSearchParams(exportParams.toString())
+    s.set('ord', novoOrd)
+    return `/ordem-producao?${s.toString()}`
+  }
+  const seta = (asc: string, desc: string) => (ord === asc ? ' ↑' : ord === desc ? ' ↓' : '')
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -220,10 +229,11 @@ export default async function OrdemProducaoPage({
                 {
                   tipo: 'select',
                   nome: 'op_concluido',
-                  label: 'Concluído',
+                  label: 'Status',
                   opcoes: [
-                    { value: 'S', label: 'Sim' },
-                    { value: 'N', label: 'Não' },
+                    { value: '', label: 'Todos' },
+                    { value: 'S', label: 'Concluída' },
+                    { value: 'N', label: 'Pendente' },
                   ],
                 },
                 {
@@ -296,9 +306,22 @@ export default async function OrdemProducaoPage({
                   <thead>
                     <tr>
                       <th>OP</th>
-                      <th>Produto</th>
-                      <th className="text-right">Qtd OP</th>
-                      <th>Validade</th>
+                      <th>Status</th>
+                      <th>
+                        <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center hover:text-text">
+                          Produto{seta('produto_az', 'produto_za')}
+                        </Link>
+                      </th>
+                      <th className="text-right">
+                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center hover:text-text">
+                          Qtd OP{seta('qtd_asc', 'qtd_desc')}
+                        </Link>
+                      </th>
+                      <th>
+                        <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center hover:text-text">
+                          Validade{seta('validade_asc', 'validade_desc')}
+                        </Link>
+                      </th>
                       <th>Quantidade</th>
                       <th></th>
                     </tr>

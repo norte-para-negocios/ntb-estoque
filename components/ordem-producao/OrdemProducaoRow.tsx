@@ -222,15 +222,15 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   return (
     <tr>
       <td className="num font-medium text-text align-top">
-        <div className="flex items-center gap-2">
-          <span>{op.numOP}</span>
-          <StatusBadge status={op.status} />
-        </div>
+        <span>{op.numOP}</span>
         {op.data && (
           <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
             Prev. {op.data}
           </div>
         )}
+      </td>
+      <td className="align-top">
+        <StatusBadge status={op.status} />
       </td>
       <td className="max-w-xs align-top">
         <div className="truncate font-medium text-text">{op.produto}</div>
