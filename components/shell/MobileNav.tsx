@@ -74,7 +74,7 @@ export function MobileNav({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm ${
+                className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm transition active:bg-surface-2 ${
                   active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted'
                 }`}
               >
@@ -98,7 +98,7 @@ export function MobileNav({
             <Link
               key={b.href}
               href={b.href}
-              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${
+              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] transition active:scale-95 active:text-brand ${
                 active ? 'text-brand' : 'text-text-muted'
               }`}
             >
