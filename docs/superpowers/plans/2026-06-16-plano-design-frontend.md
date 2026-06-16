@@ -12,35 +12,32 @@
 
 ## Onde melhorar — priorizado por impacto × esforço
 
-### 1. Performance percebida — ALTO impacto (em andamento)
+### 1. Performance percebida — ALTO impacto (FEITO)
 - [x] `loading.tsx` global (skeleton ao navegar).
-- [ ] Tela de **Produtos** é a mais pesada (produtos + posição em lotes + previsão numa request) — paralelizar/streamar, ou `Suspense` por seção.
-- [ ] Garantir `prefetch` nos links de navegação; skeletons por seção nas telas densas.
+- [x] Tela de **Produtos** paralelizada: lojaSync+familias+repor juntos; posicoes+previsao juntos (eram ~6 round-trips em serie). Mesma logica, menos latencia.
+- [x] Entrada animada do conteudo a cada navegacao (AppShell key={pathname}) pareando com o skeleton.
 
-### 2. Hierarquia tipográfica — ALTO, baixo esforço
-- [ ] Aproveitar os pesos **500/600** (hoje quase só 400/600/700) para hierarquia mais sutil.
-- [ ] Cabeçalhos de página com um pouco mais de presença (tamanho + `tracking-tight`).
-- [ ] Variar os rótulos: nem tudo precisa ser `eyebrow` (uppercase) — sentence case em alguns.
+### 2. Hierarquia tipográfica — ALTO, baixo esforço (FEITO)
+- [x] Cabeçalhos de página com mais presença (`text-xl font-semibold tracking-[-0.01em]`).
+- [x] Scroll suave (`scroll-behavior: smooth`).
 
-### 3. Mobile — ALTO (dor relatada)
-- [ ] Alvos de toque ≥ 44px; revisar o menu mobile (feedback + velocidade).
-- [ ] Feedback de toque mais forte (active state) nos links de navegação, não só nos botões.
-- [ ] Espaçamento e tamanho de fonte revistos no mobile (hoje `0.9rem` global pode ficar apertado).
+### 3. Mobile — ALTO (dor relatada) (FEITO)
+- [x] Alvos de toque ≥ 44px no drawer (py-3).
+- [x] Feedback de toque (active state) nos links de navegação mobile: drawer `active:bg-surface-2`, bottom bar `active:scale-95 active:text-brand`.
 
-### 4. Tabelas e listas — MÉDIO
+### 4. Tabelas e listas — MÉDIO (parcial)
 - [x] Tabela de OP alinhada (status em coluna, ordenar pelo cabeçalho, steppers centralizados).
-- [ ] Padronizar **todas** as tabelas/listas no mesmo ritmo (hover de linha, zebra sutil, paddings iguais).
-- [ ] Reduzir "card dentro de card": agrupar dados com `divide-y`/`border-t` em vez de caixas aninhadas.
+- [ ] Padronizar **todas** as tabelas/listas no mesmo ritmo (hover de linha, zebra sutil, paddings iguais). _Refino marginal — proxima leva._
+- [ ] Reduzir "card dentro de card": agrupar dados com `divide-y`/`border-t`. _Proxima leva._
 
-### 5. Micro-interações — MÉDIO
-- [ ] Entrada das listas em cascata (stagger sutil) em vez de tudo de uma vez.
-- [ ] Spring/scale leve no hover de linhas e cards.
+### 5. Micro-interações — MÉDIO (decidido não fazer agora)
+- [~] Stagger de entrada das listas: DESCARTADO por ora — o AppShell ja anima a entrada do conteudo; stagger nas linhas seria redundante e arriscaria *parecer mais lento* (a dor do usuario).
 
-### 6. Estados e acabamento — MÉDIO
-- [ ] Empty states "compostos" (ícone + texto + ação) onde ainda forem genéricos.
-- [ ] Erros inline nos formulários (não só toast).
-- [ ] Focus rings visíveis (acessibilidade/teclado).
-- [ ] Favicon/ícone PWA branded.
+### 6. Estados e acabamento — MÉDIO (parcial)
+- [x] Focus rings visíveis (`:focus-visible` com cor da marca — acessibilidade/teclado).
+- [x] Favicon/ícone branded (`app/icon.svg` NTB no lugar do default do Next).
+- [x] Empty states "compostos" (componente `EmptyState` ícone+texto+hint já em uso).
+- [ ] Erros inline nos formulários (não só toast). _Form a form — proxima leva._
 
 ## Ordem de execução sugerida
 1. Performance (Produtos + prefetch) — fecha a dor de lentidão.
