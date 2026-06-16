@@ -7,13 +7,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
-
-// Tipos de movimento de transferencia aceitos pelo Omie (os unicos dois possiveis).
-export const TIPOS_TRANSFERENCIA = {
-  TRF: 'Entre locais',
-  TPQ: 'Perda e quebra',
-} as const
-export type TipoTransferencia = keyof typeof TIPOS_TRANSFERENCIA
+import type { TipoTransferencia } from '@/lib/transferencia-tipos'
 
 export async function createTransferencia(data: {
   codigoLocalOrigem: number

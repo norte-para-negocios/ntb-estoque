@@ -21,11 +21,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  createTransferencia,
-  TIPOS_TRANSFERENCIA,
-  type TipoTransferencia,
-} from '@/lib/actions/transferencia'
+import { createTransferencia } from '@/lib/actions/transferencia'
+import { TIPOS_TRANSFERENCIA, type TipoTransferencia } from '@/lib/transferencia-tipos'
 
 type Local = { codigo_local_estoque: number; descricao: string }
 
