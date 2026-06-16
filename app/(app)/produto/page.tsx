@@ -277,8 +277,16 @@ export default async function ProdutoPage({
         linhas={produtos ?? []}
         chaveLinha={(p) => p.id}
         colunas={[
-          { label: 'Descrição', primaria: true, flexivel: true, render: (p) => formatarNomeProduto(p.descricao) },
-          { label: 'Código', larguraDesktop: 'w-28', render: (p) => <span className="num text-text-muted">{p.codigo}</span> },
+          {
+            label: 'Descrição',
+            primaria: true,
+            flexivel: true,
+            render: (p) => (
+              <span>
+                <span className="num text-text-muted">{p.codigo}</span> {formatarNomeProduto(p.descricao)}
+              </span>
+            ),
+          },
           ...(vista === 'precos'
             ? [
                 {
@@ -323,7 +331,7 @@ export default async function ProdutoPage({
                   render: (p: ProdutoLinha) => (
                     <EstoqueMinimoInput
                       produtoId={p.id}
-                      valorInicial={p.estoque_minimo}
+                      valorManual={p.estoque_minimo}
                       valorOmie={minOmieDe(p.codigo_produto)}
                     />
                   ),
