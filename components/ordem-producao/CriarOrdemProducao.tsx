@@ -7,7 +7,7 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
@@ -70,6 +70,17 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
 
   function setQtd(codigoProduto: number, q: string) {
     setItens((prev) => prev.map((i) => (i.produto.codigo_produto === codigoProduto ? { ...i, quantidade: q } : i)))
+  }
+
+  // Steppers +/- (mesma interacao da contagem de transferencia).
+  function ajustarQtd(codigoProduto: number, delta: number) {
+    setItens((prev) =>
+      prev.map((i) => {
+        if (i.produto.codigo_produto !== codigoProduto) return i
+        const atual = Number(i.quantidade) || 0
+        return { ...i, quantidade: String(Math.max(0, atual + delta)) }
+      })
+    )
   }
 
   function setValidadeItem(codigoProduto: number, v: string) {
@@ -144,7 +155,11 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
         <div className="space-y-4 px-4 py-3">
           <div>
             <label className={labelClass}>Produtos</label>
-            <ProdutoSearch onSelect={adicionarProduto} placeholder="Buscar produto e adicionar..." />
+            <ProdutoSearch
+              onSelect={adicionarProduto}
+              placeholder="Buscar produto e adicionar..."
+              codigosAdicionados={itens.map((i) => i.produto.codigo)}
+            />
             {itens.length > 0 && (
               <ul className="mt-3 space-y-2.5">
                 {itens.map((i) => (
@@ -163,27 +178,47 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
                         <Trash2 className="size-4" />
                       </button>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="eyebrow">Quantidade</label>
+
+                    {/* Quantidade com steppers +/- (mesma UX da contagem de transferencia) */}
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="eyebrow">Quantidade{i.produto.unidade ? ` (${i.produto.unidade})` : ''}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => ajustarQtd(i.produto.codigo_produto, -1)}
+                          className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                          aria-label="Diminuir"
+                        >
+                          <Minus className="size-4" />
+                        </button>
                         <input
                           type="number"
-                          inputMode="decimal"
                           min={0}
+                          inputMode="numeric"
                           value={i.quantidade}
                           onChange={(e) => setQtd(i.produto.codigo_produto, e.target.value)}
-                          className="num mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text outline-none focus:border-brand"
+                          className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                          placeholder="0"
                         />
+                        <button
+                          type="button"
+                          onClick={() => ajustarQtd(i.produto.codigo_produto, 1)}
+                          className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                          aria-label="Aumentar"
+                        >
+                          <Plus className="size-4" />
+                        </button>
                       </div>
-                      <div>
-                        <label className="eyebrow">Validade</label>
-                        <input
-                          type="date"
-                          value={i.validade}
-                          onChange={(e) => setValidadeItem(i.produto.codigo_produto, e.target.value)}
-                          className="num mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text outline-none focus:border-brand"
-                        />
-                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="eyebrow">Validade</span>
+                      <input
+                        type="date"
+                        value={i.validade}
+                        onChange={(e) => setValidadeItem(i.produto.codigo_produto, e.target.value)}
+                        className="num rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text outline-none focus:border-brand"
+                      />
                     </div>
                   </li>
                 ))}
