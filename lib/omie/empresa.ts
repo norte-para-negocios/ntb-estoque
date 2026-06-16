@@ -95,9 +95,10 @@ export async function syncEmpresa(loja: LojaOmie): Promise<boolean> {
         sped_nome_contador: e.sped_nome_contador ?? null,
         sped_cpf_contador: e.sped_cpf_contador ?? null,
         sped_email_contador: e.sped_email_contador ?? null,
-        // completa o endereco/identificacao (colunas que ja existem em lojas)
+        // completa o endereco/identificacao (colunas que ja existem em lojas).
+        // NAO mexe em nome/nome_fantasia: o rotulo da loja e escolha do usuario
+        // (ex.: "DONANA VILAS DO ATLANTICO"), nao o fantasia generico do Omie.
         ...soSePreenchido(e.cnpj, 'cnpj'),
-        ...soSePreenchido(e.nome_fantasia, 'nome_fantasia'),
         ...soSePreenchido(e.cep, 'cep'),
         ...soSePreenchido(e.estado, 'uf'),
         ...soSePreenchido(e.cidade, 'cidade'),

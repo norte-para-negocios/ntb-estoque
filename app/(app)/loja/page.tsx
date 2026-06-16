@@ -17,6 +17,17 @@ function fmt(d: string | null): string {
   return d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : 'dd/mm/aa hh:mm:ss'
 }
 
+// Codigos de regime tributario do Omie (ListarEmpresas).
+const REGIME: Record<string, string> = {
+  '1': 'Simples Nacional',
+  '2': 'Simples Nacional (excesso)',
+  '3': 'Regime Normal',
+}
+function regimeLabel(v: string | null): string | null {
+  if (!v) return null
+  return REGIME[v] ? `${REGIME[v]} (${v})` : v
+}
+
 export default async function LojaPage({
   searchParams,
 }: {
@@ -146,7 +157,7 @@ export default async function LojaPage({
                         ['Inscrição estadual', loja.inscricao_estadual as string | null],
                         ['Inscrição municipal', loja.inscricao_municipal as string | null],
                         ['CNAE', loja.cnae as string | null],
-                        ['Regime tributário', loja.regime_tributario as string | null],
+                        ['Regime tributário', regimeLabel(loja.regime_tributario as string | null)],
                         ['Contador', loja.sped_nome_contador as string | null],
                         ['E-mail', loja.email as string | null],
                         ['Telefone', loja.telefone1 as string | null],
