@@ -152,7 +152,7 @@ async function processarMovimento(
   // O CMC e buscado na posicao ATUAL (hoje): e o custo medio vigente. Buscar na
   // data retroativa marcaria "Sem CMC" produtos que so ganharam custo depois.
   // Apenas a DATA DO LANCAMENTO (param.data) usa a data da transferencia.
-  const hojeCmc = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+  const hojeCmc = dataOmieBR(null)
 
   try {
     const posicao = await getPosicaoProduto(

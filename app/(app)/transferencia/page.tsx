@@ -89,6 +89,7 @@ export default async function TransferenciaPage({
   const temProxima = (transferenciasRaw?.length ?? 0) > POR_PAGINA
   const transferencias = temProxima ? transferenciasRaw!.slice(0, POR_PAGINA) : transferenciasRaw
 
+  // Locais ATIVOS para o seletor de criacao.
   const { data: locais } = await supabase
     .from('local_estoques')
     .select('codigo_local_estoque, descricao')
@@ -96,7 +97,15 @@ export default async function TransferenciaPage({
     .neq('inativo', 'S')
     .order('descricao')
 
-  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+  // TODOS os locais (incl. inativos) so para exibir o NOME no historico: uma
+  // transferencia antiga de um local hoje inativo ainda deve mostrar o nome, nao
+  // o codigo numerico.
+  const { data: todosLocais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+
+  const localMap = new Map((todosLocais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
   function fmtData(d: string | null): string {
     if (!d) return ''

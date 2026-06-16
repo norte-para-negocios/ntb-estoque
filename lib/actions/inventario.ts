@@ -19,7 +19,7 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
   // Inventario costuma ser considerado D-1; grava data ancorada ao meio-dia
   // Bahia (a escolhida, ou hoje se vazia) em vez de cair no now() do banco.
   const dataInventario = dataCriacaoBahia(dataEscolhida) ?? dataCriacaoBahia(hojeBahia)!
-  const { data: inv } = await supabase
+  const { data: inv, error } = await supabase
     .from('inventarios')
     .insert({
       loja_id: lojaId,
@@ -30,6 +30,7 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
     })
     .select('id')
     .single()
+  if (error || !inv) return { error: 'Falha ao criar inventário' }
   revalidatePath('/inventario')
   return inv
 }
