@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { SyncButton } from '@/components/SyncButton'
+import { NovoLocalEstoque } from '@/components/local-estoque/NovoLocalEstoque'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -50,7 +51,12 @@ export default async function LocalEstoquePage({
         title="Locais de Estoque"
         icon={Warehouse}
         description="Locais sincronizados do Omie"
-        actions={podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
+        actions={
+          <>
+            <NovoLocalEstoque />
+            {podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
+          </>
+        }
       />
 
       <div className="flex items-center gap-2 text-[13px] text-text-muted">

@@ -23,6 +23,46 @@ interface OmieListarProdutosResponse {
   produto_servico_cadastro?: OmieProduto[]
 }
 
+interface OmieIncluirProdutoResp {
+  codigo_produto?: number
+  codigo_status?: string
+  descricao_status?: string
+}
+
+/**
+ * Cria um produto no Omie (Bloco 9.1). ESCREVE no Omie da loja.
+ * ATENCAO (regra 9.5): confirmar os nomes exatos dos campos de escrita por teste
+ * real com o Ramon antes do uso em producao.
+ */
+export async function incluirProduto(
+  loja: LojaOmie,
+  dados: {
+    codigo: string
+    descricao: string
+    unidade: string
+    ncm: string
+    valorUnitario: number
+    tipoItem?: string
+  }
+) {
+  return omieRequest<OmieIncluirProdutoResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/produtos',
+    call: 'IncluirProduto',
+    data: {
+      codigo: dados.codigo,
+      codigo_produto_integracao: dados.codigo,
+      descricao: dados.descricao,
+      unidade: dados.unidade,
+      ncm: dados.ncm,
+      valor_unitario: dados.valorUnitario,
+      ...(dados.tipoItem ? { tipoItem: dados.tipoItem } : {}),
+    },
+  })
+}
+
 export async function syncProdutos(loja: LojaOmie) {
   const supabase = createServiceClient()
   await supabase.from('lojas').update({ produto_status: 'Processando' }).eq('id', loja.id)

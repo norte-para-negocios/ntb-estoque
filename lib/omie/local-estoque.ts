@@ -26,6 +26,35 @@ interface OmieLocaisResponse {
   locaisEncontrados?: OmieLocal[]
 }
 
+interface OmieIncluirLocalResp {
+  codigo_local_estoque?: number
+  cCodStatus?: string
+  cDescStatus?: string
+}
+
+/**
+ * Cria um local de estoque no Omie (Bloco 9.2). ESCREVE no Omie da loja.
+ * ATENCAO (regra 9.5): os nomes exatos dos campos de escrita devem ser
+ * confirmados por teste real com o Ramon antes do uso em producao.
+ */
+export async function incluirLocalEstoque(
+  loja: LojaOmie,
+  dados: { descricao: string; codigo?: string }
+) {
+  return omieRequest<OmieIncluirLocalResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/estoque/local',
+    call: 'IncluirLocalEstoque',
+    data: {
+      codigo_local_estoque: 0,
+      descricao: dados.descricao,
+      ...(dados.codigo ? { codigo: dados.codigo } : {}),
+    },
+  })
+}
+
 export async function syncLocaisEstoque(loja: LojaOmie) {
   const supabase = createServiceClient()
   await supabase.from('lojas').update({ local_estoque_status: 'Processando' }).eq('id', loja.id)
