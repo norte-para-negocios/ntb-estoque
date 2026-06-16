@@ -1,19 +1,24 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, Minus, Plus, Search, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
-import type { ProdutoBusca } from '@/lib/actions/produtos-search'
+
+const QrScanner = dynamic(
+  () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
+  { ssr: false }
+)
 
 type ItemOP = { produto: ProdutoBusca; quantidade: string; validade: string }
 
-// Datas a partir da base, repetindo a cada 7 dias (recorrencia semanal). Mesma
-// regra do passo 1; recalculada aqui para nao depender de passar o array na URL.
+// Datas a partir da base, repetindo a cada 7 dias (recorrencia semanal).
 function gerarDatas(base: string, semanas: number): string[] {
   if (!base) return []
   const out: string[] = []
@@ -27,16 +32,10 @@ function gerarDatas(base: string, semanas: number): string[] {
   return out
 }
 
-function fmtBR(iso: string): string {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
-}
-
 export function CriarOPProdutos({
   data,
   semanas,
   localCodigo,
-  localNome,
   obs,
 }: {
   data: string
@@ -46,11 +45,20 @@ export function CriarOPProdutos({
   obs: string
 }) {
   const [itens, setItens] = useState<ItemOP[]>([])
+  const [filtro, setFiltro] = useState('')
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
   const datas = useMemo(() => gerarDatas(data, semanas), [data, semanas])
   const totalOPs = itens.length * datas.length
+
+  const visiveis = useMemo(() => {
+    const q = filtro.trim().toLowerCase()
+    if (!q) return itens
+    return itens.filter(
+      (i) => i.produto.descricao.toLowerCase().includes(q) || i.produto.codigo.toLowerCase().includes(q)
+    )
+  }, [itens, filtro])
 
   function adicionar(p: ProdutoBusca) {
     if (itens.some((i) => i.produto.codigo_produto === p.codigo_produto)) {
@@ -59,6 +67,17 @@ export function CriarOPProdutos({
     }
     // Mais recente no topo (igual a contagem de transferencia).
     setItens((prev) => [{ produto: p, quantidade: '1', validade: '' }, ...prev])
+  }
+
+  function onLeituraQr(codigo: string) {
+    startTransition(async () => {
+      const p = await buscarProdutoPorCodigo(codigo)
+      if (!p) {
+        toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
+        return
+      }
+      adicionar(p)
+    })
   }
 
   function setQtd(cod: number, q: string) {
@@ -123,47 +142,38 @@ export function CriarOPProdutos({
 
   return (
     <div className="pb-28 lg:pb-20">
-      {/* Resumo do cabecalho escolhido no passo 1 */}
-      <div className="mb-4 rounded-lg border border-border bg-surface p-4">
-        <h1 className="text-lg font-semibold text-text">Nova ordem de produção</h1>
-        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-text-muted">
-          <span>
-            Data: <span className="num text-text">{fmtBR(data)}</span>
-          </span>
-          {semanas > 1 && (
-            <span>
-              Repete por <span className="text-text">{semanas} semanas</span> ({datas.length} datas)
-            </span>
-          )}
-          <span>
-            Local: <span className="text-text">{localNome ?? 'Padrão do produto'}</span>
-          </span>
+      <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+        <ProdutoSearch onSelect={adicionar} codigosAdicionados={itens.map((i) => i.produto.codigo)} />
+        <QrScanner onLeitura={onLeituraQr} />
+      </div>
+
+      {itens.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            placeholder="Filtrar itens da lista"
+            className="w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+          />
         </div>
-      </div>
+      )}
 
-      {/* Busca fixa no topo */}
-      <div className="sticky top-0 z-10 -mx-4 mb-4 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
-        <ProdutoSearch
-          onSelect={adicionar}
-          codigosAdicionados={itens.map((i) => i.produto.codigo)}
-          placeholder="Buscar produto e adicionar..."
-        />
-      </div>
-
-      {itens.length ? (
+      {visiveis.length ? (
         <ul className="space-y-2.5">
-          {itens.map((i) => {
-            const base = Number(i.quantidade) || 0
+          {visiveis.map((item) => {
+            const q = item.quantidade
+            const base = Number(q) || 0
             return (
-              <li key={i.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5">
+              <li key={item.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-text">{i.produto.descricao}</div>
-                    <div className="num mt-0.5 text-xs text-text-muted">{i.produto.codigo}</div>
+                    <div className="text-sm font-medium text-text">{item.produto.descricao}</div>
+                    <div className="num mt-0.5 text-xs text-text-muted">{item.produto.codigo}</div>
                   </div>
                   <button
-                    type="button"
-                    onClick={() => remover(i.produto.codigo_produto)}
+                    onClick={() => remover(item.produto.codigo_produto)}
                     className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)]"
                     aria-label="Remover"
                   >
@@ -172,12 +182,11 @@ export function CriarOPProdutos({
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Quantidade{i.produto.unidade ? ` (${i.produto.unidade})` : ''}</span>
+                  <span className="eyebrow">Quantidade{item.produto.unidade ? ` (${item.produto.unidade})` : ''}</span>
                   <div className="flex items-center gap-2">
                     <button
-                      type="button"
-                      onClick={() => ajustarQtd(i.produto.codigo_produto, -1)}
-                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 active:scale-95"
+                      onClick={() => ajustarQtd(item.produto.codigo_produto, -1)}
+                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
                       aria-label="Diminuir"
                     >
                       <Minus className="size-4" />
@@ -186,15 +195,14 @@ export function CriarOPProdutos({
                       type="number"
                       min={0}
                       inputMode="numeric"
-                      value={i.quantidade}
-                      onChange={(e) => setQtd(i.produto.codigo_produto, e.target.value)}
+                      value={q}
+                      onChange={(e) => setQtd(item.produto.codigo_produto, e.target.value)}
                       className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
                       placeholder="0"
                     />
                     <button
-                      type="button"
-                      onClick={() => ajustarQtd(i.produto.codigo_produto, 1)}
-                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 active:scale-95"
+                      onClick={() => ajustarQtd(item.produto.codigo_produto, 1)}
+                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
                       aria-label="Aumentar"
                     >
                       <Plus className="size-4" />
@@ -206,8 +214,8 @@ export function CriarOPProdutos({
                   <span className="eyebrow">Validade</span>
                   <input
                     type="date"
-                    value={i.validade}
-                    onChange={(e) => setValidade(i.produto.codigo_produto, e.target.value)}
+                    value={item.validade}
+                    onChange={(e) => setValidade(item.produto.codigo_produto, e.target.value)}
                     className="num rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text outline-none focus:border-brand"
                   />
                 </div>
@@ -218,16 +226,16 @@ export function CriarOPProdutos({
       ) : (
         <EmptyState
           icon={Search}
-          title="Nenhum produto"
-          hint="Use a busca acima para adicionar produtos. O último adicionado fica no topo."
+          title={filtro ? 'Nenhum item encontrado' : 'Nenhum produto'}
+          hint={filtro ? 'Ajuste o filtro de busca.' : 'Use a busca acima para adicionar produtos. O último fica no topo.'}
         />
       )}
 
       {itens.length > 0 && (
         <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[13px] text-text-muted">
-              {totalOPs} ordem(ns): {itens.length} produto(s) × {datas.length} data(s). Validade fica só no NTB.
+              {totalOPs} ordem(ns){datas.length > 1 ? ` (${itens.length} × ${datas.length})` : ''}
             </span>
             <button
               onClick={criar}

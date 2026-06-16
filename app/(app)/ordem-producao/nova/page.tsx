@@ -25,8 +25,8 @@ export default async function NovaOPPage({
   const obs = sp.obs ?? ''
 
   const voltar = (
-    <Link href="/ordem-producao" className="inline-flex items-center gap-1 text-sm text-text-muted transition-colors hover:text-text">
-      <ArrowLeft className="size-4" /> Voltar
+    <Link href="/ordem-producao" className="inline-flex items-center gap-1 text-[13px] text-text-muted transition-colors hover:text-text">
+      <ArrowLeft className="size-3.5" /> Voltar
     </Link>
   )
 
@@ -62,9 +62,26 @@ export default async function NovaOPPage({
     localNome = (loc?.descricao as string | null) ?? null
   }
 
+  const m = data.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const dataBR = m ? `${m[3]}/${m[2]}/${m[1]}` : data
+
   return (
-    <div className="space-y-4">
-      {voltar}
+    <div className="pb-4">
+      <div className="mb-5">
+        {voltar}
+        <h1 className="mt-2 text-lg font-semibold tracking-tight text-text">Nova ordem de produção</h1>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text-muted">
+          <span className="num">{dataBR}</span>
+          <span>·</span>
+          <span>{localNome ?? 'Padrão do produto'}</span>
+          {semanas > 1 && (
+            <>
+              <span>·</span>
+              <span>repete por {semanas} semanas</span>
+            </>
+          )}
+        </div>
+      </div>
       <CriarOPProdutos data={data} semanas={semanas} localCodigo={localCodigo} localNome={localNome} obs={obs} />
     </div>
   )
