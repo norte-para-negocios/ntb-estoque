@@ -248,9 +248,12 @@ export default async function ProdutoPage({
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
               <Download className="size-4" /> Exportar
             </a>
-            {podeSync && <SyncButton endpoint="/api/sync/posicao" label="Atualizar custos" />}
-            {podeSync && <SyncButton endpoint="/api/sync/previsao-venda" label="Atualizar previsão" />}
-            {podeSync && <SyncButton endpoint="/api/sync/produtos" label="Atualizar agora" />}
+            {podeSync && (
+              <SyncButton
+                endpoints={['/api/sync/produtos', '/api/sync/posicao', '/api/sync/previsao-venda']}
+                label="Atualizar tudo"
+              />
+            )}
           </>
         }
       />

@@ -122,7 +122,7 @@ type StepperProps = {
 // Stepper de validade (data).
 function StepperValidade({ ctrl }: StepperProps) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarValidade(-1)}
@@ -156,7 +156,7 @@ function StepperValidade({ ctrl }: StepperProps) {
 // Stepper de quantidade (numero).
 function StepperQuantidade({ ctrl }: StepperProps) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarQuantidade(-1)}

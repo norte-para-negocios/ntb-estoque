@@ -5,18 +5,32 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
-export function SyncButton({ endpoint, label }: { endpoint: string; label: string }) {
+export function SyncButton({
+  endpoint,
+  endpoints,
+  label,
+}: {
+  endpoint?: string
+  endpoints?: string[]
+  label: string
+}) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   async function handleSync() {
     setLoading(true)
     try {
-      const res = await fetch(endpoint, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
+      // Um ou vários endpoints (ex.: "Atualizar tudo" dispara produtos + custos + previsão).
+      const lista = endpoints ?? (endpoint ? [endpoint] : [])
+      let total = 0
+      for (const ep of lista) {
+        const res = await fetch(ep, { method: 'POST' })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
+        if (data.registros != null) total += Number(data.registros) || 0
+      }
       toast.success('Sincronização concluída', {
-        description: data.registros != null ? `${data.registros} registros atualizados` : undefined,
+        description: total > 0 ? `${total} registros atualizados` : undefined,
       })
       router.refresh()
     } catch (e) {

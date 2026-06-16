@@ -16,7 +16,7 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { Factory, Download } from 'lucide-react'
+import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 const POR_PAGINA = 50
 
@@ -209,7 +209,13 @@ export default async function OrdemProducaoPage({
     s.set('ord', novoOrd)
     return `/ordem-producao?${s.toString()}`
   }
-  const seta = (asc: string, desc: string) => (ord === asc ? ' ↑' : ord === desc ? ' ↓' : '')
+  // Indicador de ordenacao SEMPRE visivel no cabecalho (mostra que da pra clicar):
+  // setinha dupla apagada quando inativo, seta cheia na direcao quando ativo.
+  const setaIcone = (asc: string, desc: string) => {
+    if (ord === asc) return <ArrowUp className="size-3.5 text-brand" />
+    if (ord === desc) return <ArrowDown className="size-3.5 text-brand" />
+    return <ChevronsUpDown className="size-3.5 opacity-40" />
+  }
 
   return (
     <div className="space-y-4">
@@ -308,22 +314,22 @@ export default async function OrdemProducaoPage({
                       <th>OP</th>
                       <th>Status</th>
                       <th>
-                        <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center hover:text-text">
-                          Produto{seta('produto_az', 'produto_za')}
+                        <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
+                          Produto {setaIcone('produto_az', 'produto_za')}
                         </Link>
                       </th>
                       <th className="text-right">
-                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center hover:text-text">
-                          Qtd OP{seta('qtd_asc', 'qtd_desc')}
+                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-end gap-1 hover:text-text">
+                          Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
                         </Link>
                       </th>
-                      <th>
-                        <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center hover:text-text">
-                          Validade{seta('validade_asc', 'validade_desc')}
+                      <th className="w-48 text-center">
+                        <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
+                          Validade {setaIcone('validade_asc', 'validade_desc')}
                         </Link>
                       </th>
-                      <th>Quantidade</th>
-                      <th></th>
+                      <th className="w-40 text-center">Quantidade</th>
+                      <th className="w-px"></th>
                     </tr>
                   </thead>
                   <tbody>
