@@ -34,3 +34,15 @@ esses campos nos próximos syncs.
 
 > Nada é descartado: o `full_object` é salvo inteiro, então qualquer campo acima pode
 > ser promovido a coluna quando o bloco que o usa for implementado.
+
+## Bloco 1.4 — Histórico garantido (confirmação, sem mudança de schema)
+
+| Tabela | Histórico | Auditoria | Veredito |
+|---|---|---|---|
+| posicao_estoques | unique `(loja, local, produto, data_posicao)` → 1 snapshot/dia | created_at/updated_at | ✅ acumulando (3 dias / 234.678 linhas reais em 16/06) |
+| movimentos | append, sem unique de sobrescrita | `data` + `created_at` | ✅ (populado sob demanda; previsao_venda derivada com 2.375) |
+| inventarios | 1 linha por operação | `data` + `user_id` + `finalizado` (timestamp) + `status` | ✅ estrutura pronta (vazia: sistema novo) |
+| transferencias | 1 linha por operação | `data` + `user_id` + `status` | ✅ estrutura pronta (vazia) |
+
+`posicao_estoques`/`movimentos` não têm `user_id` por serem sync automático do Omie (não
+ação de usuário) — correto. Nenhuma coluna de data/auditoria faltando.
