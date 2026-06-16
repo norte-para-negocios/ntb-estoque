@@ -37,6 +37,7 @@ export default async function OrdemProducaoPage({
     op_produto?: string
     tipo_produto?: string
     op_concluido?: string
+    ord?: string
     page?: string
   }>
 }) {
@@ -100,35 +101,61 @@ export default async function OrdemProducaoPage({
     c_concluida: string | null // full_object->outrasInf->>cConcluida (achatado no select)
   }
 
+  const ord = sp.ord ?? ''
+  const ordEmMemoria = ord === 'produto_az' || ord === 'produto_za'
+  // Busca tudo em memoria quando o filtro de conclusao esta ativo (so da pra
+  // avaliar conclusao apos buscar) ou quando a ordenacao e por NOME do produto
+  // (que vem do join, nao da query).
+  const precisaBuscarTudo = filtraConclusao || ordEmMemoria
+
   function baseQuery() {
     // c_concluida vem achatado do JSON (so o escalar), para nao trazer o
-    // full_object inteiro de cada OP no filtro de conclusao. O desempate por id
-    // garante janelas .range estaveis (updated_at nao e unico).
+    // full_object inteiro de cada OP no filtro de conclusao.
     let q = supabase
       .from('ordens_producao')
       .select(
         'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida'
       )
       .eq('loja_id', lojaId)
-      .order('updated_at', { ascending: false })
-      .order('id', { ascending: false })
     if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
     if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
     if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
     if (codigosFiltro !== null) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
-    return q
+    // Ordenacao no banco (qtd/validade/codigo do produto). produto_az/za sao
+    // reordenados em memoria depois. O desempate por id mantem a janela .range
+    // estavel quando a chave de ordem nao e unica.
+    if (ord === 'codigo') q = q.order('identificacao_n_cod_produto', { ascending: true })
+    else if (ord === 'qtd_desc') q = q.order('identificacao_n_qtde', { ascending: false })
+    else if (ord === 'qtd_asc') q = q.order('identificacao_n_qtde', { ascending: true })
+    else if (ord === 'validade_asc') q = q.order('validade', { ascending: true })
+    else if (ord === 'validade_desc') q = q.order('validade', { ascending: false })
+    else q = q.order('updated_at', { ascending: false })
+    return q.order('id', { ascending: false })
+  }
+
+  // Resolve descricao/unidade dos produtos de um conjunto de linhas.
+  async function resolverProdutos(rows: OPRow[]) {
+    const cods = [...new Set(rows.map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
+    const { data } = cods.length
+      ? await supabase
+          .from('produtos')
+          .select('codigo_produto, descricao, unidade')
+          .eq('loja_id', lojaId)
+          .in('codigo_produto', cods)
+      : { data: [] }
+    return new Map((data ?? []).map((p) => [p.codigo_produto, p]))
   }
 
   let ordens: OPRow[]
   let temProxima: boolean
-  if (filtraConclusao) {
-    // Conclusao so da pra avaliar em memoria (deriva de c_concluida/adicionais,
-    // nao filtravel no PostgREST). Pagina o conjunto completo em lote: sem isso a
-    // query batia no teto de 1000 e o filtro operava sobre parte dos dados,
-    // parecendo ignorado.
-    const querConcluida = sp.op_concluido === 'S'
+  let prodMap: Awaited<ReturnType<typeof resolverProdutos>>
+
+  if (precisaBuscarTudo) {
+    // Busca o conjunto completo (filtrado) em lotes para filtrar conclusao e/ou
+    // ordenar por nome do produto em memoria, depois pagina. Com o filtro padrao
+    // de mes corrente, esse conjunto e pequeno.
     const todas: OPRow[] = []
     const LOTE = 1000
     const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
@@ -139,7 +166,20 @@ export default async function OrdemProducaoPage({
       todas.push(...lote)
       if (lote.length < LOTE) break
     }
-    const filtradas = todas.filter((o) => isOpConcluida(o) === querConcluida)
+    let filtradas = todas
+    if (filtraConclusao) {
+      const querConcluida = sp.op_concluido === 'S'
+      filtradas = todas.filter((o) => isOpConcluida(o) === querConcluida)
+    }
+    prodMap = await resolverProdutos(filtradas)
+    if (ordEmMemoria) {
+      const dir = ord === 'produto_za' ? -1 : 1
+      filtradas = [...filtradas].sort((a, b) => {
+        const na = (prodMap.get(a.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
+        const nb = (prodMap.get(b.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
+        return na.localeCompare(nb, 'pt-BR') * dir
+      })
+    }
     temProxima = filtradas.length > page * POR_PAGINA
     ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
   } else {
@@ -148,19 +188,8 @@ export default async function OrdemProducaoPage({
     const ordensRaw = (data ?? []) as OPRow[]
     temProxima = ordensRaw.length > POR_PAGINA
     ordens = temProxima ? ordensRaw.slice(0, POR_PAGINA) : ordensRaw
+    prodMap = await resolverProdutos(ordens)
   }
-
-  // Buscar descricoes dos produtos relacionados
-  const codigos = [...new Set((ordens ?? []).map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
-  const { data: produtos } = codigos.length
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, descricao, unidade')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', codigos)
-    : { data: [] }
-
-  const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
 
   // Locais de estoque ativos da loja para o seletor de "Criar OP"
   const { data: locais } = await supabase
@@ -203,6 +232,20 @@ export default async function OrdemProducaoPage({
                     { value: 'N', label: 'Não' },
                   ],
                 },
+                {
+                  tipo: 'select',
+                  nome: 'ord',
+                  label: 'Ordenar por',
+                  opcoes: [
+                    { value: 'produto_az', label: 'Produto A-Z' },
+                    { value: 'produto_za', label: 'Produto Z-A' },
+                    { value: 'codigo', label: 'Código do produto' },
+                    { value: 'qtd_desc', label: 'Maior quantidade' },
+                    { value: 'qtd_asc', label: 'Menor quantidade' },
+                    { value: 'validade_asc', label: 'Validade mais próxima' },
+                    { value: 'validade_desc', label: 'Validade mais distante' },
+                  ],
+                },
               ]}
               defaults={{
                 data_inicio: dataInicio,
@@ -211,6 +254,7 @@ export default async function OrdemProducaoPage({
                 op_produto: sp.op_produto ?? '',
                 tipo_produto: sp.tipo_produto ?? '',
                 op_concluido: sp.op_concluido ?? '',
+                ord: sp.ord ?? '',
               }}
             />
             <a
