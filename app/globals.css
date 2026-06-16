@@ -104,6 +104,13 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  /* Foco visivel e consistente para navegacao por teclado (acessibilidade). */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
   .num {
     font-family: var(--font-mono);

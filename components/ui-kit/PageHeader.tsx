@@ -20,8 +20,8 @@ export function PageHeader({
           </span>
         )}
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-text">{title}</h1>
-          {description && <p className="text-[13px] text-text-muted">{description}</p>}
+          <h1 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-text">{title}</h1>
+          {description && <p className="mt-0.5 text-[13px] text-text-muted">{description}</p>}
         </div>
       </div>
       {actions && (

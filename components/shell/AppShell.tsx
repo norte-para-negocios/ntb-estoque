@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { usePathname } from 'next/navigation'
 import { Search } from 'lucide-react'
 
 import { Sidebar } from './Sidebar'
@@ -19,6 +20,7 @@ export function AppShell({
   children: React.ReactNode
 }) {
   const [buscaAberta, setBuscaAberta] = React.useState(false)
+  const pathname = usePathname()
 
   React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -69,7 +71,11 @@ export function AppShell({
                 </kbd>
               </button>
             </div>
-            {children}
+            {/* key={pathname}: re-anima a entrada do conteúdo a cada navegação,
+                dando continuidade ao skeleton de loading. */}
+            <div key={pathname} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+              {children}
+            </div>
           </div>
         </main>
       </div>
