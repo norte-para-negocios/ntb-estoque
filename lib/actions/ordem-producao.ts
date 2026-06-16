@@ -208,13 +208,15 @@ export async function finishOP(opId: number) {
     }
     await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, op.quantidade ?? 1, '')
 
-    // Marca conclusao localmente para a OP nao reaparecer como pendente
-    // (o sync nem sempre traz cConcluida de imediato). O filtro op_concluido
-    // da pagina considera este campo como verdade de conclusao.
+    // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer
+    // como pendente ate o proximo sync trazer cConcluida='S' do Omie. dataConclusao
+    // vem DD/MM/AAAA -> grava dt_conclusao_real em YYYY-MM-DD.
+    const mc = dataConclusao.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
     await supabase
       .from('ordens_producao')
       .update({
-        adicionais_d_dt_conclusao: new Date().toISOString(),
+        concluida: true,
+        dt_conclusao_real: mc ? `${mc[3]}-${mc[2]}-${mc[1]}` : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', opId)

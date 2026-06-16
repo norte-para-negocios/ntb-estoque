@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida'
+        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida'
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })

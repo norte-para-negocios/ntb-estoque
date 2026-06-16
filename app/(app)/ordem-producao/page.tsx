@@ -61,11 +61,9 @@ export default async function OrdemProducaoPage({
   const dataInicio = sp.data_inicio ?? primeiroDiaMes
   const dataFinal = sp.data_final ?? ultimoDiaMes
 
-  // Filtro op_concluido em memoria: a unica fonte confiavel de conclusao e
-  // full_object.outrasInf.cConcluida ('S'/'N'), alem do marcador local
-  // adicionais_d_dt_conclusao gravado por finishOP. Como nao da pra filtrar
-  // JSON aninhado no PostgREST, fazemos isso apos buscar. Por isso, quando o
-  // filtro op_concluido esta ativo, buscamos sem range e paginamos em memoria.
+  // Filtro de conclusao direto no banco pela coluna `concluida` (migration 012).
+  // Antes dependia do full_object aninhado (sem filtro no PostgREST) e buscava
+  // tudo em memoria em lotes; agora e um filtro simples com paginacao normal.
   const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
 
   // Filtros op_produto / tipo_produto: as colunas produto_* em ordens_producao
@@ -97,26 +95,23 @@ export default async function OrdemProducaoPage({
     identificacao_d_dt_previsao: string | null
     validade: string | null
     quantidade: number | null
-    adicionais_d_dt_conclusao: string | null
-    c_concluida: string | null // full_object->outrasInf->>cConcluida (achatado no select)
+    concluida: boolean | null
   }
 
   const ord = sp.ord ?? ''
   const ordEmMemoria = ord === 'produto_az' || ord === 'produto_za'
-  // Busca tudo em memoria quando o filtro de conclusao esta ativo (so da pra
-  // avaliar conclusao apos buscar) ou quando a ordenacao e por NOME do produto
-  // (que vem do join, nao da query).
-  const precisaBuscarTudo = filtraConclusao || ordEmMemoria
+  // So precisa buscar tudo em memoria para ordenar por NOME do produto (vem do
+  // join, nao da query). A conclusao agora filtra no banco (coluna concluida).
+  const precisaBuscarTudo = ordEmMemoria
 
   function baseQuery() {
-    // c_concluida vem achatado do JSON (so o escalar), para nao trazer o
-    // full_object inteiro de cada OP no filtro de conclusao.
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida'
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida'
       )
       .eq('loja_id', lojaId)
+    if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
     if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
     if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
     if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
@@ -170,10 +165,6 @@ export default async function OrdemProducaoPage({
       if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
     let filtradas = todas
-    if (filtraConclusao) {
-      const querConcluida = sp.op_concluido === 'S'
-      filtradas = todas.filter((o) => isOpConcluida(o) === querConcluida)
-    }
     prodMap = await resolverProdutos(filtradas)
     if (ordEmMemoria) {
       const dir = ord === 'produto_za' ? -1 : 1

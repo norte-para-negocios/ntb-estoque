@@ -4,7 +4,6 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { toCsv, csvResponse } from '@/lib/csv'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { isOpConcluida } from '@/lib/op-status'
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -51,8 +50,7 @@ export async function GET(request: Request) {
     identificacao_n_cod_produto: number | null
     identificacao_n_qtde: number | null
     validade: string | null
-    adicionais_d_dt_conclusao: string | null
-    c_concluida: string | null
+    concluida: boolean | null
   }
   const ordensRaw: Ordem[] = []
 
@@ -60,13 +58,14 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida',
+        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
       .range(from, to)
 
+    if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
     if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
     if (sp.data_final) q = q.lte('identificacao_d_dt_previsao', sp.data_final)
     if (sp.ordem_producao) {
@@ -86,11 +85,7 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  let ordens = ordensRaw
-  if (filtraConclusao) {
-    const querConcluida = sp.op_concluido === 'S'
-    ordens = ordensRaw.filter((o) => isOpConcluida(o) === querConcluida)
-  }
+  const ordens = ordensRaw
 
   // Mesmo join da page: resolve descrição do produto.
   const codigos = [...new Set(ordens.map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
