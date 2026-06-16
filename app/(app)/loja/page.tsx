@@ -5,6 +5,7 @@ import { CopyWebhook } from '@/components/loja/CopyWebhook'
 import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
+import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -130,6 +131,34 @@ export default async function LojaPage({
                       {loja.omie_app_secret ? loja.omie_app_secret.slice(0, 6) : '-'}
                     </span>
                   </span>
+                </div>
+
+                {/* Dados da empresa (puxados do Omie via ListarEmpresas) */}
+                <div className="border-t border-border pt-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[13px] font-medium text-text">Dados da empresa (Omie)</span>
+                    <PuxarEmpresa lojaId={loja.id} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] sm:grid-cols-3">
+                    {(
+                      [
+                        ['Razão social', loja.razao_social as string | null],
+                        ['Inscrição estadual', loja.inscricao_estadual as string | null],
+                        ['Inscrição municipal', loja.inscricao_municipal as string | null],
+                        ['CNAE', loja.cnae as string | null],
+                        ['Regime tributário', loja.regime_tributario as string | null],
+                        ['Contador', loja.sped_nome_contador as string | null],
+                        ['E-mail', loja.email as string | null],
+                        ['Telefone', loja.telefone1 as string | null],
+                        ['CSC produção', loja.csc_producao ? 'definido' : null],
+                      ] as [string, string | null][]
+                    ).map(([label, valor]) => (
+                      <div key={label}>
+                        <div className="text-[11px] uppercase tracking-wider text-text-muted">{label}</div>
+                        <div className="truncate text-text" title={valor ?? undefined}>{valor || '-'}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">

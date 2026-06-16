@@ -3,6 +3,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { syncEmpresa } from '@/lib/omie/empresa'
+import type { LojaOmie } from '@/lib/omie/client'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -103,4 +105,31 @@ export async function forceSyncLoja(lojaId: number) {
 
   revalidatePath('/loja')
   return { ok: true }
+}
+
+/**
+ * Puxa os dados da empresa do Omie (ListarEmpresas, so leitura) e preenche a loja:
+ * razao social, IE/IM, CNAE, regime, CSC, contador, endereco. Nao escreve no Omie.
+ */
+export async function puxarEmpresaDoOmie(lojaId: number) {
+  if (!(await isAdmin())) return { error: 'Somente administradores' }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret')
+    .eq('id', lojaId)
+    .single<LojaOmie>()
+
+  if (!loja?.omie_app_key || !loja?.omie_app_secret) {
+    return { error: 'Loja sem chave do Omie' }
+  }
+
+  try {
+    const ok = await syncEmpresa(loja)
+    revalidatePath('/loja')
+    return ok ? { ok: true } : { error: 'O Omie não retornou dados da empresa.' }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao puxar do Omie' }
+  }
 }
