@@ -59,7 +59,7 @@ function corMargem(m: number): string {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; page?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -68,6 +68,8 @@ export default async function ProdutoPage({
   const page = Math.max(1, Number(params.page) || 1)
   // Dois modos para a tabela nao estourar a largura: precos x compras.
   const vista = params.vista === 'compras' ? 'compras' : 'precos'
+  // "So repor": no modo Compras, mostra so os produtos abaixo do minimo (RPC).
+  const repor = vista === 'compras' && params.repor === '1'
   const alvoPctRaw = Number(params.margem)
   const alvoPct = alvoPctRaw >= 1 && alvoPctRaw <= 99 ? alvoPctRaw : 50
   const alvo = alvoPct / 100
@@ -101,9 +103,16 @@ export default async function ProdutoPage({
   }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
-  // situacao via full_object->>inativo ('S'/'N' do Omie). default: so ativos
-  if (!params.situacao || params.situacao === 'ativos') query = query.neq('full_object->>inativo', 'S')
-  else if (params.situacao === 'inativos') query = query.eq('full_object->>inativo', 'S')
+  // situacao pela coluna `inativo` (migration 012). default: so ativos
+  if (!params.situacao || params.situacao === 'ativos') query = query.eq('inativo', false)
+  else if (params.situacao === 'inativos') query = query.eq('inativo', true)
+
+  // Modo Compras + "Só repor": restringe aos produtos abaixo do minimo (RPC 2.3).
+  if (repor) {
+    const { data: rep } = await supabase.rpc('produtos_repor', { p_loja_id: lojaId })
+    const codigos = (rep ?? []) as number[]
+    query = query.in('codigo_produto', codigos.length ? codigos : [-1])
+  }
 
   const { data: produtosRaw } = await query
   const temProxima = (produtosRaw?.length ?? 0) > POR_PAGINA
@@ -270,6 +279,24 @@ export default async function ProdutoPage({
             })}
           </div>
           {vista === 'precos' && <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} />}
+          {vista === 'compras' &&
+            (() => {
+              const sp = new URLSearchParams(exportParams.toString())
+              sp.set('vista', 'compras')
+              if (!repor) sp.set('repor', '1')
+              return (
+                <Link
+                  href={`/produto?${sp.toString()}`}
+                  className={`rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                    repor
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-border bg-surface text-text-muted hover:text-text'
+                  }`}
+                >
+                  Só repor
+                </Link>
+              )
+            })()}
         </div>
       </div>
 
