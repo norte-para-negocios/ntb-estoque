@@ -126,11 +126,12 @@ export default async function OrdemProducaoPage({
     // Ordenacao no banco (qtd/validade/codigo do produto). produto_az/za sao
     // reordenados em memoria depois. O desempate por id mantem a janela .range
     // estavel quando a chave de ordem nao e unica.
-    if (ord === 'codigo') q = q.order('identificacao_n_cod_produto', { ascending: true })
-    else if (ord === 'qtd_desc') q = q.order('identificacao_n_qtde', { ascending: false })
-    else if (ord === 'qtd_asc') q = q.order('identificacao_n_qtde', { ascending: true })
-    else if (ord === 'validade_asc') q = q.order('validade', { ascending: true })
-    else if (ord === 'validade_desc') q = q.order('validade', { ascending: false })
+    // nullsFirst: false = OPs sem o campo (validade/qtde/codigo nulos) sempre por ultimo.
+    if (ord === 'codigo') q = q.order('identificacao_n_cod_produto', { ascending: true, nullsFirst: false })
+    else if (ord === 'qtd_desc') q = q.order('identificacao_n_qtde', { ascending: false, nullsFirst: false })
+    else if (ord === 'qtd_asc') q = q.order('identificacao_n_qtde', { ascending: true, nullsFirst: false })
+    else if (ord === 'validade_asc') q = q.order('validade', { ascending: true, nullsFirst: false })
+    else if (ord === 'validade_desc') q = q.order('validade', { ascending: false, nullsFirst: false })
     else q = q.order('updated_at', { ascending: false })
     return q.order('id', { ascending: false })
   }
@@ -151,6 +152,7 @@ export default async function OrdemProducaoPage({
   let ordens: OPRow[]
   let temProxima: boolean
   let prodMap: Awaited<ReturnType<typeof resolverProdutos>>
+  let truncado = false // conjunto bateu no teto de lotes (so sem filtro de data em loja enorme)
 
   if (precisaBuscarTudo) {
     // Busca o conjunto completo (filtrado) em lotes para filtrar conclusao e/ou
@@ -165,6 +167,7 @@ export default async function OrdemProducaoPage({
       if (!lote.length) break
       todas.push(...lote)
       if (lote.length < LOTE) break
+      if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
     let filtradas = todas
     if (filtraConclusao) {
@@ -268,6 +271,12 @@ export default async function OrdemProducaoPage({
           </>
         }
       />
+
+      {truncado && (
+        <p className="mb-3 rounded-md border border-[var(--warn,#f59e0b)]/30 bg-[var(--warn,#f59e0b)]/10 px-3 py-2 text-[13px] text-text-muted">
+          Há muitas ordens. Mostrando uma parte. Use o filtro de data para refinar e ver tudo.
+        </p>
+      )}
 
       {ordens?.length ? (
         (() => {
