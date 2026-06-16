@@ -77,15 +77,22 @@ export default async function ProdutoPage({
   const supabase = await createClient()
   const podeSync = await requirePermissao(lojaId, 'Produtos - Sincronizar')
 
-  const { data: lojaSync } = await supabase
-    .from('lojas')
-    .select('produto_ultima_atualizacao, produto_status')
-    .eq('id', lojaId)
-    .single()
-
+  // Independentes entre si -> rodam em paralelo para cortar latencia (Produtos
+  // era a tela mais lenta). lojaSync, familias e os codigos "a repor" (modo
+  // Compras) nao dependem da query principal de produtos.
   // Familias via RPC com DISTINCT no banco: evita o teto de 1000 do PostgREST
   // (que cortava familias do dropdown) e a varredura da tabela inteira a cada render.
-  const { data: familiasRows } = await supabase.rpc('familias_da_loja', { p_loja_id: lojaId })
+  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos] = await Promise.all([
+    supabase
+      .from('lojas')
+      .select('produto_ultima_atualizacao, produto_status')
+      .eq('id', lojaId)
+      .single(),
+    supabase.rpc('familias_da_loja', { p_loja_id: lojaId }),
+    repor
+      ? supabase.rpc('produtos_repor', { p_loja_id: lojaId }).then(({ data }) => (data ?? []) as number[])
+      : Promise.resolve<number[] | null>(null),
+  ])
   const familiasOpcoes = ((familiasRows ?? []) as { descricao_familia: string }[]).map((r) => ({
     value: r.descricao_familia,
     label: r.descricao_familia,
@@ -108,11 +115,11 @@ export default async function ProdutoPage({
   if (!params.situacao || params.situacao === 'ativos') query = query.eq('inativo', false)
   else if (params.situacao === 'inativos') query = query.eq('inativo', true)
 
-  // Modo Compras + "Só repor": restringe aos produtos abaixo do minimo (RPC 2.3).
+  // Modo Compras + "Só repor": restringe aos produtos abaixo do minimo (codigos
+  // ja resolvidos em paralelo acima via RPC produtos_repor).
   if (repor) {
-    const { data: rep } = await supabase.rpc('produtos_repor', { p_loja_id: lojaId })
-    const codigos = (rep ?? []) as number[]
-    query = query.in('codigo_produto', codigos.length ? codigos : [-1])
+    const cods = reporCodigos ?? []
+    query = query.in('codigo_produto', cods.length ? cods : [-1])
   }
 
   const { data: produtosRaw } = await query
@@ -133,7 +140,8 @@ export default async function ProdutoPage({
   // linhas do PostgREST, truncando e subcontando saldo/minimo. Pagina por
   // seguranca (uma loja pode ter muitos locais), igual ao /produto/export.
   const posicoes: PosicaoRow[] = []
-  if (codigos.length) {
+  async function carregarPosicoes() {
+    if (!codigos.length) return
     const { data: ultima } = await supabase
       .from('posicao_estoques')
       .select('data_posicao')
@@ -142,23 +150,31 @@ export default async function ProdutoPage({
       .limit(1)
       .maybeSingle()
     const dataPos = ultima?.data_posicao as string | undefined
-    if (dataPos) {
-      const LOTE = 1000
-      for (let off = 0; ; off += LOTE) {
-        const { data } = await supabase
-          .from('posicao_estoques')
-          .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
-          .eq('loja_id', lojaId)
-          .eq('data_posicao', dataPos)
-          .in('n_cod_prod', codigos)
-          .order('n_saldo', { ascending: false })
-          .range(off, off + LOTE - 1)
-        if (!data || !data.length) break
-        posicoes.push(...(data as PosicaoRow[]))
-        if (data.length < LOTE) break
-      }
+    if (!dataPos) return
+    const LOTE = 1000
+    for (let off = 0; ; off += LOTE) {
+      const { data } = await supabase
+        .from('posicao_estoques')
+        .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
+        .eq('loja_id', lojaId)
+        .eq('data_posicao', dataPos)
+        .in('n_cod_prod', codigos)
+        .order('n_saldo', { ascending: false })
+        .range(off, off + LOTE - 1)
+      if (!data || !data.length) break
+      posicoes.push(...(data as PosicaoRow[]))
+      if (data.length < LOTE) break
     }
   }
+
+  // Posicoes e previsao de venda so dependem de `codigos` e sao independentes
+  // entre si: carregam em paralelo para cortar latencia.
+  const [, previsaoRes] = await Promise.all([
+    carregarPosicoes(),
+    codigos.length
+      ? supabase.from('previsao_venda').select('n_cod_prod, qtde').eq('loja_id', lojaId).in('n_cod_prod', codigos)
+      : Promise.resolve({ data: [] as { n_cod_prod: number; qtde: number | null }[] }),
+  ])
   const cmcMap = new Map<number, number>()
   for (const pos of posicoes ?? []) {
     if (!cmcMap.has(pos.n_cod_prod) && pos.n_cmc) cmcMap.set(pos.n_cod_prod, Number(pos.n_cmc))
@@ -197,14 +213,9 @@ export default async function ProdutoPage({
   const minEfetivo = (p: ProdutoLinha): number | null =>
     p.estoque_minimo != null ? Number(p.estoque_minimo) : minOmieDe(p.codigo_produto)
 
-  // Previsao de venda (saidas no mesmo periodo do ano anterior) por produto
-  const { data: previsoes } = codigos.length
-    ? await supabase
-        .from('previsao_venda')
-        .select('n_cod_prod, qtde')
-        .eq('loja_id', lojaId)
-        .in('n_cod_prod', codigos)
-    : { data: [] }
+  // Previsao de venda (saidas no mesmo periodo do ano anterior) por produto.
+  // Carregada em paralelo com as posicoes (acima).
+  const previsoes = previsaoRes.data
   const prevMap = new Map<number, number>()
   for (const pv of previsoes ?? []) prevMap.set(pv.n_cod_prod, Number(pv.qtde ?? 0))
   const prevVendaDe = (codProd: number | null): number | null =>
