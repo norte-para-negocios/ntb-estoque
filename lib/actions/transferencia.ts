@@ -47,7 +47,9 @@ export async function createTransferencia(data: {
   const lojaId = await getCurrentLojaId()
   const userId = (await getUser()).id
   const supabase = createServiceClient()
-  const dataCriacao = dataCriacaoBahia(data.data)
+  // Sempre grava data ancorada ao meio-dia Bahia: a escolhida, ou hoje se vier
+  // vazia (evita cair no now() do banco, que perde a ancoragem de fuso).
+  const dataCriacao = dataCriacaoBahia(data.data) ?? dataCriacaoBahia(hojeBahia)!
   const { data: trans } = await supabase
     .from('transferencias')
     .insert({
@@ -57,7 +59,7 @@ export async function createTransferencia(data: {
       motivo: data.tipo, // guarda o tipo (TRF/TPQ); vira o `tipo` do ajuste no Omie
       status: 'Em contagem',
       user_id: userId,
-      ...(dataCriacao ? { data: dataCriacao } : {}),
+      data: dataCriacao,
     })
     .select('id')
     .single()
@@ -151,7 +153,7 @@ async function processarMovimento(
   trans: TransferenciaComMovimentos,
   mov: MovimentoRow,
   lojaId: number,
-  dataMov: string // DD/MM/YYYY: data da transferencia (nao a de hoje)
+  dataMov: string // DD/MM/YYYY: data da transferencia (vai no lancamento)
 ) {
   const supabase = createServiceClient()
 
@@ -160,12 +162,17 @@ async function processarMovimento(
     return
   }
 
+  // O CMC e buscado na posicao ATUAL (hoje): e o custo medio vigente. Buscar na
+  // data retroativa marcaria "Sem CMC" produtos que so ganharam custo depois.
+  // Apenas a DATA DO LANCAMENTO (param.data) usa a data da transferencia.
+  const hojeCmc = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+
   try {
     const posicao = await getPosicaoProduto(
       trans.loja,
       mov.codigo_local_estoque,
       mov.id_prod,
-      dataMov
+      hojeCmc
     )
     const valor = posicao?.n_cmc ?? 0
 
