@@ -6,23 +6,32 @@ import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
+import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 
-export async function createInventario(codigoLocalEstoque: number) {
+export async function createInventario(codigoLocalEstoque: number, dataEscolhida?: string) {
+  const hojeBahia = hojeBahiaISO()
+  if (dataEscolhida && dataEscolhida > hojeBahia) {
+    return { error: 'A data não pode ser futura' }
+  }
   const lojaId = await getCurrentLojaId()
   const userId = (await getUser()).id
   const supabase = createServiceClient()
-  const { data } = await supabase
+  // Inventario costuma ser considerado D-1; grava data ancorada ao meio-dia
+  // Bahia (a escolhida, ou hoje se vazia) em vez de cair no now() do banco.
+  const dataInventario = dataCriacaoBahia(dataEscolhida) ?? dataCriacaoBahia(hojeBahia)!
+  const { data: inv } = await supabase
     .from('inventarios')
     .insert({
       loja_id: lojaId,
       codigo_local_estoque: codigoLocalEstoque,
       status: 'Em contagem',
       user_id: userId,
+      data: dataInventario,
     })
     .select('id')
     .single()
   revalidatePath('/inventario')
-  return data
+  return inv
 }
 
 export async function addInventarioItem(
@@ -83,6 +92,7 @@ type InventarioComItens = {
   tipo: string | null
   origem: string | null
   motivo: string | null
+  data: string | null
   items: InventarioItemRow[]
   loja: LojaOmie
 }
@@ -96,7 +106,7 @@ async function processarItemInventario(
   inventario: InventarioComItens,
   item: InventarioItemRow,
   lojaId: number,
-  hoje: string
+  dataAjuste: string // DD/MM/YYYY: data do inventario (vai no lancamento)
 ) {
   const supabase = createServiceClient()
 
@@ -105,12 +115,16 @@ async function processarItemInventario(
     return
   }
 
+  // CMC na posicao ATUAL (hoje): custo medio vigente. Apenas a data do lancamento
+  // (param.data) usa a data do inventario, que pode ser D-1/retroativa.
+  const hojeCmc = dataOmieBR(null)
+
   try {
     const posicao = await getPosicaoProduto(
       inventario.loja,
       inventario.codigo_local_estoque,
       item.produto_codigo_produto,
-      hoje
+      hojeCmc
     )
     const valor = posicao?.n_cmc ?? 0
 
@@ -132,7 +146,7 @@ async function processarItemInventario(
       codigo_local_estoque: inventario.codigo_local_estoque,
       id_prod: item.produto_codigo_produto,
       cod_int_ajuste: `ITEM${item.id}`,
-      data: hoje,
+      data: dataAjuste,
       quan: item.quan,
       valor,
       obs: 'NTB - Estoque',
@@ -208,7 +222,7 @@ export async function finishInventario(inventarioId: number) {
   const { data: inventario } = await supabase
     .from('inventarios')
     .select(
-      'id, codigo_local_estoque, tipo, origem, motivo, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
     )
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
@@ -216,10 +230,11 @@ export async function finishInventario(inventarioId: number) {
 
   if (!inventario?.loja) return { error: 'Inventário não encontrado' }
 
-  const hoje = new Date().toLocaleDateString('pt-BR')
+  // Data do ajuste = data do inventario (permite D-1/retroativa), nao a de hoje.
+  const dataAjuste = dataOmieBR(inventario.data)
 
   for (const item of inventario.items) {
-    await processarItemInventario(inventario, item, lojaId, hoje)
+    await processarItemInventario(inventario, item, lojaId, dataAjuste)
   }
 
   await supabase
@@ -242,7 +257,7 @@ export async function forceSyncInventario(inventarioId: number) {
   const { data: inventario } = await supabase
     .from('inventarios')
     .select(
-      'id, codigo_local_estoque, tipo, origem, motivo, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
     )
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
@@ -256,14 +271,15 @@ export async function forceSyncInventario(inventarioId: number) {
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
 
-  const hoje = new Date().toLocaleDateString('pt-BR')
+  // Data do ajuste = data do inventario (permite D-1/retroativa), nao a de hoje.
+  const dataAjuste = dataOmieBR(inventario.data)
 
   const pendentes = inventario.items.filter(
     (i) => i.status === 'Erro' || i.status === null || i.status === 'Sem CMC'
   )
 
   for (const item of pendentes) {
-    await processarItemInventario(inventario, item, lojaId, hoje)
+    await processarItemInventario(inventario, item, lojaId, dataAjuste)
   }
 
   await supabase

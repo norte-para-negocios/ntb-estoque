@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
+import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 
 // Tipos de movimento de transferencia aceitos pelo Omie (os unicos dois possiveis).
 export const TIPOS_TRANSFERENCIA = {
@@ -13,20 +14,6 @@ export const TIPOS_TRANSFERENCIA = {
   TPQ: 'Transferência por perda ou quebra',
 } as const
 export type TipoTransferencia = keyof typeof TIPOS_TRANSFERENCIA
-
-// Data escolhida (YYYY-MM-DD) -> timestamptz ao meio-dia America/Bahia, para nao
-// escorregar de dia ao converter para UTC. Vazio/invalido -> undefined (usa now()).
-function dataCriacaoBahia(d?: string): string | undefined {
-  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return undefined
-  return `${d}T12:00:00-03:00`
-}
-
-// timestamptz do banco -> DD/MM/YYYY em America/Bahia, formato que o Omie espera.
-// Sem data, cai para hoje.
-function dataOmie(iso: string | null): string {
-  const base = iso ? new Date(iso) : new Date()
-  return base.toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
-}
 
 export async function createTransferencia(data: {
   codigoLocalOrigem: number
@@ -40,7 +27,7 @@ export async function createTransferencia(data: {
   if (data.tipo !== 'TRF' && data.tipo !== 'TPQ') {
     return { error: 'Tipo de transferência inválido' }
   }
-  const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const hojeBahia = hojeBahiaISO()
   if (data.data && data.data > hojeBahia) {
     return { error: 'A data não pode ser futura' }
   }
@@ -278,7 +265,7 @@ export async function finishTransferencia(transferenciaId: number) {
   if (!trans?.loja) return { error: 'Transferência não encontrada' }
 
   // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
-  const dataMov = dataOmie(trans.data)
+  const dataMov = dataOmieBR(trans.data)
 
   for (const mov of trans.movimentos) {
     await processarMovimento(trans, mov, lojaId, dataMov)
@@ -319,7 +306,7 @@ export async function forceSyncTransferencia(transferenciaId: number) {
     .eq('loja_id', lojaId)
 
   // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
-  const dataMov = dataOmie(trans.data)
+  const dataMov = dataOmieBR(trans.data)
 
   const pendentes = trans.movimentos.filter(
     (m) => m.status === 'Erro' || m.status === null
