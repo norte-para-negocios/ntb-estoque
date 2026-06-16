@@ -5,6 +5,7 @@ import { Printer, Check, Minus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP } from '@/lib/actions/ordem-producao'
 import { Num } from '@/components/ui-kit/Num'
+import type { OpStatus } from '@/lib/op-status'
 
 const stepBtnClass =
   'flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60'
@@ -19,17 +20,25 @@ interface OPData {
   quantidade: number | null
   data?: string | null // data prevista/real da OP (dd/mm/aaaa)
   concluida: boolean
+  status: OpStatus
 }
 
-// Selo de conclusao na listagem. Esconde o botao "Concluir" quando ja concluida.
-function ConclusaoBadge({ concluida }: { concluida: boolean }) {
-  const cor = concluida ? '#10b981' : '#f59e0b'
+// Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
+const STATUS_INFO: Record<OpStatus, { label: string; cor: string }> = {
+  concluida: { label: 'Concluída', cor: '#10b981' },
+  prevista: { label: 'Prevista', cor: '#3b82f6' },
+  atrasada: { label: 'Atrasada', cor: '#ef4444' },
+  pendente: { label: 'Pendente', cor: '#f59e0b' },
+}
+
+function StatusBadge({ status }: { status: OpStatus }) {
+  const { label, cor } = STATUS_INFO[status]
   return (
     <span
       className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
       style={{ background: `${cor}1f`, color: cor }}
     >
-      {concluida ? 'Concluída' : 'Pendente'}
+      {label}
     </span>
   )
 }
@@ -215,7 +224,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
       <td className="num font-medium text-text align-top">
         <div className="flex items-center gap-2">
           <span>{op.numOP}</span>
-          <ConclusaoBadge concluida={op.concluida} />
+          <StatusBadge status={op.status} />
         </div>
         {op.data && (
           <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
@@ -265,7 +274,7 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
             </div>
           )}
           <div className="mt-1 flex justify-end">
-            <ConclusaoBadge concluida={op.concluida} />
+            <StatusBadge status={op.status} />
           </div>
         </div>
       </div>

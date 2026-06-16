@@ -13,7 +13,8 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
-import { isOpConcluida } from '@/lib/op-status'
+import { isOpConcluida, opStatus } from '@/lib/op-status'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { Factory, Download } from 'lucide-react'
 
 const POR_PAGINA = 50
@@ -46,6 +47,15 @@ export default async function OrdemProducaoPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
+
+  // Filtro de periodo: default no mes corrente quando o usuario nao informa.
+  // Atende o pedido do cliente (abrir no mes atual) e reduz o volume da listagem.
+  const hojeISO = hojeBahiaISO() // YYYY-MM-DD em America/Bahia
+  const [anoAtual, mesAtual] = hojeISO.split('-').map(Number)
+  const primeiroDiaMes = `${hojeISO.slice(0, 7)}-01`
+  const ultimoDiaMes = `${hojeISO.slice(0, 7)}-${String(new Date(anoAtual, mesAtual, 0).getDate()).padStart(2, '0')}`
+  const dataInicio = sp.data_inicio ?? primeiroDiaMes
+  const dataFinal = sp.data_final ?? ultimoDiaMes
 
   // Filtro op_concluido em memoria: a unica fonte confiavel de conclusao e
   // full_object.outrasInf.cConcluida ('S'/'N'), alem do marcador local
@@ -99,8 +109,8 @@ export default async function OrdemProducaoPage({
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
-    if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
-    if (sp.data_final) q = q.lte('identificacao_d_dt_previsao', sp.data_final)
+    if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
+    if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
     if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
     if (codigosFiltro !== null) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
@@ -158,8 +168,9 @@ export default async function OrdemProducaoPage({
     .order('descricao')
 
   const exportParams = new URLSearchParams()
-  if (sp.data_inicio) exportParams.set('data_inicio', sp.data_inicio)
-  if (sp.data_final) exportParams.set('data_final', sp.data_final)
+  // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.
+  exportParams.set('data_inicio', dataInicio)
+  exportParams.set('data_final', dataFinal)
   if (sp.ordem_producao) exportParams.set('ordem_producao', sp.ordem_producao)
   if (sp.op_produto) exportParams.set('op_produto', sp.op_produto)
   if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
@@ -191,8 +202,8 @@ export default async function OrdemProducaoPage({
                 },
               ]}
               defaults={{
-                data_inicio: sp.data_inicio ?? '',
-                data_final: sp.data_final ?? '',
+                data_inicio: dataInicio,
+                data_final: dataFinal,
                 ordem_producao: sp.ordem_producao ?? '',
                 op_produto: sp.op_produto ?? '',
                 tipo_produto: sp.tipo_produto ?? '',
@@ -227,6 +238,7 @@ export default async function OrdemProducaoPage({
               // inclusao, que na recorrencia vem como hoje (bug que o cliente viu).
               data: fmtDataBR(op.identificacao_d_dt_previsao),
               concluida: isOpConcluida(op),
+              status: opStatus(op, hojeISO),
             }
           })
           return (
