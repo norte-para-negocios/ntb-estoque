@@ -13,6 +13,7 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
+import { isOpConcluida } from '@/lib/op-status'
 import { Factory, Download } from 'lucide-react'
 
 const POR_PAGINA = 50
@@ -83,17 +84,21 @@ export default async function OrdemProducaoPage({
     validade: string | null
     quantidade: number | null
     adicionais_d_dt_conclusao: string | null
-    full_object: unknown
+    c_concluida: string | null // full_object->outrasInf->>cConcluida (achatado no select)
   }
 
   function baseQuery() {
+    // c_concluida vem achatado do JSON (so o escalar), para nao trazer o
+    // full_object inteiro de cada OP no filtro de conclusao. O desempate por id
+    // garante janelas .range estaveis (updated_at nao e unico).
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, adicionais_d_dt_conclusao, full_object'
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida'
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
     if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
     if (sp.data_final) q = q.lte('identificacao_d_dt_previsao', sp.data_final)
     if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
@@ -103,33 +108,29 @@ export default async function OrdemProducaoPage({
     return q
   }
 
-  function isConcluida(o: { adicionais_d_dt_conclusao?: string | null; full_object?: unknown }): boolean {
-    if (o.adicionais_d_dt_conclusao) return true
-    const fo = (o.full_object ?? {}) as { outrasInf?: { cConcluida?: string } }
-    return fo.outrasInf?.cConcluida === 'S'
-  }
-
   let ordens: OPRow[]
   let temProxima: boolean
   if (filtraConclusao) {
-    // Conclusao so da pra avaliar em memoria (full_object aninhado nao e filtravel
-    // no PostgREST). Busca o conjunto completo paginando em lote: sem isso a query
-    // batia no teto de 1000 linhas e o filtro operava sobre parte dos dados,
-    // parecendo que era ignorado e mostrava todos.
+    // Conclusao so da pra avaliar em memoria (deriva de c_concluida/adicionais,
+    // nao filtravel no PostgREST). Pagina o conjunto completo em lote: sem isso a
+    // query batia no teto de 1000 e o filtro operava sobre parte dos dados,
+    // parecendo ignorado.
     const querConcluida = sp.op_concluido === 'S'
     const todas: OPRow[] = []
     const LOTE = 1000
-    for (let off = 0; ; off += LOTE) {
+    const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
+    for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
       const { data } = await baseQuery().range(off, off + LOTE - 1)
       const lote = (data ?? []) as OPRow[]
       if (!lote.length) break
       todas.push(...lote)
       if (lote.length < LOTE) break
     }
-    const filtradas = todas.filter((o) => isConcluida(o) === querConcluida)
+    const filtradas = todas.filter((o) => isOpConcluida(o) === querConcluida)
     temProxima = filtradas.length > page * POR_PAGINA
     ordens = filtradas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
   } else {
+    // .range busca POR_PAGINA+1 de proposito: a linha extra detecta a proxima pagina.
     const { data } = await baseQuery().range((page - 1) * POR_PAGINA, page * POR_PAGINA)
     const ordensRaw = (data ?? []) as OPRow[]
     temProxima = ordensRaw.length > POR_PAGINA
@@ -225,7 +226,7 @@ export default async function OrdemProducaoPage({
               // data real/agendada da OP (identificacao_d_dt_previsao), nao a de
               // inclusao, que na recorrencia vem como hoje (bug que o cliente viu).
               data: fmtDataBR(op.identificacao_d_dt_previsao),
-              concluida: isConcluida(op),
+              concluida: isOpConcluida(op),
             }
           })
           return (

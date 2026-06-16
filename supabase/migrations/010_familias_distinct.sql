@@ -3,7 +3,9 @@
 -- linhas do PostgREST, escondendo familias de produtos alem da linha 1000.
 -- Esta function faz o DISTINCT no Postgres (sempre poucas dezenas de familias)
 -- e o indice acelera tanto a montagem quanto o filtro .eq('descricao_familia').
--- SECURITY INVOKER: roda com as permissoes do usuario, respeitando o RLS por loja.
+-- SECURITY INVOKER: roda com as permissoes do usuario. (A tabela produtos nao
+-- tem RLS hoje; o isolamento por loja vem do filtro p_loja_id, mesmo padrao do
+-- resto do app. Habilitar RLS em produtos e um tema separado, para o dono.)
 
 create index if not exists idx_produtos_loja_familia
   on produtos (loja_id, descricao_familia);
@@ -22,4 +24,9 @@ as $$
    order by p.descricao_familia
 $$;
 
-grant execute on function familias_da_loja(bigint) to anon, authenticated;
+-- So autenticados: a tela /produto exige login. Revoga o EXECUTE de PUBLIC e de
+-- anon (este foi concedido por engano numa versao anterior) e concede so a
+-- authenticated.
+revoke execute on function familias_da_loja(bigint) from public;
+revoke execute on function familias_da_loja(bigint) from anon;
+grant execute on function familias_da_loja(bigint) to authenticated;

@@ -4,6 +4,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { toCsv, csvResponse } from '@/lib/csv'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { isOpConcluida } from '@/lib/op-status'
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
     identificacao_n_qtde: number | null
     validade: string | null
     adicionais_d_dt_conclusao: string | null
-    full_object: unknown
+    c_concluida: string | null
   }
   const ordensRaw: Ordem[] = []
 
@@ -59,10 +60,11 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, adicionais_d_dt_conclusao, full_object',
+        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
 
     if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
@@ -84,16 +86,10 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  function isConcluida(o: Ordem): boolean {
-    if (o.adicionais_d_dt_conclusao) return true
-    const fo = (o.full_object ?? {}) as { outrasInf?: { cConcluida?: string } }
-    return fo.outrasInf?.cConcluida === 'S'
-  }
-
   let ordens = ordensRaw
   if (filtraConclusao) {
     const querConcluida = sp.op_concluido === 'S'
-    ordens = ordensRaw.filter((o) => isConcluida(o) === querConcluida)
+    ordens = ordensRaw.filter((o) => isOpConcluida(o) === querConcluida)
   }
 
   // Mesmo join da page: resolve descrição do produto.

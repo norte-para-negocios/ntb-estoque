@@ -218,7 +218,9 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
           <ConclusaoBadge concluida={op.concluida} />
         </div>
         {op.data && (
-          <div className="text-[11px] font-normal text-text-muted">{op.data}</div>
+          <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
+            Prev. {op.data}
+          </div>
         )}
       </td>
       <td className="max-w-xs align-top">
@@ -257,7 +259,11 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
         <div className="shrink-0 text-right">
           <div className="num text-[11px] font-semibold text-text-muted">OP</div>
           <div className="num font-medium text-text">{op.numOP}</div>
-          {op.data && <div className="text-[11px] text-text-muted">{op.data}</div>}
+          {op.data && (
+            <div className="text-[11px] text-text-muted" title="Data prevista da OP">
+              Prev. {op.data}
+            </div>
+          )}
           <div className="mt-1 flex justify-end">
             <ConclusaoBadge concluida={op.concluida} />
           </div>

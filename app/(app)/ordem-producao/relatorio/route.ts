@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { RelatorioOPPDF, type RelatorioOPItem } from '@/components/relatorio/RelatorioOPPDF'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { isOpConcluida } from '@/lib/op-status'
 
 function num(v: unknown): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
@@ -54,10 +55,11 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, full_object'
+        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, adicionais_d_dt_conclusao, c_concluida:full_object->outrasInf->>cConcluida'
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
     if (ordemProducao) q = q.eq('num_ordem', ordemProducao)
     if (codigosFiltro !== null) {
@@ -92,8 +94,7 @@ export async function GET(request: Request) {
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.descricao]))
 
   const itens: RelatorioOPItem[] = ordensList.map((o) => {
-    const fo = (o.full_object ?? {}) as { outrasInf?: { cConcluida?: string } }
-    const concluida = fo.outrasInf?.cConcluida === 'S'
+    const concluida = isOpConcluida(o)
     return {
       numOP: o.identificacao_c_num_op || o.num_ordem || '-',
       produto:
