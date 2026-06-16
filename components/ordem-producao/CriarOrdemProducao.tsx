@@ -7,7 +7,7 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, X } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
@@ -146,37 +146,45 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
             <label className={labelClass}>Produtos</label>
             <ProdutoSearch onSelect={adicionarProduto} placeholder="Buscar produto e adicionar..." />
             {itens.length > 0 && (
-              <ul className="mt-2 space-y-1.5">
+              <ul className="mt-3 space-y-2.5">
                 {itens.map((i) => (
-                  <li key={i.produto.codigo_produto} className="flex items-center gap-2 rounded-md border border-border bg-surface-2/40 px-2.5 py-1.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-text">{i.produto.descricao}</div>
-                      <div className="num truncate text-xs text-text-muted">{i.produto.codigo}</div>
+                  <li key={i.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-text">{i.produto.descricao}</div>
+                        <div className="num mt-0.5 text-xs text-text-muted">{i.produto.codigo}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => remover(i.produto.codigo_produto)}
+                        className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)]"
+                        aria-label="Remover"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
                     </div>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      value={i.quantidade}
-                      onChange={(e) => setQtd(i.produto.codigo_produto, e.target.value)}
-                      title="Quantidade"
-                      className="num w-14 shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm text-text outline-none focus:border-brand"
-                    />
-                    <input
-                      type="date"
-                      value={i.validade}
-                      onChange={(e) => setValidadeItem(i.produto.codigo_produto, e.target.value)}
-                      title="Validade (opcional)"
-                      className="num w-[8.5rem] shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text outline-none focus:border-brand"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => remover(i.produto.codigo_produto)}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-surface-2"
-                      aria-label="Remover"
-                    >
-                      <X className="size-4" />
-                    </button>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="eyebrow">Quantidade</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          value={i.quantidade}
+                          onChange={(e) => setQtd(i.produto.codigo_produto, e.target.value)}
+                          className="num mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text outline-none focus:border-brand"
+                        />
+                      </div>
+                      <div>
+                        <label className="eyebrow">Validade</label>
+                        <input
+                          type="date"
+                          value={i.validade}
+                          onChange={(e) => setValidadeItem(i.produto.codigo_produto, e.target.value)}
+                          className="num mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text outline-none focus:border-brand"
+                        />
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>

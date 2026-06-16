@@ -70,7 +70,9 @@ export function NovoInventario({ locais }: { locais: Local[] }) {
             <Label>Local de estoque</Label>
             <Select value={local} onValueChange={(val) => setLocal((val as string) ?? '')}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o local" />
+                <SelectValue>
+                  {(v) => locais.find((l) => String(l.codigo_local_estoque) === v)?.descricao ?? 'Selecione o local'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {locais.map((l) => (

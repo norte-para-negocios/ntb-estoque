@@ -10,8 +10,8 @@ import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 
 // Tipos de movimento de transferencia aceitos pelo Omie (os unicos dois possiveis).
 export const TIPOS_TRANSFERENCIA = {
-  TRF: 'Transferência entre locais de estoque',
-  TPQ: 'Transferência por perda ou quebra',
+  TRF: 'Entre locais',
+  TPQ: 'Perda e quebra',
 } as const
 export type TipoTransferencia = keyof typeof TIPOS_TRANSFERENCIA
 

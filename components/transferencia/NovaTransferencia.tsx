@@ -85,7 +85,9 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
             <Label>Origem</Label>
             <Select value={origem} onValueChange={(v) => setOrigem((v as string) ?? '')}>
               <SelectTrigger>
-                <SelectValue placeholder="Local de origem" />
+                <SelectValue>
+                  {(v) => locais.find((l) => String(l.codigo_local_estoque) === v)?.descricao ?? 'Local de origem'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {locais.map((l) => (
@@ -100,7 +102,9 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
             <Label>Destino</Label>
             <Select value={destino} onValueChange={(v) => setDestino((v as string) ?? '')}>
               <SelectTrigger>
-                <SelectValue placeholder="Local de destino" />
+                <SelectValue>
+                  {(v) => locais.find((l) => String(l.codigo_local_estoque) === v)?.descricao ?? 'Local de destino'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {locais.map((l) => (
@@ -125,7 +129,7 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
             <Label>Motivo</Label>
             <Select value={tipo} onValueChange={(v) => setTipo((v as TipoTransferencia) ?? 'TRF')}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>{(v) => TIPOS_TRANSFERENCIA[v as TipoTransferencia] ?? 'Motivo'}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(TIPOS_TRANSFERENCIA).map(([valor, rotulo]) => (
