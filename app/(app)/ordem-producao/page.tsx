@@ -50,6 +50,9 @@ export default async function OrdemProducaoPage({
 
   // Filtro de periodo: default no mes corrente quando o usuario nao informa.
   // Atende o pedido do cliente (abrir no mes atual) e reduz o volume da listagem.
+  // OBS de produto: OPs sem identificacao_d_dt_previsao (sem data agendada) ficam
+  // fora do filtro de periodo (gte/lte nao casam NULL). Confirmar com o Ramon se
+  // precisa de um modo "sem data" para nao esconder pendentes nao agendadas.
   const hojeISO = hojeBahiaISO() // YYYY-MM-DD em America/Bahia
   const [anoAtual, mesAtual] = hojeISO.split('-').map(Number)
   const primeiroDiaMes = `${hojeISO.slice(0, 7)}-01`

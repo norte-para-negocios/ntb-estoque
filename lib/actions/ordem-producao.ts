@@ -86,10 +86,9 @@ export async function criarOrdemProducao(input: {
  * escolher qualquer data e repetir semanalmente (recorrencia). Escreve no Omie.
  */
 export async function criarOrdensProducao(input: {
-  itens: { nCodProduto: number; quantidade: number }[]
+  itens: { nCodProduto: number; quantidade: number; validade?: string | null }[]
   datas: string[] // 'YYYY-MM-DD'
   codigoLocalEstoque?: number | null
-  validade?: string | null
   obs?: string
 }) {
   const lojaId = await getCurrentLojaId()
@@ -136,10 +135,10 @@ export async function criarOrdensProducao(input: {
           continue
         }
         await fetchOrdemProducao(loja, nCodOP)
-        if (input.validade) {
+        if (item.validade) {
           await supabase
             .from('ordens_producao')
-            .update({ validade: input.validade, updated_at: new Date().toISOString() })
+            .update({ validade: item.validade, updated_at: new Date().toISOString() })
             .eq('loja_id', lojaId)
             .eq('identificacao_n_cod_op', nCodOP)
         }

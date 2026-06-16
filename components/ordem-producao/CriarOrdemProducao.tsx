@@ -19,7 +19,7 @@ const inputClass =
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 type Local = { codigo_local_estoque: number; descricao: string | null }
-type ItemOP = { produto: ProdutoBusca; quantidade: string }
+type ItemOP = { produto: ProdutoBusca; quantidade: string; validade: string }
 
 function hojeISO(): string {
   const agora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' }))
@@ -48,7 +48,6 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
   const [local, setLocal] = useState('')
   const [data, setData] = useState(hojeISO())
   const [recorrencia, setRecorrencia] = useState('1') // numero de semanas (1 = sem repetir)
-  const [validade, setValidade] = useState('')
   const [obs, setObs] = useState('')
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -58,7 +57,6 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
     setLocal('')
     setData(hojeISO())
     setRecorrencia('1')
-    setValidade('')
     setObs('')
   }
 
@@ -67,11 +65,15 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
       toast.info('Produto já está na lista')
       return
     }
-    setItens((prev) => [...prev, { produto: p, quantidade: '1' }])
+    setItens((prev) => [...prev, { produto: p, quantidade: '1', validade: '' }])
   }
 
   function setQtd(codigoProduto: number, q: string) {
     setItens((prev) => prev.map((i) => (i.produto.codigo_produto === codigoProduto ? { ...i, quantidade: q } : i)))
+  }
+
+  function setValidadeItem(codigoProduto: number, v: string) {
+    setItens((prev) => prev.map((i) => (i.produto.codigo_produto === codigoProduto ? { ...i, validade: v } : i)))
   }
 
   function remover(codigoProduto: number) {
@@ -94,6 +96,7 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
     const itensValidos = itens.map((i) => ({
       nCodProduto: i.produto.codigo_produto,
       quantidade: Number(i.quantidade) || 0,
+      validade: i.validade || null,
     }))
     if (itensValidos.some((i) => i.quantidade <= 0)) {
       toast.error('Quantidade inválida em algum produto')
@@ -104,7 +107,6 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
         itens: itensValidos,
         datas,
         codigoLocalEstoque: local ? Number(local) : null,
-        validade: validade || null,
         obs: obs.trim() || undefined,
       })
       if (res?.error) {
@@ -157,7 +159,15 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
                       min={0}
                       value={i.quantidade}
                       onChange={(e) => setQtd(i.produto.codigo_produto, e.target.value)}
-                      className="num w-16 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm text-text outline-none focus:border-brand"
+                      title="Quantidade"
+                      className="num w-14 shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm text-text outline-none focus:border-brand"
+                    />
+                    <input
+                      type="date"
+                      value={i.validade}
+                      onChange={(e) => setValidadeItem(i.produto.codigo_produto, e.target.value)}
+                      title="Validade (opcional)"
+                      className="num w-[8.5rem] shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text outline-none focus:border-brand"
                     />
                     <button
                       type="button"
@@ -191,22 +201,16 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Local de estoque</label>
-              <select value={local} onChange={(e) => setLocal(e.target.value)} className={inputClass}>
-                <option value="">Padrão do produto</option>
-                {locais.map((l) => (
-                  <option key={l.codigo_local_estoque} value={String(l.codigo_local_estoque)}>
-                    {l.descricao || l.codigo_local_estoque}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Validade (opcional)</label>
-              <input type="date" value={validade} onChange={(e) => setValidade(e.target.value)} className={inputClass} />
-            </div>
+          <div>
+            <label className={labelClass}>Local de estoque</label>
+            <select value={local} onChange={(e) => setLocal(e.target.value)} className={inputClass}>
+              <option value="">Padrão do produto</option>
+              {locais.map((l) => (
+                <option key={l.codigo_local_estoque} value={String(l.codigo_local_estoque)}>
+                  {l.descricao || l.codigo_local_estoque}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -216,7 +220,7 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
 
           <p className="text-[12px] text-text-muted">
             {totalOPs > 0
-              ? `Serão criadas ${totalOPs} ordem(ns): ${itens.length} produto(s) × ${datas.length} data(s). A validade fica só no NTB.`
+              ? `Serão criadas ${totalOPs} ordem(ns): ${itens.length} produto(s) × ${datas.length} data(s). A validade (por produto) fica só no NTB.`
               : 'Adicione produtos e escolha a data. A data vai ao Omie como início, conclusão e previsão.'}
           </p>
         </div>
