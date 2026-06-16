@@ -62,6 +62,14 @@ Fonte: Contas a Receber (faturamento), Contas a Pagar (compras), Movimento Finan
 
 > Backup em Drive/OneDrive (ideia do Ramon) removido do escopo por enquanto, a pedido do fundador (15/06).
 
+## BLOCO 9 — Cadastros completos (CRUD que ESCREVE no Omie) [pedido 16/06]
+Hoje o sistema so LE do Omie (sync). O fundador quer poder CADASTRAR e EDITAR tudo pelo NTB e que isso seja ENVIADO ao Omie (escrita). Cada item escreve no Omie, entao seguir a regra: codar e ok, mas so disparar com o Ramon presente; validacao de erro fiscal sempre.
+- [ ] **9.1 Produto** — criar/editar produto e enviar ao Omie (`IncluirProduto`/`AlterarProduto`, v1/geral/produtos). Hoje produto e so leitura.
+- [ ] **9.2 Local de estoque (deposito)** — criar/editar local e enviar ao Omie (`IncluirLocalEstoque`/`AlterarLocalEstoque`, v1/estoque/local).
+- [ ] **9.3 Fornecedor/cliente** — criar/editar e enviar ao Omie (`IncluirCliente`/`AlterarCliente`, v1/geral/clientes; base de 3.350).
+- [ ] **9.4 Loja/empresa** — editar dados da empresa e refletir no Omie quando aplicavel (liga com 1.2/5.1; `AlterarEmpresa`).
+- [ ] **9.5 Padrao de escrita** — todo cadastro: validar -> gravar no NTB -> enviar ao Omie com retry/log (igual ajuste/OP) -> tratar erro. Confirmar nomes exatos das calls de escrita por teste real antes de implementar.
+
 ---
 
 ## Skills por bloco (superpoderes)
