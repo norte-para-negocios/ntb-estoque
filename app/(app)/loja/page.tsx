@@ -6,6 +6,7 @@ import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
+import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -170,6 +171,15 @@ export default async function LojaPage({
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Certificado digital A1 (a própria loja envia o .pfx + senha) */}
+                <div className="border-t border-border pt-3">
+                  <CertificadoUpload
+                    lojaId={loja.id}
+                    nome={loja.certificado_nome as string | null}
+                    validade={loja.certificado_validade as string | null}
+                  />
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
