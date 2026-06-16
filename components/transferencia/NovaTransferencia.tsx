@@ -34,6 +34,8 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
   const [origem, setOrigem] = useState('')
   const [destino, setDestino] = useState('')
   const [tipo, setTipo] = useState<TipoTransferencia>('TRF')
+  const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const [data, setData] = useState(hojeBahia)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -51,6 +53,7 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
         codigoLocalOrigem: Number(origem),
         codigoLocalDestino: Number(destino),
         tipo,
+        data,
       })
       if (res?.error) {
         toast.error(res.error)
@@ -109,7 +112,17 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Tipo de transferência</Label>
+            <Label>Data</Label>
+            <input
+              type="date"
+              value={data}
+              max={hojeBahia}
+              onChange={(e) => setData(e.target.value)}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Motivo</Label>
             <Select value={tipo} onValueChange={(v) => setTipo((v as TipoTransferencia) ?? 'TRF')}>
               <SelectTrigger>
                 <SelectValue />

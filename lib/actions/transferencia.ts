@@ -14,10 +14,25 @@ export const TIPOS_TRANSFERENCIA = {
 } as const
 export type TipoTransferencia = keyof typeof TIPOS_TRANSFERENCIA
 
+// Data escolhida (YYYY-MM-DD) -> timestamptz ao meio-dia America/Bahia, para nao
+// escorregar de dia ao converter para UTC. Vazio/invalido -> undefined (usa now()).
+function dataCriacaoBahia(d?: string): string | undefined {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return undefined
+  return `${d}T12:00:00-03:00`
+}
+
+// timestamptz do banco -> DD/MM/YYYY em America/Bahia, formato que o Omie espera.
+// Sem data, cai para hoje.
+function dataOmie(iso: string | null): string {
+  const base = iso ? new Date(iso) : new Date()
+  return base.toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+}
+
 export async function createTransferencia(data: {
   codigoLocalOrigem: number
   codigoLocalDestino: number
   tipo: TipoTransferencia
+  data?: string // YYYY-MM-DD; vazio = hoje. Pode ser retroativa, nao futura.
 }) {
   if (data.codigoLocalOrigem === data.codigoLocalDestino) {
     return { error: 'Origem e destino não podem ser o mesmo local' }
@@ -25,9 +40,14 @@ export async function createTransferencia(data: {
   if (data.tipo !== 'TRF' && data.tipo !== 'TPQ') {
     return { error: 'Tipo de transferência inválido' }
   }
+  const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  if (data.data && data.data > hojeBahia) {
+    return { error: 'A data não pode ser futura' }
+  }
   const lojaId = await getCurrentLojaId()
   const userId = (await getUser()).id
   const supabase = createServiceClient()
+  const dataCriacao = dataCriacaoBahia(data.data)
   const { data: trans } = await supabase
     .from('transferencias')
     .insert({
@@ -37,6 +57,7 @@ export async function createTransferencia(data: {
       motivo: data.tipo, // guarda o tipo (TRF/TPQ); vira o `tipo` do ajuste no Omie
       status: 'Em contagem',
       user_id: userId,
+      ...(dataCriacao ? { data: dataCriacao } : {}),
     })
     .select('id')
     .single()
@@ -116,6 +137,7 @@ type TransferenciaComMovimentos = {
   id: number
   codigo_local_origem: number
   motivo: string | null
+  data: string | null
   movimentos: MovimentoRow[]
   loja: LojaOmie
 }
@@ -129,7 +151,7 @@ async function processarMovimento(
   trans: TransferenciaComMovimentos,
   mov: MovimentoRow,
   lojaId: number,
-  hoje: string
+  dataMov: string // DD/MM/YYYY: data da transferencia (nao a de hoje)
 ) {
   const supabase = createServiceClient()
 
@@ -143,7 +165,7 @@ async function processarMovimento(
       trans.loja,
       mov.codigo_local_estoque,
       mov.id_prod,
-      hoje
+      dataMov
     )
     const valor = posicao?.n_cmc ?? 0
 
@@ -164,7 +186,7 @@ async function processarMovimento(
       codigo_local_estoque: mov.codigo_local_estoque,
       id_prod: mov.id_prod,
       cod_int_ajuste: `MOV-${mov.id}`,
-      data: hoje,
+      data: dataMov,
       quan: mov.quan,
       valor,
       obs: 'NTB - Estoque',
@@ -240,7 +262,7 @@ export async function finishTransferencia(transferenciaId: number) {
   const { data: trans } = await supabase
     .from('transferencias')
     .select(
-      'id, codigo_local_origem, motivo, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
     )
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
@@ -248,10 +270,11 @@ export async function finishTransferencia(transferenciaId: number) {
 
   if (!trans?.loja) return { error: 'Transferência não encontrada' }
 
-  const hoje = new Date().toLocaleDateString('pt-BR')
+  // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
+  const dataMov = dataOmie(trans.data)
 
   for (const mov of trans.movimentos) {
-    await processarMovimento(trans, mov, lojaId, hoje)
+    await processarMovimento(trans, mov, lojaId, dataMov)
   }
 
   await supabase
@@ -274,7 +297,7 @@ export async function forceSyncTransferencia(transferenciaId: number) {
   const { data: trans } = await supabase
     .from('transferencias')
     .select(
-      'id, codigo_local_origem, motivo, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
     )
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
@@ -288,14 +311,15 @@ export async function forceSyncTransferencia(transferenciaId: number) {
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
 
-  const hoje = new Date().toLocaleDateString('pt-BR')
+  // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
+  const dataMov = dataOmie(trans.data)
 
   const pendentes = trans.movimentos.filter(
     (m) => m.status === 'Erro' || m.status === null
   )
 
   for (const mov of pendentes) {
-    await processarMovimento(trans, mov, lojaId, hoje)
+    await processarMovimento(trans, mov, lojaId, dataMov)
   }
 
   await supabase
