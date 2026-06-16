@@ -35,19 +35,24 @@ for (const pre of prefixos) {
     })
     try {
       await client.connect()
-      console.log(`CONECTOU em ${host}`)
-      await client.query(sql)
-      const chk = await client.query(
-        `select column_name from information_schema.columns where table_name='lojas' and column_name in ('razao_social','cnae','csc_producao') order by 1`
-      )
-      console.log('MIGRATION APLICADA. colunas criadas:', chk.rows.map((r) => r.column_name).join(', '))
-      await client.end()
-      // salva o host funcional para os outros scripts reusarem
-      fs.writeFileSync(`${PROJ}/scripts/.pooler-host`, `${host}:5432`)
-      process.exit(0)
     } catch (e) {
       console.log(`  ${host}: ${e.code || ''} ${(e.message || '').slice(0, 70)}`)
       try { await client.end() } catch {}
+      continue
+    }
+    // conectou: salva o host e aplica. Erro daqui em diante e da query (dados/SQL),
+    // nao de conexao -> reportar e parar, nao tentar outras regioes.
+    console.log(`CONECTOU em ${host}`)
+    fs.writeFileSync(`${PROJ}/scripts/.pooler-host`, `${host}:5432`)
+    try {
+      await client.query(sql)
+      console.log('MIGRATION APLICADA.')
+      await client.end()
+      process.exit(0)
+    } catch (e) {
+      console.log(`ERRO na query: ${e.code || ''} ${(e.message || '').slice(0, 120)}`)
+      try { await client.end() } catch {}
+      process.exit(1)
     }
   }
 }

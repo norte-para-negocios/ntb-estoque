@@ -11,9 +11,27 @@ interface OmieOPIdentificacao {
   codigo_local_estoque: number
 }
 
+interface OmieOPOutrasInf {
+  cConcluida?: string
+  dConclusao?: string
+  dInclusao?: string
+}
+
 interface OmieOP {
   identificacao: OmieOPIdentificacao
+  outrasInf?: OmieOPOutrasInf
   [k: string]: unknown
+}
+
+// Conclusao REAL da OP: outrasInf.cConcluida/dConclusao (nao a data planejada de
+// infAdicionais, que pode estar preenchida numa OP nao concluida). Ver migration 012.
+function mapOutrasInf(op: OmieOP) {
+  const o = op.outrasInf ?? {}
+  return {
+    concluida: o.cConcluida === 'S',
+    dt_conclusao_real: parseDate(o.dConclusao),
+    dt_inclusao: parseDate(o.dInclusao),
+  }
 }
 
 interface OmieOPResponse {
@@ -63,6 +81,7 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           identificacao_d_dt_previsao: parseDate(op.identificacao.dDtPrevisao),
           identificacao_n_qtde: op.identificacao.nQtde,
           identificacao_codigo_local_estoque: op.identificacao.codigo_local_estoque,
+          ...mapOutrasInf(op),
           full_object: op,
           updated_at: new Date().toISOString(),
         }))
@@ -117,6 +136,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
         identificacao_d_dt_previsao: parseDate(res.identificacao.dDtPrevisao),
         identificacao_n_qtde: res.identificacao.nQtde,
         identificacao_codigo_local_estoque: res.identificacao.codigo_local_estoque,
+        ...mapOutrasInf(res),
         full_object: res,
         updated_at: new Date().toISOString(),
       },

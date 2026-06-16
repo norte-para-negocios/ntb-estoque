@@ -1,9 +1,11 @@
-// Puxa os dados da empresa do Omie (ListarEmpresas) e grava nas lojas via REST.
-// Mesma logica do lib/omie/empresa.ts, mas standalone (uso local/teste/backfill),
-// ja que o Postgres direto pode estar bloqueado na rede. Requer migration 011.
-// Uso: node scripts/sync-empresa.mjs        (todas as lojas com chave)
-//      node scripts/sync-empresa.mjs 2       (so a loja informada)
+// Puxa os dados da empresa do Omie (ListarEmpresas) e grava nas lojas.
+// Mesma logica do lib/omie/empresa.ts, mas standalone (backfill local). Grava
+// pelo pooler Postgres (db.mjs descobre o host) porque o REST do Supabase pode
+// estar bloqueado nesta rede. Nunca mexe em nome/nome_fantasia (rotulo do usuario).
+// Requer migration 011. Uso: node scripts/sync-empresa.mjs        (todas com chave)
+//                            node scripts/sync-empresa.mjs 3 4     (so essas lojas)
 import fs from 'node:fs'
+import pg from 'pg'
 
 const PROJ = process.cwd()
 const env = {}
@@ -11,77 +13,76 @@ for (const line of fs.readFileSync(`${PROJ}/.env.local`, 'utf8').split(/\r?\n/))
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/)
   if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
 }
-const SUPA = env.NEXT_PUBLIC_SUPABASE_URL
-const SRV = env.SUPABASE_SERVICE_ROLE_KEY
-const H = { apikey: SRV, Authorization: `Bearer ${SRV}`, 'Content-Type': 'application/json' }
-const filtro = process.argv.slice(2).map(Number).filter((n) => !Number.isNaN(n))
+const u = new URL(env.SUPABASE_DB_URL)
+const senha = decodeURIComponent(u.password)
+const ref = u.hostname.replace(/^db\./, '').replace(/\.supabase\.co$/, '')
+let host = 'aws-1-sa-east-1.pooler.supabase.com', port = 5432
+try {
+  const [h, p] = fs.readFileSync(`${PROJ}/scripts/.pooler-host`, 'utf8').trim().split(':')
+  if (h) host = h
+  if (p) port = Number(p)
+} catch {}
 
-async function f(url, opts = {}, tent = 5) {
-  for (let i = 0; i < tent; i++) {
-    try {
-      return await fetch(url, { ...opts, signal: AbortSignal.timeout(30000) })
-    } catch (e) {
-      if (i === tent - 1) throw e
-      await new Promise((r) => setTimeout(r, 3000))
-    }
-  }
-}
+const filtro = process.argv.slice(2).map(Number).filter((n) => !Number.isNaN(n))
 const tel = (d, n) => {
   const dd = (d ?? '').trim(), nn = (n ?? '').trim()
   return !dd && !nn ? null : (dd ? `(${dd}) ${nn}` : nn).trim()
 }
 
-// 1) checa se a migration 011 foi aplicada
-const chk = await f(`${SUPA}/rest/v1/lojas?select=id,razao_social&limit=1`)
-if (!chk.ok) {
-  const txt = await chk.text()
-  console.log('MIGRATION 011 NAO APLICADA (a coluna razao_social ainda nao existe). Aplique o SQL no Supabase.')
-  console.log('  detalhe:', txt.slice(0, 200))
-  process.exit(1)
-}
-console.log('Migration 011 OK (coluna existe).')
+const client = new pg.Client({
+  host, port, user: `postgres.${ref}`, password: senha,
+  database: 'postgres', ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000,
+})
+await client.connect()
 
-// 2) lojas com chave
-const lj = await (await f(`${SUPA}/rest/v1/lojas?select=id,nome,nome_fantasia,omie_app_key,omie_app_secret&omie_app_key=not.is.null&order=id`)).json()
-const lojas = lj.filter((l) => !filtro.length || filtro.includes(Number(l.id)))
+const { rows: lojas } = await client.query(
+  `select id, nome, nome_fantasia, omie_app_key, omie_app_secret
+     from lojas where omie_app_key is not null order by id`
+)
+const alvo = lojas.filter((l) => !filtro.length || filtro.includes(Number(l.id)))
 
-for (const loja of lojas) {
+for (const loja of alvo) {
   try {
-    const r = await f('https://app.omie.com.br/api/v1/geral/empresas/', {
+    const r = await fetch('https://app.omie.com.br/api/v1/geral/empresas/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_key: loja.omie_app_key, app_secret: loja.omie_app_secret, call: 'ListarEmpresas', param: [{ pagina: 1, registros_por_pagina: 50 }] }),
+      signal: AbortSignal.timeout(30000),
     })
     const j = await r.json()
     const e = (j.empresas_cadastro || [])[0]
-    if (!e) { console.log(`loja ${loja.id}: sem dados`); continue }
-    const patch = {
-      razao_social: e.razao_social ?? null,
-      inscricao_estadual: e.inscricao_estadual ?? null,
-      inscricao_municipal: e.inscricao_municipal ?? null,
-      cnae: e.cnae ?? null,
-      cnae_municipal: e.cnae_municipal ?? null,
-      regime_tributario: e.regime_tributario ?? null,
-      optante_simples_nacional: e.optante_simples_nacional ?? null,
-      csc_producao: e.csc_producao || null,
-      csc_id_producao: e.csc_id_producao || null,
-      codigo_empresa: e.codigo_empresa ? Number(e.codigo_empresa) : null,
-      complemento: e.complemento ?? null,
-      email: e.email ?? null,
-      website: e.website ?? null,
-      telefone1: tel(e.telefone1_ddd, e.telefone1_numero),
-      telefone2: tel(e.telefone2_ddd, e.telefone2_numero),
-      sped_nome_contador: e.sped_nome_contador ?? null,
-      sped_cpf_contador: e.sped_cpf_contador ?? null,
-      sped_email_contador: e.sped_email_contador ?? null,
-      full_object_empresa: e,
-      empresa_status: 'Concluido',
-      empresa_ultima_atualizacao: new Date().toISOString(),
+    if (!e) {
+      await client.query(`update lojas set empresa_status='Sem dados', empresa_ultima_atualizacao=now() where id=$1`, [loja.id])
+      console.log(`loja ${loja.id}: sem dados`)
+      continue
     }
-    const up = await f(`${SUPA}/rest/v1/lojas?id=eq.${loja.id}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
-    console.log(`loja ${loja.id} (${loja.nome_fantasia || loja.nome}): ${up.status} -> ${e.razao_social} | IE ${e.inscricao_estadual} | CNAE ${e.cnae} | regime ${e.regime_tributario}`)
+    // completa endereco so se vier preenchido (coalesce no SQL)
+    await client.query(
+      `update lojas set
+        razao_social=$2, inscricao_estadual=$3, inscricao_municipal=$4, cnae=$5, cnae_municipal=$6,
+        regime_tributario=$7, optante_simples_nacional=$8, csc_producao=$9, csc_id_producao=$10,
+        codigo_empresa=$11, complemento=$12, email=$13, website=$14, telefone1=$15, telefone2=$16,
+        sped_nome_contador=$17, sped_cpf_contador=$18, sped_email_contador=$19,
+        cnpj=coalesce(nullif($20,''), cnpj), cep=coalesce(nullif($21,''), cep), uf=coalesce(nullif($22,''), uf),
+        cidade=coalesce(nullif($23,''), cidade), bairro=coalesce(nullif($24,''), bairro),
+        logradouro=coalesce(nullif($25,''), logradouro), numero=coalesce(nullif($26,''), numero),
+        full_object_empresa=$27, empresa_status='Concluido', empresa_ultima_atualizacao=now()
+       where id=$1`,
+      [
+        loja.id, e.razao_social ?? null, e.inscricao_estadual ?? null, e.inscricao_municipal ?? null,
+        e.cnae ?? null, e.cnae_municipal ?? null, e.regime_tributario ?? null, e.optante_simples_nacional ?? null,
+        e.csc_producao || null, e.csc_id_producao || null, e.codigo_empresa ? Number(e.codigo_empresa) : null,
+        e.complemento ?? null, e.email ?? null, e.website ?? null, tel(e.telefone1_ddd, e.telefone1_numero),
+        tel(e.telefone2_ddd, e.telefone2_numero), e.sped_nome_contador ?? null, e.sped_cpf_contador ?? null,
+        e.sped_email_contador ?? null, e.cnpj ?? '', e.cep ?? '', e.estado ?? '', e.cidade ?? '',
+        e.bairro ?? '', e.endereco ?? '', e.endereco_numero ?? '', JSON.stringify(e),
+      ]
+    )
+    console.log(`loja ${loja.id} (${loja.nome_fantasia}): ${e.razao_social} | IE ${e.inscricao_estadual} | CNAE ${e.cnae} | regime ${e.regime_tributario}`)
   } catch (err) {
-    console.log(`loja ${loja.id}: ERRO ${err.message?.slice(0, 80)}`)
+    await client.query(`update lojas set empresa_status='Erro', empresa_ultima_atualizacao=now() where id=$1`, [loja.id]).catch(() => {})
+    console.log(`loja ${loja.id}: ERRO ${(err.message || '').slice(0, 80)}`)
   }
 }
+await client.end()
 console.log('FIM')
