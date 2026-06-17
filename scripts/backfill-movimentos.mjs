@@ -34,43 +34,51 @@ await db.query(`create table if not exists movimentos_historico (
 function brToISO(d) { const m = String(d).match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-let pagina = 1, totalPaginas = 1, gravados = 0
-do {
-  let res
-  try {
-    const r = await fetch('https://app.omie.com.br/api/v1/estoque/movestoque/', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ call: 'ListarMovimentos', app_key: loja.k, app_secret: loja.s, param: [{ pagina, registros_por_pagina: 100, data_inicial: '01/01/2026', data_final: '17/06/2026', ordenar_por: 'CODIGO' }] }),
-    })
-    res = await r.json()
-  } catch (e) { console.error('erro fetch:', e.message); break }
-  if (res?.faultstring) {
-    if (/não existem registros|nao existem registros/i.test(res.faultstring)) break
-    if (/redundante|aguarde/i.test(res.faultstring)) { await sleep(52000); continue }
-    console.error('faultstring:', res.faultstring); break
-  }
-  totalPaginas = res.total_de_paginas || 1
-  // monta as linhas (produto x dia) e faz upsert em lote
-  const linhas = []
-  for (const c of res.cadastros ?? []) {
-    for (const mv of c.movimentos ?? []) {
-      const data = brToISO(mv.dDataMovimento); if (!data) continue
-      linhas.push([lojaId, c.nCodProd, c.cCodigo || null, c.cDescricao || null, data, mv.nQtdeEntradas || 0, mv.nQtdeSaidas || 0])
+// O Omie TRUNCA periodos longos no ListarMovimentos (pediu 01/01-17/06, so veio
+// ate 02/03). Solucao: backfill MES A MES (cada mes vem completo). Upsert idempotente.
+const meses = [
+  ['01/01/2026', '31/01/2026'], ['01/02/2026', '28/02/2026'], ['01/03/2026', '31/03/2026'],
+  ['01/04/2026', '30/04/2026'], ['01/05/2026', '31/05/2026'], ['01/06/2026', '17/06/2026'],
+]
+let gravados = 0
+for (const [di, df] of meses) {
+  let pagina = 1, totalPaginas = 1, doMes = 0
+  do {
+    let res
+    try {
+      const r = await fetch('https://app.omie.com.br/api/v1/estoque/movestoque/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ call: 'ListarMovimentos', app_key: loja.k, app_secret: loja.s, param: [{ pagina, registros_por_pagina: 100, data_inicial: di, data_final: df, ordenar_por: 'CODIGO' }] }),
+      })
+      res = await r.json()
+    } catch (e) { console.error('erro fetch:', e.message); break }
+    if (res?.faultstring) {
+      if (/não existem registros|nao existem registros/i.test(res.faultstring)) break
+      if (/redundante|aguarde/i.test(res.faultstring)) { await sleep(52000); continue }
+      console.error('faultstring:', res.faultstring); break
     }
-  }
-  if (linhas.length) {
-    const vals = linhas.map((_, i) => `($${i*7+1},$${i*7+2},$${i*7+3},$${i*7+4},$${i*7+5},$${i*7+6},$${i*7+7})`).join(',')
-    await db.query(
-      `insert into movimentos_historico (loja_id,cod_prod,codigo,descricao,data,entradas,saidas) values ${vals}
-       on conflict (loja_id,cod_prod,data) do update set entradas=excluded.entradas, saidas=excluded.saidas, codigo=excluded.codigo, descricao=excluded.descricao`,
-      linhas.flat()
-    )
-    gravados += linhas.length
-  }
-  console.log(`pagina ${pagina}/${totalPaginas} -> +${linhas.length} linhas (total ${gravados})`)
-  pagina++
-  await sleep(700) // anti-rajada
-} while (pagina <= totalPaginas)
+    totalPaginas = res.total_de_paginas || 1
+    const linhas = []
+    for (const c of res.cadastros ?? []) {
+      for (const mv of c.movimentos ?? []) {
+        const data = brToISO(mv.dDataMovimento); if (!data) continue
+        linhas.push([lojaId, c.nCodProd, c.cCodigo || null, c.cDescricao || null, data, mv.nQtdeEntradas || 0, mv.nQtdeSaidas || 0])
+      }
+    }
+    if (linhas.length) {
+      const vals = linhas.map((_, i) => `($${i*7+1},$${i*7+2},$${i*7+3},$${i*7+4},$${i*7+5},$${i*7+6},$${i*7+7})`).join(',')
+      await db.query(
+        `insert into movimentos_historico (loja_id,cod_prod,codigo,descricao,data,entradas,saidas) values ${vals}
+         on conflict (loja_id,cod_prod,data) do update set entradas=excluded.entradas, saidas=excluded.saidas, codigo=excluded.codigo, descricao=excluded.descricao`,
+        linhas.flat()
+      )
+      gravados += linhas.length; doMes += linhas.length
+    }
+    pagina++
+    await sleep(700) // anti-rajada
+  } while (pagina <= totalPaginas)
+  console.log(`  mes ${di} a ${df}: +${doMes} linhas (acumulado ${gravados})`)
+}
 
 const { rows: stat } = await db.query("select count(*) n, pg_size_pretty(pg_total_relation_size('movimentos_historico')) tam, pg_size_pretty(pg_database_size(current_database())) banco from movimentos_historico")
 console.log('\n=== RESULTADO loja', lojaId, '===')
