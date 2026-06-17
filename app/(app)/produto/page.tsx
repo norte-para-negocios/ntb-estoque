@@ -294,7 +294,9 @@ export default async function ProdutoPage({
               )
             })}
           </div>
-          {vista === 'precos' && <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} />}
+          {vista === 'precos' && (
+            <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} naUrl={!!params.margem} />
+          )}
           {vista === 'compras' &&
             (() => {
               const sp = new URLSearchParams(exportParams.toString())

@@ -77,8 +77,10 @@ export async function GET(
   const element = createElement(ContagemTransferenciaPDF, {
     loja: loja?.nome_fantasia || loja?.nome || '',
     data: new Date(trans.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }),
-    origem: `${trans.codigo_local_origem} - ${localMap.get(trans.codigo_local_origem) ?? ''}`,
-    destino: `${trans.codigo_local_destino} - ${localMap.get(trans.codigo_local_destino) ?? ''}`,
+    // So o NOME do local (sem o codigo numerico): pedido da reuniao 16/06
+    // "tirar os numeros, deixar so o local". Fallback no codigo se faltar nome.
+    origem: localMap.get(trans.codigo_local_origem) || String(trans.codigo_local_origem),
+    destino: localMap.get(trans.codigo_local_destino) || String(trans.codigo_local_destino),
     itens,
   }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
