@@ -24,6 +24,7 @@ export default async function InventarioPage({
     data_final?: string
     familia?: string
     tipo?: string
+    status?: string
     page?: string
   }>
 }) {
@@ -87,6 +88,9 @@ export default async function InventarioPage({
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
+  // Status: F = finalizado; A = em aberto (em contagem, ainda nao finalizado).
+  if (sp.status === 'F') query = query.eq('status', 'Finalizado')
+  else if (sp.status === 'A') query = query.neq('status', 'Finalizado')
   if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
   query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
@@ -128,10 +132,20 @@ export default async function InventarioPage({
                   opcoes: familias.map((f) => ({ value: f, label: f })),
                 },
                 { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+                {
+                  tipo: 'select',
+                  nome: 'status',
+                  label: 'Status',
+                  opcoes: [
+                    { value: 'F', label: 'Finalizado' },
+                    { value: 'A', label: 'Em aberto' },
+                  ],
+                },
               ]}
               defaults={{
                 data_inicio: sp.data_inicio ?? '',
                 data_final: sp.data_final ?? '',
+                status: sp.status ?? '',
                 familia: sp.familia ?? '',
                 tipo: sp.tipo ?? '',
               }}

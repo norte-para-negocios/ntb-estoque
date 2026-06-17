@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { NovoLocalEstoque } from '@/components/local-estoque/NovoLocalEstoque'
 import { BuscaSimples } from '@/components/BuscaSimples'
@@ -19,7 +20,7 @@ function fmtTimestamp(d: string | null): string {
 export default async function LocalEstoquePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; situacao?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque'))) notFound()
@@ -42,6 +43,9 @@ export default async function LocalEstoquePage({
     .limit(200)
 
   if (params.q) query = query.ilike('descricao', `%${escapeIlike(params.q)}%`)
+  // Situacao: ativos (inativo != S) / inativos (inativo = S) / todos (default).
+  if (params.situacao === 'ativos') query = query.neq('inativo', 'S')
+  else if (params.situacao === 'inativos') query = query.eq('inativo', 'S')
 
   const { data: locais } = await query
 
@@ -70,6 +74,33 @@ export default async function LocalEstoquePage({
         placeholder="Buscar local..."
         defaultValue={params.q ?? ''}
       />
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {[
+          { v: '', label: 'Todos' },
+          { v: 'ativos', label: 'Ativos' },
+          { v: 'inativos', label: 'Inativos' },
+        ].map((s) => {
+          const ativo = (params.situacao ?? '') === s.v
+          const qsp = new URLSearchParams()
+          if (params.q) qsp.set('q', params.q)
+          if (s.v) qsp.set('situacao', s.v)
+          const qs = qsp.toString()
+          return (
+            <Link
+              key={s.v || 'todos'}
+              href={`/local-estoque${qs ? `?${qs}` : ''}`}
+              className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+                ativo
+                  ? 'border-brand bg-brand-soft text-brand'
+                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+              }`}
+            >
+              {s.label}
+            </Link>
+          )
+        })}
+      </div>
 
       <Lista
         linhas={locais ?? []}

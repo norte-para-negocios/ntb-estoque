@@ -24,6 +24,8 @@ export default async function TransferenciaPage({
     data_final?: string
     familia?: string
     tipo?: string
+    status?: string
+    motivo?: string
     page?: string
   }>
 }) {
@@ -75,13 +77,18 @@ export default async function TransferenciaPage({
   let query = supabase
     .from('transferencias')
     .select(
-      'id, data, codigo_local_origem, codigo_local_destino, status, movimentos(count), movStatus:movimentos(status)'
+      'id, data, codigo_local_origem, codigo_local_destino, status, motivo, movimentos(count), movStatus:movimentos(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
+  // Status: C = concluída (Concluido no Omie); A = em aberto (qualquer outro).
+  if (sp.status === 'C') query = query.eq('status', 'Concluido')
+  else if (sp.status === 'A') query = query.neq('status', 'Concluido')
+  // Motivo guarda o tipo do ajuste: TRF (transferência) ou TPQ (perda/quebra).
+  if (sp.motivo === 'TRF' || sp.motivo === 'TPQ') query = query.eq('motivo', sp.motivo)
   if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
   query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
@@ -139,12 +146,32 @@ export default async function TransferenciaPage({
                   opcoes: familias.map((f) => ({ value: f, label: f })),
                 },
                 { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+                {
+                  tipo: 'select',
+                  nome: 'status',
+                  label: 'Status',
+                  opcoes: [
+                    { value: 'C', label: 'Concluída' },
+                    { value: 'A', label: 'Em aberto' },
+                  ],
+                },
+                {
+                  tipo: 'select',
+                  nome: 'motivo',
+                  label: 'Motivo',
+                  opcoes: [
+                    { value: 'TRF', label: 'Transferência' },
+                    { value: 'TPQ', label: 'Perda / quebra' },
+                  ],
+                },
               ]}
               defaults={{
                 data_inicio: sp.data_inicio ?? '',
                 data_final: sp.data_final ?? '',
                 familia: sp.familia ?? '',
                 tipo: sp.tipo ?? '',
+                status: sp.status ?? '',
+                motivo: sp.motivo ?? '',
               }}
             />
             <a
