@@ -36,10 +36,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // O Omie TRUNCA periodos longos no ListarMovimentos (pediu 01/01-17/06, so veio
 // ate 02/03). Solucao: backfill MES A MES (cada mes vem completo). Upsert idempotente.
-const meses = [
-  ['01/01/2026', '31/01/2026'], ['01/02/2026', '28/02/2026'], ['01/03/2026', '31/03/2026'],
-  ['01/04/2026', '30/04/2026'], ['01/05/2026', '31/05/2026'], ['01/06/2026', '17/06/2026'],
-]
+// 2o arg = ano (default 2026). 2025 traz jun-dez (janela rolante de 12 meses).
+const ano = process.argv[3] || '2026'
+const meses = ano === '2025'
+  ? [
+      ['01/06/2025', '30/06/2025'], ['01/07/2025', '31/07/2025'], ['01/08/2025', '31/08/2025'],
+      ['01/09/2025', '30/09/2025'], ['01/10/2025', '31/10/2025'], ['01/11/2025', '30/11/2025'],
+      ['01/12/2025', '31/12/2025'],
+    ]
+  : [
+      ['01/01/2026', '31/01/2026'], ['01/02/2026', '28/02/2026'], ['01/03/2026', '31/03/2026'],
+      ['01/04/2026', '30/04/2026'], ['01/05/2026', '31/05/2026'], ['01/06/2026', '17/06/2026'],
+    ]
+console.log('ano alvo:', ano, '| meses:', meses.length)
 let gravados = 0
 for (const [di, df] of meses) {
   let pagina = 1, totalPaginas = 1, doMes = 0
