@@ -9,6 +9,8 @@ import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { Num } from '@/components/ui-kit/Num'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { buscarFamilias } from '@/lib/actions/produto'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
@@ -46,7 +48,7 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
@@ -61,15 +63,18 @@ export default async function ValidadePage({
 
   const supabase = await createClient()
 
-  // Filtro por tipo de produto: resolve os codigos do tipo escolhido (produto acabado
-  // nao controla validade; em processo sim). null = sem filtro.
+  // Filtro por tipo + familia + busca de produto: resolve os codigos que batem em
+  // TODOS os filtros e restringe as OPs a esses produtos. null = sem filtro.
   let codigosTipo: number[] | null = null
-  if (sp.tipo) {
-    const { data: prodsTipo } = await supabase
-      .from('produtos')
-      .select('codigo_produto')
-      .eq('loja_id', lojaId)
-      .eq('tipo_item', sp.tipo)
+  if (sp.tipo || sp.familia || sp.produto) {
+    let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
+    if (sp.tipo) pq = pq.eq('tipo_item', sp.tipo)
+    if (sp.familia) pq = pq.eq('descricao_familia', sp.familia)
+    if (sp.produto) {
+      const e = escapeIlikeOr(sp.produto)
+      pq = pq.or(`descricao.ilike.%${e}%,codigo.ilike.%${e}%`)
+    }
+    const { data: prodsTipo } = await pq
     codigosTipo = [...new Set((prodsTipo ?? []).map((p) => p.codigo_produto).filter(Boolean))]
   }
 
@@ -102,6 +107,17 @@ export default async function ValidadePage({
     : { data: [] }
 
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
+  const familias = await buscarFamilias()
+
+  // Preserva tipo/familia/produto ao trocar o periodo (chips).
+  const extra = [
+    sp.tipo && `tipo=${encodeURIComponent(sp.tipo)}`,
+    sp.familia && `familia=${encodeURIComponent(sp.familia)}`,
+    sp.produto && `produto=${encodeURIComponent(sp.produto)}`,
+  ]
+    .filter(Boolean)
+    .join('&')
+  const sufixo = extra ? `&${extra}` : ''
 
   return (
     <div className="space-y-4">
@@ -113,9 +129,11 @@ export default async function ValidadePage({
           <FiltrosGaveta
             basePath="/validade"
             campos={[
+              { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
               { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+              { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
             ]}
-            defaults={{ tipo: sp.tipo ?? '' }}
+            defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
           />
         }
       />
@@ -123,11 +141,10 @@ export default async function ValidadePage({
       <div className="flex flex-wrap items-center gap-1.5">
         {PERIODOS.map((p) => {
           const ativo = !vencidos && p === dias
-          const sufixoTipo = sp.tipo ? `&tipo=${sp.tipo}` : ''
           return (
             <Link
               key={p}
-              href={`/validade?dias=${p}${sufixoTipo}`}
+              href={`/validade?dias=${p}${sufixo}`}
               className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
                 ativo
                   ? 'border-brand bg-brand-soft text-brand'
@@ -139,7 +156,7 @@ export default async function ValidadePage({
           )
         })}
         <Link
-          href={`/validade?modo=vencidos${sp.tipo ? `&tipo=${sp.tipo}` : ''}`}
+          href={`/validade?modo=vencidos${sufixo}`}
           className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
             vencidos
               ? 'border-[#ef4444] bg-[#ef44441f] text-[#ef4444]'
