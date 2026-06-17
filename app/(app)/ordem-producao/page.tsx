@@ -313,15 +313,15 @@ export default async function OrdemProducaoPage({
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: {fmtDataBR(dataInicio)} a {fmtDataBR(dataFinal)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          Pendentes <span className="num font-semibold text-[var(--warn,#f59e0b)]">{totPendentes ?? 0}</span>
+          Pendentes <span className="num font-semibold text-warn">{totPendentes ?? 0}</span>
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          Concluídas <span className="num font-semibold text-[#10b981]">{totConcluidas ?? 0}</span>
+          Concluídas <span className="num font-semibold text-ok">{totConcluidas ?? 0}</span>
         </span>
       </div>
 
       {truncado && (
-        <p className="mb-3 rounded-md border border-[var(--warn,#f59e0b)]/30 bg-[var(--warn,#f59e0b)]/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
           Há muitas ordens. Mostrando uma parte. Use o filtro de data para refinar e ver tudo.
         </p>
       )}

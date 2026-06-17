@@ -142,12 +142,12 @@ export function ContagemTransferencia({
       {finalizado && total > 0 && (
         <div
           className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
-            comErro ? 'border-[var(--err,#ef4444)]/40 bg-[var(--err,#ef4444)]/5' : 'border-[#10b981]/40 bg-[#10b981]/5'
+            comErro ? 'border-err/40 bg-err/5' : 'border-ok/40 bg-ok/5'
           }`}
         >
           <span className="text-sm font-medium text-text">
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
-            {comErro > 0 && <span className="text-[var(--err,#ef4444)]"> · {comErro} com erro</span>}
+            {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
           </span>
           {comErro > 0 && (
             <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
@@ -203,7 +203,7 @@ export function ContagemTransferencia({
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending}
-                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)] disabled:opacity-50"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err disabled:opacity-50"
                       aria-label="Remover"
                     >
                       <Trash2 className="size-4" />

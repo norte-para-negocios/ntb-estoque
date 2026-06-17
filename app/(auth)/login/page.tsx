@@ -51,7 +51,7 @@ export default function LoginPage() {
           </div>
 
           {state?.error && (
-            <div className="rounded-md border border-[var(--err)]/30 bg-[var(--err)]/10 px-3 py-2 text-sm text-[var(--err)]">
+            <div className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-sm text-err">
               {state.error}
             </div>
           )}

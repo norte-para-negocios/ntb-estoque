@@ -27,7 +27,7 @@ export type LogRowData = {
 function Detalhe({ log }: { log: LogRowData }) {
   return (
     <>
-      {log.error_message && <p className="mb-2 text-sm text-[var(--err)]">{log.error_message}</p>}
+      {log.error_message && <p className="mb-2 text-sm text-err">{log.error_message}</p>}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">

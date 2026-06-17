@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { SELO_CLASSE } from '@/lib/status-cor'
 import { Printer } from 'lucide-react'
 
 type Impressao = {
@@ -129,12 +130,7 @@ export default async function ImpressoesPage({
               const isNF = imp.origem === 'NF'
               return (
                 <span
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-                  style={
-                    isNF
-                      ? { color: '#3b82f6', background: '#3b82f61a' }
-                      : { color: '#10b981', background: '#10b9811a' }
-                  }
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[isNF ? 'info' : 'ok']}`}
                 >
                   {isNF ? 'Nota Fiscal' : 'Ordem de Produção'}
                 </span>

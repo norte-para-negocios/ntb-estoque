@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -131,40 +132,40 @@ export default async function HomePage() {
   const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
 
   // Fila "Precisa de atenção": só itens com contagem > 0.
-  type Alerta = { icon: LucideIcon; cor: string; texto: string; href: string }
+  type Alerta = { icon: LucideIcon; token: CorToken; texto: string; href: string }
   const alertas: Alerta[] = []
   if (qtdRepor > 0)
     alertas.push({
       icon: AlertTriangle,
-      cor: '#ef4444',
+      token: 'err',
       texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`,
       href: '/produto?vista=compras&repor=1',
     })
   if ((errosSync.count ?? 0) > 0)
     alertas.push({
       icon: AlertTriangle,
-      cor: '#ef4444',
+      token: 'err',
       texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`,
       href: '/sync-status',
     })
   if ((vencendo.count ?? 0) > 0)
     alertas.push({
       icon: CalendarClock,
-      cor: '#f59e0b',
+      token: 'warn',
       texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
       href: '/validade?dias=7',
     })
   if ((invAbertos.count ?? 0) > 0)
     alertas.push({
       icon: ClipboardList,
-      cor: '#2eb5c3',
+      token: 'brand',
       texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`,
       href: '/inventario',
     })
   if ((transfAbertas.count ?? 0) > 0)
     alertas.push({
       icon: ArrowLeftRight,
-      cor: '#2eb5c3',
+      token: 'brand',
       texto: `${transfAbertas.count} transferência(s) em aberto`,
       href: '/transferencia',
     })
@@ -184,7 +185,7 @@ export default async function HomePage() {
   return (
     <div className="space-y-8">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-[#10151c] text-white p-7 lg:p-9">
+      <section className="relative overflow-hidden rounded-2xl bg-ink text-white p-7 lg:p-9">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.5]"
           style={{ background: 'radial-gradient(120% 80% at 85% -20%, rgba(46,181,195,0.18), transparent 60%)' }}
@@ -224,8 +225,7 @@ export default async function HomePage() {
                 style={{ transitionTimingFunction: 'var(--ease)' }}
               >
                 <span
-                  className="flex size-8 items-center justify-center rounded-md shrink-0"
-                  style={{ background: `${a.cor}1a`, color: a.cor }}
+                  className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}
                 >
                   <a.icon className="size-4" strokeWidth={2} />
                 </span>
@@ -236,7 +236,7 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <span className="flex size-8 items-center justify-center rounded-md bg-[#10b981]/10 text-[#10b981] shrink-0">
+            <span className="flex size-8 items-center justify-center rounded-md bg-ok/10 text-ok shrink-0">
               <CheckCircle2 className="size-4" strokeWidth={2} />
             </span>
             <span className="text-sm text-text">Tudo em ordem. Nada pendente na loja.</span>
@@ -273,7 +273,7 @@ export default async function HomePage() {
             <Link
               key={a.href}
               href={a.href}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 transition-all duration-300 hover:bg-[#10151c] hover:border-[#10151c]"
+              className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 transition-all duration-300 hover:bg-ink hover:border-ink"
               style={{ transitionTimingFunction: 'var(--ease)' }}
             >
               <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white transition-colors shrink-0">
@@ -301,7 +301,7 @@ export default async function HomePage() {
           <ul className="divide-y divide-border">
             {(prodsRepor ?? []).map((p) => (
               <li key={p.codigo_produto} className="flex items-center gap-3 py-3">
-                <span className="flex size-7 items-center justify-center rounded-md bg-[#ef4444]/10 text-[#ef4444] shrink-0">
+                <span className="flex size-7 items-center justify-center rounded-md bg-err/10 text-err shrink-0">
                   <AlertTriangle className="size-3.5" strokeWidth={2} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm text-text">{formatarNomeProduto(p.descricao)}</span>

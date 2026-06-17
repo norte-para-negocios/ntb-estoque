@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP } from '@/lib/actions/ordem-producao'
 import { Num } from '@/components/ui-kit/Num'
 import type { OpStatus } from '@/lib/op-status'
+import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 
 const stepBtnClass =
   'flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60'
@@ -24,20 +25,17 @@ interface OPData {
 }
 
 // Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
-const STATUS_INFO: Record<OpStatus, { label: string; cor: string }> = {
-  concluida: { label: 'Concluída', cor: '#10b981' },
-  prevista: { label: 'Prevista', cor: '#3b82f6' },
-  atrasada: { label: 'Atrasada', cor: '#ef4444' },
-  pendente: { label: 'Pendente', cor: '#f59e0b' },
+const STATUS_INFO: Record<OpStatus, { label: string; token: CorToken }> = {
+  concluida: { label: 'Concluída', token: 'ok' },
+  prevista: { label: 'Prevista', token: 'info' },
+  atrasada: { label: 'Atrasada', token: 'err' },
+  pendente: { label: 'Pendente', token: 'warn' },
 }
 
 function StatusBadge({ status }: { status: OpStatus }) {
-  const { label, cor } = STATUS_INFO[status]
+  const { label, token } = STATUS_INFO[status]
   return (
-    <span
-      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-      style={{ background: `${cor}1f`, color: cor }}
-    >
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SELO_CLASSE[token]}`}>
       {label}
     </span>
   )

@@ -182,7 +182,7 @@ export function CriarOPProdutos({
                   </div>
                   <button
                     onClick={() => remover(item.produto.codigo_produto)}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)]"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err"
                     aria-label="Remover"
                   >
                     <Trash2 className="size-4" />

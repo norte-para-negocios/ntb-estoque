@@ -8,7 +8,7 @@ export function StatCard({
   hint,
   icon: Icon,
   href,
-  accent = '#2eb5c3',
+  accent = 'var(--brand)',
 }: {
   label: string
   value: number
@@ -29,7 +29,7 @@ export function StatCard({
       <div className="flex items-center justify-between">
         <span
           className="flex size-8 items-center justify-center rounded-md"
-          style={{ background: `${accent}1a` }}
+          style={{ background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
         >
           <Icon className="size-4" style={{ color: accent }} strokeWidth={2} />
         </span>

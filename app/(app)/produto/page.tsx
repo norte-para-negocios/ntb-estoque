@@ -20,6 +20,7 @@ import { ExcluirProdutoBtn } from '@/components/produtos/ExcluirProdutoBtn'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
 import { Package, Download, Plus } from 'lucide-react'
 
 const POR_PAGINA = 100
@@ -51,12 +52,6 @@ function margem(venda: number | null, custo: number | null): number | null {
 function precoSugerido(custo: number | null, alvo: number): number | null {
   if (!custo || alvo >= 1) return null
   return custo / (1 - alvo)
-}
-
-function corMargem(m: number): string {
-  if (m <= 0) return '#ef4444'
-  if (m < 0.2) return '#f59e0b'
-  return '#10b981'
 }
 
 export default async function ProdutoPage({
@@ -382,7 +377,7 @@ export default async function ProdutoPage({
                     const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
                     if (m == null) return <span className="text-text-muted">-</span>
                     return (
-                      <span className="num font-medium" style={{ color: corMargem(m) }}>
+                      <span className={`num font-medium ${TEXTO_CLASSE[corMargem(m)]}`}>
                         {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
                       </span>
                     )
@@ -421,7 +416,7 @@ export default async function ProdutoPage({
                     const min = minEfetivo(p)
                     // min 0 (caso dominante no Omie) = sem politica de minimo: nao marca baixo.
                     const baixo = min != null && min > 0 && saldo <= min
-                    return <span className={`num ${baixo ? 'font-semibold text-[var(--err,#ef4444)]' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
+                    return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
                   },
                 },
                 {
@@ -446,7 +441,7 @@ export default async function ProdutoPage({
                     // compra = minimo + previsao de venda - estoque atual
                     const prev = prevVendaDe(p.codigo_produto) ?? 0
                     const comprar = Math.max(0, min + prev - saldo)
-                    if (comprar <= 0) return <span className="text-[#10b981]">ok</span>
+                    if (comprar <= 0) return <span className="text-ok">ok</span>
                     return <span className="num font-semibold text-brand"><Num value={comprar} frac={0} /></span>
                   },
                 },

@@ -222,7 +222,7 @@ export default async function TransferenciaPage({
               const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
               if (t.status !== 'Concluido') return <span className="num text-text-muted">{total}</span>
               return (
-                <span className={`num font-medium ${temErro ? 'text-[var(--err,#ef4444)]' : 'text-[#10b981]'}`}>
+                <span className={`num font-medium ${temErro ? 'text-err' : 'text-ok'}`}>
                   {concluidos}/{total}
                 </span>
               )

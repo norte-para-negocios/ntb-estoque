@@ -189,7 +189,7 @@ export default async function InventarioPage({
               const temErro = itensStatus.some((i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC')
               if (inv.status !== 'Finalizado') return <span className="num text-text-muted">{total}</span>
               return (
-                <span className={`num font-medium ${temErro ? 'text-[var(--err,#ef4444)]' : 'text-[#10b981]'}`}>
+                <span className={`num font-medium ${temErro ? 'text-err' : 'text-ok'}`}>
                   {concluidos}/{total}
                 </span>
               )

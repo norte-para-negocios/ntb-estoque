@@ -25,7 +25,7 @@ export function UserMenu({ nome, perfil }: { nome: string; perfil: string | null
         onClick={() => logout()}
         aria-label="Sair"
         title="Sair"
-        className="flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-[var(--err)]"
+        className="flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err"
       >
         <LogOut className="size-4" />
       </button>

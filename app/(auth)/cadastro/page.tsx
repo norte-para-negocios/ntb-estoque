@@ -26,7 +26,7 @@ export default function CadastroPage() {
 
         {state?.ok ? (
           <div className="space-y-4 text-center">
-            <CheckCircle2 className="mx-auto size-12 text-[#10b981]" />
+            <CheckCircle2 className="mx-auto size-12 text-ok" />
             <h1 className="text-lg font-semibold text-text">Acesso solicitado</h1>
             <p className="text-sm text-text-muted">
               Seu pedido de acesso foi enviado e está aguardando a aprovação de um administrador.
@@ -57,7 +57,7 @@ export default function CadastroPage() {
               </div>
 
               {state?.error && (
-                <div className="rounded-md border border-[var(--err)]/30 bg-[var(--err)]/10 px-3 py-2 text-sm text-[var(--err)]">
+                <div className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-sm text-err">
                   {state.error}
                 </div>
               )}

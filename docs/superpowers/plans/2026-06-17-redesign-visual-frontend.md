@@ -64,6 +64,9 @@ Mantêm a direção, mas com atalhos de pressa: `impressoes` reimplementa o Stat
 
 ## Decisão 1 (do fundador): refino OU nova identidade
 
+> **DECIDIDO em 17/06/2026 pelo fundador: Caminho A (Refino).** Mantém teal + Plus Jakarta;
+> os blocos V1-V11 valem como estão. B1/B2 descartados por ora.
+
 ### Caminho A — Refino (recomendado)
 Mantém teal + Plus Jakarta + base atual. Corrige tudo acima. Baixo risco, alto retorno, é o que 9 das 11 lentes sustentam. Recomendado por ser cliente e a base já ser boa.
 

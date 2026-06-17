@@ -115,13 +115,13 @@ export default async function MovimentacoesPage({
         <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
           Entradas{' '}
-          <span className="num font-semibold text-[#10b981]">
+          <span className="num font-semibold text-ok">
             <Num value={totalEntradas} frac={0} />
           </span>
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
           Saídas{' '}
-          <span className="num font-semibold text-[var(--err)]">
+          <span className="num font-semibold text-err">
             <Num value={totalSaidas} frac={0} />
           </span>
         </span>
@@ -147,14 +147,14 @@ export default async function MovimentacoesPage({
             alinhar: 'right',
             larguraDesktop: 'w-28',
             render: (m) =>
-              m.entradas > 0 ? <span className="num font-medium text-[#10b981]"><Num value={m.entradas} frac={0} /></span> : <span className="text-text-muted">-</span>,
+              m.entradas > 0 ? <span className="num font-medium text-ok"><Num value={m.entradas} frac={0} /></span> : <span className="text-text-muted">-</span>,
           },
           {
             label: 'Saídas',
             alinhar: 'right',
             larguraDesktop: 'w-28',
             render: (m) =>
-              m.saidas > 0 ? <span className="num font-medium text-[var(--err)]"><Num value={m.saidas} frac={0} /></span> : <span className="text-text-muted">-</span>,
+              m.saidas > 0 ? <span className="num font-medium text-err"><Num value={m.saidas} frac={0} /></span> : <span className="text-text-muted">-</span>,
           },
         ]}
         vazio={

@@ -13,6 +13,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
@@ -32,14 +33,6 @@ function diasAte(validade: string): number {
   hoje.setHours(0, 0, 0, 0)
   const v = new Date(`${validade}T00:00:00`)
   return Math.round((v.getTime() - hoje.getTime()) / 86400000)
-}
-
-// Cor por urgência.
-function tom(validade: string): string {
-  const dias = diasAte(validade)
-  if (dias < 0) return '#ef4444' // vencido
-  if (dias <= 3) return '#f59e0b' // crítico
-  return '#64748b'
 }
 
 function formataData(validade: string): string {
@@ -165,7 +158,7 @@ export default async function ValidadePage({
           href={`/validade?modo=vencidos${sufixo}`}
           className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
             vencidos
-              ? 'border-[#ef4444] bg-[#ef44441f] text-[#ef4444]'
+              ? 'border-err bg-err/10 text-err'
               : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
           }`}
         >
@@ -200,8 +193,7 @@ export default async function ValidadePage({
             render: (o) => (
               <span className="inline-flex items-center gap-2">
                 <span
-                  className="size-2 rounded-full shrink-0"
-                  style={{ background: tom(o.validade as string) }}
+                  className={`size-2 rounded-full shrink-0 ${FUNDO_CLASSE[urgenciaValidade(diasAte(o.validade as string))]}`}
                 />
                 <span className="num text-text">{formataData(o.validade as string)}</span>
               </span>

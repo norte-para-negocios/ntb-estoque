@@ -29,7 +29,7 @@ export function ReprocessarErro({ lojaId, model }: { lojaId: number; model: Sync
         <RotateCw className={`size-3.5 ${pending ? 'animate-spin' : ''}`} strokeWidth={2} />
         {pending ? 'Reprocessando' : 'Reprocessar'}
       </button>
-      {erro && <span className="text-[11px] text-[var(--err)]">{erro}</span>}
+      {erro && <span className="text-[11px] text-err">{erro}</span>}
     </div>
   )
 }

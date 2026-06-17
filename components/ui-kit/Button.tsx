@@ -1,7 +1,7 @@
 const VARIANTS = {
   primary: 'bg-brand text-white hover:bg-[var(--brand-strong)]',
   outline: 'border border-border bg-surface text-text hover:bg-surface-2',
-  danger: 'bg-[var(--err)] text-white hover:opacity-90',
+  danger: 'bg-err text-white hover:opacity-90',
   ghost: 'text-text-muted hover:bg-surface-2 hover:text-text',
 } as const
 

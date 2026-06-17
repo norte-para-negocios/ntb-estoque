@@ -261,7 +261,7 @@ export function EditarUsuario({
             })}
 
           {podeExcluir && (
-            <div className="mt-2 rounded-md border border-[var(--err)]/30 bg-[var(--err)]/5 p-3">
+            <div className="mt-2 rounded-md border border-err/30 bg-err/5 p-3">
               <p className="mb-2 text-[13px] font-medium text-text">Zona de risco</p>
               {confirmarExclusao ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +270,7 @@ export function EditarUsuario({
                     type="button"
                     onClick={excluir}
                     disabled={pending}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-[var(--err)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-err px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                   >
                     <Trash2 className="size-4" /> {pending ? 'Excluindo...' : 'Confirmar exclusão'}
                   </button>
@@ -287,7 +287,7 @@ export function EditarUsuario({
                 <button
                   type="button"
                   onClick={() => setConfirmarExclusao(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--err)]/40 px-3 py-1.5 text-sm font-medium text-[var(--err)] transition-colors hover:bg-[var(--err)]/10"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-err/40 px-3 py-1.5 text-sm font-medium text-err transition-colors hover:bg-err/10"
                 >
                   <Trash2 className="size-4" /> Excluir usuário
                 </button>

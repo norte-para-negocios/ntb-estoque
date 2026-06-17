@@ -174,7 +174,7 @@ export default async function SyncStatusPage({
           value={erros24h ?? 0}
           hint="Tentativas com falha no período"
           icon={AlertTriangle}
-          accent={erros24h ? '#ef4444' : '#10b981'}
+          accent={erros24h ? 'var(--err)' : 'var(--ok)'}
         />
       </div>
 
