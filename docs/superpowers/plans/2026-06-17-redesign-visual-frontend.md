@@ -90,12 +90,12 @@ Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-tast
 - [x] Varrer e trocar todo hex semântico por token/classe (StatusPill, OrdemProducaoRow, corMargem, tom→urgenciaValidade, alertas, impressoes, sync-status/StatCard, movimentacoes, cadastro, login, contagens, e os `[var(--err)]` avulsos). `text-[var(--err,#ef4444)]` → `text-err`.
 - [x] Verificar dark/light em produto, validade, OP, home, impressoes. (navegador, claro+escuro)
 
-### V2 — Home cockpit (resolve home + screenshots)
-- [ ] Remover hero gigante (número 4.5rem, glow, `bg-[#10151c]`, barrinha).
-- [ ] "Precisa de atenção" no topo da tela.
-- [ ] 3 KPI-cards iguais → linha densa com `divide-x` sem caixa; "produtos em estoque" rebaixado a KPI normal. Aposentar ou consumir `StatCard`.
-- [ ] Unificar heading: `text-sm font-semibold` (sem uppercase-tracked nem `border-b-2 border-text`).
-- [ ] Verificar a primeira dobra no mobile (390px): fila de ação visível sem rolar.
+### V2 — Home cockpit (resolve home + screenshots) [CONCLUÍDO 17/06/2026]
+- [x] Remover hero gigante (número 4.5rem, glow, `bg-ink`, barrinha) -> cabeçalho enxuto (loja + sync).
+- [x] "Precisa de atenção" no topo da tela.
+- [x] KPIs viram faixa densa com `divide-x` sem caixa; "produtos em estoque" rebaixado a KPI normal. (StatCard segue só no sync-status.)
+- [x] Unificar heading: `text-sm font-semibold` (sem uppercase-tracked nem `border-b-2 border-text`).
+- [x] Verificar a primeira dobra no mobile (390px): fila de ação visível sem rolar.
 
 ### V3 — Ergonomia de toque (achado mais grave) [CONCLUÍDO 17/06/2026]
 - [x] Steppers +/- e inputs inline ≥44px no mobile (`size-11`/`h-11`), compacto só no `lg:`. OrdemProducaoRow, EstoqueMinimoInput, MargemAlvoInput, QuantidadeInput, ContagemInventario, ContagemTransferencia, CriarOPProdutos.
