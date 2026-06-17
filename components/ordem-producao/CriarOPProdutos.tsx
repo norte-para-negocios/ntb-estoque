@@ -202,7 +202,8 @@ export function CriarOPProdutos({
                     <input
                       type="number"
                       min={0}
-                      inputMode="numeric"
+                      step="any"
+                      inputMode="decimal"
                       value={q}
                       onChange={(e) => setQtd(item.produto.codigo_produto, e.target.value)}
                       className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"

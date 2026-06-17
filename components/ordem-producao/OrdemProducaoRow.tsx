@@ -186,6 +186,7 @@ function StepperQuantidade({ ctrl }: StepperProps) {
         type="number"
         inputMode="decimal"
         min={0}
+        step="any"
         value={ctrl.quantidade}
         onChange={(e) => ctrl.setQuantidade(e.target.value)}
         onBlur={ctrl.salvarQuantidade}

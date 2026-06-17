@@ -43,6 +43,7 @@ export function EstoqueMinimoInput({
       type="number"
       inputMode="decimal"
       min={0}
+      step="any"
       value={valor}
       disabled={pending}
       onChange={(e) => setValor(e.target.value)}
