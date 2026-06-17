@@ -170,12 +170,10 @@ export default async function HomePage() {
       href: '/transferencia',
     })
 
-  // KPIs em faixa densa (produtos rebaixado de hero para um número entre os outros).
-  const kpis = [
-    { label: 'Produtos', value: produtos.count ?? 0, href: '/produto' },
-    { label: 'Notas fiscais', value: nfs.count ?? 0, href: '/nota-fiscal' },
-    { label: 'Ordens', value: ops.count ?? 0, href: '/ordem-producao' },
-    { label: 'Inventários', value: invAbertos.count ?? 0, href: '/inventario' },
+  const secundarios = [
+    { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal' },
+    { label: 'Ordens de produção', value: ops.count ?? 0, hint: 'total', href: '/ordem-producao' },
+    { label: 'Inventários', value: invAbertos.count ?? 0, hint: 'abertos', href: '/inventario' },
   ]
 
   const atalhos = [
@@ -185,21 +183,38 @@ export default async function HomePage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho enxuto: loja + sync (sem hero gigante) */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-brand" />
-          <h1 className="text-base font-semibold text-text">{lojaNome || 'Painel'}</h1>
+    <div className="space-y-8">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-2xl bg-ink text-white p-7 lg:p-9">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.5]"
+          style={{ background: 'radial-gradient(120% 80% at 85% -20%, rgba(46,181,195,0.18), transparent 60%)' }}
+        />
+        <div className="relative">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            <span className="inline-block size-1.5 rounded-full bg-brand" />
+            {lojaNome}
+          </div>
+          <div className="mt-6 flex items-end justify-between gap-6 flex-wrap">
+            <div>
+              <p className="text-[12px] uppercase tracking-[0.16em] text-white/45 mb-2">Produtos em estoque</p>
+              <div className="num text-[4.5rem] leading-[0.85] font-bold tracking-tight">
+                <Num value={produtos.count ?? 0} />
+              </div>
+              <div className="mt-4 h-1 w-24 rounded-full bg-brand" />
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1.5 text-[12px] text-white/70">
+              <TrendingUp className="size-3.5 text-brand" /> sync {ultimaSync}
+            </div>
+          </div>
         </div>
-        <span className="flex items-center gap-1.5 text-[12px] text-text-muted">
-          <TrendingUp className="size-3.5 text-brand" /> sync {ultimaSync}
-        </span>
-      </div>
+      </section>
 
-      {/* Precisa de atenção — fila acionável, primeira coisa na tela */}
+      {/* Precisa de atenção — fila acionável */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-text">Precisa de atenção</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">
+          Precisa de atenção
+        </h2>
         {alertas.length ? (
           <div className="space-y-2">
             {alertas.map((a, i) => (
@@ -229,17 +244,22 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* KPIs em faixa densa (divide-x, sem caixas separadas) */}
-      <section className="grid grid-cols-4 divide-x divide-border overflow-hidden rounded-xl border border-border bg-surface">
-        {kpis.map((k) => (
+      {/* KPIs secundários */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {secundarios.map((k) => (
           <Link
             key={k.label}
             href={k.href}
-            className="group p-3 transition-colors hover:bg-surface-2/40 sm:p-4"
+            className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:border-brand/40"
+            style={{ transitionTimingFunction: 'var(--ease)' }}
           >
-            <p className="truncate text-[10px] font-medium text-text-muted sm:text-[11px]">{k.label}</p>
-            <div className="num mt-1 text-xl font-semibold tracking-tight text-text sm:text-2xl">
-              <Num value={k.value} />
+            <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand transition-colors duration-300" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
+            <div className="mt-3 flex items-end gap-2">
+              <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
+                <Num value={k.value} />
+              </span>
+              <span className="mb-1 text-[12px] text-text-muted">{k.hint}</span>
             </div>
           </Link>
         ))}
@@ -247,7 +267,7 @@ export default async function HomePage() {
 
       {/* Atalhos */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-text">Ações rápidas</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">Ações rápidas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {atalhos.map((a) => (
             <Link
@@ -272,8 +292,8 @@ export default async function HomePage() {
       {/* Repor estoque — produtos abaixo do minimo (D1) */}
       {qtdRepor > 0 && (
         <section>
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-text">Repor estoque</h2>
+          <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
+            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Repor estoque</h2>
             <Link href="/produto?vista=compras&repor=1" className="text-[13px] text-brand hover:underline">
               ver todos ({qtdRepor}) →
             </Link>
@@ -294,8 +314,8 @@ export default async function HomePage() {
 
       {/* Últimas notas */}
       <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-text">Últimas notas fiscais</h2>
+        <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
+          <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Últimas notas fiscais</h2>
           <Link href="/nota-fiscal" className="text-[13px] text-brand hover:underline">
             ver todas →
           </Link>
