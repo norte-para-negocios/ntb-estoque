@@ -16,6 +16,7 @@ import {
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
 import { Money } from '@/components/ui-kit/Money'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -64,7 +65,7 @@ export default async function HomePage() {
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
-  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas] =
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
       supabase
@@ -101,7 +102,21 @@ export default async function HomePage() {
         .is('deleted_at', null)
         .order('d_emissao_nfe', { ascending: false })
         .limit(5),
+      // Produtos abaixo do minimo (a repor) — mesma RPC da tela de Compras.
+      supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
     ])
+
+  // D1: produtos prestes a ruptura (abaixo do minimo). Lista os principais + ver todos.
+  const codigosRepor = (reporRes.data ?? []) as number[]
+  const qtdRepor = codigosRepor.length
+  const { data: prodsRepor } = qtdRepor
+    ? await supabase
+        .from('produtos')
+        .select('codigo_produto, codigo, descricao')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigosRepor.slice(0, 8))
+        .order('descricao')
+    : { data: [] }
 
   const ultimaSync = loja.data?.produto_ultima_atualizacao
     ? new Date(loja.data.produto_ultima_atualizacao).toLocaleTimeString('pt-BR', {
@@ -116,6 +131,13 @@ export default async function HomePage() {
   // Fila "Precisa de atenção": só itens com contagem > 0.
   type Alerta = { icon: LucideIcon; cor: string; texto: string; href: string }
   const alertas: Alerta[] = []
+  if (qtdRepor > 0)
+    alertas.push({
+      icon: AlertTriangle,
+      cor: '#ef4444',
+      texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`,
+      href: '/produto?vista=compras&repor=1',
+    })
   if ((errosSync.count ?? 0) > 0)
     alertas.push({
       icon: AlertTriangle,
@@ -257,6 +279,29 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Repor estoque — produtos abaixo do minimo (D1) */}
+      {qtdRepor > 0 && (
+        <section>
+          <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
+            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Repor estoque</h2>
+            <Link href="/produto?vista=compras&repor=1" className="text-[13px] text-brand hover:underline">
+              ver todos ({qtdRepor}) →
+            </Link>
+          </div>
+          <ul className="divide-y divide-border">
+            {(prodsRepor ?? []).map((p) => (
+              <li key={p.codigo_produto} className="flex items-center gap-3 py-3">
+                <span className="flex size-7 items-center justify-center rounded-md bg-[#ef4444]/10 text-[#ef4444] shrink-0">
+                  <AlertTriangle className="size-3.5" strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-text">{formatarNomeProduto(p.descricao)}</span>
+                <span className="num text-[12px] text-text-muted shrink-0">{p.codigo}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Últimas notas */}
       <section>
