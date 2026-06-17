@@ -17,6 +17,18 @@ function dataParaBR(iso: string): string | null {
   return `${m[3]}/${m[2]}/${m[1]}`
 }
 
+// Soma X dias a uma data 'YYYY-MM-DD' e devolve 'YYYY-MM-DD'. O Date normaliza
+// virada de mes/ano. Base do calculo de validade por OP (dia da OP + X dias).
+function addDiasISO(iso: string, dias: number): string | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + dias)
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
 /**
  * Cria uma OP no Omie e reflete no banco. A validade fica SO no nosso sistema.
  * ATENCAO: escreve de verdade no Omie da loja; testar apenas com o cliente ciente.
@@ -86,7 +98,8 @@ export async function criarOrdemProducao(input: {
  * escolher qualquer data e repetir semanalmente (recorrencia). Escreve no Omie.
  */
 export async function criarOrdensProducao(input: {
-  itens: { nCodProduto: number; quantidade: number; validade?: string | null }[]
+  // validadeDias: dias de validade (calculados por ocorrencia: data da OP + dias)
+  itens: { nCodProduto: number; quantidade: number; validadeDias?: number | null }[]
   datas: string[] // 'YYYY-MM-DD'
   codigoLocalEstoque?: number | null
   obs?: string
@@ -135,10 +148,15 @@ export async function criarOrdensProducao(input: {
           continue
         }
         await fetchOrdemProducao(loja, nCodOP)
-        if (item.validade) {
+        // Validade = data DESTA ocorrencia + X dias (calculo por OP). Resolve o
+        // bug de todas as recorrencias herdarem a validade da primeira. Fica so
+        // no nosso banco (o Omie nao recebe a validade aqui).
+        const validade =
+          item.validadeDias && item.validadeDias > 0 ? addDiasISO(dataISO, item.validadeDias) : null
+        if (validade) {
           await supabase
             .from('ordens_producao')
-            .update({ validade: item.validade, updated_at: new Date().toISOString() })
+            .update({ validade, updated_at: new Date().toISOString() })
             .eq('loja_id', lojaId)
             .eq('identificacao_n_cod_op', nCodOP)
         }

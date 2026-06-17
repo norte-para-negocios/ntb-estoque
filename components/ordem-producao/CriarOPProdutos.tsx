@@ -16,7 +16,15 @@ const QrScanner = dynamic(
   { ssr: false }
 )
 
-type ItemOP = { produto: ProdutoBusca; quantidade: string; validade: string }
+type ItemOP = { produto: ProdutoBusca; quantidade: string; validadeDias: string }
+
+// Validade em DIAS -> data 'DD/MM/AAAA' para preview (base + dias). Na criacao,
+// cada OP recorrente calcula a sua a partir da propria data.
+function previewValidadeBR(base: string, dias: number): string {
+  const [a, m, d] = base.split('-').map(Number)
+  const dt = new Date(a, m - 1, d + dias)
+  return dt.toLocaleDateString('pt-BR')
+}
 
 // Datas a partir da base, repetindo a cada 7 dias (recorrencia semanal).
 function gerarDatas(base: string, semanas: number): string[] {
@@ -66,7 +74,7 @@ export function CriarOPProdutos({
       return
     }
     // Mais recente no topo (igual a contagem de transferencia).
-    setItens((prev) => [{ produto: p, quantidade: '1', validade: '' }, ...prev])
+    setItens((prev) => [{ produto: p, quantidade: '1', validadeDias: '' }, ...prev])
   }
 
   function onLeituraQr(codigo: string) {
@@ -94,8 +102,8 @@ export function CriarOPProdutos({
     )
   }
 
-  function setValidade(cod: number, v: string) {
-    setItens((prev) => prev.map((i) => (i.produto.codigo_produto === cod ? { ...i, validade: v } : i)))
+  function setValidadeDias(cod: number, v: string) {
+    setItens((prev) => prev.map((i) => (i.produto.codigo_produto === cod ? { ...i, validadeDias: v } : i)))
   }
 
   function remover(cod: number) {
@@ -110,7 +118,7 @@ export function CriarOPProdutos({
     const itensValidos = itens.map((i) => ({
       nCodProduto: i.produto.codigo_produto,
       quantidade: Number(i.quantidade) || 0,
-      validade: i.validade || null,
+      validadeDias: Number(i.validadeDias) || null,
     }))
     if (itensValidos.some((i) => i.quantidade <= 0)) {
       toast.error('Quantidade inválida em algum produto')
@@ -211,13 +219,24 @@ export function CriarOPProdutos({
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Validade</span>
-                  <input
-                    type="date"
-                    value={item.validade}
-                    onChange={(e) => setValidade(item.produto.codigo_produto, e.target.value)}
-                    className="num rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text outline-none focus:border-brand"
-                  />
+                  <span className="eyebrow">Validade (dias)</span>
+                  <div className="flex items-center gap-2">
+                    {item.validadeDias && Number(item.validadeDias) > 0 && datas[0] && (
+                      <span className="text-xs text-text-muted">
+                        vence {previewValidadeBR(datas[0], Number(item.validadeDias))}
+                        {datas.length > 1 ? ' (1ª)' : ''}
+                      </span>
+                    )}
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={item.validadeDias}
+                      onChange={(e) => setValidadeDias(item.produto.codigo_produto, e.target.value)}
+                      placeholder="0"
+                      className="num w-20 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text outline-none focus:border-brand"
+                    />
+                  </div>
                 </div>
               </li>
             )
