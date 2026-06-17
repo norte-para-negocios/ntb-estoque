@@ -8,6 +8,7 @@ import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { parseNumBR } from '@/lib/num-br'
 
@@ -44,6 +45,7 @@ export function ContagemInventario({
 }) {
   const [itens, setItens] = useState(itensIniciais)
   const [filtro, setFiltro] = useState('')
+  const [buscaManual, setBuscaManual] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -84,15 +86,14 @@ export function ContagemInventario({
     })
   }
 
-  function onLeituraQr(codigo: string) {
-    startTransition(async () => {
-      const p = await buscarProdutoPorCodigo(codigo)
-      if (!p) {
-        toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
-        return
-      }
-      adicionar(p)
-    })
+  async function onLeituraQr(codigo: string): Promise<boolean> {
+    const p = await buscarProdutoPorCodigo(codigo)
+    if (!p) {
+      toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
+      return false
+    }
+    adicionar(p)
+    return true
   }
 
   function salvarQtd(itemId: number, num: number | null) {
@@ -163,11 +164,21 @@ export function ContagemInventario({
 
       {!finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
-          <ProdutoSearch
-            onSelect={adicionar}
-            codigosAdicionados={itens.map((i) => i.produto_codigo)}
-          />
           <QrScanner onLeitura={onLeituraQr} />
+          {buscaManual ? (
+            <ProdutoSearch
+              onSelect={adicionar}
+              codigosAdicionados={itens.map((i) => i.produto_codigo)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setBuscaManual(true)}
+              className="w-full py-1 text-center text-sm text-text-muted underline-offset-2 hover:text-text hover:underline"
+            >
+              buscar manualmente
+            </button>
+          )}
         </div>
       )}
 
@@ -203,7 +214,9 @@ export function ContagemInventario({
                       <div className="mt-1 text-[11px] text-text-muted">{item.produto_familia}</div>
                     )}
                     {item.status && (
-                      <div className="mt-1 text-[11px] text-text-muted">{item.status}</div>
+                      <div className="mt-1.5">
+                        <StatusPill status={item.status} />
+                      </div>
                     )}
                   </div>
                   {!finalizado && (
@@ -250,7 +263,7 @@ export function ContagemInventario({
                           salvarQtd(item.id, val)
                         }}
                         onWheel={(e) => e.currentTarget.blur()}
-                        className="num h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                        className="num h-12 w-20 rounded-md border border-border bg-surface px-2 text-center text-2xl font-semibold text-text outline-none focus:border-brand"
                         placeholder="0"
                       />
                       <button

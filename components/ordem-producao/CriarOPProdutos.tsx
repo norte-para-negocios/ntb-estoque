@@ -78,15 +78,14 @@ export function CriarOPProdutos({
     setItens((prev) => [{ produto: p, quantidade: '1', validadeDias: '' }, ...prev])
   }
 
-  function onLeituraQr(codigo: string) {
-    startTransition(async () => {
-      const p = await buscarProdutoPorCodigo(codigo)
-      if (!p) {
-        toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
-        return
-      }
-      adicionar(p)
-    })
+  async function onLeituraQr(codigo: string): Promise<boolean> {
+    const p = await buscarProdutoPorCodigo(codigo)
+    if (!p) {
+      toast.warning('Produto não encontrado', { description: `Código: ${codigo}` })
+      return false
+    }
+    adicionar(p)
+    return true
   }
 
   function setQtd(cod: number, q: string) {
