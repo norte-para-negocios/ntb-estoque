@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import {
   concluirOrdemProducao,
@@ -68,7 +68,7 @@ export async function criarOrdemProducao(input: {
       dData,
       nQtde: input.quantidade,
       codigoLocalEstoque: input.codigoLocalEstoque ?? undefined,
-      obs: input.obs,
+      obs: [input.obs, await carimboUsuario()].filter(Boolean).join(' · '),
     })
 
     const nCodOP = res?.nCodOP
@@ -140,7 +140,7 @@ export async function criarOrdensProducao(input: {
           dData,
           nQtde: item.quantidade,
           codigoLocalEstoque: input.codigoLocalEstoque ?? undefined,
-          obs: input.obs,
+          obs: [input.obs, await carimboUsuario()].filter(Boolean).join(' · '),
         })
         const nCodOP = res?.nCodOP
         if (!nCodOP) {
@@ -231,7 +231,7 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
       const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
       dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
     }
-    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, op.quantidade ?? 1, '')
+    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, op.quantidade ?? 1, await carimboUsuario())
 
     // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer
     // como pendente ate o proximo sync trazer cConcluida='S' do Omie. dataConclusao

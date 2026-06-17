@@ -38,6 +38,24 @@ export async function getProfile(): Promise<Profile> {
   return profile
 }
 
+// Carimbo da observacao das escritas no Omie: "NTB Estoque · <usuario do login>".
+// Sem usuario (ex.: sync automatico), cai no rotulo do sistema; nunca inventa nome.
+export async function carimboUsuario(): Promise<string> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return 'NTB Estoque'
+    const { data } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', user.id)
+      .single<{ name: string | null }>()
+    return data?.name ? `NTB Estoque · ${data.name}` : 'NTB Estoque'
+  } catch {
+    return 'NTB Estoque'
+  }
+}
+
 export async function isAdmin(): Promise<boolean> {
   const profile = await getProfile()
   return profile.perfil === 'Admin'

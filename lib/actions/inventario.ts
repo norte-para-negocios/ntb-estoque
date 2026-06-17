@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
+import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
@@ -150,7 +150,7 @@ async function processarItemInventario(
       data: dataAjuste,
       quan: item.quan,
       valor,
-      obs: 'NTB - Estoque',
+      obs: await carimboUsuario(),
       origem: inventario.origem || 'AJU',
       tipo: inventario.tipo || 'SLD',
       motivo: inventario.motivo || 'INV',

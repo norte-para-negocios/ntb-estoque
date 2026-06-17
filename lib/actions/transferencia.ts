@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
+import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
@@ -134,7 +134,8 @@ async function processarMovimento(
   trans: TransferenciaComMovimentos,
   mov: MovimentoRow,
   lojaId: number,
-  dataMov: string // DD/MM/YYYY: data da transferencia (vai no lancamento)
+  dataMov: string, // DD/MM/YYYY: data da transferencia (vai no lancamento)
+  obsCarimbo: string // "NTB Estoque · <usuario>" — quem fez a transferencia
 ) {
   const supabase = createServiceClient()
 
@@ -177,7 +178,7 @@ async function processarMovimento(
       data: dataMov,
       quan: mov.quan,
       valor,
-      obs: 'NTB - Estoque',
+      obs: obsCarimbo,
       origem: 'AJU',
       tipo: mov.tipo,
       motivo: trans.motivo || 'TRF',
@@ -262,7 +263,7 @@ export async function finishTransferencia(transferenciaId: number) {
   const dataMov = dataOmieBR(trans.data)
 
   for (const mov of trans.movimentos) {
-    await processarMovimento(trans, mov, lojaId, dataMov)
+    await processarMovimento(trans, mov, lojaId, dataMov, await carimboUsuario())
   }
 
   await supabase
@@ -307,7 +308,7 @@ export async function forceSyncTransferencia(transferenciaId: number) {
   )
 
   for (const mov of pendentes) {
-    await processarMovimento(trans, mov, lojaId, dataMov)
+    await processarMovimento(trans, mov, lojaId, dataMov, await carimboUsuario())
   }
 
   await supabase
