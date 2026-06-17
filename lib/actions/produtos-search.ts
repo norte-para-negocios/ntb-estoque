@@ -13,7 +13,10 @@ export type ProdutoBusca = {
   unidade: string
 }
 
-export async function buscarProdutos(termo: string): Promise<ProdutoBusca[]> {
+export async function buscarProdutos(
+  termo: string,
+  filtros?: { tipo?: string; familia?: string }
+): Promise<ProdutoBusca[]> {
   const lojaId = await getCurrentLojaId()
   const supabase = await createClient()
   const t = termo.trim()
@@ -31,6 +34,9 @@ export async function buscarProdutos(termo: string): Promise<ProdutoBusca[]> {
     const e = escapeIlikeOr(t)
     query = query.or(`descricao.ilike.%${e}%,codigo.ilike.%${e}%`)
   }
+  // Filtros para navegar/escolher por tipo (revenda/produção...) e familia.
+  if (filtros?.tipo) query = query.eq('tipo_item', filtros.tipo)
+  if (filtros?.familia) query = query.eq('descricao_familia', filtros.familia)
 
   // Numerico -> ordena por codigo (os 70xxx saem juntos e em ordem, em vez de
   // 20 itens alfabeticos por descricao); texto -> ordena por descricao.

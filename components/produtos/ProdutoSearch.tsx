@@ -1,9 +1,14 @@
 'use client'
 
-import { useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buscarProdutos, type ProdutoBusca } from '@/lib/actions/produtos-search'
+import { buscarFamilias } from '@/lib/actions/produto'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+
+const selectClass =
+  'min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-brand'
 
 export function ProdutoSearch({
   onSelect,
@@ -15,22 +20,32 @@ export function ProdutoSearch({
   placeholder?: string
 }) {
   const [termo, setTermo] = useState('')
+  const [tipo, setTipo] = useState('')
+  const [familia, setFamilia] = useState('') // codigo_familia (string)
+  const [familias, setFamilias] = useState<{ codigo: number; descricao: string }[]>([])
   const [resultados, setResultados] = useState<ProdutoBusca[]>([])
   const [aberto, setAberto] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const adicionados = useMemo(() => new Set(codigosAdicionados), [codigosAdicionados])
 
-  function onChange(valor: string) {
-    setTermo(valor)
+  // Carrega as familias existentes para o seletor (escolher por familia).
+  useEffect(() => {
+    buscarFamilias().then(setFamilias).catch(() => {})
+  }, [])
+
+  // Busca combinando termo + tipo + familia. Com filtro (tipo/familia), lista
+  // mesmo sem digitar; sem filtro, precisa de 2+ caracteres no termo.
+  function buscar(t: string, ti: string, fa: string) {
     if (timer.current) clearTimeout(timer.current)
-    if (valor.trim().length < 2) {
+    if (t.trim().length < 2 && !ti && !fa) {
       setResultados([])
       setAberto(false)
       return
     }
     timer.current = setTimeout(async () => {
-      const r = await buscarProdutos(valor)
+      const f = familias.find((x) => String(x.codigo) === fa)
+      const r = await buscarProdutos(t, { tipo: ti || undefined, familia: f?.descricao })
       setResultados(r)
       setAberto(true)
     }, 300)
@@ -39,21 +54,55 @@ export function ProdutoSearch({
   function selecionar(p: ProdutoBusca) {
     if (adicionados.has(p.codigo)) return
     onSelect(p)
-    setTermo('')
-    setResultados([])
-    setAberto(false)
+    // Mantem filtros e lista abertos para continuar escolhendo da mesma familia/tipo.
   }
 
   return (
     <div className="relative">
       <Input
         value={termo}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          setTermo(e.target.value)
+          buscar(e.target.value, tipo, familia)
+        }}
         placeholder={placeholder}
         onFocus={() => resultados.length && setAberto(true)}
       />
+
+      {/* Filtros: escolher por tipo (revenda/produção...) e familia, sem digitar */}
+      <div className="mt-2 flex items-center gap-2">
+        <select
+          value={tipo}
+          onChange={(e) => {
+            setTipo(e.target.value)
+            buscar(termo, e.target.value, familia)
+          }}
+          className={selectClass}
+          aria-label="Filtrar por tipo"
+        >
+          <option value="">Todos os tipos</option>
+          {PRODUTO_TIPO_ITEM.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+        <select
+          value={familia}
+          onChange={(e) => {
+            setFamilia(e.target.value)
+            buscar(termo, tipo, e.target.value)
+          }}
+          className={selectClass}
+          aria-label="Filtrar por família"
+        >
+          <option value="">Todas as famílias</option>
+          {familias.map((f) => (
+            <option key={f.codigo} value={f.codigo}>{f.descricao}</option>
+          ))}
+        </select>
+      </div>
+
       {aberto && resultados.length > 0 && (
-        <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
           {resultados.map((p) => {
             const jaAdicionado = adicionados.has(p.codigo)
             return (
