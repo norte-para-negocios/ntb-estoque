@@ -8,7 +8,9 @@
 > **✅ FEITO e no ar (16/06 noite):** A1, A2 (validade por dias + recorrência,
 > validado em tela) · A3 (escolher data na conclusão) · A7 (busca de produtos:
 > limite 50 + ordena por código) · C3 (minimo/quantidade aceitam decimais —
-> bug `step=1` confirmado ao vivo). Criacao de OP no Omie segue para teste com o Ramon.
+> bug `step=1` confirmado ao vivo) · C5 (código em coluna própria) · C8 (validade:
+> 60 dias + filtro Vencidos) · B4 (conferência só com o nome do local) · C6
+> (margem-alvo salva no perfil). Criacao/escrita no Omie segue para teste com o Ramon.
 
 ---
 
