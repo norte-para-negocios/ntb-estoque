@@ -120,13 +120,16 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
       pagina++
     } while (pagina <= total)
   }
-  // Mantem SO a foto de hoje: apaga as fotos de dias anteriores desta loja.
-  // Sem isto a posicao_estoques cresce ~1 foto/dia (100k+ linhas/dia) e estoura
-  // o banco. Roda no fim, depois de gravar a foto atual completa.
+  // Mantem as DUAS ultimas fotos (hoje + ontem). A foto do dia corrente as vezes vem
+  // SEM CMC (o Omie so fecha o custo do dia), entao a tela cai pra de ontem (que tem
+  // custo). Apaga so o que tem +1 dia: segura o crescimento E preserva o custo.
+  const ontem = new Date(`${dataISO}T00:00:00`)
+  ontem.setDate(ontem.getDate() - 1)
+  const ontemISO = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`
   await supabase
     .from('posicao_estoques')
     .delete()
     .eq('loja_id', loja.id)
-    .lt('data_posicao', dataISO)
+    .lt('data_posicao', ontemISO)
   return gravados
 }

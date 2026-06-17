@@ -155,13 +155,21 @@ export default async function ProdutoPage({
       .maybeSingle()
     const dataPos = ultima?.data_posicao as string | undefined
     if (!dataPos) return
+    // Pega as DUAS ultimas fotos (hoje + ontem). A foto do dia corrente as vezes vem
+    // sem CMC (o Omie so fecha o custo do dia), entao o custo cai pra foto de ontem.
+    // Saldo/minimo usam a data mais recente POR PRODUTO (dataMaxPorProduto), entao
+    // incluir 2 datas nao distorce o estoque.
+    const ontem = new Date(`${dataPos}T00:00:00`)
+    ontem.setDate(ontem.getDate() - 1)
+    const ontemISO = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`
     const LOTE = 1000
     for (let off = 0; ; off += LOTE) {
       const { data } = await supabase
         .from('posicao_estoques')
         .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
         .eq('loja_id', lojaId)
-        .eq('data_posicao', dataPos)
+        .gte('data_posicao', ontemISO)
+        .lte('data_posicao', dataPos)
         .in('n_cod_prod', codigos)
         .order('n_saldo', { ascending: false })
         .range(off, off + LOTE - 1)
@@ -179,12 +187,18 @@ export default async function ProdutoPage({
       ? supabase.from('previsao_venda').select('n_cod_prod, qtde').eq('loja_id', lojaId).in('n_cod_prod', codigos)
       : Promise.resolve({ data: [] as { n_cod_prod: number; qtde: number | null }[] }),
   ])
-  const cmcMap = new Map<number, number>()
+  // Custo = CMC nao-zero da foto MAIS RECENTE que tiver (hoje pode vir sem custo,
+  // entao cai pra ontem). Guarda {cmc, data} e mantem o de data maior.
+  const cmcMap = new Map<number, { cmc: number; data: string }>()
   for (const pos of posicoes ?? []) {
-    if (!cmcMap.has(pos.n_cod_prod) && pos.n_cmc) cmcMap.set(pos.n_cod_prod, Number(pos.n_cmc))
+    if (!pos.n_cmc) continue
+    const atual = cmcMap.get(pos.n_cod_prod)
+    if (!atual || (pos.data_posicao && pos.data_posicao > atual.data)) {
+      cmcMap.set(pos.n_cod_prod, { cmc: Number(pos.n_cmc), data: pos.data_posicao })
+    }
   }
   const custoDe = (codProd: number | null): number | null =>
-    codProd != null ? cmcMap.get(codProd) ?? null : null
+    codProd != null ? cmcMap.get(codProd)?.cmc ?? null : null
 
   // Estoque atual = soma dos saldos dos locais na data de posicao mais recente de cada produto.
   const dataMaxPorProduto = new Map<number, string>()
