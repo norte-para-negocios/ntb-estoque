@@ -120,5 +120,13 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
       pagina++
     } while (pagina <= total)
   }
+  // Mantem SO a foto de hoje: apaga as fotos de dias anteriores desta loja.
+  // Sem isto a posicao_estoques cresce ~1 foto/dia (100k+ linhas/dia) e estoura
+  // o banco. Roda no fim, depois de gravar a foto atual completa.
+  await supabase
+    .from('posicao_estoques')
+    .delete()
+    .eq('loja_id', loja.id)
+    .lt('data_posicao', dataISO)
   return gravados
 }
