@@ -14,26 +14,32 @@ Fora (provado que não serve no cadastro): `cfop` (ignorado, é da NF), `caracte
 estoque mínimo (vem da posição), IBPT/alíquotas (contador/regime).
 Excluir (`ExcluirProduto` por `codigo_produto`) — validado.
 
-### 🟠 Ordem de Produção (`IncluirOrdemProducao`)
-Envia hoje: `identificacao{ cCodIntOP, nCodProduto, dDtPrevisao, nQtde, codigo_local_estoque }`,
-`infAdicionais{ dDtInicio, dDtConclusao }`, `observacoes{ cObs }` (as 3 datas iguais).
-**Falta / a confirmar:**
-- **Validade real no Omie** via `lote_validade.dDataVal` (hoje a validade fica só no nosso banco).
-- **Etapa** (`cEtapa` 10/40/60) não é enviada.
-- **Observação com o usuário** (T1) — a `cObs` não carimba quem fez.
-- **Malha (`itensDetalhes`)** não é enviada — apostamos na ficha técnica do produto; **confirmar com o Ramon** que monta certo.
-Conclusão (`ConcluirOrdemProducao`): `nCodOP`, `dDtConclusao`, `nQtdeProduzida`, `cObsConclusao`. Falta: obs com usuário.
+### ✅ Ordem de Produção (`IncluirOrdemProducao`) — VARRIDO no Omie real
+Envia: `identificacao{ cCodIntOP, nCodProduto, dDtPrevisao, nQtde, codigo_local_estoque }`,
+`infAdicionais{ dDtInicio, dDtConclusao }`, `observacoes{ cObs }`.
+**Confirmado por teste:**
+- `lote_validade` e `cEtapa` **NÃO existem** na criação de OP (Omie rejeita: "não faz parte de copIncluirRequest").
+  → a **validade fica só no nosso banco mesmo** (não há onde enviar) — decisão atual correta.
+- A OP só cria para produtos **com estrutura/malha preenchida**; o Omie monta a malha da ficha técnica →
+  **não precisamos enviar `itensDetalhes`** (confirmado pela mensagem do Omie). Nosso approach está certo.
+- **Falta:** a `cObs` carimbar o usuário (T1).
+Conclusão (`ConcluirOrdemProducao`): `nCodOP`, `dDtConclusao`, `nQtdeProduzida`, `cObsConclusao`.
 
-### 🟠 Transferência (`IncluirAjusteEstoque`, tipo TRF/TPQ)
-Envia: `id_prod`, `codigo_local_estoque` (origem), `codigo_local_estoque_destino`, `tipo` (TRF/TPQ),
-`origem: 'AJU'`, `motivo`, `quan`, data. **Falta:** observação com o usuário (T1).
+### ✅ Transferência + Inventário (`IncluirAjusteEstoque`) — VARRIDO (criado+excluído no Omie)
+Envia: `codigo_local_estoque`, `id_prod`, `cod_int_ajuste`, `data` (DD/MM/AAAA, **não pode ser futura**), `quan`,
+`valor`, `obs`, `origem: 'AJU'`, `tipo` (ENT/SAI/TRF...), `motivo` (TRF/TPQ/INV), `codigo_local_estoque_destino`.
+**Completo.** Só falta a `obs` carimbar o usuário (T1) — hoje fixa "NTB - Estoque". Excluir ajuste só funciona
+depois que o Omie processa (assíncrono).
 
-### 🟠 Inventário (`IncluirAjusteEstoque`)
-Envia: `id_prod`, `codigo_local_estoque`, `quan`, data, `tipo`. **Falta:** observação com o usuário (T1).
+### 🐛→✅ Local de estoque (`IncluirLocalEstoque`) — BUG achado e corrigido
+O campo **`tipo` é obrigatório** e o nosso código NÃO enviava (9.2 nunca tinha sido testado no Omie) → falhava
+"tag [tipo] obrigatória". **Corrigido:** envia `tipo: '1'` (próprio). Achados extras: o Omie **não tem
+`ExcluirLocalEstoque`** nem aceita inativar via `AlterarLocalEstoque` (tag `inativo` não existe lá) — local criado
+por engano só some excluindo **no painel do Omie**. Campos do local: codigo, descricao, tipo, padrao, inativo,
+dispVenda/dispOrdemProducao/dispConsumoOP/dispRemessa.
 
-### Local de estoque (`IncluirLocalEstoque`) — a varrer com o mesmo método (criar+excluir).
-
-> **Método para fechar os 🟠:** criar uma OP / ajuste de teste, `ConsultarOrdemProducao`/consultar, e excluir/reverter — igual fiz no produto. Confirma campo a campo o que o Omie aceita, sem deixar lixo.
+> **Pendência de limpeza:** a varredura deixou 2 locais de teste no Omie (sem como excluir por API):
+> `4834375616` e `4834375658` ("ZZ VARREDURA EXCLUIR"). **Excluir manualmente** no painel do Omie (Estoque → Locais).
 
 ---
 

@@ -50,6 +50,9 @@ export async function incluirLocalEstoque(
     data: {
       codigo_local_estoque: 0,
       descricao: dados.descricao,
+      // `tipo` e OBRIGATORIO no Omie (1 = proprio). Confirmado por teste real na
+      // varredura 16/06 (sem ele o IncluirLocalEstoque falha "tag tipo obrigatoria").
+      tipo: '1',
       ...(dados.codigo ? { codigo: dados.codigo } : {}),
     },
   })
