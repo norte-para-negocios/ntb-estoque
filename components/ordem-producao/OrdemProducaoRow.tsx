@@ -7,9 +7,10 @@ import { setValidadeOP, setQuantidadeOP, finishOP } from '@/lib/actions/ordem-pr
 import { Num } from '@/components/ui-kit/Num'
 import type { OpStatus } from '@/lib/op-status'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { parseNumBR } from '@/lib/num-br'
 
 const stepBtnClass =
-  'flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60'
+  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-7'
 
 interface OPData {
   id: number
@@ -56,7 +57,7 @@ function useOP(op: OPData) {
   }
 
   function salvarQuantidade() {
-    const num = quantidade === '' ? null : Number(quantidade)
+    const num = parseNumBR(quantidade)
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
       return
@@ -79,7 +80,7 @@ function useOP(op: OPData) {
   }
 
   function ajustarQuantidade(delta: number) {
-    let num = quantidade === '' ? 0 : Number(quantidade)
+    let num = parseNumBR(quantidade) ?? 0
     if (Number.isNaN(num)) num = 0
     num += delta
     if (num < 0) num = 0
@@ -152,7 +153,7 @@ function StepperValidade({ ctrl }: StepperProps) {
         onChange={(e) => ctrl.setValidade(e.target.value)}
         onBlur={ctrl.salvarValidade}
         disabled={ctrl.pending}
-        className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:w-28 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-28 lg:flex-none"
       />
       <button
         type="button"
@@ -181,16 +182,15 @@ function StepperQuantidade({ ctrl }: StepperProps) {
         <Minus className="size-3.5" />
       </button>
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        min={0}
-        step="any"
         value={ctrl.quantidade}
         onChange={(e) => ctrl.setQuantidade(e.target.value)}
         onBlur={ctrl.salvarQuantidade}
+        onWheel={(e) => e.currentTarget.blur()}
         disabled={ctrl.pending}
         placeholder="0"
-        className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:w-20 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-20 lg:flex-none"
       />
       <button
         type="button"

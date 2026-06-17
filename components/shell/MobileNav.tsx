@@ -98,7 +98,7 @@ export function MobileNav({
             <Link
               key={b.href}
               href={b.href}
-              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] transition active:scale-95 active:text-brand ${
+              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] transition active:scale-95 active:text-brand ${
                 active ? 'text-brand' : 'text-text-muted'
               }`}
             >

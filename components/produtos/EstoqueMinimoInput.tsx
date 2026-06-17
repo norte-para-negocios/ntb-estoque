@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { setEstoqueMinimo } from '@/lib/actions/produto-minimo'
+import { parseNumBR } from '@/lib/num-br'
 import { toast } from 'sonner'
 
 export function EstoqueMinimoInput({
@@ -23,7 +24,7 @@ export function EstoqueMinimoInput({
   function salvar() {
     const atual = valor.trim()
     if (atual === salvoRef.current) return // nao mudou: nao grava override redundante
-    const num = atual === '' ? null : Number(atual)
+    const num = parseNumBR(atual)
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Valor inválido')
       setValor(salvoRef.current)
@@ -40,17 +41,16 @@ export function EstoqueMinimoInput({
   const ehManual = valorManual != null
   return (
     <input
-      type="number"
+      type="text"
       inputMode="decimal"
-      min={0}
-      step="any"
       value={valor}
       disabled={pending}
       onChange={(e) => setValor(e.target.value)}
       onBlur={salvar}
+      onWheel={(e) => e.currentTarget.blur()}
       placeholder="0"
       title={ehManual ? 'Mínimo definido manualmente no NTB' : 'Mínimo vindo do Omie. Edite para sobrescrever.'}
-      className={`num w-16 rounded-md border border-border bg-surface px-2 py-1 text-right text-sm outline-none focus:border-brand disabled:opacity-60 ${
+      className={`num h-11 w-16 rounded-md border border-border bg-surface px-2 text-right text-sm outline-none focus:border-brand disabled:opacity-60 lg:h-8 ${
         ehManual ? 'font-semibold text-brand' : 'text-text'
       }`}
     />

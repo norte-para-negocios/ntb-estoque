@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
+import { parseNumBR } from '@/lib/num-br'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -226,38 +227,36 @@ export function ContagemInventario({
                       <button
                         onClick={() => salvarQtd(item.id, Math.max(0, base - 1))}
                         disabled={pending}
-                        className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
                         aria-label="Diminuir"
                       >
                         <Minus className="size-4" />
                       </button>
                       <input
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
+                        type="text"
+                        inputMode="decimal"
                         value={q ?? ''}
                         disabled={pending}
                         onChange={(e) => {
-                          const raw = e.target.value
-                          const parsed = raw === '' ? null : Number(raw)
+                          const parsed = parseNumBR(e.target.value)
                           const val = parsed != null && Number.isFinite(parsed) ? parsed : null
                           setItens((prev) =>
                             prev.map((i) => (i.id === item.id ? { ...i, quan: val } : i))
                           )
                         }}
                         onBlur={(e) => {
-                          const raw = e.target.value
-                          const parsed = raw === '' ? null : Number(raw)
+                          const parsed = parseNumBR(e.target.value)
                           const val = parsed != null && Number.isFinite(parsed) ? parsed : null
                           salvarQtd(item.id, val)
                         }}
-                        className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="num h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg font-semibold text-text outline-none focus:border-brand"
                         placeholder="0"
                       />
                       <button
                         onClick={() => salvarQtd(item.id, base + 1)}
                         disabled={pending}
-                        className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
                         aria-label="Aumentar"
                       >
                         <Plus className="size-4" />

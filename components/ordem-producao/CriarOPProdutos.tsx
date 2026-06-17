@@ -10,6 +10,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
+import { parseNumBR } from '@/lib/num-br'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -96,7 +97,8 @@ export function CriarOPProdutos({
     setItens((prev) =>
       prev.map((i) => {
         if (i.produto.codigo_produto !== cod) return i
-        const atual = Number(i.quantidade) || 0
+        const parsed = parseNumBR(i.quantidade)
+        const atual = parsed != null && !Number.isNaN(parsed) ? parsed : 0
         return { ...i, quantidade: String(Math.max(0, atual + delta)) }
       })
     )
@@ -117,7 +119,7 @@ export function CriarOPProdutos({
     }
     const itensValidos = itens.map((i) => ({
       nCodProduto: i.produto.codigo_produto,
-      quantidade: Number(i.quantidade) || 0,
+      quantidade: parseNumBR(i.quantidade) || 0,
       validadeDias: Number(i.validadeDias) || null,
     }))
     if (itensValidos.some((i) => i.quantidade <= 0)) {
@@ -182,7 +184,7 @@ export function CriarOPProdutos({
                   </div>
                   <button
                     onClick={() => remover(item.produto.codigo_produto)}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err lg:size-9"
                     aria-label="Remover"
                   >
                     <Trash2 className="size-4" />
@@ -194,24 +196,23 @@ export function CriarOPProdutos({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, -1)}
-                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
                       aria-label="Diminuir"
                     >
                       <Minus className="size-4" />
                     </button>
                     <input
-                      type="number"
-                      min={0}
-                      step="any"
+                      type="text"
                       inputMode="decimal"
                       value={q}
                       onChange={(e) => setQtd(item.produto.codigo_produto, e.target.value)}
-                      className="num w-16 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="num h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg font-semibold text-text outline-none focus:border-brand"
                       placeholder="0"
                     />
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, 1)}
-                      className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
                       aria-label="Aumentar"
                     >
                       <Plus className="size-4" />
@@ -234,8 +235,9 @@ export function CriarOPProdutos({
                       inputMode="numeric"
                       value={item.validadeDias}
                       onChange={(e) => setValidadeDias(item.produto.codigo_produto, e.target.value)}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="0"
-                      className="num w-20 rounded-md border border-border bg-surface px-2 py-1.5 text-center text-sm text-text outline-none focus:border-brand"
+                      className="num h-11 w-20 rounded-md border border-border bg-surface px-2 text-center text-sm text-text outline-none focus:border-brand lg:h-9"
                     />
                   </div>
                 </div>

@@ -43,13 +43,14 @@ export function MargemAlvoInput({
   return (
     <div className="flex items-center gap-2 text-[12px] text-text-muted">
       <span className="uppercase tracking-wider">Margem alvo</span>
-      <div className="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1">
+      <div className="flex h-11 items-center gap-1 rounded-md border border-border bg-surface px-2 lg:h-8">
         <input
           type="number"
           min={1}
           max={99}
           defaultValue={valor}
           onChange={(e) => onChange(e.target.value)}
+          onWheel={(e) => e.currentTarget.blur()}
           className="num w-10 bg-transparent text-center text-sm font-medium text-text outline-none"
         />
         <span className="text-text-muted">%</span>
