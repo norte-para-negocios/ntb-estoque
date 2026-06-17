@@ -80,7 +80,7 @@ export function ContagemInventarioPDF({
         </View>
 
         <View style={s.table}>
-          <View style={s.thead}>
+          <View style={s.thead} fixed>
             <Text style={[s.th, s.cCodigo]}>Código</Text>
             <Text style={[s.th, s.cDescricao]}>Descrição</Text>
             <Text style={[s.th, s.cUnidade]}>Un.</Text>
@@ -88,7 +88,7 @@ export function ContagemInventarioPDF({
             <Text style={[s.th, s.cStatus]}>Status</Text>
           </View>
           {itens.map((it, i) => (
-            <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]}>
+            <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
               <Text style={[s.td, s.cCodigo]}>{it.codigo}</Text>
               <Text style={[s.td, s.cDescricao]}>{it.descricao}</Text>
               <Text style={[s.td, s.cUnidade]}>{it.unidade}</Text>
@@ -100,7 +100,7 @@ export function ContagemInventarioPDF({
           ))}
         </View>
 
-        <Text style={s.footer}>NTB Estoque — gerado em {data}</Text>
+        <Text style={s.footer} fixed render={({ pageNumber, totalPages }) => `NTB Estoque · ${data} · Página ${pageNumber} de ${totalPages}`} />
       </Page>
     </Document>
   )
