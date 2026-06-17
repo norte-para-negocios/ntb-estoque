@@ -97,11 +97,11 @@ Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-tast
 - [ ] Unificar heading: `text-sm font-semibold` (sem uppercase-tracked nem `border-b-2 border-text`).
 - [ ] Verificar a primeira dobra no mobile (390px): fila de ação visível sem rolar.
 
-### V3 — Ergonomia de toque (achado mais grave)
-- [ ] Steppers +/- e inputs inline ≥44px no mobile (`h-11`), compacto só no `lg:`. `OrdemProducaoRow`, `EstoqueMinimoInput`, `MargemAlvoInput`, `QuantidadeInput`, contagem.
-- [ ] "x" dos chips com área maior (`-m-2 p-2`). `ChipsFiltrosAtivos`.
-- [ ] Bottom-nav item ≥48px, label `text-[11px]`. `MobileNav`.
-- [ ] Quantidade decimal: `type="text" inputMode="decimal"` com parse de vírgula + `onWheel blur`. Testar "1,5" (grava no Omie, cuidado).
+### V3 — Ergonomia de toque (achado mais grave) [CONCLUÍDO 17/06/2026]
+- [x] Steppers +/- e inputs inline ≥44px no mobile (`size-11`/`h-11`), compacto só no `lg:`. OrdemProducaoRow, EstoqueMinimoInput, MargemAlvoInput, QuantidadeInput, ContagemInventario, ContagemTransferencia, CriarOPProdutos.
+- [x] "x" dos chips com área maior (`-my-1 -mr-1 p-2`). ChipsFiltrosAtivos.
+- [x] Bottom-nav item ≥48px (`min-h-12`), label `text-[11px]`. MobileNav.
+- [x] Quantidade decimal: `type="text" inputMode="decimal"` + `parseNumBR` (lib/num-br.ts, aceita "1,5") + `onWheel blur`. Validade-dias segue inteiro.
 
 ### V4 — Tabela única, densa, escaneável
 - [ ] Eleger `Lista` como canônico; migrar tabela inline da home e a OP (`DataTable`) para `Lista`, com header ordenável + `aria-sort`.
