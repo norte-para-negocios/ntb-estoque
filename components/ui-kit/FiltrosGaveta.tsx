@@ -17,6 +17,17 @@ const field =
   'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand'
 const lab = 'mb-1 block text-[11px] font-medium text-text-muted'
 
+// Presets de período (boa prática: atalho em vez de digitar data toda vez).
+const fmtD = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const PRESETS: { label: string; calc: () => [string, string] }[] = [
+  { label: 'Hoje', calc: () => { const h = new Date(); return [fmtD(h), fmtD(h)] } },
+  { label: '7 dias', calc: () => { const h = new Date(); const i = new Date(); i.setDate(h.getDate() - 6); return [fmtD(i), fmtD(h)] } },
+  { label: 'Este mês', calc: () => { const h = new Date(); return [fmtD(new Date(h.getFullYear(), h.getMonth(), 1)), fmtD(h)] } },
+  { label: 'Mês passado', calc: () => { const h = new Date(); return [fmtD(new Date(h.getFullYear(), h.getMonth() - 1, 1)), fmtD(new Date(h.getFullYear(), h.getMonth(), 0))] } },
+  { label: 'Este ano', calc: () => { const h = new Date(); return [fmtD(new Date(h.getFullYear(), 0, 1)), fmtD(h)] } },
+]
+
 export function FiltrosGaveta({
   basePath,
   campos,
@@ -58,6 +69,18 @@ export function FiltrosGaveta({
     router.push(`${basePath}?${params.toString()}`)
   }
 
+  // Aplica os dois campos de data de uma vez (1 navegação só).
+  function aplicarPeriodo(ini: string, fim: string) {
+    setValores((prev) => ({ ...prev, data_inicio: ini, data_final: fim }))
+    const params = new URLSearchParams(sp.toString())
+    params.delete('page')
+    params.set('data_inicio', ini)
+    params.set('data_final', fim)
+    router.push(`${basePath}?${params.toString()}`)
+  }
+  const temPeriodo =
+    campos.some((c) => c.nome === 'data_inicio') && campos.some((c) => c.nome === 'data_final')
+
   function limpar() {
     setValores({})
     router.push(basePath)
@@ -89,6 +112,26 @@ export function FiltrosGaveta({
 
         <div className="flex h-[calc(100%-49px)] flex-col">
           <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            {temPeriodo && (
+              <div>
+                <span className={lab}>Período rápido</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        const [i, f] = p.calc()
+                        aplicarPeriodo(i, f)
+                      }}
+                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-brand hover:text-text"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {campos.map((c) => (
               <div key={c.nome}>
                 <label htmlFor={`fg-${c.nome}`} className={lab}>
