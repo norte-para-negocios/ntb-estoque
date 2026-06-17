@@ -128,11 +128,11 @@ Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-tast
 - [ ] Movimentações: saída em neutro/âmbar (não `--err`) + glifo `+`/`−`.
 - [ ] Stepper de validade: trocar ±1 dia por presets +30/+90/+180 ou só o date input.
 
-### V8 — PDFs e etiquetas
-- [ ] Componente compartilhado de cabeçalho (logo) + rodapé com paginação `fixed`, aplicado aos 5 relatórios.
-- [ ] `<View ... fixed>` no thead de todos (repete cabeçalho de coluna por página) + `wrap={false}` nas linhas.
-- [ ] Contraste P&B: cabeçalho de coluna `#374151`/`#111`, rodapé ≥`#6b7280`.
-- [ ] Etiqueta: Validade e Descrição em destaque (≥11-12pt bold), CNPJ/lote/fornecedor rebaixados; QR com `margin:2` gerado a 240-320px; validar truncamento (ellipsis, não corte cego).
+### V8 — PDFs e etiquetas [PARCIAL 17/06/2026]
+- [x] Componente compartilhado (PdfChrome: cabeçalho com logo + rodapé `fixed` com paginação), aplicado aos 3 relatórios; contagens ganharam rodapé `fixed` paginado.
+- [x] `<View ... fixed>` no thead de todos (repete cabeçalho de coluna por página) + `wrap={false}` nas linhas (5 PDFs).
+- [x] Contraste P&B: cabeçalho de coluna `#374151`, rodapé `#6b7280`.
+- [ ] Etiqueta: Validade/Descrição em destaque, QR margin, truncamento. **ADIADO** (concern separado da etiqueta).
 
 ### V9 — Auth / primeira impressão
 - [ ] Quebrar o card centralizado: split-screen com painel de marca; ou elemento gráfico vazando atrás do card.
