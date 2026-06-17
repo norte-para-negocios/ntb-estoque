@@ -321,14 +321,15 @@ export default async function ProdutoPage({
         chaveLinha={(p) => p.id}
         colunas={[
           {
+            label: 'Código',
+            larguraDesktop: 'w-24',
+            render: (p) => <span className="num text-text-muted">{p.codigo}</span>,
+          },
+          {
             label: 'Descrição',
             primaria: true,
             flexivel: true,
-            render: (p) => (
-              <span>
-                <span className="num text-text-muted">{p.codigo}</span> {formatarNomeProduto(p.descricao)}
-              </span>
-            ),
+            render: (p) => <span>{formatarNomeProduto(p.descricao)}</span>,
           },
           ...(vista === 'precos'
             ? [

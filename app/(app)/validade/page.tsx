@@ -12,7 +12,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
-const PERIODOS = [3, 7, 15, 30] as const
+const PERIODOS = [3, 7, 15, 30, 60] as const
 
 // Retorna 'YYYY-MM-DD' de hoje + d dias.
 function hojeMais(d: number): string {
@@ -46,12 +46,15 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
 
   const sp = await searchParams
+  // Modo "vencidos": so os que ja venceram (validade < hoje), do mais vencido pro
+  // menos. Senao, o que vence ate hoje + N dias.
+  const vencidos = sp.modo === 'vencidos'
   const dias = PERIODOS.includes(Number(sp.dias) as (typeof PERIODOS)[number])
     ? Number(sp.dias)
     : 7
@@ -75,9 +78,10 @@ export default async function ValidadePage({
     .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
-    .lte('validade', hojeMais(dias))
-    .order('validade', { ascending: true })
-    .limit(LIMITE)
+  ordensQuery = vencidos
+    ? ordensQuery.lt('validade', hojeMais(0)).order('validade', { ascending: false })
+    : ordensQuery.lte('validade', hojeMais(dias)).order('validade', { ascending: true })
+  ordensQuery = ordensQuery.limit(LIMITE)
 
   if (codigosTipo !== null) {
     ordensQuery = ordensQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
@@ -118,7 +122,7 @@ export default async function ValidadePage({
 
       <div className="flex flex-wrap items-center gap-1.5">
         {PERIODOS.map((p) => {
-          const ativo = p === dias
+          const ativo = !vencidos && p === dias
           const sufixoTipo = sp.tipo ? `&tipo=${sp.tipo}` : ''
           return (
             <Link
@@ -134,6 +138,16 @@ export default async function ValidadePage({
             </Link>
           )
         })}
+        <Link
+          href={`/validade?modo=vencidos${sp.tipo ? `&tipo=${sp.tipo}` : ''}`}
+          className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+            vencidos
+              ? 'border-[#ef4444] bg-[#ef44441f] text-[#ef4444]'
+              : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+          }`}
+        >
+          Vencidos
+        </Link>
       </div>
 
       <Lista
