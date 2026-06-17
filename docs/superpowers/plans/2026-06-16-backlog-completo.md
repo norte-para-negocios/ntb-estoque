@@ -11,8 +11,16 @@
 > bug `step=1` confirmado ao vivo) · C5 (código em coluna própria) · C8 (validade:
 > 60 dias + filtro Vencidos) · B4 (conferência só com o nome do local) · C6
 > (margem-alvo salva no perfil) · D1 (dashboard: bloco "Repor estoque" + alerta de
-> ruptura, validado em tela). D2 (últimas notas) e D4 (vencimentos) já existiam.
+> ruptura, validado em tela) · D3 (alerta de transferências em aberto). D2 (últimas
+> notas) e D4 (vencimentos) já existiam — **bloco D do dashboard completo**.
 > Criacao/escrita no Omie segue para teste com o Ramon.
+>
+> **▶ PRÓXIMO (sessão nova, com contexto limpo):** C1/C2 — cadastro de produto
+> completo (família com código + NCM com lista + origem + tipo + "vendido por
+> loja") e excluir produto. É fiscal e escreve no Omie (`IncluirProduto`/
+> `ExcluirProduto`): confirmar o mapeamento exato dos campos com o Ramon antes de
+> disparar. A action `lib/actions/produto.ts` hoje cobre código/descrição/unidade/
+> NCM/valor/tipo — falta família (o erro "faltou a família"), origem e o excluir.
 
 ---
 
