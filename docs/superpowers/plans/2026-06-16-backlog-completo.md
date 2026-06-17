@@ -14,6 +14,7 @@ Na criação da OP você escolhe **só o dia** (data de início/produção) e a 
 
 ### A2. Validade na recorrência = dia da ocorrência + X dias 🟢  ⭐
 Decorre do A1. Hoje todas as OPs recorrentes herdam a validade da 1ª (bug). Com validade em dias, cada ocorrência calcula sozinha: **data daquela repetição + X dias**. Cálculo simples, automático. (Ex.: 1ª 23/06 +30 = 23/07; 2ª 30/06 +30 = 30/07.)
+> **Técnico (API):** o Omie recebe a validade como **data**, no array `lote_validade` do `IncluirOrdemProducao` (campo `dDataVal`, ex. 08/09/2025) — **não** aceita "dias". Então o "X dias" fica só na nossa UI: guardamos os dias, calculamos `dDataVal = data da OP + X dias` **por ocorrência** e enviamos o valor certo em cada OP. É por isso que o bug se resolve 100% do nosso lado.
 
 ### A3. Concluir OP na data prevista + escolher a data 🟢
 Hoje conclui na data de **hoje** e não dá opção de escolher. Tem que concluir na **data prevista da OP** e permitir **escolher a data** de conclusão (retroativa).
@@ -55,8 +56,8 @@ Mover o status para baixo do nome libera espaço — mas o layout atual já est�
 ### B1. Motivo (perda/quebra) funcionando 🟢
 Confirmar que o **motivo** aparece e grava (TRF/TPQ + perda/quebra entre locais). Ficou a dúvida se está completo.
 
-### B2. Observação automática com quem fez 🟢
-Preencher a observação com o **usuário logado** (quem fez a transferência) automaticamente.
+### B2. Observação automática com quem fez 🟢  ➡️ ver item TRANSVERSAL T1
+Na reunião isso apareceu na **transferência** (a observação no Omie), mas o Joaquim disse "é uma automação **também**". Decisão: vale para **toda escrita do NTB no Omie** — ver **T1** abaixo.
 
 ### B3. "Buscar na lista" + seleção por família 🟢
 Mesma melhoria da OP (A7) aplicada à transferência.
@@ -194,6 +195,36 @@ A partir de quinta; começar por **Brotas e Sertão** (as que mais trabalham). V
 
 ### I3. Reunião com André — quinta 18/06 à noite 🔵
 Alinhar G1–G4 (Vendas, infra, token, domínio).
+
+---
+
+## T. TRANSVERSAL (vale para o sistema todo)
+
+### T1. Carimbo "NTB Estoque · usuário" em TODA escrita no Omie 🟢
+Toda movimentação/cadastro que o sistema gravar no Omie — **transferência, OP, inventário/ajuste e os cadastros** — leva na **observação** o carimbo `NTB Estoque · [usuário logado]`. Rastreabilidade de quem fez e de que veio do nosso sistema. (Responde à dúvida da reunião "era só transferência, os dois ou tudo?" → **é tudo**.) Pega o usuário do login (não inventar nome).
+
+---
+
+## J. O QUE A API DO OMIE DESTRAVA (oportunidades novas, além do que foi pedido)
+> Da varredura da API (escrita) em 16/06. Tudo que escreve no Omie só dispara em teste com o Ramon (regra 9.5).
+
+### J1. Sugestão de compra → Pedido de Compra real no Omie 🟠
+`v1/produtos/pedidocompra` é escrita. Em vez de só exportar Excel/PDF (C7), **gerar o pedido de compra no Omie** a partir da sugestão (escolher fornecedor + quantidades). Fecha o ciclo da compra dentro do sistema.
+
+### J2. Aplicar preço de venda no Omie pela margem 🟠
+`v1/produtos/tabelaprecos` (e `AlterarProduto`) são escrita. Na tela de Preços, botão para **aplicar o preço sugerido** (calculado pela margem-alvo) direto no Omie — hoje só mostramos o sugerido.
+
+### J3. Foto do produto via Anexos 🟢
+`v1/geral/anexo` cria/edita anexos. A **foto** pedida na leitura/QR (D7) pode ser anexada ao produto no Omie ou guardada no nosso Storage e exibida.
+
+### J4. Criar família nova no cadastro de produto 🟠
+`v1/geral/familias` é escrita. Como a família é obrigatória (C1), permitir **criar uma família nova** na hora do cadastro, sem sair da tela.
+
+### J5. Lotes e validade reais do estoque 🟢
+`v1/produtos/produtoslote` (consulta) traz os lotes/validades que já existem no estoque — alimenta a tela de **Validade** com dado real (não só o que a gente lança nas OPs).
+
+### J6. Entrada de NF + Sefaz (confirma F3/F4) 🟠
+`recebimentonfe` (editar/concluir) + `dfedocs` (manifestar) confirmam o caminho da entrada de NF em 2 cliques e da manifestação no Sefaz.
 
 ---
 
