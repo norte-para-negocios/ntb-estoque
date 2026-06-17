@@ -14,12 +14,11 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
-import { NovoProduto } from '@/components/produtos/NovoProduto'
 import { ExcluirProdutoBtn } from '@/components/produtos/ExcluirProdutoBtn'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { Package, Download } from 'lucide-react'
+import { Package, Download, Plus } from 'lucide-react'
 
 const POR_PAGINA = 100
 
@@ -256,7 +255,9 @@ export default async function ProdutoPage({
               ]}
               defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos' }}
             />
-            <NovoProduto />
+            <Link href="/produto/novo" className={btnClass('primary')}>
+              <Plus className="size-4" /> Novo produto
+            </Link>
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
               <Download className="size-4" /> Exportar
             </a>
