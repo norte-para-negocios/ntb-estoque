@@ -89,7 +89,8 @@
   --surface-2: #1c1f27;
   --text: #e6e8ec;
   --text-muted: #8b93a1;
-  --border: rgba(255, 255, 255, 0.09);
+  /* 0.09 sumia nas tabelas do dark; 0.12 separa as linhas sem pesar. */
+  --border: rgba(255, 255, 255, 0.12);
   --brand: #2eb5c3;
   --brand-strong: #3fc6d4;
   --brand-soft: rgba(46, 181, 195, 0.14);

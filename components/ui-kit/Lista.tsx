@@ -46,7 +46,7 @@ export function Lista<T>({
               {colunas.map((c, i) => (
                 <th
                   key={i}
-                  className={`px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
+                  className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
                     c.alinhar === 'right' ? 'text-right' : 'text-left'
                   } ${c === flexivel ? '' : 'whitespace-nowrap'} ${i === 0 ? 'rounded-tl-lg' : ''} ${
                     i === colunas.length - 1 && !acao ? 'rounded-tr-lg' : ''
@@ -55,25 +55,25 @@ export function Lista<T>({
                   {c.label}
                 </th>
               ))}
-              {acao && <th className="rounded-tr-lg px-4 py-2.5" />}
+              {acao && <th className="rounded-tr-lg px-4 py-2" />}
             </tr>
           </thead>
           <tbody>
             {linhas.map((row) => (
               <tr
                 key={chaveLinha(row)}
-                className="border-b border-border/60 last:border-0 transition-colors hover:bg-surface-2/40"
+                className="border-b border-border/60 last:border-0 transition-colors even:bg-surface-2/30 hover:bg-surface-2/40"
               >
                 {colunas.map((c, i) => (
                   <td
                     key={i}
-                    className={`px-4 py-2.5 ${c.alinhar === 'right' ? 'text-right' : ''} ${tdClasse(c)}`}
+                    className={`px-4 py-2 ${c.alinhar === 'right' ? 'text-right' : ''} ${tdClasse(c)}`}
                   >
                     {c.render(row)}
                   </td>
                 ))}
                 {acao && (
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">{acao(row)}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{acao(row)}</td>
                 )}
               </tr>
             ))}
