@@ -193,7 +193,7 @@ export async function setQuantidadeOP(opId: number, quantidade: number | null) {
   revalidatePath('/ordem-producao')
 }
 
-export async function finishOP(opId: number) {
+export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
 
@@ -215,11 +215,18 @@ export async function finishOP(opId: number) {
   }
 
   try {
-    // Conclui na DATA DA OP (a data de inicio dela no Omie), NUNCA no dia de hoje.
-    // Prioridade: data de inicio do full_object (DD/MM/AAAA); senao a previsao do
-    // banco (YYYY-MM-DD -> DD/MM/YYYY); por ultimo, hoje como fallback.
-    const dInicio = op.full_object?.infAdicionais?.dDtInicio
-    let dataConclusao = dInicio && /^\d{2}\/\d{2}\/\d{4}$/.test(dInicio) ? dInicio : ''
+    // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a DATA DA OP
+    // (data de inicio no Omie), NUNCA o dia de hoje; 3) a previsao do banco;
+    // 4) hoje como ultimo fallback.
+    let dataConclusao = ''
+    if (dataEscolhidaISO) {
+      const me = dataEscolhidaISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (me) dataConclusao = `${me[3]}/${me[2]}/${me[1]}`
+    }
+    if (!dataConclusao) {
+      const dInicio = op.full_object?.infAdicionais?.dDtInicio
+      dataConclusao = dInicio && /^\d{2}\/\d{2}\/\d{4}$/.test(dInicio) ? dInicio : ''
+    }
     if (!dataConclusao) {
       const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
       dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')

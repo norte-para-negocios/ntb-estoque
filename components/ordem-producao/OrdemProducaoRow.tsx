@@ -92,11 +92,23 @@ function useOP(op: OPData) {
     })
   }
 
+  // Conclusao com data escolhivel (default = data prevista da OP). op.data vem
+  // em dd/mm/aaaa -> ISO para o input date.
+  const dataPrevistaISO =
+    op.data && /^\d{2}\/\d{2}\/\d{4}$/.test(op.data)
+      ? op.data.split('/').reverse().join('-')
+      : new Date().toISOString().split('T')[0]
+  const [escolhendoData, setEscolhendoData] = useState(false)
+  const [dataConclusao, setDataConclusao] = useState(dataPrevistaISO)
+
   function concluir() {
     startTransition(async () => {
-      const res = await finishOP(op.id)
+      const res = await finishOP(op.id, dataConclusao || null)
       if (res?.error) toast.error('Erro ao concluir', { description: res.error })
-      else toast.success('Ordem concluída no Omie')
+      else {
+        toast.success('Ordem concluída no Omie')
+        setEscolhendoData(false)
+      }
     })
   }
 
@@ -111,6 +123,10 @@ function useOP(op: OPData) {
     ajustarValidade,
     ajustarQuantidade,
     concluir,
+    escolhendoData,
+    setEscolhendoData,
+    dataConclusao,
+    setDataConclusao,
   }
 }
 
@@ -201,16 +217,45 @@ function Acoes({ op, ctrl }: StepperProps) {
       >
         <Printer className="size-3.5" /> Imprimir
       </a>
-      {!op.concluida && (
-        <button
-          type="button"
-          onClick={ctrl.concluir}
-          disabled={ctrl.pending}
-          className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
-        >
-          <Check className="size-3.5" /> Concluir
-        </button>
-      )}
+      {!op.concluida &&
+        (ctrl.escolhendoData ? (
+          <span className="inline-flex items-center gap-1.5">
+            <input
+              type="date"
+              value={ctrl.dataConclusao}
+              onChange={(e) => ctrl.setDataConclusao(e.target.value)}
+              disabled={ctrl.pending}
+              aria-label="Data de conclusão"
+              title="Conclui nesta data (default: data prevista da OP)"
+              className="num rounded-md border border-border bg-surface px-1.5 py-1 text-xs text-text outline-none focus:border-brand disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={ctrl.concluir}
+              disabled={ctrl.pending}
+              className="text-brand hover:underline disabled:opacity-60"
+            >
+              {ctrl.pending ? '...' : 'Confirmar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => ctrl.setEscolhendoData(false)}
+              disabled={ctrl.pending}
+              className="text-text-muted hover:underline disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => ctrl.setEscolhendoData(true)}
+            disabled={ctrl.pending}
+            className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
+          >
+            <Check className="size-3.5" /> Concluir
+          </button>
+        ))}
     </>
   )
 }
