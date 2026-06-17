@@ -10,7 +10,9 @@
 > limite 50 + ordena por código) · C3 (minimo/quantidade aceitam decimais —
 > bug `step=1` confirmado ao vivo) · C5 (código em coluna própria) · C8 (validade:
 > 60 dias + filtro Vencidos) · B4 (conferência só com o nome do local) · C6
-> (margem-alvo salva no perfil). Criacao/escrita no Omie segue para teste com o Ramon.
+> (margem-alvo salva no perfil) · D1 (dashboard: bloco "Repor estoque" + alerta de
+> ruptura, validado em tela). D2 (últimas notas) e D4 (vencimentos) já existiam.
+> Criacao/escrita no Omie segue para teste com o Ramon.
 
 ---
 
