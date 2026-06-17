@@ -15,6 +15,7 @@ import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
 import { NovoProduto } from '@/components/produtos/NovoProduto'
+import { ExcluirProdutoBtn } from '@/components/produtos/ExcluirProdutoBtn'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -423,6 +424,11 @@ export default async function ProdutoPage({
                 },
               ]),
         ]}
+        acao={
+          podeSync
+            ? (p) => (p.codigo_produto != null ? <ExcluirProdutoBtn codigoProduto={p.codigo_produto} /> : null)
+            : undefined
+        }
         vazio={
           <EmptyState
             icon={Package}

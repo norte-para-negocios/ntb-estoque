@@ -43,6 +43,8 @@ export async function incluirProduto(
     ncm: string
     valorUnitario: number
     tipoItem?: string
+    codigoFamilia?: number
+    origem?: string // origem da mercadoria (0-8); 0 = Nacional
   }
 ) {
   return omieRequest<OmieIncluirProdutoResp>({
@@ -59,7 +61,28 @@ export async function incluirProduto(
       ncm: dados.ncm,
       valor_unitario: dados.valorUnitario,
       ...(dados.tipoItem ? { tipoItem: dados.tipoItem } : {}),
+      // Familia (codigo numerico de uma familia ja existente no Omie). Resolve o
+      // erro "faltou a familia" da reuniao 16/06.
+      ...(dados.codigoFamilia ? { codigo_familia: dados.codigoFamilia } : {}),
+      // Origem da mercadoria vai em recomendacoes_fiscais. ATENCAO (regra 9.5):
+      // confirmar o caminho exato no teste real com o Ramon.
+      ...(dados.origem ? { recomendacoes_fiscais: { origem_mercadoria: dados.origem } } : {}),
     },
+  })
+}
+
+/**
+ * Exclui um produto no Omie (Bloco 9.2 / C2). ESCREVE no Omie.
+ * ATENCAO (regra 9.5): confirmar a call exata por teste real com o Ramon.
+ */
+export async function excluirProdutoOmie(loja: LojaOmie, codigoProduto: number) {
+  return omieRequest<OmieIncluirProdutoResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/produtos',
+    call: 'ExcluirProduto',
+    data: { codigo_produto: codigoProduto },
   })
 }
 

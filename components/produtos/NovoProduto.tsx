@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,11 +14,24 @@ import {
 import { Label } from '@/components/ui/label'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { criarProduto } from '@/lib/actions/produto'
+import { criarProduto, buscarFamilias } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand'
+
+// Origem da mercadoria (tabela fiscal padrao). 0 = Nacional (caso mais comum).
+const ORIGENS = [
+  { value: '0', label: '0 - Nacional' },
+  { value: '1', label: '1 - Estrangeira (importação direta)' },
+  { value: '2', label: '2 - Estrangeira (mercado interno)' },
+  { value: '3', label: '3 - Nacional, importação >40% e ≤70%' },
+  { value: '4', label: '4 - Nacional (conforme PPB)' },
+  { value: '5', label: '5 - Nacional, importação ≤40%' },
+  { value: '6', label: '6 - Estrangeira, imp. direta sem similar' },
+  { value: '7', label: '7 - Estrangeira, merc. interno sem similar' },
+  { value: '8', label: '8 - Nacional, importação >70%' },
+]
 
 export function NovoProduto() {
   const [open, setOpen] = useState(false)
@@ -28,8 +41,18 @@ export function NovoProduto() {
   const [ncm, setNcm] = useState('')
   const [valor, setValor] = useState('')
   const [tipo, setTipo] = useState('')
+  const [familia, setFamilia] = useState('') // codigo_familia (string)
+  const [origem, setOrigem] = useState('0')
+  const [familias, setFamilias] = useState<{ codigo: number; descricao: string }[]>([])
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  // Carrega as familias existentes ao abrir (familia e obrigatoria no Omie).
+  useEffect(() => {
+    if (open && familias.length === 0) {
+      buscarFamilias().then(setFamilias).catch(() => {})
+    }
+  }, [open, familias.length])
 
   function criar() {
     if (!codigo.trim() || !descricao.trim() || !unidade.trim()) {
@@ -40,6 +63,11 @@ export function NovoProduto() {
       toast.error('O NCM deve ter 8 dígitos')
       return
     }
+    if (!familia) {
+      toast.error('Escolha a família do produto')
+      return
+    }
+    const fam = familias.find((f) => String(f.codigo) === familia)
     startTransition(async () => {
       const res = await criarProduto({
         codigo,
@@ -48,6 +76,9 @@ export function NovoProduto() {
         ncm,
         valorUnitario: Number(valor) || 0,
         tipoItem: tipo || undefined,
+        codigoFamilia: fam ? fam.codigo : null,
+        descricaoFamilia: fam ? fam.descricao : null,
+        origem,
       })
       if (res?.error) {
         toast.error('Erro', { description: res.error })
@@ -61,6 +92,8 @@ export function NovoProduto() {
       setNcm('')
       setValor('')
       setTipo('')
+      setFamilia('')
+      setOrigem('0')
       router.refresh()
     })
   }
@@ -103,18 +136,41 @@ export function NovoProduto() {
               <input type="number" min={0} value={valor} onChange={(e) => setValor(e.target.value)} className={inputClass} placeholder="0,00" />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Tipo</Label>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputClass}>
+                <option value="">Padrão</option>
+                {PRODUTO_TIPO_ITEM.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Origem</Label>
+              <select value={origem} onChange={(e) => setOrigem(e.target.value)} className={inputClass}>
+                {ORIGENS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="space-y-1">
-            <Label>Tipo</Label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputClass}>
-              <option value="">Padrão</option>
-              {PRODUTO_TIPO_ITEM.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+            <Label>Família</Label>
+            <select value={familia} onChange={(e) => setFamilia(e.target.value)} className={inputClass}>
+              <option value="">Selecione a família</option>
+              {familias.map((f) => (
+                <option key={f.codigo} value={f.codigo}>
+                  {f.descricao}
                 </option>
               ))}
             </select>
           </div>
-          <p className="text-[12px] text-text-muted">O produto é criado direto no Omie. NCM é obrigatório (8 dígitos).</p>
+          <p className="text-[12px] text-text-muted">O produto é criado direto no Omie. NCM (8 dígitos) e família são obrigatórios.</p>
         </div>
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
