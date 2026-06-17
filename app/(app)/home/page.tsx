@@ -65,7 +65,7 @@ export default async function HomePage() {
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
-  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes] =
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
       supabase
@@ -104,6 +104,8 @@ export default async function HomePage() {
         .limit(5),
       // Produtos abaixo do minimo (a repor) — mesma RPC da tela de Compras.
       supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
+      // Transferencias ainda nao concluidas (em contagem/abertas).
+      supabase.from('transferencias').select('id', head).eq('loja_id', lojaId).neq('status', 'Concluido'),
     ])
 
   // D1: produtos prestes a ruptura (abaixo do minimo). Lista os principais + ver todos.
@@ -158,6 +160,13 @@ export default async function HomePage() {
       cor: '#2eb5c3',
       texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`,
       href: '/inventario',
+    })
+  if ((transfAbertas.count ?? 0) > 0)
+    alertas.push({
+      icon: ArrowLeftRight,
+      cor: '#2eb5c3',
+      texto: `${transfAbertas.count} transferência(s) em aberto`,
+      href: '/transferencia',
     })
 
   const secundarios = [
