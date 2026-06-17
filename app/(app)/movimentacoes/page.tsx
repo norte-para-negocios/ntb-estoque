@@ -9,6 +9,8 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Num } from '@/components/ui-kit/Num'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { buscarFamilias } from '@/lib/actions/produto'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ArrowLeftRight } from 'lucide-react'
 
 const POR_PAGINA = 100
@@ -24,7 +26,7 @@ function fmtData(d: string | null): string {
 export default async function MovimentacoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; produto?: string; page?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; produto?: string; familia?: string; tipo?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -36,6 +38,20 @@ export default async function MovimentacoesPage({
   const fim = sp.data_final || hojeISO
 
   const supabase = await createClient()
+
+  // Tipo/familia nao existem em movimentos_historico -> resolve os codigos dos
+  // produtos que batem e restringe os movimentos a eles.
+  let codigosFiltro: number[] | null = null
+  if (sp.tipo || sp.familia) {
+    let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
+    if (sp.tipo) pq = pq.eq('tipo_item', sp.tipo)
+    if (sp.familia) pq = pq.eq('descricao_familia', sp.familia)
+    const { data } = await pq
+    codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+  }
+  const codigosIn = codigosFiltro ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
+  const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
+
   let query = supabase
     .from('movimentos_historico')
     .select('cod_prod, codigo, descricao, data, entradas, saidas')
@@ -45,15 +61,27 @@ export default async function MovimentacoesPage({
     .order('data', { ascending: false })
     .order('saidas', { ascending: false })
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA)
-
-  if (sp.produto) {
-    const q = escapeIlikeOr(sp.produto)
-    query = query.or(`descricao.ilike.%${q}%,codigo.ilike.%${q}%`)
-  }
-
+  if (termo) query = query.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+  if (codigosIn) query = query.in('cod_prod', codigosIn)
   const { data: movsRaw } = await query
   const temProxima = (movsRaw?.length ?? 0) > POR_PAGINA
   const movs = temProxima ? movsRaw!.slice(0, POR_PAGINA) : movsRaw
+
+  // Totais do periodo/filtro (busca so as 2 colunas e soma) — resumo no topo.
+  let totaisQuery = supabase
+    .from('movimentos_historico')
+    .select('entradas, saidas')
+    .eq('loja_id', lojaId)
+    .gte('data', ini)
+    .lte('data', fim)
+    .limit(100000)
+  if (termo) totaisQuery = totaisQuery.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+  if (codigosIn) totaisQuery = totaisQuery.in('cod_prod', codigosIn)
+  const { data: totaisRaw } = await totaisQuery
+  const totalEntradas = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.entradas) || 0), 0)
+  const totalSaidas = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.saidas) || 0), 0)
+
+  const familias = await buscarFamilias()
 
   return (
     <div className="space-y-4">
@@ -68,14 +96,29 @@ export default async function MovimentacoesPage({
               { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
               { tipo: 'data', nome: 'data_final', label: 'Data final' },
               { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+              { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+              { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
             ]}
-            defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '' }}
+            defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+            naoContar={['data_inicio', 'data_final']}
           />
         }
       />
 
-      <div className="text-[13px] text-text-muted">
-        Período: {fmtData(ini)} a {fmtData(fim)}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          Entradas{' '}
+          <span className="num font-semibold text-[#10b981]">
+            <Num value={totalEntradas} frac={0} />
+          </span>
+        </span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          Saídas{' '}
+          <span className="num font-semibold text-[var(--err)]">
+            <Num value={totalSaidas} frac={0} />
+          </span>
+        </span>
       </div>
 
       <Lista
