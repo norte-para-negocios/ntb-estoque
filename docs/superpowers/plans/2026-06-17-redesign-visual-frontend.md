@@ -109,11 +109,11 @@ Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-tast
 - [ ] Densidade `py-1.5` + zebra `even:bg-surface-2/30` + borda do dark para `rgba(255,255,255,0.14)`.
 - [ ] Ordenação por cabeçalho em todas as telas.
 
-### V5 — Scanner QR como instrumento de cozinha
-- [ ] Câmera em leitura contínua (não fecha a cada bip; resetar `lidoRef`).
-- [ ] Moldura/mira visível + flash verde de tela cheia + `navigator.vibrate` no sucesso; flash vermelho + vibração no erro.
-- [ ] QR como bloco primário no topo da contagem (`primary`, ≥56px); busca por texto recolhida em "buscar manualmente".
-- [ ] Input de quantidade dominante (`h-12 w-20 text-2xl`); status do item em cor semântica + ícone, piso de 16px no corpo da contagem.
+### V5 — Scanner QR como instrumento de cozinha [CONCLUÍDO 17/06/2026]
+- [x] Câmera em leitura contínua (não fecha a cada bip; trava só o frame, libera após 1,5s).
+- [x] Mira visível (cantos) + flash de tela cheia verde + `navigator.vibrate` no sucesso; flash vermelho + vibração quando produto não encontrado (onLeitura devolve boolean).
+- [x] QR como bloco primário no topo da contagem (`primary` h-14, ≥56px); busca por texto recolhida em "buscar manualmente".
+- [x] Input de quantidade dominante (`h-12 w-20 text-2xl`); status do item em StatusPill (cor semântica). OBS: comportamento de câmera precisa de teste em dispositivo real.
 
 ### V6 — Formulários com validação inline
 - [ ] Componente `Campo` com `error`/`required`: pinta `aria-invalid`, mostra `<p role="alert">` sob o campo, foca o primeiro inválido no submit. Aplicar em FormNovoProduto, CriarOrdemProducao, NovoLocalEstoque, CriarOPProdutos, MargemAlvoInput.
