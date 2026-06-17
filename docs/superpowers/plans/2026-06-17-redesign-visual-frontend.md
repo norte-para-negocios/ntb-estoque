@@ -103,11 +103,11 @@ Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-tast
 - [x] Bottom-nav item ≥48px (`min-h-12`), label `text-[11px]`. MobileNav.
 - [x] Quantidade decimal: `type="text" inputMode="decimal"` + `parseNumBR` (lib/num-br.ts, aceita "1,5") + `onWheel blur`. Validade-dias segue inteiro.
 
-### V4 — Tabela única, densa, escaneável
-- [ ] Eleger `Lista` como canônico; migrar tabela inline da home e a OP (`DataTable`) para `Lista`, com header ordenável + `aria-sort`.
-- [ ] Remover `DataTable` sem uso e a prop morta `larguraDesktop`.
-- [ ] Densidade `py-1.5` + zebra `even:bg-surface-2/30` + borda do dark para `rgba(255,255,255,0.14)`.
-- [ ] Ordenação por cabeçalho em todas as telas.
+### V4 — Tabela única, densa, escaneável [PARCIAL 17/06/2026 - commit 64f56b6]
+- [ ] Eleger `Lista` como canônico; migrar tabela inline da home e a OP (`DataTable`) para `Lista`, com header ordenável + `aria-sort`. **ADIADO** (arriscado: mexe na tela mais usada + componente compartilhado).
+- [ ] Remover `DataTable` sem uso e a prop morta `larguraDesktop`. **ADIADO** (depende da migração acima).
+- [x] Densidade `py-2` + zebra `even:bg-surface-2/30` + borda do dark `0.12` (no `Lista`, vale em todas as telas). Verificado claro+escuro.
+- [ ] Ordenação por cabeçalho em todas as telas. **ADIADO** (parte da migração da OP).
 
 ### V5 — Scanner QR como instrumento de cozinha [CONCLUÍDO 17/06/2026]
 - [x] Câmera em leitura contínua (não fecha a cada bip; trava só o frame, libera após 1,5s).
