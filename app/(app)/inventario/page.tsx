@@ -7,6 +7,8 @@ import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -112,8 +114,29 @@ export default async function InventarioPage({
     return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
   }
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    {
+      tipo: 'select',
+      nome: 'familia',
+      label: 'Família',
+      opcoes: familias.map((f) => ({ value: f, label: f })),
+    },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'select',
+      nome: 'status',
+      label: 'Status',
+      opcoes: [
+        { value: 'F', label: 'Finalizado' },
+        { value: 'A', label: 'Em aberto' },
+      ],
+    },
+  ]
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Inventários"
         icon={ClipboardList}
@@ -122,26 +145,7 @@ export default async function InventarioPage({
           <>
             <FiltrosGaveta
               basePath="/inventario"
-              campos={[
-                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-                { tipo: 'data', nome: 'data_final', label: 'Data final' },
-                {
-                  tipo: 'select',
-                  nome: 'familia',
-                  label: 'Família',
-                  opcoes: familias.map((f) => ({ value: f, label: f })),
-                },
-                { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-                {
-                  tipo: 'select',
-                  nome: 'status',
-                  label: 'Status',
-                  opcoes: [
-                    { value: 'F', label: 'Finalizado' },
-                    { value: 'A', label: 'Em aberto' },
-                  ],
-                },
-              ]}
+              campos={campos}
               defaults={{
                 data_inicio: sp.data_inicio ?? '',
                 data_final: sp.data_final ?? '',
@@ -154,6 +158,8 @@ export default async function InventarioPage({
           </>
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/inventario" campos={campos} />
 
       <Lista
         linhas={inventarios ?? []}

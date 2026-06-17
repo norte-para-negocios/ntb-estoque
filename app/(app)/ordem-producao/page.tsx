@@ -8,6 +8,8 @@ import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProduc
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -194,6 +196,27 @@ export default async function OrdemProducaoPage({
     .neq('inativo', 'S')
     .order('descricao')
 
+  // Totais por status (Pendentes/Concluidas) do conjunto filtrado, IGNORANDO o
+  // filtro de conclusao: assim o usuario ve quantas ha de cada, mesmo filtrando
+  // por uma. head:true = so o count, nao traz linhas (barato).
+  const totaisBase = () => {
+    let q = supabase
+      .from('ordens_producao')
+      .select('id', { count: 'exact', head: true })
+      .eq('loja_id', lojaId)
+    if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
+    if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
+    if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
+    if (codigosFiltro !== null) {
+      q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+    }
+    return q
+  }
+  const [{ count: totConcluidas }, { count: totPendentes }] = await Promise.all([
+    totaisBase().eq('concluida', true),
+    totaisBase().eq('concluida', false),
+  ])
+
   const exportParams = new URLSearchParams()
   // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.
   exportParams.set('data_inicio', dataInicio)
@@ -217,6 +240,38 @@ export default async function OrdemProducaoPage({
     return <ChevronsUpDown className="size-3.5 opacity-40" />
   }
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
+    { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
+    { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'select',
+      nome: 'op_concluido',
+      label: 'Status',
+      opcoes: [
+        { value: '', label: 'Todos' },
+        { value: 'S', label: 'Concluída' },
+        { value: 'N', label: 'Pendente' },
+      ],
+    },
+    {
+      tipo: 'select',
+      nome: 'ord',
+      label: 'Ordenar por',
+      opcoes: [
+        { value: 'produto_az', label: 'Produto A-Z' },
+        { value: 'produto_za', label: 'Produto Z-A' },
+        { value: 'codigo', label: 'Código do produto' },
+        { value: 'qtd_desc', label: 'Maior quantidade' },
+        { value: 'qtd_asc', label: 'Menor quantidade' },
+        { value: 'validade_asc', label: 'Validade mais próxima' },
+        { value: 'validade_desc', label: 'Validade mais distante' },
+      ],
+    },
+  ]
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -226,37 +281,7 @@ export default async function OrdemProducaoPage({
           <>
             <FiltrosGaveta
               basePath="/ordem-producao"
-              campos={[
-                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-                { tipo: 'data', nome: 'data_final', label: 'Data final' },
-                { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
-                { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
-                { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-                {
-                  tipo: 'select',
-                  nome: 'op_concluido',
-                  label: 'Status',
-                  opcoes: [
-                    { value: '', label: 'Todos' },
-                    { value: 'S', label: 'Concluída' },
-                    { value: 'N', label: 'Pendente' },
-                  ],
-                },
-                {
-                  tipo: 'select',
-                  nome: 'ord',
-                  label: 'Ordenar por',
-                  opcoes: [
-                    { value: 'produto_az', label: 'Produto A-Z' },
-                    { value: 'produto_za', label: 'Produto Z-A' },
-                    { value: 'codigo', label: 'Código do produto' },
-                    { value: 'qtd_desc', label: 'Maior quantidade' },
-                    { value: 'qtd_asc', label: 'Menor quantidade' },
-                    { value: 'validade_asc', label: 'Validade mais próxima' },
-                    { value: 'validade_desc', label: 'Validade mais distante' },
-                  ],
-                },
-              ]}
+              campos={campos}
               defaults={{
                 data_inicio: dataInicio,
                 data_final: dataFinal,
@@ -278,6 +303,22 @@ export default async function OrdemProducaoPage({
           </>
         }
       />
+
+      <ChipsFiltrosAtivos
+        basePath="/ordem-producao"
+        campos={campos}
+        naoMostrar={['data_inicio', 'data_final', 'ord']}
+      />
+
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="text-[13px] text-text-muted">Período: {fmtDataBR(dataInicio)} a {fmtDataBR(dataFinal)}</span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          Pendentes <span className="num font-semibold text-[var(--warn,#f59e0b)]">{totPendentes ?? 0}</span>
+        </span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          Concluídas <span className="num font-semibold text-[#10b981]">{totConcluidas ?? 0}</span>
+        </span>
+      </div>
 
       {truncado && (
         <p className="mb-3 rounded-md border border-[var(--warn,#f59e0b)]/30 bg-[var(--warn,#f59e0b)]/10 px-3 py-2 text-[13px] text-text-muted">

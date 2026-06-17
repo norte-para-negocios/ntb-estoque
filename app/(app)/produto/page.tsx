@@ -7,6 +7,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Money } from '@/components/ui-kit/Money'
@@ -60,7 +62,7 @@ function corMargem(m: number): string {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; page?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -98,12 +100,19 @@ export default async function ProdutoPage({
     label: r.descricao_familia,
   }))
 
+  // Ordenacao resolvida no banco (query paginada -> barato). Custo/margem/saldo
+  // vem de mapas em memoria DEPOIS da paginacao, entao nao da pra ordenar por eles
+  // aqui sem buscar tudo; ficam de fora. Default = descricao A-Z.
+  const ord = params.ord ?? ''
   let query = supabase
     .from('produtos')
     .select('id, codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, valor_unitario, estoque_minimo')
     .eq('loja_id', lojaId)
-    .order('descricao')
-    .range((page - 1) * POR_PAGINA, page * POR_PAGINA)
+  if (ord === 'descricao_za') query = query.order('descricao', { ascending: false })
+  else if (ord === 'venda_asc') query = query.order('valor_unitario', { ascending: true, nullsFirst: false }).order('descricao')
+  else if (ord === 'venda_desc') query = query.order('valor_unitario', { ascending: false, nullsFirst: false }).order('descricao')
+  else query = query.order('descricao') // descricao_az (default)
+  query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA)
 
   if (params.q) {
     const q = escapeIlikeOr(params.q)
@@ -226,8 +235,38 @@ export default async function ProdutoPage({
   if (params.familia) exportParams.set('familia', params.familia)
   if (params.tipo) exportParams.set('tipo', params.tipo)
   if (params.situacao) exportParams.set('situacao', params.situacao)
+  // ord viaja junto para que trocar vista/margem/repor preserve a ordenacao.
+  // O export (CSV) ignora o param; sem efeito colateral.
+  if (params.ord) exportParams.set('ord', params.ord)
 
   const margemParams = new URLSearchParams(exportParams.toString())
+
+  const campos: CampoFiltro[] = [
+    { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'select',
+      nome: 'situacao',
+      label: 'Situação',
+      opcoes: [
+        { value: 'ativos', label: 'Somente ativos' },
+        { value: 'inativos', label: 'Somente inativos' },
+        { value: 'todos', label: 'Todos' },
+      ],
+    },
+    {
+      tipo: 'select',
+      nome: 'ord',
+      label: 'Ordenar por',
+      opcoes: [
+        { value: 'descricao_az', label: 'Descrição A-Z' },
+        { value: 'descricao_za', label: 'Descrição Z-A' },
+        { value: 'venda_desc', label: 'Maior preço de venda' },
+        { value: 'venda_asc', label: 'Menor preço de venda' },
+      ],
+    },
+  ]
 
   return (
     <div className="space-y-4">
@@ -238,22 +277,8 @@ export default async function ProdutoPage({
           <>
             <FiltrosGaveta
               basePath="/produto"
-              campos={[
-                { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
-                { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
-                { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
-                {
-                  tipo: 'select',
-                  nome: 'situacao',
-                  label: 'Situação',
-                  opcoes: [
-                    { value: 'ativos', label: 'Somente ativos' },
-                    { value: 'inativos', label: 'Somente inativos' },
-                    { value: 'todos', label: 'Todos' },
-                  ],
-                },
-              ]}
-              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos' }}
+              campos={campos}
+              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
             />
             <Link href="/produto/novo" className={btnClass('primary')}>
               <Plus className="size-4" /> Novo produto
@@ -270,6 +295,8 @@ export default async function ProdutoPage({
           </>
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[13px] text-text-muted">

@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Num } from '@/components/ui-kit/Num'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -109,6 +111,12 @@ export default async function ValidadePage({
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
   const familias = await buscarFamilias()
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+  ]
+
   // Preserva tipo/familia/produto ao trocar o periodo (chips).
   const extra = [
     sp.tipo && `tipo=${encodeURIComponent(sp.tipo)}`,
@@ -128,15 +136,13 @@ export default async function ValidadePage({
         actions={
           <FiltrosGaveta
             basePath="/validade"
-            campos={[
-              { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
-              { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-              { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
-            ]}
+            campos={campos}
             defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
           />
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
 
       <div className="flex flex-wrap items-center gap-1.5">
         {PERIODOS.map((p) => {

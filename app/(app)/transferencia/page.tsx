@@ -7,6 +7,8 @@ import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -126,8 +128,38 @@ export default async function TransferenciaPage({
   if (sp.tipo) relatorioParams.set('tipo', sp.tipo)
   const relatorioHref = `/transferencia/relatorio?${relatorioParams.toString()}`
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    {
+      tipo: 'select',
+      nome: 'familia',
+      label: 'Família',
+      opcoes: familias.map((f) => ({ value: f, label: f })),
+    },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'select',
+      nome: 'status',
+      label: 'Status',
+      opcoes: [
+        { value: 'C', label: 'Concluída' },
+        { value: 'A', label: 'Em aberto' },
+      ],
+    },
+    {
+      tipo: 'select',
+      nome: 'motivo',
+      label: 'Motivo',
+      opcoes: [
+        { value: 'TRF', label: 'Transferência' },
+        { value: 'TPQ', label: 'Perda / quebra' },
+      ],
+    },
+  ]
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Transferências"
         icon={ArrowLeftRight}
@@ -136,35 +168,7 @@ export default async function TransferenciaPage({
           <>
             <FiltrosGaveta
               basePath="/transferencia"
-              campos={[
-                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-                { tipo: 'data', nome: 'data_final', label: 'Data final' },
-                {
-                  tipo: 'select',
-                  nome: 'familia',
-                  label: 'Família',
-                  opcoes: familias.map((f) => ({ value: f, label: f })),
-                },
-                { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-                {
-                  tipo: 'select',
-                  nome: 'status',
-                  label: 'Status',
-                  opcoes: [
-                    { value: 'C', label: 'Concluída' },
-                    { value: 'A', label: 'Em aberto' },
-                  ],
-                },
-                {
-                  tipo: 'select',
-                  nome: 'motivo',
-                  label: 'Motivo',
-                  opcoes: [
-                    { value: 'TRF', label: 'Transferência' },
-                    { value: 'TPQ', label: 'Perda / quebra' },
-                  ],
-                },
-              ]}
+              campos={campos}
               defaults={{
                 data_inicio: sp.data_inicio ?? '',
                 data_final: sp.data_final ?? '',
@@ -186,6 +190,8 @@ export default async function TransferenciaPage({
           </>
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} />
 
       <Lista
         linhas={transferencias ?? []}

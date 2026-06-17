@@ -3,6 +3,8 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -48,27 +50,11 @@ export default async function NotaFiscalPage({
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
 
-  let query = supabase
-    .from('notas_fiscais')
-    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
-    .eq('loja_id', lojaId)
-    .gte('d_emissao_nfe', dataInicio)
-    .lte('d_emissao_nfe', dataFinal)
-    .is('deleted_at', null)
-    .order('d_emissao_nfe', { ascending: false })
-    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
-
-  if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-  // Fornecedor: o controller original filtra por c_nome
-  if (params.fornecedor) query = query.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
-
-  // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
-  if (params.status === 'C') query = query.eq('c_etapa', '60')
-  else if (params.status === 'P') query = query.neq('c_etapa', '60')
-
   // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
   // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
-  // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items e filtram notas_fiscais.id in (...).
+  // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items -> notas_fiscais.id in (...).
+  // Resolvido ANTES da query para que lista e totais reusem o mesmo conjunto de ids.
+  let notaIds: number[] | null = null
   if (params.tipo || params.produto) {
     if (params.tipo) {
       const { data: prodCodigos } = await supabase
@@ -80,7 +66,7 @@ export default async function NotaFiscalPage({
       const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
 
       if (codigos.length === 0) {
-        query = query.in('id', [-1])
+        notaIds = []
       } else {
         let itemQuery = supabase
           .from('nota_fiscal_items')
@@ -94,10 +80,9 @@ export default async function NotaFiscalPage({
           )
         }
         const { data: itemRows } = await itemQuery
-        const notaIds = Array.from(
-          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+        notaIds = Array.from(
+          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
         )
-        query = query.in('id', notaIds.length ? notaIds : [-1])
       }
     } else if (params.produto) {
       const p = escapeIlikeOr(params.produto)
@@ -106,16 +91,52 @@ export default async function NotaFiscalPage({
         .select('nota_fiscal_id')
         .eq('loja_id', lojaId)
         .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
-      const notaIds = Array.from(
-        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+      notaIds = Array.from(
+        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
       )
-      query = query.in('id', notaIds.length ? notaIds : [-1])
     }
   }
+  const idsIn = notaIds !== null ? (notaIds.length ? notaIds : [-1]) : null
 
-  const { data: notasRaw } = await query
+  // Query da listagem (paginada).
+  let query = supabase
+    .from('notas_fiscais')
+    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
+    .eq('loja_id', lojaId)
+    .gte('d_emissao_nfe', dataInicio)
+    .lte('d_emissao_nfe', dataFinal)
+    .is('deleted_at', null)
+    .order('d_emissao_nfe', { ascending: false })
+    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
+  if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+  // Fornecedor: o controller original filtra por c_nome
+  if (params.fornecedor) query = query.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
+  // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
+  if (params.status === 'C') query = query.eq('c_etapa', '60')
+  else if (params.status === 'P') query = query.neq('c_etapa', '60')
+  if (idsIn) query = query.in('id', idsIn)
+
+  // Query dos totais (mesmos filtros, sem paginacao): soma R$ + contagem do topo.
+  let totaisQuery = supabase
+    .from('notas_fiscais')
+    .select('n_valor_nfe')
+    .eq('loja_id', lojaId)
+    .gte('d_emissao_nfe', dataInicio)
+    .lte('d_emissao_nfe', dataFinal)
+    .is('deleted_at', null)
+    .limit(100000)
+  if (params.num_nfe) totaisQuery = totaisQuery.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+  if (params.fornecedor) totaisQuery = totaisQuery.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
+  if (params.status === 'C') totaisQuery = totaisQuery.eq('c_etapa', '60')
+  else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
+  if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
+
+  const [{ data: notasRaw }, { data: totaisRaw }] = await Promise.all([query, totaisQuery])
   const temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
   const notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
+
+  const qtdNotas = totaisRaw?.length ?? 0
+  const totalValor = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
 
   const relatorioParams = new URLSearchParams()
   relatorioParams.set('data_inicio', dataInicio)
@@ -125,6 +146,24 @@ export default async function NotaFiscalPage({
   if (params.status) relatorioParams.set('status', params.status)
   if (params.tipo) relatorioParams.set('tipo', params.tipo)
   if (params.produto) relatorioParams.set('produto', params.produto)
+
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
+    { tipo: 'data', nome: 'data_final', label: 'Data Final' },
+    { tipo: 'texto', nome: 'num_nfe', label: 'Nº NFe' },
+    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
+    {
+      tipo: 'select',
+      nome: 'status',
+      label: 'Status',
+      opcoes: [
+        { value: 'P', label: 'Pendente' },
+        { value: 'C', label: 'Concluída' },
+      ],
+    },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'texto', nome: 'produto', label: 'Produto' },
+  ]
 
   return (
     <div className="space-y-4">
@@ -136,23 +175,7 @@ export default async function NotaFiscalPage({
             <FiltrosGaveta
               basePath="/nota-fiscal"
               naoContar={['data_inicio', 'data_final']}
-              campos={[
-                { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
-                { tipo: 'data', nome: 'data_final', label: 'Data Final' },
-                { tipo: 'texto', nome: 'num_nfe', label: 'Nº NFe' },
-                { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
-                {
-                  tipo: 'select',
-                  nome: 'status',
-                  label: 'Status',
-                  opcoes: [
-                    { value: 'P', label: 'Pendente' },
-                    { value: 'C', label: 'Concluída' },
-                  ],
-                },
-                { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
-                { tipo: 'texto', nome: 'produto', label: 'Produto' },
-              ]}
+              campos={campos}
               defaults={{
                 data_inicio: dataInicio,
                 data_final: dataFinal,
@@ -181,6 +204,18 @@ export default async function NotaFiscalPage({
           </>
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="text-[13px] text-text-muted">Período: {fmtData(dataInicio)} a {fmtData(dataFinal)}</span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          {qtdNotas} {qtdNotas === 1 ? 'nota' : 'notas'}
+        </span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+          Total <Money value={totalValor} className="font-semibold text-text" />
+        </span>
+      </div>
 
       <Lista
         linhas={notas ?? []}

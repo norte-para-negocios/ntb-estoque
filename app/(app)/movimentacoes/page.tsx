@@ -5,6 +5,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Num } from '@/components/ui-kit/Num'
 import { escapeIlikeOr } from '@/lib/utils-busca'
@@ -83,6 +85,14 @@ export default async function MovimentacoesPage({
 
   const familias = await buscarFamilias()
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+  ]
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -92,18 +102,14 @@ export default async function MovimentacoesPage({
         actions={
           <FiltrosGaveta
             basePath="/movimentacoes"
-            campos={[
-              { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-              { tipo: 'data', nome: 'data_final', label: 'Data final' },
-              { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
-              { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-              { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
-            ]}
+            campos={campos}
             defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
             naoContar={['data_inicio', 'data_final']}
           />
         }
       />
+
+      <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
