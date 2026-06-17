@@ -13,11 +13,12 @@
 > (margem-alvo salva no perfil) · D1 (dashboard: bloco "Repor estoque" + alerta de
 > ruptura, validado em tela) · D3 (alerta de transferências em aberto). D2 (últimas
 > notas) e D4 (vencimentos) já existiam — **bloco D do dashboard completo** · C1
-> (cadastro de produto com FAMÍLIA + ORIGEM, validado em tela) · C2 (excluir produto
-> com confirmação inline na tela de Produtos, validado em tela).
-> **A escrita no Omie (criar/excluir produto) só dispara no teste com o Ramon** —
-> confirmar `codigo_familia` e `recomendacoes_fiscais.origem_mercadoria` no
-> `IncluirProduto` e a call `ExcluirProduto` (regra 9.5).
+> (cadastro de produto com FAMÍLIA + ORIGEM) · C2 (excluir produto com confirmação).
+> **✅ C1/C2 VALIDADOS no Omie REAL (16/06, autorizado pelo fundador):** criou um
+> produto de teste com `codigo_familia` + `recomendacoes_fiscais.origem_mercadoria`
+> ("Produto cadastrado com sucesso!") e excluiu na sequência ("Produto excluído com
+> sucesso!") — sem lixo. O mapeamento dos campos fiscais e a call `ExcluirProduto`
+> estão **confirmados** (não dependem mais de teste futuro).
 >
 > **▶ Ainda aberto:** lista de NCM e criar família nova (J4) no cadastro · A5/A10
 > (reverter/excluir OP) · B2/T1 (carimbo do usuário na observação) · A8/A11 (ajustes
