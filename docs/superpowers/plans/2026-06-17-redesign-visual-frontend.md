@@ -83,12 +83,12 @@ A lente distinctive diz que o visual, embora competente, é "shadcn template com
 
 Cada bloco é um commit/PR independente. Antes de tocar UI, invoque `design-taste-frontend` ou `impeccable`. Verificação = `npm run build` + screenshot no preview (este plano já mostrou que dá pra rodar o sistema localmente e fotografar).
 
-### V1 — Saneamento de tokens de cor (MAIOR ALAVANCA, resolve a frente transversal)
-- [ ] Expor no `@theme inline`: `--color-ok/warn/err/info: var(--ok/warn/err/info)`.
-- [ ] Criar `--ink` (= `#10151c`) com par no `.dark` para o hero/atalhos.
-- [ ] Criar `lib/status-cor.ts`: um `STATUS_MAP` único (StatusPill + OrdemProducaoRow) e `nivelUrgencia()` que retorna NOME do token, não hex.
-- [ ] Varrer e trocar todo hex semântico por token/classe nos ~24 arquivos (StatusPill, OrdemProducaoRow, corMargem, tom, alertas, impressoes, sync-status, movimentacoes, cadastro). Eliminar `text-[var(--err,#ef4444)]` → `text-err`.
-- [ ] Verificar dark/light em produto, validade, OP, home, impressoes.
+### V1 — Saneamento de tokens de cor (MAIOR ALAVANCA, resolve a frente transversal) [CONCLUÍDO 17/06/2026 - commit 1b40a05]
+- [x] Expor no `@theme inline`: `--color-ok/warn/err/info: var(--ok/warn/err/info)`. (+ `--color-ink`)
+- [x] Criar `--ink` (= `#10151c`) com par no `.dark` para o hero/atalhos.
+- [x] Criar `lib/status-cor.ts`: fonte única (STATUS map p/ StatusPill + badge de OP, `urgenciaValidade()` e `corMargem()` retornando NOME do token; mapas de classes SELO/TEXTO/FUNDO).
+- [x] Varrer e trocar todo hex semântico por token/classe (StatusPill, OrdemProducaoRow, corMargem, tom→urgenciaValidade, alertas, impressoes, sync-status/StatCard, movimentacoes, cadastro, login, contagens, e os `[var(--err)]` avulsos). `text-[var(--err,#ef4444)]` → `text-err`.
+- [x] Verificar dark/light em produto, validade, OP, home, impressoes. (navegador, claro+escuro)
 
 ### V2 — Home cockpit (resolve home + screenshots)
 - [ ] Remover hero gigante (número 4.5rem, glow, `bg-[#10151c]`, barrinha).
