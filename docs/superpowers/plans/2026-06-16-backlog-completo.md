@@ -4,6 +4,11 @@
 > ainda está aberto do plano gigante (`2026-06-15-plano-gigante.md`). Cada item
 > diz o comportamento esperado. Marcadores: 🟢 dá pra fazer já · 🟠 depende do
 > Ramon (fiscal/escrita) · 🔵 depende do André (infra/Vendas) · ⚪ stand by.
+>
+> **✅ FEITO e no ar (16/06 noite):** A1, A2 (validade por dias + recorrência,
+> validado em tela) · A3 (escolher data na conclusão) · A7 (busca de produtos:
+> limite 50 + ordena por código) · C3 (minimo/quantidade aceitam decimais —
+> bug `step=1` confirmado ao vivo). Criacao de OP no Omie segue para teste com o Ramon.
 
 ---
 
