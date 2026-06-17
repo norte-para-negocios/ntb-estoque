@@ -16,18 +16,27 @@ export type ProdutoBusca = {
 export async function buscarProdutos(termo: string): Promise<ProdutoBusca[]> {
   const lojaId = await getCurrentLojaId()
   const supabase = await createClient()
+  const t = termo.trim()
+  // Termo so com numeros = busca por CODIGO (ex.: "70" para os produtos 70mil).
+  const ehCodigo = /^\d+$/.test(t)
+
   let query = supabase
     .from('produtos')
     .select('codigo_produto, codigo, descricao, descricao_familia, unidade')
     .eq('loja_id', lojaId)
-    .limit(20)
+    // Limite maior: o limite de 20 cortava produtos (faltavam itens na busca da OP).
+    .limit(50)
 
-  if (termo.trim()) {
-    const t = escapeIlikeOr(termo)
-    query = query.or(`descricao.ilike.%${t}%,codigo.ilike.%${t}%`)
+  if (t) {
+    const e = escapeIlikeOr(t)
+    query = query.or(`descricao.ilike.%${e}%,codigo.ilike.%${e}%`)
   }
 
-  const { data } = await query.order('descricao')
+  // Numerico -> ordena por codigo (os 70xxx saem juntos e em ordem, em vez de
+  // 20 itens alfabeticos por descricao); texto -> ordena por descricao.
+  query = ehCodigo ? query.order('codigo') : query.order('descricao')
+
+  const { data } = await query
   return (data ?? []).map((p) => ({ ...p, descricao: formatarNomeProduto(p.descricao) })) as ProdutoBusca[]
 }
 
