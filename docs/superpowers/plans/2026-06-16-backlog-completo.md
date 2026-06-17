@@ -12,15 +12,16 @@
 > 60 dias + filtro Vencidos) · B4 (conferência só com o nome do local) · C6
 > (margem-alvo salva no perfil) · D1 (dashboard: bloco "Repor estoque" + alerta de
 > ruptura, validado em tela) · D3 (alerta de transferências em aberto). D2 (últimas
-> notas) e D4 (vencimentos) já existiam — **bloco D do dashboard completo**.
-> Criacao/escrita no Omie segue para teste com o Ramon.
+> notas) e D4 (vencimentos) já existiam — **bloco D do dashboard completo** · C1
+> (cadastro de produto com FAMÍLIA + ORIGEM, validado em tela) · C2 (excluir produto
+> com confirmação inline na tela de Produtos, validado em tela).
+> **A escrita no Omie (criar/excluir produto) só dispara no teste com o Ramon** —
+> confirmar `codigo_familia` e `recomendacoes_fiscais.origem_mercadoria` no
+> `IncluirProduto` e a call `ExcluirProduto` (regra 9.5).
 >
-> **▶ PRÓXIMO (sessão nova, com contexto limpo):** C1/C2 — cadastro de produto
-> completo (família com código + NCM com lista + origem + tipo + "vendido por
-> loja") e excluir produto. É fiscal e escreve no Omie (`IncluirProduto`/
-> `ExcluirProduto`): confirmar o mapeamento exato dos campos com o Ramon antes de
-> disparar. A action `lib/actions/produto.ts` hoje cobre código/descrição/unidade/
-> NCM/valor/tipo — falta família (o erro "faltou a família"), origem e o excluir.
+> **▶ Ainda aberto:** lista de NCM e criar família nova (J4) no cadastro · A5/A10
+> (reverter/excluir OP) · B2/T1 (carimbo do usuário na observação) · A8/A11 (ajustes
+> finos). 🔵 André (quinta 18/06): Norte Vendas + infra.
 
 ---
 
