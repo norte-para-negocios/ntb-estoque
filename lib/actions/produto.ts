@@ -40,6 +40,17 @@ export async function criarProduto(dados: {
   codigoFamilia?: number | null
   descricaoFamilia?: string | null
   origem?: string // origem da mercadoria (0-8)
+  ean?: string
+  descrDetalhada?: string
+  obsInternas?: string
+  marca?: string
+  modelo?: string
+  pesoLiq?: number
+  pesoBruto?: number
+  altura?: number
+  largura?: number
+  profundidade?: number
+  cest?: string
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
@@ -68,6 +79,17 @@ export async function criarProduto(dados: {
       tipoItem: dados.tipoItem?.trim() || undefined,
       codigoFamilia: dados.codigoFamilia || undefined,
       origem: dados.origem || undefined,
+      ean: dados.ean?.trim() || undefined,
+      descrDetalhada: dados.descrDetalhada?.trim() || undefined,
+      obsInternas: dados.obsInternas?.trim() || undefined,
+      marca: dados.marca?.trim() || undefined,
+      modelo: dados.modelo?.trim() || undefined,
+      pesoLiq: dados.pesoLiq || undefined,
+      pesoBruto: dados.pesoBruto || undefined,
+      altura: dados.altura || undefined,
+      largura: dados.largura || undefined,
+      profundidade: dados.profundidade || undefined,
+      cest: dados.cest?.replace(/\D/g, '') || undefined,
     })
 
     // Grava o produto recem-criado direto (sem re-sync pesado de toda a base).

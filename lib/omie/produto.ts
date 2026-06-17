@@ -34,6 +34,9 @@ interface OmieIncluirProdutoResp {
  * ATENCAO (regra 9.5): confirmar os nomes exatos dos campos de escrita por teste
  * real com o Ramon antes do uso em producao.
  */
+// Campos confirmados por teste real no Omie (criar+consultar+excluir, 16/06):
+// ean/marca/modelo/peso/dimensoes/descr_detalhada/obs_internas sao top-level;
+// origem e CEST ficam em recomendacoes_fiscais; CFOP e top-level.
 export async function incluirProduto(
   loja: LojaOmie,
   dados: {
@@ -45,8 +48,23 @@ export async function incluirProduto(
     tipoItem?: string
     codigoFamilia?: number
     origem?: string // origem da mercadoria (0-8); 0 = Nacional
+    ean?: string
+    descrDetalhada?: string
+    obsInternas?: string
+    marca?: string
+    modelo?: string
+    pesoLiq?: number
+    pesoBruto?: number
+    altura?: number
+    largura?: number
+    profundidade?: number
+    cest?: string // recomendacoes_fiscais.id_cest
   }
 ) {
+  const fiscais: Record<string, string> = {}
+  if (dados.origem) fiscais.origem_mercadoria = dados.origem
+  if (dados.cest) fiscais.id_cest = dados.cest
+
   return omieRequest<OmieIncluirProdutoResp>({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
@@ -61,12 +79,18 @@ export async function incluirProduto(
       ncm: dados.ncm,
       valor_unitario: dados.valorUnitario,
       ...(dados.tipoItem ? { tipoItem: dados.tipoItem } : {}),
-      // Familia (codigo numerico de uma familia ja existente no Omie). Resolve o
-      // erro "faltou a familia" da reuniao 16/06.
       ...(dados.codigoFamilia ? { codigo_familia: dados.codigoFamilia } : {}),
-      // Origem da mercadoria vai em recomendacoes_fiscais. ATENCAO (regra 9.5):
-      // confirmar o caminho exato no teste real com o Ramon.
-      ...(dados.origem ? { recomendacoes_fiscais: { origem_mercadoria: dados.origem } } : {}),
+      ...(dados.ean ? { ean: dados.ean } : {}),
+      ...(dados.descrDetalhada ? { descr_detalhada: dados.descrDetalhada } : {}),
+      ...(dados.obsInternas ? { obs_internas: dados.obsInternas } : {}),
+      ...(dados.marca ? { marca: dados.marca } : {}),
+      ...(dados.modelo ? { modelo: dados.modelo } : {}),
+      ...(dados.pesoLiq ? { peso_liq: dados.pesoLiq } : {}),
+      ...(dados.pesoBruto ? { peso_bruto: dados.pesoBruto } : {}),
+      ...(dados.altura ? { altura: dados.altura } : {}),
+      ...(dados.largura ? { largura: dados.largura } : {}),
+      ...(dados.profundidade ? { profundidade: dados.profundidade } : {}),
+      ...(Object.keys(fiscais).length ? { recomendacoes_fiscais: fiscais } : {}),
     },
   })
 }
