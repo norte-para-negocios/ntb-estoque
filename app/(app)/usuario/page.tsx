@@ -73,7 +73,7 @@ export default async function UsuarioPage({
         title="Usuários"
         icon={Users}
         description="Acessos, permissões e locais por loja"
-        actions={<NovoUsuario lojas={lojas ?? []} />}
+        actions={<NovoUsuario lojas={lojas ?? []} permissoes={permissoes ?? []} />}
       />
 
       {pendentes.length > 0 && (

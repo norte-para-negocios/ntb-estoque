@@ -19,6 +19,9 @@ export async function criarUsuario(input: {
   email: string
   perfil: 'Admin' | 'Usuario'
   lojaIds: number[]
+  // Ids das permissoes que o usuario tera EM CADA loja selecionada (4.1).
+  // Quando ausente/undefined, concede TODAS (compatibilidade com chamadas antigas).
+  permissaoIds?: number[]
 }) {
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   if (!input.name || !input.email) return { error: 'Nome e e-mail obrigatórios' }
@@ -52,12 +55,16 @@ export async function criarUsuario(input: {
     await supabase.from('loja_user').insert({ loja_id: lojaId, user_id: userId })
   }
 
-  // Usuario (nao-admin): concede todas as permissoes nas lojas selecionadas.
-  // Granularidade fina pode ser ajustada depois.
+  // Usuario (nao-admin): concede as permissoes ESCOLHIDAS em cada loja selecionada.
+  // Se nenhuma lista veio (permissaoIds undefined), cai no default = todas.
   if (input.perfil === 'Usuario') {
-    const { data: permissoes } = await supabase.from('permissoes').select('id')
+    let permissaoIds = input.permissaoIds
+    if (permissaoIds === undefined) {
+      const { data: permissoes } = await supabase.from('permissoes').select('id')
+      permissaoIds = (permissoes ?? []).map((p) => p.id as number)
+    }
     const rows = input.lojaIds.flatMap((lojaId) =>
-      (permissoes ?? []).map((p) => ({ loja_id: lojaId, permissao_id: p.id, user_id: userId }))
+      (permissaoIds ?? []).map((permissao_id) => ({ loja_id: lojaId, permissao_id, user_id: userId }))
     )
     if (rows.length) await supabase.from('permissao_user').insert(rows)
   }

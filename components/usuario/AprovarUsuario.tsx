@@ -7,14 +7,10 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Check, X } from 'lucide-react'
+import { Check, X, ShieldCheck, User as UserIcon, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import { aprovarUsuario, recusarUsuario } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
-
-const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand'
-const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 
@@ -85,42 +81,87 @@ export function AprovarUsuario({
             </button>
           }
         />
-        <DialogContent className="overflow-hidden bg-surface p-0" showCloseButton={false}>
-          <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
-            Aprovar {nome}
+        <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-md" showCloseButton={false}>
+          <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+              <Check className="size-4" strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-[15px] font-semibold text-text">Aprovar acesso</div>
+              <div className="truncate text-[12px] text-text-muted">{nome}</div>
+            </div>
           </div>
-          <div className="space-y-4 px-4 py-3">
+          <div className="space-y-5 px-5 py-4">
             <div>
-              <label className={labelClass}>Perfil</label>
-              <select
-                className={inputClass}
-                value={perfil}
-                onChange={(e) => setPerfil((e.target.value as 'Admin' | 'Usuario') ?? 'Usuario')}
-              >
-                <option value="Usuario">Usuário</option>
-                <option value="Admin">Administrador</option>
-              </select>
+              <label className="mb-1.5 block text-[13px] font-medium text-text">Perfil</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPerfil('Usuario')}
+                  className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
+                    perfil === 'Usuario' ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+                  }`}
+                >
+                  <span className={`flex items-center gap-1.5 text-[13px] font-medium ${perfil === 'Usuario' ? 'text-brand' : 'text-text'}`}>
+                    <UserIcon className="size-4" /> Usuário
+                  </span>
+                  <span className="text-[11px] text-text-muted">Acesso conforme permissões</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPerfil('Admin')}
+                  className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
+                    perfil === 'Admin' ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+                  }`}
+                >
+                  <span className={`flex items-center gap-1.5 text-[13px] font-medium ${perfil === 'Admin' ? 'text-brand' : 'text-text'}`}>
+                    <ShieldCheck className="size-4" /> Administrador
+                  </span>
+                  <span className="text-[11px] text-text-muted">Acesso total ao sistema</span>
+                </button>
+              </div>
             </div>
             {perfil === 'Usuario' && (
               <div>
-                <label className={labelClass}>Lojas com acesso</label>
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                  {lojas.map((l) => (
-                    <label key={l.id} className="flex items-center gap-2 text-sm text-text">
-                      <input
-                        type="checkbox"
-                        checked={lojaIds.includes(l.id)}
-                        onChange={() => toggleLoja(l.id)}
-                        className="accent-[var(--brand)]"
-                      />
-                      {l.nome_fantasia || l.nome}
-                    </label>
-                  ))}
+                <label className="mb-1.5 block text-[13px] font-medium text-text">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Store className="size-3.5 text-text-muted" /> Lojas com acesso
+                  </span>
+                </label>
+                <div className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-surface-2/30 p-2 sm:grid-cols-2">
+                  {lojas.map((l) => {
+                    const on = lojaIds.includes(l.id)
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => toggleLoja(l.id)}
+                        className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                          on ? 'border-brand bg-brand-soft text-text' : 'border-border bg-surface text-text-muted hover:text-text'
+                        }`}
+                      >
+                        <span
+                          className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                            on ? 'border-brand bg-brand text-white' : 'border-border'
+                          }`}
+                        >
+                          {on && <span className="text-[10px] leading-none">✓</span>}
+                        </span>
+                        <span className="truncate">{l.nome_fantasia || l.nome}</span>
+                      </button>
+                    )
+                  })}
                 </div>
+                <p className="mt-1.5 text-[12px] text-text-muted">
+                  As permissões iniciais ficam liberadas; ajuste depois em Editar.
+                </p>
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className={btnClass('outline')}>
+              Cancelar
+            </button>
             <button type="button" onClick={aprovar} disabled={pending} className={btnClass('primary')}>
               {pending ? 'Aprovando...' : 'Aprovar acesso'}
             </button>

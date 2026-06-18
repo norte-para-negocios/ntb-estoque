@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, User as UserIcon, Store, Warehouse } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   editarUsuario,
@@ -16,10 +16,11 @@ import {
   toggleLocal,
 } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
+import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
-const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
+  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 type Permissao = { id: number; nome: string }
@@ -63,6 +64,12 @@ export function EditarUsuario({
   )
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+
+  const idPorNome = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of permissoes) m.set(p.nome, p.id)
+    return m
+  }, [permissoes])
 
   function toggleLoja(id: number) {
     setLojaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -108,6 +115,17 @@ export function EditarUsuario({
     })
   }
 
+  // Liga/desliga todas as permissoes de um modulo numa loja de uma vez.
+  function alternarModulo(lojaId: number, ids: number[], todosMarcados: boolean) {
+    for (const permissaoId of ids) {
+      const chave = `${lojaId}:${permissaoId}`
+      const jaAtiva = permAtivas.has(chave)
+      // Se a acao e marcar, so liga as que estao desligadas; se e desmarcar, so desliga as ligadas.
+      if (todosMarcados && jaAtiva) alternarPermissao(lojaId, permissaoId)
+      else if (!todosMarcados && !jaAtiva) alternarPermissao(lojaId, permissaoId)
+    }
+  }
+
   function excluir() {
     startTransition(async () => {
       const res = await excluirUsuario(usuario.id)
@@ -148,46 +166,84 @@ export function EditarUsuario({
         }
       />
       <SheetContent className="w-full overflow-y-auto bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
-          Editar usuário
+        <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+            <UserIcon className="size-4" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold text-text">Editar usuário</div>
+            <div className="truncate text-[12px] text-text-muted">{usuario.name}</div>
+          </div>
         </div>
 
-        <div className="space-y-4 px-4 py-3">
+        <div className="space-y-5 px-5 py-4">
           <div>
             <label className={labelClass}>Nome</label>
             <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
+
           <div>
             <label className={labelClass}>Perfil</label>
-            <select
-              className={inputClass}
-              value={perfil}
-              onChange={(e) => setPerfil((e.target.value as 'Admin' | 'Usuario') ?? 'Usuario')}
-            >
-              <option value="Usuario">Usuário</option>
-              <option value="Admin">Administrador</option>
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <PerfilOpcao
+                ativo={perfil === 'Usuario'}
+                onClick={() => setPerfil('Usuario')}
+                icon={<UserIcon className="size-4" />}
+                titulo="Usuário"
+                desc="Acesso conforme permissões"
+              />
+              <PerfilOpcao
+                ativo={perfil === 'Admin'}
+                onClick={() => setPerfil('Admin')}
+                icon={<ShieldCheck className="size-4" />}
+                titulo="Administrador"
+                desc="Acesso total ao sistema"
+              />
+            </div>
           </div>
 
           {perfil === 'Usuario' && (
             <div>
-              <label className={labelClass}>Lojas com acesso</label>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                {lojas.map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm text-text">
-                    <input
-                      type="checkbox"
-                      checked={lojaIds.includes(l.id)}
-                      onChange={() => toggleLoja(l.id)}
-                      className="accent-[var(--brand)]"
-                    />
-                    {l.nome_fantasia || l.nome}
-                  </label>
-                ))}
+              <label className={labelClass}>
+                <span className="inline-flex items-center gap-1.5">
+                  <Store className="size-3.5 text-text-muted" /> Lojas com acesso
+                </span>
+              </label>
+              <div className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-surface-2/30 p-2 sm:grid-cols-2">
+                {lojas.map((l) => {
+                  const on = lojaIds.includes(l.id)
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => toggleLoja(l.id)}
+                      className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                        on
+                          ? 'border-brand bg-brand-soft text-text'
+                          : 'border-border bg-surface text-text-muted hover:text-text'
+                      }`}
+                    >
+                      <span
+                        className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                          on ? 'border-brand bg-brand text-white' : 'border-border'
+                        }`}
+                      >
+                        {on && <span className="text-[10px] leading-none">✓</span>}
+                      </span>
+                      <span className="truncate">{l.nome_fantasia || l.nome}</span>
+                    </button>
+                  )
+                })}
               </div>
-              <p className="mt-1 text-xs text-text-muted">
+              <p className="mt-1.5 text-[12px] text-text-muted">
                 Salve os dados antes de ajustar permissões e locais das lojas recém-adicionadas.
               </p>
+            </div>
+          )}
+
+          {perfil === 'Admin' && (
+            <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+              Administrador tem acesso a todas as lojas e a todos os módulos.
             </div>
           )}
 
@@ -207,53 +263,94 @@ export function EditarUsuario({
               const locaisLoja = locais.filter((lo) => lo.loja_id === loja.id)
               return (
                 <div key={loja.id} className="space-y-3 rounded-md border border-border bg-surface-2/40 p-3">
-                  <p className="text-sm font-medium text-text">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+                    <Store className="size-3.5 text-text-muted" />
                     {loja.nome_fantasia || loja.nome}
                   </p>
 
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Permissões</p>
-                    <div className="grid grid-cols-1 gap-1">
-                      {permissoes.map((p) => (
-                        <label
-                          key={p.id}
-                          className="flex items-center gap-2 text-sm text-text"
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                      Permissões
+                    </p>
+                    {CATALOGO_PERMISSOES.map((mod) => {
+                      const itens = mod.permissoes
+                        .map((p) => ({ ...p, id: idPorNome.get(p.nome) }))
+                        .filter((p): p is { nome: string; label: string; id: number } => p.id != null)
+                      if (!itens.length) return null
+                      const ids = itens.map((i) => i.id)
+                      const marcados = ids.filter((id) => permAtivas.has(`${loja.id}:${id}`)).length
+                      const todos = marcados === ids.length
+                      return (
+                        <div
+                          key={mod.modulo}
+                          className="rounded-md border border-border bg-surface p-2.5"
                         >
-                          <input
-                            type="checkbox"
-                            checked={permAtivas.has(`${loja.id}:${p.id}`)}
-                            onChange={() => alternarPermissao(loja.id, p.id)}
-                            className="accent-[var(--brand)]"
-                          />
-                          {p.nome}
-                        </label>
-                      ))}
-                    </div>
+                          <button
+                            type="button"
+                            onClick={() => alternarModulo(loja.id, ids, todos)}
+                            className="flex w-full items-center justify-between gap-2 text-left"
+                          >
+                            <span className="text-[13px] font-medium text-text">{mod.modulo}</span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                marcados > 0
+                                  ? 'bg-brand-soft text-brand'
+                                  : 'bg-surface-2 text-text-muted'
+                              }`}
+                            >
+                              {marcados}/{ids.length}
+                            </span>
+                          </button>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {itens.map((p) => {
+                              const on = permAtivas.has(`${loja.id}:${p.id}`)
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => alternarPermissao(loja.id, p.id)}
+                                  className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                                    on
+                                      ? 'border-brand bg-brand text-white'
+                                      : 'border-border bg-surface text-text-muted hover:text-text'
+                                  }`}
+                                >
+                                  {p.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
 
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Locais de estoque</p>
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                      <Warehouse className="size-3" /> Locais de estoque
+                    </p>
                     {locaisLoja.length ? (
-                      <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto">
-                        {locaisLoja.map((lo) => (
-                          <label
-                            key={lo.id}
-                            className="flex items-center gap-2 text-sm text-text"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={locaisAtivos.has(`${loja.id}:${lo.id}`)}
-                              onChange={() => alternarLocal(loja.id, lo.id)}
-                              className="accent-[var(--brand)]"
-                            />
-                            {lo.descricao || `Local ${lo.id}`}
-                          </label>
-                        ))}
+                      <div className="flex flex-wrap gap-1.5">
+                        {locaisLoja.map((lo) => {
+                          const on = locaisAtivos.has(`${loja.id}:${lo.id}`)
+                          return (
+                            <button
+                              key={lo.id}
+                              type="button"
+                              onClick={() => alternarLocal(loja.id, lo.id)}
+                              className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                                on
+                                  ? 'border-brand bg-brand text-white'
+                                  : 'border-border bg-surface text-text-muted hover:text-text'
+                              }`}
+                            >
+                              {lo.descricao || `Local ${lo.id}`}
+                            </button>
+                          )
+                        })}
                       </div>
                     ) : (
-                      <p className="text-xs text-text-muted">
-                        Nenhum local de estoque cadastrado.
-                      </p>
+                      <p className="text-xs text-text-muted">Nenhum local de estoque cadastrado.</p>
                     )}
                   </div>
                 </div>
@@ -297,5 +394,35 @@ export function EditarUsuario({
         </div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+function PerfilOpcao({
+  ativo,
+  onClick,
+  icon,
+  titulo,
+  desc,
+}: {
+  ativo: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  titulo: string
+  desc: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
+        ativo ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+      }`}
+    >
+      <span className={`flex items-center gap-1.5 text-[13px] font-medium ${ativo ? 'text-brand' : 'text-text'}`}>
+        {icon}
+        {titulo}
+      </span>
+      <span className="text-[11px] text-text-muted">{desc}</span>
+    </button>
   )
 }
