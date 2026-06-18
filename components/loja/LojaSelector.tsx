@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { toast } from 'sonner'
+import { Store } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -21,6 +22,20 @@ export function LojaSelector({
   currentLojaId: number | null
 }) {
   const [pending, startTransition] = useTransition()
+
+  // Quem so tem 1 loja (ou nenhuma) nao ve o dropdown: mostra apenas o nome da
+  // loja num bloco estatico, pra nao revelar que existem outras lojas.
+  if (lojas.length <= 1) {
+    const unica = lojas[0]
+    return (
+      <div className="flex w-full items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text">
+        <Store className="size-4 shrink-0 text-text-muted" aria-hidden />
+        <span className="truncate">
+          {unica ? unica.nome_fantasia || unica.nome : 'Nenhuma loja'}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <Select
