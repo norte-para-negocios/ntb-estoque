@@ -30,11 +30,28 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 | # | Tarefa | Onde | Validação |
 |---|---|---|---|
 | 1.1 ✅ | Inventário/transferência: **envio item-a-item** (sai do campo→envia; mexeu→reprocessa; erro passa adiante) | ContagemInventario/Transferencia + actions | lançar item → integra na hora |
-| 1.2 | Inventário: editar/excluir item + imprimir da lista | tela inventário | editar item finalizado; imprimir direto |
-| 1.3 | Movimentações: **filtros completos** (tipo mov, rejeito, PDV, local, família, origem) | `app/(app)/movimentacoes` | cada filtro funciona |
-| 1.4 | Movimentações: **valor (R$) x quantidade** alternável + por mês/data | idem | alternar valor/qtd; agrupar por mês |
-| 1.5 | OP: **reverter** (concluída) + **excluir** (aberta) | varredura Omie + action OP | reverter/excluir testado (criar+limpar) |
-| 1.6 | Botões rápidos de status (Concluídos/Pendentes) em cima da tabela | OP/inventário/transf | 1 clique filtra |
+| 1.2 ✅ | Inventário: editar/excluir item + imprimir da lista | tela inventário | editar item finalizado; imprimir direto |
+| 1.3 ✅ | Movimentações: **filtros completos** (tipo mov, rejeito, PDV, local, família, origem) | `app/(app)/movimentacoes` | cada filtro funciona |
+| 1.4 ✅ | Movimentações: **valor (R$) x quantidade** alternável + por mês/data | idem | alternar valor/qtd; agrupar por mês |
+| 1.5 ✅ | OP: **reverter** (concluída) + **excluir** (aberta) | varredura Omie + action OP | reverter/excluir testado (criar+limpar) |
+| 1.6 ✅ | Botões rápidos de status (Concluídos/Pendentes) em cima da tabela | OP/inventário/transf | 1 clique filtra |
+
+> **Notas Fase 1 (18/06, Joaquim Salles):**
+> - **1.3 origem/tipo-de-movimentação/local/rejeito/PDV:** a tabela `movimentos_historico`
+>   só tem entradas/saídas em QUANTIDADE por (loja, produto, dia). Não há coluna de
+>   origem, tipo de movimentação, local nem PDV ali (o backfill veio do agregado de
+>   `ListarMovimentos`). Implementados os filtros que existem: data (com presets),
+>   produto, **família**, tipo de produto. Para tipo-de-movimentação/local/rejeito/PDV
+>   seria preciso reimportar o movimento granular do Omie (movestoque por linha) — fica
+>   pra uma fase de dados. Não inventei colunas.
+> - **1.4 valor (R$):** o histórico só tem quantidade; o valor é ESTIMADO = qtd × CMC
+>   recente do produto (RPC `cmc_recente_da_loja`, migration 017). Aviso na tela.
+>   Observação: alguns produtos têm CMC cadastrado errado no Omie (ex.: "Casquinha de
+>   siri" com CMC de R$ 100 bi), o que infla o total — é dado a corrigir na origem.
+> - **1.5 reverter/excluir:** testado no Omie real (loja 3, produto 70011 com estrutura):
+>   incluir → concluir → **ReverterOrdemProducao** (Omie: "conclusão revertida com
+>   sucesso, movimentos de estoque estornados") → **ExcluirOrdemProducao** ("excluída
+>   com sucesso") → consulta confirma que sumiu. Criado+limpo, sem lixo.
 
 ## FASE 2 — UI / polimento + exportação
 | # | Tarefa | Onde | Validação |
