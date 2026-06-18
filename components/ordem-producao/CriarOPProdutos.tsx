@@ -170,35 +170,36 @@ export function CriarOPProdutos({
       )}
 
       {visiveis.length ? (
-        <ul className="space-y-2.5">
+        <ul className="space-y-2.5 lg:space-y-1.5">
           {visiveis.map((item) => {
             const q = item.quantidade
             const base = Number(q) || 0
             return (
-              <li key={item.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5">
-                <div className="flex items-start justify-between gap-3">
+              <li key={item.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-4 lg:py-2 lg:pl-3.5 lg:pr-2">
+                <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-text">{item.produto.descricao}</div>
+                    <div className="truncate text-sm font-medium text-text">{item.produto.descricao}</div>
                     <div className="num mt-0.5 text-xs text-text-muted">{item.produto.codigo}</div>
                   </div>
                   <button
                     onClick={() => remover(item.produto.codigo_produto)}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err lg:size-9"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err lg:order-last lg:size-8"
                     aria-label="Remover"
                   >
                     <Trash2 className="size-4" />
                   </button>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Quantidade{item.produto.unidade ? ` (${item.produto.unidade})` : ''}</span>
-                  <div className="flex items-center gap-2">
+                <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end">
+                  <span className="eyebrow lg:hidden">Quantidade{item.produto.unidade ? ` (${item.produto.unidade})` : ''}</span>
+                  <span className="hidden text-xs text-text-muted lg:inline">{item.produto.unidade || ''}</span>
+                  <div className="flex items-center gap-2 lg:gap-1.5">
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, -1)}
-                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 lg:size-8"
                       aria-label="Diminuir"
                     >
-                      <Minus className="size-4" />
+                      <Minus className="size-4 lg:size-3.5" />
                     </button>
                     <input
                       type="text"
@@ -206,21 +207,22 @@ export function CriarOPProdutos({
                       value={q}
                       onChange={(e) => setQtd(item.produto.codigo_produto, e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
-                      className="num h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg font-semibold text-text outline-none focus:border-brand"
+                      className="num h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-lg font-semibold text-text outline-none focus:border-brand lg:h-8 lg:w-14 lg:text-base"
                       placeholder="0"
                     />
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, 1)}
-                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2"
+                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 lg:size-8"
                       aria-label="Aumentar"
                     >
-                      <Plus className="size-4" />
+                      <Plus className="size-4 lg:size-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Validade (dias)</span>
+                <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end lg:gap-2">
+                  <span className="eyebrow lg:hidden">Validade (dias)</span>
+                  <span className="hidden text-xs text-text-muted lg:inline">Validade</span>
                   <div className="flex items-center gap-2">
                     {item.validadeDias && Number(item.validadeDias) > 0 && datas[0] && (
                       <span className="text-xs text-text-muted">
@@ -235,8 +237,8 @@ export function CriarOPProdutos({
                       value={item.validadeDias}
                       onChange={(e) => setValidadeDias(item.produto.codigo_produto, e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
-                      placeholder="0"
-                      className="num h-11 w-20 rounded-md border border-border bg-surface px-2 text-center text-sm text-text outline-none focus:border-brand lg:h-9"
+                      placeholder="dias"
+                      className="num h-11 w-20 rounded-md border border-border bg-surface px-2 text-center text-sm text-text outline-none focus:border-brand lg:h-8 lg:w-16"
                     />
                   </div>
                 </div>

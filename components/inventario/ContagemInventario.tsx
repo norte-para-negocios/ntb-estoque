@@ -258,7 +258,7 @@ export function ContagemInventario({
       )}
 
       {visiveis.length ? (
-        <ul className="space-y-2.5">
+        <ul className="space-y-2 lg:space-y-1.5">
           {visiveis.map((item) => {
             const q = item.quan
             // base finita para os botoes +/- (evita NaN propagando)
@@ -266,17 +266,29 @@ export function ContagemInventario({
             return (
               <li
                 key={item.id}
-                className="rounded-lg border border-border bg-surface p-3.5"
+                className="rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-text">{item.produto_descricao}</div>
-                    <div className="num mt-0.5 text-xs text-text-muted">{item.produto_codigo}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-text">{item.produto_descricao}</span>
+                      {item.status && (
+                        <span className="hidden shrink-0 lg:inline">
+                          <StatusPill status={item.status} />
+                        </span>
+                      )}
+                    </div>
+                    <div className="num mt-0.5 flex items-center gap-2 text-xs text-text-muted">
+                      <span>{item.produto_codigo}</span>
+                      {item.produto_familia && (
+                        <span className="hidden truncate text-[11px] text-text-muted lg:inline">{item.produto_familia}</span>
+                      )}
+                    </div>
                     {item.produto_familia && (
-                      <div className="mt-1 text-[11px] text-text-muted">{item.produto_familia}</div>
+                      <div className="mt-1 text-[11px] text-text-muted lg:hidden">{item.produto_familia}</div>
                     )}
                     {item.status && (
-                      <div className="mt-1.5">
+                      <div className="mt-1.5 lg:hidden">
                         <StatusPill status={item.status} />
                       </div>
                     )}
@@ -285,7 +297,7 @@ export function ContagemInventario({
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending}
-                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err disabled:opacity-50"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err disabled:opacity-50 lg:order-last lg:size-8"
                       aria-label="Remover"
                     >
                       <Trash2 className="size-4" />
@@ -293,19 +305,20 @@ export function ContagemInventario({
                   )}
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="eyebrow">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
+                <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end">
+                  <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
+                  <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
                   {!editavel ? (
-                    <span className="num text-lg font-semibold text-text">{q ?? 0}</span>
+                    <span className="num text-lg font-semibold text-text lg:text-base">{q ?? 0}</span>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
                         onClick={() => salvarQtd(item.id, Math.max(0, base - 1))}
                         disabled={pending}
-                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
                       >
-                        <Minus className="size-4" />
+                        <Minus className="size-4 lg:size-3.5" />
                       </button>
                       <input
                         type="text"
@@ -325,16 +338,16 @@ export function ContagemInventario({
                           salvarQtd(item.id, val)
                         }}
                         onWheel={(e) => e.currentTarget.blur()}
-                        className="num h-12 w-20 rounded-md border border-border bg-surface px-2 text-center text-2xl font-semibold text-text outline-none focus:border-brand"
+                        className="num h-12 w-20 rounded-md border border-border bg-surface px-2 text-center text-2xl font-semibold text-text outline-none focus:border-brand lg:h-8 lg:w-16 lg:text-base"
                         placeholder="0"
                       />
                       <button
                         onClick={() => salvarQtd(item.id, base + 1)}
                         disabled={pending}
-                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"
                       >
-                        <Plus className="size-4" />
+                        <Plus className="size-4 lg:size-3.5" />
                       </button>
                     </div>
                   )}
