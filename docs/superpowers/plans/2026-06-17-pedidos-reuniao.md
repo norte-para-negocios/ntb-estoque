@@ -114,6 +114,8 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
   se cadastra, escolhe o perfil (administrador/funcionário), informa o código da loja (identifica a
   loja), faz login; o chefe ajusta as permissões. Ou o próprio código já traz as permissões. (resolve o
   login/onboarding que estava em standby; vão alinhar com o André)
+- **Um ADMINISTRADOR por loja** (multi-admin): cada loja pode ter seu próprio admin; aumentar as
+  possibilidades de login/perfis por loja (não ficar só num admin global; mais logins por loja).
 - Visual do cadastro de usuário "tá muito feio" — melhorar.
 
 ================================================================================
@@ -138,6 +140,20 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
 - Lojas 5/6: o bloqueio do Omie é só pra "puxar as informações da loja"; o resto funciona.
 - Ramon autorizou: Joaquim pode TESTAR transferência/produção e depois APAGAR ("testa e apaga"), e
   mandar pro Ramon o que testou pra ele conferir a comunicação.
+
+================================================================================
+## L. UI / TABELAS (transversal, várias telas)
+================================================================================
+- **Cabeçalho fixo (sticky) ao rolar**, igual Excel/freeze: o topo da tabela tem que ficar "cravado"
+  na tela pra continuar vendo o nome de cada coluna ao descer a lista. ATENÇÃO: eu removi o sticky do
+  thead quando consertei os cantos arredondados (overflow-hidden quebra o sticky). Refazer mantendo OS
+  DOIS (cantos curvos + cabeçalho fixo). Vale pra Lista e DataTable.
+- **Botões rápidos de status** (chips) direto na tela: Concluídos / Pendentes / etc. (OP, inventário,
+  transferência) — atalho de 1 clique em vez de abrir a gaveta de filtro.
+- **Filtros de movimentação por família** (e tudo): garantir o filtro de família na tela de
+  movimentações (além de tipo/local/origem/tipo de movimentação).
+- Ele citou "várias coisas pequenas" de polimento de tela — manter o olho em detalhes ao revisar
+  cada tela rodando (ver no navegador antes de dar por pronto).
 
 ================================================================================
 ## K. AGENDA
