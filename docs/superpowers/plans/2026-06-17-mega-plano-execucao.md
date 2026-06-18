@@ -18,8 +18,8 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 |---|---|---|---|
 | 0.1 ✅ | Etiqueta: nunca imprimir 0; default 1 quando vazio | geração de etiqueta / impressão | gerar etiqueta sem nº → sai 1 |
 | 0.2 ✅ | Unidade de medida + quantidade zero ao add produto | OP/transf/inventário (ProdutoSearch + linha do item) | add produto → unidade aparece, qtd começa 1 |
-| 0.3 | Transferência não "volta"/zera o produto | `lib/actions/transferencia.ts` + tela contagem | transferir → produto fica, não some no refresh |
-| 0.4 | Inventário trava em "Iniciado" | fluxo de envio do inventário | item com erro não trava os outros |
+| 0.3 ✅ | Transferência não "volta"/zera o produto | `lib/actions/transferencia.ts` + tela contagem | transferir → produto fica, não some no refresh |
+| 0.4 ✅ | Inventário trava em "Iniciado" | fluxo de envio do inventário | item com erro não trava os outros |
 | 0.5 ✅ | Cabeçalho fixo (sticky) das tabelas (eu removi) | `ui-kit/Lista.tsx`, `DataTable.tsx` | rolar → cabeçalho fica cravado + cantos curvos |
 | 0.6 | CMC/estoque negativo: sinalizar | tela produto/posição | produto negativo aparece sinalizado |
 | 0.7 | Estoque mínimo sumindo | sync/tela produto | mínimo aparece em todos |
@@ -29,7 +29,7 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 ## FASE 1 — Operação (inventário/transferência + movimentações + OP)
 | # | Tarefa | Onde | Validação |
 |---|---|---|---|
-| 1.1 | Inventário/transferência: **envio item-a-item** (sai do campo→envia; mexeu→reprocessa; erro passa adiante) | ContagemInventario/Transferencia + actions | lançar item → integra na hora |
+| 1.1 ✅ | Inventário/transferência: **envio item-a-item** (sai do campo→envia; mexeu→reprocessa; erro passa adiante) | ContagemInventario/Transferencia + actions | lançar item → integra na hora |
 | 1.2 | Inventário: editar/excluir item + imprimir da lista | tela inventário | editar item finalizado; imprimir direto |
 | 1.3 | Movimentações: **filtros completos** (tipo mov, rejeito, PDV, local, família, origem) | `app/(app)/movimentacoes` | cada filtro funciona |
 | 1.4 | Movimentações: **valor (R$) x quantidade** alternável + por mês/data | idem | alternar valor/qtd; agrupar por mês |
