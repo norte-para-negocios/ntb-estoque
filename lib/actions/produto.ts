@@ -198,9 +198,16 @@ export async function editarProduto(
   const editadosAtuais = new Set<string>(
     Array.isArray(atual.campos_editados) ? (atual.campos_editados as string[]) : []
   )
+  // Normaliza para comparar so o que importa. NCM no banco pode vir formatado do Omie
+  // ("0804.40.00") e o form grava so digitos ("08044000"): comparar por digitos evita
+  // marcar NCM como editado sem o usuario ter mudado nada.
+  const norm = (campo: string, v: unknown): string => {
+    if (campo === 'ncm') return String(v ?? '').replace(/\D/g, '')
+    return String(v ?? '')
+  }
   for (const campo of PROTEGIVEIS) {
     // family vem como par (codigo + descricao): tratar como um conjunto.
-    const mudou = String(atual[campo as keyof typeof atual] ?? '') !== String(novo[campo as keyof typeof novo] ?? '')
+    const mudou = norm(campo, atual[campo as keyof typeof atual]) !== norm(campo, novo[campo as keyof typeof novo])
     if (mudou) {
       editadosAtuais.add(campo)
       if (campo === 'codigo_familia' || campo === 'descricao_familia') {
