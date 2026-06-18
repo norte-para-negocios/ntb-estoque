@@ -1,4 +1,4 @@
-import { getProfile } from '@/lib/auth'
+import { getProfile, getPermissoesNomes } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import {
@@ -41,8 +41,12 @@ export default async function HomePage() {
   const lojaId = profile.current_loja_id
   const supabase = await createClient()
 
-  // Multi-tenant: nao-admin so pode ver dados de lojas que tem em loja_user.
+  // Tudo na home respeita permissao: o usuario so ve o bloco que ele pode acessar.
   const isAdmin = profile.perfil === 'Admin'
+  const perms = await getPermissoesNomes(lojaId)
+  const pode = (nome: string) => perms.has('*') || perms.has(nome)
+
+  // Multi-tenant: nao-admin so pode ver dados de lojas que tem em loja_user.
   if (!isAdmin) {
     const { data: vinculo } = await supabase
       .from('loja_user')
@@ -131,17 +135,17 @@ export default async function HomePage() {
 
   const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
 
-  // Fila "Precisa de atenção": só itens com contagem > 0.
+  // Fila "Precisa de atenção": só itens com contagem > 0 E que o usuário pode acessar.
   type Alerta = { icon: LucideIcon; token: CorToken; texto: string; href: string }
   const alertas: Alerta[] = []
-  if (qtdRepor > 0)
+  if (qtdRepor > 0 && pode('Produtos'))
     alertas.push({
       icon: AlertTriangle,
       token: 'err',
       texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`,
       href: '/produto?vista=compras&repor=1',
     })
-  if ((errosSync.count ?? 0) > 0)
+  if ((errosSync.count ?? 0) > 0 && isAdmin)
     alertas.push({
       icon: AlertTriangle,
       token: 'err',
@@ -155,14 +159,14 @@ export default async function HomePage() {
       texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
       href: '/validade?dias=7',
     })
-  if ((invAbertos.count ?? 0) > 0)
+  if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))
     alertas.push({
       icon: ClipboardList,
       token: 'brand',
       texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`,
       href: '/inventario',
     })
-  if ((transfAbertas.count ?? 0) > 0)
+  if ((transfAbertas.count ?? 0) > 0 && pode('Transferencias - Ver'))
     alertas.push({
       icon: ArrowLeftRight,
       token: 'brand',
@@ -171,16 +175,16 @@ export default async function HomePage() {
     })
 
   const secundarios = [
-    { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal' },
-    { label: 'Ordens de produção', value: ops.count ?? 0, hint: 'total', href: '/ordem-producao' },
-    { label: 'Inventários', value: invAbertos.count ?? 0, hint: 'abertos', href: '/inventario' },
-  ]
+    { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal', perm: 'Notas Fiscais' },
+    { label: 'Ordens de produção', value: ops.count ?? 0, hint: 'total', href: '/ordem-producao', perm: 'Ordens de Producao' },
+    { label: 'Inventários', value: invAbertos.count ?? 0, hint: 'abertos', href: '/inventario', perm: 'Inventarios - Ver' },
+  ].filter((k) => pode(k.perm))
 
   const atalhos = [
-    { label: 'Novo inventário', desc: 'Contagem de estoque', href: '/inventario', icon: ClipboardList },
-    { label: 'Nova transferência', desc: 'Entre locais', href: '/transferencia', icon: ArrowLeftRight },
-    { label: 'Etiquetas de NF', desc: 'Imprimir', href: '/nota-fiscal', icon: FileText },
-  ]
+    { label: 'Novo inventário', desc: 'Contagem de estoque', href: '/inventario', icon: ClipboardList, perm: 'Inventarios - Criar' },
+    { label: 'Nova transferência', desc: 'Entre locais', href: '/transferencia', icon: ArrowLeftRight, perm: 'Transferencias - Criar' },
+    { label: 'Etiquetas de NF', desc: 'Imprimir', href: '/nota-fiscal', icon: FileText, perm: 'Notas Fiscais' },
+  ].filter((a) => pode(a.perm))
 
   return (
     <div className="space-y-8">
@@ -245,52 +249,56 @@ export default async function HomePage() {
       </section>
 
       {/* KPIs secundários */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {secundarios.map((k) => (
-          <Link
-            key={k.label}
-            href={k.href}
-            className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:border-brand/40"
-            style={{ transitionTimingFunction: 'var(--ease)' }}
-          >
-            <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand transition-colors duration-300" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
-            <div className="mt-3 flex items-end gap-2">
-              <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
-                <Num value={k.value} />
-              </span>
-              <span className="mb-1 text-[12px] text-text-muted">{k.hint}</span>
-            </div>
-          </Link>
-        ))}
-      </section>
-
-      {/* Atalhos */}
-      <section>
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">Ações rápidas</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {atalhos.map((a) => (
+      {secundarios.length > 0 && (
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {secundarios.map((k) => (
             <Link
-              key={a.href}
-              href={a.href}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 transition-all duration-300 hover:bg-ink hover:border-ink"
+              key={k.label}
+              href={k.href}
+              className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:border-brand/40"
               style={{ transitionTimingFunction: 'var(--ease)' }}
             >
-              <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white transition-colors shrink-0">
-                <a.icon className="size-4" strokeWidth={2} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-text group-hover:text-white transition-colors">{a.label}</div>
-                <div className="text-[11px] text-text-muted group-hover:text-white/50 transition-colors truncate">{a.desc}</div>
+              <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand transition-colors duration-300" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
+                  <Num value={k.value} />
+                </span>
+                <span className="mb-1 text-[12px] text-text-muted">{k.hint}</span>
               </div>
-              <ArrowRight className="size-4 text-text-muted/30 group-hover:text-brand group-hover:translate-x-1 transition-all shrink-0" />
             </Link>
           ))}
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* Atalhos */}
+      {atalhos.length > 0 && (
+        <section>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">Ações rápidas</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {atalhos.map((a) => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 transition-all duration-300 hover:bg-ink hover:border-ink"
+                style={{ transitionTimingFunction: 'var(--ease)' }}
+              >
+                <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white transition-colors shrink-0">
+                  <a.icon className="size-4" strokeWidth={2} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-text group-hover:text-white transition-colors">{a.label}</div>
+                  <div className="text-[11px] text-text-muted group-hover:text-white/50 transition-colors truncate">{a.desc}</div>
+                </div>
+                <ArrowRight className="size-4 text-text-muted/30 group-hover:text-brand group-hover:translate-x-1 transition-all shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Repor estoque — produtos abaixo do minimo (D1) */}
-      {qtdRepor > 0 && (
+      {qtdRepor > 0 && pode('Produtos') && (
         <section>
           <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
             <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Repor estoque</h2>
@@ -313,34 +321,36 @@ export default async function HomePage() {
       )}
 
       {/* Últimas notas */}
-      <section>
-        <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-          <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Últimas notas fiscais</h2>
-          <Link href="/nota-fiscal" className="text-[13px] text-brand hover:underline">
-            ver todas →
-          </Link>
-        </div>
-        {ultimasNotas.data?.length ? (
-          <table className="w-full text-sm">
-            <tbody>
-              {ultimasNotas.data.map((nf) => (
-                <tr key={nf.id} className="border-b border-border last:border-0 hover:bg-surface-2/50 transition-colors">
-                  <td className="py-3 pr-3 num text-text-muted w-24">{fmtData(nf.d_emissao_nfe)}</td>
-                  <td className="py-3 pr-4 num font-medium text-text w-28">{nf.c_numero_nfe}</td>
-                  <td className="py-3 pr-4 text-text/80 truncate max-w-0 w-full">
-                    {nf.c_razao_social || nf.c_nome || '-'}
-                  </td>
-                  <td className="py-3 text-right num font-semibold text-text whitespace-nowrap">
-                    <Money value={nf.n_valor_nfe} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState icon={FileText} title="Nenhuma nota fiscal" hint="Sincronize com o Omie para ver as notas." />
-        )}
-      </section>
+      {pode('Notas Fiscais') && (
+        <section>
+          <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
+            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Últimas notas fiscais</h2>
+            <Link href="/nota-fiscal" className="text-[13px] text-brand hover:underline">
+              ver todas →
+            </Link>
+          </div>
+          {ultimasNotas.data?.length ? (
+            <table className="w-full text-sm">
+              <tbody>
+                {ultimasNotas.data.map((nf) => (
+                  <tr key={nf.id} className="border-b border-border last:border-0 hover:bg-surface-2/50 transition-colors">
+                    <td className="py-3 pr-3 num text-text-muted w-24">{fmtData(nf.d_emissao_nfe)}</td>
+                    <td className="py-3 pr-4 num font-medium text-text w-28">{nf.c_numero_nfe}</td>
+                    <td className="py-3 pr-4 text-text/80 truncate max-w-0 w-full">
+                      {nf.c_razao_social || nf.c_nome || '-'}
+                    </td>
+                    <td className="py-3 text-right num font-semibold text-text whitespace-nowrap">
+                      <Money value={nf.n_valor_nfe} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <EmptyState icon={FileText} title="Nenhuma nota fiscal" hint="Sincronize com o Omie para ver as notas." />
+          )}
+        </section>
+      )}
     </div>
   )
 }
