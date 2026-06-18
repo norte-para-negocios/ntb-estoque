@@ -37,7 +37,8 @@ export function EditarProdutoForm({
 }) {
   const [open, setOpen] = useState(false)
   const [descricao, setDescricao] = useState(produto.descricao ?? '')
-  const [familia, setFamilia] = useState(produto.codigoFamilia != null ? String(produto.codigoFamilia) : '')
+  // codigo_familia 0 no Omie = "sem familia": inicia como vazio para o select casar.
+  const [familia, setFamilia] = useState(produto.codigoFamilia ? String(produto.codigoFamilia) : '')
   const [tipo, setTipo] = useState(produto.tipoItem ?? '')
   const [unidade, setUnidade] = useState(produto.unidade ?? '')
   const [ncm, setNcm] = useState(produto.ncm ?? '')
@@ -128,11 +129,13 @@ export function EditarProdutoForm({
             <label className={labelClass}>Família</label>
             <select className={inputClass} value={familia} onChange={(e) => setFamilia(e.target.value)}>
               <option value="">Sem família</option>
-              {familias.map((f) => (
-                <option key={f.codigo} value={f.codigo}>
-                  {f.descricao}
-                </option>
-              ))}
+              {familias
+                .filter((f) => f.codigo > 0 && f.descricao.trim())
+                .map((f) => (
+                  <option key={f.codigo} value={f.codigo}>
+                    {f.descricao}
+                  </option>
+                ))}
             </select>
           </div>
           <div>
