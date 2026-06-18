@@ -82,7 +82,7 @@ export function ChipsFiltrosAtivos({
             type="button"
             onClick={() => remover(ch.nome)}
             aria-label={`Remover filtro ${ch.campoLabel}`}
-            className="-my-1 -mr-1 ml-0.5 inline-flex items-center justify-center rounded-full p-2 text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            className="-my-1 -mr-1 ml-0.5 inline-flex items-center justify-center rounded-full p-2 text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
           >
             <X className="size-3.5" />
           </button>
@@ -92,7 +92,7 @@ export function ChipsFiltrosAtivos({
         <button
           type="button"
           onClick={limparTudo}
-          className="ml-0.5 text-[12px] font-medium text-brand transition-colors hover:underline"
+          className="ml-0.5 text-[12px] font-medium text-brand u-motion hover:underline"
         >
           Limpar tudo
         </button>

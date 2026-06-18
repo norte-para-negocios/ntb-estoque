@@ -24,7 +24,6 @@ export function ReprocessarErro({ lojaId, model }: { lojaId: number; model: Sync
         onClick={handleClick}
         disabled={pending}
         className={btnClass('outline')}
-        style={{ transitionTimingFunction: 'var(--ease)' }}
       >
         <RotateCw className={`size-3.5 ${pending ? 'animate-spin' : ''}`} strokeWidth={2} />
         {pending ? 'Reprocessando' : 'Reprocessar'}

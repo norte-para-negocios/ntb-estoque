@@ -78,7 +78,27 @@
   /* Sombras suaves difusas */
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 6px -2px rgba(16, 24, 40, 0.05);
-  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* ----------------------------------------------------------------------
+     Linguagem de movimento (A1). Tom: Linear / Stripe / Vercel.
+     Sutil, discreto, consistente. Tudo no sistema se move com este ritmo.
+     - Durações curtas: micro-interação some antes de "chamar atenção".
+     - Easing: --ease-out para entradas/hover (desacelera no fim, natural);
+       --ease-in-out para movimentos contínuos (gavetas, sanfonas).
+     ---------------------------------------------------------------------- */
+  --dur-fast: 120ms; /* hover/focus/press de elementos pequenos (chips, ícones) */
+  --dur: 180ms; /* padrão: botões, links, células, cards */
+  --dur-slow: 280ms; /* superfícies maiores: gavetas, sanfonas, sidebar */
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* desacelera no fim, sem overshoot */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* simétrico, para abrir/fechar */
+  /* Alias retrocompatível: código antigo usa var(--ease). */
+  --ease: var(--ease-out);
+
+  /* Escalas de toque/press padronizadas (nunca "saltam"). */
+  --press: 0.98; /* press de botões/links/cards */
+  --press-sm: 0.96; /* press de ícones pequenos (toggles do menu) */
+
   --radius: 0.625rem;
 }
 
@@ -117,11 +137,13 @@
     @apply font-sans;
     scroll-behavior: smooth;
   }
-  /* Foco visivel e consistente para navegacao por teclado (acessibilidade). */
+  /* Foco visivel e consistente para navegacao por teclado (acessibilidade).
+     O anel cresce do offset 0 -> 2px com leve fade: elegante, nada que pisque. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 4px;
+    transition: outline-offset var(--dur-fast) var(--ease-out);
   }
   .num {
     font-family: var(--font-mono);
@@ -129,6 +151,58 @@
   }
   .eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Utilitários de micro-interação (A2). Centralizam o ritmo do sistema para
+   não repetir `style={{transitionTimingFunction}}` em cada componente e
+   garantir que TUDO se mova igual. Só transform/opacity/cor/sombra (GPU).
+   ------------------------------------------------------------------------ */
+@layer utilities {
+  /* Base de qualquer elemento interativo: transição padrão das props baratas.
+     Inclui transform, então u-press/u-card só precisam definir o estado final
+     (sem redeclarar transition, o que apagaria as outras props). */
+  .u-motion {
+    transition-property: color, background-color, border-color, box-shadow,
+      opacity, transform;
+    transition-duration: var(--dur);
+    transition-timing-function: var(--ease-out);
+  }
+  /* Feedback tátil de press (toque/clique). Discreto, nunca "afunda" demais.
+     Requer u-motion no mesmo elemento para a transição do transform. */
+  .u-press:active {
+    transform: scale(var(--press));
+  }
+  .u-press-sm:active {
+    transform: scale(var(--press-sm));
+  }
+  /* Card/elevação: sobe 1px e ganha sombra suave no hover. Nada que salte.
+     Requer u-motion no mesmo elemento (ou usa a base própria abaixo). */
+  .u-card {
+    transition-property: box-shadow, transform, border-color;
+    transition-duration: var(--dur);
+    transition-timing-function: var(--ease-out);
+  }
+  .u-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .u-card:active {
+    transform: translateY(0);
+  }
+}
+
+/* Acessibilidade + tom refinado: quem pede menos movimento, recebe quase nada.
+   Zera durações/animações globalmente, preservando o estado final. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

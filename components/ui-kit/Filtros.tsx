@@ -10,7 +10,7 @@ export type CampoFiltro =
   | { tipo: 'select'; nome: string; label: string; opcoes: { value: string; label: string }[] }
 
 const field =
-  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand'
+  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:border-brand focus:shadow-[0_0_0_3px_var(--brand-soft)]'
 const lab = 'mb-1 block text-[11px] font-medium text-text-muted'
 
 export function Filtros({

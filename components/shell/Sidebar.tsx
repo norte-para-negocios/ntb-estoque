@@ -134,7 +134,7 @@ export function Sidebar({
         }`}
         style={{
           transition:
-            'width 360ms var(--ease), opacity 240ms var(--ease), transform 360ms var(--ease)',
+            'width var(--dur-slow) var(--ease-in-out), opacity var(--dur) var(--ease-out), transform var(--dur-slow) var(--ease-in-out)',
         }}
         aria-hidden={recolhida}
       >
@@ -155,8 +155,7 @@ export function Sidebar({
               onClick={recolher}
               aria-label="Recolher menu"
               title="Recolher menu"
-              className="flex size-8 items-center justify-center rounded-md text-text-muted transition-all duration-200 hover:bg-surface-2 hover:text-text active:scale-[0.92]"
-              style={{ transitionTimingFunction: 'var(--ease)' }}
+              className="flex size-8 items-center justify-center rounded-md text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
             >
               <PanelLeftClose className="size-[18px]" strokeWidth={2} />
             </button>
@@ -209,14 +208,14 @@ function FloatingToggle({ visivel, onClick }: { visivel: boolean; onClick: () =>
       onClick={onClick}
       aria-label="Abrir menu"
       title="Abrir menu"
-      className={`hidden lg:flex fixed left-4 top-4 z-40 items-center gap-2 rounded-2xl border border-border bg-surface/90 px-3 py-2.5 text-sm font-medium text-text shadow-[var(--shadow-md)] backdrop-blur will-change-transform hover:bg-surface ${
+      className={`hidden lg:flex fixed left-4 top-4 z-40 items-center gap-2 rounded-2xl border border-border bg-surface/90 px-3 py-2.5 text-sm font-medium text-text shadow-[var(--shadow-md)] backdrop-blur will-change-transform hover:-translate-y-px hover:bg-surface hover:shadow-[var(--shadow-md)] active:scale-[var(--press)] ${
         visivel
           ? 'translate-x-0 scale-100 opacity-100 pointer-events-auto'
           : '-translate-x-3 scale-95 opacity-0 pointer-events-none'
       }`}
       style={{
         transition:
-          'transform 320ms var(--ease), opacity 220ms var(--ease)',
+          'transform var(--dur-slow) var(--ease-in-out), opacity var(--dur) var(--ease-out)',
       }}
     >
       <PanelLeftOpen className="size-[18px] text-brand" strokeWidth={2} />
@@ -250,8 +249,7 @@ function GrupoSanfona({
         type="button"
         onClick={onToggle}
         aria-expanded={aberto}
-        className="group flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 transition-colors duration-200 hover:bg-surface-2 hover:text-text-muted"
-        style={{ transitionTimingFunction: 'var(--ease)' }}
+        className="group flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 u-motion hover:bg-surface-2 hover:text-text-muted"
       >
         <span className="flex items-center gap-1.5">
           {grupo}
@@ -260,27 +258,29 @@ function GrupoSanfona({
           )}
         </span>
         <ChevronDown
-          className={`size-3.5 shrink-0 text-text-muted/60 transition-transform duration-300 ${
+          className={`size-3.5 shrink-0 text-text-muted/60 transition-transform ${
             aberto ? 'rotate-0' : '-rotate-90'
           }`}
           strokeWidth={2.5}
-          style={{ transitionTimingFunction: 'var(--ease)' }}
+          style={{ transitionDuration: 'var(--dur-slow)', transitionTimingFunction: 'var(--ease-in-out)' }}
         />
       </button>
       {/* grid-template-rows 0fr->1fr: anima a altura sem medir o DOM e sem
           animar `height` (mais barato; só transform/opacity no conteúdo). */}
       <div
-        className="grid transition-[grid-template-rows] duration-300"
+        className="grid transition-[grid-template-rows]"
         style={{
           gridTemplateRows: aberto ? '1fr' : '0fr',
-          transitionTimingFunction: 'var(--ease)',
+          transitionDuration: 'var(--dur-slow)',
+          transitionTimingFunction: 'var(--ease-in-out)',
         }}
       >
         <div className="overflow-hidden">
           <div
-            className={`space-y-0.5 pt-0.5 pb-1 transition-opacity duration-200 ${
+            className={`space-y-0.5 pt-0.5 pb-1 transition-opacity ${
               aberto ? 'opacity-100' : 'opacity-0'
             }`}
+            style={{ transitionDuration: 'var(--dur)', transitionTimingFunction: 'var(--ease-out)' }}
           >
             {children}
           </div>
@@ -295,19 +295,18 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-all duration-200 ${
+      className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm u-motion u-press-sm ${
         active
           ? 'bg-brand-soft text-text font-medium'
           : 'text-text-muted hover:bg-surface-2 hover:text-text'
       }`}
-      style={{ transitionTimingFunction: 'var(--ease)' }}
     >
       {active && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-brand" />
+        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
       )}
       <Icon
-        className={`size-[17px] shrink-0 ${
-          active ? 'text-brand' : 'text-text-muted/70 group-hover:text-text-muted'
+        className={`size-[17px] shrink-0 u-motion ${
+          active ? 'text-brand' : 'text-text-muted/70 group-hover:translate-x-px group-hover:text-text-muted'
         }`}
         strokeWidth={2}
       />

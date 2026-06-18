@@ -51,7 +51,7 @@ export function SegmentLinks({
             role="tab"
             aria-selected={ativo}
             onClick={() => selecionar(o.value)}
-            className={`rounded-[5px] px-3 py-1 text-[13px] font-medium transition-colors ${
+            className={`rounded-[5px] px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
               ativo
                 ? 'bg-surface text-text shadow-sm'
                 : 'text-text-muted hover:text-text'

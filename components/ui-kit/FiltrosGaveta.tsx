@@ -14,7 +14,7 @@ import type { CampoFiltro } from './Filtros'
 export type { CampoFiltro }
 
 const field =
-  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition-colors focus:border-brand'
+  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:border-brand focus:shadow-[0_0_0_3px_var(--brand-soft)]'
 const lab = 'mb-1 block text-[11px] font-medium text-text-muted'
 
 // Presets de período (boa prática: atalho em vez de digitar data toda vez).
@@ -124,7 +124,7 @@ export function FiltrosGaveta({
                         const [i, f] = p.calc()
                         aplicarPeriodo(i, f)
                       }}
-                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-brand hover:text-text"
+                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text-muted u-motion u-press-sm hover:border-brand hover:bg-surface-2 hover:text-text"
                     >
                       {p.label}
                     </button>

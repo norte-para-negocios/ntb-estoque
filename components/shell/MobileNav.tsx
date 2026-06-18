@@ -105,8 +105,7 @@ export function MobileNav({
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
-          className="flex size-10 items-center justify-center rounded-md text-text transition-transform duration-200 hover:bg-surface-2 active:scale-90"
-          style={{ transitionTimingFunction: 'var(--ease)' }}
+          className="flex size-10 items-center justify-center rounded-md text-text u-motion u-press-sm hover:bg-surface-2"
         >
           <Menu className="size-5" />
         </button>
@@ -121,10 +120,10 @@ export function MobileNav({
 
       {/* Backdrop com fade. */}
       <div
-        className={`lg:hidden fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+        className={`lg:hidden fixed inset-0 z-40 bg-black/40 transition-opacity ${
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        style={{ transitionTimingFunction: 'var(--ease)' }}
+        style={{ transitionDuration: 'var(--dur-slow)', transitionTimingFunction: 'var(--ease-out)' }}
         onClick={() => setOpen(false)}
         aria-hidden
       />
@@ -134,7 +133,7 @@ export function MobileNav({
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{
-          transition: 'transform 340ms var(--ease)',
+          transition: 'transform var(--dur-slow) var(--ease-in-out)',
         }}
         aria-hidden={!open}
       >
@@ -152,8 +151,7 @@ export function MobileNav({
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"
-            className="flex size-10 items-center justify-center rounded-md transition-transform duration-200 hover:bg-surface-2 active:scale-90"
-            style={{ transitionTimingFunction: 'var(--ease)' }}
+            className="flex size-10 items-center justify-center rounded-md u-motion u-press-sm hover:bg-surface-2"
           >
             <X className="size-5" />
           </button>
@@ -176,7 +174,7 @@ export function MobileNav({
                   type="button"
                   onClick={() => setGrupoAberto((atual) => (atual === g ? null : g))}
                   aria-expanded={aberto}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 active:bg-surface-2"
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 u-motion active:bg-surface-2"
                 >
                   <span className="flex items-center gap-1.5">
                     {g}
@@ -185,25 +183,27 @@ export function MobileNav({
                     )}
                   </span>
                   <ChevronDown
-                    className={`size-4 shrink-0 text-text-muted/60 transition-transform duration-300 ${
+                    className={`size-4 shrink-0 text-text-muted/60 transition-transform ${
                       aberto ? 'rotate-0' : '-rotate-90'
                     }`}
                     strokeWidth={2.5}
-                    style={{ transitionTimingFunction: 'var(--ease)' }}
+                    style={{ transitionDuration: 'var(--dur-slow)', transitionTimingFunction: 'var(--ease-in-out)' }}
                   />
                 </button>
                 <div
-                  className="grid transition-[grid-template-rows] duration-300"
+                  className="grid transition-[grid-template-rows]"
                   style={{
                     gridTemplateRows: aberto ? '1fr' : '0fr',
-                    transitionTimingFunction: 'var(--ease)',
+                    transitionDuration: 'var(--dur-slow)',
+                    transitionTimingFunction: 'var(--ease-in-out)',
                   }}
                 >
                   <div className="overflow-hidden">
                     <div
-                      className={`space-y-0.5 pt-0.5 pb-1 transition-opacity duration-200 ${
+                      className={`space-y-0.5 pt-0.5 pb-1 transition-opacity ${
                         aberto ? 'opacity-100' : 'opacity-0'
                       }`}
+                      style={{ transitionDuration: 'var(--dur)', transitionTimingFunction: 'var(--ease-out)' }}
                     >
                       {list.map((item) => {
                         const Icon = item.icon
@@ -213,7 +213,7 @@ export function MobileNav({
                           <Link
                             key={item.href}
                             href={item.href}
-                            className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm transition active:bg-surface-2 ${
+                            className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm u-motion active:bg-surface-2 ${
                               active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted'
                             }`}
                           >
@@ -254,7 +254,7 @@ export function MobileNav({
             <Link
               key={b.href}
               href={b.href}
-              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] transition active:scale-95 active:text-brand ${
+              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] u-motion u-press-sm active:text-brand ${
                 active ? 'text-brand' : 'text-text-muted'
               }`}
             >

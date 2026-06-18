@@ -63,7 +63,7 @@ export function Lista<T>({
             {linhas.map((row) => (
               <tr
                 key={chaveLinha(row)}
-                className="border-b border-border/60 last:border-0 transition-colors even:bg-surface-2/30 hover:bg-surface-2/40"
+                className="border-b border-border/60 last:border-0 u-motion even:bg-surface-2/30 hover:bg-surface-2/60"
               >
                 {colunas.map((c, i) => (
                   <td

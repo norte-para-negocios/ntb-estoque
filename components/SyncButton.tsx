@@ -47,7 +47,7 @@ export function SyncButton({
       onClick={handleSync}
       disabled={loading}
       title="O sistema sincroniza sozinho em segundo plano. Use para forçar agora."
-      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-all duration-200 hover:bg-[var(--brand-strong)] active:scale-[0.98] disabled:opacity-60"
+      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white u-motion u-press hover:bg-[var(--brand-strong)] disabled:opacity-60 disabled:active:scale-100"
     >
       <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
       {loading ? 'Sincronizando...' : label}

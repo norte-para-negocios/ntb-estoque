@@ -68,7 +68,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setBuscaAberta(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
               >
                 <Search className="size-4" aria-hidden />
                 <span>Buscar</span>
@@ -79,7 +79,11 @@ export function AppShell({
             </div>
             {/* key={pathname}: re-anima a entrada do conteúdo a cada navegação,
                 dando continuidade ao skeleton de loading. */}
-            <div key={pathname} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+            <div
+              key={pathname}
+              className="animate-in fade-in slide-in-from-bottom-1"
+              style={{ animationDuration: 'var(--dur-slow)', animationTimingFunction: 'var(--ease-out)' }}
+            >
               {children}
             </div>
           </div>

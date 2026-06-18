@@ -18,12 +18,9 @@ export function StatCard({
   accent?: string
 }) {
   const inner = (
-    <div
-      className="group relative overflow-hidden rounded-lg border border-border bg-surface p-4 transition-all duration-200 hover:shadow-[var(--shadow-md)]"
-      style={{ transitionTimingFunction: 'var(--ease)' }}
-    >
+    <div className="group relative overflow-hidden rounded-lg border border-border bg-surface p-4 u-card">
       <div
-        className="absolute inset-x-0 top-0 h-[2px] opacity-60 transition-opacity group-hover:opacity-100"
+        className="absolute inset-x-0 top-0 h-[2px] opacity-60 u-motion group-hover:opacity-100"
         style={{ background: accent }}
       />
       <div className="flex items-center justify-between">
@@ -34,7 +31,7 @@ export function StatCard({
           <Icon className="size-4" style={{ color: accent }} strokeWidth={2} />
         </span>
         {href && (
-          <ArrowUpRight className="size-4 text-text-muted/30 transition-colors group-hover:text-text-muted" />
+          <ArrowUpRight className="size-4 text-text-muted/30 u-motion group-hover:translate-x-px group-hover:-translate-y-px group-hover:text-text-muted" />
         )}
       </div>
       <div className="mt-3 text-[1.7rem] font-semibold leading-none text-text">

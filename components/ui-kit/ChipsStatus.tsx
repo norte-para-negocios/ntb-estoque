@@ -48,10 +48,10 @@ export function ChipsStatus({
             type="button"
             aria-pressed={ativo}
             onClick={() => selecionar(o.value)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
               ativo
                 ? 'border-brand bg-brand/10 text-brand'
-                : 'border-border bg-surface text-text-muted hover:border-brand/50 hover:text-text'
+                : 'border-border bg-surface text-text-muted hover:border-brand/50 hover:bg-surface-2 hover:text-text'
             }`}
           >
             {o.label}

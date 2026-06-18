@@ -8,7 +8,9 @@ const VARIANTS = {
 export type BtnVariant = keyof typeof VARIANTS
 
 export function btnClass(variant: BtnVariant = 'primary'): string {
-  return `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 active:scale-[0.98] disabled:opacity-60 ${VARIANTS[variant]}`
+  // u-motion: ritmo padrão do sistema (cor/sombra/transform, var(--dur) + ease-out).
+  // u-press: press sutil (scale var(--press) = 0.98) com timing rápido.
+  return `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium u-motion u-press disabled:opacity-60 disabled:active:scale-100 ${VARIANTS[variant]}`
 }
 
 export function Button({
@@ -16,11 +18,5 @@ export function Button({
   className = '',
   ...props
 }: { variant?: BtnVariant } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      className={`${btnClass(variant)} ${className}`}
-      style={{ transitionTimingFunction: 'var(--ease)' }}
-      {...props}
-    />
-  )
+  return <button className={`${btnClass(variant)} ${className}`} {...props} />
 }
