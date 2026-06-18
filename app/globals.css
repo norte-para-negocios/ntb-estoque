@@ -247,6 +247,38 @@
     );
     animation: u-shimmer 1.4s var(--ease-in-out) infinite;
   }
+
+  /* ----------------------------------------------------------------------
+     Lote 2 (B) - "Momentos de confirmacao". Bolinha de status VIVA: status
+     em andamento (contando/processando) emitem um halo que nasce da bolinha,
+     expande e se dissolve - o "live dot" do Linear. Aplicado so na bolinha
+     (StatusPill) quando o status e `vivo`; terminais (Concluido/Erro) ficam
+     parados. So transform/opacity (GPU). O halo herda a cor do selo via
+     currentColor, entao acompanha o token (warn/info) e o dark mode.
+     Calmo de proposito (2s) para sinalizar "vivo" sem piscar.
+     ---------------------------------------------------------------------- */
+  .u-pulse-dot {
+    position: relative;
+  }
+  .u-pulse-dot::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background-color: currentColor;
+    animation: u-pulse-ring 2s var(--ease-out) infinite;
+    pointer-events: none;
+  }
+}
+
+/* Icone do toast (sonner) entra com um leve "pop" de escala, dando vida a
+   confirmacao sem competir com a leitura. Vale para os tipos com significado
+   (success/error/warning/info); o loading fica de fora para nao mexer no spinner. */
+[data-sonner-toast][data-type='success'] [data-icon],
+[data-sonner-toast][data-type='error'] [data-icon],
+[data-sonner-toast][data-type='warning'] [data-icon],
+[data-sonner-toast][data-type='info'] [data-icon] {
+  animation: u-pop var(--dur) var(--ease-out) both;
 }
 
 @keyframes u-fade-up {
@@ -272,6 +304,32 @@
 @keyframes u-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+/* Halo do "live dot": nasce sobre a bolinha (cor identica, sem salto) e se
+   dissolve enquanto cresce. Para em 70% para haver uma pausa calma entre pulsos. */
+@keyframes u-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Pop de entrada (icone do toast): surge pequeno e assenta no tamanho final. */
+@keyframes u-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

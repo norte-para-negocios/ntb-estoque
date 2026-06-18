@@ -45,13 +45,15 @@ export const COR_VAR: Record<CorToken, string> = {
 }
 
 // Status do sistema (Omie + internos) -> rótulo + token. Fonte única do StatusPill.
-const STATUS: Record<string, { label: string; token: CorToken }> = {
+// `vivo`: status que representam trabalho ACONTECENDO agora (contando, processando).
+// A bolinha do selo ganha um halo pulsante ("live dot"); os terminais ficam estáticos.
+const STATUS: Record<string, { label: string; token: CorToken; vivo?: true }> = {
   Concluido: { label: 'Concluído', token: 'ok' },
   Concluida: { label: 'Concluída', token: 'ok' },
   Finalizado: { label: 'Finalizado', token: 'ok' },
-  Processando: { label: 'Processando', token: 'info' },
-  'Processando no Omie': { label: 'Processando no Omie', token: 'info' },
-  'Em contagem': { label: 'Em contagem', token: 'warn' },
+  Processando: { label: 'Processando', token: 'info', vivo: true },
+  'Processando no Omie': { label: 'Processando no Omie', token: 'info', vivo: true },
+  'Em contagem': { label: 'Em contagem', token: 'warn', vivo: true },
   Iniciado: { label: 'Iniciado', token: 'neutro' },
   Vazio: { label: 'Sem quantidade', token: 'neutro' },
   'Sem CMC': { label: 'Sem CMC', token: 'warn' },
@@ -63,7 +65,7 @@ const STATUS: Record<string, { label: string; token: CorToken }> = {
   Usuario: { label: 'Usuário', token: 'neutro' },
 }
 
-export function statusInfo(status: string | null): { label: string; token: CorToken } {
+export function statusInfo(status: string | null): { label: string; token: CorToken; vivo?: true } {
   return (status && STATUS[status]) || { label: status ?? 'N/A', token: 'neutro' }
 }
 
