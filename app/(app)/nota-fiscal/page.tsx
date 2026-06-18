@@ -208,9 +208,8 @@ export default async function NotaFiscalPage({
       <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: {fmtData(dataInicio)} a {fmtData(dataFinal)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          {qtdNotas} {qtdNotas === 1 ? 'nota' : 'notas'}
+          <span className="font-semibold text-text">{qtdNotas}</span> {qtdNotas === 1 ? 'nota' : 'notas'} de {fmtData(dataInicio)} a {fmtData(dataFinal)}
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
           Total <Money value={totalValor} className="font-semibold text-text" />
