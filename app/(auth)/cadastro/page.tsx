@@ -71,7 +71,7 @@ export default function CadastroPage() {
               </div>
               <div>
                 <label htmlFor="codigo" className={labelClass}>
-                  Código da loja <span className="text-text-muted/70">(opcional)</span>
+                  Código de convite <span className="text-text-muted/70">(opcional)</span>
                 </label>
                 <input
                   id="codigo"
@@ -82,8 +82,8 @@ export default function CadastroPage() {
                   className={`${inputClass} uppercase tracking-wider`}
                 />
                 <p className="mt-1 text-[12px] text-text-muted">
-                  Tem o código da sua loja? Informe para já entrar vinculado a ela. Sem código,
-                  seu acesso aguarda aprovação de um administrador.
+                  Recebeu um código do responsável? Informe para já entrar com o acesso liberado.
+                  Sem código, seu pedido aguarda aprovação de um administrador.
                 </p>
               </div>
 

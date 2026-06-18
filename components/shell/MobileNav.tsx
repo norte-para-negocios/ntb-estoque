@@ -27,11 +27,13 @@ const BOTTOM = [
 
 export function MobileNav({
   isAdmin,
+  podeGerirUsuarios = false,
   rotasVisiveis,
   lojaSelector,
   userMenu,
 }: {
   isAdmin: boolean
+  podeGerirUsuarios?: boolean
   rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
@@ -58,9 +60,12 @@ export function MobileNav({
   const itens = useMemo(
     () =>
       NAV_ITEMS.filter(
-        (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+        (i) =>
+          (!i.admin || isAdmin) &&
+          (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
+          (permitidas === null || permitidas.has(i.href))
       ),
-    [isAdmin, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, podeGerirUsuarios, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const gruposVisiveis = useMemo(

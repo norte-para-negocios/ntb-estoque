@@ -1,8 +1,56 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { isAdmin, getUser } from '@/lib/auth'
+import { getUser, getAtorGestao, type AtorGestao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+
+// Helpers de escopo (frente C). O ator e Admin global OU AdminLoja na propria loja.
+//
+// AdminLoja: so cria/aprova/edita perfil 'Usuario', so nas lojas dele, e as
+// permissoes que concede nao excedem as dele (ele tem acesso total as lojas dele,
+// entao qualquer permissao do catalogo e valida para essas lojas).
+
+// Confere que o perfil que o ator quer atribuir e permitido para ele.
+function perfilPermitido(ator: AtorGestao, perfil: PerfilUsuario): boolean {
+  if (ator.isAdminGlobal) return true
+  // AdminLoja: so 'Usuario'.
+  return perfil === 'Usuario'
+}
+
+// Restringe uma lista de lojas ao que o ator pode gerir. Admin global passa direto.
+function lojasNoEscopo(ator: AtorGestao, lojaIds: number[]): number[] {
+  if (ator.isAdminGlobal) return lojaIds
+  return lojaIds.filter((id) => ator.lojaIds.includes(id))
+}
+
+// Verifica que o ator pode mexer no usuario alvo: Admin global pode em todos;
+// AdminLoja so em usuarios vinculados a alguma loja dele (e que nao sejam Admin
+// global nem outro AdminLoja).
+async function podeGerirAlvo(
+  ator: AtorGestao,
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string
+): Promise<boolean> {
+  if (ator.isAdminGlobal) return true
+  if (!ator.isAdminLoja) return false
+
+  const { data: alvo } = await supabase
+    .from('profiles')
+    .select('perfil')
+    .eq('id', userId)
+    .maybeSingle<{ perfil: string | null }>()
+  // AdminLoja nao mexe em Admin global nem em outro AdminLoja.
+  if (!alvo || alvo.perfil === 'Admin' || alvo.perfil === 'AdminLoja') return false
+
+  // O alvo precisa estar vinculado a pelo menos uma loja do ator (ou ser pendente
+  // sem vinculo, caso de aprovacao). Para edicao/exclusao exigimos vinculo.
+  const { data: vinc } = await supabase
+    .from('loja_user')
+    .select('loja_id')
+    .eq('user_id', userId)
+    .in('loja_id', ator.lojaIds.length ? ator.lojaIds : [-1])
+  return (vinc ?? []).length > 0
+}
 
 function senhaAleatoria(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
@@ -29,8 +77,28 @@ export async function criarUsuario(input: {
   // Quando ausente/undefined, concede TODAS (compatibilidade com chamadas antigas).
   permissaoIds?: number[]
 }) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão para criar usuários.' }
   if (!input.name || !input.email) return { error: 'Nome e e-mail obrigatórios' }
+
+  // Escopo de perfil (frente C): AdminLoja so cria 'Usuario'.
+  if (!perfilPermitido(ator, input.perfil)) {
+    return { error: 'Você só pode criar usuários comuns.' }
+  }
+
+  // Escopo de loja: Admin global -> todas (quando perfil Admin) ou as escolhidas;
+  // AdminLoja -> intersecao com as lojas dele. Admin global criando 'Admin' usa todas.
+  let lojaIds: number[]
+  if (input.perfil === 'Admin') {
+    // So Admin global chega aqui (perfilPermitido ja barrou AdminLoja). Admin global
+    // recebe todas as lojas ativas.
+    lojaIds = ator.lojaIds
+  } else {
+    lojaIds = lojasNoEscopo(ator, input.lojaIds)
+    if (lojaIds.length === 0) {
+      return { error: 'Selecione ao menos uma loja válida.' }
+    }
+  }
 
   const supabase = createServiceClient()
   const senha = senhaAleatoria()
@@ -53,11 +121,11 @@ export async function criarUsuario(input: {
     name: input.name,
     email: input.email,
     perfil: input.perfil,
-    current_loja_id: input.lojaIds[0] ?? null,
+    current_loja_id: lojaIds[0] ?? null,
   })
 
-  // Vincular as lojas
-  for (const lojaId of input.lojaIds) {
+  // Vincular as lojas (ja escopadas ao ator)
+  for (const lojaId of lojaIds) {
     await supabase.from('loja_user').insert({ loja_id: lojaId, user_id: userId })
   }
 
@@ -71,7 +139,7 @@ export async function criarUsuario(input: {
     } else {
       permissaoIds = input.permissaoIds
     }
-    const rows = input.lojaIds.flatMap((lojaId) =>
+    const rows = lojaIds.flatMap((lojaId) =>
       permissaoIds.map((permissao_id) => ({ loja_id: lojaId, permissao_id, user_id: userId }))
     )
     if (rows.length) await supabase.from('permissao_user').insert(rows)
@@ -85,25 +153,51 @@ export async function editarUsuario(
   userId: string,
   input: { name: string; perfil: PerfilUsuario; lojaIds: number[] }
 ) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão para editar usuários.' }
   if (!input.name) return { error: 'Nome obrigatório' }
 
   const supabase = createServiceClient()
 
-  await supabase
-    .from('profiles')
-    .update({ name: input.name, perfil: input.perfil })
-    .eq('id', userId)
+  // Escopo do alvo: AdminLoja so edita 'Usuario' vinculado a loja dele.
+  if (!(await podeGerirAlvo(ator, supabase, userId))) {
+    return { error: 'Você não pode editar este usuário.' }
+  }
+  // Escopo de perfil: AdminLoja nao promove ninguem a Admin/AdminLoja.
+  if (!perfilPermitido(ator, input.perfil)) {
+    return { error: 'Você só pode manter o usuário como usuário comum.' }
+  }
 
-  // Sincroniza loja_user: remove as que sairam, adiciona as novas
+  // Escopo de lojas. Para AdminLoja: as lojas FORA do escopo dele que o alvo ja tem
+  // devem ser PRESERVADAS (ele nao enxerga nem mexe nelas); ele so soma/remove as
+  // lojas dele. Admin global controla a lista inteira.
   const { data: atuais } = await supabase
     .from('loja_user')
     .select('loja_id')
     .eq('user_id', userId)
   const atuaisIds = (atuais ?? []).map((r) => r.loja_id as number)
 
-  const remover = atuaisIds.filter((id) => !input.lojaIds.includes(id))
-  const adicionar = input.lojaIds.filter((id) => !atuaisIds.includes(id))
+  let alvoLojaIds: number[]
+  if (ator.isAdminGlobal) {
+    alvoLojaIds = input.lojaIds
+  } else {
+    // Lojas fora do escopo do AdminLoja que o alvo ja tinha: mantem.
+    const foraDoEscopo = atuaisIds.filter((id) => !ator.lojaIds.includes(id))
+    // Dentro do escopo: o que o AdminLoja escolheu (intersecao com as dele).
+    const dentro = lojasNoEscopo(ator, input.lojaIds)
+    alvoLojaIds = [...new Set([...foraDoEscopo, ...dentro])]
+  }
+  if (alvoLojaIds.length === 0 && input.perfil !== 'Admin') {
+    return { error: 'Selecione ao menos uma loja válida.' }
+  }
+
+  await supabase
+    .from('profiles')
+    .update({ name: input.name, perfil: input.perfil })
+    .eq('id', userId)
+
+  const remover = atuaisIds.filter((id) => !alvoLojaIds.includes(id))
+  const adicionar = alvoLojaIds.filter((id) => !atuaisIds.includes(id))
 
   if (remover.length) {
     await supabase
@@ -145,16 +239,16 @@ export async function editarUsuario(
   }
 
   // Garante current_loja_id valido
-  if (input.lojaIds.length) {
+  if (alvoLojaIds.length) {
     const { data: prof } = await supabase
       .from('profiles')
       .select('current_loja_id')
       .eq('id', userId)
       .single<{ current_loja_id: number | null }>()
-    if (!prof?.current_loja_id || !input.lojaIds.includes(prof.current_loja_id)) {
+    if (!prof?.current_loja_id || !alvoLojaIds.includes(prof.current_loja_id)) {
       await supabase
         .from('profiles')
-        .update({ current_loja_id: input.lojaIds[0] })
+        .update({ current_loja_id: alvoLojaIds[0] })
         .eq('id', userId)
     }
   }
@@ -163,24 +257,43 @@ export async function editarUsuario(
   return { ok: true }
 }
 
-// Aprova um cadastro pendente: define perfil, vincula lojas, concede permissoes e
-// muda o status para 'aprovado' (libera o acesso). Reusa a regra do criarUsuario.
+// Aprova um cadastro pendente: define perfil, vincula lojas, concede as PERMISSOES
+// escolhidas e muda o status para 'aprovado' (libera o acesso). Frente B: o admin
+// escolhe perfil + lojas + permissoes na hora de aprovar.
 export async function aprovarUsuario(
   userId: string,
-  input: { perfil: PerfilUsuario; lojaIds: number[] }
+  input: { perfil: PerfilUsuario; lojaIds: number[]; permissaoIds?: number[] }
 ) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão para aprovar usuários.' }
+
+  // Escopo de perfil (frente C): AdminLoja so aprova como 'Usuario'.
+  if (!perfilPermitido(ator, input.perfil)) {
+    return { error: 'Você só pode aprovar como usuário comum.' }
+  }
 
   const supabase = createServiceClient()
 
-  // Admin global -> todas as lojas ativas. Admin de loja / Usuario -> as escolhidas.
-  const lojaIds =
-    input.perfil === 'Admin'
-      ? ((await supabase.from('lojas').select('id').eq('ativo', true)).data ?? []).map((l) => l.id as number)
-      : input.lojaIds
+  // O alvo precisa estar pendente. AdminLoja so aprova pendentes (que ainda nao tem
+  // dono); Admin global aprova qualquer pendente.
+  const { data: alvo } = await supabase
+    .from('profiles')
+    .select('status')
+    .eq('id', userId)
+    .maybeSingle<{ status: string | null }>()
+  if (!alvo) return { error: 'Usuário não encontrado.' }
+  if (alvo.status !== 'pendente') return { error: 'Este cadastro não está pendente.' }
 
-  if (input.perfil !== 'Admin' && lojaIds.length === 0) {
-    return { error: 'Selecione ao menos uma loja' }
+  // Lojas: Admin global criando Admin -> todas ativas. Caso contrario -> escolhidas
+  // (AdminLoja limitado as lojas dele).
+  let lojaIds: number[]
+  if (input.perfil === 'Admin') {
+    lojaIds = ((await supabase.from('lojas').select('id').eq('ativo', true)).data ?? []).map(
+      (l) => l.id as number
+    )
+  } else {
+    lojaIds = lojasNoEscopo(ator, input.lojaIds)
+    if (lojaIds.length === 0) return { error: 'Selecione ao menos uma loja válida.' }
   }
 
   await supabase
@@ -196,10 +309,17 @@ export async function aprovarUsuario(
     await supabase.from('loja_user').insert(novas.map((loja_id) => ({ loja_id, user_id: userId })))
   }
 
-  // Concede todas as permissoes nas lojas vinculadas (granularidade fina ajustavel depois)
-  const { data: permissoes } = await supabase.from('permissoes').select('id')
+  // Permissoes: Admin e AdminLoja -> acesso total (todas). Usuario -> as ESCOLHIDAS
+  // (ou todas, se nao veio lista, por compatibilidade).
+  let permissaoIds: number[]
+  if (input.perfil === 'Admin' || input.perfil === 'AdminLoja' || input.permissaoIds === undefined) {
+    const { data: permissoes } = await supabase.from('permissoes').select('id')
+    permissaoIds = (permissoes ?? []).map((p) => p.id as number)
+  } else {
+    permissaoIds = input.permissaoIds
+  }
   const rows = lojaIds.flatMap((lojaId) =>
-    (permissoes ?? []).map((p) => ({ loja_id: lojaId, permissao_id: p.id, user_id: userId }))
+    permissaoIds.map((permissao_id) => ({ loja_id: lojaId, permissao_id, user_id: userId }))
   )
   if (rows.length) {
     await supabase.from('permissao_user').upsert(rows, { onConflict: 'loja_id,permissao_id,user_id' })
@@ -211,8 +331,16 @@ export async function aprovarUsuario(
 
 // Recusa um cadastro pendente: remove a conta de auth (cascade apaga o profile).
 export async function recusarUsuario(userId: string) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão.' }
   const supabase = createServiceClient()
+  // So recusa pendentes. AdminLoja tambem pode (pendentes nao tem dono ainda).
+  const { data: alvo } = await supabase
+    .from('profiles')
+    .select('status')
+    .eq('id', userId)
+    .maybeSingle<{ status: string | null }>()
+  if (alvo?.status !== 'pendente') return { error: 'Este cadastro não está pendente.' }
   const { error } = await supabase.auth.admin.deleteUser(userId)
   if (error) return { error: 'Não foi possível recusar o cadastro.' }
   revalidatePath('/usuario')
@@ -222,10 +350,14 @@ export async function recusarUsuario(userId: string) {
 // Exclui um usuario ja existente: remove a conta de auth (cascade apaga profile,
 // vinculos de loja, permissoes e locais). O admin nao pode excluir a propria conta.
 export async function excluirUsuario(userId: string) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão para excluir usuários.' }
   const me = await getUser()
   if (me.id === userId) return { error: 'Você não pode excluir a própria conta' }
   const supabase = createServiceClient()
+  if (!(await podeGerirAlvo(ator, supabase, userId))) {
+    return { error: 'Você não pode excluir este usuário.' }
+  }
   const { error } = await supabase.auth.admin.deleteUser(userId)
   if (error) return { error: 'Não foi possível excluir o usuário.' }
   revalidatePath('/usuario')
@@ -238,8 +370,16 @@ export async function togglePermissao(
   permissaoId: number,
   ativar: boolean
 ) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão.' }
+  // Escopo: AdminLoja so mexe nas permissoes de lojas dele e em usuarios dele.
+  if (!ator.isAdminGlobal && !ator.lojaIds.includes(lojaId)) {
+    return { error: 'Você não pode alterar permissões desta loja.' }
+  }
   const supabase = createServiceClient()
+  if (!(await podeGerirAlvo(ator, supabase, userId))) {
+    return { error: 'Você não pode alterar este usuário.' }
+  }
 
   if (ativar) {
     const { data: existe } = await supabase
@@ -273,8 +413,15 @@ export async function toggleLocal(
   localEstoqueId: number,
   ativar: boolean
 ) {
-  if (!(await isAdmin())) return { error: 'Apenas administradores' }
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão.' }
+  if (!ator.isAdminGlobal && !ator.lojaIds.includes(lojaId)) {
+    return { error: 'Você não pode alterar locais desta loja.' }
+  }
   const supabase = createServiceClient()
+  if (!(await podeGerirAlvo(ator, supabase, userId))) {
+    return { error: 'Você não pode alterar este usuário.' }
+  }
 
   if (ativar) {
     const { data: existe } = await supabase

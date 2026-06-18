@@ -34,11 +34,13 @@ function gravarLS(chave: string, valor: unknown) {
 
 export function Sidebar({
   isAdmin,
+  podeGerirUsuarios = false,
   rotasVisiveis,
   lojaSelector,
   userMenu,
 }: {
   isAdmin: boolean
+  podeGerirUsuarios?: boolean
   rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
@@ -46,13 +48,17 @@ export function Sidebar({
   const pathname = usePathname()
 
   // Filtro de permissão (4.2) intacto: mesma regra de antes.
+  // - admin: so admin global. - gestaoUsuarios: admin global OU AdminLoja.
   const permitidas = rotasVisiveis ? new Set(rotasVisiveis) : null
   const itens = React.useMemo(
     () =>
       NAV_ITEMS.filter(
-        (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+        (i) =>
+          (!i.admin || isAdmin) &&
+          (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
+          (permitidas === null || permitidas.has(i.href))
       ),
-    [isAdmin, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, podeGerirUsuarios, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Só os grupos que sobraram itens depois do filtro.

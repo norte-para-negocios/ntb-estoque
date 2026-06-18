@@ -8,6 +8,7 @@ import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
 import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
 import { CodigoOnboarding } from '@/components/loja/CodigoOnboarding'
+import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -66,6 +67,12 @@ export default async function LojaPage({
   }
 
   const { data: lojas } = await query
+
+  // Catalogo de permissoes para o convite por codigo (gerado direto da tela da loja).
+  const { data: permissoes } = await supabase
+    .from('permissoes')
+    .select('id, nome')
+    .order('id')
 
   const webhookUrl =
     (process.env.NEXT_PUBLIC_APP_URL || 'https://ntb-estoque.vercel.app') + '/api/webhook'
@@ -219,6 +226,16 @@ export default async function LojaPage({
                     lojaId={loja.id}
                     codigo={loja.codigo_onboarding as string | null}
                   />
+                  {/* Convite por código COM permissões embutidas (frente A) */}
+                  <div className="mt-3">
+                    <ConvidarUsuario
+                      lojas={[{ id: loja.id, nome: loja.nome, nome_fantasia: loja.nome_fantasia }]}
+                      permissoes={permissoes ?? []}
+                      podeAdminLoja={true}
+                      lojaFixaId={loja.id}
+                      triggerLabel="Convidar por código (com permissões)"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">

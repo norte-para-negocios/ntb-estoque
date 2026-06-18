@@ -144,6 +144,63 @@ export async function getCurrentLojaId(): Promise<number> {
   return profile.current_loja_id
 }
 
+// Ator da GESTAO DE USUARIOS (frente C). Resume quem esta agindo nas telas/acoes
+// de usuario, para escopar Admin global x AdminLoja:
+//  - Admin global ('Admin'): gere tudo, todas as lojas, qualquer perfil.
+//  - AdminLoja: gere SO as lojas dele (loja_user), so cria/convida/aprova perfil
+//    'Usuario', e so concede permissoes que ele mesmo tem (todas, ja que AdminLoja
+//    tem acesso total as lojas dele -> '*').
+//  - Outros perfis: nao podem gerir (podeGerir = false).
+// Esta funcao e a fonte de verdade no SERVIDOR; a UI so reflete o que ela diz.
+export type AtorGestao = {
+  id: string
+  perfil: string | null
+  isAdminGlobal: boolean
+  isAdminLoja: boolean
+  podeGerir: boolean
+  // Lojas que o ator pode gerir. Admin global: todas as ativas. AdminLoja: as dele.
+  lojaIds: number[]
+}
+
+export async function getAtorGestao(): Promise<AtorGestao> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('perfil')
+    .eq('id', user.id)
+    .single<{ perfil: string | null }>()
+
+  const perfil = profile?.perfil ?? null
+  const isAdminGlobal = perfil === 'Admin'
+  const isAdminLoja = perfil === 'AdminLoja'
+
+  let lojaIds: number[] = []
+  if (isAdminGlobal) {
+    const { data } = await supabase.from('lojas').select('id').eq('ativo', true)
+    lojaIds = (data ?? []).map((l) => l.id as number)
+  } else if (isAdminLoja) {
+    const { data } = await supabase
+      .from('loja_user')
+      .select('loja_id')
+      .eq('user_id', user.id)
+    lojaIds = [...new Set((data ?? []).map((r) => r.loja_id as number).filter((v) => v != null))]
+  }
+
+  return {
+    id: user.id,
+    perfil,
+    isAdminGlobal,
+    isAdminLoja,
+    podeGerir: isAdminGlobal || (isAdminLoja && lojaIds.length > 0),
+    lojaIds,
+  }
+}
+
 // Conjunto de NOMES de permissao que o usuario tem na loja informada.
 // Admin recebe '*' (tudo) para o chamador tratar como acesso total.
 // Usado pelo shell para esconder do menu o que o usuario nao pode ver (4.2).

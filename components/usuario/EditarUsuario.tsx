@@ -43,12 +43,15 @@ export function EditarUsuario({
   permissoes,
   locais,
   podeExcluir = true,
+  // Escopo (frente C): AdminLoja nao promove ninguem a AdminLoja/Admin global.
+  podeEscolherPerfilAlto = true,
 }: {
   usuario: UsuarioEditavel
   lojas: Loja[]
   permissoes: Permissao[]
   locais: Local[]
   podeExcluir?: boolean
+  podeEscolherPerfilAlto?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
@@ -189,7 +192,7 @@ export function EditarUsuario({
 
           <div>
             <label className={labelClass}>Perfil</label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className={`grid grid-cols-1 gap-2 ${podeEscolherPerfilAlto ? 'sm:grid-cols-3' : ''}`}>
               <PerfilOpcao
                 ativo={perfil === 'Usuario'}
                 onClick={() => setPerfil('Usuario')}
@@ -197,20 +200,24 @@ export function EditarUsuario({
                 titulo="Usuário"
                 desc="Acesso conforme permissões"
               />
-              <PerfilOpcao
-                ativo={perfil === 'AdminLoja'}
-                onClick={() => setPerfil('AdminLoja')}
-                icon={<ShieldHalf className="size-4" />}
-                titulo="Admin da loja"
-                desc="Acesso total às lojas dele"
-              />
-              <PerfilOpcao
-                ativo={perfil === 'Admin'}
-                onClick={() => setPerfil('Admin')}
-                icon={<ShieldCheck className="size-4" />}
-                titulo="Administrador"
-                desc="Acesso total ao sistema"
-              />
+              {podeEscolherPerfilAlto && (
+                <>
+                  <PerfilOpcao
+                    ativo={perfil === 'AdminLoja'}
+                    onClick={() => setPerfil('AdminLoja')}
+                    icon={<ShieldHalf className="size-4" />}
+                    titulo="Admin da loja"
+                    desc="Acesso total às lojas dele"
+                  />
+                  <PerfilOpcao
+                    ativo={perfil === 'Admin'}
+                    onClick={() => setPerfil('Admin')}
+                    icon={<ShieldCheck className="size-4" />}
+                    titulo="Administrador"
+                    desc="Acesso total ao sistema"
+                  />
+                </>
+              )}
             </div>
           </div>
 

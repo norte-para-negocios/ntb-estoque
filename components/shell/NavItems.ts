@@ -24,7 +24,10 @@ export type NavItem = {
   label: string
   icon: LucideIcon
   group: 'Operação' | 'Cadastros' | 'Administração'
+  // admin: so admin GLOBAL ('Admin') ve a rota.
   admin?: boolean
+  // gestaoUsuarios: admin global OU AdminLoja veem (gestao de usuarios escopada).
+  gestaoUsuarios?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -44,5 +47,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
-  { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', admin: true },
+  { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
 ]

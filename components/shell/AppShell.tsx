@@ -10,12 +10,15 @@ import { BuscaGlobal } from './BuscaGlobal'
 
 export function AppShell({
   isAdmin,
+  podeGerirUsuarios = false,
   rotasVisiveis,
   lojaSelector,
   userMenu,
   children,
 }: {
   isAdmin: boolean
+  // AdminLoja: ve a gestao de usuarios (escopada) mesmo sem ser admin global.
+  podeGerirUsuarios?: boolean
   // null = admin (ve tudo). Array = rotas que o nao-admin pode ver (4.2).
   rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
@@ -56,9 +59,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar isAdmin={isAdmin} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+      <Sidebar isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <MobileNav isAdmin={isAdmin} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+        <MobileNav isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
         <main className="flex-1 min-w-0 overflow-x-hidden pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
             <div className="mb-4 flex justify-end">
