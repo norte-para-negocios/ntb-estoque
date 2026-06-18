@@ -27,13 +27,27 @@ export default function CadastroPage() {
         {state?.ok ? (
           <div className="space-y-4 text-center">
             <CheckCircle2 className="mx-auto size-12 text-ok" />
-            <h1 className="text-lg font-semibold text-text">Acesso solicitado</h1>
-            <p className="text-sm text-text-muted">
-              Seu pedido de acesso foi enviado e está aguardando a aprovação de um administrador.
-              Assim que for liberado, você poderá entrar com seu e-mail e senha.
-            </p>
-            <Link href="/login" className={`${btnClass('outline')} w-full justify-center`}>
-              Voltar para o login
+            {state.entrou ? (
+              <>
+                <h1 className="text-lg font-semibold text-text">Conta criada</h1>
+                <p className="text-sm text-text-muted">
+                  Você já está vinculado à loja{' '}
+                  <span className="font-medium text-text">{state.loja}</span>. Entre com seu
+                  e-mail e senha. O responsável pela loja ajusta suas permissões.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-semibold text-text">Acesso solicitado</h1>
+                <p className="text-sm text-text-muted">
+                  Seu pedido de acesso foi enviado e está aguardando a aprovação de um
+                  administrador. Assim que for liberado, você poderá entrar com seu e-mail e
+                  senha.
+                </p>
+              </>
+            )}
+            <Link href="/login" className={`${btnClass('primary')} w-full justify-center`}>
+              Ir para o login
             </Link>
           </div>
         ) : (
@@ -54,6 +68,23 @@ export default function CadastroPage() {
               <div>
                 <label htmlFor="password" className={labelClass}>Senha</label>
                 <input id="password" name="password" type="password" required minLength={6} autoComplete="new-password" placeholder="Mínimo 6 caracteres" className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="codigo" className={labelClass}>
+                  Código da loja <span className="text-text-muted/70">(opcional)</span>
+                </label>
+                <input
+                  id="codigo"
+                  name="codigo"
+                  type="text"
+                  autoCapitalize="characters"
+                  placeholder="NTB-XXXXXXXX"
+                  className={`${inputClass} uppercase tracking-wider`}
+                />
+                <p className="mt-1 text-[12px] text-text-muted">
+                  Tem o código da sua loja? Informe para já entrar vinculado a ela. Sem código,
+                  seu acesso aguarda aprovação de um administrador.
+                </p>
               </div>
 
               {state?.error && (

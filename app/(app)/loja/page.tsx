@@ -7,6 +7,7 @@ import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
 import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
+import { CodigoOnboarding } from '@/components/loja/CodigoOnboarding'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -209,6 +210,14 @@ export default async function LojaPage({
                     lojaId={loja.id}
                     nome={loja.certificado_nome as string | null}
                     validade={loja.certificado_validade as string | null}
+                  />
+                </div>
+
+                {/* Código de onboarding (4.5): cadastro vinculado a esta loja */}
+                <div className="border-t border-border pt-3">
+                  <CodigoOnboarding
+                    lojaId={loja.id}
+                    codigo={loja.codigo_onboarding as string | null}
                   />
                 </div>
 
