@@ -59,7 +59,7 @@ export function AppShell({
       <Sidebar isAdmin={isAdmin} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileNav isAdmin={isAdmin} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
-        <main className="flex-1 min-w-0 pb-20 lg:pb-0">
+        <main className="flex-1 min-w-0 overflow-x-hidden pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
             <div className="mb-4 flex justify-end">
               <button

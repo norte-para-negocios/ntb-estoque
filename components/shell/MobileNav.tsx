@@ -2,10 +2,21 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-import { Menu, X, LayoutDashboard, FileText, ClipboardList, Package } from 'lucide-react'
+import {
+  Menu,
+  X,
+  ChevronDown,
+  LayoutDashboard,
+  FileText,
+  ClipboardList,
+  Package,
+} from 'lucide-react'
 import { NAV_ITEMS } from './NavItems'
+
+const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
+type Grupo = (typeof GRUPOS)[number]
 
 const BOTTOM = [
   { href: '/home', label: 'Início', icon: LayoutDashboard },
@@ -27,72 +38,201 @@ export function MobileNav({
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+
   useEffect(() => {
     setOpen(false)
   }, [pathname])
+
+  // Trava o scroll do body enquanto o drawer está aberto (sem mexer em html).
+  useEffect(() => {
+    if (!open) return
+    const anterior = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = anterior
+    }
+  }, [open])
+
+  // Filtro de permissão (4.2) intacto.
   const permitidas = rotasVisiveis ? new Set(rotasVisiveis) : null
-  const itens = NAV_ITEMS.filter(
-    (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+  const itens = useMemo(
+    () =>
+      NAV_ITEMS.filter(
+        (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+      ),
+    [isAdmin, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
   )
+
+  const gruposVisiveis = useMemo(
+    () => GRUPOS.filter((g) => itens.some((i) => i.group === g)),
+    [itens]
+  )
+
+  const grupoDaRota = useMemo<Grupo | null>(() => {
+    const atual = itens.find(
+      (i) => pathname === i.href || pathname.startsWith(i.href + '/')
+    )
+    return atual?.group ?? null
+  }, [itens, pathname])
+
+  const [grupoAberto, setGrupoAberto] = useState<Grupo | null>(null)
+
+  // Ao abrir o drawer, expande o grupo da rota atual (ou o primeiro).
+  useEffect(() => {
+    if (open) {
+      setGrupoAberto(grupoDaRota ?? gruposVisiveis[0] ?? null)
+    }
+  }, [open, grupoDaRota, gruposVisiveis])
+
   // Barra inferior fixa: filtra pelas mesmas permissoes. /home nao tem permissao
   // mapeada (sempre visivel), entao a barra nunca fica vazia.
   const bottomVisivel = BOTTOM.filter((b) => permitidas === null || permitidas.has(b.href))
+
   return (
     <>
       <header
         className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 backdrop-blur px-3"
-        style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          height: 'calc(3.5rem + env(safe-area-inset-top))',
+        }}
       >
         <button
           onClick={() => setOpen(true)}
-          aria-label="Menu"
-          className="flex size-10 items-center justify-center rounded-md text-text hover:bg-surface-2"
+          aria-label="Abrir menu"
+          className="flex size-10 items-center justify-center rounded-md text-text transition-transform duration-200 hover:bg-surface-2 active:scale-90"
+          style={{ transitionTimingFunction: 'var(--ease)' }}
         >
           <Menu className="size-5" />
         </button>
-        <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto dark:brightness-0 dark:invert" />
+        <Image
+          src="/ntb-logo.png"
+          alt="NTB"
+          width={100}
+          height={32}
+          className="h-6 w-auto dark:brightness-0 dark:invert"
+        />
       </header>
 
-      {open && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-black/30" onClick={() => setOpen(false)} aria-hidden />
-      )}
-
-      <aside
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] bg-surface overflow-y-auto transition-transform duration-300 ${
-          open ? 'translate-x-0' : '-translate-x-full'
+      {/* Backdrop com fade. */}
+      <div
+        className={`lg:hidden fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         style={{ transitionTimingFunction: 'var(--ease)' }}
+        onClick={() => setOpen(false)}
+        aria-hidden
+      />
+
+      <aside
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[300px] max-w-[86vw] bg-surface flex flex-col will-change-transform ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{
+          transition: 'transform 340ms var(--ease)',
+        }}
+        aria-hidden={!open}
       >
-        <div className="flex h-14 items-center justify-between border-b border-border px-4">
-          <Image src="/ntb-logo.png" alt="NTB" width={100} height={32} className="h-6 w-auto dark:brightness-0 dark:invert" />
+        <div
+          className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0"
+          style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <Image
+            src="/ntb-logo.png"
+            alt="NTB"
+            width={100}
+            height={32}
+            className="h-6 w-auto dark:brightness-0 dark:invert"
+          />
           <button
             onClick={() => setOpen(false)}
-            aria-label="Fechar"
-            className="flex size-9 items-center justify-center rounded-md hover:bg-surface-2"
+            aria-label="Fechar menu"
+            className="flex size-10 items-center justify-center rounded-md transition-transform duration-200 hover:bg-surface-2 active:scale-90"
+            style={{ transitionTimingFunction: 'var(--ease)' }}
           >
             <X className="size-5" />
           </button>
         </div>
-        <div className="px-3 py-3 border-b border-border">{lojaSelector}</div>
-        <nav className="px-3 py-3 space-y-0.5">
-          {itens.map((item) => {
-            const Icon = item.icon
-            const active = pathname === item.href || pathname.startsWith(item.href + '/')
+
+        <div className="px-3 py-3 border-b border-border shrink-0">{lojaSelector}</div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+          {gruposVisiveis.map((g) => {
+            const list = itens.filter((i) => i.group === g)
+            const aberto = grupoAberto === g
+            const temAtivoFechado =
+              !aberto &&
+              list.some(
+                (i) => pathname === i.href || pathname.startsWith(i.href + '/')
+              )
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm transition active:bg-surface-2 ${
-                  active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted'
-                }`}
-              >
-                <Icon className={`size-[18px] ${active ? 'text-brand' : ''}`} />
-                {item.label}
-              </Link>
+              <div key={g}>
+                <button
+                  type="button"
+                  onClick={() => setGrupoAberto((atual) => (atual === g ? null : g))}
+                  aria-expanded={aberto}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 active:bg-surface-2"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {g}
+                    {temAtivoFechado && (
+                      <span className="size-1.5 rounded-full bg-brand" aria-hidden />
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={`size-4 shrink-0 text-text-muted/60 transition-transform duration-300 ${
+                      aberto ? 'rotate-0' : '-rotate-90'
+                    }`}
+                    strokeWidth={2.5}
+                    style={{ transitionTimingFunction: 'var(--ease)' }}
+                  />
+                </button>
+                <div
+                  className="grid transition-[grid-template-rows] duration-300"
+                  style={{
+                    gridTemplateRows: aberto ? '1fr' : '0fr',
+                    transitionTimingFunction: 'var(--ease)',
+                  }}
+                >
+                  <div className="overflow-hidden">
+                    <div
+                      className={`space-y-0.5 pt-0.5 pb-1 transition-opacity duration-200 ${
+                        aberto ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      {list.map((item) => {
+                        const Icon = item.icon
+                        const active =
+                          pathname === item.href || pathname.startsWith(item.href + '/')
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm transition active:bg-surface-2 ${
+                              active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted'
+                            }`}
+                          >
+                            <Icon
+                              className={`size-[18px] shrink-0 ${active ? 'text-brand' : ''}`}
+                            />
+                            {item.label}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )
           })}
         </nav>
-        <div className="border-t border-border p-3">{userMenu}</div>
+
+        <div
+          className="border-t border-border p-3 shrink-0"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
+          {userMenu}
+        </div>
       </aside>
 
       <nav
