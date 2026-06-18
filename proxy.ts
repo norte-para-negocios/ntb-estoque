@@ -33,6 +33,7 @@ export async function proxy(request: NextRequest) {
   const isPublic =
     path.startsWith('/login') ||
     path.startsWith('/cadastro') ||
+    path === '/manifest.webmanifest' ||
     path.startsWith('/api/webhook') ||
     path.startsWith('/api/cron')
 
