@@ -90,7 +90,10 @@ export function CriarOPProdutos({
   }
 
   function setQtd(cod: number, q: string) {
-    setItens((prev) => prev.map((i) => (i.produto.codigo_produto === cod ? { ...i, quantidade: q } : i)))
+    // So aceita digitos, virgula e ponto (a virgula fica enquanto digita, ex.: "3,4");
+    // parseNumBR converte na criacao. type=number/parseInt rejeitaria o decimal BR.
+    const limpo = q.replace(/[^\d.,]/g, '')
+    setItens((prev) => prev.map((i) => (i.produto.codigo_produto === cod ? { ...i, quantidade: limpo } : i)))
   }
 
   function ajustarQtd(cod: number, delta: number) {
@@ -174,7 +177,6 @@ export function CriarOPProdutos({
         <ul className="space-y-2.5 lg:space-y-1.5">
           {visiveis.map((item) => {
             const q = item.quantidade
-            const base = Number(q) || 0
             return (
               <li key={item.produto.codigo_produto} className="rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-4 lg:py-2 lg:pl-3.5 lg:pr-2">
                 <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">

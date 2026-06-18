@@ -9,3 +9,14 @@ export function parseNumBR(v: string): number | null {
   const norm = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
   return Number(norm)
 }
+
+// Number/null (ou string numerica vinda do banco, ex.: "3.400000") -> texto pt-BR
+// limpo para preencher o input de quantidade, sem zeros a direita. null/invalido
+// vira string vazia. Ex.: 3.4 -> "3,4"; "240.00" -> "240"; null -> "".
+export function formatNumBR(v: number | string | null | undefined): string {
+  if (v == null || v === '') return ''
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return ''
+  // remove zeros a direita e o ponto decimal solto; troca ponto por virgula.
+  return String(n).replace('.', ',')
+}

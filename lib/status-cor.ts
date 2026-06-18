@@ -53,6 +53,7 @@ const STATUS: Record<string, { label: string; token: CorToken }> = {
   'Processando no Omie': { label: 'Processando no Omie', token: 'info' },
   'Em contagem': { label: 'Em contagem', token: 'warn' },
   Iniciado: { label: 'Iniciado', token: 'neutro' },
+  Vazio: { label: 'Sem quantidade', token: 'neutro' },
   'Sem CMC': { label: 'Sem CMC', token: 'warn' },
   Erro: { label: 'Erro', token: 'err' },
   Pendente: { label: 'Pendente', token: 'warn' },

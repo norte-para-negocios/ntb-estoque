@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
-import { parseNumBR } from '@/lib/num-br'
+import { parseNumBR, formatNumBR } from '@/lib/num-br'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -24,6 +24,13 @@ import {
   finishInventario,
   forceSyncInventario,
 } from '@/lib/actions/inventario'
+
+// Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
+// virgula e ainda nao ter dado blur); se invalido, cai no number ja salvo.
+function stepBase(texto: string, fallback: number): number {
+  const p = parseNumBR(texto)
+  return p != null && Number.isFinite(p) ? p : fallback
+}
 
 export type ItemContagem = {
   id: number
@@ -45,6 +52,13 @@ export function ContagemInventario({
   finalizado: boolean
 }) {
   const [itens, setItens] = useState(itensIniciais)
+  // Texto CRU do input de quantidade: mantido separado do number pra que a virgula
+  // fique enquanto o usuario digita ("3,4"). Se o input fosse controlado pelo
+  // number, parseNumBR("3,") devolveria 3 e o React reescreveria o campo como "3",
+  // comendo a virgula. So convertemos pra number no blur (salvar).
+  const [textos, setTextos] = useState<Record<number, string>>(() =>
+    Object.fromEntries(itensIniciais.map((i) => [i.id, formatNumBR(i.quan)]))
+  )
   const [filtro, setFiltro] = useState('')
   const [buscaManual, setBuscaManual] = useState(false)
   // Inventario finalizado entra em modo leitura; "Editar itens" destrava os
@@ -89,6 +103,7 @@ export function ContagemInventario({
           } as ItemContagem,
           ...prev,
         ])
+        setTextos((prev) => ({ ...prev, [novo.id]: '' }))
       }
       toast.success('Produto adicionado')
     })
@@ -112,17 +127,22 @@ export function ContagemInventario({
       toast.error('Quantidade inválida')
       return
     }
+    // No inventario a contagem 0 e VALIDA (zera o saldo) e vai pro Omie; so o campo
+    // VAZIO (null) fica pendente como 'Vazio' (rotulo "Sem quantidade") e e
+    // descartado ao finalizar — nao trava o inventario nem conta no placar.
+    setTextos((prev) => ({ ...prev, [itemId]: formatNumBR(num) }))
     setItens((prev) =>
       prev.map((i) =>
         i.id === itemId
-          ? { ...i, quan: num, status: num != null ? 'Processando' : 'Iniciado' }
+          ? { ...i, quan: num, status: num != null ? 'Processando' : 'Vazio' }
           : i
       )
     )
     startTransition(async () => {
       const res = await enviarInventarioItem(itemId, num)
+      const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
-        prev.map((i) => (i.id === itemId ? { ...i, status: res.status } : i))
+        prev.map((i) => (i.id === itemId ? { ...i, status: statusUi } : i))
       )
       if (res.status === 'Erro' || res.status === 'Sem CMC') {
         toast.error('Falha ao integrar item', {
@@ -175,9 +195,14 @@ export function ContagemInventario({
 
   // Resumo de integracao: como cada item ja integra na hora, mostramos o placar
   // durante a contagem tambem (e o botao de reenviar pendentes quando ha erro).
-  const total = itens.length
-  const integrados = itens.filter((i) => i.status === 'Concluido').length
-  const comErro = itens.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
+  // Itens VAZIOS (sem quantidade contada) nao entram no placar: sao descartados ao
+  // finalizar. No inventario a contagem 0 conta normal (zerar saldo e valido); so
+  // o campo vazio (quan null) e ignorado.
+  const vazios = itens.filter((i) => i.status === 'Vazio' || i.quan == null).length
+  const comQtd = itens.filter((i) => !(i.status === 'Vazio' || i.quan == null))
+  const total = comQtd.length
+  const integrados = comQtd.filter((i) => i.status === 'Concluido').length
+  const comErro = comQtd.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
 
   return (
     <div className="pb-28 lg:pb-20">
@@ -190,6 +215,7 @@ export function ContagemInventario({
           <span className="text-sm font-medium text-text">
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
+            {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
           </span>
           <span className="inline-flex items-center gap-2">
             {comErro > 0 && (
@@ -263,8 +289,11 @@ export function ContagemInventario({
         <ul className="space-y-2 lg:space-y-1.5">
           {visiveis.map((item) => {
             const q = item.quan
-            // base finita para os botoes +/- (evita NaN propagando)
-            const base = Number.isFinite(q as number) ? (q as number) : 0
+            const texto = textos[item.id] ?? ''
+            // base finita para os botoes +/- (evita NaN propagando). quan pode vir
+            // como string numerica do banco ("3.00"), entao coage via Number.
+            const qn = q == null ? NaN : Number(q)
+            const base = Number.isFinite(qn) ? qn : 0
             return (
               <li
                 key={item.id}
@@ -311,11 +340,11 @@ export function ContagemInventario({
                   <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
                   {!editavel ? (
-                    <span className="num text-lg font-semibold text-text lg:text-base">{q ?? 0}</span>
+                    <span className="num text-lg font-semibold text-text lg:text-base">{formatNumBR(q ?? 0)}</span>
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
-                        onClick={() => salvarQtd(item.id, Math.max(0, base - 1))}
+                        onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base) - 1))}
                         disabled={pending}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
@@ -325,14 +354,12 @@ export function ContagemInventario({
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={q ?? ''}
+                        value={texto}
                         disabled={pending}
                         onChange={(e) => {
-                          const parsed = parseNumBR(e.target.value)
-                          const val = parsed != null && Number.isFinite(parsed) ? parsed : null
-                          setItens((prev) =>
-                            prev.map((i) => (i.id === item.id ? { ...i, quan: val } : i))
-                          )
+                          // Guarda a string CRUA (a virgula fica enquanto digita).
+                          const limpo = e.target.value.replace(/[^\d.,]/g, '')
+                          setTextos((prev) => ({ ...prev, [item.id]: limpo }))
                         }}
                         onBlur={(e) => {
                           const parsed = parseNumBR(e.target.value)
@@ -344,7 +371,7 @@ export function ContagemInventario({
                         placeholder="0"
                       />
                       <button
-                        onClick={() => salvarQtd(item.id, base + 1)}
+                        onClick={() => salvarQtd(item.id, stepBase(texto, base) + 1)}
                         disabled={pending}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"

@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
-import { parseNumBR } from '@/lib/num-br'
+import { parseNumBR, formatNumBR } from '@/lib/num-br'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -24,6 +24,13 @@ import {
   finishTransferencia,
   forceSyncTransferencia,
 } from '@/lib/actions/transferencia'
+
+// Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
+// virgula e ainda nao ter dado blur); se invalido, cai no number ja salvo.
+function stepBase(texto: string, fallback: number): number {
+  const p = parseNumBR(texto)
+  return p != null && Number.isFinite(p) ? p : fallback
+}
 
 export type ItemMovimento = {
   id: number
@@ -47,6 +54,14 @@ export function ContagemTransferencia({
   const [itens, setItens] = useState(itensIniciais)
   const [quans, setQuans] = useState<Record<number, number | null>>(() =>
     Object.fromEntries(itensIniciais.map((i) => [i.id, i.quan]))
+  )
+  // Texto CRU do input de quantidade (string do que o usuario digitou). Mantido
+  // separado do number: se o input fosse controlado pelo number, ao digitar a
+  // virgula ("3,") o parse devolveria 3 e o React reescreveria o campo como "3",
+  // comendo a virgula — impossivel chegar em "3,4". Guardando a string crua, a
+  // virgula fica; o number so e calculado no blur (salvar) com parseNumBR.
+  const [textos, setTextos] = useState<Record<number, string>>(() =>
+    Object.fromEntries(itensIniciais.map((i) => [i.id, formatNumBR(i.quan)]))
   )
   const [filtro, setFiltro] = useState('')
   const [buscaManual, setBuscaManual] = useState(false)
@@ -80,6 +95,7 @@ export function ContagemTransferencia({
         }
         setItens((prev) => [novoItem, ...prev])
         setQuans((prev) => ({ ...prev, [novo.id]: null }))
+        setTextos((prev) => ({ ...prev, [novo.id]: '' }))
       }
       toast.success('Produto adicionado')
     })
@@ -103,18 +119,27 @@ export function ContagemTransferencia({
       toast.error('Quantidade inválida')
       return
     }
+    // Quantidade > 0 vai pro Omie; vazio/zero NAO trava a transferencia: fica como
+    // 'Vazio' (rotulo "Sem quantidade") e e descartado ao concluir (nao conta no
+    // placar nem manda ajuste zero ao Omie). Antes ficava 'Iniciado' pra sempre,
+    // contando no denominador e parecendo que a transferencia nunca conclui.
+    const temQtd = num != null && num > 0
     setQuans((prev) => ({ ...prev, [movId]: num }))
+    setTextos((prev) => ({ ...prev, [movId]: formatNumBR(num) }))
     setItens((prev) =>
       prev.map((i) =>
         i.id === movId
-          ? { ...i, quan: num, status: num != null && num > 0 ? 'Processando' : 'Iniciado' }
+          ? { ...i, quan: num, status: temQtd ? 'Processando' : 'Vazio' }
           : i
       )
     )
     startTransition(async () => {
       const res = await enviarMovimento(movId, num)
+      // Servidor devolve 'Iniciado' pra qtd vazia/zero; na UI mostramos 'Vazio'
+      // (rotulo claro de que o item nao entra na transferencia).
+      const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
-        prev.map((i) => (i.id === movId ? { ...i, status: res.status } : i))
+        prev.map((i) => (i.id === movId ? { ...i, status: statusUi } : i))
       )
       if (res.status === 'Erro') {
         toast.error('Falha ao integrar item', { description: res.descricao_status || 'Tente reenviar' })
@@ -156,9 +181,14 @@ export function ContagemTransferencia({
 
   // Resumo de integracao: como cada item ja integra na hora, mostramos o placar
   // durante a contagem tambem (e o botao de reenviar pendentes quando ha erro).
-  const total = itens.length
-  const integrados = itens.filter((i) => i.status === 'Concluido').length
-  const comErro = itens.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
+  // Itens VAZIOS (sem quantidade) NAO entram no placar: nao vao pro Omie e sao
+  // descartados ao concluir, entao nao podem inflar o denominador (era o que
+  // fazia a transferencia parecer "presa" sem nunca chegar a X de X).
+  const vazios = itens.filter((i) => i.status === 'Vazio' || (i.quan == null || i.quan <= 0)).length
+  const comQtd = itens.filter((i) => !(i.status === 'Vazio' || (i.quan == null || i.quan <= 0)))
+  const total = comQtd.length
+  const integrados = comQtd.filter((i) => i.status === 'Concluido').length
+  const comErro = comQtd.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
 
   return (
     <div className="pb-28 lg:pb-20">
@@ -171,6 +201,7 @@ export function ContagemTransferencia({
           <span className="text-sm font-medium text-text">
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
+            {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
           </span>
           {comErro > 0 && (
             <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
@@ -218,6 +249,7 @@ export function ContagemTransferencia({
         <ul className="space-y-2 lg:space-y-1.5">
           {visiveis.map((item) => {
             const q = quans[item.id]
+            const texto = textos[item.id] ?? ''
             // base finita para os botoes +/- (evita NaN propagando)
             const base = Number.isFinite(q as number) ? (q as number) : 0
             return (
@@ -258,11 +290,11 @@ export function ContagemTransferencia({
                   <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
                   {finalizado ? (
-                    <span className="num text-lg font-semibold text-text lg:text-base">{q ?? 0}</span>
+                    <span className="num text-lg font-semibold text-text lg:text-base">{formatNumBR(q ?? 0)}</span>
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
-                        onClick={() => salvarQtd(item.id, Math.max(0, base - 1))}
+                        onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base) - 1))}
                         disabled={pending}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
@@ -272,12 +304,13 @@ export function ContagemTransferencia({
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={q ?? ''}
+                        value={texto}
                         disabled={pending}
                         onChange={(e) => {
-                          const parsed = parseNumBR(e.target.value)
-                          const val = parsed != null && Number.isFinite(parsed) ? parsed : null
-                          setQuans((prev) => ({ ...prev, [item.id]: val }))
+                          // Guarda a string CRUA (a virgula fica enquanto digita).
+                          // So aceita digitos, virgula e ponto pra evitar lixo.
+                          const limpo = e.target.value.replace(/[^\d.,]/g, '')
+                          setTextos((prev) => ({ ...prev, [item.id]: limpo }))
                         }}
                         onBlur={(e) => {
                           const parsed = parseNumBR(e.target.value)
@@ -289,7 +322,7 @@ export function ContagemTransferencia({
                         placeholder="0"
                       />
                       <button
-                        onClick={() => salvarQtd(item.id, base + 1)}
+                        onClick={() => salvarQtd(item.id, stepBase(texto, base) + 1)}
                         disabled={pending}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"
