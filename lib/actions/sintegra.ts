@@ -25,10 +25,7 @@ export async function consultarCnpj(cnpjCpf: string): Promise<
   { error: string } | { ok: true; parceiro: ParceiroOmie | null }
 > {
   const lojaId = await getCurrentLojaId()
-  // Permissao: basta poder ver fornecedores OU clientes.
-  const pode =
-    (await requirePermissao(lojaId, 'Fornecedores')) || (await requirePermissao(lojaId, 'Clientes'))
-  if (!pode) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 
   const limpo = cnpjCpf.replace(/\s/g, '').trim()
   if (!limpo) return { error: 'Informe um CNPJ ou CPF' }
@@ -71,37 +68,20 @@ function paraLinha(p: ParceiroOmie, lojaId: number, extra: Record<string, unknow
 }
 
 /**
- * Importa o parceiro consultado para o cadastro local (fornecedor e/ou cliente).
+ * Importa o parceiro consultado para o cadastro local de fornecedor.
  * Banco = fonte da verdade. NAO escreve no Omie.
  */
 export async function importarParceiro(
-  p: ParceiroOmie,
-  como: { fornecedor: boolean; cliente: boolean }
+  p: ParceiroOmie
 ): Promise<{ error: string } | { ok: true; importados: string[] }> {
   const { lojaId, supabase } = await getLoja()
-  const importados: string[] = []
+  if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
 
-  if (como.fornecedor) {
-    if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão (fornecedor)' }
-    const { error } = await supabase
-      .from('fornecedores')
-      .upsert(paraLinha(p, lojaId), { onConflict: 'loja_id,codigo_omie' })
-    if (error) return { error: error.message }
-    importados.push('fornecedor')
-  }
-
-  if (como.cliente) {
-    if (!(await requirePermissao(lojaId, 'Clientes'))) return { error: 'Sem permissão (cliente)' }
-    const { error } = await supabase
-      .from('clientes')
-      .upsert(paraLinha(p, lojaId), { onConflict: 'loja_id,codigo_omie' })
-    if (error) return { error: error.message }
-    importados.push('cliente')
-  }
-
-  if (!importados.length) return { error: 'Escolha importar como fornecedor e/ou cliente' }
+  const { error } = await supabase
+    .from('fornecedores')
+    .upsert(paraLinha(p, lojaId), { onConflict: 'loja_id,codigo_omie' })
+  if (error) return { error: error.message }
 
   revalidatePath('/fornecedor')
-  revalidatePath('/cliente')
-  return { ok: true, importados }
+  return { ok: true, importados: ['fornecedor'] }
 }

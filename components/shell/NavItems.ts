@@ -15,7 +15,6 @@ import {
   Users,
   FolderTree,
   Truck,
-  Contact,
   ScanLine,
   type LucideIcon,
 } from 'lucide-react'
@@ -41,7 +40,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/local-estoque', label: 'Locais de Estoque', icon: Warehouse, group: 'Cadastros' },
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
-  { href: '/cliente', label: 'Clientes', icon: Contact, group: 'Cadastros' },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros' },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },

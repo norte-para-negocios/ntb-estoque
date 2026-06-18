@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Search, Building2, CheckCircle2, Truck, Contact } from 'lucide-react'
+import { Search, Building2, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { consultarCnpj, importarParceiro } from '@/lib/actions/sintegra'
 import type { ParceiroOmie } from '@/lib/omie/cliente-fornecedor'
@@ -16,8 +16,6 @@ export function SintegraBusca() {
   const [cnpj, setCnpj] = useState('')
   const [estado, setEstado] = useState<Estado>('inicial')
   const [parceiro, setParceiro] = useState<ParceiroOmie | null>(null)
-  const [comoFornecedor, setComoFornecedor] = useState(false)
-  const [comoCliente, setComoCliente] = useState(false)
   const [pending, startTransition] = useTransition()
   const [importando, startImport] = useTransition()
 
@@ -41,25 +39,19 @@ export function SintegraBusca() {
         return
       }
       setParceiro(res.parceiro)
-      setComoFornecedor(res.parceiro.ehFornecedor)
-      setComoCliente(res.parceiro.ehCliente)
       setEstado('achou')
     })
   }
 
   function importar() {
     if (!parceiro) return
-    if (!comoFornecedor && !comoCliente) {
-      toast.error('Escolha importar como fornecedor e/ou cliente')
-      return
-    }
     startImport(async () => {
-      const res = await importarParceiro(parceiro, { fornecedor: comoFornecedor, cliente: comoCliente })
+      const res = await importarParceiro(parceiro)
       if ('error' in res) {
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success(`Importado como ${res.importados.join(' e ')}`)
+      toast.success('Importado como fornecedor')
     })
   }
 
@@ -103,7 +95,7 @@ export function SintegraBusca() {
       {estado === 'nao_achou' && (
         <div className="rounded-lg border border-border bg-surface p-4 text-[13px] text-text-muted">
           Nenhum cadastro encontrado no Omie para esse CNPJ/CPF. O Omie só localiza quem já está
-          cadastrado lá (cliente ou fornecedor).
+          cadastrado lá.
         </div>
       )}
 
@@ -112,18 +104,6 @@ export function SintegraBusca() {
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
             <Building2 className="size-4 text-brand" />
             <span className="text-sm font-semibold text-text">Cadastro encontrado no Omie</span>
-            <span className="ml-auto flex gap-1.5">
-              {parceiro.ehFornecedor && (
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
-                  Fornecedor
-                </span>
-              )}
-              {parceiro.ehCliente && (
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
-                  Cliente
-                </span>
-              )}
-            </span>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-4 text-[13px] sm:grid-cols-3">
             {campos.map(([label, valor]) => (
@@ -135,33 +115,15 @@ export function SintegraBusca() {
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-4 border-t border-border px-4 py-3">
-            <span className="text-[13px] font-medium text-text">Importar para o cadastro local como:</span>
-            <label className="flex items-center gap-2 text-sm text-text">
-              <input
-                type="checkbox"
-                checked={comoFornecedor}
-                onChange={(e) => setComoFornecedor(e.target.checked)}
-                className="accent-[var(--brand)]"
-              />
-              <Truck className="size-4 text-text-muted" /> Fornecedor
-            </label>
-            <label className="flex items-center gap-2 text-sm text-text">
-              <input
-                type="checkbox"
-                checked={comoCliente}
-                onChange={(e) => setComoCliente(e.target.checked)}
-                className="accent-[var(--brand)]"
-              />
-              <Contact className="size-4 text-text-muted" /> Cliente
-            </label>
+          <div className="flex items-center justify-end border-t border-border px-4 py-3">
             <button
               type="button"
               onClick={importar}
               disabled={importando}
-              className={`${btnClass('primary')} ml-auto`}
+              className={btnClass('primary')}
             >
-              <CheckCircle2 className="size-4" /> {importando ? 'Importando...' : 'Importar'}
+              <CheckCircle2 className="size-4" />{' '}
+              {importando ? 'Importando...' : 'Importar como fornecedor'}
             </button>
           </div>
         </div>
