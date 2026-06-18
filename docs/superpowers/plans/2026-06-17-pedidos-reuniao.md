@@ -58,9 +58,10 @@ agora, independente depois (mas já preparando).
 - **Trazer VALOR (R$), não só quantidade.** "Interessa são valores, lá tá muito mais valor que
   quantidade." Opção de ALTERNAR: o usuário escolhe se quer ver quantidade OU valor.
 - **Filtro por tipo de movimentação:** entrada, saída, **rejeito**, entrada de OP, saída de OP,
-  movimentação/manual de estoque, transferência. ("o que gostaria de ver é a parte de rejeito.")
-- **Filtro por local de estoque** — trabalham por local; quer saber, num local: o que entrou por
-  transferência e quanto saiu por transferência (do depósito).
+  manual de estoque, transferência, **saída gerada pelo PDV**. (Voxtral: "espelhar os tipos do
+  RELATÓRIO DE MOVIMENTAÇÕES do Omie, que tem TODOS esses tipos.")
+- **Filtro por local de estoque** — trabalham por local; quer saber, num local: se houve **rejeito**
+  nesse local, o que entrou por transferência e quanto saiu por transferência (do depósito, pra onde).
 - **Filtro por origem** (compra de produto, consumo, transferência, entrada) — origem já aparece.
 - **Filtro por tipo de produto e família.**
 - **Agrupar/englobar por MÊS** (não só por data). Hoje fica "por data" e "por produto" e polui (muita
