@@ -52,6 +52,8 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
 - **Agrupar/englobar por MÊS** (não só por data). Hoje fica "por data" e "por produto" e polui (muita
   água, embalagem). Quer **priorizar produtos com entrada**; "cada produto colocar um do mês".
 - Filtro de **entradas** e filtro de **concluído**.
+- **FILTROS COMPLETOS** (bateu forte nisso): poder **ESCOLHER ver POR MÊS ou POR DATA** (alternável),
+  filtro por **família**, e a **movimentação de VALOR (R$/grana) TODA ali** — não faltar nada no filtro.
 - **Deixar aberto pra criar mais filtros** depois.
 - Contexto: é a tela que ele usa pra ADMINISTRAÇÃO (entrada x saída por valor).
 
@@ -152,8 +154,41 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
   transferência) — atalho de 1 clique em vez de abrir a gaveta de filtro.
 - **Filtros de movimentação por família** (e tudo): garantir o filtro de família na tela de
   movimentações (além de tipo/local/origem/tipo de movimentação).
+- **MELHORAR MUITO os filtros** em geral (todas as telas) + **botões rápidos em cima da tabela**.
+- **Melhorar a BUSCA de produto** — ainda está precária ao adicionar produto, e NÃO só na OP: também
+  em **transferência e inventário** (busca mais inteligente/rápida).
+- **Scroll feio** — criar um **scroll customizado** próprio (estilizado, fino e bonito), pra todas as
+  telas. O scroll padrão do navegador tá feio.
+- **Produtos selecionados mais finos** (no local de estoque / nas listas) — deixar as linhas dos
+  produtos já selecionados mais finas/compactas e refinadas.
 - Ele citou "várias coisas pequenas" de polimento de tela — manter o olho em detalhes ao revisar
-  cada tela rodando (ver no navegador antes de dar por pronto).
+  cada tela RODANDO (ver no navegador antes de dar por pronto). Invocar skill de taste antes de UI.
+
+================================================================================
+## M. EXPORTAÇÃO (PDF + Excel) — pra TODAS as telas/relatórios
+================================================================================
+- **PDF bonito** (bem feito, não cru). E ao gerar o PDF, **poder ESCOLHER o que vai nele** ANTES de
+  gerar — via os filtros (período, loja, colunas, tipo, etc.). Ou seja: aplica filtro -> escolhe o que
+  entra -> gera o PDF só com aquilo.
+- **Excel de verdade (.xlsx), NÃO CSV.** Melhorar muito a planilha exportada: **deixar LINDA e bem
+  feita** (cabeçalho formatado, colunas, totais, visual caprichado).
+- As duas opções (PDF e Excel) disponíveis nas telas/relatórios.
+
+================================================================================
+## N. CADASTROS (criar os que faltam)
+================================================================================
+- **Cadastro de fornecedor** (e puxar via SINTEGRA — ver E).
+- **Cadastro de família.**
+- Cadastro de cliente, CEST (ver E).
+- "Tem cadastro de fornecedor, de família, de tudo isso que você não bota" — criar todos os cadastros
+  que faltam, não só produto/local.
+
+================================================================================
+## O. HISTÓRICO / RETENÇÃO (confirmado de novo)
+================================================================================
+- **Guardar sempre 1 ano de histórico no banco** (janela rolante); o que passa de 1 ano vai pro
+  arquivo morto. É o que faz a **PREVISÃO funcionar certinho** (precisa de 1 ano). Já é a regra (rolling
+  12 meses + offload pro Storage); manter e garantir que a previsão usa esse 1 ano.
 
 ================================================================================
 ## K. AGENDA
