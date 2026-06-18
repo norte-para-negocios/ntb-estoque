@@ -56,12 +56,45 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 ## FASE 2 — UI / polimento + exportação
 | # | Tarefa | Onde | Validação |
 |---|---|---|---|
-| 2.1 | Scroll customizado (estilizado, fino) global | globals.css / shell | scroll bonito em todas as telas |
-| 2.2 | Produtos selecionados mais finos/compactos | listas de seleção | linhas mais finas |
-| 2.3 | Busca de produto melhor (OP/transf/inventário) | `ProdutoSearch` + action | busca rápida/inteligente |
-| 2.4 | Exportar **PDF bonito** + escolher conteúdo pelos filtros antes | rotas de impressão/export | filtra → escolhe → PDF só com aquilo |
-| 2.5 | Exportar **Excel (.xlsx) lindo** (não CSV) | export + lib xlsx | planilha formatada |
-| 2.6 | NF: total do período no topo (nº notas) | tela NF | mostra "N notas de X a Y" |
+| 2.1 ✅ | Scroll customizado (estilizado, fino) global | globals.css / shell | scroll bonito em todas as telas |
+| 2.2 ✅ | Produtos selecionados mais finos/compactos | listas de seleção | linhas mais finas |
+| 2.3 ✅ | Busca de produto melhor (OP/transf/inventário) | `ProdutoSearch` + action | busca rápida/inteligente |
+| 2.4 ✅ | Exportar **PDF bonito** + escolher conteúdo pelos filtros antes | rotas de impressão/export | filtra → escolhe → PDF só com aquilo |
+| 2.5 ✅ | Exportar **Excel (.xlsx) lindo** (não CSV) | export + lib xlsx | planilha formatada |
+| 2.6 ✅ | NF: total do período no topo (nº notas) | tela NF | mostra "N notas de X a Y" |
+
+> **Notas Fase 2 (18/06, Joaquim Salles):** todas as tarefas feitas, no ar e validadas no
+> link (https://ntb-estoque.vercel.app):
+> - **2.1 scroll:** scrollbar própria fina/arredondada com respiro e hover, tokens
+>   claro/escuro, em `globals.css` (WebKit `::-webkit-scrollbar` + Firefox
+>   `scrollbar-width/color`). Vale para janela e qualquer container que rola. Vista na tela
+>   de Movimentações (dark) e nas demais.
+> - **2.2 produtos finos:** as listas de seleção de OP, transferência e inventário viram uma
+>   linha só no desktop (descrição + controles na mesma altura, `lg:size-8`, input `lg:h-8`,
+>   espaçamento menor). No mobile mantém cards e alvos de toque grandes (`size-11`). Visto na
+>   Nova OP (3 produtos numa linha fina cada).
+> - **2.3 busca melhor:** a busca quebra o termo em PALAVRAS e exige cada uma (AND, em
+>   descrição OU código): "arroz bco" acha "ARROZ BCO" sem depender da frase literal nem da
+>   ordem (validado no banco e no link, retorna os 3 Arroz Bco). Resultados de texto
+>   reordenados por relevância (prefixo > palavra inteira > resto). Dropdown ganhou estados
+>   "Buscando..." e "Nenhum produto encontrado", debounce 180ms e guarda de corrida. Vale nas
+>   3 telas (todas usam `ProdutoSearch`).
+> - **2.4 PDF bonito + filtros:** a rota `/nota-fiscal/relatorio` passou a respeitar TODOS os
+>   filtros da tela (status, tipo, produto), não só data/fornecedor/número, então o que está
+>   na tela é o que sai no PDF (validado no link: `status=C` derruba de 98 notas/R$157mil para
+>   38 notas/R$72mil). PDF refinado: bloco de resumo no topo (período, nº notas, total),
+>   coluna Etapa, cabeçalho na cor da marca, zebra, rodapé numerado, paginação.
+> - **2.5 Excel .xlsx:** novo helper `lib/excel.ts` com **exceljs** (MIT, free) gera planilha
+>   formatada de verdade: cabeçalho colorido (teal), zebra, larguras, formato moeda/número
+>   pt-BR, linha de totais, painel congelado. Exportações de NF, OP e Produtos saíram de CSV
+>   para `.xlsx`; botões "Exportar" viraram "Excel". Validado em produção: content-type xlsx,
+>   assinatura ZIP, e ao reabrir o arquivo baixado os estilos/totais/moeda estão lá.
+> - **2.6 total NF:** o totalizador da tela NF mostra "N notas de X a Y" numa frase só (nº de
+>   notas + intervalo de datas, no estilo que o Ramon pediu) + chip de Total em R$. Visto no
+>   link: "163 notas de 19/05/2026 a 18/06/2026".
+>
+> Nenhuma escrita no Omie nesta fase (a Nova OP usada para testar a 2.2/2.3 ficou em rascunho,
+> não cliquei em "Criar"; nada foi gravado).
 
 ## FASE 3 — Cadastros + estrutura de produto
 | # | Tarefa | Onde | Validação |
