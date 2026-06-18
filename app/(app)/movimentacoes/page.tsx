@@ -309,7 +309,8 @@ export default async function MovimentacoesPage({
       {emValor && (
         <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
           Valor estimado: quantidade movimentada x CMC (custo médio) atual de cada produto. O histórico
-          guarda só a quantidade, então o valor usa o custo mais recente, não o custo de cada dia.
+          guarda só a quantidade, então o valor usa o custo mais recente, não o custo de cada dia. Valores
+          muito altos indicam CMC cadastrado errado no Omie (custo do produto a corrigir na origem).
         </p>
       )}
 
