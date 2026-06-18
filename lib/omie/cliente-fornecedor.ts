@@ -104,7 +104,10 @@ async function syncPorTag(
 
       if (lista.length) {
         const rows = lista.map((c) => ({ loja_id: loja.id, ...mapBase(c) }))
-        await supabase.from(tabela).upsert(rows, { onConflict: 'loja_id,codigo_omie' })
+        const { error: upErr } = await supabase
+          .from(tabela)
+          .upsert(rows, { onConflict: 'loja_id,codigo_omie' })
+        if (upErr) throw new Error(`Falha ao gravar ${tabela}: ${upErr.message}`)
       }
 
       pagina++

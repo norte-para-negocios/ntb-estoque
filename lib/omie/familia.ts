@@ -52,7 +52,10 @@ export async function syncFamilias(loja: LojaOmie) {
           full_object: f,
           updated_at: new Date().toISOString(),
         }))
-        await supabase.from('familias').upsert(rows, { onConflict: 'loja_id,codigo_familia' })
+        const { error: upErr } = await supabase
+          .from('familias')
+          .upsert(rows, { onConflict: 'loja_id,codigo_familia' })
+        if (upErr) throw new Error(`Falha ao gravar familias: ${upErr.message}`)
       }
 
       pagina++
