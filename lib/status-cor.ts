@@ -56,6 +56,10 @@ const STATUS: Record<string, { label: string; token: CorToken }> = {
   'Sem CMC': { label: 'Sem CMC', token: 'warn' },
   Erro: { label: 'Erro', token: 'err' },
   Pendente: { label: 'Pendente', token: 'warn' },
+  // Perfis de usuario (selo na tela de Usuarios)
+  Admin: { label: 'Admin', token: 'brand' },
+  AdminLoja: { label: 'Admin da loja', token: 'info' },
+  Usuario: { label: 'Usuário', token: 'neutro' },
 }
 
 export function statusInfo(status: string | null): { label: string; token: CorToken } {

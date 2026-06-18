@@ -7,9 +7,9 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Check, X, ShieldCheck, User as UserIcon, Store } from 'lucide-react'
+import { Check, X, ShieldCheck, ShieldHalf, User as UserIcon, Store } from 'lucide-react'
 import { toast } from 'sonner'
-import { aprovarUsuario, recusarUsuario } from '@/lib/actions/usuario'
+import { aprovarUsuario, recusarUsuario, type PerfilUsuario } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
@@ -24,7 +24,7 @@ export function AprovarUsuario({
   lojas: Loja[]
 }) {
   const [open, setOpen] = useState(false)
-  const [perfil, setPerfil] = useState<'Admin' | 'Usuario'>('Usuario')
+  const [perfil, setPerfil] = useState<PerfilUsuario>('Usuario')
   const [lojaIds, setLojaIds] = useState<number[]>([])
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -34,7 +34,7 @@ export function AprovarUsuario({
   }
 
   function aprovar() {
-    if (perfil === 'Usuario' && lojaIds.length === 0) {
+    if (perfil !== 'Admin' && lojaIds.length === 0) {
       toast.error('Selecione ao menos uma loja')
       return
     }
@@ -94,7 +94,7 @@ export function AprovarUsuario({
           <div className="space-y-5 px-5 py-4">
             <div>
               <label className="mb-1.5 block text-[13px] font-medium text-text">Perfil</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => setPerfil('Usuario')}
@@ -105,7 +105,19 @@ export function AprovarUsuario({
                   <span className={`flex items-center gap-1.5 text-[13px] font-medium ${perfil === 'Usuario' ? 'text-brand' : 'text-text'}`}>
                     <UserIcon className="size-4" /> Usuário
                   </span>
-                  <span className="text-[11px] text-text-muted">Acesso conforme permissões</span>
+                  <span className="text-[11px] text-text-muted">Conforme permissões</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPerfil('AdminLoja')}
+                  className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
+                    perfil === 'AdminLoja' ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+                  }`}
+                >
+                  <span className={`flex items-center gap-1.5 text-[13px] font-medium ${perfil === 'AdminLoja' ? 'text-brand' : 'text-text'}`}>
+                    <ShieldHalf className="size-4" /> Admin da loja
+                  </span>
+                  <span className="text-[11px] text-text-muted">Total nas lojas dele</span>
                 </button>
                 <button
                   type="button"
@@ -117,11 +129,11 @@ export function AprovarUsuario({
                   <span className={`flex items-center gap-1.5 text-[13px] font-medium ${perfil === 'Admin' ? 'text-brand' : 'text-text'}`}>
                     <ShieldCheck className="size-4" /> Administrador
                   </span>
-                  <span className="text-[11px] text-text-muted">Acesso total ao sistema</span>
+                  <span className="text-[11px] text-text-muted">Total no sistema</span>
                 </button>
               </div>
             </div>
-            {perfil === 'Usuario' && (
+            {perfil !== 'Admin' && (
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-text">
                   <span className="inline-flex items-center gap-1.5">

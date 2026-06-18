@@ -56,9 +56,40 @@ export async function carimboUsuario(): Promise<string> {
   }
 }
 
+// Admin GLOBAL: vê todas as lojas, todos os módulos, administração global
+// (Lojas, Logs, Saúde da integração, Usuários). NÃO inclui o Admin de loja.
 export async function isAdmin(): Promise<boolean> {
   const profile = await getProfile()
   return profile.perfil === 'Admin'
+}
+
+// Admin de loja: acesso TOTAL aos módulos das lojas vinculadas (loja_user), mas
+// NÃO é admin global. Retorna true se o perfil é 'AdminLoja' e a loja informada
+// (ou a loja atual) está entre as lojas do usuário.
+export async function isAdminDaLoja(lojaId?: number): Promise<boolean> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('perfil, current_loja_id')
+    .eq('id', user.id)
+    .single<{ perfil: string | null; current_loja_id: number | null }>()
+
+  if (profile?.perfil !== 'AdminLoja') return false
+  const alvo = lojaId ?? profile.current_loja_id
+  if (!alvo) return false
+
+  const { data: vinculo } = await supabase
+    .from('loja_user')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('loja_id', alvo)
+    .maybeSingle()
+  return !!vinculo
 }
 
 export async function requirePermissao(lojaId: number, permissaoNome: string): Promise<boolean> {
@@ -74,8 +105,19 @@ export async function requirePermissao(lojaId: number, permissaoNome: string): P
     .eq('id', user.id)
     .single<{ perfil: string | null }>()
 
-  // Admin tem acesso a tudo
+  // Admin global tem acesso a tudo.
   if (profile?.perfil === 'Admin') return true
+
+  // Admin de loja: acesso total aos modulos da(s) loja(s) vinculada(s).
+  if (profile?.perfil === 'AdminLoja') {
+    const { data: vinculo } = await supabase
+      .from('loja_user')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('loja_id', lojaId)
+      .maybeSingle()
+    if (vinculo) return true
+  }
 
   const { data: permissao } = await supabase
     .from('permissoes')
@@ -120,6 +162,17 @@ export async function getPermissoesNomes(lojaId: number | null): Promise<Set<str
 
   if (profile?.perfil === 'Admin') return new Set(['*'])
   if (!lojaId) return new Set()
+
+  // Admin de loja: acesso total aos modulos da loja atual (se vinculado a ela).
+  if (profile?.perfil === 'AdminLoja') {
+    const { data: vinculo } = await supabase
+      .from('loja_user')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('loja_id', lojaId)
+      .maybeSingle()
+    if (vinculo) return new Set(['*'])
+  }
 
   // Junta permissao_user (da loja) com o nome da permissao.
   const { data } = await supabase

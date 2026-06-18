@@ -7,13 +7,14 @@ import {
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Pencil, Trash2, ShieldCheck, User as UserIcon, Store, Warehouse } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, ShieldHalf, User as UserIcon, Store, Warehouse } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   editarUsuario,
   excluirUsuario,
   togglePermissao,
   toggleLocal,
+  type PerfilUsuario,
 } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
@@ -52,8 +53,12 @@ export function EditarUsuario({
   const [open, setOpen] = useState(false)
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [name, setName] = useState(usuario.name)
-  const [perfil, setPerfil] = useState<'Admin' | 'Usuario'>(
-    usuario.perfil === 'Admin' ? 'Admin' : 'Usuario'
+  const [perfil, setPerfil] = useState<PerfilUsuario>(
+    usuario.perfil === 'Admin'
+      ? 'Admin'
+      : usuario.perfil === 'AdminLoja'
+        ? 'AdminLoja'
+        : 'Usuario'
   )
   const [lojaIds, setLojaIds] = useState<number[]>(usuario.lojaIds)
   const [permAtivas, setPermAtivas] = useState<Set<string>>(
@@ -80,7 +85,7 @@ export function EditarUsuario({
       toast.error('Preencha o nome')
       return
     }
-    if (perfil === 'Usuario' && lojaIds.length === 0) {
+    if (perfil !== 'Admin' && lojaIds.length === 0) {
       toast.error('Selecione ao menos uma loja')
       return
     }
@@ -184,13 +189,20 @@ export function EditarUsuario({
 
           <div>
             <label className={labelClass}>Perfil</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <PerfilOpcao
                 ativo={perfil === 'Usuario'}
                 onClick={() => setPerfil('Usuario')}
                 icon={<UserIcon className="size-4" />}
                 titulo="Usuário"
                 desc="Acesso conforme permissões"
+              />
+              <PerfilOpcao
+                ativo={perfil === 'AdminLoja'}
+                onClick={() => setPerfil('AdminLoja')}
+                icon={<ShieldHalf className="size-4" />}
+                titulo="Admin da loja"
+                desc="Acesso total às lojas dele"
               />
               <PerfilOpcao
                 ativo={perfil === 'Admin'}
@@ -202,7 +214,7 @@ export function EditarUsuario({
             </div>
           </div>
 
-          {perfil === 'Usuario' && (
+          {perfil !== 'Admin' && (
             <div>
               <label className={labelClass}>
                 <span className="inline-flex items-center gap-1.5">
@@ -244,6 +256,14 @@ export function EditarUsuario({
           {perfil === 'Admin' && (
             <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
               Administrador tem acesso a todas as lojas e a todos os módulos.
+            </div>
+          )}
+
+          {perfil === 'AdminLoja' && (
+            <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+              Admin da loja tem acesso total aos módulos das lojas acima. Ao salvar, as
+              permissões dessas lojas são concedidas automaticamente. Não vê outras lojas nem
+              a administração global.
             </div>
           )}
 

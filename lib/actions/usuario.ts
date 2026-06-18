@@ -14,10 +14,16 @@ function senhaAleatoria(): string {
   return s + '@1'
 }
 
+// Perfis do sistema:
+// - 'Admin'     = admin GLOBAL (todas as lojas, administracao global).
+// - 'AdminLoja' = admin DA LOJA (acesso total aos modulos das lojas vinculadas, nao global).
+// - 'Usuario'   = restrito por loja + permissoes escolhidas.
+export type PerfilUsuario = 'Admin' | 'AdminLoja' | 'Usuario'
+
 export async function criarUsuario(input: {
   name: string
   email: string
-  perfil: 'Admin' | 'Usuario'
+  perfil: PerfilUsuario
   lojaIds: number[]
   // Ids das permissoes que o usuario tera EM CADA loja selecionada (4.1).
   // Quando ausente/undefined, concede TODAS (compatibilidade com chamadas antigas).
@@ -55,16 +61,18 @@ export async function criarUsuario(input: {
     await supabase.from('loja_user').insert({ loja_id: lojaId, user_id: userId })
   }
 
-  // Usuario (nao-admin): concede as permissoes ESCOLHIDAS em cada loja selecionada.
-  // Se nenhuma lista veio (permissaoIds undefined), cai no default = todas.
-  if (input.perfil === 'Usuario') {
-    let permissaoIds = input.permissaoIds
-    if (permissaoIds === undefined) {
+  // Admin de loja: acesso total = TODAS as permissoes nas lojas vinculadas.
+  // Usuario: as permissoes ESCOLHIDAS (ou todas, se nao veio lista).
+  if (input.perfil === 'AdminLoja' || input.perfil === 'Usuario') {
+    let permissaoIds: number[]
+    if (input.perfil === 'AdminLoja' || input.permissaoIds === undefined) {
       const { data: permissoes } = await supabase.from('permissoes').select('id')
       permissaoIds = (permissoes ?? []).map((p) => p.id as number)
+    } else {
+      permissaoIds = input.permissaoIds
     }
     const rows = input.lojaIds.flatMap((lojaId) =>
-      (permissaoIds ?? []).map((permissao_id) => ({ loja_id: lojaId, permissao_id, user_id: userId }))
+      permissaoIds.map((permissao_id) => ({ loja_id: lojaId, permissao_id, user_id: userId }))
     )
     if (rows.length) await supabase.from('permissao_user').insert(rows)
   }
@@ -75,7 +83,7 @@ export async function criarUsuario(input: {
 
 export async function editarUsuario(
   userId: string,
-  input: { name: string; perfil: 'Admin' | 'Usuario'; lojaIds: number[] }
+  input: { name: string; perfil: PerfilUsuario; lojaIds: number[] }
 ) {
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   if (!input.name) return { error: 'Nome obrigatório' }
@@ -122,13 +130,18 @@ export async function editarUsuario(
       .insert(adicionar.map((loja_id) => ({ loja_id, user_id: userId })))
   }
 
-  // Se virou Admin, concede todas as permissoes nas lojas vinculadas
-  if (input.perfil === 'Admin' && adicionar.length) {
+  // Admin (global) ou Admin de loja: concede todas as permissoes nas lojas
+  // recem-adicionadas (acesso total a essas lojas).
+  if ((input.perfil === 'Admin' || input.perfil === 'AdminLoja') && adicionar.length) {
     const { data: permissoes } = await supabase.from('permissoes').select('id')
     const rows = adicionar.flatMap((lojaId) =>
       (permissoes ?? []).map((p) => ({ loja_id: lojaId, permissao_id: p.id, user_id: userId }))
     )
-    if (rows.length) await supabase.from('permissao_user').insert(rows)
+    if (rows.length) {
+      await supabase
+        .from('permissao_user')
+        .upsert(rows, { onConflict: 'loja_id,permissao_id,user_id' })
+    }
   }
 
   // Garante current_loja_id valido
@@ -154,18 +167,19 @@ export async function editarUsuario(
 // muda o status para 'aprovado' (libera o acesso). Reusa a regra do criarUsuario.
 export async function aprovarUsuario(
   userId: string,
-  input: { perfil: 'Admin' | 'Usuario'; lojaIds: number[] }
+  input: { perfil: PerfilUsuario; lojaIds: number[] }
 ) {
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
 
   const supabase = createServiceClient()
 
+  // Admin global -> todas as lojas ativas. Admin de loja / Usuario -> as escolhidas.
   const lojaIds =
     input.perfil === 'Admin'
       ? ((await supabase.from('lojas').select('id').eq('ativo', true)).data ?? []).map((l) => l.id as number)
       : input.lojaIds
 
-  if (input.perfil === 'Usuario' && lojaIds.length === 0) {
+  if (input.perfil !== 'Admin' && lojaIds.length === 0) {
     return { error: 'Selecione ao menos uma loja' }
   }
 

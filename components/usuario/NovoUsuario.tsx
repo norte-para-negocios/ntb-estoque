@@ -7,9 +7,9 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, ShieldCheck, User as UserIcon, Store } from 'lucide-react'
+import { Plus, ShieldCheck, ShieldHalf, User as UserIcon, Store } from 'lucide-react'
 import { toast } from 'sonner'
-import { criarUsuario } from '@/lib/actions/usuario'
+import { criarUsuario, type PerfilUsuario } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
@@ -30,7 +30,7 @@ export function NovoUsuario({
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [perfil, setPerfil] = useState<'Admin' | 'Usuario'>('Usuario')
+  const [perfil, setPerfil] = useState<PerfilUsuario>('Usuario')
   const [lojaIds, setLojaIds] = useState<number[]>([])
   // Ids das permissoes concedidas (aplicadas em todas as lojas selecionadas).
   const [permIds, setPermIds] = useState<Set<number>>(new Set())
@@ -90,7 +90,7 @@ export function NovoUsuario({
       toast.error('Preencha nome e e-mail')
       return
     }
-    if (perfil === 'Usuario' && lojaIds.length === 0) {
+    if (perfil !== 'Admin' && lojaIds.length === 0) {
       toast.error('Selecione ao menos uma loja')
       return
     }
@@ -104,7 +104,8 @@ export function NovoUsuario({
         email,
         perfil,
         lojaIds: perfil === 'Admin' ? lojas.map((l) => l.id) : lojaIds,
-        permissaoIds: perfil === 'Admin' ? undefined : Array.from(permIds),
+        // AdminLoja e Admin recebem todas as permissoes (permissaoIds undefined).
+        permissaoIds: perfil === 'Usuario' ? Array.from(permIds) : undefined,
       })
       if (res?.error) {
         toast.error('Erro', { description: res.error })
@@ -175,13 +176,20 @@ export function NovoUsuario({
           {/* Perfil em segmento (mais bonito que select) */}
           <div>
             <label className={labelClass}>Perfil</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <PerfilOpcao
                 ativo={perfil === 'Usuario'}
                 onClick={() => setPerfil('Usuario')}
                 icon={<UserIcon className="size-4" />}
                 titulo="Usuário"
                 desc="Acesso conforme permissões"
+              />
+              <PerfilOpcao
+                ativo={perfil === 'AdminLoja'}
+                onClick={() => setPerfil('AdminLoja')}
+                icon={<ShieldHalf className="size-4" />}
+                titulo="Admin da loja"
+                desc="Acesso total às lojas dele"
               />
               <PerfilOpcao
                 ativo={perfil === 'Admin'}
@@ -234,6 +242,14 @@ export function NovoUsuario({
                 </div>
               </div>
 
+              {perfil === 'AdminLoja' && (
+                <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+                  Admin da loja tem acesso total aos módulos das lojas marcadas acima. Não vê
+                  outras lojas nem a administração global (Lojas, Logs, Saúde, Usuários).
+                </div>
+              )}
+
+              {perfil === 'Usuario' && (
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <label className="text-[13px] font-medium text-text">Permissões</label>
@@ -312,6 +328,7 @@ export function NovoUsuario({
                   })}
                 </div>
               </div>
+              )}
             </>
           )}
         </div>
