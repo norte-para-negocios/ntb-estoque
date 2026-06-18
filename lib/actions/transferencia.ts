@@ -98,6 +98,124 @@ export async function setQuantidadeMovimento(movimentoId: number, quan: number |
   revalidatePath('/transferencia')
 }
 
+/**
+ * Resultado do envio item-a-item devolvido para a UI atualizar a linha na hora.
+ */
+export type EnvioMovimentoResult = {
+  status: string
+  descricao_status: string | null
+  valor: number | null
+  id_ajuste: number | null
+  error?: string
+}
+
+/**
+ * Envia UM movimento ao Omie na hora (item-a-item): grava a quantidade, e se ela
+ * for valida (> 0) busca o CMC e lanca o ajuste de estoque. Se o item ja tinha sido
+ * lancado (tem id_ajuste), exclui o ajuste antigo antes de relancar (reprocessa ao
+ * mexer na quantidade). Erro num item NAO afeta os outros. Retorna o status final
+ * para a UI atualizar a linha sem refresh.
+ */
+export async function enviarMovimento(
+  movimentoId: number,
+  quan: number | null
+): Promise<EnvioMovimentoResult> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+
+  // Carrega o movimento + transferencia + loja num so passo.
+  const { data: mov } = await supabase
+    .from('movimentos')
+    .select(
+      'id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, id_ajuste, transferencia:transferencias(id, codigo_local_origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+    )
+    .eq('id', movimentoId)
+    .eq('loja_id', lojaId)
+    .single<{
+      id: number
+      id_prod: number
+      codigo_local_estoque: number
+      codigo_local_estoque_destino: number
+      tipo: string
+      id_ajuste: number | null
+      transferencia: {
+        id: number
+        codigo_local_origem: number
+        motivo: string | null
+        data: string | null
+        status: string | null
+        loja: LojaOmie
+      } | null
+    }>()
+
+  if (!mov?.transferencia?.loja) {
+    return { status: 'Erro', descricao_status: 'Movimento não encontrado', valor: null, id_ajuste: null, error: 'Movimento não encontrado' }
+  }
+
+  // Se ja foi lancado, exclui o ajuste antigo antes de relancar (mexeu na quantidade
+  // -> reprocessa). Limpa os campos de integracao pra nao deixar estado velho.
+  if (mov.id_ajuste) {
+    await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
+    await supabase
+      .from('movimentos')
+      .update({ id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null })
+      .eq('id', mov.id)
+  }
+
+  // Quantidade vazia/zerada: so grava e marca 'Iniciado' (sem mandar pro Omie). Nao
+  // apaga o item (evita o bug do produto que "some"); o usuario segue contando.
+  if (quan === null || !(quan > 0)) {
+    await supabase
+      .from('movimentos')
+      .update({ quan, status: 'Iniciado', updated_at: new Date().toISOString() })
+      .eq('id', mov.id)
+    revalidatePath('/transferencia')
+    return { status: 'Iniciado', descricao_status: null, valor: null, id_ajuste: null }
+  }
+
+  await supabase
+    .from('movimentos')
+    .update({ quan, updated_at: new Date().toISOString() })
+    .eq('id', mov.id)
+
+  const trans: TransferenciaComMovimentos = {
+    id: mov.transferencia.id,
+    codigo_local_origem: mov.transferencia.codigo_local_origem,
+    motivo: mov.transferencia.motivo,
+    data: mov.transferencia.data,
+    movimentos: [],
+    loja: mov.transferencia.loja,
+  }
+  const movRow: MovimentoRow = {
+    id: mov.id,
+    id_prod: mov.id_prod,
+    codigo_local_estoque: mov.codigo_local_estoque,
+    codigo_local_estoque_destino: mov.codigo_local_estoque_destino,
+    tipo: mov.tipo,
+    quan,
+    status: 'Iniciado',
+    id_ajuste: null,
+  }
+
+  const dataMov = dataOmieBR(mov.transferencia.data)
+  await processarMovimento(trans, movRow, lojaId, dataMov, await carimboUsuario())
+
+  // Le o resultado final que processarMovimento gravou.
+  const { data: final } = await supabase
+    .from('movimentos')
+    .select('status, descricao_status, valor, id_ajuste')
+    .eq('id', mov.id)
+    .single<{ status: string | null; descricao_status: string | null; valor: number | null; id_ajuste: number | null }>()
+
+  revalidatePath('/transferencia')
+  return {
+    status: final?.status ?? 'Erro',
+    descricao_status: final?.descricao_status ?? null,
+    valor: final?.valor ?? null,
+    id_ajuste: final?.id_ajuste ?? null,
+  }
+}
+
 export async function removeMovimento(movimentoId: number) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
@@ -262,7 +380,13 @@ export async function finishTransferencia(transferenciaId: number) {
   // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
   const dataMov = dataOmieBR(trans.data)
 
-  for (const mov of trans.movimentos) {
+  // Como os itens ja integram item-a-item ao sair do campo de quantidade, aqui so
+  // processamos os que ficaram pendentes (sem id_ajuste e ainda nao Concluido).
+  // Reprocessar um 'Concluido' (que ja tem ajuste) duplicaria o lancamento no Omie.
+  const pendentes = trans.movimentos.filter(
+    (m) => m.status !== 'Concluido' && m.id_ajuste === null && m.quan !== null && m.quan > 0
+  )
+  for (const mov of pendentes) {
     await processarMovimento(trans, mov, lojaId, dataMov, await carimboUsuario())
   }
 
@@ -303,8 +427,14 @@ export async function forceSyncTransferencia(transferenciaId: number) {
   // Data do ajuste = data da transferencia (permite retroativa), nao a de hoje.
   const dataMov = dataOmieBR(trans.data)
 
+  // Reprocessa tudo que nao integrou ainda (Erro/Processando travado/Iniciado com
+  // quantidade), sem tocar nos 'Concluido' (tem ajuste, relancar duplicaria).
   const pendentes = trans.movimentos.filter(
-    (m) => m.status === 'Erro' || m.status === null
+    (m) =>
+      m.status !== 'Concluido' &&
+      m.id_ajuste === null &&
+      m.quan !== null &&
+      m.quan > 0
   )
 
   for (const mov of pendentes) {

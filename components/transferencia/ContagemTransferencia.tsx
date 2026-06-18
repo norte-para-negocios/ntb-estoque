@@ -18,7 +18,7 @@ const QrScanner = dynamic(
 )
 import {
   addMovimento,
-  editQuantidadeMovimento,
+  enviarMovimento,
   removeMovimento,
   finishTransferencia,
   forceSyncTransferencia,
@@ -94,14 +94,32 @@ export function ContagemTransferencia({
     return true
   }
 
+  // Sai do campo de quantidade -> envia o item ao Omie na hora (item-a-item). Se o
+  // item ja tinha sido lancado, o servidor exclui o ajuste antigo e relanca
+  // (reprocessa ao mexer na quantidade). Erro num item nao afeta os outros.
   function salvarQtd(movId: number, num: number | null) {
     if (num != null && (Number.isNaN(num) || num < 0)) {
       toast.error('Quantidade inválida')
       return
     }
     setQuans((prev) => ({ ...prev, [movId]: num }))
-    startTransition(() => {
-      editQuantidadeMovimento(movId, num)
+    setItens((prev) =>
+      prev.map((i) =>
+        i.id === movId
+          ? { ...i, quan: num, status: num != null && num > 0 ? 'Processando' : 'Iniciado' }
+          : i
+      )
+    )
+    startTransition(async () => {
+      const res = await enviarMovimento(movId, num)
+      setItens((prev) =>
+        prev.map((i) => (i.id === movId ? { ...i, status: res.status } : i))
+      )
+      if (res.status === 'Erro') {
+        toast.error('Falha ao integrar item', { description: res.descricao_status || 'Tente reenviar' })
+      } else if (res.status === 'Concluido') {
+        toast.success('Item integrado ao Omie')
+      }
     })
   }
 
@@ -135,14 +153,15 @@ export function ContagemTransferencia({
     })
   }
 
-  // Resumo de integracao apos finalizar.
+  // Resumo de integracao: como cada item ja integra na hora, mostramos o placar
+  // durante a contagem tambem (e o botao de reenviar pendentes quando ha erro).
   const total = itens.length
   const integrados = itens.filter((i) => i.status === 'Concluido').length
   const comErro = itens.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
 
   return (
     <div className="pb-28 lg:pb-20">
-      {finalizado && total > 0 && (
+      {total > 0 && (integrados > 0 || comErro > 0 || finalizado) && (
         <div
           className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
             comErro ? 'border-err/40 bg-err/5' : 'border-ok/40 bg-ok/5'
@@ -291,7 +310,7 @@ export function ContagemTransferencia({
               className={`${btnClass('primary')} w-full sm:w-auto`}
             >
               <CheckCircle className="size-4" />
-              {pending ? 'Enviando ao Omie...' : 'Finalizar e enviar ao Omie'}
+              {pending ? 'Processando...' : 'Concluir transferência'}
             </button>
           </div>
         </div>

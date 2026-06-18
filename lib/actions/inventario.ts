@@ -71,6 +71,123 @@ export async function setQuantidadeInventarioItem(itemId: number, quan: number |
   revalidatePath(`/inventario`)
 }
 
+/**
+ * Resultado do envio item-a-item devolvido para a UI atualizar a linha na hora.
+ */
+export type EnvioInventarioResult = {
+  status: string
+  descricao_status: string | null
+  valor: number | null
+  id_ajuste: number | null
+  error?: string
+}
+
+/**
+ * Envia UM item do inventario ao Omie na hora (item-a-item): grava a quantidade, e se
+ * ela for valida (>= 0) busca o CMC e lanca o ajuste de estoque. Se o item ja tinha
+ * sido lancado (tem id_ajuste), exclui o ajuste antigo antes de relancar (reprocessa
+ * ao mexer na quantidade). Erro num item NAO trava os outros. Retorna o status final
+ * para a UI atualizar a linha sem refresh.
+ *
+ * Obs.: no inventario a contagem PODE ser 0 (zerar o saldo e um ajuste valido), por
+ * isso aceitamos quan === 0; so quan null (campo vazio) fica pendente em 'Iniciado'.
+ */
+export async function enviarInventarioItem(
+  itemId: number,
+  quan: number | null
+): Promise<EnvioInventarioResult> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+
+  const { data: item } = await supabase
+    .from('inventario_items')
+    .select(
+      'id, produto_codigo, produto_codigo_produto, id_ajuste, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+    )
+    .eq('id', itemId)
+    .eq('loja_id', lojaId)
+    .single<{
+      id: number
+      produto_codigo: string
+      produto_codigo_produto: number
+      id_ajuste: number | null
+      inventario: {
+        id: number
+        codigo_local_estoque: number
+        tipo: string | null
+        origem: string | null
+        motivo: string | null
+        data: string | null
+        status: string | null
+        loja: LojaOmie
+      } | null
+    }>()
+
+  if (!item?.inventario?.loja) {
+    return { status: 'Erro', descricao_status: 'Item não encontrado', valor: null, id_ajuste: null, error: 'Item não encontrado' }
+  }
+
+  // Ja lancado -> exclui o ajuste antigo antes de relancar (reprocessa ao mexer).
+  if (item.id_ajuste) {
+    await excluirAjusteEstoque(item.inventario.loja, item.id_ajuste)
+    await supabase
+      .from('inventario_items')
+      .update({ id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null })
+      .eq('id', item.id)
+  }
+
+  // Campo vazio (null): so grava e fica pendente em 'Iniciado'; nao apaga o item.
+  if (quan === null) {
+    await supabase
+      .from('inventario_items')
+      .update({ quan: null, status: 'Iniciado', updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+    revalidatePath('/inventario')
+    return { status: 'Iniciado', descricao_status: null, valor: null, id_ajuste: null }
+  }
+
+  await supabase
+    .from('inventario_items')
+    .update({ quan, updated_at: new Date().toISOString() })
+    .eq('id', item.id)
+
+  const inventario: InventarioComItens = {
+    id: item.inventario.id,
+    codigo_local_estoque: item.inventario.codigo_local_estoque,
+    tipo: item.inventario.tipo,
+    origem: item.inventario.origem,
+    motivo: item.inventario.motivo,
+    data: item.inventario.data,
+    items: [],
+    loja: item.inventario.loja,
+  }
+  const itemRow: InventarioItemRow = {
+    id: item.id,
+    produto_codigo: item.produto_codigo,
+    produto_codigo_produto: item.produto_codigo_produto,
+    quan,
+    status: 'Iniciado',
+    id_ajuste: null,
+  }
+
+  const dataAjuste = dataOmieBR(item.inventario.data)
+  await processarItemInventario(inventario, itemRow, lojaId, dataAjuste)
+
+  const { data: final } = await supabase
+    .from('inventario_items')
+    .select('status, descricao_status, valor, id_ajuste')
+    .eq('id', item.id)
+    .single<{ status: string | null; descricao_status: string | null; valor: number | null; id_ajuste: number | null }>()
+
+  revalidatePath('/inventario')
+  return {
+    status: final?.status ?? 'Erro',
+    descricao_status: final?.descricao_status ?? null,
+    valor: final?.valor ?? null,
+    id_ajuste: final?.id_ajuste ?? null,
+  }
+}
+
 export async function removeInventarioItem(itemId: number) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
@@ -234,7 +351,13 @@ export async function finishInventario(inventarioId: number) {
   // Data do ajuste = data do inventario (permite D-1/retroativa), nao a de hoje.
   const dataAjuste = dataOmieBR(inventario.data)
 
-  for (const item of inventario.items) {
+  // Os itens ja integram item-a-item ao sair do campo de quantidade; aqui so
+  // processamos os pendentes (sem id_ajuste e ainda nao Concluido). Reprocessar um
+  // item ja Concluido (que tem ajuste) duplicaria o lancamento no Omie.
+  const pendentes = inventario.items.filter(
+    (i) => i.status !== 'Concluido' && i.id_ajuste === null && i.quan !== null
+  )
+  for (const item of pendentes) {
     await processarItemInventario(inventario, item, lojaId, dataAjuste)
   }
 
@@ -275,8 +398,10 @@ export async function forceSyncInventario(inventarioId: number) {
   // Data do ajuste = data do inventario (permite D-1/retroativa), nao a de hoje.
   const dataAjuste = dataOmieBR(inventario.data)
 
+  // Reprocessa tudo que nao integrou (Erro/Sem CMC/Processando travado/Iniciado com
+  // quantidade), sem tocar nos 'Concluido' (tem ajuste, relancar duplicaria).
   const pendentes = inventario.items.filter(
-    (i) => i.status === 'Erro' || i.status === null || i.status === 'Sem CMC'
+    (i) => i.status !== 'Concluido' && i.id_ajuste === null && i.quan !== null
   )
 
   for (const item of pendentes) {
