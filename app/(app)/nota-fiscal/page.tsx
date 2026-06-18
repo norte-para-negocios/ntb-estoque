@@ -198,7 +198,7 @@ export default async function NotaFiscalPage({
               href={`/nota-fiscal/export?${relatorioParams.toString()}`}
               className={btnClass('outline')}
             >
-              <Download className="size-4" /> Exportar
+              <Download className="size-4" /> Excel
             </a>
             <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />
           </>

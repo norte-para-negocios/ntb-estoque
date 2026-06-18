@@ -293,7 +293,7 @@ export default async function ProdutoPage({
               <Plus className="size-4" /> Novo produto
             </Link>
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
-              <Download className="size-4" /> Exportar
+              <Download className="size-4" /> Excel
             </a>
             {podeSync && (
               <SyncButton

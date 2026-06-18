@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
-import { toCsv, csvResponse } from '@/lib/csv'
+import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -32,6 +32,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createClient()
+
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('nome, nome_fantasia')
+    .eq('id', lojaId)
+    .single()
 
   const dataInicio =
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
@@ -129,17 +135,26 @@ export async function GET(request: Request) {
     emissao: fmtData(n.d_emissao_nfe),
     nfe: n.c_numero_nfe ?? '-',
     fornecedor: n.c_razao_social || n.c_nome || '-',
-    valor: n.n_valor_nfe ?? 0,
     etapa: labelEtapa(n.c_etapa),
+    valor: n.n_valor_nfe ?? 0,
   }))
 
-  const csv = toCsv(rows, [
-    { key: 'emissao', label: 'Emissão' },
-    { key: 'nfe', label: 'NFe' },
-    { key: 'fornecedor', label: 'Fornecedor' },
-    { key: 'valor', label: 'Valor' },
-    { key: 'etapa', label: 'Etapa' },
-  ])
+  const periodo = `${fmtData(dataInicio)} a ${fmtData(dataFinal)}`
+  const lojaNome = loja?.nome_fantasia || loja?.nome || ''
+  const buffer = await gerarPlanilha(
+    rows,
+    [
+      { key: 'emissao', label: 'Emissão', tipo: 'texto', largura: 12 },
+      { key: 'nfe', label: 'NFe', tipo: 'texto', largura: 14 },
+      { key: 'fornecedor', label: 'Fornecedor', tipo: 'texto' },
+      { key: 'etapa', label: 'Etapa', tipo: 'texto', largura: 12 },
+      { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
+    ],
+    {
+      titulo: 'Notas Fiscais',
+      subtitulo: `${lojaNome} · Período: ${periodo}`,
+    },
+  )
 
-  return csvResponse('notas-fiscais.csv', csv)
+  return planilhaResponse('notas-fiscais.xlsx', buffer)
 }

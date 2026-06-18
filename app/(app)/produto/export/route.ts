@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { labelTipoItem } from '@/lib/constants-omie'
-import { toCsv, csvResponse } from '@/lib/csv'
+import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -70,14 +70,18 @@ export async function GET(request: Request) {
     valor: p.valor_unitario ?? 0,
   }))
 
-  const csv = toCsv(rows, [
-    { key: 'codigo', label: 'Código' },
-    { key: 'descricao', label: 'Descrição' },
-    { key: 'familia', label: 'Família' },
-    { key: 'tipo', label: 'Tipo' },
-    { key: 'unidade', label: 'Unidade' },
-    { key: 'valor', label: 'Valor' },
-  ])
+  const buffer = await gerarPlanilha(
+    rows,
+    [
+      { key: 'codigo', label: 'Código', tipo: 'texto', largura: 12 },
+      { key: 'descricao', label: 'Descrição', tipo: 'texto' },
+      { key: 'familia', label: 'Família', tipo: 'texto' },
+      { key: 'tipo', label: 'Tipo', tipo: 'texto', largura: 18 },
+      { key: 'unidade', label: 'Unidade', tipo: 'texto', largura: 10 },
+      { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16 },
+    ],
+    { titulo: 'Produtos' },
+  )
 
-  return csvResponse('produtos.csv', csv)
+  return planilhaResponse('produtos.xlsx', buffer)
 }

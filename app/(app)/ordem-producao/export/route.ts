@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
-import { toCsv, csvResponse } from '@/lib/csv'
+import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+
+function fmtData(d: string | null): string {
+  if (!d) return '-'
+  const [y, m, day] = d.split('-')
+  return `${day}/${m}/${y}`
+}
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -104,17 +110,23 @@ export async function GET(request: Request) {
     return {
       op: op.identificacao_c_num_op || op.num_ordem || '-',
       produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
-      qtd: op.identificacao_n_qtde ?? '',
-      validade: op.validade ?? '-',
+      qtd: op.identificacao_n_qtde ?? 0,
+      validade: op.validade ? fmtData(op.validade) : '-',
+      status: op.concluida ? 'Concluída' : 'Pendente',
     }
   })
 
-  const csv = toCsv(rows, [
-    { key: 'op', label: 'OP' },
-    { key: 'produto', label: 'Produto' },
-    { key: 'qtd', label: 'Qtd' },
-    { key: 'validade', label: 'Validade' },
-  ])
+  const buffer = await gerarPlanilha(
+    rows,
+    [
+      { key: 'op', label: 'OP', tipo: 'texto', largura: 16 },
+      { key: 'produto', label: 'Produto', tipo: 'texto' },
+      { key: 'qtd', label: 'Qtd', tipo: 'numero', largura: 12 },
+      { key: 'validade', label: 'Validade', tipo: 'texto', largura: 14 },
+      { key: 'status', label: 'Status', tipo: 'texto', largura: 14 },
+    ],
+    { titulo: 'Ordens de Produção' },
+  )
 
-  return csvResponse('ordens-producao.csv', csv)
+  return planilhaResponse('ordens-producao.xlsx', buffer)
 }

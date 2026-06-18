@@ -297,7 +297,7 @@ export default async function OrdemProducaoPage({
               href={`/ordem-producao/export?${exportParams.toString()}`}
               className={btnClass('outline')}
             >
-              <Download className="size-4" /> Exportar
+              <Download className="size-4" /> Excel
             </a>
             <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />
             <CriarOrdemProducao locais={locais ?? []} />
