@@ -17,8 +17,10 @@ import { escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { MargemAlvoInput } from '@/components/produtos/MargemAlvoInput'
 import { ExcluirProdutoBtn } from '@/components/produtos/ExcluirProdutoBtn'
+import { EditarProdutoForm } from '@/components/produtos/EditarProdutoForm'
 import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
@@ -31,11 +33,14 @@ type ProdutoLinha = {
   codigo_produto: number | null
   codigo: string | null
   descricao: string | null
+  codigo_familia: number | null
   descricao_familia: string | null
   tipo_item: string | null
   unidade: string | null
+  ncm: string | null
   valor_unitario: number | null
   estoque_minimo: number | null
+  inativo: boolean | null
 }
 
 function fmtTimestamp(d: string | null): string {
@@ -80,7 +85,7 @@ export default async function ProdutoPage({
   // Compras) nao dependem da query principal de produtos.
   // Familias via RPC com DISTINCT no banco: evita o teto de 1000 do PostgREST
   // (que cortava familias do dropdown) e a varredura da tabela inteira a cada render.
-  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos] = await Promise.all([
+  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos, familiasComCodigo] = await Promise.all([
     supabase
       .from('lojas')
       .select('produto_ultima_atualizacao, produto_status')
@@ -90,6 +95,8 @@ export default async function ProdutoPage({
     repor
       ? supabase.rpc('produtos_repor', { p_loja_id: lojaId }).then(({ data }) => (data ?? []) as number[])
       : Promise.resolve<number[] | null>(null),
+    // Familias com codigo+descricao para o select do form de edicao (o RPC acima so traz descricao).
+    buscarFamilias(),
   ])
   const familiasOpcoes = ((familiasRows ?? []) as { descricao_familia: string }[]).map((r) => ({
     value: r.descricao_familia,
@@ -102,7 +109,7 @@ export default async function ProdutoPage({
   const ord = params.ord ?? ''
   let query = supabase
     .from('produtos')
-    .select('id, codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, valor_unitario, estoque_minimo')
+    .select('id, codigo_produto, codigo, descricao, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo')
     .eq('loja_id', lojaId)
   if (ord === 'descricao_za') query = query.order('descricao', { ascending: false })
   else if (ord === 'venda_asc') query = query.order('valor_unitario', { ascending: true, nullsFirst: false }).order('descricao')
@@ -466,6 +473,21 @@ export default async function ProdutoPage({
         acao={(p) =>
           p.codigo_produto != null ? (
             <div className="flex items-center justify-end gap-1">
+              <EditarProdutoForm
+                produto={{
+                  id: p.id,
+                  codigo: p.codigo,
+                  descricao: p.descricao,
+                  codigoFamilia: p.codigo_familia,
+                  tipoItem: p.tipo_item,
+                  unidade: p.unidade,
+                  ncm: p.ncm,
+                  valorUnitario: p.valor_unitario,
+                  estoqueMinimo: p.estoque_minimo,
+                  inativo: !!p.inativo,
+                }}
+                familias={familiasComCodigo}
+              />
               <EstruturaProduto
                 codigoProduto={p.codigo_produto}
                 descricao={formatarNomeProduto(p.descricao)}

@@ -122,6 +122,110 @@ export async function criarProduto(dados: {
 }
 
 /**
+ * Edita um produto LOCAL no banco (Supabase = fonte da verdade; visao de substituir
+ * o Omie). NAO escreve no Omie: a escrita (AlterarProduto) precisa ser validada com
+ * o Ramon em produto de teste antes de virar producao. Aqui salvamos so no banco e
+ * marcamos os campos alterados em produtos.campos_editados, para que o sync de
+ * produtos (ListarProdutos -> upsert) NAO sobrescreva o que foi editado a mao.
+ */
+export async function editarProduto(
+  id: number,
+  dados: {
+    descricao: string
+    codigoFamilia: number | null
+    descricaoFamilia: string | null
+    tipoItem: string | null
+    unidade: string
+    ncm: string | null
+    valorUnitario: number | null
+    estoqueMinimo: number | null
+    inativo: boolean
+  }
+) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  if (!id) return { error: 'Produto inválido' }
+
+  if (!dados.descricao?.trim()) return { error: 'Informe a descrição' }
+  if (!dados.unidade?.trim()) return { error: 'Informe a unidade (ex.: UN, KG)' }
+  const ncm = (dados.ncm || '').replace(/\D/g, '')
+  if (ncm && ncm.length !== 8) return { error: 'O NCM deve ter 8 dígitos (ou deixe em branco)' }
+  if (dados.valorUnitario != null && (Number.isNaN(dados.valorUnitario) || dados.valorUnitario < 0)) {
+    return { error: 'Preço de venda inválido' }
+  }
+  if (dados.estoqueMinimo != null && (Number.isNaN(dados.estoqueMinimo) || dados.estoqueMinimo < 0)) {
+    return { error: 'Estoque mínimo inválido' }
+  }
+
+  const supabase = createServiceClient()
+
+  // Estado atual para comparar e so marcar como "editado a mao" o que realmente mudou.
+  const { data: atual } = await supabase
+    .from('produtos')
+    .select(
+      'descricao, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo, campos_editados'
+    )
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .single()
+  if (!atual) return { error: 'Produto não encontrado' }
+
+  const novo = {
+    descricao: dados.descricao.trim(),
+    codigo_familia: dados.codigoFamilia,
+    descricao_familia: dados.descricaoFamilia,
+    tipo_item: dados.tipoItem?.trim() || null,
+    unidade: dados.unidade.trim(),
+    ncm: ncm || null,
+    valor_unitario: dados.valorUnitario,
+    estoque_minimo: dados.estoqueMinimo,
+    inativo: dados.inativo,
+  }
+
+  // Campos que o sync sobrescreve e portanto precisam de protecao quando editados.
+  // estoque_minimo ja e override historico (o sync nunca o toca), entao nao entra aqui.
+  const PROTEGIVEIS = [
+    'descricao',
+    'codigo_familia',
+    'descricao_familia',
+    'tipo_item',
+    'unidade',
+    'ncm',
+    'valor_unitario',
+    'inativo',
+  ] as const
+
+  const editadosAtuais = new Set<string>(
+    Array.isArray(atual.campos_editados) ? (atual.campos_editados as string[]) : []
+  )
+  for (const campo of PROTEGIVEIS) {
+    // family vem como par (codigo + descricao): tratar como um conjunto.
+    const mudou = String(atual[campo as keyof typeof atual] ?? '') !== String(novo[campo as keyof typeof novo] ?? '')
+    if (mudou) {
+      editadosAtuais.add(campo)
+      if (campo === 'codigo_familia' || campo === 'descricao_familia') {
+        editadosAtuais.add('codigo_familia')
+        editadosAtuais.add('descricao_familia')
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from('produtos')
+    .update({
+      ...novo,
+      campos_editados: [...editadosAtuais],
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/produto')
+  return { ok: true }
+}
+
+/**
  * Exclui um produto no Omie e remove do banco (Bloco 9.2 / C2). ESCREVE no Omie.
  * Disparo real apenas com o Ramon (regra: nao escrever no Omie em teste sozinho).
  */

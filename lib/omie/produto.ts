@@ -110,9 +110,38 @@ export async function excluirProdutoOmie(loja: LojaOmie, codigoProduto: number) 
   })
 }
 
+// Campos que a edicao manual (NTB) pode proteger do sync. Se o nome estiver em
+// produtos.campos_editados, o sync NAO sobrescreve aquele campo daquele produto.
+// full_object/ean/bloqueado nunca sao editaveis pela tela, entao ficam livres.
+const CAMPOS_PROTEGIVEIS = [
+  'descricao',
+  'codigo_familia',
+  'descricao_familia',
+  'tipo_item',
+  'unidade',
+  'valor_unitario',
+  'inativo',
+  'ncm',
+] as const
+
 export async function syncProdutos(loja: LojaOmie) {
   const supabase = createServiceClient()
   await supabase.from('lojas').update({ produto_status: 'Processando' }).eq('id', loja.id)
+
+  // Mapa codigo_produto -> campos editados a mao (para nao sobrescrever no upsert).
+  // Carrega so quem tem algo editado (campos_editados != []), barato mesmo em base grande.
+  const editadosPorProduto = new Map<number, Set<string>>()
+  {
+    const { data: editados } = await supabase
+      .from('produtos')
+      .select('codigo_produto, campos_editados')
+      .eq('loja_id', loja.id)
+      .neq('campos_editados', '[]')
+    for (const e of editados ?? []) {
+      const lista = Array.isArray(e.campos_editados) ? (e.campos_editados as string[]) : []
+      if (lista.length) editadosPorProduto.set(e.codigo_produto as number, new Set(lista))
+    }
+  }
 
   try {
     let pagina = 1
@@ -155,7 +184,31 @@ export async function syncProdutos(loja: LojaOmie) {
           full_object: p,
           updated_at: new Date().toISOString(),
         }))
-        await supabase.from('produtos').upsert(rows, { onConflict: 'codigo_produto,loja_id' })
+
+        // Caminho rapido: produtos sem nenhuma edicao manual vao no upsert em lote
+        // (igual a antes). Produtos editados a mao seguem por update individual que
+        // omite os campos protegidos, preservando o que o usuario digitou no NTB.
+        const semEdicao = rows.filter((r) => !editadosPorProduto.has(r.codigo_produto))
+        const comEdicao = rows.filter((r) => editadosPorProduto.has(r.codigo_produto))
+
+        if (semEdicao.length) {
+          await supabase.from('produtos').upsert(semEdicao, { onConflict: 'codigo_produto,loja_id' })
+        }
+        for (const row of comEdicao) {
+          const protegidos = editadosPorProduto.get(row.codigo_produto)!
+          const patch: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(row)) {
+            // chave de match e metadados nunca entram no patch; campos protegidos sao pulados.
+            if (k === 'codigo_produto' || k === 'loja_id') continue
+            if (CAMPOS_PROTEGIVEIS.includes(k as (typeof CAMPOS_PROTEGIVEIS)[number]) && protegidos.has(k)) continue
+            patch[k] = v
+          }
+          await supabase
+            .from('produtos')
+            .update(patch)
+            .eq('loja_id', loja.id)
+            .eq('codigo_produto', row.codigo_produto)
+        }
       }
 
       await logIntegrationAttempt({
