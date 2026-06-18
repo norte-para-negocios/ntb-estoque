@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Loader2, SearchX } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { buscarProdutos, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { buscarFamilias } from '@/lib/actions/produto'
@@ -25,7 +25,11 @@ export function ProdutoSearch({
   const [familias, setFamilias] = useState<{ codigo: number; descricao: string }[]>([])
   const [resultados, setResultados] = useState<ProdutoBusca[]>([])
   const [aberto, setAberto] = useState(false)
+  const [buscando, setBuscando] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Cada busca recebe um id; so o resultado da ultima busca disparada vale (evita
+  // que uma resposta lenta antiga sobrescreva uma busca mais recente).
+  const reqId = useRef(0)
 
   const adicionados = useMemo(() => new Set(codigosAdicionados), [codigosAdicionados])
 
@@ -41,14 +45,21 @@ export function ProdutoSearch({
     if (t.trim().length < 2 && !ti && !fa) {
       setResultados([])
       setAberto(false)
+      setBuscando(false)
       return
     }
+    // Abre ja mostrando o estado "buscando" para dar resposta imediata ao usuario.
+    setBuscando(true)
+    setAberto(true)
+    const id = ++reqId.current
+    // Debounce menor (180ms): a busca por palavras e leve e responde rapido.
     timer.current = setTimeout(async () => {
       const f = familias.find((x) => String(x.codigo) === fa)
       const r = await buscarProdutos(t, { tipo: ti || undefined, familia: f?.descricao })
+      if (id !== reqId.current) return // chegou tarde: ignora (ja ha busca mais nova)
       setResultados(r)
-      setAberto(true)
-    }, 300)
+      setBuscando(false)
+    }, 180)
   }
 
   function selecionar(p: ProdutoBusca) {
@@ -101,9 +112,20 @@ export function ProdutoSearch({
         </select>
       </div>
 
-      {aberto && resultados.length > 0 && (
+      {aberto && (buscando || resultados.length > 0 || termo.trim().length >= 2 || tipo || familia) && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
-          {resultados.map((p) => {
+          {buscando ? (
+            <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
+              <Loader2 className="size-4 animate-spin" />
+              Buscando produtos...
+            </div>
+          ) : resultados.length === 0 ? (
+            <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
+              <SearchX className="size-4" />
+              Nenhum produto encontrado
+            </div>
+          ) : (
+          resultados.map((p) => {
             const jaAdicionado = adicionados.has(p.codigo)
             return (
               <button
@@ -128,7 +150,8 @@ export function ProdutoSearch({
                 )}
               </button>
             )
-          })}
+          })
+          )}
         </div>
       )}
     </div>

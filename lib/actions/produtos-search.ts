@@ -22,6 +22,10 @@ export async function buscarProdutos(
   const t = termo.trim()
   // Termo so com numeros = busca por CODIGO (ex.: "70" para os produtos 70mil).
   const ehCodigo = /^\d+$/.test(t)
+  // Cada palavra vira um filtro AND: "arroz tipo 1" acha "ARROZ AGULHINHA TIPO 1"
+  // mesmo fora de ordem (busca por palavras, nao pela frase literal). Cada palavra
+  // pode bater na descricao OU no codigo. Limite de 6 palavras evita query gigante.
+  const palavras = t.split(/\s+/).filter(Boolean).slice(0, 6)
 
   let query = supabase
     .from('produtos')
@@ -30,8 +34,9 @@ export async function buscarProdutos(
     // Limite maior: o limite de 20 cortava produtos (faltavam itens na busca da OP).
     .limit(50)
 
-  if (t) {
-    const e = escapeIlikeOr(t)
+  for (const palavra of palavras) {
+    const e = escapeIlikeOr(palavra)
+    // .or() de cada palavra ja vira AND com os demais .or() (descricao OU codigo).
     query = query.or(`descricao.ilike.%${e}%,codigo.ilike.%${e}%`)
   }
   // Filtros para navegar/escolher por tipo (revenda/produção...) e familia.
@@ -43,7 +48,21 @@ export async function buscarProdutos(
   query = ehCodigo ? query.order('codigo') : query.order('descricao')
 
   const { data } = await query
-  return (data ?? []).map((p) => ({ ...p, descricao: formatarNomeProduto(p.descricao) })) as ProdutoBusca[]
+  const linhas = (data ?? []).map((p) => ({ ...p, descricao: formatarNomeProduto(p.descricao) })) as ProdutoBusca[]
+
+  // Ordenacao por relevancia (so para texto): quem comeca com o termo aparece
+  // primeiro, depois match exato de palavra inteira, depois o resto alfabetico.
+  if (!ehCodigo && palavras.length) {
+    const primeira = palavras[0].toLowerCase()
+    const rank = (d: string) => {
+      const desc = d.toLowerCase()
+      if (desc.startsWith(primeira)) return 0
+      if (new RegExp(`\\b${primeira.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(desc)) return 1
+      return 2
+    }
+    linhas.sort((a, b) => rank(a.descricao) - rank(b.descricao) || a.descricao.localeCompare(b.descricao))
+  }
+  return linhas
 }
 
 export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBusca | null> {
