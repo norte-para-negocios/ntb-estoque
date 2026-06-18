@@ -99,12 +99,54 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 ## FASE 3 — Cadastros + estrutura de produto
 | # | Tarefa | Onde | Validação |
 |---|---|---|---|
-| 3.1 | **Estrutura de produto (BOM)**: itens, kg, rendimento, ver consumo | cadastro produto + Omie (malha) | cadastrar ficha; ver consumo na OP |
-| 3.2 | Cadastro de **fornecedor** (+ puxar do Omie) | nova tela/cadastro | criar/listar fornecedor |
-| 3.3 | Cadastro de **família** | nova tela/cadastro | criar/listar família |
-| 3.4 | Cadastro de **cliente** + CEST | nova tela/cadastro | criar/listar |
-| 3.5 | **Endereço das lojas** (+ puxar do Omie) | cadastro de loja | informar/puxar endereço |
-| 3.6 | **SINTEGRA**: puxar cadastros por CNPJ | nova tela | puxar produto/cliente/fornecedor |
+| 3.1 ✅ | **Estrutura de produto (BOM)**: itens, kg, rendimento, ver consumo | cadastro produto + Omie (malha) | cadastrar ficha; ver consumo na OP |
+| 3.2 ✅ | Cadastro de **fornecedor** (+ puxar do Omie) | nova tela/cadastro | criar/listar fornecedor |
+| 3.3 ✅ | Cadastro de **família** | nova tela/cadastro | criar/listar família |
+| 3.4 ✅ | Cadastro de **cliente** + CEST | nova tela/cadastro | criar/listar |
+| 3.5 ✅ | **Endereço das lojas** (+ puxar do Omie) | cadastro de loja | informar/puxar endereço |
+| 3.6 ✅ | **SINTEGRA**: puxar cadastros por CNPJ | nova tela | puxar produto/cliente/fornecedor |
+
+> **Notas Fase 3 (18/06, Joaquim Salles):** tudo no ar e validado no link
+> (https://ntb-estoque.vercel.app), logado como Admin na loja DONANA RIO VERMELHO.
+> **Banco = fonte da verdade** (visão de independência): cadastros são LOCAIS no Supabase;
+> o Omie é só LEITURA ("puxar" preenche o banco). **NENHUMA escrita no Omie nesta fase.**
+> Migrations 018 (tabelas familias/fornecedores/clientes + status por loja + permissões
+> Familias/Fornecedores/Clientes e -Sincronizar) e 019 (fix do ON CONFLICT).
+> - **3.3 Famílias:** tela `/familia` (criar/editar/excluir LOCAL + "Puxar do Omie").
+>   Grafia certa da API é **PesquisarFamilias** (`ListarFamilias` NÃO existe, confirmado por
+>   probe). Validado no link: 59 famílias puxadas da loja 3 (ARTESANAIS, Bases, Kids, etc.),
+>   com origem Omie/Local, código Omie e situação.
+> - **3.2 Fornecedores:** tela `/fornecedor` (CRUD local + puxar). Fornecedor/cliente moram
+>   na MESMA base do Omie (`ListarClientes`); a **tag** distingue
+>   (`clientesFiltro.tags=[{tag:'Fornecedor'}]`). Validado: 758 fornecedores puxados, com
+>   razão social, CNPJ/CPF, cidade/UF, busca e paginação.
+> - **3.4 Clientes + CEST:** tela `/cliente` idêntica (tag 'Cliente' = 2.585 puxados) + campo
+>   **CEST local**. O Omie NÃO tem CEST no cadastro de cliente (confirmado por
+>   `ConsultarCliente`); CEST é do produto, mas o Ramon pediu o campo no cadastro fiscal de
+>   cliente, então fica como campo local opcional. Validado: dialog de edição mostra o CEST.
+> - **3.5 Endereço da loja:** o backend já existia (`syncEmpresa` puxa o endereço da empresa
+>   via `ListarEmpresas`; `LojaForm` já edita cep/uf/cidade/bairro/logradouro/número). Faltava
+>   EXIBIR: a tela de loja agora mostra o bloco **Endereço** (visto no link: "R PRAIA DE ITAPUA,
+>   S/N · LOTEAMENTO VILAS DO ATLANTICO - LAURO DE FREITAS (BA)/BA · CEP 42700-130"). O botão
+>   "Puxar dados do Omie" preenche o endereço.
+> - **3.6 SINTEGRA:** tela `/sintegra`, consulta por CNPJ/CPF no Omie
+>   (`clientesFiltro.cnpj_cpf`, LEITURA), mostra o cadastro + a tag e importa para fornecedor
+>   e/ou cliente LOCAL. Validado no link com CNPJ 11.537.003/0001-85 (achou "CELSO TEIXEIRA DE
+>   SALES", tag Fornecedor, dados completos; import gravou no banco sem duplicar).
+>   *Limite real:* o Omie só localiza quem JÁ está cadastrado lá (cliente/fornecedor). A
+>   consulta pública na Receita/SINTEGRA externa (razão social + IE de qualquer CNPJ, mesmo
+>   fora do Omie) exigiria um serviço externo (fora do custo-zero por ora). Produto não tem
+>   busca por CNPJ. Documentado, não inventado.
+> - **3.1 Estrutura de produto (BOM):** botão **"Estrutura"** na linha do produto abre a ficha
+>   técnica. Grafia certa: `v1/geral/malha` / **ConsultarEstrutura** `{idProduto}` (descoberta
+>   por probe). Mostra os **componentes** (código, descrição, família, qtde, unidade KG/UN/LT,
+>   perda %) e o **consumo real da última OP concluída** (de `itensDetalhes` do full_object já
+>   no banco, sem chamada extra ao Omie). Validado no link com "Camarão a Joel 600 G - Vatapá":
+>   9 componentes + consumo da OP 2026/00219652 (consumo = ficha × qtde produzida, ex.: ficha
+>   0,41 → consumo 0,82 em 2 unidades), coluna "Do estoque" Sim/Não.
+>   **NÃO escrevemos a malha no Omie** (regra crítica): só leitura/exibição. A EDIÇÃO da ficha
+>   técnica fica para validar com o Ramon (aviso na própria tela). Quando o produto não tem OP
+>   concluída no banco, o bloco de consumo informa isso (visto no "Filé de Peixe c/ Purê").
 
 ## FASE 4 — Usuários / permissões / onboarding
 | # | Tarefa | Onde | Validação |
