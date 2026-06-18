@@ -46,6 +46,9 @@ agora, independente depois (mas já preparando).
    Pedido: ter como VER/saber quando o produto está ficando negativo (alerta), pra fazer transferência
    ANTES de zerar. Mostrar o CMC total e sinalizar quando está negativo. (relacionado: estrutura que
    consome mais do que entra — ver D).
+10. **Etiqueta imprime 0 em vez de 1** — ao gerar etiqueta SEM informar a quantidade, imprime 0
+   etiquetas. A tela mostra "1" mas sai 0 na quantidade impressa. Deve ser SEMPRE no mínimo 1 (default
+   1 quando o campo está vazio; nunca imprimir 0). Vale pra toda geração de etiqueta.
 > Joaquim atribuiu vários a alterações locais ainda não subidas pro ar (mexeu no banco pra pegar
 > histórico, deu conflito). Disse que sobe e testa amanhã 18/06 10h.
 
