@@ -203,7 +203,10 @@ export async function editarProduto(
   // marcar NCM como editado sem o usuario ter mudado nada.
   const norm = (campo: string, v: unknown): string => {
     if (campo === 'ncm') return String(v ?? '').replace(/\D/g, '')
-    return String(v ?? '')
+    // O Omie usa codigo_familia 0 para "sem familia"; tratar 0/null/'' como iguais
+    // evita marcar familia como editada sem o usuario ter mudado nada.
+    if (campo === 'codigo_familia') return Number(v) > 0 ? String(Number(v)) : ''
+    return String(v ?? '').trim()
   }
   for (const campo of PROTEGIVEIS) {
     // family vem como par (codigo + descricao): tratar como um conjunto.
