@@ -27,6 +27,14 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
 6. **Estoque mínimo não trazendo** em alguns produtos ("não está trazendo estoque mínimo também").
 7. **Sugestão de preço** — regra: se NÃO tem preço de venda (zerado), NÃO dar sugestão de preço mesmo
    tendo custo. Hoje aparenta dar/zoar. Conferir.
+8. **Unidade de medida + quantidade não aparece às vezes** — ao adicionar produto em OP/transf/
+   inventário, a unidade (UN/KG) às vezes não aparece e a quantidade fica ZERO mesmo o produto
+   aparecendo (transcr.: "aparece com UN mas fica com zero; só se eu botar de novo é que coloca").
+   Conferir (a) produtos com `unidade` vazia e (b) se as telas de operação exibem unidade na linha.
+9. **CMC / estoque NEGATIVO sem aviso** — quando o produto fica negativo, o CMC fica negativo.
+   Pedido: ter como VER/saber quando o produto está ficando negativo (alerta), pra fazer transferência
+   ANTES de zerar. Mostrar o CMC total e sinalizar quando está negativo. (relacionado: estrutura que
+   consome mais do que entra — ver D).
 > Joaquim atribuiu vários a alterações locais ainda não subidas pro ar (mexeu no banco pra pegar
 > histórico, deu conflito). Disse que sobe e testa amanhã 18/06 10h.
 
@@ -41,8 +49,9 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
   transferência e quanto saiu por transferência (do depósito).
 - **Filtro por origem** (compra de produto, consumo, transferência, entrada) — origem já aparece.
 - **Filtro por tipo de produto e família.**
-- **Agrupar/ver por MÊS** (não só por data). Hoje fica "por data" e "por produto" e polui (muita água,
-  embalagem). Quer poder priorizar produtos com entrada; "cada produto colocar um do mês".
+- **Agrupar/englobar por MÊS** (não só por data). Hoje fica "por data" e "por produto" e polui (muita
+  água, embalagem). Quer **priorizar produtos com entrada**; "cada produto colocar um do mês".
+- Filtro de **entradas** e filtro de **concluído**.
 - **Deixar aberto pra criar mais filtros** depois.
 - Contexto: é a tela que ele usa pra ADMINISTRAÇÃO (entrada x saída por valor).
 
@@ -70,15 +79,19 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
   - **Rendimento/peso:** o arroz ganha peso (100 g cru -> 180 g cozido). Opção de PESO acumulado dos
     itens (somar o peso dos componentes) — "não pesa o produto, mas é bom ter a opção". Pode marcar um
     item pra NÃO entrar na conta.
+  - **Ver o consumo de cada elemento** ao produzir/concluir a OP (ex.: o prato camarão a joel consome
+    25 g de ervilha; outro consome 55 g). A estrutura pode estar **consumindo mais do que entra** ->
+    gera saldo/CMC negativo (ligado ao bug A-9). Quer enxergar isso ("a gente consegue ver todos os
+    elementos, o que está sendo consumido").
   - O necessário: **permitir cadastrar a estrutura.**
 
 ================================================================================
 ## E. CADASTRO VIA SINTEGRA / FORNECEDOR (pra integração fiscal futura)
 ================================================================================
 - Tela onde se informa um endereço/CNPJ (ele chamou de "cindere" = SINTEGRA?) pra **puxar cadastros**:
-  produtos, clientes, **fornecedor**, CEST.
+  **produtos, clientes, fornecedor, CEST**.
 - Quando entrar a integração fiscal (entrada de NF), vai precisar cadastrar/puxar o fornecedor.
-- Pedido: criar o campo/fluxo de **cadastro de fornecedor** (e puxar fornecedor já cadastrado).
+- Pedido: criar o campo/fluxo de **cadastro de fornecedor e de cliente** (e puxar os já cadastrados).
 
 ================================================================================
 ## F. LOCAL DE ESTOQUE
