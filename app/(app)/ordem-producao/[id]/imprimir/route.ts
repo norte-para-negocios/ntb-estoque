@@ -68,7 +68,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       lote: String(numOP),
       quantidade,
       qtde_nf: '',
-      qtde_etiqueta: num(op.quantidade ?? 0, 3),
+      qtde_etiqueta: num(op.quantidade || 1, 3), // nunca 0: se a qtd nao foi editada (null/0), usa 1
       inclusao: '',
       validade,
       produzido,
