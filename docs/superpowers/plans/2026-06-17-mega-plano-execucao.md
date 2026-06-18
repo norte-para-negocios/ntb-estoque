@@ -151,12 +151,64 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 ## FASE 4 — Usuários / permissões / onboarding
 | # | Tarefa | Onde | Validação |
 |---|---|---|---|
-| 4.1 | Permissões granulares por módulo ao criar usuário | tela usuário + auth | escolher permissões |
-| 4.2 | Esconder do menu o que não tem permissão | shell/NavItems + auth | menu só mostra o permitido |
-| 4.3 | Esconder seletor de loja p/ quem só tem 1 (mostrar só o nome) | shell | 1 loja → sem dropdown |
-| 4.4 | **Admin por loja** (multi-admin, mais logins) | auth/perfis | cada loja com seu admin |
-| 4.5 | **Onboarding por código de loja** (alinhar c/ André 18/06) | fluxo de cadastro/login | código → perfil → loja → login |
-| 4.6 | Visual do cadastro de usuário (tá feio) | tela usuário | UI revisada |
+| 4.1 ✅ | Permissões granulares por módulo ao criar usuário | tela usuário + auth | escolher permissões |
+| 4.2 ✅ | Esconder do menu o que não tem permissão | shell/NavItems + auth | menu só mostra o permitido |
+| 4.3 ✅ | Esconder seletor de loja p/ quem só tem 1 (mostrar só o nome) | shell | 1 loja → sem dropdown |
+| 4.4 ✅ | **Admin por loja** (multi-admin, mais logins) | auth/perfis | cada loja com seu admin |
+| 4.5 ✅ | **Onboarding por código de loja** (alinhar c/ André) | fluxo de cadastro/login | código → perfil → loja → login |
+| 4.6 ✅ | Visual do cadastro de usuário (tá feio) | tela usuário | UI revisada |
+
+> **Notas Fase 4 (18/06, Joaquim Salles):** tudo no ar e testado no link
+> (https://ntb-estoque.vercel.app). Zona sensível (auth): **login E logout do admin global
+> testados depois de cada item** (Claude QA continua entrando; ciclo login→logout→login
+> validado no fim). As páginas têm guarda própria (`isAdmin`/`requirePermissao`), então o
+> filtro de menu é só cosmético; testei que rotas globais negam por URL (404) para
+> não-admin e Admin de loja.
+> - **4.3 seletor de loja:** `LojaSelector` mostra só o nome (bloco estático com ícone)
+>   quando o usuário tem ≤1 loja; 2+ mantém o dropdown. Visto no link: usuário de 1 loja vê
+>   "DONANA RIO VERMELHO" sem dropdown; admin (6 lojas) vê o Select.
+> - **4.6 visual:** Novo/Editar/Aprovar usuário refeitos com o ui-kit (perfil em segmento de
+>   cards, lojas e permissões em chips por módulo com contador, marcar tudo/limpar, botão
+>   Cancelar). Bem mais limpo que a lista de checkboxes. Screenshots em Desktop/Screenshots.
+> - **4.1 permissões granulares na criação:** catálogo `lib/permissoes-catalogo.ts` agrupa as
+>   22 permissões reais do banco por módulo. `NovoUsuario` deixa escolher os módulos; gravado
+>   via `criarUsuario(permissaoIds)`. Testado no link: criei "QA Restrito" com só
+>   Produtos-Acessar + Inventários-Ver; conferido no banco que gravou exatamente isso. Admin
+>   recebe tudo automático. (A edição já tinha granular por loja; foi refinada.)
+> - **4.2 esconder menu:** layout calcula rotas visíveis (`getPermissoesNomes` +
+>   `rotasPermitidas`, mapa `MENU_PERMISSAO`); Sidebar/MobileNav (lateral + barra inferior)
+>   filtram. Admin vê tudo. Testado no link com o usuário restrito: só apareceram
+>   Início/Inventários/Movimentações/Validade/Impressões + Produtos (sem NF/OP/Transf/Locais/
+>   Famílias/Fornecedores/SINTEGRA/Administração). **Saúde da integração** virou só-admin
+>   (pedido G) — no menu e bloqueada por URL.
+> - **4.4 admin por loja:** novo perfil **'AdminLoja'** = acesso TOTAL aos módulos das lojas
+>   vinculadas (loja_user), sem ser admin global (não vê Lojas/Logs/Saúde/Usuários nem outras
+>   lojas). `requirePermissao`/`getPermissoesNomes` liberam tudo via vínculo de loja (sem
+>   precisar de linhas em permissao_user). Pode haver vários (multi-admin). **Admin global
+>   ('Admin') intacto.** Migration 021 (CHECK Admin/AdminLoja/Usuario). Testado no link:
+>   promovi um usuário a AdminLoja → viu todos os módulos da loja, abriu /fornecedor sem
+>   permissão explícita, e levou 404 em /usuario.
+> - **4.5 onboarding por código de loja:** cada loja gera/regenera/remove um código
+>   (`NTB-XXXXXXXX`) na tela de Loja (só admin; `CodigoOnboarding` + `onboarding-loja.ts`).
+>   No cadastro público há campo opcional "Código da loja": com código válido a conta entra
+>   **aprovada e já vinculada** àquela loja como **Usuário SEM permissões** (o chefe ajusta);
+>   sem código, segue o fluxo de aprovação pendente. Migration 022 (`lojas.codigo_onboarding`
+>   + índice único parcial). Testado no link de ponta a ponta: gerei o código, cadastrei com
+>   ele, "Conta criada / já vinculado à DONANA RIO VERMELHO", conferido no banco
+>   (aprovado, loja 3, 0 permissões).
+>   **>> CONFIRMAR FLUXO FINAL COM O ANDRÉ:** (a) entrar **aprovado** na hora x ficar
+>   **pendente** mesmo com código; (b) o código pode trazer **perfil** (ex.: já entrar como
+>   Admin da loja) ou perfil é sempre Usuário e o chefe promove; (c) o código pode trazer um
+>   **conjunto de permissões** pronto. Implementei a versão sensata (aprova + Usuário sem
+>   permissões); o resto é só estender a action `cadastrar`. Não travei a fase por isso.
+> - **Ferramentas de QA criadas** (não afetam runtime): `scripts/qa-set-senha.mjs` e
+>   `scripts/qa-del-user.mjs` (definir senha / remover conta de teste via Admin API). Os 2
+>   usuários de teste e os códigos de loja gerados no teste foram **removidos** ao final
+>   (ambiente limpo; 6 profiles originais intactos).
+> - **Fora do escopo (anotado):** a HOME ainda mostra cards/ações (NF, OP, Nova transferência,
+>   Etiquetas de NF) que um usuário restrito não acessa — clicar leva a 404 pela guarda da
+>   página. Esconder esses blocos da home por permissão é polimento para uma próxima leva
+>   (não estava nos itens 4.x).
 
 ## FASE 5 — Relatórios + independência do Omie
 | # | Tarefa | Onde | Validação |
