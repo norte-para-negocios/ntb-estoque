@@ -9,7 +9,9 @@ import { FormNovoProduto } from '@/components/produtos/FormNovoProduto'
 // espaco horizontal, campos organizados em secoes. Familias carregadas no server.
 export default async function NovoProdutoPage() {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
+  // Tela de criar: exige a permissao de Criar (nao basta o acesso ao modulo),
+  // pois pode ser aberta direto pela URL.
+  if (!(await requirePermissao(lojaId, 'Produtos - Criar'))) notFound()
 
   const familias = await buscarFamilias()
 

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
@@ -49,6 +49,14 @@ export default async function OrdemProducaoPage({
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
 
   const supabase = await createClient()
+
+  // Permissoes de acao por botao. Sync (Atualizar agora) virou admin-only.
+  const podeSync = await isAdmin()
+  const podeCriar = await requirePermissao(lojaId, 'Ordens de Producao - Criar')
+  const podeEditar = await requirePermissao(lojaId, 'Ordens de Producao - Editar')
+  const podeExcluir = await requirePermissao(lojaId, 'Ordens de Producao - Excluir')
+  const podeConcluir = await requirePermissao(lojaId, 'Ordens de Producao - Concluir')
+  const podeReverter = await requirePermissao(lojaId, 'Ordens de Producao - Reverter')
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
@@ -299,8 +307,8 @@ export default async function OrdemProducaoPage({
             >
               <Download className="size-4" /> Excel
             </a>
-            <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />
-            <CriarOrdemProducao locais={locais ?? []} />
+            {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
+            {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}
           </>
         }
       />
@@ -348,9 +356,11 @@ export default async function OrdemProducaoPage({
               data: fmtDataBR(op.identificacao_d_dt_previsao),
               concluida: isOpConcluida(op),
               status: opStatus(op, hojeISO),
-              // A pagina ja exige a permissao 'Ordens de Producao' (notFound acima),
-              // entao quem chega aqui pode gerenciar (concluir/reverter/excluir).
-              podeGerenciar: true,
+              // Cada acao da OP atras da sua permissao (calculada no servidor acima).
+              podeEditar,
+              podeExcluir,
+              podeConcluir,
+              podeReverter,
             }
           })
           return (

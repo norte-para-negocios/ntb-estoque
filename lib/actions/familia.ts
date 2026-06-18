@@ -18,7 +18,7 @@ export type FamiliaInput = {
  */
 export async function criarFamilia(dados: FamiliaInput) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Familias'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Familias - Criar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
 
   const supabase = createServiceClient()
@@ -37,7 +37,7 @@ export async function criarFamilia(dados: FamiliaInput) {
 
 export async function editarFamilia(id: number, dados: FamiliaInput) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Familias'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Familias - Editar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
 
   const supabase = createServiceClient()
@@ -59,7 +59,7 @@ export async function editarFamilia(id: number, dados: FamiliaInput) {
 
 export async function excluirFamilia(id: number) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Familias'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Familias - Excluir'))) return { error: 'Sem permissão' }
 
   const supabase = createServiceClient()
   const { error } = await supabase.from('familias').delete().eq('id', id).eq('loja_id', lojaId)

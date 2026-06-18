@@ -53,7 +53,7 @@ export async function criarProduto(dados: {
   cest?: string
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão' }
 
   if (!dados.codigo?.trim()) return { error: 'Informe o código do produto' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição' }
@@ -143,7 +143,7 @@ export async function editarProduto(
   }
 ) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão' }
   if (!id) return { error: 'Produto inválido' }
 
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição' }
@@ -241,7 +241,7 @@ export async function editarProduto(
  */
 export async function excluirProduto(codigoProduto: number) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Produtos - Excluir'))) return { error: 'Sem permissão' }
   if (!codigoProduto) return { error: 'Produto inválido' }
 
   const supabase = createServiceClient()

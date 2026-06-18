@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -45,6 +45,8 @@ export default async function NotaFiscalPage({
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
+  // Sync (Atualizar agora) virou admin-only. NF e importada do Omie (so leitura).
+  const podeSync = await isAdmin()
 
   const dataInicio =
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
@@ -200,7 +202,7 @@ export default async function NotaFiscalPage({
             >
               <Download className="size-4" /> Excel
             </a>
-            <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />
+            {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />}
           </>
         }
       />

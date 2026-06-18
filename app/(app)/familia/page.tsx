@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { BuscaSimples } from '@/components/BuscaSimples'
@@ -37,7 +37,11 @@ export default async function FamiliaPage({
 
   const params = await searchParams
   const supabase = await createClient()
-  const podeSync = await requirePermissao(lojaId, 'Familias - Sincronizar')
+  // Puxar do Omie (sync) virou admin-only.
+  const podeSync = await isAdmin()
+  const podeCriar = await requirePermissao(lojaId, 'Familias - Criar')
+  const podeEditar = await requirePermissao(lojaId, 'Familias - Editar')
+  const podeExcluir = await requirePermissao(lojaId, 'Familias - Excluir')
 
   const { data: lojaSync } = await supabase
     .from('lojas')
@@ -66,7 +70,7 @@ export default async function FamiliaPage({
         description="Famílias de produto (cadastro local e leitura do Omie)"
         actions={
           <>
-            <FamiliaForm />
+            {podeCriar && <FamiliaForm />}
             {podeSync && <PuxarFamilias />}
           </>
         }
@@ -132,8 +136,10 @@ export default async function FamiliaPage({
         ]}
         acao={(f) => (
           <div className="flex items-center justify-end gap-1">
-            <FamiliaForm familia={{ id: f.id, nome: f.nome, codigo: f.codigo, inativo: f.inativo }} />
-            <ExcluirFamilia id={f.id} nome={f.nome} />
+            {podeEditar && (
+              <FamiliaForm familia={{ id: f.id, nome: f.nome, codigo: f.codigo, inativo: f.inativo }} />
+            )}
+            {podeExcluir && <ExcluirFamilia id={f.id} nome={f.nome} />}
           </div>
         )}
         vazio={

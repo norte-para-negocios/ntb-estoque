@@ -12,7 +12,7 @@ import type { LojaOmie } from '@/lib/omie/client'
  */
 export async function criarLocalEstoque(dados: { descricao: string; codigo?: string }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Locais de Estoque'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Locais de Estoque - Criar'))) return { error: 'Sem permissão' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
 
   const supabase = createServiceClient()

@@ -23,8 +23,11 @@ interface OPData {
   data?: string | null // data prevista/real da OP (dd/mm/aaaa)
   concluida: boolean
   status: OpStatus
-  /** Quem pode operar a OP (concluir/reverter/excluir). */
-  podeGerenciar?: boolean
+  /** Permissoes de acao por botao (calculadas no servidor). */
+  podeEditar?: boolean // steppers de validade/quantidade
+  podeExcluir?: boolean // excluir OP aberta
+  podeConcluir?: boolean // concluir OP aberta
+  podeReverter?: boolean // reverter OP concluida
 }
 
 // Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
@@ -157,14 +160,15 @@ type StepperProps = {
   ctrl: ReturnType<typeof useOP>
 }
 
-// Stepper de validade (data).
-function StepperValidade({ ctrl }: StepperProps) {
+// Stepper de validade (data). Sem permissao de Editar, fica somente-leitura.
+function StepperValidade({ op, ctrl }: StepperProps) {
+  const bloqueado = !op.podeEditar
   return (
     <div className="flex items-center gap-1.5 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarValidade(-1)}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
         aria-label="Diminuir validade"
         className={stepBtnClass}
       >
@@ -175,13 +179,14 @@ function StepperValidade({ ctrl }: StepperProps) {
         value={ctrl.validade}
         onChange={(e) => ctrl.setValidade(e.target.value)}
         onBlur={ctrl.salvarValidade}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
+        readOnly={bloqueado}
         className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-28 lg:flex-none"
       />
       <button
         type="button"
         onClick={() => ctrl.ajustarValidade(1)}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
         aria-label="Aumentar validade"
         className={stepBtnClass}
       >
@@ -191,14 +196,15 @@ function StepperValidade({ ctrl }: StepperProps) {
   )
 }
 
-// Stepper de quantidade (numero).
-function StepperQuantidade({ ctrl }: StepperProps) {
+// Stepper de quantidade (numero). Sem permissao de Editar, fica somente-leitura.
+function StepperQuantidade({ op, ctrl }: StepperProps) {
+  const bloqueado = !op.podeEditar
   return (
     <div className="flex items-center gap-1.5 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarQuantidade(-1)}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
         aria-label="Diminuir quantidade"
         className={stepBtnClass}
       >
@@ -211,14 +217,15 @@ function StepperQuantidade({ ctrl }: StepperProps) {
         onChange={(e) => ctrl.setQuantidade(e.target.value)}
         onBlur={ctrl.salvarQuantidade}
         onWheel={(e) => e.currentTarget.blur()}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
+        readOnly={bloqueado}
         placeholder="0"
         className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-20 lg:flex-none"
       />
       <button
         type="button"
         onClick={() => ctrl.ajustarQuantidade(1)}
-        disabled={ctrl.pending}
+        disabled={ctrl.pending || bloqueado}
         aria-label="Aumentar quantidade"
         className={stepBtnClass}
       >
@@ -240,6 +247,7 @@ function Acoes({ op, ctrl }: StepperProps) {
         <Printer className="size-3.5" /> Imprimir
       </a>
       {!op.concluida &&
+        op.podeConcluir &&
         (ctrl.escolhendoData ? (
           <span className="inline-flex items-center gap-1.5">
             <input
@@ -278,29 +286,31 @@ function Acoes({ op, ctrl }: StepperProps) {
             <Check className="size-3.5" /> Concluir
           </button>
         ))}
-      {/* Regra do fundador: concluida -> reverter; aberta -> excluir. So gestores. */}
-      {op.podeGerenciar &&
-        (op.concluida ? (
-          <button
-            type="button"
-            onClick={ctrl.reverter}
-            disabled={ctrl.pending}
-            className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
-            title="Reverter a conclusão (estorna no Omie)"
-          >
-            <Undo2 className="size-3.5" /> Reverter
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={ctrl.excluir}
-            disabled={ctrl.pending}
-            className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
-            title="Excluir a OP no Omie"
-          >
-            <Trash2 className="size-3.5" /> Excluir
-          </button>
-        ))}
+      {/* Regra do fundador: concluida -> reverter; aberta -> excluir. Cada acao
+          atras da sua permissao (Reverter / Excluir). */}
+      {op.concluida
+        ? op.podeReverter && (
+            <button
+              type="button"
+              onClick={ctrl.reverter}
+              disabled={ctrl.pending}
+              className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
+              title="Reverter a conclusão (estorna no Omie)"
+            >
+              <Undo2 className="size-3.5" /> Reverter
+            </button>
+          )
+        : op.podeExcluir && (
+            <button
+              type="button"
+              onClick={ctrl.excluir}
+              disabled={ctrl.pending}
+              className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
+              title="Excluir a OP no Omie"
+            >
+              <Trash2 className="size-3.5" /> Excluir
+            </button>
+          )}
     </>
   )
 }

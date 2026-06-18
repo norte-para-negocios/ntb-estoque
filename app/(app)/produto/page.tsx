@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
@@ -78,7 +78,11 @@ export default async function ProdutoPage({
   const alvoPct = alvoPctRaw >= 1 && alvoPctRaw <= 99 ? alvoPctRaw : 50
   const alvo = alvoPct / 100
   const supabase = await createClient()
-  const podeSync = await requirePermissao(lojaId, 'Produtos - Sincronizar')
+  // Sync (Atualizar tudo) virou admin-only: so o admin global ve o botao.
+  const podeSync = await isAdmin()
+  const podeCriar = await requirePermissao(lojaId, 'Produtos - Criar')
+  const podeEditar = await requirePermissao(lojaId, 'Produtos - Editar')
+  const podeExcluir = await requirePermissao(lojaId, 'Produtos - Excluir')
 
   // Independentes entre si -> rodam em paralelo para cortar latencia (Produtos
   // era a tela mais lenta). lojaSync, familias e os codigos "a repor" (modo
@@ -297,9 +301,11 @@ export default async function ProdutoPage({
               campos={campos}
               defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
             />
-            <Link href="/produto/novo" className={btnClass('primary')}>
-              <Plus className="size-4" /> Novo produto
-            </Link>
+            {podeCriar && (
+              <Link href="/produto/novo" className={btnClass('primary')}>
+                <Plus className="size-4" /> Novo produto
+              </Link>
+            )}
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
               <Download className="size-4" /> Excel
             </a>
@@ -426,6 +432,7 @@ export default async function ProdutoPage({
                       produtoId={p.id}
                       valorManual={p.estoque_minimo}
                       valorOmie={minOmieDe(p.codigo_produto)}
+                      podeEditar={podeEditar}
                     />
                   ),
                 },
@@ -473,26 +480,28 @@ export default async function ProdutoPage({
         acao={(p) =>
           p.codigo_produto != null ? (
             <div className="flex items-center justify-end gap-1">
-              <EditarProdutoForm
-                produto={{
-                  id: p.id,
-                  codigo: p.codigo,
-                  descricao: p.descricao,
-                  codigoFamilia: p.codigo_familia,
-                  tipoItem: p.tipo_item,
-                  unidade: p.unidade,
-                  ncm: p.ncm,
-                  valorUnitario: p.valor_unitario,
-                  estoqueMinimo: p.estoque_minimo,
-                  inativo: !!p.inativo,
-                }}
-                familias={familiasComCodigo}
-              />
+              {podeEditar && (
+                <EditarProdutoForm
+                  produto={{
+                    id: p.id,
+                    codigo: p.codigo,
+                    descricao: p.descricao,
+                    codigoFamilia: p.codigo_familia,
+                    tipoItem: p.tipo_item,
+                    unidade: p.unidade,
+                    ncm: p.ncm,
+                    valorUnitario: p.valor_unitario,
+                    estoqueMinimo: p.estoque_minimo,
+                    inativo: !!p.inativo,
+                  }}
+                  familias={familiasComCodigo}
+                />
+              )}
               <EstruturaProduto
                 codigoProduto={p.codigo_produto}
                 descricao={formatarNomeProduto(p.descricao)}
               />
-              {podeSync && <ExcluirProdutoBtn codigoProduto={p.codigo_produto} />}
+              {podeExcluir && <ExcluirProdutoBtn codigoProduto={p.codigo_produto} />}
             </div>
           ) : null
         }

@@ -18,22 +18,28 @@ export type ModuloCatalogo = {
   permissoes: PermissaoCatalogoItem[]
 }
 
-// Agrupamento por modulo. A permissao "...- Sincronizar" entra junto do modulo dela.
+// Agrupamento por modulo. "Acessar" e o ver/entrar no modulo (permissao com o nome
+// do modulo, da qual o menu depende). As demais sao acoes (Criar/Editar/Excluir e
+// especificas). O "Sincronizar" NAO entra mais no catalogo: o sync virou admin-only
+// (perfil 'Admin') e nao depende de permissao por usuario (as permissoes "... -
+// Sincronizar" continuam no banco, inertes, so nao sao mais exibidas como opcao).
 export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
   {
     modulo: 'Notas Fiscais',
     grupo: 'Operação',
-    permissoes: [
-      { nome: 'Notas Fiscais', label: 'Acessar' },
-      { nome: 'Notas Fiscais - Sincronizar', label: 'Sincronizar' },
-    ],
+    // Importada do Omie (nao se cria NF aqui): so acessar/ver.
+    permissoes: [{ nome: 'Notas Fiscais', label: 'Acessar' }],
   },
   {
     modulo: 'Ordens de Produção',
     grupo: 'Operação',
     permissoes: [
       { nome: 'Ordens de Producao', label: 'Acessar' },
-      { nome: 'Ordens de Producao - Sincronizar', label: 'Sincronizar' },
+      { nome: 'Ordens de Producao - Criar', label: 'Criar' },
+      { nome: 'Ordens de Producao - Editar', label: 'Editar' },
+      { nome: 'Ordens de Producao - Excluir', label: 'Excluir' },
+      { nome: 'Ordens de Producao - Concluir', label: 'Concluir' },
+      { nome: 'Ordens de Producao - Reverter', label: 'Reverter' },
     ],
   },
   {
@@ -61,7 +67,9 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     grupo: 'Cadastros',
     permissoes: [
       { nome: 'Produtos', label: 'Acessar' },
-      { nome: 'Produtos - Sincronizar', label: 'Sincronizar' },
+      { nome: 'Produtos - Criar', label: 'Criar' },
+      { nome: 'Produtos - Editar', label: 'Editar' },
+      { nome: 'Produtos - Excluir', label: 'Excluir' },
     ],
   },
   {
@@ -69,7 +77,9 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     grupo: 'Cadastros',
     permissoes: [
       { nome: 'Locais de Estoque', label: 'Acessar' },
-      { nome: 'Locais de Estoque - Sincronizar', label: 'Sincronizar' },
+      { nome: 'Locais de Estoque - Criar', label: 'Criar' },
+      { nome: 'Locais de Estoque - Editar', label: 'Editar' },
+      { nome: 'Locais de Estoque - Excluir', label: 'Excluir' },
     ],
   },
   {
@@ -77,7 +87,9 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     grupo: 'Cadastros',
     permissoes: [
       { nome: 'Familias', label: 'Acessar' },
-      { nome: 'Familias - Sincronizar', label: 'Sincronizar' },
+      { nome: 'Familias - Criar', label: 'Criar' },
+      { nome: 'Familias - Editar', label: 'Editar' },
+      { nome: 'Familias - Excluir', label: 'Excluir' },
     ],
   },
   {
@@ -85,16 +97,15 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     grupo: 'Cadastros',
     permissoes: [
       { nome: 'Fornecedores', label: 'Acessar' },
-      { nome: 'Fornecedores - Sincronizar', label: 'Sincronizar' },
+      { nome: 'Fornecedores - Criar', label: 'Criar' },
+      { nome: 'Fornecedores - Editar', label: 'Editar' },
+      { nome: 'Fornecedores - Excluir', label: 'Excluir' },
     ],
   },
   {
     modulo: 'Clientes',
     grupo: 'Cadastros',
-    permissoes: [
-      { nome: 'Clientes', label: 'Acessar' },
-      { nome: 'Clientes - Sincronizar', label: 'Sincronizar' },
-    ],
+    permissoes: [{ nome: 'Clientes', label: 'Acessar' }],
   },
 ]
 

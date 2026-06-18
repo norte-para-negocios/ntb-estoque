@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -74,7 +74,11 @@ export default async function FornecedorPage({
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const supabase = await createClient()
-  const podeSync = await requirePermissao(lojaId, 'Fornecedores - Sincronizar')
+  // Puxar do Omie (sync) virou admin-only.
+  const podeSync = await isAdmin()
+  const podeCriar = await requirePermissao(lojaId, 'Fornecedores - Criar')
+  const podeEditar = await requirePermissao(lojaId, 'Fornecedores - Editar')
+  const podeExcluir = await requirePermissao(lojaId, 'Fornecedores - Excluir')
 
   const { data: lojaSync } = await supabase
     .from('lojas')
@@ -109,7 +113,7 @@ export default async function FornecedorPage({
         description="Cadastro local de fornecedores (leitura do Omie por tag)"
         actions={
           <>
-            <NovoFornecedor />
+            {podeCriar && <NovoFornecedor />}
             {podeSync && <PuxarFornecedores />}
           </>
         }
@@ -169,8 +173,8 @@ export default async function FornecedorPage({
         ]}
         acao={(p) => (
           <div className="flex items-center justify-end gap-1">
-            <EditarFornecedor existente={{ id: p.id, values: toValues(p) }} />
-            <ExcluirFornecedor id={p.id} nome={p.razao_social} />
+            {podeEditar && <EditarFornecedor existente={{ id: p.id, values: toValues(p) }} />}
+            {podeExcluir && <ExcluirFornecedor id={p.id} nome={p.razao_social} />}
           </div>
         )}
         vazio={

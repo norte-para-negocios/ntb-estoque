@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
@@ -27,7 +27,9 @@ export default async function LocalEstoquePage({
 
   const params = await searchParams
   const supabase = await createClient()
-  const podeSync = await requirePermissao(lojaId, 'Locais de Estoque - Sincronizar')
+  // Sync (Sincronizar com Omie) virou admin-only.
+  const podeSync = await isAdmin()
+  const podeCriar = await requirePermissao(lojaId, 'Locais de Estoque - Criar')
 
   const { data: lojaSync } = await supabase
     .from('lojas')
@@ -57,7 +59,7 @@ export default async function LocalEstoquePage({
         description="Locais sincronizados do Omie"
         actions={
           <>
-            <NovoLocalEstoque />
+            {podeCriar && <NovoLocalEstoque />}
             {podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
           </>
         }

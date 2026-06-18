@@ -48,7 +48,7 @@ function normalizar(d: ParceiroInput) {
  */
 export async function criarFornecedor(dados: ParceiroInput) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Fornecedores - Criar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
 
   const supabase = createServiceClient()
@@ -63,7 +63,7 @@ export async function criarFornecedor(dados: ParceiroInput) {
 
 export async function editarFornecedor(id: number, dados: ParceiroInput) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Fornecedores - Editar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
 
   const supabase = createServiceClient()
@@ -80,7 +80,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput) {
 
 export async function excluirFornecedor(id: number) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Fornecedores'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 
   const supabase = createServiceClient()
   const { error } = await supabase.from('fornecedores').delete().eq('id', id).eq('loja_id', lojaId)

@@ -7,7 +7,8 @@ import { revalidatePath } from 'next/cache'
 // Define o estoque minimo de um produto no NTB (o Omie traz 0). Base do alerta de reposicao.
 export async function setEstoqueMinimo(produtoId: number, valor: number | null) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  // Definir o estoque minimo manual e uma edicao do produto.
+  if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão' }
   if (valor != null && (Number.isNaN(valor) || valor < 0)) {
     return { error: 'Valor inválido' }
   }

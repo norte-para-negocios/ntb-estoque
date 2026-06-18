@@ -9,10 +9,12 @@ export function EstoqueMinimoInput({
   produtoId,
   valorManual,
   valorOmie,
+  podeEditar = true,
 }: {
   produtoId: number
   valorManual: number | null // override definido no NTB (produtos.estoque_minimo)
   valorOmie: number | null // minimo vindo do Omie (posicao de estoque)
+  podeEditar?: boolean // sem permissao de Editar produto, o campo fica somente-leitura
 }) {
   // Mostra o valor EFETIVO preenchido: override manual tem prioridade; senao o do Omie.
   const efetivo = valorManual != null ? valorManual : valorOmie
@@ -44,7 +46,8 @@ export function EstoqueMinimoInput({
       type="text"
       inputMode="decimal"
       value={valor}
-      disabled={pending}
+      disabled={pending || !podeEditar}
+      readOnly={!podeEditar}
       onChange={(e) => setValor(e.target.value)}
       onBlur={salvar}
       onWheel={(e) => e.currentTarget.blur()}

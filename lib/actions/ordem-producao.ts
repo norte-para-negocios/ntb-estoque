@@ -44,7 +44,7 @@ export async function criarOrdemProducao(input: {
   obs?: string
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) {
     return { error: 'Sem permissão' }
   }
   if (!input.nCodProduto) return { error: 'Selecione um produto' }
@@ -107,7 +107,7 @@ export async function criarOrdensProducao(input: {
   obs?: string
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) return { error: 'Sem permissão' }
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) return { error: 'Sem permissão' }
   if (!input.itens.length) return { error: 'Adicione ao menos um produto' }
   if (!input.datas.length) return { error: 'Informe a data' }
 
@@ -175,6 +175,7 @@ export async function criarOrdensProducao(input: {
 
 export async function setValidadeOP(opId: number, validade: string | null) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
   await supabase
     .from('ordens_producao')
@@ -186,6 +187,7 @@ export async function setValidadeOP(opId: number, validade: string | null) {
 
 export async function setQuantidadeOP(opId: number, quantidade: number | null) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
   await supabase
     .from('ordens_producao')
@@ -197,6 +199,7 @@ export async function setQuantidadeOP(opId: number, quantidade: number | null) {
 
 export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
 
   const { data: op } = await supabase
@@ -257,10 +260,10 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
 }
 
 // Busca a OP + a loja (chaves Omie) garantindo o escopo da loja atual. Comum a
-// excluir/reverter. Inclui a permissao de Ordens de Producao.
-async function carregarOPdaLoja(opId: number) {
+// excluir/reverter. A permissao exigida varia por acao (Excluir/Reverter).
+async function carregarOPdaLoja(opId: number, permissao: string) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
+  if (!(await requirePermissao(lojaId, permissao))) {
     return { error: 'Sem permissão' as const }
   }
   const supabase = createServiceClient()
@@ -285,7 +288,7 @@ async function carregarOPdaLoja(opId: number) {
  * fundador: a pendente permite excluir. Bloqueia se a OP estiver concluida.
  */
 export async function excluirOP(opId: number) {
-  const ctx = await carregarOPdaLoja(opId)
+  const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
   if (op.concluida) {
@@ -307,7 +310,7 @@ export async function excluirOP(opId: number) {
  * OP nao estiver concluida (nao ha o que reverter).
  */
 export async function reverterOP(opId: number) {
-  const ctx = await carregarOPdaLoja(opId)
+  const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Reverter')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
   if (!op.concluida) {
