@@ -23,7 +23,7 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 | 0.5 ✅ | Cabeçalho fixo (sticky) das tabelas (eu removi) | `ui-kit/Lista.tsx`, `DataTable.tsx` | rolar → cabeçalho fica cravado + cantos curvos |
 | 0.6 | CMC/estoque negativo: sinalizar | tela produto/posição | produto negativo aparece sinalizado |
 | 0.7 | Estoque mínimo sumindo | sync/tela produto | mínimo aparece em todos |
-| 0.8 | Sugestão de preço só com preço de venda | `app/(app)/produto/page.tsx` | sem preço de venda → sem sugestão |
+| 0.8 ✅ | Sugestão de preço só com preço de venda | `app/(app)/produto/page.tsx` | sem preço de venda → sem sugestão |
 | 0.9 ✅ | NF por loja (investigar vs Omie) | `db.mjs` + sync NF | confirmar se falta mês real ou é tela |
 
 ## FASE 1 — Operação (inventário/transferência + movimentações + OP)
