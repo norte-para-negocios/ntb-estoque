@@ -191,6 +191,30 @@
   .u-card:active {
     transform: translateY(0);
   }
+
+  /* ----------------------------------------------------------------------
+     A4 - Entrada de listas/tabelas. Fade-up MUITO sutil das primeiras linhas
+     (stagger leve). So opacity + translateY de 4px (GPU). A duracao curta e o
+     deslocamento minimo garantem que NAO atrapalha o uso repetido nem briga
+     com o fade da pagina (A3): as duas se somam de leve, nao competem.
+     O delay por linha vem de --stagger (inline, calculado por indice e
+     limitado as ~12 primeiras), entao linha 13+ entra junto, sem atraso.
+     ---------------------------------------------------------------------- */
+  .u-stagger {
+    animation: u-fade-up var(--dur) var(--ease-out) both;
+    animation-delay: var(--stagger, 0ms);
+  }
+}
+
+@keyframes u-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Acessibilidade + tom refinado: quem pede menos movimento, recebe quase nada.

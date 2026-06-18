@@ -35,6 +35,11 @@ export function Lista<T>({
       ? 'w-full max-w-0 truncate'
       : 'whitespace-nowrap'
 
+  // A4: stagger leve só nas primeiras linhas (24ms/linha, teto ~12) para a lista
+  // "assentar" ao carregar sem atrasar o uso. Da 12 em diante entra sem delay.
+  const stagger = (i: number): React.CSSProperties =>
+    ({ '--stagger': `${Math.min(i, 11) * 24}ms` } as React.CSSProperties)
+
   return (
     <>
       {/* Desktop: tabela. SEM overflow-hidden (ele quebra o sticky do cabecalho).
@@ -60,10 +65,11 @@ export function Lista<T>({
             </tr>
           </thead>
           <tbody>
-            {linhas.map((row) => (
+            {linhas.map((row, i) => (
               <tr
                 key={chaveLinha(row)}
-                className="border-b border-border/60 last:border-0 u-motion even:bg-surface-2/30 hover:bg-surface-2/60"
+                style={stagger(i)}
+                className="border-b border-border/60 last:border-0 u-motion u-stagger even:bg-surface-2/30 hover:bg-surface-2/60"
               >
                 {colunas.map((c, i) => (
                   <td
@@ -84,8 +90,12 @@ export function Lista<T>({
 
       {/* Mobile: cards empilhados */}
       <div className="lg:hidden space-y-3">
-        {linhas.map((row) => (
-          <div key={chaveLinha(row)} className="rounded-lg border border-border bg-surface p-4">
+        {linhas.map((row, i) => (
+          <div
+            key={chaveLinha(row)}
+            style={stagger(i)}
+            className="u-stagger rounded-lg border border-border bg-surface p-4"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 font-semibold text-text">{primaria.render(row)}</div>
               {acao && <div className="shrink-0">{acao(row)}</div>}

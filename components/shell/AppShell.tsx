@@ -77,12 +77,16 @@ export function AppShell({
                 </kbd>
               </button>
             </div>
-            {/* key={pathname}: re-anima a entrada do conteúdo a cada navegação,
-                dando continuidade ao skeleton de loading. */}
+            {/* A3 - transicao de rota. key={pathname}: re-anima a entrada do
+                conteudo a cada navegacao (crossfade discreto + 2px de subida).
+                Curto e quase so opacidade: o "assentar" do conteudo fica por
+                conta do stagger das linhas (A4), entao a pagina nao da um slide
+                grande que brigaria com ele. Tom Linear/Vercel: a pagina troca,
+                nao "voa". */}
             <div
               key={pathname}
-              className="animate-in fade-in slide-in-from-bottom-1"
-              style={{ animationDuration: 'var(--dur-slow)', animationTimingFunction: 'var(--ease-out)' }}
+              className="animate-in fade-in slide-in-from-bottom-[2px]"
+              style={{ animationDuration: 'var(--dur)', animationTimingFunction: 'var(--ease-out)' }}
             >
               {children}
             </div>
