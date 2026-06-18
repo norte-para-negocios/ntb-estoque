@@ -225,8 +225,7 @@ export default async function HomePage() {
               <Link
                 key={i}
                 href={a.href}
-                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 transition-all duration-200 hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
-                style={{ transitionTimingFunction: 'var(--ease)' }}
+                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 u-motion u-press hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
               >
                 <span
                   className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}
@@ -234,7 +233,7 @@ export default async function HomePage() {
                   <a.icon className="size-4" strokeWidth={2} />
                 </span>
                 <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
-                <ArrowRight className="size-4 shrink-0 text-text-muted/40 transition-all group-hover:text-text-muted group-hover:translate-x-0.5" />
+                <ArrowRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
               </Link>
             ))}
           </div>
@@ -255,10 +254,9 @@ export default async function HomePage() {
             <Link
               key={k.label}
               href={k.href}
-              className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:border-brand/40"
-              style={{ transitionTimingFunction: 'var(--ease)' }}
+              className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 u-motion u-card hover:border-brand/40"
             >
-              <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand transition-colors duration-300" />
+              <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand u-motion" />
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
               <div className="mt-3 flex items-end gap-2">
                 <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
@@ -280,17 +278,16 @@ export default async function HomePage() {
               <Link
                 key={a.href}
                 href={a.href}
-                className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 transition-all duration-300 hover:bg-ink hover:border-ink"
-                style={{ transitionTimingFunction: 'var(--ease)' }}
+                className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 u-motion u-press hover:bg-ink hover:border-ink"
               >
-                <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white transition-colors shrink-0">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white u-motion shrink-0">
                   <a.icon className="size-4" strokeWidth={2} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-text group-hover:text-white transition-colors">{a.label}</div>
-                  <div className="text-[11px] text-text-muted group-hover:text-white/50 transition-colors truncate">{a.desc}</div>
+                  <div className="text-sm font-semibold text-text group-hover:text-white u-motion">{a.label}</div>
+                  <div className="text-[11px] text-text-muted group-hover:text-white/50 u-motion truncate">{a.desc}</div>
                 </div>
-                <ArrowRight className="size-4 text-text-muted/30 group-hover:text-brand group-hover:translate-x-1 transition-all shrink-0" />
+                <ArrowRight className="size-4 text-text-muted/30 group-hover:text-brand group-hover:translate-x-0.5 u-motion shrink-0" />
               </Link>
             ))}
           </div>
@@ -333,7 +330,7 @@ export default async function HomePage() {
             <table className="w-full text-sm">
               <tbody>
                 {ultimasNotas.data.map((nf) => (
-                  <tr key={nf.id} className="border-b border-border last:border-0 hover:bg-surface-2/50 transition-colors">
+                  <tr key={nf.id} className="border-b border-border last:border-0 u-motion hover:bg-surface-2/60">
                     <td className="py-3 pr-3 num text-text-muted w-24">{fmtData(nf.d_emissao_nfe)}</td>
                     <td className="py-3 pr-4 num font-medium text-text w-28">{nf.c_numero_nfe}</td>
                     <td className="py-3 pr-4 text-text/80 truncate max-w-0 w-full">
