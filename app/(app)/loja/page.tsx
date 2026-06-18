@@ -12,7 +12,21 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { escapeIlikeOr } from '@/lib/utils-busca'
-import { Store } from 'lucide-react'
+import { Store, MapPin } from 'lucide-react'
+
+// Monta o endereco em uma linha legivel a partir das colunas da loja.
+function enderecoCompleto(loja: Record<string, unknown>): string | null {
+  const log = (loja.logradouro as string | null)?.trim()
+  const num = (loja.numero as string | null)?.trim()
+  const bairro = (loja.bairro as string | null)?.trim()
+  const cidade = (loja.cidade as string | null)?.trim()
+  const uf = (loja.uf as string | null)?.trim()
+  const cep = (loja.cep as string | null)?.trim()
+  const linha1 = [log, num].filter(Boolean).join(', ')
+  const linha2 = [bairro, [cidade, uf].filter(Boolean).join('/')].filter(Boolean).join(' - ')
+  const partes = [linha1, linha2, cep ? `CEP ${cep}` : ''].filter(Boolean)
+  return partes.length ? partes.join(' · ') : null
+}
 
 function fmt(d: string | null): string {
   return d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' }) : 'dd/mm/aa hh:mm:ss'
@@ -143,6 +157,22 @@ export default async function LojaPage({
                       {loja.omie_app_secret ? loja.omie_app_secret.slice(0, 6) : '-'}
                     </span>
                   </span>
+                </div>
+
+                {/* Endereco da loja (informado no cadastro ou puxado do Omie). */}
+                <div className="border-t border-border pt-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    <MapPin className="size-4 text-text-muted" />
+                    <span className="text-[13px] font-medium text-text">Endereço</span>
+                  </div>
+                  <p className="text-[13px] text-text">
+                    {enderecoCompleto(loja) || (
+                      <span className="text-text-muted">
+                        Sem endereço. Edite a loja para informar, ou clique em &quot;Puxar dados do
+                        Omie&quot; para trazer do cadastro da empresa.
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 {/* Dados da empresa (puxados do Omie via ListarEmpresas) */}
