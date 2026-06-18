@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation' // ainda usado no finalizar
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
-import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
+import { Trash2, CheckCircle, Minus, Plus, Search, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -46,8 +46,15 @@ export function ContagemInventario({
   const [itens, setItens] = useState(itensIniciais)
   const [filtro, setFiltro] = useState('')
   const [buscaManual, setBuscaManual] = useState(false)
+  // Inventario finalizado entra em modo leitura; "Editar itens" destrava os
+  // controles para corrigir/excluir um item depois de finalizado (o servidor
+  // exclui o ajuste antigo no Omie e relanca a nova quantidade).
+  const [editando, setEditando] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  // Controles de quantidade/remocao liberados: durante a contagem (nao finalizado)
+  // ou quando o usuario clica em "Editar itens" num inventario finalizado.
+  const editavel = !finalizado || editando
 
   const visiveis = useMemo(() => {
     const q = filtro.trim().toLowerCase()
@@ -127,10 +134,19 @@ export function ContagemInventario({
   }
 
   function remover(itemId: number) {
+    if (finalizado && !window.confirm('Excluir este item? O ajuste já lançado no Omie será removido.')) {
+      return
+    }
+    const anterior = itens
     setItens((prev) => prev.filter((i) => i.id !== itemId))
     startTransition(async () => {
-      await removeInventarioItem(itemId)
-      toast.success('Item removido')
+      const res = await removeInventarioItem(itemId)
+      if (res?.error) {
+        setItens(anterior) // desfaz o otimismo se o Omie recusar
+        toast.error('Erro ao remover', { description: res.error })
+      } else {
+        toast.success('Item removido')
+      }
     })
   }
 
@@ -174,12 +190,38 @@ export function ContagemInventario({
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
           </span>
-          {comErro > 0 && (
-            <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
-              {pending ? 'Reenviando...' : 'Reenviar pendentes'}
-            </button>
-          )}
+          <span className="inline-flex items-center gap-2">
+            {comErro > 0 && (
+              <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
+                {pending ? 'Reenviando...' : 'Reenviar pendentes'}
+              </button>
+            )}
+            {finalizado && (
+              <button
+                onClick={() => setEditando((v) => !v)}
+                disabled={pending}
+                className={btnClass(editando ? 'primary' : 'outline')}
+              >
+                {editando ? (
+                  <>
+                    <X className="size-4" /> Concluir edição
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="size-4" /> Editar itens
+                  </>
+                )}
+              </button>
+            )}
+          </span>
         </div>
+      )}
+
+      {editando && (
+        <p className="mb-4 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Editando um inventário finalizado. Ao alterar a quantidade ou excluir um item, o ajuste já
+          lançado no Omie é refeito ou removido na hora.
+        </p>
       )}
 
       {!finalizado && (
@@ -239,7 +281,7 @@ export function ContagemInventario({
                       </div>
                     )}
                   </div>
-                  {!finalizado && (
+                  {editavel && (
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending}
@@ -253,7 +295,7 @@ export function ContagemInventario({
 
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="eyebrow">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
-                  {finalizado ? (
+                  {!editavel ? (
                     <span className="num text-lg font-semibold text-text">{q ?? 0}</span>
                   ) : (
                     <div className="flex items-center gap-2">

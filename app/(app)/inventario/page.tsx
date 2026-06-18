@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardList, Pencil } from 'lucide-react'
+import { ClipboardList, Pencil, Printer } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -219,6 +219,16 @@ export default async function InventarioPage({
               <Link href={`/inventario/${inv.id}/contagem`} className={btnClass('outline')}>
                 <Pencil className="size-4" /> {finalizado ? 'Ver' : 'Contar'}
               </Link>
+              <a
+                href={`/inventario/${inv.id}/imprimir`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+                aria-label="Imprimir"
+                title="Imprimir"
+              >
+                <Printer className="size-4" /> Imprimir
+              </a>
               <AcoesInventario
                 inventarioId={inv.id}
                 temErro={temErro}

@@ -191,8 +191,25 @@ export async function enviarInventarioItem(
 export async function removeInventarioItem(itemId: number) {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
+  // Se o item ja foi lancado no Omie (id_ajuste), exclui o ajuste de estoque
+  // antes de remover a linha — senao o estoque ficaria ajustado sem o item no
+  // sistema. Vale para item de inventario finalizado tambem (editar pos-fato).
+  const { data: item } = await supabase
+    .from('inventario_items')
+    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .eq('id', itemId)
+    .eq('loja_id', lojaId)
+    .single<{ id: number; id_ajuste: number | null; loja: LojaOmie }>()
+  if (item?.id_ajuste && item.loja) {
+    try {
+      await excluirAjusteEstoque(item.loja, item.id_ajuste)
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Falha ao excluir o ajuste no Omie' }
+    }
+  }
   await supabase.from('inventario_items').delete().eq('id', itemId).eq('loja_id', lojaId)
   revalidatePath('/inventario')
+  return { ok: true }
 }
 
 type InventarioItemRow = {
