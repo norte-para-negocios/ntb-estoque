@@ -16,11 +16,11 @@ criar+excluir · sem travessão · assinar "Joaquim Salles" · histórico rollin
 ## FASE 0 — Estabilizar bugs (faz primeiro: trava o uso real)
 | # | Tarefa | Onde (provável) | Validação |
 |---|---|---|---|
-| 0.1 | Etiqueta: nunca imprimir 0; default 1 quando vazio | geração de etiqueta / impressão | gerar etiqueta sem nº → sai 1 |
+| 0.1 ✅ | Etiqueta: nunca imprimir 0; default 1 quando vazio | geração de etiqueta / impressão | gerar etiqueta sem nº → sai 1 |
 | 0.2 | Unidade de medida + quantidade zero ao add produto | OP/transf/inventário (ProdutoSearch + linha do item) | add produto → unidade aparece, qtd começa 1 |
 | 0.3 | Transferência não "volta"/zera o produto | `lib/actions/transferencia.ts` + tela contagem | transferir → produto fica, não some no refresh |
 | 0.4 | Inventário trava em "Iniciado" | fluxo de envio do inventário | item com erro não trava os outros |
-| 0.5 | Cabeçalho fixo (sticky) das tabelas (eu removi) | `ui-kit/Lista.tsx`, `DataTable.tsx` | rolar → cabeçalho fica cravado + cantos curvos |
+| 0.5 ✅ | Cabeçalho fixo (sticky) das tabelas (eu removi) | `ui-kit/Lista.tsx`, `DataTable.tsx` | rolar → cabeçalho fica cravado + cantos curvos |
 | 0.6 | CMC/estoque negativo: sinalizar | tela produto/posição | produto negativo aparece sinalizado |
 | 0.7 | Estoque mínimo sumindo | sync/tela produto | mínimo aparece em todos |
 | 0.8 | Sugestão de preço só com preço de venda | `app/(app)/produto/page.tsx` | sem preço de venda → sem sugestão |
