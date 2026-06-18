@@ -8,6 +8,7 @@ import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferenci
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -191,7 +192,17 @@ export default async function TransferenciaPage({
         }
       />
 
-      <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} />
+      <ChipsStatus
+        basePath="/transferencia"
+        param="status"
+        opcoes={[
+          { value: '', label: 'Todas' },
+          { value: 'A', label: 'Em aberto' },
+          { value: 'C', label: 'Concluídas' },
+        ]}
+      />
+
+      <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} />
 
       <Lista
         linhas={transferencias ?? []}

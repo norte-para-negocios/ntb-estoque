@@ -9,6 +9,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -304,20 +305,24 @@ export default async function OrdemProducaoPage({
         }
       />
 
+      <ChipsStatus
+        basePath="/ordem-producao"
+        param="op_concluido"
+        opcoes={[
+          { value: '', label: 'Todas' },
+          { value: 'N', label: 'Pendentes', count: totPendentes ?? 0 },
+          { value: 'S', label: 'Concluídas', count: totConcluidas ?? 0 },
+        ]}
+      />
+
       <ChipsFiltrosAtivos
         basePath="/ordem-producao"
         campos={campos}
-        naoMostrar={['data_inicio', 'data_final', 'ord']}
+        naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido']}
       />
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: {fmtDataBR(dataInicio)} a {fmtDataBR(dataFinal)}</span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          Pendentes <span className="num font-semibold text-warn">{totPendentes ?? 0}</span>
-        </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          Concluídas <span className="num font-semibold text-ok">{totConcluidas ?? 0}</span>
-        </span>
       </div>
 
       {truncado && (

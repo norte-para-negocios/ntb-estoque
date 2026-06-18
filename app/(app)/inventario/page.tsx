@@ -8,6 +8,7 @@ import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -159,7 +160,17 @@ export default async function InventarioPage({
         }
       />
 
-      <ChipsFiltrosAtivos basePath="/inventario" campos={campos} />
+      <ChipsStatus
+        basePath="/inventario"
+        param="status"
+        opcoes={[
+          { value: '', label: 'Todos' },
+          { value: 'A', label: 'Em aberto' },
+          { value: 'F', label: 'Finalizados' },
+        ]}
+      />
+
+      <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} />
 
       <Lista
         linhas={inventarios ?? []}
