@@ -73,6 +73,7 @@ export function ContagemTransferencia({
           id_prod: p.codigo_produto,
           descricao: p.descricao,
           codigo: p.codigo,
+          unidade: p.unidade ?? null, // sem isto a unidade (UN/KG) nao aparecia na transferencia
           quan: null,
           status: 'Iniciado',
         }
