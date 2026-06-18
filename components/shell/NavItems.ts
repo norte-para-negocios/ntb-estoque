@@ -41,7 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
-  { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros' },
+  { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', admin: true },

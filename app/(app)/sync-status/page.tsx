@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
+import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { StatCard } from '@/components/ui-kit/StatCard'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -62,6 +63,8 @@ export default async function SyncStatusPage({
 }) {
   const profile = await getProfile()
   const isAdmin = profile.perfil === 'Admin'
+  // Saude da integracao e so para admin (pedido G da reuniao 17/06).
+  if (!isAdmin) notFound()
   const params = await searchParams
 
   const dias = Math.max(1, Number(params.dias) || 1)
