@@ -402,7 +402,8 @@ export default async function ProdutoPage({
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-32',
                   render: (p: ProdutoLinha) => {
-                    const s = precoSugerido(custoDe(p.codigo_produto), alvo)
+                    // Sem preco de venda nao da sugestao (pedido do fundador 17/06).
+                    const s = Number(p.valor_unitario) > 0 ? precoSugerido(custoDe(p.codigo_produto), alvo) : null
                     return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
                   },
                 },
