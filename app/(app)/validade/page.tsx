@@ -80,18 +80,25 @@ export default async function ValidadePage({
     .not('validade', 'is', null)
   ordensQuery = vencidos
     ? ordensQuery.lt('validade', hojeMais(0)).order('validade', { ascending: false })
-    : ordensQuery.lte('validade', hojeMais(dias)).order('validade', { ascending: true })
+    : ordensQuery
+        .gte('validade', hojeMais(0))
+        .lte('validade', hojeMais(dias))
+        .order('validade', { ascending: true })
   ordensQuery = ordensQuery.limit(LIMITE)
 
   if (codigosTipo !== null) {
     ordensQuery = ordensQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
   }
 
-  const { data: ordens } = await ordensQuery
+  const { data: ordensRaw } = await ordensQuery
+  // Esconde OPs sem saldo (quantidade 0): sem unidade nao ha o que vencer.
+  const ordens = (ordensRaw ?? []).filter(
+    (o) => Number(o.quantidade ?? o.identificacao_n_qtde ?? 0) > 0
+  )
 
   // Resolver descrição/código/unidade dos produtos relacionados.
   const codigos = [
-    ...new Set((ordens ?? []).map((o) => o.identificacao_n_cod_produto).filter(Boolean)),
+    ...new Set(ordens.map((o) => o.identificacao_n_cod_produto).filter(Boolean)),
   ]
   const { data: produtos } = codigos.length
     ? await supabase
