@@ -16,10 +16,12 @@ const BOTTOM = [
 
 export function MobileNav({
   isAdmin,
+  rotasVisiveis,
   lojaSelector,
   userMenu,
 }: {
   isAdmin: boolean
+  rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
 }) {
@@ -28,7 +30,13 @@ export function MobileNav({
   useEffect(() => {
     setOpen(false)
   }, [pathname])
-  const itens = NAV_ITEMS.filter((i) => !i.admin || isAdmin)
+  const permitidas = rotasVisiveis ? new Set(rotasVisiveis) : null
+  const itens = NAV_ITEMS.filter(
+    (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+  )
+  // Barra inferior fixa: filtra pelas mesmas permissoes. /home nao tem permissao
+  // mapeada (sempre visivel), entao a barra nunca fica vazia.
+  const bottomVisivel = BOTTOM.filter((b) => permitidas === null || permitidas.has(b.href))
   return (
     <>
       <header
@@ -88,10 +96,13 @@ export function MobileNav({
       </aside>
 
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 border-t border-border bg-surface/95 backdrop-blur"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid border-t border-border bg-surface/95 backdrop-blur"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          gridTemplateColumns: `repeat(${bottomVisivel.length}, minmax(0, 1fr))`,
+        }}
       >
-        {BOTTOM.map((b) => {
+        {bottomVisivel.map((b) => {
           const Icon = b.icon
           const active = pathname.startsWith(b.href)
           return (

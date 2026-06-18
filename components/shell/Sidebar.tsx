@@ -9,15 +9,20 @@ const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 
 export function Sidebar({
   isAdmin,
+  rotasVisiveis,
   lojaSelector,
   userMenu,
 }: {
   isAdmin: boolean
+  rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
 }) {
   const pathname = usePathname()
-  const itens = NAV_ITEMS.filter((i) => !i.admin || isAdmin)
+  const permitidas = rotasVisiveis ? new Set(rotasVisiveis) : null
+  const itens = NAV_ITEMS.filter(
+    (i) => (!i.admin || isAdmin) && (permitidas === null || permitidas.has(i.href))
+  )
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-surface sticky top-0 h-screen self-start">
       <div className="flex h-16 items-center px-5 border-b border-border">

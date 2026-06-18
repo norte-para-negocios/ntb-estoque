@@ -101,3 +101,43 @@ export async function getCurrentLojaId(): Promise<number> {
   if (!profile.current_loja_id) redirect('/home')
   return profile.current_loja_id
 }
+
+// Conjunto de NOMES de permissao que o usuario tem na loja informada.
+// Admin recebe '*' (tudo) para o chamador tratar como acesso total.
+// Usado pelo shell para esconder do menu o que o usuario nao pode ver (4.2).
+export async function getPermissoesNomes(lojaId: number | null): Promise<Set<string>> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return new Set()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('perfil')
+    .eq('id', user.id)
+    .single<{ perfil: string | null }>()
+
+  if (profile?.perfil === 'Admin') return new Set(['*'])
+  if (!lojaId) return new Set()
+
+  // Junta permissao_user (da loja) com o nome da permissao.
+  const { data } = await supabase
+    .from('permissao_user')
+    .select('permissoes(nome)')
+    .eq('user_id', user.id)
+    .eq('loja_id', lojaId)
+    .returns<{ permissoes: { nome: string } | { nome: string }[] | null }[]>()
+
+  const nomes = new Set<string>()
+  for (const row of data ?? []) {
+    const p = row.permissoes
+    if (!p) continue
+    if (Array.isArray(p)) {
+      for (const x of p) if (x?.nome) nomes.add(x.nome)
+    } else if (p.nome) {
+      nomes.add(p.nome)
+    }
+  }
+  return nomes
+}

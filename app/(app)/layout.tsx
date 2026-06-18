@@ -1,14 +1,19 @@
-import { getProfile } from '@/lib/auth'
+import { getProfile, getPermissoesNomes } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shell/AppShell'
 import { LojaSelector } from '@/components/loja/LojaSelector'
 import { UserMenu } from '@/components/shell/UserMenu'
+import { rotasPermitidas } from '@/lib/permissoes-menu'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
   const isAdmin = profile.perfil === 'Admin'
 
   const supabase = await createClient()
+
+  // Quais rotas do menu o usuario pode ver (4.2). Admin recebe null = todas.
+  const permissoes = await getPermissoesNomes(profile.current_loja_id)
+  const rotasVisiveis = isAdmin ? null : Array.from(rotasPermitidas(permissoes))
 
   let lojasQuery = supabase
     .from('lojas')
@@ -33,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AppShell
       isAdmin={isAdmin}
+      rotasVisiveis={rotasVisiveis}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >
