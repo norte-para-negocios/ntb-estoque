@@ -7,7 +7,6 @@ import { Search } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { MobileNav } from './MobileNav'
 import { BuscaGlobal } from './BuscaGlobal'
-import { SplashIntro } from './SplashIntro'
 
 export function AppShell({
   isAdmin,
@@ -60,7 +59,6 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <SplashIntro />
       <Sidebar isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileNav isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
