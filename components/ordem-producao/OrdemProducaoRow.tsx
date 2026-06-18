@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus } from 'lucide-react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { setValidadeOP, setQuantidadeOP, finishOP } from '@/lib/actions/ordem-producao'
+import { setValidadeOP, setQuantidadeOP, finishOP, reverterOP, excluirOP } from '@/lib/actions/ordem-producao'
 import { Num } from '@/components/ui-kit/Num'
 import type { OpStatus } from '@/lib/op-status'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
@@ -23,6 +23,8 @@ interface OPData {
   data?: string | null // data prevista/real da OP (dd/mm/aaaa)
   concluida: boolean
   status: OpStatus
+  /** Quem pode operar a OP (concluir/reverter/excluir). */
+  podeGerenciar?: boolean
 }
 
 // Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
@@ -111,6 +113,25 @@ function useOP(op: OPData) {
     })
   }
 
+  // Reverter a conclusao (OP concluida) e excluir (OP aberta). Escrevem no Omie.
+  function reverter() {
+    if (!window.confirm('Reverter a conclusão desta OP no Omie? O estoque produzido será estornado.')) return
+    startTransition(async () => {
+      const res = await reverterOP(op.id)
+      if (res?.error) toast.error('Erro ao reverter', { description: res.error })
+      else toast.success('Conclusão revertida no Omie')
+    })
+  }
+
+  function excluir() {
+    if (!window.confirm('Excluir esta OP no Omie? Esta ação não pode ser desfeita.')) return
+    startTransition(async () => {
+      const res = await excluirOP(op.id)
+      if (res?.error) toast.error('Erro ao excluir', { description: res.error })
+      else toast.success('OP excluída no Omie')
+    })
+  }
+
   return {
     validade,
     setValidade,
@@ -122,6 +143,8 @@ function useOP(op: OPData) {
     ajustarValidade,
     ajustarQuantidade,
     concluir,
+    reverter,
+    excluir,
     escolhendoData,
     setEscolhendoData,
     dataConclusao,
@@ -253,6 +276,29 @@ function Acoes({ op, ctrl }: StepperProps) {
             className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
           >
             <Check className="size-3.5" /> Concluir
+          </button>
+        ))}
+      {/* Regra do fundador: concluida -> reverter; aberta -> excluir. So gestores. */}
+      {op.podeGerenciar &&
+        (op.concluida ? (
+          <button
+            type="button"
+            onClick={ctrl.reverter}
+            disabled={ctrl.pending}
+            className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
+            title="Reverter a conclusão (estorna no Omie)"
+          >
+            <Undo2 className="size-3.5" /> Reverter
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={ctrl.excluir}
+            disabled={ctrl.pending}
+            className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
+            title="Excluir a OP no Omie"
+          >
+            <Trash2 className="size-3.5" /> Excluir
           </button>
         ))}
     </>

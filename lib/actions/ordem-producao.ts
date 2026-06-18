@@ -7,6 +7,8 @@ import {
   concluirOrdemProducao,
   incluirOrdemProducao,
   fetchOrdemProducao,
+  excluirOrdemProducao,
+  reverterOrdemProducao,
 } from '@/lib/omie/ordem-producao'
 import type { LojaOmie } from '@/lib/omie/client'
 
@@ -251,5 +253,76 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao concluir no Omie' }
+  }
+}
+
+// Busca a OP + a loja (chaves Omie) garantindo o escopo da loja atual. Comum a
+// excluir/reverter. Inclui a permissao de Ordens de Producao.
+async function carregarOPdaLoja(opId: number) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
+    return { error: 'Sem permissão' as const }
+  }
+  const supabase = createServiceClient()
+  const { data: op } = await supabase
+    .from('ordens_producao')
+    .select('identificacao_n_cod_op, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .single<{
+      identificacao_n_cod_op: number | null
+      concluida: boolean | null
+      loja: LojaOmie
+    }>()
+  if (!op?.identificacao_n_cod_op || !op.loja) {
+    return { error: 'Ordem de produção não encontrada' as const }
+  }
+  return { lojaId, supabase, op }
+}
+
+/**
+ * Exclui no Omie uma OP ABERTA (nao concluida) e remove do banco. Regra do
+ * fundador: a pendente permite excluir. Bloqueia se a OP estiver concluida.
+ */
+export async function excluirOP(opId: number) {
+  const ctx = await carregarOPdaLoja(opId)
+  if ('error' in ctx) return { error: ctx.error }
+  const { lojaId, supabase, op } = ctx
+  if (op.concluida) {
+    return { error: 'OP concluída não pode ser excluída. Reverta a conclusão antes.' }
+  }
+  try {
+    await excluirOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+    await supabase.from('ordens_producao').delete().eq('id', opId).eq('loja_id', lojaId)
+    revalidatePath('/ordem-producao')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao excluir no Omie' }
+  }
+}
+
+/**
+ * Reverte no Omie a CONCLUSAO de uma OP concluida e volta o status local para
+ * nao-concluido. Regra do fundador: a concluida permite reverter. Bloqueia se a
+ * OP nao estiver concluida (nao ha o que reverter).
+ */
+export async function reverterOP(opId: number) {
+  const ctx = await carregarOPdaLoja(opId)
+  if ('error' in ctx) return { error: ctx.error }
+  const { lojaId, supabase, op } = ctx
+  if (!op.concluida) {
+    return { error: 'Só dá para reverter uma OP concluída.' }
+  }
+  try {
+    await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+    await supabase
+      .from('ordens_producao')
+      .update({ concluida: false, dt_conclusao_real: null, updated_at: new Date().toISOString() })
+      .eq('id', opId)
+      .eq('loja_id', lojaId)
+    revalidatePath('/ordem-producao')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao reverter no Omie' }
   }
 }

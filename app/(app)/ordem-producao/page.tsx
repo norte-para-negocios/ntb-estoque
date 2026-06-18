@@ -348,6 +348,9 @@ export default async function OrdemProducaoPage({
               data: fmtDataBR(op.identificacao_d_dt_previsao),
               concluida: isOpConcluida(op),
               status: opStatus(op, hojeISO),
+              // A pagina ja exige a permissao 'Ordens de Producao' (notFound acima),
+              // entao quem chega aqui pode gerenciar (concluir/reverter/excluir).
+              podeGerenciar: true,
             }
           })
           return (

@@ -187,6 +187,37 @@ export async function incluirOrdemProducao(
   })
 }
 
+/**
+ * Exclui uma Ordem de Producao no Omie (ExcluirOrdemProducao). So vale para OP
+ * ABERTA/pendente. Param: { nCodOP }. Validada em teste real anterior.
+ */
+export async function excluirOrdemProducao(loja: LojaOmie, nCodOP: number) {
+  return omieRequest({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/op',
+    call: 'ExcluirOrdemProducao',
+    data: { nCodOP },
+  })
+}
+
+/**
+ * Reverte a CONCLUSAO de uma OP concluida (ReverterOrdemProducao) — "Solicitacao
+ * de reversao da conclusao da ordem de producao" (lista oficial do Omie). Param:
+ * { nCodOP }. Volta a OP para o estado nao-concluido (estorna o estoque produzido).
+ */
+export async function reverterOrdemProducao(loja: LojaOmie, nCodOP: number) {
+  return omieRequest({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/op',
+    call: 'ReverterOrdemProducao',
+    data: { nCodOP },
+  })
+}
+
 export async function concluirOrdemProducao(
   loja: LojaOmie,
   nCodOP: number,
