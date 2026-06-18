@@ -4,6 +4,17 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
 (?) = precisa confirmar. Quem mostra a tela e fala os pedidos é o Ramon; Joaquim anota.
 
 ================================================================================
+## VISÃO ESTRATÉGICA (norteia TUDO)
+================================================================================
+**O OBJETIVO É SUBSTITUIR O OMIE COMPLETAMENTE no futuro.** Hoje o sistema é INTEGRADO ao Omie
+(puxa e escreve), mas a meta é ser INDEPENDENTE: o banco próprio é a fonte da verdade, não ficar
+dependente de puxar direto do Omie a todo momento (transcr.: "fazer de uma maneira que não fique
+puxando direto lá; fica tudo salvo no banco"). **DECISÃO: preparar a arquitetura desde já pra essa
+independência** — dados completos no banco, cadastros próprios (loja, produto, fornecedor, cliente,
+família, CEST), histórico próprio (1 ano + arquivo morto), estrutura de produto própria. Integrado
+agora, independente depois (mas já preparando).
+
+================================================================================
 ## A. BUGS (corrigir)
 ================================================================================
 1. **CMC / custo zerado** — JÁ CORRIGIDO (no main). Causa confirmada na reunião: "cada dia o
@@ -180,6 +191,9 @@ Releitura integral da transcrição (1.142 segmentos, 62 min). Áudio ruim em pa
 - **Cadastro de fornecedor** (e puxar via SINTEGRA — ver E).
 - **Cadastro de família.**
 - Cadastro de cliente, CEST (ver E).
+- **Endereço das lojas** — poder informar o endereço ao cadastrar a loja; e as lojas que JÁ existem,
+  **puxar o endereço do Omie** se tiver. (parte de tornar o cadastro de loja completo/próprio = visão
+  de independência do Omie)
 - "Tem cadastro de fornecedor, de família, de tudo isso que você não bota" — criar todos os cadastros
   que faltam, não só produto/local.
 
