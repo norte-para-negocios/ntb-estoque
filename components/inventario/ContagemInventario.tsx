@@ -7,6 +7,7 @@ import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, CheckCircle, Minus, Plus, Search, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
@@ -193,6 +194,7 @@ export function ContagemInventario({
           <span className="inline-flex items-center gap-2">
             {comErro > 0 && (
               <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
+                {pending && <Spinner />}
                 {pending ? 'Reenviando...' : 'Reenviar pendentes'}
               </button>
             )}
@@ -372,7 +374,7 @@ export function ContagemInventario({
               disabled={pending}
               className={`${btnClass('primary')} w-full sm:w-auto`}
             >
-              <CheckCircle className="size-4" />
+              {pending ? <Spinner /> : <CheckCircle className="size-4" />}
               {pending ? 'Processando...' : 'Concluir inventário'}
             </button>
           </div>

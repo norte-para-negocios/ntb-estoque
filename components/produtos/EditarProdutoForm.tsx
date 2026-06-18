@@ -9,6 +9,7 @@ import { editarProduto } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { parseNumBR } from '@/lib/num-br'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
@@ -199,6 +200,7 @@ export function EditarProdutoForm({
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
+            {pending && <Spinner />}
             {pending ? 'Salvando...' : 'Salvar'}
           </button>
         </div>

@@ -6,6 +6,7 @@ import { ShieldCheck, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { salvarCertificado } from '@/lib/actions/certificado'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-brand'
@@ -102,7 +103,7 @@ export function CertificadoUpload({
         </div>
         <div className="flex items-end">
           <button type="button" onClick={enviar} disabled={pending} className={btnClass('outline')}>
-            <Upload className={`size-4 ${pending ? 'animate-pulse' : ''}`} />
+            {pending ? <Spinner /> : <Upload className="size-4" />}
             {pending ? 'Enviando...' : 'Salvar certificado'}
           </button>
         </div>

@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { Num } from '@/components/ui-kit/Num'
+import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
@@ -203,7 +203,7 @@ export default async function HomePage() {
             <div>
               <p className="text-[12px] uppercase tracking-[0.16em] text-white/45 mb-2">Produtos em estoque</p>
               <div className="num text-[4.5rem] leading-[0.85] font-bold tracking-tight">
-                <Num value={produtos.count ?? 0} />
+                <CountUp value={produtos.count ?? 0} duration={750} />
               </div>
               <div className="mt-4 h-1 w-24 rounded-full bg-brand" />
             </div>
@@ -260,7 +260,7 @@ export default async function HomePage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
               <div className="mt-3 flex items-end gap-2">
                 <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
-                  <Num value={k.value} />
+                  <CountUp value={k.value} duration={550} />
                 </span>
                 <span className="mb-1 text-[12px] text-text-muted">{k.hint}</span>
               </div>

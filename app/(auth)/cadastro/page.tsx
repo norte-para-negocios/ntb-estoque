@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useActionState } from 'react'
 import { cadastrar } from '@/lib/actions/cadastro'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { CheckCircle2 } from 'lucide-react'
 
 const inputClass =
@@ -94,6 +95,7 @@ export default function CadastroPage() {
               )}
 
               <button type="submit" disabled={pending} className={`${btnClass('primary')} w-full py-2.5`}>
+                {pending && <Spinner />}
                 {pending ? 'Enviando...' : 'Pedir acesso'}
               </button>
             </form>

@@ -11,6 +11,7 @@ import { Plus, ShieldCheck, ShieldHalf, User as UserIcon, Store } from 'lucide-r
 import { toast } from 'sonner'
 import { criarUsuario, type PerfilUsuario } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
@@ -350,6 +351,7 @@ export function NovoUsuario({
             Cancelar
           </button>
           <button type="button" onClick={criar} disabled={pending} className={btnClass('primary')}>
+            {pending && <Spinner />}
             {pending ? 'Criando...' : 'Criar usuário'}
           </button>
         </div>

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { criarProduto } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand'
@@ -219,6 +220,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         <div className="flex items-center gap-2">
           <Link href="/produto" className={btnClass('outline')}>Cancelar</Link>
           <button onClick={criar} disabled={pending} className={btnClass('primary')}>
+            {pending && <Spinner />}
             {pending ? 'Criando...' : 'Criar no Omie'}
           </button>
         </div>

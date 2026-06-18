@@ -11,6 +11,7 @@ import { Ticket, ShieldHalf, User as UserIcon, Store, Copy, Check } from 'lucide
 import { toast } from 'sonner'
 import { gerarConvite, type PerfilConvite } from '@/lib/actions/convite'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
@@ -357,6 +358,7 @@ export function ConvidarUsuario({
                 Cancelar
               </button>
               <button type="button" onClick={gerar} disabled={pending} className={btnClass('primary')}>
+                {pending && <Spinner />}
                 {pending ? 'Gerando...' : 'Gerar convite'}
               </button>
             </div>

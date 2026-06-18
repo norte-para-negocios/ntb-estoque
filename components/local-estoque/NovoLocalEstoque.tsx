@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarLocalEstoque } from '@/lib/actions/local-estoque'
@@ -83,6 +84,7 @@ export function NovoLocalEstoque() {
         </div>
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
+            {pending && <Spinner />}
             {pending ? 'Criando...' : 'Criar no Omie'}
           </Button>
         </DialogFooter>

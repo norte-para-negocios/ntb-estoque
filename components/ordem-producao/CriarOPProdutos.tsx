@@ -7,6 +7,7 @@ import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import { Trash2, Minus, Plus, Search, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
@@ -265,7 +266,7 @@ export function CriarOPProdutos({
               disabled={pending}
               className={`${btnClass('primary')} w-full sm:w-auto`}
             >
-              <CheckCircle className="size-4" />
+              {pending ? <Spinner /> : <CheckCircle className="size-4" />}
               {pending ? 'Criando no Omie...' : `Criar ${totalOPs > 1 ? `${totalOPs} OPs` : 'OP'}`}
             </button>
           </div>

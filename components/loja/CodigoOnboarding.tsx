@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Copy, Check, RefreshCw, KeyRound, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { gerarCodigoLoja, removerCodigoLoja } from '@/lib/actions/onboarding-loja'
 
 // Codigo de onboarding da loja (4.5): admin gera/regenera/remove; o funcionario
@@ -91,7 +92,7 @@ export function CodigoOnboarding({
         </div>
       ) : (
         <button type="button" onClick={gerar} disabled={pending} className={btnClass('primary')}>
-          <KeyRound className="size-4" /> {pending ? 'Gerando...' : 'Gerar código'}
+          {pending ? <Spinner /> : <KeyRound className="size-4" />} {pending ? 'Gerando...' : 'Gerar código'}
         </button>
       )}
     </div>

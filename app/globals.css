@@ -99,6 +99,10 @@
   --press: 0.98; /* press de botões/links/cards */
   --press-sm: 0.96; /* press de ícones pequenos (toggles do menu) */
 
+  /* Brilho do skeleton shimmer (A6). Levíssimo no claro: quase branco translúcido
+     varrendo o cinza-base. Sutil de propósito — não deve "cintilar". */
+  --shimmer: rgba(255, 255, 255, 0.55);
+
   --radius: 0.625rem;
 }
 
@@ -121,6 +125,8 @@
   --ink: #0a0d13;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
+  /* No escuro o brilho branco forte estoura: usa um clarão bem mais discreto. */
+  --shimmer: rgba(255, 255, 255, 0.06);
 }
 
 @layer base {
@@ -204,6 +210,43 @@
     animation: u-fade-up var(--dur) var(--ease-out) both;
     animation-delay: var(--stagger, 0ms);
   }
+
+  /* ----------------------------------------------------------------------
+     A6 - Fade-in simples (sem deslocamento). Para estados vazios (EmptyState)
+     e mensagens que aparecem depois de uma espera: entram com calma, sem
+     "pular". Só opacity (GPU). Mais lento que o stagger das listas porque é
+     uma superfície inteira surgindo, não uma linha.
+     ---------------------------------------------------------------------- */
+  .u-fade-in {
+    animation: u-fade-in var(--dur-slow) var(--ease-out) both;
+  }
+
+  /* ----------------------------------------------------------------------
+     A6 - Skeleton shimmer SUTIL. Um brilho percorre o placeholder da esquerda
+     para a direita, indicando "carregando" de forma viva mas discreta (tom
+     Linear/Vercel). Anima só background-position (sem layout/transform). Pensado
+     para os blocos cinza do loading.tsx: aplique .u-skeleton no bloco e ele
+     ganha a base + o sweep. O brilho é levíssimo (alpha baixo) para não brilhar
+     "demais". Em reduced-motion o sweep para e fica o tom-base estático.
+     ---------------------------------------------------------------------- */
+  .u-skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--surface-2);
+  }
+  .u-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--shimmer) 50%,
+      transparent 100%
+    );
+    animation: u-shimmer 1.4s var(--ease-in-out) infinite;
+  }
 }
 
 @keyframes u-fade-up {
@@ -217,6 +260,21 @@
   }
 }
 
+@keyframes u-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes u-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Acessibilidade + tom refinado: quem pede menos movimento, recebe quase nada.
    Zera durações/animações globalmente, preservando o estado final. */
 @media (prefers-reduced-motion: reduce) {
@@ -227,6 +285,11 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* O sweep do skeleton fica só com o tom-base estático (sem barra de brilho
+     congelada num ponto). Mantém a leitura de "carregando" sem movimento. */
+  .u-skeleton::after {
+    display: none !important;
   }
 }
 

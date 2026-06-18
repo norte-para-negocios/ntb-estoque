@@ -17,6 +17,7 @@ import {
   type PerfilUsuario,
 } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
@@ -281,6 +282,7 @@ export function EditarUsuario({
               disabled={pending}
               className={btnClass('primary')}
             >
+              {pending && <Spinner />}
               {pending ? 'Salvando...' : 'Salvar dados'}
             </button>
           </div>
@@ -396,7 +398,7 @@ export function EditarUsuario({
                     disabled={pending}
                     className="inline-flex items-center gap-1.5 rounded-md bg-err px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                   >
-                    <Trash2 className="size-4" /> {pending ? 'Excluindo...' : 'Confirmar exclusão'}
+                    {pending ? <Spinner /> : <Trash2 className="size-4" />} {pending ? 'Excluindo...' : 'Confirmar exclusão'}
                   </button>
                   <button
                     type="button"

@@ -6,6 +6,7 @@ import { Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { puxarEmpresaDoOmie } from '@/lib/actions/loja'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 
 export function PuxarEmpresa({ lojaId }: { lojaId: number }) {
   const [pending, startTransition] = useTransition()
@@ -40,7 +41,7 @@ export function PuxarEmpresa({ lojaId }: { lojaId: number }) {
       disabled={pending || cooldown > 0}
       className={btnClass('outline')}
     >
-      <Building2 className={`size-4 ${pending ? 'animate-pulse' : ''}`} />
+      {pending ? <Spinner /> : <Building2 className="size-4" />}
       {pending ? 'Puxando...' : cooldown > 0 ? `Aguarde ${cooldown}s` : 'Puxar dados do Omie'}
     </button>
   )

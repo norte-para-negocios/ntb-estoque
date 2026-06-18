@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
+import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
@@ -208,6 +209,7 @@ export function ParceiroForm({
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
+            {pending && <Spinner />}
             {pending ? 'Salvando...' : editando ? 'Salvar' : 'Criar'}
           </button>
         </div>

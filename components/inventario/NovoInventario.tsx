@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { createInventario } from '@/lib/actions/inventario'
@@ -99,6 +100,7 @@ export function NovoInventario({ locais }: { locais: Local[] }) {
         </div>
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
+            {pending && <Spinner />}
             {pending ? 'Criando...' : 'Criar e contar'}
           </Button>
         </DialogFooter>

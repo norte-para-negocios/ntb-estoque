@@ -10,7 +10,7 @@ export function EmptyState({
   hint?: string
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-surface px-6 py-14 text-center">
+    <div className="u-fade-in rounded-lg border border-dashed border-border bg-surface px-6 py-14 text-center">
       <span className="mx-auto mb-3 flex size-11 items-center justify-center rounded-full bg-surface-2 text-text-muted">
         <Icon className="size-5" strokeWidth={1.75} />
       </span>
