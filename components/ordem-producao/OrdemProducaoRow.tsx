@@ -336,7 +336,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
         <StepperQuantidade op={op} ctrl={ctrl} />
       </td>
       <td className="text-right align-top">
-        <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+        <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
           <Acoes op={op} ctrl={ctrl} />
         </div>
       </td>
