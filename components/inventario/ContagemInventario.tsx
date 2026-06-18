@@ -61,6 +61,8 @@ export function ContagemInventario({
   )
   const [filtro, setFiltro] = useState('')
   const [buscaManual, setBuscaManual] = useState(false)
+  // id do item recem-adicionado: a linha nova ganha o flash de entrada (u-flash-in).
+  const [novoId, setNovoId] = useState<number | null>(null)
   // Inventario finalizado entra em modo leitura; "Editar itens" destrava os
   // controles para corrigir/excluir um item depois de finalizado (o servidor
   // exclui o ajuste antigo no Omie e relanca a nova quantidade).
@@ -104,6 +106,7 @@ export function ContagemInventario({
           ...prev,
         ])
         setTextos((prev) => ({ ...prev, [novo.id]: '' }))
+        setNovoId(novo.id)
       }
       toast.success('Produto adicionado')
     })
@@ -297,7 +300,9 @@ export function ContagemInventario({
             return (
               <li
                 key={item.id}
-                className="rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2"
+                className={`rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2${
+                  item.id === novoId ? ' u-flash-in' : ''
+                }`}
               >
                 <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">

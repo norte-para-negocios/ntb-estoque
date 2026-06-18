@@ -269,6 +269,19 @@
     animation: u-pulse-ring 2s var(--ease-out) infinite;
     pointer-events: none;
   }
+
+  /* ----------------------------------------------------------------------
+     Item recem-adicionado (contagem de transferencia/inventario via scan/busca):
+     a linha desliza pra dentro (u-fade-up) e da um leve "flash" de marca que
+     assenta na cor de repouso (--surface), sinalizando "acabou de entrar" sem
+     chamar atencao. Aplicado SO na linha nova (estado novoId no client); as
+     demais ficam paradas. transform/opacity + background-color (GPU/barato).
+     O flash e um pouco mais longo (600ms) para ser perceptivel mas calmo.
+     ---------------------------------------------------------------------- */
+  .u-flash-in {
+    animation: u-fade-up var(--dur) var(--ease-out) both,
+      u-flash-bg 600ms var(--ease-out) both;
+  }
 }
 
 /* Icone do toast (sonner) entra com um leve "pop" de escala, dando vida a
@@ -330,6 +343,17 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* Flash de marca do item recem-adicionado: parte do tom da marca e assenta na
+   cor de repouso da linha (--surface), entao nao deixa residuo de cor. */
+@keyframes u-flash-bg {
+  from {
+    background-color: var(--brand-soft);
+  }
+  to {
+    background-color: var(--surface);
   }
 }
 
