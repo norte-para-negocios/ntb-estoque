@@ -40,7 +40,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/movimentacoes', label: 'Movimentações', icon: ArrowDownUp, group: 'Operação' },
   { href: '/validade', label: 'Validade', icon: CalendarClock, group: 'Operação' },
   { href: '/impressoes', label: 'Impressões', icon: Printer, group: 'Operação' },
-  { href: '/etiqueta-config', label: 'Config. Etiqueta', icon: Settings, group: 'Operação' },
   { href: '/produto', label: 'Produtos', icon: Package, group: 'Cadastros' },
   { href: '/local-estoque', label: 'Locais de Estoque', icon: Warehouse, group: 'Cadastros' },
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
