@@ -89,7 +89,9 @@ Nenhuma. A permissao `Locais de Estoque - Excluir` ja existia no banco (catalogo
 
 ## Hashes dos commits
 
-_(preenchido apos git commit)_
+- `676c0f2` - fix(6.1): corrigir select de familias no cadastro de produto
+- `0477a2a` - feat(6.3): cron diario de sync de familias do Omie
+- `a57faaa` - docs: relatorio de implementacao da Fase 6
 
 ---
 
