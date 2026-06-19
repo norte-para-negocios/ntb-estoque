@@ -375,6 +375,18 @@
   }
 }
 
+/* -----------------------------------------------------------------------
+   Cabeçalho de tabela congelado (tipo Excel, bug I2).
+   --lista-header-h é gravado dinamicamente pelo ListaHeader via ResizeObserver.
+   Todos os <thead> dentro de [data-sticky-table] ficam colados ABAIXO
+   do ListaHeader. Fallback 0px: telas sem ListaHeader o thead gruda no topo.
+   ----------------------------------------------------------------------- */
+[data-sticky-table] thead {
+  position: sticky;
+  top: var(--lista-header-h, 0px);
+  z-index: 20;
+}
+
 /* Scrollbar customizada: fina, discreta e estilizada (2.1).
    Vale para a janela e para qualquer container que role (tabelas, dropdowns).
    Firefox usa scrollbar-width/color; WebKit/Chromium usa ::-webkit-scrollbar. */

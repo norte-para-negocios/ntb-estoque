@@ -1,3 +1,7 @@
+'use client'
+
+import * as React from 'react'
+
 /**
  * ListaHeader — wrapper sticky para o cabeçalho das telas de lista.
  *
@@ -15,10 +19,51 @@
  *
  * O <PageHeader> filho mantém seu mb-5 original; o pb-3 do wrapper
  * garante respiro entre os chips e a tabela quando o bloco está colado.
+ *
+ * Coordenação do thead sticky (bug I2):
+ * Um ResizeObserver mede a altura deste bloco e grava --lista-header-h
+ * em document.documentElement. Lista.tsx e DataTable.tsx usam essa
+ * variável no top do <thead> para que o cabeçalho da tabela fique
+ * colado ABAIXO deste bloco, sem colidir.
  */
 export function ListaHeader({ children }: { children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    // MobileNav tem h-14 (56px) e só aparece abaixo de lg (1024px).
+    // No desktop o ListaHeader começa em top-0; no mobile em top-14.
+    // O thead sticky precisa de top = (offset do MobileNav) + (altura do ListaHeader)
+    // para não colidir com nenhum dos dois cabeçalhos fixos.
+    const MOBILE_NAV_H = 56 // px — equivale a h-14 do MobileNav
+    const isDesktop = () => window.matchMedia('(min-width: 1024px)').matches
+
+    const update = () => {
+      const h = el.getBoundingClientRect().height
+      const offset = isDesktop() ? 0 : MOBILE_NAV_H
+      document.documentElement.style.setProperty('--lista-header-h', `${offset + h}px`)
+    }
+
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+
+    // Recalcula ao redimensionar a janela (mudança desktop ↔ mobile)
+    window.addEventListener('resize', update)
+
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+      // Limpa ao desmontar (tela sem ListaHeader não herdaria offset antigo)
+      document.documentElement.style.removeProperty('--lista-header-h')
+    }
+  }, [])
+
   return (
     <div
+      ref={ref}
       className={[
         'sticky top-14 lg:top-0 z-20',
         'bg-bg/95 backdrop-blur-sm',

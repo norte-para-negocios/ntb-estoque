@@ -47,7 +47,16 @@ export function Lista<T>({
           ao rolar, igual Excel. */}
       <div className="hidden lg:block rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-20 border-b border-border bg-surface-2 shadow-[0_1px_0_var(--border)]">
+          <thead
+            className="sticky z-20 border-b border-border bg-surface-2 shadow-[0_1px_0_var(--border)]"
+            style={{
+              // Desktop: fica logo abaixo do ListaHeader (top-0 do ListaHeader).
+              // Mobile: fica abaixo do MobileNav (56px) + ListaHeader.
+              // --lista-header-h é gravado pelo ListaHeader via ResizeObserver.
+              // Fallback 0px: telas sem ListaHeader o thead gruda no topo normal.
+              top: 'var(--lista-header-h, 0px)',
+            }}
+          >
             <tr>
               {colunas.map((c, i) => (
                 <th
