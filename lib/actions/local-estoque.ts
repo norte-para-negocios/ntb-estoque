@@ -7,6 +7,28 @@ import { incluirLocalEstoque, syncLocaisEstoque } from '@/lib/omie/local-estoque
 import type { LojaOmie } from '@/lib/omie/client'
 
 /**
+ * Exclui um local de estoque APENAS do banco local (nao no Omie).
+ * O Omie nao oferece API publica para excluir local de estoque; a exclusao
+ * fica no NTB e o registro e ignorado nos proximos syncs (upsert por id).
+ */
+export async function excluirLocalEstoque(id: number) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Locais de Estoque - Excluir'))) return { error: 'Sem permissão' }
+  if (!id) return { error: 'Local inválido' }
+
+  const supabase = createServiceClient()
+  const { error } = await supabase
+    .from('local_estoques')
+    .delete()
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/local-estoque')
+  return { ok: true }
+}
+
+/**
  * Cria um local de estoque no Omie e re-sincroniza (Bloco 9.2). ESCREVE no Omie.
  * Disparo real apenas com o Ramon (regra: nao escrever no Omie em teste sozinho).
  */

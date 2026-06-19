@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
 import { NovoLocalEstoque } from '@/components/local-estoque/NovoLocalEstoque'
+import { ExcluirLocalEstoque } from '@/components/local-estoque/ExcluirLocalEstoque'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
@@ -31,6 +32,7 @@ export default async function LocalEstoquePage({
   // Sync (Sincronizar com Omie) virou admin-only.
   const podeSync = await isAdmin()
   const podeCriar = await requirePermissao(lojaId, 'Locais de Estoque - Criar')
+  const podeExcluir = await requirePermissao(lojaId, 'Locais de Estoque - Excluir')
 
   const { data: lojaSync } = await supabase
     .from('lojas')
@@ -121,6 +123,13 @@ export default async function LocalEstoquePage({
             render: (l) => <StatusPill status={l.inativo === 'S' ? 'Inativo' : 'Ativo'} />,
           },
         ]}
+        acao={(l) =>
+          podeExcluir ? (
+            <div className="flex items-center justify-end gap-1">
+              <ExcluirLocalEstoque id={l.id} descricao={l.descricao || ''} />
+            </div>
+          ) : null
+        }
         vazio={
           <EmptyState
             icon={Warehouse}

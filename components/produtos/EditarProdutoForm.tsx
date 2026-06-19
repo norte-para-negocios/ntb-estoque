@@ -74,11 +74,14 @@ export function EditarProdutoForm({
       return
     }
     const fam = familias.find((f) => String(f.codigo) === familia)
+    // Familias locais (sem ID Omie) usam codigo negativo como placeholder.
+    // Nao enviar codigo negativo ao Omie: passar null para que o campo fique vazio.
+    const codigoFamiliaOmie = fam && fam.codigo > 0 ? fam.codigo : null
 
     startTransition(async () => {
       const res = await editarProduto(produto.id, {
         descricao: descricao.trim(),
-        codigoFamilia: fam ? fam.codigo : null,
+        codigoFamilia: codigoFamiliaOmie,
         descricaoFamilia: fam ? fam.descricao : null,
         tipoItem: tipo || null,
         unidade: unidade.trim(),
@@ -136,7 +139,7 @@ export function EditarProdutoForm({
             <select className={inputClass} value={familia} onChange={(e) => setFamilia(e.target.value)}>
               <option value="">Sem família</option>
               {familias
-                .filter((f) => f.codigo > 0 && f.descricao.trim())
+                .filter((f) => f.descricao.trim())
                 .map((f) => (
                   <option key={f.codigo} value={f.codigo}>
                     {f.descricao}

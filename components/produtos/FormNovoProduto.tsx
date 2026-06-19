@@ -85,6 +85,9 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
       const n = parseNumBR(s)
       return n != null && Number.isFinite(n) && n > 0 ? n : undefined
     }
+    // Familias locais (sem ID Omie) usam codigo negativo como placeholder.
+    // Nao enviar codigo negativo ao Omie: passar null para que o campo fique vazio.
+    const codigoFamiliaOmie = fam && fam.codigo > 0 ? fam.codigo : null
     startTransition(async () => {
       const res = await criarProduto({
         codigo,
@@ -93,7 +96,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         ncm,
         valorUnitario: valNum ?? 0,
         tipoItem: tipo || undefined,
-        codigoFamilia: fam ? fam.codigo : null,
+        codigoFamilia: codigoFamiliaOmie,
         descricaoFamilia: fam ? fam.descricao : null,
         origem,
         ean: extra.ean || undefined,

@@ -7,23 +7,25 @@ import { incluirProduto, alterarProduto, excluirProdutoOmie } from '@/lib/omie/p
 import type { LojaOmie } from '@/lib/omie/client'
 
 // Familias existentes na loja (codigo + descricao), para o seletor do cadastro.
+// Busca da tabela `familias` (fonte da verdade), nao de produtos: assim familias
+// recem-criadas localmente ja aparecem no select antes de ter qualquer produto vinculado.
+// Inclui familias sem codigo_familia (origem=local) com codigo negativo temporario para
+// o select funcionar; apenas familias com codigo_familia > 0 sao enviadas ao Omie.
 export async function buscarFamilias(): Promise<{ codigo: number; descricao: string }[]> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { data } = await supabase
-    .from('produtos')
-    .select('codigo_familia, descricao_familia')
+    .from('familias')
+    .select('id, codigo_familia, nome')
     .eq('loja_id', lojaId)
-    .not('codigo_familia', 'is', null)
-    .not('descricao_familia', 'is', null)
-  const map = new Map<number, string>()
-  for (const p of data ?? []) {
-    const cod = p.codigo_familia as number | null
-    if (cod != null && !map.has(cod)) map.set(cod, p.descricao_familia as string)
-  }
-  return [...map.entries()]
-    .map(([codigo, descricao]) => ({ codigo, descricao }))
-    .sort((a, b) => a.descricao.localeCompare(b.descricao))
+    .eq('inativo', false)
+    .order('nome')
+  return (data ?? []).map((f) => ({
+    // codigo_familia (do Omie) quando disponivel; sen~ao usa o id local negativo
+    // para nao colidir com codigos reais do Omie (sempre positivos).
+    codigo: (f.codigo_familia as number | null) ?? -(f.id as number),
+    descricao: f.nome as string,
+  }))
 }
 
 /**
