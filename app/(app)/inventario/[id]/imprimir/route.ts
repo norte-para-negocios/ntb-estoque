@@ -7,20 +7,33 @@ import {
   ContagemInventarioPDF,
   type ContagemInventarioItem,
 } from '@/components/relatorio/ContagemInventarioPDF'
+import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 const TIPO_MOVIMENTO_INVENTARIO: Record<string, string> = {
-  INV: 'Ajuste por Inventário',
-  INI: 'Ajuste por Inventário (Estoque Inicial)',
+  INV: 'Ajuste por Inventario',
+  INI: 'Ajuste por Inventario (Estoque Inicial)',
+}
+
+async function pdfErroResponse(titulo: string, mensagem: string) {
+  const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
+  const buf = await renderToBuffer(el)
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="erro.pdf"',
+    },
+  })
 }
 
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Ver'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
   }
 
   const { id } = await params
@@ -34,7 +47,7 @@ export async function GET(
     .single()
 
   if (!inventario) {
-    return NextResponse.json({ error: 'Inventário não encontrado' }, { status: 404 })
+    return pdfErroResponse('Inventario nao encontrado', `O inventario #${id} nao foi encontrado ou nao pertence a esta loja.`)
   }
 
   const { data: loja } = await supabase
@@ -43,12 +56,18 @@ export async function GET(
     .eq('id', lojaId)
     .single()
 
+  const nomeLoja = loja?.nome_fantasia || loja?.nome || ''
+
+  // Busca o NOME do local (pedido da reuniao 16/06: so nome, sem codigo numerico).
   const { data: local } = await supabase
     .from('local_estoques')
     .select('codigo_local_estoque, descricao')
     .eq('loja_id', lojaId)
     .eq('codigo_local_estoque', inventario.codigo_local_estoque)
     .maybeSingle()
+
+  // So o nome do local (descricao), sem exibir o codigo numerico.
+  const nomeLocal = local?.descricao || inventario.codigo_local_estoque || '-'
 
   const { data: itensRaw } = await supabase
     .from('inventario_items')
@@ -57,7 +76,6 @@ export async function GET(
     .gte('quan', 0)
     .order('id')
 
-  // Unidade vem do cadastro de produtos
   const codigos = [
     ...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean)),
   ]
@@ -78,11 +96,15 @@ export async function GET(
     status: it.status || 'N/A',
   }))
 
+  const dataFormatada = new Date(inventario.data).toLocaleDateString('pt-BR', {
+    timeZone: 'America/Bahia',
+  })
+
   const element = createElement(ContagemInventarioPDF, {
     id: inventario.id,
-    loja: loja?.nome_fantasia || loja?.nome || '',
-    data: new Date(inventario.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }),
-    local: `${local?.codigo_local_estoque ?? inventario.codigo_local_estoque} - ${local?.descricao ?? ''}`,
+    loja: nomeLoja,
+    data: dataFormatada,
+    local: nomeLocal,
     tipo: TIPO_MOVIMENTO_INVENTARIO[inventario.motivo ?? ''] || 'Desconhecido',
     itens,
   }) as Parameters<typeof renderToBuffer>[0]

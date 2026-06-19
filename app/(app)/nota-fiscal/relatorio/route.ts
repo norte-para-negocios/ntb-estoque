@@ -4,22 +4,30 @@ import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
+import { fmtData } from '@/lib/pdf-utils'
 import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/RelatorioNFPDF'
-
-function fmtData(d: string | null): string {
-  if (!d) return '-'
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
-}
+import { PdfErro } from '@/components/relatorio/PdfChrome'
 
 function labelEtapa(etapa: string | null): string {
-  return etapa === '60' ? 'Concluída' : 'Pendente'
+  return etapa === '60' ? 'Concluida' : 'Pendente'
+}
+
+async function pdfErroResponse(titulo: string, mensagem: string) {
+  const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
+  const buf = await renderToBuffer(el)
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="erro.pdf"',
+    },
+  })
 }
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
   }
 
   const { searchParams } = new URL(request.url)
@@ -41,9 +49,9 @@ export async function GET(request: Request) {
     .eq('id', lojaId)
     .single()
 
-  // Mesma logica de filtro da tela/export: resolve notaIds quando ha filtro de
-  // tipo (via produtos.tipo_item) ou produto (via descricao/codigo do item). Sem
-  // isto o PDF saia diferente da tela quando o usuario filtrava por tipo/produto.
+  const nomeLoja = loja?.nome_fantasia || loja?.nome || 'Loja'
+
+  // Mesma logica de filtro da tela/export.
   let notaIdsFiltro: number[] | null = null
   if (tipo || produto) {
     if (tipo) {
@@ -67,7 +75,9 @@ export async function GET(request: Request) {
         }
         const { data: itemRows } = await itemQuery
         const notaIds = Array.from(
-          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
+          new Set(
+            (itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null),
+          ),
         )
         notaIdsFiltro = notaIds.length ? notaIds : [-1]
       }
@@ -79,14 +89,14 @@ export async function GET(request: Request) {
         .eq('loja_id', lojaId)
         .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
       const notaIds = Array.from(
-        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
+        new Set(
+          (itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null),
+        ),
       )
       notaIdsFiltro = notaIds.length ? notaIds : [-1]
     }
   }
 
-  // Paginacao interna: PostgREST limita a 1000 linhas por request. Buscamos
-  // em paginas ate esgotar para nao truncar silenciosamente o relatorio.
   const PAGE_SIZE = 1000
   type Nota = {
     d_emissao_nfe: string | null
@@ -132,10 +142,23 @@ export async function GET(request: Request) {
     valor: n.n_valor_nfe ?? 0,
   }))
 
+  // Monta subtitulo com filtros aplicados.
+  const filtrosAtivos: string[] = []
+  if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
+  if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
+  if (status) filtrosAtivos.push(`Status: ${status === 'C' ? 'Concluida' : 'Pendente'}`)
+  if (tipo) filtrosAtivos.push(`Tipo: ${tipo}`)
+  if (produto) filtrosAtivos.push(`Produto: ${produto}`)
+
   const periodo = `${fmtData(dataInicio)} a ${fmtData(dataFinal)}`
+  const filtros = filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined
+
+  const nomeArquivo = `relatorio-nf-${nomeLoja.replace(/\s+/g, '-').toLowerCase()}-${dataInicio}-${dataFinal}.pdf`
+
   const element = createElement(RelatorioNFPDF, {
-    loja: loja?.nome_fantasia || loja?.nome || '',
+    loja: nomeLoja,
     periodo,
+    filtros,
     notas: itens,
   }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
@@ -143,7 +166,7 @@ export async function GET(request: Request) {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="relatorio-notas-fiscais.pdf"',
+      'Content-Disposition': `inline; filename="${nomeArquivo}"`,
     },
   })
 }

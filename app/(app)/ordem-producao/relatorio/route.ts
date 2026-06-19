@@ -5,23 +5,33 @@ import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { RelatorioOPPDF, type RelatorioOPItem } from '@/components/relatorio/RelatorioOPPDF'
+import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { isOpConcluida } from '@/lib/op-status'
+import { numBRPdf } from '@/lib/pdf-utils'
 
-function num(v: unknown): string {
-  const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+async function pdfErroResponse(titulo: string, mensagem: string) {
+  const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
+  const buf = await renderToBuffer(el)
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="erro.pdf"',
+    },
+  })
 }
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
   }
 
   const { searchParams } = new URL(request.url)
   const opProduto = searchParams.get('op_produto') || ''
   const ordemProducao = searchParams.get('ordem_producao') || ''
+  const statusFiltro = searchParams.get('status') || ''
 
   const supabase = await createClient()
 
@@ -31,9 +41,8 @@ export async function GET(request: Request) {
     .eq('id', lojaId)
     .single()
 
-  // Filtro op_produto cruza via tabela produtos (colunas produto_* da
-  // ordens_producao sao NULL) para obter codigo_produto e filtrar por
-  // identificacao_n_cod_produto.
+  const nomeLoja = loja?.nome_fantasia || loja?.nome || 'Loja'
+
   let codigosFiltro: number[] | null = null
   if (opProduto) {
     const termo = escapeIlikeOr(opProduto)
@@ -47,7 +56,6 @@ export async function GET(request: Request) {
     ]
   }
 
-  // Paginacao interna para nao truncar em 1000 linhas.
   const PAGE_SIZE = 1000
   const ordensList: NonNullable<Awaited<ReturnType<typeof buildQuery>>['data']> = []
 
@@ -55,7 +63,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida'
+        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
@@ -75,13 +83,14 @@ export async function GET(request: Request) {
     ordensList.push(...bloco)
     if (bloco.length < PAGE_SIZE) break
   }
-  // Resolve descricoes dos produtos quando produto_descricao estiver vazio
+
+  // Resolve descricoes dos produtos quando produto_descricao estiver vazio.
   const codigos = [
     ...new Set(
       ordensList
         .filter((o) => !o.produto_descricao)
         .map((o) => o.identificacao_n_cod_produto)
-        .filter(Boolean)
+        .filter(Boolean),
     ),
   ]
   const { data: produtos } = codigos.length
@@ -93,23 +102,39 @@ export async function GET(request: Request) {
     : { data: [] }
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.descricao]))
 
-  const itens: RelatorioOPItem[] = ordensList.map((o) => {
+  let itens: RelatorioOPItem[] = ordensList.map((o) => {
     const concluida = isOpConcluida(o)
     return {
       numOP: o.identificacao_c_num_op || o.num_ordem || '-',
       produto:
         formatarNomeProduto(
-          o.produto_descricao || prodMap.get(o.identificacao_n_cod_produto)
+          o.produto_descricao || prodMap.get(o.identificacao_n_cod_produto),
         ) || `Produto ${o.identificacao_n_cod_produto}`,
-      quantidade: `${num(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
+      quantidade: `${numBRPdf(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
       validade: o.validade || '-',
-      status: concluida ? 'Concluída' : 'Pendente',
+      status: concluida ? 'Concluida' : 'Pendente',
     }
   })
 
+  // Filtro de status apos montar os itens (usa logica isOpConcluida).
+  if (statusFiltro === 'concluida') itens = itens.filter((i) => i.status === 'Concluida')
+  else if (statusFiltro === 'pendente') itens = itens.filter((i) => i.status === 'Pendente')
+
+  // Monta subtitulo com filtros aplicados.
+  const filtrosAtivos: string[] = []
+  if (ordemProducao) filtrosAtivos.push(`OP: ${ordemProducao}`)
+  if (opProduto) filtrosAtivos.push(`Produto: ${opProduto}`)
+  if (statusFiltro) filtrosAtivos.push(`Status: ${statusFiltro}`)
+
+  const filtros = filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined
+  const periodo = `${itens.length} ${itens.length === 1 ? 'ordem' : 'ordens'}`
+
+  const nomeArquivo = `relatorio-op-${nomeLoja.replace(/\s+/g, '-').toLowerCase()}.pdf`
+
   const element = createElement(RelatorioOPPDF, {
-    loja: loja?.nome_fantasia || loja?.nome || '',
-    periodo: `${itens.length} ordens`,
+    loja: nomeLoja,
+    periodo,
+    filtros,
     ordens: itens,
   }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
@@ -117,7 +142,7 @@ export async function GET(request: Request) {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="relatorio-ordens-producao.pdf"',
+      'Content-Disposition': `inline; filename="${nomeArquivo}"`,
     },
   })
 }

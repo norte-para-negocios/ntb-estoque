@@ -7,15 +7,28 @@ import {
   ContagemTransferenciaPDF,
   type ContagemTransferenciaItem,
 } from '@/components/relatorio/ContagemTransferenciaPDF'
+import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+
+async function pdfErroResponse(titulo: string, mensagem: string) {
+  const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
+  const buf = await renderToBuffer(el)
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="erro.pdf"',
+    },
+  })
+}
 
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Ver'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
   }
 
   const { id } = await params
@@ -29,7 +42,7 @@ export async function GET(
     .single()
 
   if (!trans) {
-    return NextResponse.json({ error: 'Transferência não encontrada' }, { status: 404 })
+    return pdfErroResponse('Transferencia nao encontrada', `A transferencia #${id} nao foi encontrada ou nao pertence a esta loja.`)
   }
 
   const { data: loja } = await supabase
@@ -38,14 +51,14 @@ export async function GET(
     .eq('id', lojaId)
     .single()
 
+  const nomeLoja = loja?.nome_fantasia || loja?.nome || ''
+
   const { data: locais } = await supabase
     .from('local_estoques')
     .select('codigo_local_estoque, descricao')
     .eq('loja_id', lojaId)
     .in('codigo_local_estoque', [trans.codigo_local_origem, trans.codigo_local_destino])
-  const localMap = new Map(
-    (locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao])
-  )
+  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
   const { data: movimentos } = await supabase
     .from('movimentos')
@@ -75,10 +88,9 @@ export async function GET(
   })
 
   const element = createElement(ContagemTransferenciaPDF, {
-    loja: loja?.nome_fantasia || loja?.nome || '',
+    loja: nomeLoja,
     data: new Date(trans.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' }),
-    // So o NOME do local (sem o codigo numerico): pedido da reuniao 16/06
-    // "tirar os numeros, deixar so o local". Fallback no codigo se faltar nome.
+    // So o NOME do local (sem codigo numerico).
     origem: localMap.get(trans.codigo_local_origem) || String(trans.codigo_local_origem),
     destino: localMap.get(trans.codigo_local_destino) || String(trans.codigo_local_destino),
     itens,

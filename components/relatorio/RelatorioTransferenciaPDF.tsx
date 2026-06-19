@@ -1,27 +1,32 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
-import { PdfCabecalho, PdfRodape } from './PdfChrome'
+import { PdfCabecalho, PdfRodape, PdfResumoBar, pdfTabela } from './PdfChrome'
+
+// Colunas: somam 96% para garantir paddingRight entre elas sem colisao.
+const col = StyleSheet.create({
+  data:     { width: '16%' },
+  origem:   { width: '26%' },
+  destino:  { width: '26%' },
+  motivo:   { width: '16%' },
+  produtos: { width: '7%', textAlign: 'right' },
+  status:   { width: '9%' },
+})
 
 const s = StyleSheet.create({
-  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 9, fontFamily: 'Helvetica', color: '#111' },
-  table: { width: '100%' },
-  thead: { flexDirection: 'row', backgroundColor: '#f3f4f6', borderRadius: 3, paddingVertical: 5, paddingHorizontal: 4, marginBottom: 2 },
-  tr: { flexDirection: 'row', borderBottom: 0.5, borderColor: '#e5e7eb', paddingVertical: 3.5, paddingHorizontal: 4 },
-  trAlt: { backgroundColor: '#fafafa' },
-  th: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#374151', textTransform: 'uppercase' },
-  td: { fontSize: 8.5 },
-  total: { flexDirection: 'row', marginTop: 8, paddingTop: 4, paddingHorizontal: 4, borderTop: 1, borderColor: '#111' },
-  totTxt: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#111' },
-  cData: { width: '18%' },
-  cOrigem: { width: '30%' },
-  cDestino: { width: '30%' },
-  cProdutos: { width: '12%', textAlign: 'right' },
-  cStatus: { width: '10%' },
+  page: {
+    paddingTop: 28,
+    paddingHorizontal: 28,
+    paddingBottom: 44,
+    fontSize: 9,
+    fontFamily: 'Helvetica',
+    color: '#111',
+  },
 })
 
 export interface RelatorioTransferenciaItem {
   data: string
   origem: string
   destino: string
+  motivo?: string
   produtos: number
   status: string
 }
@@ -29,39 +34,58 @@ export interface RelatorioTransferenciaItem {
 export function RelatorioTransferenciaPDF({
   loja,
   periodo,
+  filtros,
   transferencias,
 }: {
   loja: string
   periodo: string
+  filtros?: string
   transferencias: RelatorioTransferenciaItem[]
 }) {
+  const sub = [loja, `Periodo: ${periodo}`, filtros].filter(Boolean).join(' · ')
+  const total = transferencias.reduce((acc, t) => acc + t.produtos, 0)
+  const haMotivo = transferencias.some((t) => t.motivo)
+
   return (
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
-        <PdfCabecalho titulo="Relatório de Transferências" sub={`${loja} · Período: ${periodo}`} />
+        <PdfCabecalho titulo="Relatorio de Transferencias" sub={sub} />
 
-        <View style={s.table}>
-          <View style={s.thead} fixed>
-            <Text style={[s.th, s.cData]}>Data</Text>
-            <Text style={[s.th, s.cOrigem]}>Origem</Text>
-            <Text style={[s.th, s.cDestino]}>Destino</Text>
-            <Text style={[s.th, s.cProdutos]}>Produtos</Text>
-            <Text style={[s.th, s.cStatus]}>Status</Text>
+        <PdfResumoBar
+          campos={[
+            { label: 'Periodo', valor: periodo },
+            { label: 'Transferencias', valor: String(transferencias.length) },
+            { label: 'Total de itens', valor: String(total) },
+          ]}
+        />
+
+        <View style={pdfTabela.table}>
+          <View style={pdfTabela.thead} fixed>
+            <Text style={[pdfTabela.th, col.data]}>Data</Text>
+            <Text style={[pdfTabela.th, col.origem]}>Origem</Text>
+            <Text style={[pdfTabela.th, col.destino]}>Destino</Text>
+            {haMotivo ? <Text style={[pdfTabela.th, col.motivo]}>Motivo</Text> : null}
+            <Text style={[pdfTabela.th, col.produtos]}>Itens</Text>
+            <Text style={[pdfTabela.th, col.status]}>Status</Text>
           </View>
+
           {transferencias.map((t, i) => (
-            <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
-              <Text style={[s.td, s.cData]}>{t.data}</Text>
-              <Text style={[s.td, s.cOrigem]}>{t.origem}</Text>
-              <Text style={[s.td, s.cDestino]}>{t.destino}</Text>
-              <Text style={[s.td, s.cProdutos]}>{t.produtos}</Text>
-              <Text style={[s.td, s.cStatus]}>{t.status}</Text>
+            <View key={i} style={[pdfTabela.tr, i % 2 === 1 ? pdfTabela.trAlt : {}]} wrap={false}>
+              <Text style={[pdfTabela.tdMuted, col.data]}>{t.data}</Text>
+              <Text style={[pdfTabela.td, col.origem]}>{t.origem}</Text>
+              <Text style={[pdfTabela.td, col.destino]}>{t.destino}</Text>
+              {haMotivo ? <Text style={[pdfTabela.tdMuted, col.motivo]}>{t.motivo ?? '-'}</Text> : null}
+              <Text style={[pdfTabela.td, col.produtos]}>{t.produtos}</Text>
+              <Text style={[pdfTabela.td, col.status]}>{t.status}</Text>
             </View>
           ))}
-          <View style={s.total} wrap={false}>
-            <Text style={[s.totTxt, { width: '90%' }]}>
-              Total ({transferencias.length} transferências)
+
+          <View style={pdfTabela.totalRow} wrap={false}>
+            <Text style={[pdfTabela.totalTxt, { flex: 1 }]}>
+              Total ({transferencias.length} {transferencias.length === 1 ? 'transferencia' : 'transferencias'})
             </Text>
-            <Text style={[s.totTxt, { width: '10%' }]} />
+            <Text style={[pdfTabela.totalTxt, col.produtos, { textAlign: 'right' }]}>{total}</Text>
+            <Text style={[pdfTabela.totalTxt, col.status]} />
           </View>
         </View>
 
