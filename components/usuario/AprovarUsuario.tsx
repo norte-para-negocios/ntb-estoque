@@ -34,6 +34,7 @@ export function AprovarUsuario({
   podeEscolherPerfilAlto: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [confirmarRecusa, setConfirmarRecusa] = useState(false)
   const [perfil, setPerfil] = useState<PerfilUsuario>('Usuario')
   const [lojaIds, setLojaIds] = useState<number[]>([])
   const [permIds, setPermIds] = useState<Set<number>>(new Set())
@@ -108,9 +109,36 @@ export function AprovarUsuario({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <button type="button" onClick={recusar} disabled={pending} className={btnClass('outline')}>
-        <X className="size-4" /> Recusar
-      </button>
+      {confirmarRecusa ? (
+        <>
+          <span className="text-[13px] text-text-muted">Confirmar recusa?</span>
+          <button
+            type="button"
+            onClick={recusar}
+            disabled={pending}
+            className={btnClass('danger')}
+          >
+            {pending ? 'Recusando...' : 'Confirmar'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmarRecusa(false)}
+            disabled={pending}
+            className={btnClass('ghost')}
+          >
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmarRecusa(true)}
+          disabled={pending}
+          className={btnClass('outline')}
+        >
+          <X className="size-4" /> Recusar
+        </button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger

@@ -4,6 +4,15 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getUser, getAtorGestao, type AtorGestao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
+// Converte erros brutos do Supabase/Postgres em mensagens amigaveis ao usuario.
+function mensagemAmigavel(err: { code?: string; message?: string }): string {
+  const code = err.code ?? ''
+  if (code === '23505') return 'Este registro já existe.'
+  if (code === '42501' || code === '42P01') return 'Sem permissão para executar esta ação.'
+  if (code.startsWith('PGRST')) return 'Erro de consulta. Tente novamente.'
+  return 'Erro ao salvar. Tente novamente.'
+}
+
 // Helpers de escopo (frente C). O ator e Admin global OU AdminLoja na propria loja.
 //
 // AdminLoja: so cria/aprova/edita perfil 'Usuario', so nas lojas dele, e as
@@ -111,7 +120,7 @@ export async function criarUsuario(input: {
   })
 
   if (error || !created.user) {
-    return { error: error?.message || 'Falha ao criar usuário' }
+    return { error: error ? mensagemAmigavel(error) : 'Falha ao criar usuário.' }
   }
 
   const userId = created.user.id
@@ -309,13 +318,17 @@ export async function aprovarUsuario(
     await supabase.from('loja_user').insert(novas.map((loja_id) => ({ loja_id, user_id: userId })))
   }
 
-  // Permissoes: Admin e AdminLoja -> acesso total (todas). Usuario -> as ESCOLHIDAS
-  // (ou todas, se nao veio lista, por compatibilidade).
+  // Permissoes: Admin e AdminLoja -> acesso total (todas). Usuario -> as ESCOLHIDAS.
+  // Array vazio explicito para perfil Usuario e rejeitado (sem permissao = sem acesso util).
   let permissaoIds: number[]
-  if (input.perfil === 'Admin' || input.perfil === 'AdminLoja' || input.permissaoIds === undefined) {
+  if (input.perfil === 'Admin' || input.perfil === 'AdminLoja') {
     const { data: permissoes } = await supabase.from('permissoes').select('id')
     permissaoIds = (permissoes ?? []).map((p) => p.id as number)
   } else {
+    // perfil === 'Usuario': exige ao menos uma permissao escolhida
+    if (!input.permissaoIds || input.permissaoIds.length === 0) {
+      return { error: 'Selecione ao menos uma permissão.' }
+    }
     permissaoIds = input.permissaoIds
   }
   const rows = lojaIds.flatMap((lojaId) =>
