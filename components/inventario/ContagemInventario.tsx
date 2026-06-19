@@ -200,7 +200,8 @@ export function ContagemInventario({
   }
 
   // Resumo de integracao: como cada item ja integra na hora, mostramos o placar
-  // durante a contagem tambem (e o botao de reenviar pendentes quando ha erro).
+  // durante a contagem tambem (e o botao de reenviar pendentes quando ha erro ou
+  // quando ha itens 'Iniciado' com quantidade num inventario finalizado).
   // Itens VAZIOS (sem quantidade contada) nao entram no placar: sao descartados ao
   // finalizar. No inventario a contagem 0 conta normal (zerar saldo e valido); so
   // o campo vazio (quan null) e ignorado.
@@ -209,22 +210,28 @@ export function ContagemInventario({
   const total = comQtd.length
   const integrados = comQtd.filter((i) => i.status === 'Concluido').length
   const comErro = comQtd.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
+  // Itens 'Iniciado' com quantidade: ficaram pendentes (network error, item adicionado
+  // pos-finalizacao etc.). Num inventario finalizado esses itens nunca chegaram ao Omie
+  // e o botao de reenvio nao aparecia. Agora entram no criterio de "tem pendentes".
+  const comIniciado = comQtd.filter((i) => i.status === 'Iniciado' || i.status === 'Processando').length
+  const temPendentes = comErro > 0 || (finalizado && comIniciado > 0)
 
   return (
     <div className="pb-28 lg:pb-20">
-      {total > 0 && (integrados > 0 || comErro > 0 || finalizado) && (
+      {total > 0 && (integrados > 0 || temPendentes || finalizado) && (
         <div
           className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
-            comErro ? 'border-err/40 bg-err/5' : 'border-ok/40 bg-ok/5'
+            temPendentes ? 'border-err/40 bg-err/5' : 'border-ok/40 bg-ok/5'
           }`}
         >
           <span className="text-sm font-medium text-text">
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
+            {comIniciado > 0 && <span className="text-warn"> · {comIniciado} pendente{comIniciado > 1 ? 's' : ''}</span>}
             {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
           </span>
           <span className="inline-flex items-center gap-2">
-            {comErro > 0 && (
+            {temPendentes && (
               <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
                 {pending && <Spinner />}
                 {pending ? 'Reenviando...' : 'Reenviar pendentes'}
