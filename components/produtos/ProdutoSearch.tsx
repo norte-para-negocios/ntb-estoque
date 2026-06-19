@@ -113,7 +113,7 @@ export function ProdutoSearch({
       </div>
 
       {aberto && (buscando || resultados.length > 0 || termo.trim().length >= 2 || tipo || familia) && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
           {buscando ? (
             <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
               <Loader2 className="size-4 animate-spin" />

@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus, Undo2, Trash2 } from 'lucide-react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP, reverterOP, excluirOP } from '@/lib/actions/ordem-producao'
-import { Num } from '@/components/ui-kit/Num'
 import type { OpStatus } from '@/lib/op-status'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { parseNumBR } from '@/lib/num-br'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { btnClass } from '@/components/ui-kit/Button'
 
 const stepBtnClass =
   'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-7'
@@ -47,6 +48,18 @@ function StatusBadge({ status }: { status: OpStatus }) {
   )
 }
 
+// Quantidade da OP: inteiro sem casas decimais, decimal com ate 3 casas sem zeros
+// a direita. Ex.: 20.000 -> "20"; 1.500 -> "1,5"; 1.234 -> "1,234".
+function QtdOP({ value }: { value: number | null | undefined }) {
+  const v = value ?? 0
+  const frac = Number.isInteger(v) ? 0 : 3
+  return (
+    <span className="num">
+      {v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: frac })}
+    </span>
+  )
+}
+
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
 function useOP(op: OPData) {
   const [validade, setValidade] = useState(op.validade ? op.validade.split('T')[0] : '')
@@ -74,9 +87,14 @@ function useOP(op: OPData) {
   }
 
   function ajustarValidade(delta: number) {
-    const base = validade ? new Date(validade) : new Date()
+    // Parsing local (sem UTC): "2025-01-15" -> new Date(2025,0,15) para evitar
+    // off-by-one quando o TZ local e UTC-3 (Bahia) e o ISO converte para dia anterior.
+    const partes = validade ? validade.split('-').map(Number) : null
+    const base = partes ? new Date(partes[0], partes[1] - 1, partes[2]) : new Date()
     base.setDate(base.getDate() + delta)
-    const novo = base.toISOString().split('T')[0]
+    const mm = String(base.getMonth() + 1).padStart(2, '0')
+    const dd = String(base.getDate()).padStart(2, '0')
+    const novo = `${base.getFullYear()}-${mm}-${dd}`
     setValidade(novo)
     startTransition(async () => {
       await setValidadeOP(op.id, novo)
@@ -96,13 +114,18 @@ function useOP(op: OPData) {
     })
   }
 
-  // Conclusao com data escolhivel (default = data prevista da OP). op.data vem
-  // em dd/mm/aaaa -> ISO para o input date.
-  const dataPrevistaISO =
-    op.data && /^\d{2}\/\d{2}\/\d{4}$/.test(op.data)
-      ? op.data.split('/').reverse().join('-')
-      : new Date().toISOString().split('T')[0]
-  const [escolhendoData, setEscolhendoData] = useState(false)
+  // Conclusao guiada em dialog. op.data vem em dd/mm/aaaa -> ISO para o input.
+  // Usa parsing local para evitar off-by-one de fuso UTC.
+  const dataPrevistaISO = (() => {
+    if (op.data && /^\d{2}\/\d{2}\/\d{4}$/.test(op.data)) {
+      return op.data.split('/').reverse().join('-')
+    }
+    const hoje = new Date()
+    const mm = String(hoje.getMonth() + 1).padStart(2, '0')
+    const dd = String(hoje.getDate()).padStart(2, '0')
+    return `${hoje.getFullYear()}-${mm}-${dd}`
+  })()
+  const [dialogConclusao, setDialogConclusao] = useState(false)
   const [dataConclusao, setDataConclusao] = useState(dataPrevistaISO)
 
   function concluir() {
@@ -111,7 +134,7 @@ function useOP(op: OPData) {
       if (res?.error) toast.error('Erro ao concluir', { description: res.error })
       else {
         toast.success('Ordem concluída no Omie')
-        setEscolhendoData(false)
+        setDialogConclusao(false)
       }
     })
   }
@@ -148,10 +171,11 @@ function useOP(op: OPData) {
     concluir,
     reverter,
     excluir,
-    escolhendoData,
-    setEscolhendoData,
+    dialogConclusao,
+    setDialogConclusao,
     dataConclusao,
     setDataConclusao,
+    dataPrevistaISO,
   }
 }
 
@@ -235,6 +259,65 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
   )
 }
 
+// Dialog de conclusao guiada: escolher data (default = data prevista) + confirmar.
+// Desacopla o seletor de data dos botoes Imprimir/Excluir, evitando o espremimento
+// reportado no video.
+function DialogConclusao({ op, ctrl }: StepperProps) {
+  return (
+    <Dialog open={ctrl.dialogConclusao} onOpenChange={ctrl.setDialogConclusao}>
+      <DialogContent className="bg-surface" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarCheck className="size-4 text-brand" />
+            Concluir OP {op.numOP}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
+              Data de conclusao
+            </label>
+            <input
+              type="date"
+              value={ctrl.dataConclusao}
+              onChange={(e) => ctrl.setDataConclusao(e.target.value)}
+              disabled={ctrl.pending}
+              className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+            />
+            <p className="mt-1 text-[11px] text-text-muted">
+              Padrao: data prevista da OP. Altere se a producao foi em outro dia.
+            </p>
+          </div>
+          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+            A conclusao sera gravada no Omie. O estoque produzido sera incrementado.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={() => ctrl.setDialogConclusao(false)}
+            disabled={ctrl.pending}
+            className={btnClass('ghost')}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={ctrl.concluir}
+            disabled={ctrl.pending}
+            className={btnClass('primary')}
+          >
+            <Check className="size-3.5" />
+            {ctrl.pending ? 'Concluindo...' : 'Confirmar conclusao'}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function Acoes({ op, ctrl }: StepperProps) {
   return (
     <>
@@ -246,46 +329,19 @@ function Acoes({ op, ctrl }: StepperProps) {
       >
         <Printer className="size-3.5" /> Imprimir
       </a>
-      {!op.concluida &&
-        op.podeConcluir &&
-        (ctrl.escolhendoData ? (
-          <span className="inline-flex items-center gap-1.5">
-            <input
-              type="date"
-              value={ctrl.dataConclusao}
-              onChange={(e) => ctrl.setDataConclusao(e.target.value)}
-              disabled={ctrl.pending}
-              aria-label="Data de conclusão"
-              title="Conclui nesta data (default: data prevista da OP)"
-              className="num rounded-md border border-border bg-surface px-1.5 py-1 text-xs text-text outline-none focus:border-brand disabled:opacity-60"
-            />
-            <button
-              type="button"
-              onClick={ctrl.concluir}
-              disabled={ctrl.pending}
-              className="text-brand hover:underline disabled:opacity-60"
-            >
-              {ctrl.pending ? '...' : 'Confirmar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => ctrl.setEscolhendoData(false)}
-              disabled={ctrl.pending}
-              className="text-text-muted hover:underline disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-          </span>
-        ) : (
+      {!op.concluida && op.podeConcluir && (
+        <>
           <button
             type="button"
-            onClick={() => ctrl.setEscolhendoData(true)}
+            onClick={() => ctrl.setDialogConclusao(true)}
             disabled={ctrl.pending}
             className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
           >
             <Check className="size-3.5" /> Concluir
           </button>
-        ))}
+          <DialogConclusao op={op} ctrl={ctrl} />
+        </>
+      )}
       {/* Regra do fundador: concluida -> reverter; aberta -> excluir. Cada acao
           atras da sua permissao (Reverter / Excluir). */}
       {op.concluida
@@ -295,7 +351,7 @@ function Acoes({ op, ctrl }: StepperProps) {
               onClick={ctrl.reverter}
               disabled={ctrl.pending}
               className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
-              title="Reverter a conclusão (estorna no Omie)"
+              title="Reverter a conclusao (estorna no Omie)"
             >
               <Undo2 className="size-3.5" /> Reverter
             </button>
@@ -337,7 +393,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
         <div className="text-[11px] text-text-muted">{op.unidade}</div>
       </td>
       <td className="text-right align-top">
-        <Num value={op.qtdOP} frac={3} /> <span className="text-text-muted">{op.unidade}</span>
+        <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
       </td>
       <td className="align-top">
         <StepperValidade op={op} ctrl={ctrl} />
@@ -383,7 +439,7 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
           Qtd OP{' '}
         </span>
-        <Num value={op.qtdOP} frac={3} /> <span className="text-text-muted">{op.unidade}</span>
+        <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
       </div>
 
       <div className="mt-3">

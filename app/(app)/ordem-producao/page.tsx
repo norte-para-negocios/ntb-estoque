@@ -42,6 +42,7 @@ export default async function OrdemProducaoPage({
     op_produto?: string
     tipo_produto?: string
     op_concluido?: string
+    op_status?: string
     ord?: string
     page?: string
   }>
@@ -74,10 +75,12 @@ export default async function OrdemProducaoPage({
   const dataInicio = sp.data_inicio ?? primeiroDiaMes
   const dataFinal = sp.data_final ?? ultimoDiaMes
 
-  // Filtro de conclusao direto no banco pela coluna `concluida` (migration 012).
-  // Antes dependia do full_object aninhado (sem filtro no PostgREST) e buscava
-  // tudo em memoria em lotes; agora e um filtro simples com paginacao normal.
+  // Filtro de status: concluida (S/N) ou status granular (prevista/pendente/atrasada).
+  // op_concluido S/N mantido por compatibilidade; op_status e o novo filtro de 4 estados.
   const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
+  // Filtro por status granular (prevista/pendente/atrasada) via comparacao de data no banco.
+  // Nao ha coluna de status; derivamos da comparacao de identificacao_d_dt_previsao com hoje.
+  const filtroStatus = sp.op_status ?? ''
 
   // Filtros op_produto / tipo_produto: as colunas produto_* em ordens_producao
   // sao 100% NULL. Cruzamos via a tabela produtos para obter os codigo_produto
@@ -125,6 +128,17 @@ export default async function OrdemProducaoPage({
       )
       .eq('loja_id', lojaId)
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
+    // Filtro de status granular: prevista / pendente / atrasada / concluida.
+    // "pendente" = data = hoje (nao concluida); "prevista" = data futura; "atrasada" = data passada.
+    if (filtroStatus === 'concluida') {
+      q = q.eq('concluida', true)
+    } else if (filtroStatus === 'prevista') {
+      q = q.eq('concluida', false).gt('identificacao_d_dt_previsao', hojeISO)
+    } else if (filtroStatus === 'pendente') {
+      q = q.eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO)
+    } else if (filtroStatus === 'atrasada') {
+      q = q.eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO)
+    }
     if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
     if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
     if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
@@ -206,9 +220,8 @@ export default async function OrdemProducaoPage({
     .neq('inativo', 'S')
     .order('descricao')
 
-  // Totais por status (Pendentes/Concluidas) do conjunto filtrado, IGNORANDO o
-  // filtro de conclusao: assim o usuario ve quantas ha de cada, mesmo filtrando
-  // por uma. head:true = so o count, nao traz linhas (barato).
+  // Totais por status granular: ignora filtro de status/conclusao para mostrar todos os contadores.
+  // head:true = so o count, sem trazer linhas (barato).
   const totaisBase = () => {
     let q = supabase
       .from('ordens_producao')
@@ -222,9 +235,16 @@ export default async function OrdemProducaoPage({
     }
     return q
   }
-  const [{ count: totConcluidas }, { count: totPendentes }] = await Promise.all([
+  const [
+    { count: totConcluidas },
+    { count: totPrevistas },
+    { count: totPendentes },
+    { count: totAtrasadas },
+  ] = await Promise.all([
     totaisBase().eq('concluida', true),
-    totaisBase().eq('concluida', false),
+    totaisBase().eq('concluida', false).gt('identificacao_d_dt_previsao', hojeISO),
+    totaisBase().eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO),
+    totaisBase().eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO),
   ])
 
   const exportParams = new URLSearchParams()
@@ -235,6 +255,7 @@ export default async function OrdemProducaoPage({
   if (sp.op_produto) exportParams.set('op_produto', sp.op_produto)
   if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
+  if (sp.op_status) exportParams.set('op_status', sp.op_status)
 
   // Ordenacao clicando no cabecalho da tabela (mantem os filtros atuais).
   const ordHref = (novoOrd: string) => {
@@ -258,12 +279,14 @@ export default async function OrdemProducaoPage({
     { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
     {
       tipo: 'select',
-      nome: 'op_concluido',
+      nome: 'op_status',
       label: 'Status',
       opcoes: [
         { value: '', label: 'Todos' },
-        { value: 'S', label: 'Concluída' },
-        { value: 'N', label: 'Pendente' },
+        { value: 'prevista', label: 'Prevista' },
+        { value: 'pendente', label: 'Pendente' },
+        { value: 'atrasada', label: 'Atrasada' },
+        { value: 'concluida', label: 'Concluída' },
       ],
     },
     {
@@ -299,7 +322,7 @@ export default async function OrdemProducaoPage({
                   ordem_producao: sp.ordem_producao ?? '',
                   op_produto: sp.op_produto ?? '',
                   tipo_produto: sp.tipo_produto ?? '',
-                  op_concluido: sp.op_concluido ?? '',
+                  op_status: sp.op_status ?? '',
                   ord: sp.ord ?? '',
                 }}
                 persistirEm="/ordem-producao"
@@ -317,17 +340,19 @@ export default async function OrdemProducaoPage({
         />
         <ChipsStatus
           basePath="/ordem-producao"
-          param="op_concluido"
+          param="op_status"
           opcoes={[
             { value: '', label: 'Todas' },
-            { value: 'N', label: 'Pendentes', count: totPendentes ?? 0 },
-            { value: 'S', label: 'Concluídas', count: totConcluidas ?? 0 },
+            { value: 'prevista', label: 'Previstas', count: totPrevistas ?? 0 },
+            { value: 'pendente', label: 'Pendentes', count: totPendentes ?? 0 },
+            { value: 'atrasada', label: 'Atrasadas', count: totAtrasadas ?? 0 },
+            { value: 'concluida', label: 'Concluídas', count: totConcluidas ?? 0 },
           ]}
         />
         <ChipsFiltrosAtivos
           basePath="/ordem-producao"
           campos={campos}
-          naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido']}
+          naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido', 'op_status']}
           persistirEm="/ordem-producao"
         />
       </ListaHeader>
