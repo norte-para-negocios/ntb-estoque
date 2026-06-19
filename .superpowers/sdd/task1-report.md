@@ -1,5 +1,5 @@
 STATUS: DONE
-COMMITS: (preencher após commit)
+COMMITS: 8cd64eb
 TSC: sem erros
 MIGRATION_APLICADA: sim
 PERMISSOES_NO_BANCO: Impressoes, Movimentacoes, Validade
