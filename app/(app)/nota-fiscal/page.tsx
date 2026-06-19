@@ -189,6 +189,7 @@ export default async function NotaFiscalPage({
                   tipo: params.tipo ?? '',
                   produto: params.produto ?? '',
                 }}
+                persistirEm="/nota-fiscal"
               />
               <a
                 href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
@@ -208,7 +209,7 @@ export default async function NotaFiscalPage({
             </>
           }
         />
-        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} persistirEm="/nota-fiscal" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

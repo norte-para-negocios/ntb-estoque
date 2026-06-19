@@ -302,6 +302,7 @@ export default async function OrdemProducaoPage({
                   op_concluido: sp.op_concluido ?? '',
                   ord: sp.ord ?? '',
                 }}
+                persistirEm="/ordem-producao"
               />
               <a
                 href={`/ordem-producao/export?${exportParams.toString()}`}
@@ -327,6 +328,7 @@ export default async function OrdemProducaoPage({
           basePath="/ordem-producao"
           campos={campos}
           naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido']}
+          persistirEm="/ordem-producao"
         />
       </ListaHeader>
 

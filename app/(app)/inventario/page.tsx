@@ -157,6 +157,7 @@ export default async function InventarioPage({
                   familia: sp.familia ?? '',
                   tipo: sp.tipo ?? '',
                 }}
+                persistirEm="/inventario"
               />
               {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
             </>
@@ -171,7 +172,7 @@ export default async function InventarioPage({
             { value: 'F', label: 'Finalizados' },
           ]}
         />
-        <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} />
+        <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} persistirEm="/inventario" />
       </ListaHeader>
 
       <Lista

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/sheet'
 import { btnClass } from './Button'
 import type { CampoFiltro } from './Filtros'
+import { useFiltrosPersistentes } from '@/hooks/use-filtros-persistentes'
 
 export type { CampoFiltro }
 
@@ -33,18 +34,24 @@ export function FiltrosGaveta({
   campos,
   defaults,
   naoContar = [],
+  persistirEm,
 }: {
   basePath: string
   campos: CampoFiltro[]
   defaults: Record<string, string>
-  /** Campos cujo valor não conta no badge (ex.: datas padrão). */
+  /** Campos cujo valor nao conta no badge (ex.: datas padrao). */
   naoContar?: string[]
+  /** Quando informado, persiste os filtros no localStorage com escopo por rota. */
+  persistirEm?: string
 }) {
   const router = useRouter()
   const sp = useSearchParams()
   const [open, setOpen] = useState(false)
   // Valores controlados; cada filtro aplica na hora (sem precisar de "Aplicar").
   const [valores, setValores] = useState<Record<string, string>>(defaults)
+
+  // Hook de persistencia (ativo quando `persistirEm` e fornecido).
+  const { limpar: limparPersistente } = useFiltrosPersistentes(persistirEm ?? '')
 
   // Ressincroniza quando a URL muda (navegacao externa, limpar, etc.)
   useEffect(() => {
@@ -83,8 +90,13 @@ export function FiltrosGaveta({
 
   function limpar() {
     setValores({})
-    router.push(basePath)
     setOpen(false)
+    if (persistirEm) {
+      // Usa o hook para limpar storage + URL.
+      limparPersistente()
+    } else {
+      router.push(basePath)
+    }
   }
 
   return (

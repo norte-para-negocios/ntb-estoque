@@ -101,6 +101,7 @@ export default async function ImpressoesPage({
                 data_final: sp.data_final ?? '',
                 origem: sp.origem ?? '',
               }}
+              persistirEm="/impressoes"
             />
           }
         />

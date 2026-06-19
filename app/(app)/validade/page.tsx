@@ -140,10 +140,11 @@ export default async function ValidadePage({
               basePath="/validade"
               campos={campos}
               defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+              persistirEm="/validade"
             />
           }
         />
-        <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
+        <ChipsFiltrosAtivos basePath="/validade" campos={campos} persistirEm="/validade" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-1.5">

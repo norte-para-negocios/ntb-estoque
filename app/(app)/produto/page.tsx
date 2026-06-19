@@ -311,6 +311,7 @@ export default async function ProdutoPage({
                 basePath="/produto"
                 campos={campos}
                 defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
+                persistirEm="/produto"
               />
               {podeCriar && (
                 <Link href="/produto/novo" className={btnClass('primary')}>
@@ -329,7 +330,7 @@ export default async function ProdutoPage({
             </>
           }
         />
-        <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} />
+        <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} persistirEm="/produto" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

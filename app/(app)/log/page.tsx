@@ -125,7 +125,7 @@ export default async function LogPage({
           title="Logs de Integração com APIs"
           icon={ScrollText}
           description="Tentativas de integração com APIs"
-          actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} />}
+          actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} persistirEm="/log" />}
         />
         <div className="flex gap-1.5">
           {filtros.map((f) => (

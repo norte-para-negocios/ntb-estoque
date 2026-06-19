@@ -261,10 +261,11 @@ export default async function MovimentacoesPage({
               campos={campos}
               defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
               naoContar={['data_inicio', 'data_final']}
+              persistirEm="/movimentacoes"
             />
           }
         />
-        <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+        <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} persistirEm="/movimentacoes" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

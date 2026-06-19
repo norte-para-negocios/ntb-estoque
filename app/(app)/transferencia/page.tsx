@@ -181,6 +181,7 @@ export default async function TransferenciaPage({
                   status: sp.status ?? '',
                   motivo: sp.motivo ?? '',
                 }}
+                persistirEm="/transferencia"
               />
               <a
                 href={relatorioHref}
@@ -203,7 +204,7 @@ export default async function TransferenciaPage({
             { value: 'C', label: 'Concluídas' },
           ]}
         />
-        <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} />
+        <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} persistirEm="/transferencia" />
       </ListaHeader>
 
       <Lista

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X } from 'lucide-react'
 import type { CampoFiltro } from './Filtros'
+import { useFiltrosPersistentes } from '@/hooks/use-filtros-persistentes'
 
 // Formata 'YYYY-MM-DD' (valor de input date) para 'DD/MM/AAAA'. Outros formatos
 // passam direto.
@@ -27,18 +28,24 @@ function rotuloValor(campo: CampoFiltro, valor: string): string {
  * da gaveta para resolver rotulos. `naoMostrar` exclui campos que nao sao filtro de
  * conteudo (ex.: 'ord' de ordenacao). Preserva params fora de `campos` (dias/modo,
  * vista, etc.) ao remover.
+ * `persistirEm` deve ser o mesmo valor passado ao FiltrosGaveta para que o
+ * "Limpar tudo" tambem apague o localStorage.
  */
 export function ChipsFiltrosAtivos({
   basePath,
   campos,
   naoMostrar = [],
+  persistirEm,
 }: {
   basePath: string
   campos: CampoFiltro[]
   naoMostrar?: string[]
+  /** Quando informado, limparTudo tambem apaga o localStorage da rota. */
+  persistirEm?: string
 }) {
   const router = useRouter()
   const sp = useSearchParams()
+  const { limpar: limparPersistente } = useFiltrosPersistentes(persistirEm ?? '')
 
   const chips = campos
     .filter((c) => !naoMostrar.includes(c.nome))
@@ -64,6 +71,11 @@ export function ChipsFiltrosAtivos({
   }
 
   function limparTudo() {
+    if (persistirEm) {
+      // Delega ao hook que apaga storage + navega.
+      limparPersistente()
+      return
+    }
     const params = new URLSearchParams(sp.toString())
     for (const c of campos) if (!naoMostrar.includes(c.nome)) params.delete(c.nome)
     navegar(params)

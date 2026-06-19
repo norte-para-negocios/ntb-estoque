@@ -169,7 +169,7 @@ export default async function SyncStatusPage({
           icon={Activity}
           description="Painel de erros de sincronização com o Omie"
           actions={
-            <FiltrosGaveta basePath="/sync-status" campos={campos} defaults={defaults} naoContar={['dias']} />
+            <FiltrosGaveta basePath="/sync-status" campos={campos} defaults={defaults} naoContar={['dias']} persistirEm="/sync-status" />
           }
         />
       </ListaHeader>
