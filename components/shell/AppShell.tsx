@@ -65,10 +65,20 @@ export function AppShell({
         <main className="flex-1 min-w-0 overflow-x-hidden pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
             <div className="mb-4 flex justify-end">
+              {/* Mobile: so icone, sem texto e sem linha extra */}
               <button
                 type="button"
                 onClick={() => setBuscaAberta(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+                aria-label="Buscar"
+                className="lg:hidden flex size-9 items-center justify-center rounded-lg border border-border bg-surface text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+              >
+                <Search className="size-4" aria-hidden />
+              </button>
+              {/* Desktop: botao completo com texto e atalho de teclado */}
+              <button
+                type="button"
+                onClick={() => setBuscaAberta(true)}
+                className="hidden lg:inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
               >
                 <Search className="size-4" aria-hidden />
                 <span>Buscar</span>
