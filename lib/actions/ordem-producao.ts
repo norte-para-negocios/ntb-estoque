@@ -197,19 +197,27 @@ export async function setQuantidadeOP(opId: number, quantidade: number | null) {
   revalidatePath('/ordem-producao')
 }
 
-export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
+// qtdeProduzida (opcional): conclusao PARCIAL — concluir so parte da OP. Ex.: OP de
+// 10 kg, concluir 4 kg. Vai como nQtdeProduzida pro Omie. Se nao vier (ou <=0), usa
+// a quantidade cheia da OP (op.quantidade ?? identificacao_n_qtde ?? 1).
+export async function finishOP(
+  opId: number,
+  dataEscolhidaISO?: string | null,
+  qtdeProduzida?: number | null,
+) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
 
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, quantidade, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, quantidade, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
       identificacao_n_cod_op: number | null
       identificacao_d_dt_previsao: string | null
+      identificacao_n_qtde: number | null
       quantidade: number | null
       full_object: { infAdicionais?: { dDtInicio?: string } } | null
       loja: LojaOmie
@@ -218,6 +226,12 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
   if (!op?.identificacao_n_cod_op || !op.loja) {
     return { error: 'Ordem de produção não encontrada' }
   }
+
+  // Quantidade a concluir: a escolhida (parcial) se valida; senao a cheia da OP.
+  const qtdConcluir =
+    qtdeProduzida != null && Number.isFinite(qtdeProduzida) && qtdeProduzida > 0
+      ? qtdeProduzida
+      : op.quantidade ?? op.identificacao_n_qtde ?? 1
 
   try {
     // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a DATA DA OP
@@ -236,16 +250,18 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
       const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
       dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
     }
-    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, op.quantidade ?? 1, await carimboUsuario())
+    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, qtdConcluir, await carimboUsuario())
 
     // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer
     // como pendente ate o proximo sync trazer cConcluida='S' do Omie. dataConclusao
-    // vem DD/MM/AAAA -> grava dt_conclusao_real em YYYY-MM-DD.
+    // vem DD/MM/AAAA -> grava dt_conclusao_real em YYYY-MM-DD. Reflete tambem a
+    // quantidade efetivamente concluida (parcial) na coluna `quantidade`.
     const mc = dataConclusao.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
     await supabase
       .from('ordens_producao')
       .update({
         concluida: true,
+        quantidade: qtdConcluir,
         dt_conclusao_real: mc ? `${mc[3]}-${mc[2]}-${mc[1]}` : null,
         updated_at: new Date().toISOString(),
       })

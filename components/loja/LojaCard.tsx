@@ -299,10 +299,18 @@ export function LojaCard({
     { label: 'Nota Fiscal', data: loja.nota_fiscal_ultima_atualizacao, status: loja.nota_fiscal_status },
   ]
 
+  // Master-detail: a loja comeca fechada; clicar no cabecalho revela as secoes.
+  const [aberta, setAberta] = useState(false)
+
   return (
     <div className="rounded-lg border border-border bg-surface u-card overflow-hidden">
-      {/* Cabecalho compacto */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      {/* Cabecalho compacto — clicar NA loja abre/fecha as secoes (master-detail). */}
+      <button
+        type="button"
+        onClick={() => setAberta((a) => !a)}
+        aria-expanded={aberta}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left u-motion hover:bg-surface-2/40"
+      >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-sm font-semibold text-text">{displayName}</span>
@@ -325,7 +333,17 @@ export function LojaCard({
           </div>
         </div>
         <HealthBadge loja={loja} />
-      </div>
+        <ChevronDown
+          className="size-4 shrink-0 text-text-muted"
+          style={{
+            transform: aberta ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: `transform var(--dur-slow) var(--ease-in-out)`,
+          }}
+        />
+      </button>
+
+      {aberta && (
+        <div className="animate-in fade-in" style={{ animationDuration: 'var(--dur)' }}>
 
       {/* Seção: Sincronização */}
       <Section icon={RefreshCw} title="Sincronização" badge={<StatusPill status={loja.empresa_status} />}>
@@ -434,6 +452,8 @@ export function LojaCard({
         <LojaForm loja={loja} />
         <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome || '(sem nome)'} />
       </div>
+        </div>
+      )}
     </div>
   )
 }

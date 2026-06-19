@@ -127,10 +127,19 @@ function useOP(op: OPData) {
   })()
   const [dialogConclusao, setDialogConclusao] = useState(false)
   const [dataConclusao, setDataConclusao] = useState(dataPrevistaISO)
+  // Conclusao PARCIAL: quanto concluir (default = quantidade da OP). Ex.: OP de
+  // 10 kg, concluir so 4 kg.
+  const qtdConcluirDefault = op.quantidade ?? op.qtdOP ?? 1
+  const [qtdeConcluir, setQtdeConcluir] = useState(String(qtdConcluirDefault))
 
   function concluir() {
+    const q = parseNumBR(qtdeConcluir)
+    if (q == null || Number.isNaN(q) || q <= 0) {
+      toast.error('Quantidade a concluir inválida')
+      return
+    }
     startTransition(async () => {
-      const res = await finishOP(op.id, dataConclusao || null)
+      const res = await finishOP(op.id, dataConclusao || null, q)
       if (res?.error) toast.error('Erro ao concluir', { description: res.error })
       else {
         toast.success('Ordem concluída no Omie')
@@ -176,6 +185,9 @@ function useOP(op: OPData) {
     dataConclusao,
     setDataConclusao,
     dataPrevistaISO,
+    qtdeConcluir,
+    setQtdeConcluir,
+    qtdConcluirDefault,
   }
 }
 
@@ -276,6 +288,28 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
         <div className="space-y-4 py-1">
           <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
+              Quantidade a concluir
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={ctrl.qtdeConcluir}
+                onChange={(e) => ctrl.setQtdeConcluir(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
+                disabled={ctrl.pending}
+                placeholder="0"
+                className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+              />
+              <span className="shrink-0 text-sm text-text-muted">{op.unidade}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-text-muted">
+              OP de {ctrl.qtdConcluirDefault.toLocaleString('pt-BR', { maximumFractionDigits: 12 })} {op.unidade}.
+              Pode concluir só uma parte (ex.: produziu menos que o previsto).
+            </p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
               Data de conclusão
             </label>
             <input
@@ -290,7 +324,8 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
             </p>
           </div>
           <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
-            A conclusão será gravada no Omie. O estoque produzido será incrementado.
+            A conclusão será gravada no Omie. O estoque produzido será incrementado
+            pela quantidade informada acima.
           </p>
         </div>
 
