@@ -239,11 +239,23 @@ export default async function ProdutoPage({
   const saldoDe = (codProd: number | null): number | null =>
     codProd != null && saldoMap.has(codProd) ? saldoMap.get(codProd)! : null
 
-  // Estoque minimo do Omie = soma dos minimos por local na data de posicao mais
-  // recente (mesma logica do saldo). Fonte real do minimo; o campo manual e override.
+  // Estoque minimo do Omie. ATENCAO: a foto do dia corrente as vezes vem SEM
+  // minimo (o Omie so consolida a posicao no fim do dia), igual acontece com o
+  // CMC. Por isso NAO usamos a foto mais recente em geral (dataMaxPorProduto):
+  // usamos, por produto, a foto mais recente que REALMENTE tem minimo, somando
+  // os minimos dos locais nessa data. Sem isso, lojas cuja foto de hoje veio sem
+  // minimo (ex.: Rio Vermelho) mostravam minimo 0 indevidamente.
+  const dataMinPorProduto = new Map<number, string>()
+  for (const pos of posicoes ?? []) {
+    if (!pos.estoque_minimo || Number(pos.estoque_minimo) <= 0) continue
+    const atual = dataMinPorProduto.get(pos.n_cod_prod)
+    if (!atual || (pos.data_posicao && pos.data_posicao > atual)) {
+      dataMinPorProduto.set(pos.n_cod_prod, pos.data_posicao)
+    }
+  }
   const minOmieMap = new Map<number, number>()
   for (const pos of posicoes ?? []) {
-    if (pos.data_posicao === dataMaxPorProduto.get(pos.n_cod_prod)) {
+    if (pos.data_posicao === dataMinPorProduto.get(pos.n_cod_prod)) {
       minOmieMap.set(pos.n_cod_prod, (minOmieMap.get(pos.n_cod_prod) ?? 0) + Number(pos.estoque_minimo ?? 0))
     }
   }

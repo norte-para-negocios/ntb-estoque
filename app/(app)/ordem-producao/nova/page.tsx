@@ -18,7 +18,7 @@ export default async function NovaOPPage({
 }) {
   const lojaId = await getCurrentLojaId()
   // Passo 2 da criacao de OP: exige a permissao de Criar (pode ser aberta por URL).
-  if (!(await requirePermissao(lojaId, 'Ordens de Produção - Criar'))) notFound()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) notFound()
 
   const sp = await searchParams
   const data = (sp.data ?? '').match(/^\d{4}-\d{2}-\d{2}$/) ? sp.data! : ''

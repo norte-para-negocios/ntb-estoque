@@ -59,7 +59,6 @@ function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: numbe
   // Alturas das zonas em mm
   const hCabecalho = 6 * MM    // 6 mm para o nome da loja
   const hRodape    = 5 * MM    // 5 mm para CNPJ + logo mini
-  const hCorpo     = H - hCabecalho - hRodape
 
   const padH = 2.5 * MM  // padding horizontal interno
   const padOX = (3 + offsetX) * MM   // margem esquerda com offset de calibração
@@ -96,8 +95,10 @@ function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: numbe
       letterSpacing: 0.3,
     },
     // --- CORPO (coluna esquerda + coluna direita) ---
+    // flex:1 (nao altura fixa): o corpo absorve o espaco restante e NUNCA estoura
+    // alem da pagina (o que jogava conteudo pra uma 2a etiqueta/pagina).
     corpo: {
-      height: hCorpo,
+      flex: 1,
       flexDirection: 'row',
       overflow: 'hidden',
     },
@@ -179,7 +180,7 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
           : ''
 
         return (
-          <Page key={i} size={[W, H]} style={s.page}>
+          <Page key={i} size={[W, H]} style={s.page} wrap={false}>
             <View style={s.inner}>
               {/* === ZONA 1: CABECALHO — nome da loja === */}
               <View style={s.cabecalho}>
