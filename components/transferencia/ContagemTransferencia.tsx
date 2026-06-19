@@ -66,7 +66,6 @@ export function ContagemTransferencia({
     Object.fromEntries(itensIniciais.map((i) => [i.id, formatNumBR(i.quan)]))
   )
   const [filtro, setFiltro] = useState('')
-  const [buscaManual, setBuscaManual] = useState(false)
   // id do item recem-adicionado: a linha nova ganha o flash de entrada (u-flash-in).
   const [novoId, setNovoId] = useState<number | null>(null)
   const [pending, startTransition] = useTransition()
@@ -220,20 +219,10 @@ export function ContagemTransferencia({
       {podeEditar && !finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           <QrScanner onLeitura={onLeituraQr} />
-          {buscaManual ? (
-            <ProdutoSearch
-              onSelect={adicionar}
-              codigosAdicionados={itens.map((i) => i.codigo)}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setBuscaManual(true)}
-              className="w-full py-1 text-center text-sm text-text-muted underline-offset-2 hover:text-text hover:underline"
-            >
-              buscar manualmente
-            </button>
-          )}
+          <ProdutoSearch
+            onSelect={adicionar}
+            codigosAdicionados={itens.map((i) => i.codigo)}
+          />
         </div>
       )}
 
