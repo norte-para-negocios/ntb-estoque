@@ -20,3 +20,19 @@ export function formatNumBR(v: number | string | null | undefined): string {
   // remove zeros a direita e o ponto decimal solto; troca ponto por virgula.
   return String(n).replace('.', ',')
 }
+
+// Quantidade EXATA como veio do Omie/banco: TODAS as casas decimais, sem
+// arredondar e sem zeros a direita. Aceita numero ou string numerica do banco.
+// Regra do fundador: se a quantidade for 0,0139203299, tem que aparecer isso —
+// nunca arredondar para 3 casas. Ex.: 0.0139203299 -> "0,0139203299";
+// "240.000000" -> "240"; 1.5 -> "1,5"; null -> "".
+export function formatQtdExata(v: number | string | null | undefined): string {
+  if (v == null || v === '') return ''
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return ''
+  // Todas as casas decimais (ate 12 — cobre a precisao do Omie) com separador de
+  // milhar pt-BR, sem zeros a direita. NAO arredonda a quantidade real: o teto de
+  // 12 casas so descarta o ruido de ponto flutuante que aparece alem da precisao
+  // de verdade (ex.: 0,30000000000000004 -> "0,3"; 0,0139203299 -> "0,0139203299").
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
+}

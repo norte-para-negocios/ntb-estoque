@@ -15,7 +15,8 @@ function fmtData(d: string | null): string {
 }
 
 function fmtQt(n: number): string {
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
+  // Quantidade EXATA da malha/estrutura do Omie (sem arredondar a 3 casas).
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
 }
 
 export function EstruturaProduto({

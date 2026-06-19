@@ -266,11 +266,12 @@ export function ContagemInventario({
 
       {podeEditar && !finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
-          <QrScanner onLeitura={onLeituraQr} />
+          {/* Busca manual ACIMA do QR (padrao em todas as contagens) */}
           <ProdutoSearch
             onSelect={adicionar}
             codigosAdicionados={itens.map((i) => i.produto_codigo)}
           />
+          <QrScanner onLeitura={onLeituraQr} />
         </div>
       )}
 

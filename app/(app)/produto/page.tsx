@@ -22,6 +22,7 @@ import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { Num } from '@/components/ui-kit/Num'
+import { formatQtdExata } from '@/lib/num-br'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
 import { Package, Download, Plus } from 'lucide-react'
@@ -495,7 +496,8 @@ export default async function ProdutoPage({
                     const min = minEfetivo(p)
                     // min 0 (caso dominante no Omie) = sem politica de minimo: nao marca baixo.
                     const baixo = min != null && min > 0 && saldo <= min
-                    return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}><Num value={saldo} frac={0} /></span>
+                    // Quantidade EXATA do Omie (sem arredondar): 0,0139203299 aparece inteiro.
+                    return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}>{formatQtdExata(saldo)}</span>
                   },
                 },
                 {
@@ -505,7 +507,7 @@ export default async function ProdutoPage({
                   render: (p: ProdutoLinha) => {
                     const pv = prevVendaDe(p.codigo_produto)
                     if (pv == null) return <span className="text-text-muted">-</span>
-                    return <span className="num text-text-muted"><Num value={pv} frac={0} /></span>
+                    return <span className="num text-text-muted">{formatQtdExata(pv)}</span>
                   },
                 },
                 {
@@ -521,7 +523,7 @@ export default async function ProdutoPage({
                     const prev = prevVendaDe(p.codigo_produto) ?? 0
                     const comprar = Math.max(0, min + prev - saldo)
                     if (comprar <= 0) return <span className="text-ok">ok</span>
-                    return <span className="num font-semibold text-brand"><Num value={comprar} frac={0} /></span>
+                    return <span className="num font-semibold text-brand">{formatQtdExata(comprar)}</span>
                   },
                 },
               ]),

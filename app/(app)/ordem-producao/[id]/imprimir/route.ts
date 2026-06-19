@@ -7,9 +7,12 @@ import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig, type AlturaPreset, ALTURA_PRESETS } from '@/components/etiqueta/EtiquetaPDF'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
-function num(v: unknown, dec: number): string {
+// Quantidade EXATA do Omie na etiqueta: ate 12 casas, sem arredondar.
+// (o parametro dec e mantido por compatibilidade de chamada; nao trunca mais
+//  a quantidade real — 0,816100 aparece como "0,8161", nao "1".)
+function num(v: unknown, _dec?: number): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 12 })
 }
 
 function parseConfig(url: string): EtiquetaConfig {

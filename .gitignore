@@ -45,3 +45,4 @@ scripts/.pooler-host
 .claude/worktrees/
 .superpowers/
 _qa_*.png
+_qa_*.mjs

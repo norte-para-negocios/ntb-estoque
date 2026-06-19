@@ -11,6 +11,7 @@ import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Num } from '@/components/ui-kit/Num'
+import { formatQtdExata } from '@/lib/num-br'
 import { Money } from '@/components/ui-kit/Money'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -262,7 +263,7 @@ export default async function MovimentacoesPage({
     return <Money value={n} className="font-medium" />
   }
   const colQtd = (n: number) =>
-    n > 0 ? <span className="num font-medium"><Num value={n} frac={0} /></span> : <span className="text-text-muted">-</span>
+    n > 0 ? <span className="num font-medium">{formatQtdExata(n)}</span> : <span className="text-text-muted">-</span>
 
   // Quantos produtos sem CMC ha nas linhas exibidas (para aviso).
   const semCmc = linhas.filter((l) => !l.temCmc && (l.entradas > 0 || l.saidas > 0)).length
@@ -305,7 +306,7 @@ export default async function MovimentacoesPage({
         <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Entradas{' '}
-          <span className="num font-semibold text-ok"><Num value={totalEntradas} frac={0} /></span>
+          <span className="num font-semibold text-ok">{formatQtdExata(totalEntradas)}</span>
           {totalValEntradas > 0 && (
             <span className="ml-1.5 text-ok/70">
               (<Money value={totalValEntradas} />)
@@ -314,7 +315,7 @@ export default async function MovimentacoesPage({
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Saídas{' '}
-          <span className="num font-semibold text-err"><Num value={totalSaidas} frac={0} /></span>
+          <span className="num font-semibold text-err">{formatQtdExata(totalSaidas)}</span>
           {totalValSaidas > 0 && (
             <span className="ml-1.5 text-err/70">
               (<Money value={totalValSaidas} />)

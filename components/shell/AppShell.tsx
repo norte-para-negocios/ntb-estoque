@@ -62,7 +62,13 @@ export function AppShell({
       <Sidebar isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileNav isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
-        <main className="flex-1 min-w-0 overflow-x-hidden pb-20 lg:pb-0">
+        {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
+            virar container de scroll. -hidden faria o overflow-y computar pra
+            auto, tornando o <main> um scroll container SEM altura fixa -> o
+            position:sticky do thead/ListaHeader grudava num elemento que nao
+            rola e descia junto com o body. clip mantem o sticky preso ao body
+            (cabecalho de tabela congelado tipo Excel). */}
+        <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
             <div className="mb-4 flex justify-end">
               {/* Mobile: so icone, sem texto e sem linha extra */}

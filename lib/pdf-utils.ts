@@ -23,12 +23,13 @@ export function moedaBR(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-/** Formata numero como quantidade pt-BR sem zeros desnecessarios: 3.4 -> "3,4"; 5.0 -> "5" */
+/** Formata numero como quantidade pt-BR sem zeros desnecessarios: 3.4 -> "3,4"; 5.0 -> "5".
+ *  Quantidade EXATA do Omie: ate 12 casas (sem arredondar a 3), so descarta ruido de float. */
 export function numBRPdf(v: number | string | null | undefined): string {
   if (v == null || v === '') return '-'
   const n = typeof v === 'number' ? v : Number(v)
   if (!Number.isFinite(n)) return '-'
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 12 })
 }
 
 /** Formata numero como quantidade pt-BR com 2 casas: 3.4 -> "3,40" */
