@@ -88,30 +88,33 @@ export function Lista<T>({
         </table>
       </div>
 
-      {/* Mobile: cards empilhados */}
-      <div className="lg:hidden space-y-3">
+      {/* Mobile: linhas estilo extrato — compactas, padding reduzido,
+          dados secundarios em linha unica abaixo do titulo.
+          Altura minima 40px por linha clicavel (alvo de toque). */}
+      <div className="lg:hidden divide-y divide-border rounded-lg border border-border bg-surface">
         {linhas.map((row, i) => (
           <div
             key={chaveLinha(row)}
             style={stagger(i)}
-            className="u-stagger rounded-lg border border-border bg-surface p-4"
+            className="u-stagger flex min-h-[40px] items-center gap-2 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 font-semibold text-text">{primaria.render(row)}</div>
-              {acao && <div className="shrink-0">{acao(row)}</div>}
+            {/* Coluna esquerda: titulo + dados secundarios em linha */}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-text leading-snug">
+                {primaria.render(row)}
+              </div>
+              {demais.length > 0 && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                  {demais.map((c, idx) => (
+                    <span key={idx} className="text-xs text-text-muted leading-none">
+                      {c.render(row)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            {demais.length > 0 && (
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {demais.map((c, i) => (
-                  <div key={i} className={`min-w-0 ${c.alinhar === 'right' ? 'text-right' : ''}`}>
-                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                      {c.label}
-                    </dt>
-                    <dd className="text-sm text-text break-words">{c.render(row)}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+            {/* Coluna direita: acao */}
+            {acao && <div className="shrink-0">{acao(row)}</div>}
           </div>
         ))}
       </div>
