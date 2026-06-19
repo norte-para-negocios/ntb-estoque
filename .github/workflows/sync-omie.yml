@@ -42,3 +42,6 @@ jobs:
           # Previsao de venda: 1 loja por hora (bloco 0); a janela muda devagar e
           # cobre as lojas em rodizio ao longo do dia.
           if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-previsao; fi
+          # Movimentos de estoque (entradas/saidas por produto/dia): 1x por hora
+          # (bloco 0). Rate limit ~700ms/pagina por loja, maxDuration=300s.
+          if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-movimentos; fi

@@ -5,6 +5,7 @@
     { "path": "/api/cron/sync-ops", "schedule": "0 1 * * *" },
     { "path": "/api/cron/sync-nfs", "schedule": "30 1 * * *" },
     { "path": "/api/cron/prune", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/sync-movimentos", "schedule": "0 4 * * *" },
     { "path": "/api/cron/arquivar?dry_run=false", "schedule": "0 3 1 * *" }
   ]
 }
