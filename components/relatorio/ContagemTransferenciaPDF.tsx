@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, PdfMetaBox, pdfTabela } from './PdfChrome'
 import { numBR2 } from '@/lib/pdf-utils'
+import { statusInfo } from '@/lib/status-cor'
 
 // Colunas: somam 96% para garantir paddingRight entre colunas sem colisao.
 // BUG corrigido: anteriormente somavam 100% sem paddingRight, colando "5Concluido".
@@ -44,7 +45,7 @@ export function ContagemTransferenciaPDF({
   destino: string
   itens: ContagemTransferenciaItem[]
 }) {
-  const concluidos = itens.filter((it) => it.status === 'Concluído' || it.status === 'Concluída').length
+  const concluidos = itens.filter((it) => it.status === 'Concluido').length
 
   return (
     <Document>
@@ -81,7 +82,7 @@ export function ContagemTransferenciaPDF({
               <Text style={[pdfTabela.td, col.qtde]}>
                 {numBR2(it.quan)}
               </Text>
-              <Text style={[pdfTabela.td, col.status]}>{it.status}</Text>
+              <Text style={[pdfTabela.td, col.status]}>{statusInfo(it.status).label}</Text>
             </View>
           ))}
 

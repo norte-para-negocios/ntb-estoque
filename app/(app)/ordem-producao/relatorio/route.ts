@@ -112,12 +112,12 @@ export async function GET(request: Request) {
         ) || `Produto ${o.identificacao_n_cod_produto}`,
       quantidade: `${numBRPdf(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
       validade: o.validade || '-',
-      status: concluida ? 'Concluída' : 'Pendente',
+      status: concluida ? 'Concluida' : 'Pendente',
     }
   })
 
   // Filtro de status apos montar os itens (usa logica isOpConcluida).
-  if (statusFiltro === 'concluida') itens = itens.filter((i) => i.status === 'Concluída')
+  if (statusFiltro === 'concluida') itens = itens.filter((i) => i.status === 'Concluida')
   else if (statusFiltro === 'pendente') itens = itens.filter((i) => i.status === 'Pendente')
 
   // Monta subtitulo com filtros aplicados.

@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, PdfResumoBar, pdfTabela } from './PdfChrome'
+import { statusInfo } from '@/lib/status-cor'
 
 // Colunas OP: somam 96% para garantir paddingRight entre colunas sem colisao.
 const col = StyleSheet.create({
@@ -41,7 +42,7 @@ export function RelatorioOPPDF({
   ordens: RelatorioOPItem[]
 }) {
   const sub = [loja, periodo, filtros].filter(Boolean).join(' · ')
-  const concluidas = ordens.filter((o) => o.status === 'Concluída').length
+  const concluidas = ordens.filter((o) => o.status === 'Concluida').length
 
   return (
     <Document>
@@ -71,7 +72,7 @@ export function RelatorioOPPDF({
               <Text style={[pdfTabela.td, col.produto]}>{o.produto}</Text>
               <Text style={[pdfTabela.td, col.qtd]}>{o.quantidade}</Text>
               <Text style={[pdfTabela.tdMuted, col.validade]}>{o.validade}</Text>
-              <Text style={[pdfTabela.td, col.status]}>{o.status}</Text>
+              <Text style={[pdfTabela.td, col.status]}>{statusInfo(o.status).label}</Text>
             </View>
           ))}
 

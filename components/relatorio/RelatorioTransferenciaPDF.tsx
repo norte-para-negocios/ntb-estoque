@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, PdfResumoBar, pdfTabela } from './PdfChrome'
+import { statusInfo } from '@/lib/status-cor'
 
 // Colunas: somam 96% para garantir paddingRight entre elas sem colisao.
 const col = StyleSheet.create({
@@ -76,7 +77,7 @@ export function RelatorioTransferenciaPDF({
               <Text style={[pdfTabela.td, col.destino]}>{t.destino}</Text>
               {haMotivo ? <Text style={[pdfTabela.tdMuted, col.motivo]}>{t.motivo ?? '-'}</Text> : null}
               <Text style={[pdfTabela.td, col.produtos]}>{t.produtos}</Text>
-              <Text style={[pdfTabela.td, col.status]}>{t.status}</Text>
+              <Text style={[pdfTabela.td, col.status]}>{statusInfo(t.status).label}</Text>
             </View>
           ))}
 
