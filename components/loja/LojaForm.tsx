@@ -17,6 +17,23 @@ const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
+// Mascara de CNPJ: remove nao-digitos e formata XX.XXX.XXX/XXXX-XX
+function aplicarMascaraCnpj(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 14)
+  if (d.length <= 2) return d
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
+}
+
+// Mascara de CEP: XXXXX-XXX
+function aplicarMascaraCep(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
 export type LojaExistente = {
   id: number
   cnpj: string | null
@@ -31,6 +48,9 @@ export type LojaExistente = {
   omie_app_key: string | null
   omie_app_secret: string | null
   ativo: boolean | null
+  // campos extras (presentes em LojaRow, ignorados no form mas necessarios para
+  // o card receber o objeto completo e passar para LojaForm sem erros de tipo)
+  [key: string]: unknown
 }
 
 function vazio(): LojaInput {
@@ -118,7 +138,13 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
         <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-4 py-3">
           <div>
             <label className={labelClass}>CNPJ</label>
-            <input className={inputClass} value={form.cnpj} onChange={(e) => set('cnpj', e.target.value)} />
+            <input
+              className={`${inputClass} num`}
+              value={form.cnpj}
+              placeholder="XX.XXX.XXX/XXXX-XX"
+              onChange={(e) => set('cnpj', aplicarMascaraCnpj(e.target.value))}
+              maxLength={18}
+            />
           </div>
           <div>
             <label className={labelClass}>Nome</label>
@@ -134,7 +160,13 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
           </div>
           <div>
             <label className={labelClass}>CEP</label>
-            <input className={inputClass} value={form.cep} onChange={(e) => set('cep', e.target.value)} />
+            <input
+              className={`${inputClass} num`}
+              value={form.cep}
+              placeholder="XXXXX-XXX"
+              maxLength={9}
+              onChange={(e) => set('cep', aplicarMascaraCep(e.target.value))}
+            />
           </div>
           <div>
             <label className={labelClass}>UF</label>
@@ -142,7 +174,8 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
               className={inputClass}
               value={form.uf}
               maxLength={2}
-              onChange={(e) => set('uf', e.target.value)}
+              placeholder="BA"
+              onChange={(e) => set('uf', e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
             />
           </div>
           <div>
