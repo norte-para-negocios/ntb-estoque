@@ -65,8 +65,18 @@ export default async function HomePage() {
     }
   }
 
-  const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
-  const seteDias = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+  // Datas via hora local (evita off-by-one de fuso UTC).
+  function localISO(offsetDias: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + offsetDias)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dia = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dia}`
+  }
+  const trintaDias = localISO(-30)
+  const hojeLocal = localISO(0)
+  const seteDias = localISO(7)
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
@@ -85,13 +95,16 @@ export default async function HomePage() {
         .select('id', head)
         .eq('loja_id', lojaId)
         .neq('status', 'Finalizado'),
-      // Produtos (OPs) vencendo nos proximos 7 dias
+      // OPs vencendo nos proximos 7 dias (excluindo ja vencidas e saldo zero).
+      // Alinhado com a lista de /validade: janela [hoje, hoje+7], quantidade > 0.
       supabase
         .from('ordens_producao')
         .select('id', head)
         .eq('loja_id', lojaId)
         .not('validade', 'is', null)
-        .lte('validade', seteDias),
+        .gte('validade', hojeLocal)
+        .lte('validade', seteDias)
+        .gt('quantidade', 0),
       // Erros de sincronizacao da loja nas ultimas 24h
       supabase
         .from('integration_attempts')
@@ -156,8 +169,8 @@ export default async function HomePage() {
     alertas.push({
       icon: CalendarClock,
       token: 'warn',
-      texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
-      href: '/validade?dias=7',
+      texto: `${vencendo.count} produto(s) vencem nos proximos 7 dias`,
+      href: '/validade',
     })
   if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))
     alertas.push({

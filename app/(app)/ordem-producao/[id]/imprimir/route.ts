@@ -31,8 +31,8 @@ function fmtData(d: string | null): string {
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Produção'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
+    return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
   }
 
   const { id } = await params

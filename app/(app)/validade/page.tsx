@@ -1,3 +1,4 @@
+import React from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
@@ -10,30 +11,48 @@ import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Num } from '@/components/ui-kit/Num'
+import type { Coluna } from '@/components/ui-kit/Lista'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { escapeIlikeOr } from '@/lib/utils-busca'
-import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
-import { CalendarClock } from 'lucide-react'
+import { urgenciaValidade, FUNDO_CLASSE, SELO_CLASSE } from '@/lib/status-cor'
+import { AlertTriangle, CalendarClock, Printer } from 'lucide-react'
 
-const LIMITE = 200
-const PERIODOS = [3, 7, 15, 30, 60] as const
+const LIMITE = 400
 
-// Retorna 'YYYY-MM-DD' de hoje + d dias.
-function hojeMais(d: number): string {
-  const dt = new Date()
-  dt.setHours(0, 0, 0, 0)
-  dt.setDate(dt.getDate() + d)
-  return dt.toISOString().slice(0, 10)
+// Retorna 'YYYY-MM-DD' via hora local (evita off-by-one de fuso UTC).
+function hojeISO(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dia}`
 }
 
-// Diferença em dias entre a validade e hoje (negativo = vencido).
+// Retorna 'YYYY-MM-DD' de hoje + d dias (local).
+function hojeMais(d: number): string {
+  const dt = new Date()
+  dt.setDate(dt.getDate() + d)
+  const y = dt.getFullYear()
+  const m = String(dt.getMonth() + 1).padStart(2, '0')
+  const dia = String(dt.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dia}`
+}
+
+// Diferenca em dias entre a validade e hoje (negativo = vencido). Parsing local.
 function diasAte(validade: string): number {
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
-  const v = new Date(`${validade}T00:00:00`)
+  const [a, m, d] = validade.split('-').map(Number)
+  const v = new Date(a, m - 1, d)
   return Math.round((v.getTime() - hoje.getTime()) / 86400000)
+}
+
+function textoValidade(dias: number): string {
+  if (dias < 0) return `vencido ha ${-dias} dia${-dias === 1 ? '' : 's'}`
+  if (dias === 0) return 'vence hoje'
+  return `vence em ${dias} dia${dias === 1 ? '' : 's'}`
 }
 
 function formataData(validade: string): string {
@@ -41,26 +60,45 @@ function formataData(validade: string): string {
   return `${d}/${m}/${a}`
 }
 
+type OrdemRow = {
+  id: number
+  identificacao_c_num_op: string | null
+  num_ordem: string | null
+  identificacao_n_cod_produto: number
+  identificacao_n_qtde: number | null
+  quantidade: number | null
+  validade: string | null
+}
+
+type ProdutoRow = {
+  codigo_produto: number
+  codigo: string | null
+  descricao: string | null
+  unidade: string | null
+}
+
+// Classifica OP em secao do painel.
+type Secao = 'vencidos' | 'hoje' | 'semana' | 'depois'
+
+function secaoDeOp(dias: number): Secao {
+  if (dias < 0) return 'vencidos'
+  if (dias === 0) return 'hoje'
+  if (dias <= 7) return 'semana'
+  return 'depois'
+}
+
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string }>
+  searchParams: Promise<{ tipo?: string; familia?: string; produto?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Validade'))) notFound()
 
   const sp = await searchParams
-  // Modo "vencidos": so os que ja venceram (validade < hoje), do mais vencido pro
-  // menos. Senao, o que vence ate hoje + N dias.
-  const vencidos = sp.modo === 'vencidos'
-  const dias = PERIODOS.includes(Number(sp.dias) as (typeof PERIODOS)[number])
-    ? Number(sp.dias)
-    : 7
-
   const supabase = await createClient()
 
-  // Filtro por tipo + familia + busca de produto: resolve os codigos que batem em
-  // TODOS os filtros e restringe as OPs a esses produtos. null = sem filtro.
+  // Filtro por tipo + familia + busca de produto.
   let codigosTipo: number[] | null = null
   if (sp.tipo || sp.familia || sp.produto) {
     let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
@@ -74,33 +112,46 @@ export default async function ValidadePage({
     codigosTipo = [...new Set((prodsTipo ?? []).map((p) => p.codigo_produto).filter(Boolean))]
   }
 
+  // Busca todas as OPs com validade definida (sem saldo zero).
   let ordensQuery = supabase
     .from('ordens_producao')
-    .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
+    .select(
+      'id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade'
+    )
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
-  ordensQuery = vencidos
-    ? ordensQuery.lt('validade', hojeMais(0)).order('validade', { ascending: false })
-    : ordensQuery
-        .gte('validade', hojeMais(0))
-        .lte('validade', hojeMais(dias))
-        .order('validade', { ascending: true })
-  ordensQuery = ordensQuery.limit(LIMITE)
+    .order('validade', { ascending: true })
+    .limit(LIMITE)
 
   if (codigosTipo !== null) {
-    ordensQuery = ordensQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
+    ordensQuery = ordensQuery.in(
+      'identificacao_n_cod_produto',
+      codigosTipo.length ? codigosTipo : [-1]
+    )
   }
 
   const { data: ordensRaw } = await ordensQuery
-  // Esconde OPs sem saldo (quantidade 0): sem unidade nao ha o que vencer.
-  const ordens = (ordensRaw ?? []).filter(
+  // Filtra saldo zero (quantidade nula/zero): sem estoque nao ha o que vencer.
+  const ordens = ((ordensRaw ?? []) as OrdemRow[]).filter(
     (o) => Number(o.quantidade ?? o.identificacao_n_qtde ?? 0) > 0
   )
 
-  // Resolver descrição/código/unidade dos produtos relacionados.
-  const codigos = [
-    ...new Set(ordens.map((o) => o.identificacao_n_cod_produto).filter(Boolean)),
-  ]
+  // Separa por secao usando parsing local.
+  const grupos: Record<Secao, OrdemRow[]> = {
+    vencidos: [],
+    hoje: [],
+    semana: [],
+    depois: [],
+  }
+  for (const op of ordens) {
+    const dias = diasAte(op.validade as string)
+    grupos[secaoDeOp(dias)].push(op)
+  }
+  // Vencidos: mais recente primeiro (ja esta em ASC de validade, inverte so esse grupo).
+  grupos.vencidos = grupos.vencidos.slice().reverse()
+
+  // Resolver descricao/codigo/unidade dos produtos relacionados.
+  const codigos = [...new Set(ordens.map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
   const { data: produtos } = codigos.length
     ? await supabase
         .from('produtos')
@@ -109,37 +160,133 @@ export default async function ValidadePage({
         .in('codigo_produto', codigos)
     : { data: [] }
 
-  const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
+  const prodMap = new Map(((produtos ?? []) as ProdutoRow[]).map((p) => [p.codigo_produto, p]))
   const familias = await buscarFamilias()
 
   const campos: CampoFiltro[] = [
-    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou codigo)' },
     { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'select',
+      nome: 'familia',
+      label: 'Familia',
+      opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })),
+    },
   ]
 
-  // Preserva tipo/familia/produto ao trocar o periodo (chips).
-  const extra = [
-    sp.tipo && `tipo=${encodeURIComponent(sp.tipo)}`,
-    sp.familia && `familia=${encodeURIComponent(sp.familia)}`,
-    sp.produto && `produto=${encodeURIComponent(sp.produto)}`,
+  const qtdVencidos = grupos.vencidos.length
+  const qtdSemana = grupos.hoje.length + grupos.semana.length
+
+  const hoje = hojeISO()
+  void hoje // usado so para confirmar parsing local no servidor
+
+  function colunasSecao(secao: Secao): Coluna<OrdemRow>[] {
+    return [
+      {
+        label: 'Produto',
+        primaria: true,
+        render: (o: OrdemRow) => {
+          const prod = prodMap.get(o.identificacao_n_cod_produto)
+          return (
+            <Link href={`/ordem-producao/${o.id}`} className="group flex flex-col gap-0.5">
+              <span className="text-text font-medium group-hover:text-brand transition-colors">
+                {formatarNomeProduto(prod?.descricao) ||
+                  `Produto ${o.identificacao_n_cod_produto}`}
+              </span>
+              {prod?.codigo && (
+                <span className="text-[12px] text-text-muted">{prod.codigo}</span>
+              )}
+            </Link>
+          )
+        },
+      },
+      {
+        label: 'Validade',
+        larguraDesktop: 'w-48',
+        render: (o: OrdemRow) => {
+          const dias = diasAte(o.validade as string)
+          const urgencia = urgenciaValidade(dias)
+          return (
+            <span className="inline-flex items-center gap-2">
+              <span
+                className={`size-2 rounded-full shrink-0 ${FUNDO_CLASSE[urgencia]}`}
+              />
+              <span className="flex flex-col">
+                <span className="num text-[13px] text-text">{formataData(o.validade as string)}</span>
+                <span className={`text-[11px] ${urgencia === 'err' ? 'text-err' : urgencia === 'warn' ? 'text-warn' : 'text-text-muted'}`}>
+                  {textoValidade(dias)}
+                </span>
+              </span>
+            </span>
+          )
+        },
+      },
+      {
+        label: 'OP',
+        larguraDesktop: 'w-36',
+        render: (o: OrdemRow) => (
+          <span className="text-text-muted text-[13px]">
+            {o.identificacao_c_num_op || o.num_ordem || '-'}
+          </span>
+        ),
+      },
+      {
+        label: 'Qtd',
+        alinhar: 'right' as const,
+        larguraDesktop: 'w-28',
+        render: (o: OrdemRow) => {
+          const prod = prodMap.get(o.identificacao_n_cod_produto)
+          return (
+            <>
+              <Num value={o.quantidade ?? o.identificacao_n_qtde} frac={0} />
+              {prod?.unidade && (
+                <span className="ml-1 text-[12px] text-text-muted">{prod.unidade}</span>
+              )}
+            </>
+          )
+        },
+      },
+    ]
+  }
+
+  function acaoImprimir(o: OrdemRow): React.ReactNode {
+    return (
+      <a
+        href={`/ordem-producao/${o.id}/imprimir`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+        title="Imprimir etiqueta"
+      >
+        <Printer className="size-3.5" strokeWidth={2} />
+        <span className="hidden sm:inline">Imprimir</span>
+      </a>
+    )
+  }
+
+  const secoes: { id: Secao; label: string; empty: string }[] = [
+    { id: 'vencidos', label: 'Vencidos', empty: 'Nenhum produto vencido.' },
+    { id: 'hoje', label: 'Vencem hoje', empty: 'Nenhum produto vence hoje.' },
+    { id: 'semana', label: 'Esta semana (ate 7 dias)', empty: 'Nenhum produto vence nos proximos 7 dias.' },
+    { id: 'depois', label: 'Depois (mais de 7 dias)', empty: 'Nenhum produto com validade alem de 7 dias.' },
   ]
-    .filter(Boolean)
-    .join('&')
-  const sufixo = extra ? `&${extra}` : ''
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <ListaHeader>
         <PageHeader
           title="Validade"
           icon={CalendarClock}
-          description="Produtos que vencem no período"
+          description="Triagem de produtos por prazo de validade"
           actions={
             <FiltrosGaveta
               basePath="/validade"
               campos={campos}
-              defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+              defaults={{
+                produto: sp.produto ?? '',
+                tipo: sp.tipo ?? '',
+                familia: sp.familia ?? '',
+              }}
               persistirEm="/validade"
             />
           }
@@ -147,102 +294,60 @@ export default async function ValidadePage({
         <ChipsFiltrosAtivos basePath="/validade" campos={campos} persistirEm="/validade" />
       </ListaHeader>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {PERIODOS.map((p) => {
-          const ativo = !vencidos && p === dias
-          return (
-            <Link
-              key={p}
-              href={`/validade?dias=${p}${sufixo}`}
-              className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
-                ativo
-                  ? 'border-brand bg-brand-soft text-brand'
-                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
-              }`}
-            >
-              {p} dias
-            </Link>
-          )
-        })}
-        <Link
-          href={`/validade?modo=vencidos${sufixo}`}
-          className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
-            vencidos
-              ? 'border-err bg-err/10 text-err'
-              : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
-          }`}
-        >
-          Vencidos
-        </Link>
+      {/* Banner de alerta quando ha vencidos */}
+      {qtdVencidos > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-err/30 bg-err/10 px-4 py-3">
+          <AlertTriangle className="size-5 shrink-0 text-err" strokeWidth={2} />
+          <p className="text-sm font-medium text-err">
+            {qtdVencidos} produto{qtdVencidos !== 1 ? 's' : ''} vencido{qtdVencidos !== 1 ? 's' : ''} em estoque com saldo positivo
+          </p>
+        </div>
+      )}
+
+      {/* Cabecalho de resumo */}
+      <div className="flex flex-wrap gap-3">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium ${qtdVencidos > 0 ? SELO_CLASSE['err'] : SELO_CLASSE['neutro']}`}>
+          {qtdVencidos} vencido{qtdVencidos !== 1 ? 's' : ''}
+        </span>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium ${qtdSemana > 0 ? SELO_CLASSE['warn'] : SELO_CLASSE['neutro']}`}>
+          {qtdSemana} vencem nos proximos 7 dias
+        </span>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium ${SELO_CLASSE['neutro']}`}>
+          {grupos.depois.length} alem de 7 dias
+        </span>
       </div>
 
-      <Lista
-        linhas={ordens ?? []}
-        chaveLinha={(o) => o.id}
-        colunas={[
-          {
-            label: 'Produto',
-            primaria: true,
-            render: (o) => {
-              const prod = prodMap.get(o.identificacao_n_cod_produto)
-              return (
-                <span>
-                  <span className="text-text">
-                    {formatarNomeProduto(prod?.descricao) || `Produto ${o.identificacao_n_cod_produto}`}
-                  </span>
-                  {prod?.codigo && (
-                    <span className="ml-1.5 text-[12px] text-text-muted">{prod.codigo}</span>
-                  )}
-                </span>
-              )
-            },
-          },
-          {
-            label: 'Validade',
-            larguraDesktop: 'w-40',
-            render: (o) => (
-              <span className="inline-flex items-center gap-2">
-                <span
-                  className={`size-2 rounded-full shrink-0 ${FUNDO_CLASSE[urgenciaValidade(diasAte(o.validade as string))]}`}
-                />
-                <span className="num text-text">{formataData(o.validade as string)}</span>
-              </span>
-            ),
-          },
-          {
-            label: 'OP',
-            larguraDesktop: 'w-40',
-            render: (o) => (
-              <span className="text-text-muted">
-                {o.identificacao_c_num_op || o.num_ordem || '-'}
-              </span>
-            ),
-          },
-          {
-            label: 'Qtd',
-            alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (o) => {
-              const prod = prodMap.get(o.identificacao_n_cod_produto)
-              return (
-                <>
-                  <Num value={o.quantidade ?? o.identificacao_n_qtde} frac={0} />
-                  {prod?.unidade && (
-                    <span className="ml-1 text-[12px] text-text-muted">{prod.unidade}</span>
-                  )}
-                </>
-              )
-            },
-          },
-        ]}
-        vazio={
-          <EmptyState
-            icon={CalendarClock}
-            title="Nada vencendo"
-            hint="Nenhum produto vence nesse período."
-          />
-        }
-      />
+      {/* Secoes */}
+      {secoes.map(({ id, label, empty }) => {
+        const linhas = grupos[id]
+        return (
+          <section key={id} className="space-y-2">
+            <div className="flex items-center gap-2">
+              {id === 'vencidos' && <span className="size-2 rounded-full bg-err shrink-0" />}
+              {id === 'hoje' && <span className="size-2 rounded-full bg-warn shrink-0" />}
+              {id === 'semana' && <span className="size-2 rounded-full bg-warn/60 shrink-0" />}
+              {id === 'depois' && <span className="size-2 rounded-full bg-text-muted/40 shrink-0" />}
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                {label}
+                <span className="ml-2 font-normal">{linhas.length}</span>
+              </h2>
+            </div>
+            {linhas.length > 0 ? (
+              <Lista
+                linhas={linhas}
+                chaveLinha={(o) => o.id}
+                colunas={colunasSecao(id)}
+                acao={acaoImprimir}
+                vazio={<EmptyState icon={CalendarClock} title="Nada aqui" hint={empty} />}
+              />
+            ) : (
+              <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[13px] text-text-muted">
+                {empty}
+              </div>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }
