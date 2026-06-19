@@ -157,6 +157,12 @@ export default async function ProdutoPage({
   // linhas do PostgREST, truncando e subcontando saldo/minimo. Pagina por
   // seguranca (uma loja pode ter muitos locais), igual ao /produto/export.
   const posicoes: PosicaoRow[] = []
+  // Minimo do Omie e ESPARSO: so aparece nas fotos CONSOLIDADAS (a foto do dia, e
+  // ate algumas fotos intermediarias, vem sem minimo). Por isso ele e buscado a
+  // parte (estoque_minimo>0) numa janela ampla, pra achar a foto mais recente que
+  // realmente tem o minimo de cada produto -- senao lojas com fotos recentes sem
+  // minimo (ex.: Rio Vermelho: 19/06 e 18/06 sem minimo, 16/06 com) zeravam.
+  const minimoRows: PosicaoRow[] = []
   async function carregarPosicoes() {
     if (!codigos.length) return
     const { data: ultima } = await supabase
@@ -197,6 +203,26 @@ export default async function ProdutoPage({
         .range(off, off + LOTE - 1)
       if (!data || !data.length) break
       posicoes.push(...(data as PosicaoRow[]))
+      if (data.length < LOTE) break
+    }
+    // Busca DEDICADA do minimo: estoque_minimo>0, janela ampla (ate ~90 dias atras
+    // de dataPos), pois o minimo pode estar numa foto consolidada anterior a janela
+    // do saldo/CMC. Esparso (poucos produtos tem minimo), entao a consulta e leve.
+    const cutoffMin = new Date(new Date(dataPos).getTime() - 90 * 86400000)
+      .toISOString()
+      .slice(0, 10)
+    for (let off = 0; ; off += LOTE) {
+      const { data } = await supabase
+        .from('posicao_estoques')
+        .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
+        .eq('loja_id', lojaId)
+        .gt('estoque_minimo', 0)
+        .gte('data_posicao', cutoffMin)
+        .in('n_cod_prod', codigos)
+        .order('data_posicao', { ascending: false })
+        .range(off, off + LOTE - 1)
+      if (!data || !data.length) break
+      minimoRows.push(...(data as PosicaoRow[]))
       if (data.length < LOTE) break
     }
   }
@@ -246,15 +272,14 @@ export default async function ProdutoPage({
   // os minimos dos locais nessa data. Sem isso, lojas cuja foto de hoje veio sem
   // minimo (ex.: Rio Vermelho) mostravam minimo 0 indevidamente.
   const dataMinPorProduto = new Map<number, string>()
-  for (const pos of posicoes ?? []) {
-    if (!pos.estoque_minimo || Number(pos.estoque_minimo) <= 0) continue
+  for (const pos of minimoRows) {
     const atual = dataMinPorProduto.get(pos.n_cod_prod)
     if (!atual || (pos.data_posicao && pos.data_posicao > atual)) {
       dataMinPorProduto.set(pos.n_cod_prod, pos.data_posicao)
     }
   }
   const minOmieMap = new Map<number, number>()
-  for (const pos of posicoes ?? []) {
+  for (const pos of minimoRows) {
     if (pos.data_posicao === dataMinPorProduto.get(pos.n_cod_prod)) {
       minOmieMap.set(pos.n_cod_prod, (minOmieMap.get(pos.n_cod_prod) ?? 0) + Number(pos.estoque_minimo ?? 0))
     }
