@@ -16,12 +16,12 @@ export default async function EtiquetaConfigPage() {
       <div className="space-y-4">
         <ListaHeader>
           <PageHeader
-            title="Configuracao de etiqueta"
+            title="Configuração de etiqueta"
             icon={Settings}
             description="Ajuste o layout e o alinhamento das etiquetas desta loja"
           />
         </ListaHeader>
-        <EmptyState icon={Settings} title="Sem permissao" hint="Voce nao tem acesso a esta tela." />
+        <EmptyState icon={Settings} title="Sem permissão" hint="Você não tem acesso a esta tela." />
       </div>
     )
   }
@@ -60,9 +60,9 @@ export default async function EtiquetaConfigPage() {
     <div className="space-y-4">
       <ListaHeader>
         <PageHeader
-          title="Configuracao de etiqueta"
+          title="Configuração de etiqueta"
           icon={Settings}
-          description="Ajuste o layout e o alinhamento das etiquetas desta loja. As configuracoes ficam salvas no navegador."
+          description="Ajuste o layout e o alinhamento das etiquetas desta loja. As configurações ficam salvas no navegador."
         />
       </ListaHeader>
 

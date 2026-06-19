@@ -41,17 +41,17 @@ export function RelatorioOPPDF({
   ordens: RelatorioOPItem[]
 }) {
   const sub = [loja, periodo, filtros].filter(Boolean).join(' · ')
-  const concluidas = ordens.filter((o) => o.status === 'Concluida').length
+  const concluidas = ordens.filter((o) => o.status === 'Concluída').length
 
   return (
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
-        <PdfCabecalho titulo="Relatorio de Ordens de Producao" sub={sub} />
+        <PdfCabecalho titulo="Relatório de Ordens de Produção" sub={sub} />
 
         <PdfResumoBar
           campos={[
             { label: 'Ordens', valor: String(ordens.length) },
-            { label: 'Concluidas', valor: String(concluidas) },
+            { label: 'Concluídas', valor: String(concluidas) },
             { label: 'Pendentes', valor: String(ordens.length - concluidas) },
           ]}
         />

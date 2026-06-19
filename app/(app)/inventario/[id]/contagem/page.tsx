@@ -59,7 +59,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   const finalizado = inventario.status === 'Finalizado'
 
-  const tituloInv = `Inventario · ${local?.descricao || inventario.codigo_local_estoque}`
+  const tituloInv = `Inventário · ${local?.descricao || inventario.codigo_local_estoque}`
 
   return (
     <div className="pb-4">
@@ -67,7 +67,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
         href="/inventario"
         title={tituloInv}
         breadcrumb={[
-          { label: 'Inventarios', href: '/inventario' },
+          { label: 'Inventários', href: '/inventario' },
           { label: tituloInv },
         ]}
         meta={

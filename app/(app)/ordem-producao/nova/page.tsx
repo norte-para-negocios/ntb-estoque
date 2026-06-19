@@ -18,7 +18,7 @@ export default async function NovaOPPage({
 }) {
   const lojaId = await getCurrentLojaId()
   // Passo 2 da criacao de OP: exige a permissao de Criar (pode ser aberta por URL).
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) notFound()
+  if (!(await requirePermissao(lojaId, 'Ordens de Produção - Criar'))) notFound()
 
   const sp = await searchParams
   const data = (sp.data ?? '').match(/^\d{4}-\d{2}-\d{2}$/) ? sp.data! : ''
@@ -32,20 +32,20 @@ export default async function NovaOPPage({
       <div className="space-y-4">
         <DetailHeader
           href="/ordem-producao"
-          title="Nova ordem de producao"
+          title="Nova ordem de produção"
           breadcrumb={[
-            { label: 'Ordens de Producao', href: '/ordem-producao' },
+            { label: 'Ordens de Produção', href: '/ordem-producao' },
             { label: 'Nova OP' },
           ]}
         />
         <EmptyState
           icon={Factory}
-          title="Comece pela tela de Ordens de Producao"
+          title="Comece pela tela de Ordens de Produção"
           hint='Clique em "Criar OP" para escolher a data e o local antes de adicionar os produtos.'
         />
         <div>
           <Link href="/ordem-producao" className={btnClass('primary')}>
-            Ir para Ordens de Producao
+            Ir para Ordens de Produção
           </Link>
         </div>
       </div>
@@ -72,16 +72,16 @@ export default async function NovaOPPage({
     <div className="pb-4">
       <DetailHeader
         href="/ordem-producao"
-        title="Nova ordem de producao"
+        title="Nova ordem de produção"
         breadcrumb={[
-          { label: 'Ordens de Producao', href: '/ordem-producao' },
+          { label: 'Ordens de Produção', href: '/ordem-producao' },
           { label: 'Nova OP' },
         ]}
         meta={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text-muted">
             <span className="num">{dataBR}</span>
             <span aria-hidden>·</span>
-            <span>{localNome ?? 'Padrao do produto'}</span>
+            <span>{localNome ?? 'Padrão do produto'}</span>
             {semanas > 1 && (
               <>
                 <span aria-hidden>·</span>

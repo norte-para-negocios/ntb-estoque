@@ -11,8 +11,8 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 const TIPO_MOVIMENTO_INVENTARIO: Record<string, string> = {
-  INV: 'Ajuste por Inventario',
-  INI: 'Ajuste por Inventario (Estoque Inicial)',
+  INV: 'Ajuste por Inventário',
+  INI: 'Ajuste por Inventário (Estoque Inicial)',
 }
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
@@ -33,7 +33,7 @@ export async function GET(
 ) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Ver'))) {
-    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
+    return pdfErroResponse('Sem permissão', 'Você não tem permissão para acessar este relatório.')
   }
 
   const { id } = await params
@@ -47,7 +47,7 @@ export async function GET(
     .single()
 
   if (!inventario) {
-    return pdfErroResponse('Inventario nao encontrado', `O inventario #${id} nao foi encontrado ou nao pertence a esta loja.`)
+    return pdfErroResponse('Inventário não encontrado', `O inventário #${id} não foi encontrado ou não pertence a esta loja.`)
   }
 
   const { data: loja } = await supabase

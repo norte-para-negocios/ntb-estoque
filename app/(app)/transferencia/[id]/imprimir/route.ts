@@ -28,7 +28,7 @@ export async function GET(
 ) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Ver'))) {
-    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
+    return pdfErroResponse('Sem permissão', 'Você não tem permissão para acessar este relatório.')
   }
 
   const { id } = await params
@@ -42,7 +42,7 @@ export async function GET(
     .single()
 
   if (!trans) {
-    return pdfErroResponse('Transferencia nao encontrada', `A transferencia #${id} nao foi encontrada ou nao pertence a esta loja.`)
+    return pdfErroResponse('Transferência não encontrada', `A transferência #${id} não foi encontrada ou não pertence a esta loja.`)
   }
 
   const { data: loja } = await supabase

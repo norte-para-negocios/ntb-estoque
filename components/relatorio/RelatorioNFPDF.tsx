@@ -41,17 +41,17 @@ export function RelatorioNFPDF({
   filtros?: string
   notas: RelatorioNFItem[]
 }) {
-  const sub = [loja, `Periodo: ${periodo}`, filtros].filter(Boolean).join(' · ')
+  const sub = [loja, `Período: ${periodo}`, filtros].filter(Boolean).join(' · ')
   const total = notas.reduce((acc, n) => acc + n.valor, 0)
 
   return (
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
-        <PdfCabecalho titulo="Relatorio de Notas Fiscais" sub={sub} />
+        <PdfCabecalho titulo="Relatório de Notas Fiscais" sub={sub} />
 
         <PdfResumoBar
           campos={[
-            { label: 'Periodo', valor: periodo },
+            { label: 'Período', valor: periodo },
             { label: 'Notas', valor: String(notas.length) },
             { label: 'Total', valor: moedaBR(total), destaque: true, alinhaDireita: true },
           ]}
@@ -59,8 +59,8 @@ export function RelatorioNFPDF({
 
         <View style={pdfTabela.table}>
           <View style={pdfTabela.theadBrand} fixed>
-            <Text style={[pdfTabela.thBrand, col.emissao]}>Emissao</Text>
-            <Text style={[pdfTabela.thBrand, col.numero]}>Numero</Text>
+            <Text style={[pdfTabela.thBrand, col.emissao]}>Emissão</Text>
+            <Text style={[pdfTabela.thBrand, col.numero]}>Número</Text>
             <Text style={[pdfTabela.thBrand, col.fornecedor]}>Fornecedor</Text>
             <Text style={[pdfTabela.thBrand, col.etapa]}>Etapa</Text>
             <Text style={[pdfTabela.thBrand, col.valor]}>Valor</Text>

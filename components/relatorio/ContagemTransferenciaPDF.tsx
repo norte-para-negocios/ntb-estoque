@@ -44,13 +44,13 @@ export function ContagemTransferenciaPDF({
   destino: string
   itens: ContagemTransferenciaItem[]
 }) {
-  const concluidos = itens.filter((it) => it.status === 'Concluido' || it.status === 'Concluída').length
+  const concluidos = itens.filter((it) => it.status === 'Concluído' || it.status === 'Concluída').length
 
   return (
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
         <PdfCabecalho
-          titulo="Transferencia de Estoque"
+          titulo="Transferência de Estoque"
           sub={loja || undefined}
         />
 
@@ -60,14 +60,14 @@ export function ContagemTransferenciaPDF({
             { rotulo: 'Origem', valor: origem },
             { rotulo: 'Destino', valor: destino },
             { rotulo: 'Itens', valor: String(itens.length) },
-            { rotulo: 'Concluidos', valor: String(concluidos) },
+            { rotulo: 'Concluídos', valor: String(concluidos) },
           ]}
         />
 
         <View style={pdfTabela.table}>
           <View style={pdfTabela.thead} fixed>
-            <Text style={[pdfTabela.th, col.codigo]}>Codigo</Text>
-            <Text style={[pdfTabela.th, col.descricao]}>Descricao</Text>
+            <Text style={[pdfTabela.th, col.codigo]}>Código</Text>
+            <Text style={[pdfTabela.th, col.descricao]}>Descrição</Text>
             <Text style={[pdfTabela.th, col.unidade]}>Un.</Text>
             <Text style={[pdfTabela.th, col.qtde]}>Qtde</Text>
             <Text style={[pdfTabela.th, col.status]}>Status</Text>

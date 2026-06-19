@@ -50,7 +50,7 @@ export default async function LojaPage({
         <PageHeader
           title="Lojas"
           icon={Store}
-          description="Cadastro de lojas e integracao Omie"
+          description="Cadastro de lojas e integração Omie"
           actions={<LojaForm />}
         />
       </ListaHeader>
@@ -61,7 +61,7 @@ export default async function LojaPage({
       <div className="rounded-lg border border-border bg-surface p-4">
         <div className="mb-2 text-sm font-semibold text-text">Webhook do Omie</div>
         <p className="text-[13px] text-text-muted">
-          Importante: cadastre o webhook abaixo nos seus aplicativos Omie no endereco{' '}
+          Importante: cadastre o webhook abaixo nos seus aplicativos Omie no endereço{' '}
           <a
             href="https://developer.omie.com.br/my-apps/"
             target="_blank"
@@ -70,7 +70,7 @@ export default async function LojaPage({
           >
             developer.omie.com.br/my-apps
           </a>{' '}
-          e ative todas as opcoes.
+          e ative todas as opções.
         </p>
         <div className="mt-3">
           <CopyWebhook url={webhookUrl} />
@@ -90,7 +90,7 @@ export default async function LojaPage({
           <EmptyState
             icon={Store}
             title="Nenhuma loja cadastrada"
-            hint='Clique em "Nova loja" para comecar.'
+            hint='Clique em "Nova loja" para começar.'
           />
         )}
       </div>

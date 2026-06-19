@@ -9,7 +9,7 @@ import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/Rel
 import { PdfErro } from '@/components/relatorio/PdfChrome'
 
 function labelEtapa(etapa: string | null): string {
-  return etapa === '60' ? 'Concluida' : 'Pendente'
+  return etapa === '60' ? 'Concluída' : 'Pendente'
 }
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
@@ -27,7 +27,7 @@ async function pdfErroResponse(titulo: string, mensagem: string) {
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
-    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
+    return pdfErroResponse('Sem permissão', 'Você não tem permissão para acessar este relatório.')
   }
 
   const { searchParams } = new URL(request.url)
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
   const filtrosAtivos: string[] = []
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
-  if (status) filtrosAtivos.push(`Status: ${status === 'C' ? 'Concluida' : 'Pendente'}`)
+  if (status) filtrosAtivos.push(`Status: ${status === 'C' ? 'Concluída' : 'Pendente'}`)
   if (tipo) filtrosAtivos.push(`Tipo: ${tipo}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
 

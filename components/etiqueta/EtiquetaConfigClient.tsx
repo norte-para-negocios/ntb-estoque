@@ -50,7 +50,7 @@ interface Props {
 }
 
 const CAMPOS_VISIVEIS: { key: keyof EtiquetaConfig; label: string }[] = [
-  { key: 'mostrarFabricacao', label: 'Fabricacao' },
+  { key: 'mostrarFabricacao', label: 'Fabricação' },
   { key: 'mostrarValidade', label: 'Validade' },
   { key: 'mostrarQtdeNf', label: 'Qtde NF' },
   { key: 'mostrarQtdeEtiqueta', label: 'Qtde Etiqueta' },
@@ -115,11 +115,11 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
     <div className="space-y-6">
       {/* Campos da config */}
       <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-text">Identificacao da loja na etiqueta</h2>
+        <h2 className="text-sm font-semibold text-text">Identificação da loja na etiqueta</h2>
 
         <div className="space-y-1">
           <label className="text-xs text-text-muted font-medium">
-            Nome exibido no cabecalho da etiqueta
+            Nome exibido no cabeçalho da etiqueta
           </label>
           <input
             type="text"
@@ -152,18 +152,18 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
                     : 'border-border bg-bg text-text-muted hover:bg-surface-2'
                 }`}
               >
-                {preset === 'padrao' ? 'Padrao (40 mm)' : 'Compacta (32 mm)'}
+                {preset === 'padrao' ? 'Padrão (40 mm)' : 'Compacta (32 mm)'}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Offset de calibracao */}
+      {/* Offset de calibração */}
       <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-text">Calibracao de alinhamento (offset)</h2>
+        <h2 className="text-sm font-semibold text-text">Calibração de alinhamento (offset)</h2>
         <p className="text-xs text-text-muted">
-          Use para corrigir o deslocamento da impressao na impressora. Valores em mm. Positivo = direita/baixo.
+          Use para corrigir o deslocamento da impressão na impressora. Valores em mm. Positivo = direita/baixo.
         </p>
 
         <div className="grid grid-cols-2 gap-4">
@@ -193,13 +193,13 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
           </div>
         </div>
         <p className="text-xs text-text-muted">
-          Se a impressao sai deslocada para a esquerda, use X positivo (ex.: +2).
+          Se a impressão sai deslocada para a esquerda, use X positivo (ex.: +2).
         </p>
       </div>
 
       {/* Visibilidade de campos */}
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-text">Campos visiveis na etiqueta</h2>
+        <h2 className="text-sm font-semibold text-text">Campos visíveis na etiqueta</h2>
         <div className="grid grid-cols-2 gap-2">
           {CAMPOS_VISIVEIS.map(({ key, label }) => {
             const checked = (config[key] as boolean | undefined) ?? true
@@ -223,8 +223,8 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
 
       {/* Preview visual (renderizado em HTML, nao PDF) */}
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-text">Pre-visualizacao da etiqueta</h2>
-        <p className="text-xs text-text-muted">Representacao aproximada do layout — cores/fontes podem diferir do PDF impresso.</p>
+        <h2 className="text-sm font-semibold text-text">Pré-visualização da etiqueta</h2>
+        <p className="text-xs text-text-muted">Representação aproximada do layout — cores/fontes podem diferir do PDF impresso.</p>
         <EtiquetaPreview nomeLoja={nomeMostrado} config={config} />
       </div>
 
@@ -232,7 +232,7 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
       <div className="flex items-center gap-3 flex-wrap">
         <Button onClick={salvar} variant="primary">
           <Save className="size-4" />
-          {salvo ? 'Salvo!' : 'Salvar configuracao'}
+          {salvo ? 'Salvo!' : 'Salvar configuração'}
         </Button>
 
         {urlTeste() && (
@@ -259,7 +259,7 @@ export function EtiquetaConfigClient({ lojaId, nomeLojaDB, testNfId, testOpId }:
 
       {!urlTeste() && (
         <p className="text-xs text-text-muted">
-          Para o botao de teste funcionar e necessario ter ao menos uma Nota Fiscal ou Ordem de Producao impressa antes.
+          Para o botão de teste funcionar é necessário ter ao menos uma Nota Fiscal ou Ordem de Produção impressa antes.
         </p>
       )}
     </div>

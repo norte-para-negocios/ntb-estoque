@@ -71,7 +71,7 @@ export function PdfRodape({ texto = 'NTB Estoque' }: { texto?: string }) {
   return (
     <View style={sFooter.footer} fixed>
       <Text>{texto}</Text>
-      <Text render={({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`} />
+      <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   )
 }
@@ -220,7 +220,7 @@ const sErro = StyleSheet.create({
   msg: { fontSize: 10, color: TEXT_DARK, lineHeight: 1.5 },
 })
 
-export function PdfErro({ titulo = 'Acesso negado', mensagem = 'Voce nao tem permissao para acessar este relatorio.' }: {
+export function PdfErro({ titulo = 'Acesso negado', mensagem = 'Você não tem permissão para acessar este relatório.' }: {
   titulo?: string
   mensagem?: string
 }) {

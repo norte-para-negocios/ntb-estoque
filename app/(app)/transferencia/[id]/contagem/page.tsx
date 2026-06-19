@@ -84,7 +84,7 @@ export default async function ContagemTransferenciaPage({
         href="/transferencia"
         title={tituloTrans}
         breadcrumb={[
-          { label: 'Transferencias', href: '/transferencia' },
+          { label: 'Transferências', href: '/transferencia' },
           { label: tituloTrans },
         ]}
         meta={

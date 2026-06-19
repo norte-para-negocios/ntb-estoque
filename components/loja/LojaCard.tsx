@@ -295,7 +295,7 @@ export function LojaCard({
   const syncs = [
     { label: 'Local de Estoque', data: loja.local_estoque_ultima_atualizacao, status: loja.local_estoque_status },
     { label: 'Produto', data: loja.produto_ultima_atualizacao, status: loja.produto_status },
-    { label: 'Ordem de Producao', data: loja.ordem_producao_ultima_atualizacao, status: loja.ordem_producao_status },
+    { label: 'Ordem de Produção', data: loja.ordem_producao_ultima_atualizacao, status: loja.ordem_producao_status },
     { label: 'Nota Fiscal', data: loja.nota_fiscal_ultima_atualizacao, status: loja.nota_fiscal_status },
   ]
 
@@ -327,8 +327,8 @@ export function LojaCard({
         <HealthBadge loja={loja} />
       </div>
 
-      {/* Secao: Sincronizacao */}
-      <Section icon={RefreshCw} title="Sincronizacao" badge={<StatusPill status={loja.empresa_status} />}>
+      {/* Seção: Sincronização */}
+      <Section icon={RefreshCw} title="Sincronização" badge={<StatusPill status={loja.empresa_status} />}>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <ForceSyncLoja lojaId={loja.id} />
         </div>
@@ -351,24 +351,24 @@ export function LojaCard({
         )}
       </Section>
 
-      {/* Secao: Chaves Omie */}
+      {/* Seção: Chaves Omie */}
       <Section icon={Key} title="Chaves Omie">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <DadoLinha label="App Key" valor={maskSegredo(loja.omie_app_key)} mono />
           <DadoLinha label="App Secret" valor={maskSegredo(loja.omie_app_secret)} mono />
         </div>
         <p className="mt-2 text-[11px] text-text-muted">
-          Para editar as chaves, use o botao &quot;Editar loja&quot; abaixo.
+          Para editar as chaves, use o botão &quot;Editar loja&quot; abaixo.
         </p>
       </Section>
 
-      {/* Secao: Endereco */}
-      <Section icon={MapPin} title="Endereco">
+      {/* Seção: Endereço */}
+      <Section icon={MapPin} title="Endereço">
         {enderecoCompleto(loja) ? (
           <p className="text-[13px] text-text">{enderecoCompleto(loja)}</p>
         ) : (
           <p className="text-[13px] text-text-muted">
-            Sem endereco. Edite a loja para informar, ou use &quot;Dados da empresa&quot; para trazer do Omie.
+            Sem endereço. Edite a loja para informar, ou use &quot;Dados da empresa&quot; para trazer do Omie.
           </p>
         )}
         {loja.complemento && (
@@ -376,17 +376,17 @@ export function LojaCard({
         )}
       </Section>
 
-      {/* Secao: Dados da empresa */}
+      {/* Seção: Dados da empresa */}
       <Section icon={Building2} title="Dados da empresa (Omie)">
         <div className="mb-3 flex">
           <PuxarEmpresa lojaId={loja.id} />
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-          <DadoLinha label="Razao Social" valor={loja.razao_social} />
-          <DadoLinha label="Inscricao Estadual" valor={loja.inscricao_estadual} mono />
-          <DadoLinha label="Inscricao Municipal" valor={loja.inscricao_municipal} mono />
+          <DadoLinha label="Razão Social" valor={loja.razao_social} />
+          <DadoLinha label="Inscrição Estadual" valor={loja.inscricao_estadual} mono />
+          <DadoLinha label="Inscrição Municipal" valor={loja.inscricao_municipal} mono />
           <DadoLinha label="CNAE" valor={loja.cnae} mono />
-          <DadoLinha label="Regime tributario" valor={regimeLabel(loja.regime_tributario)} />
+          <DadoLinha label="Regime Tributário" valor={regimeLabel(loja.regime_tributario)} />
           <DadoLinha label="Contador" valor={loja.sped_nome_contador} />
           <DadoLinha label="E-mail" valor={loja.email} />
           <DadoLinha
@@ -394,7 +394,7 @@ export function LojaCard({
             valor={loja.telefone1 ? maskTelefone(loja.telefone1) : null}
             mono
           />
-          <DadoLinha label="CSC Producao" valor={loja.csc_producao ? 'definido' : null} />
+          <DadoLinha label="CSC Produção" valor={loja.csc_producao ? 'definido' : null} />
         </div>
       </Section>
 
@@ -407,15 +407,15 @@ export function LojaCard({
         />
       </Section>
 
-      {/* Secao: Acesso de usuarios */}
-      <Section icon={Users} title="Acesso de usuarios">
+      {/* Seção: Acesso de usuários */}
+      <Section icon={Users} title="Acesso de usuários">
         <div className="mb-3 flex items-center gap-2">
           <KeyRound className="size-4 text-text-muted" />
-          <span className="text-[13px] font-medium text-text">Codigo de onboarding</span>
+          <span className="text-[13px] font-medium text-text">Código de onboarding</span>
         </div>
         <p className="mb-3 text-[12px] text-text-muted">
-          Quem tiver este codigo entra no cadastro ja vinculado a esta loja (como usuario, sem
-          permissoes; ajuste depois). Regenerar invalida o codigo anterior.
+          Quem tiver este código entra no cadastro já vinculado a esta loja (como usuário, sem
+          permissões; ajuste depois). Regenerar invalida o código anterior.
         </p>
         <CodigoOnboarding lojaId={loja.id} codigo={loja.codigo_onboarding} />
         <div className="mt-4 border-t border-border pt-4">
@@ -429,7 +429,7 @@ export function LojaCard({
         </div>
       </Section>
 
-      {/* Rodape: acoes de edicao/exclusao */}
+      {/* Rodapé: ações de edição/exclusão */}
       <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
         <LojaForm loja={loja} />
         <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome || '(sem nome)'} />

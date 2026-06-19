@@ -11,7 +11,7 @@ const W = 72.56 * MM
 // Presets de altura
 export const ALTURA_PRESETS = {
   padrao: 40.04,   // mesma do sistema Laravel original
-  compacta: 32,    // reduzida — elimina sobra vertical
+  compacta: 32,    // reduzida -- elimina sobra vertical
 } as const
 export type AlturaPreset = keyof typeof ALTURA_PRESETS
 
@@ -21,7 +21,7 @@ export interface EtiquetaConfig {
   alturaPreset?: AlturaPreset
   offsetX?: number        // deslocamento horizontal em mm (negativo = esquerda)
   offsetY?: number        // deslocamento vertical em mm (negativo = cima)
-  // Visibilidade de campos (todos true por padrao)
+  // Visibilidade de campos (todos true por padrão)
   mostrarFabricacao?: boolean
   mostrarValidade?: boolean
   mostrarQtdeNf?: boolean
@@ -62,8 +62,8 @@ function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: numbe
   const hCorpo     = H - hCabecalho - hRodape
 
   const padH = 2.5 * MM  // padding horizontal interno
-  const padOX = (3 + offsetX) * MM   // margem esquerda com offset de calibracao
-  const padOY = (2 + offsetY) * MM   // margem topo com offset de calibracao
+  const padOX = (3 + offsetX) * MM   // margem esquerda com offset de calibração
+  const padOY = (2 + offsetY) * MM   // margem topo com offset de calibração
 
   return StyleSheet.create({
     page: {
@@ -200,7 +200,7 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
                     <View style={s.campoRow}>
                       {mostrar.fabricacao && e.produzido !== '' && (
                         <View style={s.campo}>
-                          <Text style={s.label}>Fabricacao:</Text>
+                          <Text style={s.label}>Fabricação:</Text>
                           <Text style={s.valor}>{e.produzido.trim().slice(0, 10)}</Text>
                         </View>
                       )}

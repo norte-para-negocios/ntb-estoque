@@ -51,7 +51,7 @@ export function ContagemInventarioPDF({
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
         <PdfCabecalho
-          titulo={`Inventario #${id}`}
+          titulo={`Inventário #${id}`}
           sub={loja || undefined}
         />
 
@@ -66,8 +66,8 @@ export function ContagemInventarioPDF({
 
         <View style={pdfTabela.table}>
           <View style={pdfTabela.thead} fixed>
-            <Text style={[pdfTabela.th, col.codigo]}>Codigo</Text>
-            <Text style={[pdfTabela.th, col.descricao]}>Descricao</Text>
+            <Text style={[pdfTabela.th, col.codigo]}>Código</Text>
+            <Text style={[pdfTabela.th, col.descricao]}>Descrição</Text>
             <Text style={[pdfTabela.th, col.unidade]}>Un.</Text>
             <Text style={[pdfTabela.th, col.qtde]}>Qtde</Text>
             <Text style={[pdfTabela.th, col.status]}>Status</Text>

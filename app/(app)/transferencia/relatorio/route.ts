@@ -12,8 +12,8 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 
 // Mapa de motivo (TRF/TPQ) para texto legivel no PDF.
 const LABEL_MOTIVO: Record<string, string> = {
-  TRF: 'Transferencia',
-  TPQ: 'Transferencia PQ',
+  TRF: 'Transferência',
+  TPQ: 'Perda/Quebra',
 }
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
@@ -31,7 +31,7 @@ async function pdfErroResponse(titulo: string, mensagem: string) {
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Ver'))) {
-    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
+    return pdfErroResponse('Sem permissão', 'Você não tem permissão para acessar este relatório.')
   }
 
   const { searchParams } = new URL(request.url)
@@ -130,7 +130,7 @@ export async function GET(request: Request) {
 
   // Monta subtitulo com filtros aplicados.
   const filtrosAtivos: string[] = []
-  if (familia) filtrosAtivos.push(`Familia: ${familia}`)
+  if (familia) filtrosAtivos.push(`Família: ${familia}`)
   if (tipo) filtrosAtivos.push(`Tipo: ${tipo}`)
   if (status) filtrosAtivos.push(`Status: ${status}`)
 

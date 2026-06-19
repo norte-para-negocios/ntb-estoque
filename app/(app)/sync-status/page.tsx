@@ -212,7 +212,7 @@ export default async function SyncStatusPage({
           </ul>
         ) : (
           <div className="px-4 py-6 text-center text-[13px] text-text-muted">
-            Nenhuma loja visivel.
+            Nenhuma loja visível.
           </div>
         )}
       </div>

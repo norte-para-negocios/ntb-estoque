@@ -42,19 +42,19 @@ export function RelatorioTransferenciaPDF({
   filtros?: string
   transferencias: RelatorioTransferenciaItem[]
 }) {
-  const sub = [loja, `Periodo: ${periodo}`, filtros].filter(Boolean).join(' · ')
+  const sub = [loja, `Período: ${periodo}`, filtros].filter(Boolean).join(' · ')
   const total = transferencias.reduce((acc, t) => acc + t.produtos, 0)
   const haMotivo = transferencias.some((t) => t.motivo)
 
   return (
     <Document>
       <Page size="A4" orientation="portrait" style={s.page}>
-        <PdfCabecalho titulo="Relatorio de Transferencias" sub={sub} />
+        <PdfCabecalho titulo="Relatório de Transferências" sub={sub} />
 
         <PdfResumoBar
           campos={[
-            { label: 'Periodo', valor: periodo },
-            { label: 'Transferencias', valor: String(transferencias.length) },
+            { label: 'Período', valor: periodo },
+            { label: 'Transferências', valor: String(transferencias.length) },
             { label: 'Total de itens', valor: String(total) },
           ]}
         />
@@ -82,7 +82,7 @@ export function RelatorioTransferenciaPDF({
 
           <View style={pdfTabela.totalRow} wrap={false}>
             <Text style={[pdfTabela.totalTxt, { flex: 1 }]}>
-              Total ({transferencias.length} {transferencias.length === 1 ? 'transferencia' : 'transferencias'})
+              Total ({transferencias.length} {transferencias.length === 1 ? 'transferência' : 'transferências'})
             </Text>
             <Text style={[pdfTabela.totalTxt, col.produtos, { textAlign: 'right' }]}>{total}</Text>
             <Text style={[pdfTabela.totalTxt, col.status]} />

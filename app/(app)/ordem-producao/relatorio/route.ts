@@ -25,7 +25,7 @@ async function pdfErroResponse(titulo: string, mensagem: string) {
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) {
-    return pdfErroResponse('Sem permissao', 'Voce nao tem permissao para acessar este relatorio.')
+    return pdfErroResponse('Sem permissão', 'Você não tem permissão para acessar este relatório.')
   }
 
   const { searchParams } = new URL(request.url)
@@ -112,12 +112,12 @@ export async function GET(request: Request) {
         ) || `Produto ${o.identificacao_n_cod_produto}`,
       quantidade: `${numBRPdf(o.identificacao_n_qtde)} ${o.produto_unidade || ''}`.trim(),
       validade: o.validade || '-',
-      status: concluida ? 'Concluida' : 'Pendente',
+      status: concluida ? 'Concluída' : 'Pendente',
     }
   })
 
   // Filtro de status apos montar os itens (usa logica isOpConcluida).
-  if (statusFiltro === 'concluida') itens = itens.filter((i) => i.status === 'Concluida')
+  if (statusFiltro === 'concluida') itens = itens.filter((i) => i.status === 'Concluída')
   else if (statusFiltro === 'pendente') itens = itens.filter((i) => i.status === 'Pendente')
 
   // Monta subtitulo com filtros aplicados.
