@@ -120,16 +120,38 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
       pagina++
     } while (pagina <= total)
   }
-  // Mantem as DUAS ultimas fotos (hoje + ontem). A foto do dia corrente as vezes vem
-  // SEM CMC (o Omie so fecha o custo do dia), entao a tela cai pra de ontem (que tem
-  // custo). Apaga so o que tem +1 dia: segura o crescimento E preserva o custo.
-  const ontem = new Date(`${dataISO}T00:00:00`)
-  ontem.setDate(ontem.getDate() - 1)
-  const ontemISO = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`
-  await supabase
+  // Mantem as DUAS fotos mais recentes (nao necessariamente dias consecutivos).
+  // A foto do dia corrente as vezes vem SEM CMC (o Omie so fecha o custo no fim
+  // do dia), entao a tela cai pra foto anterior (que tem custo). Usar "ontem fixo"
+  // como corte falha quando uma loja fica um dia sem sync: o dia anterior ao atual
+  // fica vazio e a segunda foto mais recente cai fora. Aqui: busca a data maxima
+  // real, depois busca a maior data anterior a ela (penultima distinta), e apaga
+  // so o que for mais antigo que a penultima -- seguro contra lacunas no rodizio.
+  const { data: maxRow } = await supabase
     .from('posicao_estoques')
-    .delete()
+    .select('data_posicao')
     .eq('loja_id', loja.id)
-    .lt('data_posicao', ontemISO)
+    .order('data_posicao', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (maxRow) {
+    const dataMax = (maxRow as { data_posicao: string }).data_posicao
+    const { data: penultimaRow } = await supabase
+      .from('posicao_estoques')
+      .select('data_posicao')
+      .eq('loja_id', loja.id)
+      .lt('data_posicao', dataMax)
+      .order('data_posicao', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (penultimaRow) {
+      const penultima = (penultimaRow as { data_posicao: string }).data_posicao
+      await supabase
+        .from('posicao_estoques')
+        .delete()
+        .eq('loja_id', loja.id)
+        .lt('data_posicao', penultima)
+    }
+  }
   return gravados
 }

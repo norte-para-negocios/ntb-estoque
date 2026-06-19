@@ -167,20 +167,29 @@ export default async function ProdutoPage({
       .maybeSingle()
     const dataPos = ultima?.data_posicao as string | undefined
     if (!dataPos) return
-    // Pega as DUAS ultimas fotos (hoje + ontem). A foto do dia corrente as vezes vem
-    // sem CMC (o Omie so fecha o custo do dia), entao o custo cai pra foto de ontem.
-    // Saldo/minimo usam a data mais recente POR PRODUTO (dataMaxPorProduto), entao
-    // incluir 2 datas nao distorce o estoque.
-    const ontem = new Date(`${dataPos}T00:00:00`)
-    ontem.setDate(ontem.getDate() - 1)
-    const ontemISO = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`
+    // Pega as DUAS fotos mais recentes (nao necessariamente dias consecutivos).
+    // A foto do dia corrente as vezes vem sem CMC (o Omie so fecha o custo no
+    // fim do dia), entao o custo cai pra foto anterior. Calcular "ontem" como
+    // dataPos-1 falha quando uma loja ficou um dia sem sync: o slot do dia
+    // anterior fica vazio e a foto com CMC cai fora do intervalo. Buscamos a
+    // penultima data REAL (maior data < dataPos) para montar o intervalo correto.
+    const { data: penultimaRow } = await supabase
+      .from('posicao_estoques')
+      .select('data_posicao')
+      .eq('loja_id', lojaId)
+      .lt('data_posicao', dataPos)
+      .order('data_posicao', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    // Se so existe uma foto, usa ela como limite inferior tambem (sem perda).
+    const dataInicio = (penultimaRow?.data_posicao as string | undefined) ?? dataPos
     const LOTE = 1000
     for (let off = 0; ; off += LOTE) {
       const { data } = await supabase
         .from('posicao_estoques')
         .select('n_cod_prod, n_cmc, n_saldo, estoque_minimo, data_posicao')
         .eq('loja_id', lojaId)
-        .gte('data_posicao', ontemISO)
+        .gte('data_posicao', dataInicio)
         .lte('data_posicao', dataPos)
         .in('n_cod_prod', codigos)
         .order('n_saldo', { ascending: false })
