@@ -109,11 +109,11 @@ function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: numbe
       overflow: 'hidden',
     },
     right: {
-      width: 45,
+      width: 38,
       flexShrink: 0,
       alignItems: 'center',
       justifyContent: 'flex-start',
-      paddingTop: 2,
+      paddingTop: 1,
     },
     descricao: {
       fontSize: 8,
@@ -126,7 +126,7 @@ function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: numbe
     label: { fontSize: 5.5, color: '#555' },
     valor: { fontSize: 7, fontFamily: 'Helvetica-Bold' },
     linha: { fontSize: 6.5, marginBottom: 1 },
-    qr: { width: 44, height: 44 },
+    qr: { width: 36, height: 36 },
     // --- RODAPE ---
     rodape: {
       height: hRodape,
