@@ -4,12 +4,23 @@ import { createElement } from 'react'
 import QRCode from 'qrcode'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
-import { EtiquetaPDF, type Etiqueta } from '@/components/etiqueta/EtiquetaPDF'
+import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig, type AlturaPreset, ALTURA_PRESETS } from '@/components/etiqueta/EtiquetaPDF'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 function num(v: unknown, dec: number): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0
   return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+}
+
+function parseConfig(url: string): EtiquetaConfig {
+  const sp = new URL(url).searchParams
+  const preset = sp.get('altura') as AlturaPreset | null
+  return {
+    alturaPreset: preset && preset in ALTURA_PRESETS ? preset : undefined,
+    offsetX: sp.has('ox') ? Number(sp.get('ox')) : undefined,
+    offsetY: sp.has('oy') ? Number(sp.get('oy')) : undefined,
+    nomeExibido: sp.get('nome') ?? undefined,
+  }
 }
 
 function fmtData(d: string | null): string {
@@ -18,7 +29,7 @@ function fmtData(d: string | null): string {
   return `${dia}/${m}/${y}`
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Produção'))) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
@@ -37,7 +48,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .single()
   if (!op) return NextResponse.json({ error: 'Ordem não encontrada' }, { status: 404 })
 
-  const { data: loja } = await supabase.from('lojas').select('cnpj').eq('id', lojaId).single()
+  const { data: loja } = await supabase.from('lojas').select('cnpj, nome, nome_fantasia').eq('id', lojaId).single()
   const { data: prod } = await supabase
     .from('produtos')
     .select('codigo, descricao, unidade')
@@ -75,10 +86,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       fornecedor: '',
       cnpj: loja?.cnpj ?? '',
       qr,
+      nome_loja: loja?.nome_fantasia || loja?.nome || '',
     })
   }
 
-  const element = createElement(EtiquetaPDF, { etiquetas }) as Parameters<typeof renderToBuffer>[0]
+  const config = parseConfig(request.url)
+  const element = createElement(EtiquetaPDF, { etiquetas, config }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
 
   // Registra a impressao no historico (aditivo, nao quebra o PDF em caso de erro)

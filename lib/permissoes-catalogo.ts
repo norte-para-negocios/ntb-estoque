@@ -115,6 +115,7 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
 // tratadas a parte (so admin). Se uma rota nao tem permissao mapeada, nao filtra.
 export const MENU_PERMISSAO: Record<string, string> = {
   '/nota-fiscal': 'Notas Fiscais',
+  '/etiqueta-config': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',
   '/inventario': 'Inventarios - Ver',
