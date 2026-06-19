@@ -66,17 +66,6 @@ export async function addInventarioItem(
   return data
 }
 
-export async function setQuantidadeInventarioItem(itemId: number, quan: number | null) {
-  const lojaId = await getCurrentLojaId()
-  const supabase = createServiceClient()
-  await supabase
-    .from('inventario_items')
-    .update({ quan, updated_at: new Date().toISOString() })
-    .eq('id', itemId)
-    .eq('loja_id', lojaId)
-  revalidatePath(`/inventario`)
-}
-
 /**
  * Resultado do envio item-a-item devolvido para a UI atualizar a linha na hora.
  */

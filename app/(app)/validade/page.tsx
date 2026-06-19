@@ -341,9 +341,7 @@ export default async function ValidadePage({
                 vazio={<EmptyState icon={CalendarClock} title="Nada aqui" hint={empty} />}
               />
             ) : (
-              <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[13px] text-text-muted">
-                {empty}
-              </div>
+              <EmptyState icon={CalendarClock} title="Nada aqui" hint={empty} />
             )}
           </section>
         )

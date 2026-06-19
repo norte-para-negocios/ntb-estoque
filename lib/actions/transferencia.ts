@@ -93,17 +93,6 @@ export async function addMovimento(
   return data
 }
 
-export async function setQuantidadeMovimento(movimentoId: number, quan: number | null) {
-  const lojaId = await getCurrentLojaId()
-  const supabase = createServiceClient()
-  await supabase
-    .from('movimentos')
-    .update({ quan, updated_at: new Date().toISOString() })
-    .eq('id', movimentoId)
-    .eq('loja_id', lojaId)
-  revalidatePath('/transferencia')
-}
-
 /**
  * Resultado do envio item-a-item devolvido para a UI atualizar a linha na hora.
  */
