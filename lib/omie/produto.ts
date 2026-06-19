@@ -96,6 +96,52 @@ export async function incluirProduto(
 }
 
 /**
+ * Altera um produto no Omie (Bloco 0.3). ESCREVE no Omie.
+ * O identificador e codigo_produto (nCodProd, ID interno Omie, campo "codigo_produto"
+ * na tabela produtos do NTB). Apenas os campos presentes no payload sao alterados;
+ * campos omitidos NAO sao zerados pelo Omie.
+ * ATENCAO: confirmar payload exato por teste real com o Ramon (criar+alterar+excluir
+ * antes de usar em producao).
+ */
+export async function alterarProduto(
+  loja: LojaOmie,
+  dados: {
+    codigoProduto: number // nCodProd (codigo_produto na tabela produtos)
+    descricao: string
+    unidade: string
+    ncm?: string | null
+    valorUnitario?: number | null
+    tipoItem?: string | null
+    codigoFamilia?: number | null
+    inativo?: boolean
+  }
+) {
+  const fiscais: Record<string, unknown> = {}
+  // recomendacoes_fiscais so entra se houver algum campo fiscal a alterar.
+  // Por ora nao mapeamos origem/CEST na edicao, pois o formulario nao os expoe.
+
+  return omieRequest<OmieIncluirProdutoResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/produtos',
+    call: 'AlterarProduto',
+    data: {
+      codigo_produto: dados.codigoProduto,
+      descricao: dados.descricao,
+      unidade: dados.unidade,
+      ...(dados.ncm != null ? { ncm: dados.ncm } : {}),
+      ...(dados.valorUnitario != null ? { valor_unitario: dados.valorUnitario } : {}),
+      ...(dados.tipoItem != null ? { tipoItem: dados.tipoItem } : {}),
+      // codigo_familia 0 = sem familia no Omie; null no NTB mapeia para 0.
+      ...(dados.codigoFamilia != null ? { codigo_familia: dados.codigoFamilia } : { codigo_familia: 0 }),
+      ...(dados.inativo != null ? { inativo: dados.inativo ? 'S' : 'N' } : {}),
+      ...(Object.keys(fiscais).length ? { recomendacoes_fiscais: fiscais } : {}),
+    },
+  })
+}
+
+/**
  * Exclui um produto no Omie (Bloco 9.2 / C2). ESCREVE no Omie.
  * ATENCAO (regra 9.5): confirmar a call exata por teste real com o Ramon.
  */

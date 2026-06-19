@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { criarProduto } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { parseNumBR } from '@/lib/num-br'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
@@ -75,9 +76,14 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
       return
     }
     const fam = familias.find((f) => String(f.codigo) === familia)
+    const valNum = parseNumBR(valor)
+    if (valNum != null && (Number.isNaN(valNum) || valNum < 0)) {
+      toast.error('Valor unitário inválido')
+      return
+    }
     const num = (s: string) => {
-      const n = Number(s.replace(',', '.'))
-      return Number.isFinite(n) && n > 0 ? n : undefined
+      const n = parseNumBR(s)
+      return n != null && Number.isFinite(n) && n > 0 ? n : undefined
     }
     startTransition(async () => {
       const res = await criarProduto({
@@ -85,7 +91,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         descricao,
         unidade,
         ncm,
-        valorUnitario: Number(valor.replace(',', '.')) || 0,
+        valorUnitario: valNum ?? 0,
         tipoItem: tipo || undefined,
         codigoFamilia: fam ? fam.codigo : null,
         descricaoFamilia: fam ? fam.descricao : null,
@@ -124,7 +130,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
               <input value={unidade} onChange={(e) => setUnidade(e.target.value)} className={inputClass} placeholder="UN, KG..." />
             </Campo>
             <Campo label="Valor unitário">
-              <input type="number" min={0} step="any" value={valor} onChange={(e) => setValor(e.target.value)} className={inputClass} placeholder="0,00" />
+              <input type="text" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className={inputClass} placeholder="0,00" />
             </Campo>
             <Campo label="Descrição *">
               <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className={inputClass} placeholder="Nome do produto" />

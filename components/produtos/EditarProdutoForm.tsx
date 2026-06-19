@@ -28,7 +28,7 @@ export type ProdutoEditavel = {
   inativo: boolean
 }
 
-// Edita um produto LOCAL (salva no banco, nao escreve no Omie). O codigo e read-only.
+// Edita um produto: salva no banco e envia AlterarProduto ao Omie. O codigo e read-only.
 export function EditarProdutoForm({
   produto,
   familias,
@@ -91,7 +91,12 @@ export function EditarProdutoForm({
         toast.error('Erro ao salvar', { description: res.error })
         return
       }
-      toast.success('Produto atualizado')
+      if (res?.omieError) {
+        // Save local OK; Omie nao atualizou (ex.: produto sem nCodProd ou erro de API).
+        toast.warning('Salvo localmente', { description: `Omie nao atualizado: ${res.omieError}` })
+      } else {
+        toast.success('Produto atualizado no NTB e no Omie')
+      }
       setOpen(false)
       router.refresh()
     })
@@ -194,8 +199,8 @@ export function EditarProdutoForm({
             Produto inativo
           </label>
           <p className="col-span-2 text-[12px] text-text-muted">
-            A edição é salva no NTB e protegida da sincronização com o Omie. A alteração no Omie ainda
-            não é feita por aqui.
+            A edição é salva no NTB e enviada ao Omie via AlterarProduto. Campos editados ficam
+            protegidos da sincronização automática.
           </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">

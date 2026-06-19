@@ -3,7 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import { incluirProduto, excluirProdutoOmie } from '@/lib/omie/produto'
+import { incluirProduto, alterarProduto, excluirProdutoOmie } from '@/lib/omie/produto'
 import type { LojaOmie } from '@/lib/omie/client'
 
 // Familias existentes na loja (codigo + descricao), para o seletor do cadastro.
@@ -122,11 +122,10 @@ export async function criarProduto(dados: {
 }
 
 /**
- * Edita um produto LOCAL no banco (Supabase = fonte da verdade; visao de substituir
- * o Omie). NAO escreve no Omie: a escrita (AlterarProduto) precisa ser validada com
- * o Ramon em produto de teste antes de virar producao. Aqui salvamos so no banco e
- * marcamos os campos alterados em produtos.campos_editados, para que o sync de
- * produtos (ListarProdutos -> upsert) NAO sobrescreva o que foi editado a mao.
+ * Edita um produto: salva no banco local e, em seguida, envia AlterarProduto ao Omie.
+ * Ordem: (1) salvar local + atualizar campos_editados; (2) tentar AlterarProduto no Omie.
+ * Se o Omie recusar, o save local JA foi feito e a resposta inclui { ok: true, omieError }.
+ * Campos protegidos (campos_editados) continuam bloqueando o sync na direcao Omie->NTB.
  */
 export async function editarProduto(
   id: number,
@@ -160,10 +159,11 @@ export async function editarProduto(
   const supabase = createServiceClient()
 
   // Estado atual para comparar e so marcar como "editado a mao" o que realmente mudou.
+  // Inclui codigo_produto (nCodProd) para identificar o produto ao chamar o Omie.
   const { data: atual } = await supabase
     .from('produtos')
     .select(
-      'descricao, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo, campos_editados'
+      'codigo_produto, descricao, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo, campos_editados'
     )
     .eq('id', id)
     .eq('loja_id', lojaId)
@@ -220,7 +220,7 @@ export async function editarProduto(
     }
   }
 
-  const { error } = await supabase
+  const { error: dbError } = await supabase
     .from('produtos')
     .update({
       ...novo,
@@ -230,9 +230,42 @@ export async function editarProduto(
     .eq('id', id)
     .eq('loja_id', lojaId)
 
-  if (error) return { error: error.message }
+  if (dbError) return { error: dbError.message }
   revalidatePath('/produto')
-  return { ok: true }
+
+  // Envia alteracao ao Omie (AlterarProduto). Se falhar, o save local ja foi feito
+  // e retornamos ok:true + omieError para o form mostrar aviso sem bloquear o usuario.
+  const codigoProduto = atual.codigo_produto as number | null
+  if (!codigoProduto) {
+    // Produto sem nCodProd no banco (ex.: criado fora do Omie) nao tem como alterar no Omie.
+    return { ok: true, omieError: 'Produto sem ID Omie (codigo_produto nulo): alteracao local salva, Omie nao atualizado.' }
+  }
+
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret')
+    .eq('id', lojaId)
+    .single<LojaOmie>()
+  if (!loja) {
+    return { ok: true, omieError: 'Loja nao encontrada: alteracao local salva, Omie nao atualizado.' }
+  }
+
+  try {
+    await alterarProduto(loja, {
+      codigoProduto,
+      descricao: novo.descricao,
+      unidade: novo.unidade,
+      ncm: novo.ncm || null,
+      valorUnitario: novo.valor_unitario,
+      tipoItem: novo.tipo_item,
+      codigoFamilia: novo.codigo_familia,
+      inativo: novo.inativo,
+    })
+    return { ok: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Falha ao enviar ao Omie'
+    return { ok: true, omieError: msg }
+  }
 }
 
 /**
