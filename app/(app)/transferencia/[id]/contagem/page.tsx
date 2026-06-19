@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { Printer } from 'lucide-react'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import {
   ContagemTransferencia,
   type ItemMovimento,
@@ -74,22 +74,21 @@ export default async function ContagemTransferenciaPage({
 
   const finalizado = trans.status === 'Concluido'
 
+  const origemNome = localMap.get(trans.codigo_local_origem) || trans.codigo_local_origem
+  const destinoNome = localMap.get(trans.codigo_local_destino) || trans.codigo_local_destino
+  const tituloTrans = `${origemNome} → ${destinoNome}`
+
   return (
     <div className="pb-4">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link
-            href="/transferencia"
-            className="mb-2 inline-flex items-center gap-1 text-[13px] text-text-muted transition-colors hover:text-text"
-          >
-            <ArrowLeft className="size-3.5" /> Voltar
-          </Link>
-          <h1 className="truncate text-lg font-semibold tracking-tight text-text">
-            {localMap.get(trans.codigo_local_origem) || trans.codigo_local_origem}
-            {' → '}
-            {localMap.get(trans.codigo_local_destino) || trans.codigo_local_destino}
-          </h1>
-          <div className="mt-1 flex items-center gap-2">
+      <DetailHeader
+        href="/transferencia"
+        title={tituloTrans}
+        breadcrumb={[
+          { label: 'Transferencias', href: '/transferencia' },
+          { label: tituloTrans },
+        ]}
+        meta={
+          <>
             <span className="num text-[13px] text-text-muted">
               {new Date(trans.data).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })}
             </span>
@@ -97,17 +96,19 @@ export default async function ContagemTransferenciaPage({
             {responsavel?.name && (
               <span className="text-[13px] text-text-muted">por {responsavel.name}</span>
             )}
-          </div>
-        </div>
-        <a
-          href={`/transferencia/${trans.id}/imprimir`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
-        >
-          <Printer className="size-4" /> Imprimir PDF
-        </a>
-      </div>
+          </>
+        }
+        actions={
+          <a
+            href={`/transferencia/${trans.id}/imprimir`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
+          >
+            <Printer className="size-4" /> Imprimir PDF
+          </a>
+        }
+      />
 
       <ContagemTransferencia
         transferenciaId={trans.id}

@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { ItensNotaFiscal, type ItemNF } from '@/components/nota-fiscal/ItensNotaFiscal'
-import { FileText } from 'lucide-react'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -33,10 +32,20 @@ export default async function NotaFiscalItensPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <DetailHeader
+        href="/nota-fiscal"
         title={`NFe ${nf.c_numero_nfe}`}
-        icon={FileText}
-        description={nf.c_razao_social || nf.c_nome || undefined}
+        breadcrumb={[
+          { label: 'Notas Fiscais', href: '/nota-fiscal' },
+          { label: `NFe ${nf.c_numero_nfe}` },
+        ]}
+        meta={
+          (nf.c_razao_social || nf.c_nome) ? (
+            <span className="text-[13px] text-text-muted">
+              {nf.c_razao_social || nf.c_nome}
+            </span>
+          ) : undefined
+        }
       />
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} />
     </div>

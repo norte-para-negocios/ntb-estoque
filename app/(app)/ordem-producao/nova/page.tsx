@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Factory } from 'lucide-react'
+import { Factory } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
+import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { CriarOPProdutos } from '@/components/ordem-producao/CriarOPProdutos'
 
 // Passo 2 da criacao de OP: escolher os produtos. O cabecalho (data/recorrencia/
@@ -25,25 +26,26 @@ export default async function NovaOPPage({
   const localCodigo = sp.local && /^\d+$/.test(sp.local) ? Number(sp.local) : null
   const obs = sp.obs ?? ''
 
-  const voltar = (
-    <Link href="/ordem-producao" className="inline-flex items-center gap-1 text-[13px] text-text-muted transition-colors hover:text-text">
-      <ArrowLeft className="size-3.5" /> Voltar
-    </Link>
-  )
-
   // Sem data valida = acesso direto sem passar pelo passo 1.
   if (!data) {
     return (
       <div className="space-y-4">
-        {voltar}
+        <DetailHeader
+          href="/ordem-producao"
+          title="Nova ordem de producao"
+          breadcrumb={[
+            { label: 'Ordens de Producao', href: '/ordem-producao' },
+            { label: 'Nova OP' },
+          ]}
+        />
         <EmptyState
           icon={Factory}
-          title="Comece pela tela de Ordens de Produção"
+          title="Comece pela tela de Ordens de Producao"
           hint='Clique em "Criar OP" para escolher a data e o local antes de adicionar os produtos.'
         />
         <div>
           <Link href="/ordem-producao" className={btnClass('primary')}>
-            Ir para Ordens de Produção
+            Ir para Ordens de Producao
           </Link>
         </div>
       </div>
@@ -68,21 +70,27 @@ export default async function NovaOPPage({
 
   return (
     <div className="pb-4">
-      <div className="mb-5">
-        {voltar}
-        <h1 className="mt-2 text-lg font-semibold tracking-tight text-text">Nova ordem de produção</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text-muted">
-          <span className="num">{dataBR}</span>
-          <span>·</span>
-          <span>{localNome ?? 'Padrão do produto'}</span>
-          {semanas > 1 && (
-            <>
-              <span>·</span>
-              <span>repete por {semanas} semanas</span>
-            </>
-          )}
-        </div>
-      </div>
+      <DetailHeader
+        href="/ordem-producao"
+        title="Nova ordem de producao"
+        breadcrumb={[
+          { label: 'Ordens de Producao', href: '/ordem-producao' },
+          { label: 'Nova OP' },
+        ]}
+        meta={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text-muted">
+            <span className="num">{dataBR}</span>
+            <span aria-hidden>·</span>
+            <span>{localNome ?? 'Padrao do produto'}</span>
+            {semanas > 1 && (
+              <>
+                <span aria-hidden>·</span>
+                <span>repete por {semanas} semanas</span>
+              </>
+            )}
+          </span>
+        }
+      />
       <CriarOPProdutos data={data} semanas={semanas} localCodigo={localCodigo} localNome={localNome} obs={obs} />
     </div>
   )
