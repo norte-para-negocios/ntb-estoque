@@ -131,17 +131,20 @@ export default async function UsuarioPage({
               : 'Usuários, convites e aprovações das suas lojas'
           }
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <ConvidarUsuario
-                lojas={lojas}
-                permissoes={permissoes ?? []}
-                podeAdminLoja={ator.isAdminGlobal}
-              />
-              <NovoUsuario
-                lojas={lojas}
-                permissoes={permissoes ?? []}
-                podeEscolherPerfilAlto={ator.isAdminGlobal}
-              />
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <ConvidarUsuario
+                  lojas={lojas}
+                  permissoes={permissoes ?? []}
+                  podeAdminLoja={ator.isAdminGlobal}
+                />
+                <NovoUsuario
+                  lojas={lojas}
+                  permissoes={permissoes ?? []}
+                  podeEscolherPerfilAlto={ator.isAdminGlobal}
+                />
+              </div>
+              <p className="text-[11px] text-text-muted">Prefira convidar por código acima</p>
             </div>
           }
         />

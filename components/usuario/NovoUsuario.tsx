@@ -7,7 +7,7 @@ import {
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, ShieldCheck, ShieldHalf, User as UserIcon, Store } from 'lucide-react'
+import { Plus, ShieldCheck, ShieldHalf, User as UserIcon, Store, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarUsuario, type PerfilUsuario } from '@/lib/actions/usuario'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -38,6 +38,8 @@ export function NovoUsuario({
   const [lojaIds, setLojaIds] = useState<number[]>([])
   // Ids das permissoes concedidas (aplicadas em todas as lojas selecionadas).
   const [permIds, setPermIds] = useState<Set<number>>(new Set())
+  const [senhaGerada, setSenhaGerada] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -87,6 +89,15 @@ export function NovoUsuario({
     setPerfil('Usuario')
     setLojaIds([])
     setPermIds(new Set())
+    setSenhaGerada(null)
+    setCopiado(false)
+  }
+
+  function copiarSenha() {
+    if (!senhaGerada) return
+    navigator.clipboard.writeText(senhaGerada)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
   }
 
   function criar() {
@@ -115,12 +126,8 @@ export function NovoUsuario({
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success('Usuário criado', {
-        description: `Senha provisória: ${res.senha}`,
-        duration: 15000,
-      })
-      setOpen(false)
-      resetar()
+      setSenhaGerada(res.senha ?? null)
+      toast.success('Usuário criado')
       router.refresh()
     })
   }
@@ -154,7 +161,34 @@ export function NovoUsuario({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        {senhaGerada ? (
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6">
+            <div className="rounded-md border border-ok/30 bg-ok/10 px-3 py-2.5 text-[13px] text-text">
+              Acesso criado. Envie esta senha provisória ao usuário. Ele usa no primeiro login.
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[13px] font-medium text-text">Senha provisória</label>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={senhaGerada}
+                  readOnly
+                  className="num min-w-[10rem] flex-1 rounded-md border border-border bg-surface-2/40 px-3 py-2 text-sm font-medium tracking-wider text-text outline-none"
+                />
+                <button type="button" onClick={copiarSenha} className={`${btnClass('primary')} shrink-0`}>
+                  {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
+                  {copiado ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button type="button" onClick={() => { setOpen(false) }} className={btnClass('primary')}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Nome</label>
@@ -355,6 +389,8 @@ export function NovoUsuario({
             {pending ? 'Criando...' : 'Criar usuário'}
           </button>
         </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
