@@ -31,6 +31,7 @@ export async function buscarProdutos(
     .from('produtos')
     .select('codigo_produto, codigo, descricao, descricao_familia, unidade')
     .eq('loja_id', lojaId)
+    .eq('inativo', false)
     // Limite maior: o limite de 20 cortava produtos (faltavam itens na busca da OP).
     .limit(50)
 
@@ -74,6 +75,7 @@ export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBus
     .from('produtos')
     .select('codigo_produto, codigo, descricao, descricao_familia, unidade')
     .eq('loja_id', lojaId)
+    .eq('inativo', false)
     .eq('codigo', termo)
     .limit(1)
     .maybeSingle()
