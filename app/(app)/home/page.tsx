@@ -169,7 +169,7 @@ export default async function HomePage() {
     alertas.push({
       icon: CalendarClock,
       token: 'warn',
-      texto: `${vencendo.count} produto(s) vencem nos proximos 7 dias`,
+      texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
       href: '/validade',
     })
   if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))

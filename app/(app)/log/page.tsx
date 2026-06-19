@@ -70,7 +70,7 @@ export default async function LogPage({
     : { data: null }
 
   const campos: CampoFiltro[] = [
-    { tipo: 'data', nome: 'data_inicio', label: 'Data inicio' },
+    { tipo: 'data', nome: 'data_inicio', label: 'Data início' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     ...(admin && lojas?.length
       ? ([

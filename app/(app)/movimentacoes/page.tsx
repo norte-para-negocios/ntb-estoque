@@ -251,9 +251,9 @@ export default async function MovimentacoesPage({
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
-    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou codigo)' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-    { tipo: 'select', nome: 'familia', label: 'Familia', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
   ]
 
   const colValor = (n: number, temCmc: boolean) => {
@@ -271,9 +271,9 @@ export default async function MovimentacoesPage({
     <div className="space-y-4">
       <ListaHeader>
         <PageHeader
-          title="Movimentacoes"
+          title="Movimentações"
           icon={ArrowLeftRight}
-          description="Historico de entradas e saidas por produto (2026)"
+          description="Histórico de entradas e saídas por produto (2026)"
           actions={
             <FiltrosGaveta
               basePath="/movimentacoes"
@@ -294,7 +294,7 @@ export default async function MovimentacoesPage({
           param="modo"
           aria-label="Agrupar por"
           opcoes={[
-            { value: '', label: 'Por mes' },
+            { value: '', label: 'Por mês' },
             { value: 'data', label: 'Por data' },
           ]}
         />
@@ -302,7 +302,7 @@ export default async function MovimentacoesPage({
 
       {/* Barra de totais do periodo */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Periodo: {fmtData(ini)} a {fmtData(fim)}</span>
+        <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Entradas{' '}
           <span className="num font-semibold text-ok"><Num value={totalEntradas} frac={0} /></span>
@@ -313,7 +313,7 @@ export default async function MovimentacoesPage({
           )}
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Saidas{' '}
+          Saídas{' '}
           <span className="num font-semibold text-err"><Num value={totalSaidas} frac={0} /></span>
           {totalValSaidas > 0 && (
             <span className="ml-1.5 text-err/70">
@@ -328,8 +328,8 @@ export default async function MovimentacoesPage({
         <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
           <span>
-            <strong className="text-warn">CMC suspeito detectado</strong> — um ou mais produtos tem custo medio unitario acima de R${' '}
-            {CMC_ALERTA_UNITARIO.toLocaleString('pt-BR')} no Omie. Os valores de entrada/saida podem estar inflados. Corrija o CMC na origem (Omie) e sincronize a posicao.
+            <strong className="text-warn">CMC suspeito detectado</strong> — um ou mais produtos têm custo médio unitário acima de R${' '}
+            {CMC_ALERTA_UNITARIO.toLocaleString('pt-BR')} no Omie. Os valores de entrada/saída podem estar inflados. Corrija o CMC na origem (Omie) e sincronize a posição.
           </span>
         </div>
       )}
@@ -339,7 +339,7 @@ export default async function MovimentacoesPage({
         <div className="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[12px] text-text-muted">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
           <span>
-            {semCmc} produto{semCmc > 1 ? 's' : ''} nesta pagina sem CMC cadastrado no Omie. Valores estimados indicados como "sem CMC" nessas linhas.
+            {semCmc} produto{semCmc > 1 ? 's' : ''} nesta página sem CMC cadastrado no Omie. Valores estimados indicados como "sem CMC" nessas linhas.
           </span>
         </div>
       )}
@@ -358,7 +358,7 @@ export default async function MovimentacoesPage({
         chaveLinha={(m) => m.chave}
         colunas={[
           {
-            label: porMes ? 'Mes' : 'Data',
+            label: porMes ? 'Mês' : 'Data',
             larguraDesktop: 'w-24',
             render: (m) => <span className="num text-text-muted">{porMes ? fmtMes(m.quando) : fmtData(m.quando)}</span>,
           },
@@ -386,13 +386,13 @@ export default async function MovimentacoesPage({
             render: (m) => <span className="text-ok">{colValor(m.valEntradas, m.temCmc)}</span>,
           },
           {
-            label: 'Saidas (qtd)',
+            label: 'Saídas (qtd)',
             alinhar: 'right',
             larguraDesktop: 'w-28',
             render: (m) => <span className="text-err">{colQtd(m.saidas)}</span>,
           },
           {
-            label: 'Saidas (R$)',
+            label: 'Saídas (R$)',
             alinhar: 'right',
             larguraDesktop: 'w-32',
             render: (m) => <span className="text-err">{colValor(m.valSaidas, m.temCmc)}</span>,
@@ -401,8 +401,8 @@ export default async function MovimentacoesPage({
         vazio={
           <EmptyState
             icon={ArrowLeftRight}
-            title="Nenhuma movimentacao"
-            hint="Ajuste o periodo ou o produto. O historico cobre 2026."
+            title="Nenhuma movimentação"
+            hint="Ajuste o período ou o produto. O histórico cobre 2026."
           />
         }
       />

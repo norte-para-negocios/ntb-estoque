@@ -276,7 +276,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
         <div className="space-y-4 py-1">
           <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
-              Data de conclusao
+              Data de conclusão
             </label>
             <input
               type="date"
@@ -286,11 +286,11 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
               className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
             />
             <p className="mt-1 text-[11px] text-text-muted">
-              Padrao: data prevista da OP. Altere se a producao foi em outro dia.
+              Padrão: data prevista da OP. Altere se a produção foi em outro dia.
             </p>
           </div>
           <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
-            A conclusao sera gravada no Omie. O estoque produzido sera incrementado.
+            A conclusão será gravada no Omie. O estoque produzido será incrementado.
           </p>
         </div>
 
@@ -310,7 +310,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
             className={btnClass('primary')}
           >
             <Check className="size-3.5" />
-            {ctrl.pending ? 'Concluindo...' : 'Confirmar conclusao'}
+            {ctrl.pending ? 'Concluindo...' : 'Confirmar conclusão'}
           </button>
         </DialogFooter>
       </DialogContent>
@@ -351,7 +351,7 @@ function Acoes({ op, ctrl }: StepperProps) {
               onClick={ctrl.reverter}
               disabled={ctrl.pending}
               className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
-              title="Reverter a conclusao (estorna no Omie)"
+              title="Reverter a conclusão (estorna no Omie)"
             >
               <Undo2 className="size-3.5" /> Reverter
             </button>

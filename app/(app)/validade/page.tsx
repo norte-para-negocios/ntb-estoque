@@ -50,7 +50,7 @@ function diasAte(validade: string): number {
 }
 
 function textoValidade(dias: number): string {
-  if (dias < 0) return `vencido ha ${-dias} dia${-dias === 1 ? '' : 's'}`
+  if (dias < 0) return `vencido há ${-dias} dia${-dias === 1 ? '' : 's'}`
   if (dias === 0) return 'vence hoje'
   return `vence em ${dias} dia${dias === 1 ? '' : 's'}`
 }
@@ -164,12 +164,12 @@ export default async function ValidadePage({
   const familias = await buscarFamilias()
 
   const campos: CampoFiltro[] = [
-    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou codigo)' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
     {
       tipo: 'select',
       nome: 'familia',
-      label: 'Familia',
+      label: 'Família',
       opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })),
     },
   ]
@@ -267,8 +267,8 @@ export default async function ValidadePage({
   const secoes: { id: Secao; label: string; empty: string }[] = [
     { id: 'vencidos', label: 'Vencidos', empty: 'Nenhum produto vencido.' },
     { id: 'hoje', label: 'Vencem hoje', empty: 'Nenhum produto vence hoje.' },
-    { id: 'semana', label: 'Esta semana (ate 7 dias)', empty: 'Nenhum produto vence nos proximos 7 dias.' },
-    { id: 'depois', label: 'Depois (mais de 7 dias)', empty: 'Nenhum produto com validade alem de 7 dias.' },
+    { id: 'semana', label: 'Esta semana (até 7 dias)', empty: 'Nenhum produto vence nos próximos 7 dias.' },
+    { id: 'depois', label: 'Depois (mais de 7 dias)', empty: 'Nenhum produto com validade além de 7 dias.' },
   ]
 
   return (
@@ -310,10 +310,10 @@ export default async function ValidadePage({
           {qtdVencidos} vencido{qtdVencidos !== 1 ? 's' : ''}
         </span>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium ${qtdSemana > 0 ? SELO_CLASSE['warn'] : SELO_CLASSE['neutro']}`}>
-          {qtdSemana} vencem nos proximos 7 dias
+          {qtdSemana} vencem nos próximos 7 dias
         </span>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-medium ${SELO_CLASSE['neutro']}`}>
-          {grupos.depois.length} alem de 7 dias
+          {grupos.depois.length} além de 7 dias
         </span>
       </div>
 

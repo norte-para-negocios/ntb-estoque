@@ -424,7 +424,7 @@ export function LojaCard({
             permissoes={permissoes}
             podeAdminLoja
             lojaFixaId={loja.id}
-            triggerLabel="Convidar por codigo (com permissoes)"
+            triggerLabel="Convidar por código (com permissões)"
           />
         </div>
       </Section>

@@ -96,7 +96,7 @@ export function EditarProdutoForm({
       }
       if (res?.omieError) {
         // Save local OK; Omie nao atualizou (ex.: produto sem nCodProd ou erro de API).
-        toast.warning('Salvo localmente', { description: `Omie nao atualizado: ${res.omieError}` })
+        toast.warning('Salvo localmente', { description: `Omie não atualizado: ${res.omieError}` })
       } else {
         toast.success('Produto atualizado no NTB e no Omie')
       }

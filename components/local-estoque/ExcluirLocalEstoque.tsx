@@ -12,12 +12,12 @@ export function ExcluirLocalEstoque({ id, descricao }: { id: number; descricao: 
   const router = useRouter()
 
   function excluir() {
-    if (!window.confirm(`Excluir o local "${descricao}" do banco local?\n\nEsta acao nao remove o local no Omie.`)) return
+    if (!window.confirm(`Excluir o local "${descricao}" do banco local?\n\nEsta ação não remove o local no Omie.`)) return
     startTransition(async () => {
       const res = await excluirLocalEstoque(id)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Local excluido do banco local')
+        toast.success('Local excluído do banco local')
         router.refresh()
       }
     })
