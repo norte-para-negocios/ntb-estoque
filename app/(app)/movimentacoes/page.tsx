@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -249,21 +250,22 @@ export default async function MovimentacoesPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Movimentações"
-        icon={ArrowLeftRight}
-        description="Histórico de entradas e saídas por produto (2026)"
-        actions={
-          <FiltrosGaveta
-            basePath="/movimentacoes"
-            campos={campos}
-            defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
-            naoContar={['data_inicio', 'data_final']}
-          />
-        }
-      />
-
-      <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+      <ListaHeader>
+        <PageHeader
+          title="Movimentações"
+          icon={ArrowLeftRight}
+          description="Histórico de entradas e saídas por produto (2026)"
+          actions={
+            <FiltrosGaveta
+              basePath="/movimentacoes"
+              campos={campos}
+              defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+              naoContar={['data_inicio', 'data_final']}
+            />
+          }
+        />
+        <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
         <SegmentLinks

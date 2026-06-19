@@ -7,6 +7,7 @@ import { AprovarUsuario } from '@/components/usuario/AprovarUsuario'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
 import { ConvitesLista, type ConviteItem } from '@/components/usuario/ConvitesLista'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
@@ -120,29 +121,31 @@ export default async function UsuarioPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Usuários"
-        icon={Users}
-        description={
-          ator.isAdminGlobal
-            ? 'Acessos, permissões e locais por loja'
-            : 'Usuários, convites e aprovações das suas lojas'
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ConvidarUsuario
-              lojas={lojas}
-              permissoes={permissoes ?? []}
-              podeAdminLoja={ator.isAdminGlobal}
-            />
-            <NovoUsuario
-              lojas={lojas}
-              permissoes={permissoes ?? []}
-              podeEscolherPerfilAlto={ator.isAdminGlobal}
-            />
-          </div>
-        }
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Usuários"
+          icon={Users}
+          description={
+            ator.isAdminGlobal
+              ? 'Acessos, permissões e locais por loja'
+              : 'Usuários, convites e aprovações das suas lojas'
+          }
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <ConvidarUsuario
+                lojas={lojas}
+                permissoes={permissoes ?? []}
+                podeAdminLoja={ator.isAdminGlobal}
+              />
+              <NovoUsuario
+                lojas={lojas}
+                permissoes={permissoes ?? []}
+                podeEscolherPerfilAlto={ator.isAdminGlobal}
+              />
+            </div>
+          }
+        />
+      </ListaHeader>
 
       {pendentes.length > 0 && (
         <div className="rounded-lg border border-brand/40 bg-brand-soft/40">

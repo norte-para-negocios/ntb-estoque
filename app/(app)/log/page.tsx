@@ -3,6 +3,7 @@ import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import Link from 'next/link'
 import { LogDetalhe, LogCard } from '@/components/log/LogDetalhe'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { type CampoFiltro } from '@/components/ui-kit/Filtros'
@@ -119,28 +120,29 @@ export default async function LogPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Logs de Integração com APIs"
-        icon={ScrollText}
-        description="Tentativas de integração com APIs"
-        actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} />}
-      />
-
-      <div className="flex gap-1.5">
-        {filtros.map((f) => (
-          <Link
-            key={f.label}
-            href={f.href}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              f.ativo
-                ? 'bg-brand text-white'
-                : 'border border-border bg-surface text-text-muted hover:bg-surface-2 hover:text-text'
-            }`}
-          >
-            {f.label}
-          </Link>
-        ))}
-      </div>
+      <ListaHeader>
+        <PageHeader
+          title="Logs de Integração com APIs"
+          icon={ScrollText}
+          description="Tentativas de integração com APIs"
+          actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} />}
+        />
+        <div className="flex gap-1.5">
+          {filtros.map((f) => (
+            <Link
+              key={f.label}
+              href={f.href}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                f.ativo
+                  ? 'bg-brand text-white'
+                  : 'border border-border bg-surface text-text-muted hover:bg-surface-2 hover:text-text'
+              }`}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </div>
+      </ListaHeader>
 
       {logs?.length ? (
         <>

@@ -7,6 +7,7 @@ import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao
 import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
@@ -283,51 +284,51 @@ export default async function OrdemProducaoPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Ordens de Produção"
-        icon={Factory}
-        actions={
-          <>
-            <FiltrosGaveta
-              basePath="/ordem-producao"
-              campos={campos}
-              defaults={{
-                data_inicio: dataInicio,
-                data_final: dataFinal,
-                ordem_producao: sp.ordem_producao ?? '',
-                op_produto: sp.op_produto ?? '',
-                tipo_produto: sp.tipo_produto ?? '',
-                op_concluido: sp.op_concluido ?? '',
-                ord: sp.ord ?? '',
-              }}
-            />
-            <a
-              href={`/ordem-producao/export?${exportParams.toString()}`}
-              className={btnClass('outline')}
-            >
-              <Download className="size-4" /> Excel
-            </a>
-            {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
-            {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}
-          </>
-        }
-      />
-
-      <ChipsStatus
-        basePath="/ordem-producao"
-        param="op_concluido"
-        opcoes={[
-          { value: '', label: 'Todas' },
-          { value: 'N', label: 'Pendentes', count: totPendentes ?? 0 },
-          { value: 'S', label: 'Concluídas', count: totConcluidas ?? 0 },
-        ]}
-      />
-
-      <ChipsFiltrosAtivos
-        basePath="/ordem-producao"
-        campos={campos}
-        naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido']}
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Ordens de Produção"
+          icon={Factory}
+          actions={
+            <>
+              <FiltrosGaveta
+                basePath="/ordem-producao"
+                campos={campos}
+                defaults={{
+                  data_inicio: dataInicio,
+                  data_final: dataFinal,
+                  ordem_producao: sp.ordem_producao ?? '',
+                  op_produto: sp.op_produto ?? '',
+                  tipo_produto: sp.tipo_produto ?? '',
+                  op_concluido: sp.op_concluido ?? '',
+                  ord: sp.ord ?? '',
+                }}
+              />
+              <a
+                href={`/ordem-producao/export?${exportParams.toString()}`}
+                className={btnClass('outline')}
+              >
+                <Download className="size-4" /> Excel
+              </a>
+              {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
+              {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}
+            </>
+          }
+        />
+        <ChipsStatus
+          basePath="/ordem-producao"
+          param="op_concluido"
+          opcoes={[
+            { value: '', label: 'Todas' },
+            { value: 'N', label: 'Pendentes', count: totPendentes ?? 0 },
+            { value: 'S', label: 'Concluídas', count: totConcluidas ?? 0 },
+          ]}
+        />
+        <ChipsFiltrosAtivos
+          basePath="/ordem-producao"
+          campos={campos}
+          naoMostrar={['data_inicio', 'data_final', 'ord', 'op_concluido']}
+        />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: {fmtDataBR(dataInicio)} a {fmtDataBR(dataFinal)}</span>

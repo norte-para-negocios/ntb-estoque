@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { StatCard } from '@/components/ui-kit/StatCard'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -162,14 +163,16 @@ export default async function SyncStatusPage({
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Saúde da integração"
-        icon={Activity}
-        description="Painel de erros de sincronização com o Omie"
-        actions={
-          <FiltrosGaveta basePath="/sync-status" campos={campos} defaults={defaults} naoContar={['dias']} />
-        }
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Saúde da integração"
+          icon={Activity}
+          description="Painel de erros de sincronização com o Omie"
+          actions={
+            <FiltrosGaveta basePath="/sync-status" campos={campos} defaults={defaults} naoContar={['dias']} />
+          }
+        />
+      </ListaHeader>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard

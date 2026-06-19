@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -37,11 +38,13 @@ export default async function ImpressoesPage({
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
     return (
       <div className="space-y-4">
-        <PageHeader
-          title="Histórico de impressão de etiquetas"
-          icon={Printer}
-          description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
-        />
+        <ListaHeader>
+          <PageHeader
+            title="Histórico de impressão de etiquetas"
+            icon={Printer}
+            description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
+          />
+        </ListaHeader>
         <EmptyState icon={Printer} title="Sem permissão" hint="Você não tem acesso a esta tela." />
       </div>
     )
@@ -72,34 +75,36 @@ export default async function ImpressoesPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Histórico de impressão de etiquetas"
-        icon={Printer}
-        description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
-        actions={
-          <FiltrosGaveta
-            basePath="/impressoes"
-            campos={[
-              { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-              { tipo: 'data', nome: 'data_final', label: 'Data final' },
-              {
-                tipo: 'select',
-                nome: 'origem',
-                label: 'Origem',
-                opcoes: [
-                  { value: 'NF', label: 'Nota Fiscal' },
-                  { value: 'OP', label: 'Ordem de Produção' },
-                ],
-              },
-            ]}
-            defaults={{
-              data_inicio: sp.data_inicio ?? '',
-              data_final: sp.data_final ?? '',
-              origem: sp.origem ?? '',
-            }}
-          />
-        }
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Histórico de impressão de etiquetas"
+          icon={Printer}
+          description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
+          actions={
+            <FiltrosGaveta
+              basePath="/impressoes"
+              campos={[
+                { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+                { tipo: 'data', nome: 'data_final', label: 'Data final' },
+                {
+                  tipo: 'select',
+                  nome: 'origem',
+                  label: 'Origem',
+                  opcoes: [
+                    { value: 'NF', label: 'Nota Fiscal' },
+                    { value: 'OP', label: 'Ordem de Produção' },
+                  ],
+                },
+              ]}
+              defaults={{
+                data_inicio: sp.data_inicio ?? '',
+                data_final: sp.data_final ?? '',
+                origem: sp.origem ?? '',
+              }}
+            />
+          }
+        />
+      </ListaHeader>
 
       <Lista
         linhas={impressoes ?? []}

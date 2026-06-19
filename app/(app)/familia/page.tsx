@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -64,17 +65,19 @@ export default async function FamiliaPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Famílias"
-        icon={FolderTree}
-        description="Famílias de produto (cadastro local e leitura do Omie)"
-        actions={
-          <>
-            {podeCriar && <FamiliaForm />}
-            {podeSync && <PuxarFamilias />}
-          </>
-        }
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Famílias"
+          icon={FolderTree}
+          description="Famílias de produto (cadastro local e leitura do Omie)"
+          actions={
+            <>
+              {podeCriar && <FamiliaForm />}
+              {podeSync && <PuxarFamilias />}
+            </>
+          }
+        />
+      </ListaHeader>
 
       <div className="flex items-center gap-2 text-[13px] text-text-muted">
         <span>Atualizado em {fmtTimestamp(lojaSync?.familia_ultima_atualizacao ?? null)}</span>

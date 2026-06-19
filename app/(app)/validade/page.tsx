@@ -3,6 +3,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -129,20 +130,21 @@ export default async function ValidadePage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Validade"
-        icon={CalendarClock}
-        description="Produtos que vencem no período"
-        actions={
-          <FiltrosGaveta
-            basePath="/validade"
-            campos={campos}
-            defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
-          />
-        }
-      />
-
-      <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
+      <ListaHeader>
+        <PageHeader
+          title="Validade"
+          icon={CalendarClock}
+          description="Produtos que vencem no período"
+          actions={
+            <FiltrosGaveta
+              basePath="/validade"
+              campos={campos}
+              defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+            />
+          }
+        />
+        <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-1.5">
         {PERIODOS.map((p) => {

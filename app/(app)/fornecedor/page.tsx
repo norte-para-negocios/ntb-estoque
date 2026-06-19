@@ -3,6 +3,7 @@ import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
@@ -107,17 +108,19 @@ export default async function FornecedorPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Fornecedores"
-        icon={Truck}
-        description="Cadastro local de fornecedores (leitura do Omie por tag)"
-        actions={
-          <>
-            {podeCriar && <NovoFornecedor />}
-            {podeSync && <PuxarFornecedores />}
-          </>
-        }
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Fornecedores"
+          icon={Truck}
+          description="Cadastro local de fornecedores (leitura do Omie por tag)"
+          actions={
+            <>
+              {podeCriar && <NovoFornecedor />}
+              {podeSync && <PuxarFornecedores />}
+            </>
+          }
+        />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
         <span>{total} fornecedor(es)</span>

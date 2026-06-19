@@ -8,6 +8,7 @@ import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
@@ -169,45 +170,46 @@ export default async function NotaFiscalPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Notas Fiscais"
-        icon={FileText}
-        actions={
-          <>
-            <FiltrosGaveta
-              basePath="/nota-fiscal"
-              naoContar={['data_inicio', 'data_final']}
-              campos={campos}
-              defaults={{
-                data_inicio: dataInicio,
-                data_final: dataFinal,
-                num_nfe: params.num_nfe ?? '',
-                fornecedor: params.fornecedor ?? '',
-                status: params.status ?? '',
-                tipo: params.tipo ?? '',
-                produto: params.produto ?? '',
-              }}
-            />
-            <a
-              href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={btnClass('outline')}
-            >
-              <FileText className="size-4" /> Relatório PDF
-            </a>
-            <a
-              href={`/nota-fiscal/export?${relatorioParams.toString()}`}
-              className={btnClass('outline')}
-            >
-              <Download className="size-4" /> Excel
-            </a>
-            {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />}
-          </>
-        }
-      />
-
-      <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+      <ListaHeader>
+        <PageHeader
+          title="Notas Fiscais"
+          icon={FileText}
+          actions={
+            <>
+              <FiltrosGaveta
+                basePath="/nota-fiscal"
+                naoContar={['data_inicio', 'data_final']}
+                campos={campos}
+                defaults={{
+                  data_inicio: dataInicio,
+                  data_final: dataFinal,
+                  num_nfe: params.num_nfe ?? '',
+                  fornecedor: params.fornecedor ?? '',
+                  status: params.status ?? '',
+                  tipo: params.tipo ?? '',
+                  produto: params.produto ?? '',
+                }}
+              />
+              <a
+                href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+              >
+                <FileText className="size-4" /> Relatório PDF
+              </a>
+              <a
+                href={`/nota-fiscal/export?${relatorioParams.toString()}`}
+                className={btnClass('outline')}
+              >
+                <Download className="size-4" /> Excel
+              </a>
+              {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />}
+            </>
+          }
+        />
+        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">

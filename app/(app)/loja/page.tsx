@@ -10,6 +10,7 @@ import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
 import { CodigoOnboarding } from '@/components/loja/CodigoOnboarding'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
@@ -86,12 +87,14 @@ export default async function LojaPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Lojas"
-        icon={Store}
-        description="Cadastro de lojas e integração Omie"
-        actions={<LojaForm />}
-      />
+      <ListaHeader>
+        <PageHeader
+          title="Lojas"
+          icon={Store}
+          description="Cadastro de lojas e integração Omie"
+          actions={<LojaForm />}
+        />
+      </ListaHeader>
 
       <BuscaSimples basePath="/loja" placeholder="Buscar por nome ou nome fantasia" defaultValue={q} />
 

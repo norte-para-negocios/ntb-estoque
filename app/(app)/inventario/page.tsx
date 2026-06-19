@@ -6,6 +6,7 @@ import { ClipboardList, Pencil, Printer } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
@@ -139,39 +140,39 @@ export default async function InventarioPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Inventários"
-        icon={ClipboardList}
-        description="Contagens de estoque por local"
-        actions={
-          <>
-            <FiltrosGaveta
-              basePath="/inventario"
-              campos={campos}
-              defaults={{
-                data_inicio: sp.data_inicio ?? '',
-                data_final: sp.data_final ?? '',
-                status: sp.status ?? '',
-                familia: sp.familia ?? '',
-                tipo: sp.tipo ?? '',
-              }}
-            />
-            {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
-          </>
-        }
-      />
-
-      <ChipsStatus
-        basePath="/inventario"
-        param="status"
-        opcoes={[
-          { value: '', label: 'Todos' },
-          { value: 'A', label: 'Em aberto' },
-          { value: 'F', label: 'Finalizados' },
-        ]}
-      />
-
-      <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} />
+      <ListaHeader>
+        <PageHeader
+          title="Inventários"
+          icon={ClipboardList}
+          description="Contagens de estoque por local"
+          actions={
+            <>
+              <FiltrosGaveta
+                basePath="/inventario"
+                campos={campos}
+                defaults={{
+                  data_inicio: sp.data_inicio ?? '',
+                  data_final: sp.data_final ?? '',
+                  status: sp.status ?? '',
+                  familia: sp.familia ?? '',
+                  tipo: sp.tipo ?? '',
+                }}
+              />
+              {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
+            </>
+          }
+        />
+        <ChipsStatus
+          basePath="/inventario"
+          param="status"
+          opcoes={[
+            { value: '', label: 'Todos' },
+            { value: 'A', label: 'Em aberto' },
+            { value: 'F', label: 'Finalizados' },
+          ]}
+        />
+        <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} />
+      </ListaHeader>
 
       <Lista
         linhas={inventarios ?? []}

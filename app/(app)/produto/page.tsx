@@ -25,6 +25,7 @@ import { Num } from '@/components/ui-kit/Num'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
 import { Package, Download, Plus } from 'lucide-react'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 
 const POR_PAGINA = 100
 
@@ -300,35 +301,36 @@ export default async function ProdutoPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Produtos"
-        icon={Package}
-        actions={
-          <>
-            <FiltrosGaveta
-              basePath="/produto"
-              campos={campos}
-              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
-            />
-            {podeCriar && (
-              <Link href="/produto/novo" className={btnClass('primary')}>
-                <Plus className="size-4" /> Novo produto
-              </Link>
-            )}
-            <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
-              <Download className="size-4" /> Excel
-            </a>
-            {podeSync && (
-              <SyncButton
-                endpoints={['/api/sync/produtos', '/api/sync/posicao', '/api/sync/previsao-venda']}
-                label="Atualizar tudo"
+      <ListaHeader>
+        <PageHeader
+          title="Produtos"
+          icon={Package}
+          actions={
+            <>
+              <FiltrosGaveta
+                basePath="/produto"
+                campos={campos}
+                defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
               />
-            )}
-          </>
-        }
-      />
-
-      <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} />
+              {podeCriar && (
+                <Link href="/produto/novo" className={btnClass('primary')}>
+                  <Plus className="size-4" /> Novo produto
+                </Link>
+              )}
+              <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
+                <Download className="size-4" /> Excel
+              </a>
+              {podeSync && (
+                <SyncButton
+                  endpoints={['/api/sync/produtos', '/api/sync/posicao', '/api/sync/previsao-venda']}
+                  label="Atualizar tudo"
+                />
+              )}
+            </>
+          }
+        />
+        <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} />
+      </ListaHeader>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[13px] text-text-muted">

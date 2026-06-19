@@ -6,6 +6,7 @@ import { ArrowLeftRight, Pencil, FileText } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
@@ -162,48 +163,48 @@ export default async function TransferenciaPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Transferências"
-        icon={ArrowLeftRight}
-        description="Movimentações entre locais de estoque"
-        actions={
-          <>
-            <FiltrosGaveta
-              basePath="/transferencia"
-              campos={campos}
-              defaults={{
-                data_inicio: sp.data_inicio ?? '',
-                data_final: sp.data_final ?? '',
-                familia: sp.familia ?? '',
-                tipo: sp.tipo ?? '',
-                status: sp.status ?? '',
-                motivo: sp.motivo ?? '',
-              }}
-            />
-            <a
-              href={relatorioHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={btnClass('outline')}
-            >
-              <FileText className="size-4" /> Relatório PDF
-            </a>
-            {podeCriar ? <NovaTransferencia locais={locais ?? []} /> : null}
-          </>
-        }
-      />
-
-      <ChipsStatus
-        basePath="/transferencia"
-        param="status"
-        opcoes={[
-          { value: '', label: 'Todas' },
-          { value: 'A', label: 'Em aberto' },
-          { value: 'C', label: 'Concluídas' },
-        ]}
-      />
-
-      <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} />
+      <ListaHeader>
+        <PageHeader
+          title="Transferências"
+          icon={ArrowLeftRight}
+          description="Movimentações entre locais de estoque"
+          actions={
+            <>
+              <FiltrosGaveta
+                basePath="/transferencia"
+                campos={campos}
+                defaults={{
+                  data_inicio: sp.data_inicio ?? '',
+                  data_final: sp.data_final ?? '',
+                  familia: sp.familia ?? '',
+                  tipo: sp.tipo ?? '',
+                  status: sp.status ?? '',
+                  motivo: sp.motivo ?? '',
+                }}
+              />
+              <a
+                href={relatorioHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+              >
+                <FileText className="size-4" /> Relatório PDF
+              </a>
+              {podeCriar ? <NovaTransferencia locais={locais ?? []} /> : null}
+            </>
+          }
+        />
+        <ChipsStatus
+          basePath="/transferencia"
+          param="status"
+          opcoes={[
+            { value: '', label: 'Todas' },
+            { value: 'A', label: 'Em aberto' },
+            { value: 'C', label: 'Concluídas' },
+          ]}
+        />
+        <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} />
+      </ListaHeader>
 
       <Lista
         linhas={transferencias ?? []}
