@@ -10,6 +10,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 export default async function ContagemPage({ params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Ver'))) notFound()
+  const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
 
   const { id } = await params
   const supabase = await createClient()
@@ -95,6 +96,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
         inventarioId={inventario.id}
         itensIniciais={(itens ?? []) as ItemContagem[]}
         finalizado={finalizado}
+        podeEditar={podeEditar}
       />
     </div>
   )

@@ -26,6 +26,9 @@ export async function createTransferencia(data: {
     return { error: 'A data não pode ser futura' }
   }
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Criar'))) {
+    return { error: 'Sem permissao para criar transferencia' }
+  }
   const userId = (await getUser()).id
   const supabase = createServiceClient()
   // Sempre grava data ancorada ao meio-dia Bahia: a escolhida, ou hoje se vier
@@ -53,6 +56,9 @@ export async function addMovimento(
   produto: { id_prod: number }
 ) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return null
+  }
   const supabase = createServiceClient()
 
   const { data: trans } = await supabase
@@ -121,6 +127,9 @@ export async function enviarMovimento(
   quan: number | null
 ): Promise<EnvioMovimentoResult> {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar transferencia' }
+  }
   const supabase = createServiceClient()
 
   // Carrega o movimento + transferencia + loja num so passo.
@@ -218,6 +227,9 @@ export async function enviarMovimento(
 
 export async function removeMovimento(movimentoId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
   const supabase = createServiceClient()
   await supabase.from('movimentos').delete().eq('id', movimentoId).eq('loja_id', lojaId)
   revalidatePath('/transferencia')
@@ -358,6 +370,9 @@ async function processarMovimento(
  */
 export async function finishTransferencia(transferenciaId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
   const supabase = createServiceClient()
 
   await supabase
@@ -405,6 +420,9 @@ export async function finishTransferencia(transferenciaId: number) {
  */
 export async function forceSyncTransferencia(transferenciaId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
   const supabase = createServiceClient()
 
   const { data: trans } = await supabase
@@ -456,6 +474,9 @@ export async function forceSyncTransferencia(transferenciaId: number) {
  */
 export async function duplicarTransferencia(transferenciaId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Criar'))) {
+    return { error: 'Sem permissao para criar transferencia' }
+  }
   const supabase = createServiceClient()
 
   const { data: original } = await supabase
@@ -557,6 +578,9 @@ export async function excluirTransferencia(transferenciaId: number) {
  */
 export async function editQuantidadeMovimento(movId: number, quan: number | null) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
   const supabase = createServiceClient()
 
   const { data: mov } = await supabase

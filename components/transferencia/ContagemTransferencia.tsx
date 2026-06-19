@@ -46,10 +46,12 @@ export function ContagemTransferencia({
   transferenciaId,
   itensIniciais,
   finalizado,
+  podeEditar = true,
 }: {
   transferenciaId: number
   itensIniciais: ItemMovimento[]
   finalizado: boolean
+  podeEditar?: boolean
 }) {
   const [itens, setItens] = useState(itensIniciais)
   const [quans, setQuans] = useState<Record<number, number | null>>(() =>
@@ -215,7 +217,7 @@ export function ContagemTransferencia({
         </div>
       )}
 
-      {!finalizado && (
+      {podeEditar && !finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           <QrScanner onLeitura={onLeituraQr} />
           {buscaManual ? (
@@ -279,7 +281,7 @@ export function ContagemTransferencia({
                       </div>
                     )}
                   </div>
-                  {!finalizado && (
+                  {podeEditar && !finalizado && (
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending}
@@ -294,7 +296,7 @@ export function ContagemTransferencia({
                 <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end">
                   <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
-                  {finalizado ? (
+                  {finalizado || !podeEditar ? (
                     <span className="num text-lg font-semibold text-text lg:text-base">{formatNumBR(q ?? 0)}</span>
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">
@@ -349,7 +351,7 @@ export function ContagemTransferencia({
         />
       )}
 
-      {!finalizado && itens.length > 0 && (
+      {podeEditar && !finalizado && itens.length > 0 && (
         <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
           <div className="flex justify-end">
             <button

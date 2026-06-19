@@ -46,10 +46,12 @@ export function ContagemInventario({
   inventarioId,
   itensIniciais,
   finalizado,
+  podeEditar = true,
 }: {
   inventarioId: number
   itensIniciais: ItemContagem[]
   finalizado: boolean
+  podeEditar?: boolean
 }) {
   const [itens, setItens] = useState(itensIniciais)
   // Texto CRU do input de quantidade: mantido separado do number pra que a virgula
@@ -71,7 +73,8 @@ export function ContagemInventario({
   const router = useRouter()
   // Controles de quantidade/remocao liberados: durante a contagem (nao finalizado)
   // ou quando o usuario clica em "Editar itens" num inventario finalizado.
-  const editavel = !finalizado || editando
+  // Requer tambem podeEditar (permissao Inventarios - Editar).
+  const editavel = podeEditar && (!finalizado || editando)
 
   const visiveis = useMemo(() => {
     const q = filtro.trim().toLowerCase()
@@ -255,7 +258,7 @@ export function ContagemInventario({
         </p>
       )}
 
-      {!finalizado && (
+      {podeEditar && !finalizado && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           <QrScanner onLeitura={onLeituraQr} />
           {buscaManual ? (
@@ -398,7 +401,7 @@ export function ContagemInventario({
         />
       )}
 
-      {!finalizado && itens.length > 0 && (
+      {podeEditar && !finalizado && itens.length > 0 && (
         <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
           <div className="flex justify-end">
             <button

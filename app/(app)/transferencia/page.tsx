@@ -38,6 +38,7 @@ export default async function TransferenciaPage({
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Transferencias - Criar')
   const podeExcluir = await requirePermissao(lojaId, 'Transferencias - Excluir')
+  const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
@@ -245,10 +246,11 @@ export default async function TransferenciaPage({
           const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
           const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
           const concluido = t.status === 'Concluido'
+          const labelAcao = concluido || !podeEditar ? 'Ver' : 'Contar'
           return (
             <div className="flex items-center justify-end gap-2">
               <Link href={`/transferencia/${t.id}/contagem`} className={btnClass('outline')}>
-                <Pencil className="size-4" /> {concluido ? 'Ver' : 'Contar'}
+                <Pencil className="size-4" /> {labelAcao}
               </Link>
               <AcoesTransferencia
                 transferenciaId={t.id}

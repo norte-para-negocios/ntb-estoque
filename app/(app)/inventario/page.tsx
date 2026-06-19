@@ -37,6 +37,7 @@ export default async function InventarioPage({
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Inventarios - Criar')
   const podeExcluir = await requirePermissao(lojaId, 'Inventarios - Excluir')
+  const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
@@ -214,10 +215,11 @@ export default async function InventarioPage({
             (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
           )
           const finalizado = inv.status === 'Finalizado'
+          const labelAcao = finalizado || !podeEditar ? 'Ver' : 'Contar'
           return (
             <div className="flex items-center justify-end gap-2">
               <Link href={`/inventario/${inv.id}/contagem`} className={btnClass('outline')}>
-                <Pencil className="size-4" /> {finalizado ? 'Ver' : 'Contar'}
+                <Pencil className="size-4" /> {labelAcao}
               </Link>
               <a
                 href={`/inventario/${inv.id}/imprimir`}

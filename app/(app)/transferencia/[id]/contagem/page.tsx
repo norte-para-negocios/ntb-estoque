@@ -17,6 +17,7 @@ export default async function ContagemTransferenciaPage({
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Ver'))) notFound()
+  const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
 
   const { id } = await params
   const supabase = await createClient()
@@ -112,6 +113,7 @@ export default async function ContagemTransferenciaPage({
         transferenciaId={trans.id}
         itensIniciais={itens}
         finalizado={finalizado}
+        podeEditar={podeEditar}
       />
     </div>
   )

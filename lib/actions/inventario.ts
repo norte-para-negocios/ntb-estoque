@@ -14,6 +14,9 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
     return { error: 'A data não pode ser futura' }
   }
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Criar'))) {
+    return { error: 'Sem permissao para criar inventario' }
+  }
   const userId = (await getUser()).id
   const supabase = createServiceClient()
   // Inventario costuma ser considerado D-1; grava data ancorada ao meio-dia
@@ -45,6 +48,9 @@ export async function addInventarioItem(
   }
 ) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return null
+  }
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('inventario_items')
@@ -97,6 +103,9 @@ export async function enviarInventarioItem(
   quan: number | null
 ): Promise<EnvioInventarioResult> {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
+  }
   const supabase = createServiceClient()
 
   const { data: item } = await supabase
@@ -190,6 +199,9 @@ export async function enviarInventarioItem(
 
 export async function removeInventarioItem(itemId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { error: 'Sem permissao para editar inventario' }
+  }
   const supabase = createServiceClient()
   // Se o item ja foi lancado no Omie (id_ajuste), exclui o ajuste de estoque
   // antes de remover a linha — senao o estoque ficaria ajustado sem o item no
@@ -346,6 +358,9 @@ async function processarItemInventario(
  */
 export async function finishInventario(inventarioId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { error: 'Sem permissao para editar inventario' }
+  }
   const supabase = createServiceClient()
 
   await supabase
@@ -393,6 +408,9 @@ export async function finishInventario(inventarioId: number) {
  */
 export async function forceSyncInventario(inventarioId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { error: 'Sem permissao para editar inventario' }
+  }
   const supabase = createServiceClient()
 
   const { data: inventario } = await supabase
@@ -440,6 +458,9 @@ export async function forceSyncInventario(inventarioId: number) {
  */
 export async function duplicarInventario(inventarioId: number) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Criar'))) {
+    return { error: 'Sem permissao para criar inventario' }
+  }
   const supabase = createServiceClient()
 
   const { data: original } = await supabase
@@ -530,6 +551,9 @@ export async function excluirInventario(inventarioId: number) {
  */
 export async function editQuantidadeInventarioItem(itemId: number, quan: number | null) {
   const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { error: 'Sem permissao para editar inventario' }
+  }
   const supabase = createServiceClient()
 
   const { data: item } = await supabase
