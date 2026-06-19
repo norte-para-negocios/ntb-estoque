@@ -63,6 +63,24 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Movimentações',
+    grupo: 'Operação',
+    // Modulo de leitura: historico de entradas/saidas importado do Omie.
+    permissoes: [{ nome: 'Movimentacoes', label: 'Acessar' }],
+  },
+  {
+    modulo: 'Validade',
+    grupo: 'Operação',
+    // Modulo de leitura: OPs com validade proxima ou vencida.
+    permissoes: [{ nome: 'Validade', label: 'Acessar' }],
+  },
+  {
+    modulo: 'Impressões',
+    grupo: 'Operação',
+    // Modulo de leitura: historico de impressao de etiquetas.
+    permissoes: [{ nome: 'Impressoes', label: 'Acessar' }],
+  },
+  {
     modulo: 'Produtos',
     grupo: 'Cadastros',
     permissoes: [
@@ -119,8 +137,9 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',
   '/inventario': 'Inventarios - Ver',
-  // /movimentacoes, /validade, /impressoes: derivam de notas/op/produtos; sem
-  //   permissao propria no banco, ficam visiveis (relatorios de leitura).
+  '/movimentacoes': 'Movimentacoes',
+  '/validade': 'Validade',
+  '/impressoes': 'Impressoes',
   '/produto': 'Produtos',
   '/local-estoque': 'Locais de Estoque',
   '/familia': 'Familias',

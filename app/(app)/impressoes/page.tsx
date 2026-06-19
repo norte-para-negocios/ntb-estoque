@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -35,20 +36,7 @@ export default async function ImpressoesPage({
   searchParams: Promise<{ data_inicio?: string; data_final?: string; origem?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
-    return (
-      <div className="space-y-4">
-        <ListaHeader>
-          <PageHeader
-            title="Histórico de impressão de etiquetas"
-            icon={Printer}
-            description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
-          />
-        </ListaHeader>
-        <EmptyState icon={Printer} title="Sem permissão" hint="Você não tem acesso a esta tela." />
-      </div>
-    )
-  }
+  if (!(await requirePermissao(lojaId, 'Impressoes'))) notFound()
 
   const sp = await searchParams
   const supabase = await createClient()

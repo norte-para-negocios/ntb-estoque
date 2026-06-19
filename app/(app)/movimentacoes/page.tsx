@@ -54,7 +54,7 @@ export default async function MovimentacoesPage({
   }>
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
+  if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
