@@ -264,10 +264,10 @@ export async function finishOP(opId: number, dataEscolhidaISO?: string | null) {
 async function carregarOPdaLoja(opId: number, permissao: string) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, permissao))) {
-    return { error: 'Sem permissão' as const }
+    return { error: 'Sem permissão' }
   }
   const supabase = createServiceClient()
-  const { data: op } = await supabase
+  const { data: op, error: dbError } = await supabase
     .from('ordens_producao')
     .select('identificacao_n_cod_op, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', opId)
@@ -277,8 +277,22 @@ async function carregarOPdaLoja(opId: number, permissao: string) {
       concluida: boolean | null
       loja: LojaOmie
     }>()
-  if (!op?.identificacao_n_cod_op || !op.loja) {
-    return { error: 'Ordem de produção não encontrada' as const }
+  // Distingue entre: (a) registro nao existe / fora do escopo da loja, (b) DB error,
+  // (c) registro existe mas identificacao_n_cod_op e null (OP nao sincronizada ainda),
+  // (d) loja ausente no join (dado inconsistente). Cada caso recebe mensagem propria.
+  if (dbError) {
+    return { error: `Erro ao buscar OP id=${opId}: ${dbError.message}` }
+  }
+  if (!op) {
+    return { error: `Ordem de producao nao encontrada (id=${opId}, loja=${lojaId})` }
+  }
+  if (!op.identificacao_n_cod_op) {
+    return {
+      error: `OP id=${opId} existe no banco mas ainda nao tem codigo Omie (identificacao_n_cod_op nulo). Aguarde o proximo sync.`,
+    }
+  }
+  if (!op.loja) {
+    return { error: `Loja da OP id=${opId} nao encontrada (dado inconsistente).` }
   }
   return { lojaId, supabase, op }
 }
