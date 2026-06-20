@@ -257,6 +257,13 @@ export default async function MovimentacoesPage({
     { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
   ]
 
+  // Valores em R$ OCULTOS por ora (decisao do fundador 20/06): o custo medio (CMC)
+  // esta inconsistente na fonte (Omie) — produtos com saldo negativo fazem o custo
+  // explodir, alem de custos cadastrados errados — entao a estimativa de valor mente
+  // (chegava a R$ trilhoes). A tela foca na QUANTIDADE movimentada, que e confiavel.
+  // Religar (true) quando o custo for corrigido no Omie. Ver roadmap fase 3.
+  const MOSTRAR_VALORES = false
+
   const colValor = (n: number, temCmc: boolean) => {
     if (!temCmc) return <span className="text-text-muted text-[11px]">sem CMC</span>
     if (n <= 0) return <span className="text-text-muted">-</span>
@@ -307,7 +314,7 @@ export default async function MovimentacoesPage({
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Entradas{' '}
           <span className="num font-semibold text-ok">{formatQtdResumo(totalEntradas)}</span>
-          {totalValEntradas > 0 && (
+          {MOSTRAR_VALORES && totalValEntradas > 0 && (
             <span className="ml-1.5 text-ok/70">
               (<Money value={totalValEntradas} />)
             </span>
@@ -316,7 +323,7 @@ export default async function MovimentacoesPage({
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Saídas{' '}
           <span className="num font-semibold text-err">{formatQtdResumo(totalSaidas)}</span>
-          {totalValSaidas > 0 && (
+          {MOSTRAR_VALORES && totalValSaidas > 0 && (
             <span className="ml-1.5 text-err/70">
               (<Money value={totalValSaidas} />)
             </span>
@@ -324,8 +331,8 @@ export default async function MovimentacoesPage({
         </span>
       </div>
 
-      {/* Aviso: CMC absurdo detectado */}
-      {temCmcAbsurdo && (
+      {/* Avisos de valor so aparecem quando os valores estao visiveis (MOSTRAR_VALORES) */}
+      {MOSTRAR_VALORES && temCmcAbsurdo && (
         <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
           <span>
@@ -335,8 +342,7 @@ export default async function MovimentacoesPage({
         </div>
       )}
 
-      {/* Aviso: alguns produtos sem CMC */}
-      {semCmc > 0 && (
+      {MOSTRAR_VALORES && semCmc > 0 && (
         <div className="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[12px] text-text-muted">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
           <span>
@@ -345,14 +351,23 @@ export default async function MovimentacoesPage({
         </div>
       )}
 
-      {/* Aviso de metodologia de valor */}
-      <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
-        Valores estimados: quantidade movimentada x CMC (custo medio) atual. O historico guarda so quantidade;
-        o custo usa o snapshot mais recente da posicao de estoque, nao o custo exato de cada data.{' '}
-        <strong>Origem/destino nao disponivel:</strong> a tabela de historico e agregada por produto/dia
-        e nao contem o movimento granular. Para ver origem/destino e necessario reimportar o movimento
-        individual do Omie (pendente de fase de dados).
-      </p>
+      {/* Nota: valores ocultos (custo furado) ou metodologia (quando religar) */}
+      {MOSTRAR_VALORES ? (
+        <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
+          Valores estimados: quantidade movimentada x CMC (custo medio) atual. O historico guarda so quantidade;
+          o custo usa o snapshot mais recente da posicao de estoque, nao o custo exato de cada data.{' '}
+          <strong>Origem/destino nao disponivel:</strong> a tabela de historico e agregada por produto/dia
+          e nao contem o movimento granular.
+        </p>
+      ) : (
+        <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
+          <strong>Valores em R$ ocultos por enquanto.</strong> O custo médio (CMC) está com inconsistências no
+          Omie (estoque negativo e custos errados), então a estimativa de valor não é confiável ainda. A tela
+          mostra só a <strong>quantidade</strong> movimentada, que é confiável. Os valores voltam quando o custo
+          for corrigido na origem. <strong>Origem/destino não disponível:</strong> o histórico vem agregado por
+          produto/dia, sem o movimento individual.
+        </p>
+      )}
 
       <Lista
         linhas={linhas}
@@ -380,24 +395,28 @@ export default async function MovimentacoesPage({
             larguraDesktop: 'w-28',
             render: (m) => <span className="text-ok">{colQtd(m.entradas)}</span>,
           },
-          {
-            label: 'Entradas (R$)',
-            alinhar: 'right',
-            larguraDesktop: 'w-32',
-            render: (m) => <span className="text-ok">{colValor(m.valEntradas, m.temCmc)}</span>,
-          },
+          ...(MOSTRAR_VALORES
+            ? [{
+                label: 'Entradas (R$)',
+                alinhar: 'right' as const,
+                larguraDesktop: 'w-32',
+                render: (m: LinhaExibida) => <span className="text-ok">{colValor(m.valEntradas, m.temCmc)}</span>,
+              }]
+            : []),
           {
             label: 'Saídas (qtd)',
             alinhar: 'right',
             larguraDesktop: 'w-28',
             render: (m) => <span className="text-err">{colQtd(m.saidas)}</span>,
           },
-          {
-            label: 'Saídas (R$)',
-            alinhar: 'right',
-            larguraDesktop: 'w-32',
-            render: (m) => <span className="text-err">{colValor(m.valSaidas, m.temCmc)}</span>,
-          },
+          ...(MOSTRAR_VALORES
+            ? [{
+                label: 'Saídas (R$)',
+                alinhar: 'right' as const,
+                larguraDesktop: 'w-32',
+                render: (m: LinhaExibida) => <span className="text-err">{colValor(m.valSaidas, m.temCmc)}</span>,
+              }]
+            : []),
         ]}
         vazio={
           <EmptyState
