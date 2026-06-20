@@ -314,17 +314,20 @@ async function carregarOPdaLoja(opId: number, permissao: string) {
 }
 
 /**
- * Exclui no Omie uma OP ABERTA (nao concluida) e remove do banco. Regra do
- * fundador: a pendente permite excluir. Bloqueia se a OP estiver concluida.
+ * Exclui uma OP no Omie e remove do banco. Decisao do fundador (20/06): excluir
+ * OP concluida DIRETO — revertendo a conclusao no Omie automaticamente antes de
+ * excluir (o Omie nao deixa excluir uma OP concluida sem antes estornar a
+ * producao). A pendente exclui direto, como antes.
  */
 export async function excluirOP(opId: number) {
   const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
-  if (op.concluida) {
-    return { error: 'OP concluída não pode ser excluída. Reverta a conclusão antes.' }
-  }
   try {
+    // Concluida: reverte (estorna a producao) antes de excluir.
+    if (op.concluida) {
+      await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+    }
     await excluirOrdemProducao(op.loja, op.identificacao_n_cod_op!)
     await supabase.from('ordens_producao').delete().eq('id', opId).eq('loja_id', lojaId)
     revalidatePath('/ordem-producao')

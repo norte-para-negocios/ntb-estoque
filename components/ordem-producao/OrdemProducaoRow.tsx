@@ -159,7 +159,10 @@ function useOP(op: OPData) {
   }
 
   function excluir() {
-    if (!window.confirm('Excluir esta OP no Omie? Esta ação não pode ser desfeita.')) return
+    const msg = op.concluida
+      ? 'Excluir esta OP concluída? A produção será estornada (revertida) no Omie e a OP removida. Esta ação não pode ser desfeita.'
+      : 'Excluir esta OP no Omie? Esta ação não pode ser desfeita.'
+    if (!window.confirm(msg)) return
     startTransition(async () => {
       const res = await excluirOP(op.id)
       if (res?.error) toast.error('Erro ao excluir', { description: res.error })
@@ -377,31 +380,31 @@ function Acoes({ op, ctrl }: StepperProps) {
           <DialogConclusao op={op} ctrl={ctrl} />
         </>
       )}
-      {/* Regra do fundador: concluida -> reverter; aberta -> excluir. Cada acao
-          atras da sua permissao (Reverter / Excluir). */}
-      {op.concluida
-        ? op.podeReverter && (
-            <button
-              type="button"
-              onClick={ctrl.reverter}
-              disabled={ctrl.pending}
-              className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
-              title="Reverter a conclusão (estorna no Omie)"
-            >
-              <Undo2 className="size-3.5" /> Reverter
-            </button>
-          )
-        : op.podeExcluir && (
-            <button
-              type="button"
-              onClick={ctrl.excluir}
-              disabled={ctrl.pending}
-              className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
-              title="Excluir a OP no Omie"
-            >
-              <Trash2 className="size-3.5" /> Excluir
-            </button>
-          )}
+      {/* Reverter: so na concluida (estorna sem excluir). Excluir: qualquer estado
+          (na concluida o servidor reverte a producao automaticamente antes de
+          excluir). Cada acao atras da sua permissao. */}
+      {op.concluida && op.podeReverter && (
+        <button
+          type="button"
+          onClick={ctrl.reverter}
+          disabled={ctrl.pending}
+          className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
+          title="Reverter a conclusão (estorna no Omie)"
+        >
+          <Undo2 className="size-3.5" /> Reverter
+        </button>
+      )}
+      {op.podeExcluir && (
+        <button
+          type="button"
+          onClick={ctrl.excluir}
+          disabled={ctrl.pending}
+          className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
+          title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : 'Excluir a OP no Omie'}
+        >
+          <Trash2 className="size-3.5" /> Excluir
+        </button>
+      )}
     </>
   )
 }
