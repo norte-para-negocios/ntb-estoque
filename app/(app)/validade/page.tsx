@@ -17,7 +17,9 @@ import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
-const PERIODOS = [3, 7, 15, 30, 60] as const
+// 0 = "vence hoje" (so a data de hoje). Os demais sao horizontes acumulados:
+// "7 dias" = vence de hoje ate +7. Cada um vira um chip de triagem com contagem.
+const PERIODOS = [0, 7, 15, 30, 60] as const
 
 // Retorna 'YYYY-MM-DD' de hoje + d dias.
 function hojeMais(d: number): string {
@@ -111,6 +113,36 @@ export default async function ValidadePage({
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
   const familias = await buscarFamilias()
 
+  // Triagem por vencimento: conta no banco (head:true, sem trazer linha) quantas
+  // OPs com saldo caem em cada horizonte, respeitando o mesmo filtro de
+  // tipo/familia/produto. So conta OP com saldo (quantidade > 0; ou sem saldo
+  // lancado mas com qtde produzida > 0) para bater com a lista.
+  const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
+  function queryContagem() {
+    let q = supabase
+      .from('ordens_producao')
+      .select('id', { count: 'exact', head: true })
+      .eq('loja_id', lojaId)
+      .not('validade', 'is', null)
+      .or(SALDO_OR)
+    if (codigosTipo !== null) {
+      q = q.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
+    }
+    return q
+  }
+  const hoje0 = hojeMais(0)
+  const [cVencidos, c0, c7, c15, c30, c60] = await Promise.all(
+    [
+      queryContagem().lt('validade', hoje0),
+      queryContagem().gte('validade', hoje0).lte('validade', hoje0),
+      queryContagem().gte('validade', hoje0).lte('validade', hojeMais(7)),
+      queryContagem().gte('validade', hoje0).lte('validade', hojeMais(15)),
+      queryContagem().gte('validade', hoje0).lte('validade', hojeMais(30)),
+      queryContagem().gte('validade', hoje0).lte('validade', hojeMais(60)),
+    ].map((p) => p.then((r) => r.count ?? 0)),
+  )
+  const contagemPeriodo: Record<number, number> = { 0: c0, 7: c7, 15: c15, 30: c30, 60: c60 }
+
   const campos: CampoFiltro[] = [
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
@@ -145,32 +177,51 @@ export default async function ValidadePage({
       <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {PERIODOS.map((p) => {
-          const ativo = !vencidos && p === dias
-          return (
-            <Link
-              key={p}
-              href={`/validade?dias=${p}${sufixo}`}
-              className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
-                ativo
-                  ? 'border-brand bg-brand-soft text-brand'
-                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
-              }`}
-            >
-              {p} dias
-            </Link>
-          )
-        })}
         <Link
           href={`/validade?modo=vencidos${sufixo}`}
-          className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
             vencidos
               ? 'border-err bg-err/10 text-err'
               : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
           }`}
         >
           Vencidos
+          <span
+            className={`num text-[12px] tabular-nums ${
+              cVencidos === 0
+                ? 'opacity-40'
+                : vencidos
+                  ? 'font-semibold'
+                  : 'font-semibold text-err'
+            }`}
+          >
+            {cVencidos}
+          </span>
         </Link>
+        {PERIODOS.map((p) => {
+          const ativo = !vencidos && p === dias
+          const n = contagemPeriodo[p] ?? 0
+          return (
+            <Link
+              key={p}
+              href={`/validade?dias=${p}${sufixo}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+                ativo
+                  ? 'border-brand bg-brand-soft text-brand'
+                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+              }`}
+            >
+              {p === 0 ? 'Vence hoje' : `${p} dias`}
+              <span
+                className={`num text-[12px] tabular-nums ${
+                  n === 0 ? 'opacity-40' : ativo ? 'font-semibold' : 'font-semibold text-text'
+                }`}
+              >
+                {n}
+              </span>
+            </Link>
+          )
+        })}
       </div>
 
       <Lista
