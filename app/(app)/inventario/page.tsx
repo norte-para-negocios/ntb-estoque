@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardList, Pencil, Printer } from 'lucide-react'
+import { ClipboardList, Pencil, Printer, Download } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -167,6 +167,18 @@ export default async function InventarioPage({
                 }}
                 persistirEm="/inventario"
               />
+              <a
+                href={`/inventario/export?${new URLSearchParams(
+                  Object.entries({ data_inicio: sp.data_inicio, data_final: sp.data_final, status: sp.status }).filter(
+                    (e): e is [string, string] => Boolean(e[1]),
+                  ),
+                ).toString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+              >
+                <Download className="size-4" /> Excel
+              </a>
               {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
             </>
           }

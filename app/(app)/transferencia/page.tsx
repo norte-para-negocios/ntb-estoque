@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeftRight, Pencil, FileText } from 'lucide-react'
+import { ArrowLeftRight, Pencil, FileText, Download } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -138,6 +138,13 @@ export default async function TransferenciaPage({
   if (sp.tipo) relatorioParams.set('tipo', sp.tipo)
   const relatorioHref = `/transferencia/relatorio?${relatorioParams.toString()}`
 
+  const exportParams = new URLSearchParams()
+  if (sp.data_inicio) exportParams.set('data_inicio', sp.data_inicio)
+  if (sp.data_final) exportParams.set('data_final', sp.data_final)
+  if (sp.status) exportParams.set('status', sp.status)
+  if (sp.motivo) exportParams.set('motivo', sp.motivo)
+  const exportHref = `/transferencia/export?${exportParams.toString()}`
+
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
@@ -190,6 +197,14 @@ export default async function TransferenciaPage({
                 }}
                 persistirEm="/transferencia"
               />
+              <a
+                href={exportHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+              >
+                <Download className="size-4" /> Excel
+              </a>
               <a
                 href={relatorioHref}
                 target="_blank"
