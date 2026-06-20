@@ -58,6 +58,30 @@ export async function incluirLocalEstoque(
   })
 }
 
+/**
+ * Altera um local de estoque no Omie (AlterarLocalEstoque, disponivel desde
+ * maio/2023). ESCREVE no Omie da loja. So a descricao (e o codigo opcional) muda;
+ * o codigo_local_estoque identifica o registro. tipo='1' (proprio), igual no incluir.
+ */
+export async function alterarLocalEstoque(
+  loja: LojaOmie,
+  dados: { codigoLocalEstoque: number; descricao: string; codigo?: string }
+) {
+  return omieRequest<OmieIncluirLocalResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/estoque/local',
+    call: 'AlterarLocalEstoque',
+    data: {
+      codigo_local_estoque: dados.codigoLocalEstoque,
+      descricao: dados.descricao,
+      tipo: '1',
+      ...(dados.codigo ? { codigo: dados.codigo } : {}),
+    },
+  })
+}
+
 export async function syncLocaisEstoque(loja: LojaOmie) {
   const supabase = createServiceClient()
   await supabase.from('lojas').update({ local_estoque_status: 'Processando' }).eq('id', loja.id)
