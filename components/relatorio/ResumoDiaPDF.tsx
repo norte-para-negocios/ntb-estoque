@@ -64,7 +64,7 @@ export function ResumoDiaPDF({
             { label: 'Notas Fiscais', valor: fmt(contagem.notas) },
             { label: 'Transferências', valor: fmt(contagem.transferencias) },
             { label: 'Inventários', valor: fmt(contagem.inventarios) },
-            { label: 'Produção', valor: `${fmt(contagem.opsConcluidas)}/${fmt(contagem.opsPrevistas)}` },
+            { label: 'Produção', valor: fmt(contagem.opsConcluidas) },
             { label: 'Etiquetas', valor: fmt(contagem.etiquetas) },
             { label: 'Erros', valor: fmt(contagem.erros) },
           ]}

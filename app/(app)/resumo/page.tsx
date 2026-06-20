@@ -21,7 +21,7 @@ const CATS: { key: CategoriaKey; label: string; valor: (c: Contagem) => string; 
   { key: 'notas', label: 'Notas Fiscais', valor: (c) => fmt(c.notas), sub: (c) => (c.valorNotas > 0 ? fmtMoeda(c.valorNotas) : null) },
   { key: 'transferencias', label: 'Transferências', valor: (c) => fmt(c.transferencias) },
   { key: 'inventarios', label: 'Inventários', valor: (c) => fmt(c.inventarios) },
-  { key: 'producao', label: 'Produção', valor: (c) => fmt(c.opsConcluidas), sub: (c) => `${fmt(c.opsPrevistas)} previstas` },
+  { key: 'producao', label: 'Produção', valor: (c) => fmt(c.opsConcluidas), sub: () => 'concluídas no dia' },
   { key: 'movimentacoes', label: 'Movimentações', valor: (c) => fmt(c.movEntradas + c.movSaidas), sub: (c) => `${fmt(c.movEntradas)} E · ${fmt(c.movSaidas)} S` },
   { key: 'etiquetas', label: 'Etiquetas', valor: (c) => fmt(c.etiquetas) },
   { key: 'erros', label: 'Erros', valor: (c) => fmt(c.erros) },

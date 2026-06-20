@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
 import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 // "Resumo do dia" — painel gerencial. Consulta ao vivo, escopado por loja, para um
 // dia (fuso America/Bahia, UTC-3). Organizado por CATEGORIA: cada uma tem a sua
@@ -239,19 +240,38 @@ async function listarCategoria(
       }),
     }
   } else if (cat === 'producao') {
+    // Só o que foi PRODUZIDO no dia (OPs concluídas), agrupado por produto. As
+    // "previstas" NÃO entram: previsão é plano, não atividade do dia.
     const { data } = await supabase.from('ordens_producao')
-      .select('id, loja_id, num_ordem, produto_descricao, quantidade, produto_unidade')
-      .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO).order('num_ordem', { ascending: false }).limit(LIMITE_LISTA)
-    const rows = (data ?? []) as { loja_id: number; num_ordem: string | null; produto_descricao: string | null; quantidade: number | null; produto_unidade: string | null }[]
-    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+      .select('identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
+      .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO).limit(5000)
+    const rows = (data ?? []) as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
+    // Nome do produto: OPs do Omie vêm sem produto_descricao -> resolve pelo código.
+    const codigos = [...new Set(rows.map((r) => r.identificacao_n_cod_produto).filter((v) => v != null) as number[])]
+    const nomeProd = new Map<number, string>()
+    if (codigos.length) {
+      const { data: prods } = await supabase.from('produtos').select('codigo_produto, descricao').in('loja_id', lojaIds).in('codigo_produto', codigos)
+      for (const p of (prods ?? []) as { codigo_produto: number; descricao: string }[]) nomeProd.set(p.codigo_produto, formatarNomeProduto(p.descricao))
+    }
+    const grupo = new Map<string, { produto: string; qtd: number; ops: number }>()
+    for (const o of rows) {
+      const produto = o.produto_descricao
+        ? formatarNomeProduto(o.produto_descricao)
+        : o.identificacao_n_cod_produto != null
+          ? nomeProd.get(o.identificacao_n_cod_produto) ?? `Produto ${o.identificacao_n_cod_produto}`
+          : '-'
+      const g = grupo.get(produto) ?? { produto, qtd: 0, ops: 0 }
+      g.qtd += Number(o.identificacao_n_qtde ?? 0)
+      g.ops += 1
+      grupo.set(produto, g)
+    }
+    const grupos = [...grupo.values()].sort((a, b) => b.qtd - a.qtd)
     lista = {
-      colunas: [{ label: 'OP' }, { label: 'Produto' }, ...(lojaTag ? [lojaTag] : []), { label: 'Quantidade', alinharDir: true }],
-      total: contagem.opsConcluidas,
-      linhas: rows.map((o) => ({
-        celulas: [o.num_ordem ?? '-', o.produto_descricao ?? '-',
-          ...(lojas ? [lojas.get(o.loja_id) ?? '-'] : []),
-          o.quantidade != null ? `${fmtNum(Number(o.quantidade))} ${o.produto_unidade ?? ''}`.trim() : '-'],
-        status: { label: 'Concluída', tom: 'ok' },
+      colunas: [{ label: 'Produto' }, { label: 'OPs', alinharDir: true }, { label: 'Produzido', alinharDir: true }],
+      total: grupos.length,
+      linhas: grupos.map((g) => ({
+        celulas: [g.produto, fmtNum(g.ops), fmtNum(g.qtd)],
+        status: null,
       })),
     }
   } else if (cat === 'movimentacoes') {
