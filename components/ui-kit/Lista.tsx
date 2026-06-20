@@ -42,10 +42,10 @@ export function Lista<T>({
 
   return (
     <>
-      {/* Desktop: tabela. SEM overflow-hidden (ele quebra o sticky do cabecalho).
-          Os cantos superiores vem dos rounded-tl/tr nos th; o cabecalho fica fixo (sticky)
-          ao rolar, igual Excel. */}
-      <div className="hidden lg:block rounded-lg border border-border bg-surface">
+      {/* Desktop: tabela. overflow-clip (NAO -hidden): corta o fundo quadrado do
+          thead na curva do card SEM virar scroll container, entao o cabecalho fixo
+          (sticky) continua funcionando ao rolar, igual Excel. */}
+      <div className="hidden lg:block overflow-clip rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
           <thead
             className="sticky z-20 border-b border-border bg-surface-2 shadow-[0_1px_0_var(--border)]"

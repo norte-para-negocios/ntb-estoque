@@ -109,7 +109,7 @@ export default async function ResumoPage({
       {lista.grafico && lista.grafico.itens.length > 0 && <ResumoGrafico grafico={lista.grafico} />}
 
       {/* LISTA DA CATEGORIA SELECIONADA (detalhe) */}
-      <div className="rounded-lg border border-border bg-surface">
+      <div className="overflow-clip rounded-lg border border-border bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-text">
             {catLabel} <span className="text-text-muted">· {fmt(lista.total)}</span>
