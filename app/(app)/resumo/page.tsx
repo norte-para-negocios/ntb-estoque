@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getAtorGestao } from '@/lib/auth'
+import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { carregarResumoDia, hojeBahia } from '@/lib/resumo-dia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -52,7 +52,18 @@ export default async function ResumoPage({
     .order('nome_fantasia')
   const lojas = (lojasRaw ?? []).map((l) => ({ id: l.id as number, nome: (l.nome_fantasia || l.nome || `Loja ${l.id}`) as string }))
 
-  const lojaSel = sp.loja && ator.lojaIds.includes(Number(sp.loja)) ? Number(sp.loja) : null
+  // Por padrão escopa para a LOJA ATUAL (a do seletor da barra lateral), igual ao
+  // resto do sistema. O admin pode escolher "Todas as lojas" explicitamente
+  // (?loja=todas). Admin de loja só enxerga as lojas dele (ator.lojaIds).
+  const lojaAtual = await getCurrentLojaId()
+  let lojaSel: number | null
+  if (sp.loja === 'todas') {
+    lojaSel = null
+  } else if (sp.loja && ator.lojaIds.includes(Number(sp.loja))) {
+    lojaSel = Number(sp.loja)
+  } else {
+    lojaSel = ator.lojaIds.includes(lojaAtual) ? lojaAtual : (ator.lojaIds[0] ?? null)
+  }
   const lojaIdsEfetivos = lojaSel ? [lojaSel] : ator.lojaIds
 
   const { kpis, feed, porLoja } = await carregarResumoDia(lojaIdsEfetivos, data)
