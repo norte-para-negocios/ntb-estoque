@@ -2,6 +2,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getUser, getAtorGestao, type AtorGestao } from '@/lib/auth'
+import { registrarAuditoria } from '@/lib/auditoria'
 import { revalidatePath } from 'next/cache'
 
 // Converte erros brutos do Supabase/Postgres em mensagens amigaveis ao usuario.
@@ -154,6 +155,7 @@ export async function criarUsuario(input: {
     if (rows.length) await supabase.from('permissao_user').insert(rows)
   }
 
+  await registrarAuditoria('criar', 'usuário', userId, input.name)
   revalidatePath('/usuario')
   return { ok: true, senha }
 }
@@ -338,6 +340,8 @@ export async function aprovarUsuario(
     await supabase.from('permissao_user').upsert(rows, { onConflict: 'loja_id,permissao_id,user_id' })
   }
 
+  const { data: profEdit } = await supabase.from('profiles').select('name').eq('id', userId).maybeSingle()
+  await registrarAuditoria('editar', 'usuário', userId, profEdit?.name ?? null)
   revalidatePath('/usuario')
   return { ok: true }
 }
@@ -371,8 +375,10 @@ export async function excluirUsuario(userId: string) {
   if (!(await podeGerirAlvo(ator, supabase, userId))) {
     return { error: 'Você não pode excluir este usuário.' }
   }
+  const { data: profDel } = await supabase.from('profiles').select('name').eq('id', userId).maybeSingle()
   const { error } = await supabase.auth.admin.deleteUser(userId)
   if (error) return { error: 'Não foi possível excluir o usuário.' }
+  await registrarAuditoria('excluir', 'usuário', userId, profDel?.name ?? null)
   revalidatePath('/usuario')
   return { ok: true }
 }

@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { syncFamilias } from '@/lib/omie/familia'
+import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 
 export type FamiliaInput = {
@@ -31,6 +32,7 @@ export async function criarFamilia(dados: FamiliaInput) {
   })
   if (error) return { error: error.message }
 
+  await registrarAuditoria('criar', 'família', null, dados.nome.trim())
   revalidatePath('/familia')
   return { ok: true }
 }
@@ -53,6 +55,7 @@ export async function editarFamilia(id: number, dados: FamiliaInput) {
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
+  await registrarAuditoria('editar', 'família', id, dados.nome.trim())
   revalidatePath('/familia')
   return { ok: true }
 }
@@ -62,9 +65,11 @@ export async function excluirFamilia(id: number) {
   if (!(await requirePermissao(lojaId, 'Familias - Excluir'))) return { error: 'Sem permissão' }
 
   const supabase = createServiceClient()
+  const { data: alvo } = await supabase.from('familias').select('nome').eq('id', id).eq('loja_id', lojaId).maybeSingle()
   const { error } = await supabase.from('familias').delete().eq('id', id).eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
+  await registrarAuditoria('excluir', 'família', id, alvo?.nome ?? null)
   revalidatePath('/familia')
   return { ok: true }
 }

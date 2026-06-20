@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { syncEmpresa } from '@/lib/omie/empresa'
+import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 
 /**
@@ -54,6 +55,7 @@ export async function criarLoja(dados: LojaInput) {
 
   if (error) return { error: error.message }
 
+  await registrarAuditoria('criar', 'loja', null, dados.nome.trim())
   revalidatePath('/loja')
   return { ok: true }
 }
@@ -72,6 +74,7 @@ export async function editarLoja(lojaId: number, dados: LojaInput) {
 
   if (error) return { error: error.message }
 
+  await registrarAuditoria('editar', 'loja', lojaId, dados.nome.trim())
   revalidatePath('/loja')
   return { ok: true }
 }
@@ -80,10 +83,12 @@ export async function excluirLoja(lojaId: number) {
   if (!(await isAdmin())) return { error: 'Somente administradores' }
 
   const supabase = createServiceClient()
+  const { data: alvo } = await supabase.from('lojas').select('nome').eq('id', lojaId).maybeSingle()
   const { error } = await supabase.from('lojas').delete().eq('id', lojaId)
 
   if (error) return { error: error.message }
 
+  await registrarAuditoria('excluir', 'loja', lojaId, alvo?.nome ?? null)
   revalidatePath('/loja')
   return { ok: true }
 }

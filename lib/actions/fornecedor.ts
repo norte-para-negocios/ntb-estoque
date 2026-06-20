@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { syncFornecedores } from '@/lib/omie/cliente-fornecedor'
+import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 
 export type ParceiroInput = {
@@ -57,6 +58,7 @@ export async function criarFornecedor(dados: ParceiroInput) {
     .insert({ loja_id: lojaId, origem: 'local', ...normalizar(dados) })
   if (error) return { error: error.message }
 
+  await registrarAuditoria('criar', 'fornecedor', null, dados.razao_social.trim())
   revalidatePath('/fornecedor')
   return { ok: true }
 }
@@ -74,6 +76,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput) {
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
+  await registrarAuditoria('editar', 'fornecedor', id, dados.razao_social.trim())
   revalidatePath('/fornecedor')
   return { ok: true }
 }
@@ -83,9 +86,11 @@ export async function excluirFornecedor(id: number) {
   if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 
   const supabase = createServiceClient()
+  const { data: alvo } = await supabase.from('fornecedores').select('razao_social').eq('id', id).eq('loja_id', lojaId).maybeSingle()
   const { error } = await supabase.from('fornecedores').delete().eq('id', id).eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
+  await registrarAuditoria('excluir', 'fornecedor', id, alvo?.razao_social ?? null)
   revalidatePath('/fornecedor')
   return { ok: true }
 }
