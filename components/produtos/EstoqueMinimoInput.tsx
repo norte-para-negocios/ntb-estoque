@@ -36,7 +36,10 @@ export function EstoqueMinimoInput({
     startTransition(async () => {
       const res = await setEstoqueMinimo(produtoId, num)
       if (res?.error) toast.error('Erro', { description: res.error })
-      else toast.success('Mínimo salvo')
+      else
+        toast.success('Mínimo salvo', {
+          description: 'Vale só no nosso sistema. Não altera o estoque mínimo no Omie.',
+        })
     })
   }
 
@@ -52,7 +55,11 @@ export function EstoqueMinimoInput({
       onBlur={salvar}
       onWheel={(e) => e.currentTarget.blur()}
       placeholder="0"
-      title={ehManual ? 'Mínimo definido manualmente no NTB' : 'Mínimo vindo do Omie. Edite para sobrescrever.'}
+      title={
+        ehManual
+          ? 'Mínimo definido no nosso sistema (não altera no Omie)'
+          : 'Mínimo vindo do Omie. Ao editar, vale só no nosso sistema (não volta pro Omie).'
+      }
       className={`num h-11 w-16 rounded-md border border-border bg-surface px-2 text-right text-sm outline-none focus:border-brand disabled:opacity-60 lg:h-8 ${
         ehManual ? 'font-semibold text-brand' : 'text-text'
       }`}
