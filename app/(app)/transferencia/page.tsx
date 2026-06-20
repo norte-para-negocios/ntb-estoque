@@ -82,7 +82,7 @@ export default async function TransferenciaPage({
   let query = supabase
     .from('transferencias')
     .select(
-      'id, data, codigo_local_origem, codigo_local_destino, status, motivo, movimentos(count), movStatus:movimentos(status)'
+      'id, data, codigo_local_origem, codigo_local_destino, status, motivo, user_id, movimentos(count), movStatus:movimentos(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
@@ -118,6 +118,13 @@ export default async function TransferenciaPage({
     .eq('loja_id', lojaId)
 
   const localMap = new Map((todosLocais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+
+  // Responsavel de cada transferencia: user_id -> nome (tabela profiles).
+  const userIds = [...new Set((transferencias ?? []).map((t) => t.user_id).filter(Boolean))]
+  const { data: profs } = userIds.length
+    ? await supabase.from('profiles').select('id, name').in('id', userIds as string[])
+    : { data: [] as { id: string; name: string | null }[] }
+  const nomeMap = new Map((profs ?? []).map((p) => [p.id, p.name]))
 
   function fmtData(d: string | null): string {
     if (!d) return ''
@@ -225,6 +232,11 @@ export default async function TransferenciaPage({
             },
           },
           { label: 'Data', larguraDesktop: 'w-28', render: (t) => <span className="num text-text-muted">{fmtData(t.data)}</span> },
+          {
+            label: 'Responsável',
+            larguraDesktop: 'w-40',
+            render: (t) => <span className="truncate text-text-muted">{nomeMap.get(t.user_id) || '-'}</span>,
+          },
           {
             label: 'Integrados',
             alinhar: 'right',

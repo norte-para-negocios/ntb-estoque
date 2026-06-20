@@ -86,7 +86,7 @@ export default async function InventarioPage({
   let query = supabase
     .from('inventarios')
     .select(
-      'id, data, codigo_local_estoque, status, finalizado, items:inventario_items(count), itensStatus:inventario_items(status)'
+      'id, data, codigo_local_estoque, status, finalizado, user_id, items:inventario_items(count), itensStatus:inventario_items(status)'
     )
     .eq('loja_id', lojaId)
     .order('data', { ascending: false })
@@ -111,6 +111,14 @@ export default async function InventarioPage({
     .order('descricao')
 
   const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+
+  // Responsavel de cada inventario: user_id -> nome (tabela profiles). Operacao
+  // multi-usuario precisa saber quem fez a contagem.
+  const userIds = [...new Set((inventarios ?? []).map((i) => i.user_id).filter(Boolean))]
+  const { data: profs } = userIds.length
+    ? await supabase.from('profiles').select('id, name').in('id', userIds as string[])
+    : { data: [] as { id: string; name: string | null }[] }
+  const nomeMap = new Map((profs ?? []).map((p) => [p.id, p.name]))
 
   function fmtData(d: string | null): string {
     if (!d) return ''
@@ -192,6 +200,11 @@ export default async function InventarioPage({
             },
           },
           { label: 'Data', larguraDesktop: 'w-28', render: (inv) => <span className="num text-text-muted">{fmtData(inv.data)}</span> },
+          {
+            label: 'Responsável',
+            larguraDesktop: 'w-40',
+            render: (inv) => <span className="truncate text-text-muted">{nomeMap.get(inv.user_id) || '-'}</span>,
+          },
           {
             label: 'Integrados',
             alinhar: 'right',
