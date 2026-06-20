@@ -181,6 +181,16 @@ export function ContagemInventario({
   }
 
   function finalizar() {
+    // Avisa antes de fechar se ha item sem quantidade (sera ignorado) ou com erro
+    // (nao integrou). Evita concluir sem querer deixando produto de fora.
+    const semQtd = itens.filter((i) => i.status === 'Vazio' || i.quan == null).length
+    const erros = itens.filter((i) => i.status === 'Erro').length
+    if (semQtd > 0 || erros > 0) {
+      const partes: string[] = []
+      if (semQtd > 0) partes.push(`${semQtd} item(ns) sem quantidade serão ignorados`)
+      if (erros > 0) partes.push(`${erros} item(ns) com erro não foram integrados`)
+      if (!window.confirm(`Concluir o inventário?\n\n${partes.join('\n')}.\n\nDeseja continuar mesmo assim?`)) return
+    }
     startTransition(async () => {
       const res = await finishInventario(inventarioId)
       if (res?.error) toast.error('Erro', { description: res.error })

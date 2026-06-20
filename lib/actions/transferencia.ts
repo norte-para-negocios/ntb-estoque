@@ -502,6 +502,10 @@ export async function duplicarTransferencia(transferenciaId: number) {
 
   if (!original) return { error: 'Transferência não encontrada' }
 
+  // A duplicata e uma NOVA transferencia: responsavel = quem duplicou, data = hoje.
+  // Antes ficava sem responsavel (user_id nulo) e sem data.
+  const userId = (await getUser()).id
+  const dataNova = dataCriacaoBahia(hojeBahiaISO())!
   const { data: nova } = await supabase
     .from('transferencias')
     .insert({
@@ -510,6 +514,8 @@ export async function duplicarTransferencia(transferenciaId: number) {
       codigo_local_destino: original.codigo_local_destino,
       motivo: original.motivo,
       status: 'Em contagem',
+      user_id: userId,
+      data: dataNova,
     })
     .select('id')
     .single<{ id: number }>()

@@ -461,12 +461,18 @@ export async function duplicarInventario(inventarioId: number) {
 
   if (!original) return { error: 'Inventário não encontrado' }
 
+  // A duplicata e uma NOVA contagem: responsavel = quem duplicou, data = hoje.
+  // Antes ficava sem responsavel (user_id nulo) e sem data. Mesmo local e itens.
+  const userId = (await getUser()).id
+  const dataNova = dataCriacaoBahia(hojeBahiaISO())!
   const { data: novo } = await supabase
     .from('inventarios')
     .insert({
       loja_id: lojaId,
       codigo_local_estoque: original.codigo_local_estoque,
       status: 'Em contagem',
+      user_id: userId,
+      data: dataNova,
     })
     .select('id')
     .single<{ id: number }>()
