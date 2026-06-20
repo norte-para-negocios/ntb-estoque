@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ResumoFiltros } from '@/components/resumo/ResumoFiltros'
+import { ResumoGrafico } from '@/components/resumo/ResumoGrafico'
 import { SELO_CLASSE } from '@/lib/status-cor'
 import { LayoutDashboard, Download, Inbox } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -104,7 +105,10 @@ export default async function ResumoPage({
         })}
       </div>
 
-      {/* LISTA DA CATEGORIA SELECIONADA */}
+      {/* GRÁFICO DA CATEGORIA (visão visual) */}
+      {lista.grafico && lista.grafico.itens.length > 0 && <ResumoGrafico grafico={lista.grafico} />}
+
+      {/* LISTA DA CATEGORIA SELECIONADA (detalhe) */}
       <div className="rounded-lg border border-border bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-text">

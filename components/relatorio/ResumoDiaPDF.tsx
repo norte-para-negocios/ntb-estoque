@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, PdfResumoBar, pdfTabela } from './PdfChrome'
-import type { CategoriaKey, CategoriaLista, Contagem } from '@/lib/resumo-dia'
+import type { CategoriaKey, CategoriaLista, Contagem, Grafico } from '@/lib/resumo-dia'
 
 const s = StyleSheet.create({
   page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 9, fontFamily: 'Helvetica', color: '#111' },
@@ -10,6 +10,26 @@ const s = StyleSheet.create({
 
 const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
 const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const fmtBar = (v: number, u: 'num' | 'reais') => (u === 'reais' ? fmtMoeda(v) : fmt(v))
+
+// Gráfico de barras horizontais no PDF.
+function Barras({ grafico }: { grafico: Grafico }) {
+  const max = Math.max(...grafico.itens.map((i) => i.valor), 1)
+  return (
+    <View style={{ marginBottom: 10 }}>
+      <Text style={{ fontSize: 8, color: '#777', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{grafico.titulo}</Text>
+      {grafico.itens.map((it, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }}>
+          <Text style={{ width: '34%', fontSize: 8, color: '#333' }}>{it.label}</Text>
+          <View style={{ flex: 1, height: 7, backgroundColor: '#edf0f2', borderRadius: 3 }}>
+            <View style={{ height: 7, width: `${Math.max(3, (it.valor / max) * 100)}%`, backgroundColor: '#14b8a6', borderRadius: 3 }} />
+          </View>
+          <Text style={{ width: '16%', fontSize: 8, color: '#111', textAlign: 'right', marginLeft: 6 }}>{fmtBar(it.valor, grafico.unidade)}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
 
 function Secao({ label, lista, quebra }: { label: string; lista: CategoriaLista; quebra: boolean }) {
   const temStatus = lista.linhas.some((l) => l.status)
@@ -21,6 +41,7 @@ function Secao({ label, lista, quebra }: { label: string; lista: CategoriaLista;
   return (
     <View break={quebra} wrap>
       <Text style={s.secaoTitulo}>{label} ({fmt(lista.total)})</Text>
+      {lista.grafico && lista.grafico.itens.length > 0 ? <Barras grafico={lista.grafico} /> : null}
       <View style={pdfTabela.table}>
         <View style={pdfTabela.thead} fixed>
           {cols.map((c, i) => (

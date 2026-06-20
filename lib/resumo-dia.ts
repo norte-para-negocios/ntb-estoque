@@ -17,10 +17,23 @@ export type LinhaCategoria = {
   status?: { label: string; tom: Tom } | null
 }
 
+export type ItemGrafico = { label: string; valor: number }
+export type Grafico = { titulo: string; unidade: 'num' | 'reais'; itens: ItemGrafico[] }
+
 export type CategoriaLista = {
   colunas: { label: string; alinharDir?: boolean }[]
   linhas: LinhaCategoria[]
   total: number // total real (a lista pode estar capada)
+  grafico?: Grafico // top itens para o gráfico de barras
+}
+
+// Top N de um mapa label->valor, ordenado desc.
+function topN(m: Map<string, number>, n = 8): ItemGrafico[] {
+  return [...m.entries()]
+    .map(([label, valor]) => ({ label, valor }))
+    .filter((i) => i.valor > 0)
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, n)
 }
 
 export type Contagem = {
@@ -192,6 +205,12 @@ async function listarCategoria(
         status: n.c_etapa === '60' ? { label: 'Concluída', tom: 'ok' } : { label: 'Pendente', tom: 'warn' },
       })),
     }
+    const fornec = new Map<string, number>()
+    for (const n of rows) {
+      const f = (n.c_nome || n.c_razao_social || '-').slice(0, 28)
+      fornec.set(f, (fornec.get(f) ?? 0) + Number(n.n_valor_nfe ?? 0))
+    }
+    lista.grafico = { titulo: 'Por fornecedor (R$)', unidade: 'reais', itens: topN(fornec) }
   } else if (cat === 'transferencias') {
     const { data } = await supabase.from('transferencias')
       .select('id, loja_id, codigo_local_origem, codigo_local_destino, status, created_at, user_id')
@@ -216,6 +235,12 @@ async function listarCategoria(
         }
       }),
     }
+    const transfPessoa = new Map<string, number>()
+    for (const t of rows) {
+      const p = t.user_id ? users.get(t.user_id) ?? 'Sistema' : 'Sistema'
+      transfPessoa.set(p, (transfPessoa.get(p) ?? 0) + 1)
+    }
+    lista.grafico = { titulo: 'Por pessoa', unidade: 'num', itens: topN(transfPessoa) }
   } else if (cat === 'inventarios') {
     const { data } = await supabase.from('inventarios')
       .select('id, loja_id, codigo_local_estoque, status, finalizado, created_at, user_id')
@@ -239,6 +264,12 @@ async function listarCategoria(
         }
       }),
     }
+    const invPessoa = new Map<string, number>()
+    for (const inv of rows) {
+      const p = inv.user_id ? users.get(inv.user_id) ?? 'Sistema' : 'Sistema'
+      invPessoa.set(p, (invPessoa.get(p) ?? 0) + 1)
+    }
+    lista.grafico = { titulo: 'Por pessoa', unidade: 'num', itens: topN(invPessoa) }
   } else if (cat === 'producao') {
     // Só o que foi PRODUZIDO no dia (OPs concluídas), agrupado por produto. As
     // "previstas" NÃO entram: previsão é plano, não atividade do dia.
@@ -274,6 +305,7 @@ async function listarCategoria(
         status: null,
       })),
     }
+    lista.grafico = { titulo: 'Mais produzidos', unidade: 'num', itens: grupos.slice(0, 8).map((g) => ({ label: g.produto.slice(0, 28), valor: g.qtd })) }
   } else if (cat === 'movimentacoes') {
     const { data } = await supabase.from('movimentos_historico')
       .select('loja_id, codigo, descricao, entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO)
@@ -290,6 +322,7 @@ async function listarCategoria(
         status: null,
       })),
     }
+    lista.grafico = { titulo: 'Maiores saídas', unidade: 'num', itens: rows.slice(0, 8).map((m) => ({ label: ([m.codigo, m.descricao].filter(Boolean).join(' - ') || '-').slice(0, 28), valor: Number(m.saidas ?? 0) })).filter((i) => i.valor > 0) }
   } else if (cat === 'etiquetas') {
     const { data } = await supabase.from('impressao_etiquetas')
       .select('id, loja_id, qtd_etiquetas, user_id, created_at').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim)
@@ -309,6 +342,12 @@ async function listarCategoria(
         status: null,
       })),
     }
+    const etqPessoa = new Map<string, number>()
+    for (const e of rows) {
+      const p = e.user_id ? users.get(e.user_id) ?? 'Sistema' : 'Sistema'
+      etqPessoa.set(p, (etqPessoa.get(p) ?? 0) + Number(e.qtd_etiquetas ?? 0))
+    }
+    lista.grafico = { titulo: 'Por pessoa', unidade: 'num', itens: topN(etqPessoa) }
   } else if (cat === 'erros') {
     const { data } = await supabase.from('integration_attempts')
       .select('id, loja_id, model, error_message, created_at').in('loja_id', lojaIds).eq('error', true)
@@ -327,6 +366,12 @@ async function listarCategoria(
         }
       }),
     }
+    const errTipo = new Map<string, number>()
+    for (const er of rows) {
+      const t = explicarErroOmie(er.error_message)?.titulo ?? 'Erro'
+      errTipo.set(t, (errTipo.get(t) ?? 0) + 1)
+    }
+    lista.grafico = { titulo: 'Por tipo', unidade: 'num', itens: topN(errTipo) }
   }
 
   return lista
