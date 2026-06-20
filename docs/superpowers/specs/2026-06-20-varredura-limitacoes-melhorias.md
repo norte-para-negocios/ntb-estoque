@@ -31,6 +31,7 @@ A API do Omie é só leitura para várias coisas. O sistema lê e mostra, mas a 
 - **Origem/destino de movimentação histórica:** o Omie não devolve o movimento granular (a tabela vem agregada por produto/dia). Por isso a tela de Movimentações não mostra de/para. Precisaria reimportar movimento a movimento.
 - **Lojas Praia do Forte (5) e Brotas (6):** dados da empresa bloqueados pelo Omie ("Consumo Indevido"). Só o suporte Omie libera.
 - **CEST / origem da mercadoria do produto:** só entram na criação, não na edição via API. Mudar depois é no Omie.
+- **Conclusão parcial de OP mantendo a OP aberta (com saldo pendente):** NÃO é possível via API (testado ao vivo 20/06). O `ConcluirOrdemProducao` só aceita `nCodOP`, data, `nQtdeProduzida` e observação; concluir uma OP de qtd 3 produzindo 1 FECHA a OP inteira, não guarda o saldo. Os parâmetros `cConcluirParcial`, `cManterAberta`, `cEncerrarOP` não existem na estrutura. A opção "manter aberta" que aparece no help do Omie é uma CONFIGURAÇÃO da empresa no Omie ("Configurando o Processo de Ordem de Produção"), não um parâmetro da API. Depende do Ramon ligar/verificar essa config no Omie. (Criar, concluir, reverter e excluir OP, esses sim, funcionam via API: validado no mesmo teste.)
 
 ## 3. "Tudo editável" (substituir o ERP no futuro): onde estamos
 

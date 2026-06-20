@@ -7,6 +7,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
+import { registrarAuditoria } from '@/lib/auditoria'
 
 export async function createInventario(codigoLocalEstoque: number, dataEscolhida?: string) {
   const hojeBahia = hojeBahiaISO()
@@ -34,6 +35,7 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
     .select('id')
     .single()
   if (error || !inv) return { error: 'Falha ao criar inventário' }
+  await registrarAuditoria('criar', 'inventário', inv.id, null)
   revalidatePath('/inventario')
   return inv
 }
@@ -535,6 +537,7 @@ export async function excluirInventario(inventarioId: number) {
 
   await supabase.from('inventarios').delete().eq('id', inventarioId).eq('loja_id', lojaId)
 
+  await registrarAuditoria('excluir', 'inventário', inventarioId, null)
   revalidatePath('/inventario')
   return { ok: true }
 }

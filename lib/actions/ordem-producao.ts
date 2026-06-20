@@ -11,6 +11,7 @@ import {
   reverterOrdemProducao,
 } from '@/lib/omie/ordem-producao'
 import type { LojaOmie } from '@/lib/omie/client'
+import { registrarAuditoria } from '@/lib/auditoria'
 
 // 'YYYY-MM-DD' (input date) -> 'DD/MM/YYYY' (formato que o Omie espera).
 function dataParaBR(iso: string): string | null {
@@ -88,6 +89,7 @@ export async function criarOrdemProducao(input: {
         .eq('identificacao_n_cod_op', nCodOP)
     }
 
+    await registrarAuditoria('criar', 'ordem de produção', nCodOP, null)
     revalidatePath('/ordem-producao')
     return { ok: true, nCodOP }
   } catch (e) {
@@ -169,6 +171,7 @@ export async function criarOrdensProducao(input: {
     }
   }
 
+  if (criadas > 0) await registrarAuditoria('criar', 'ordem de produção', null, `${criadas} OP(s)`)
   revalidatePath('/ordem-producao')
   return { ok: true, criadas, erros }
 }
@@ -330,6 +333,7 @@ export async function excluirOP(opId: number) {
     }
     await excluirOrdemProducao(op.loja, op.identificacao_n_cod_op!)
     await supabase.from('ordens_producao').delete().eq('id', opId).eq('loja_id', lojaId)
+    await registrarAuditoria('excluir', 'ordem de produção', op.identificacao_n_cod_op, null)
     revalidatePath('/ordem-producao')
     return { ok: true }
   } catch (e) {

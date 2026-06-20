@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { incluirLocalEstoque, alterarLocalEstoque, syncLocaisEstoque } from '@/lib/omie/local-estoque'
+import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 
 /**
@@ -17,6 +18,12 @@ export async function excluirLocalEstoque(id: number) {
   if (!id) return { error: 'Local inválido' }
 
   const supabase = createServiceClient()
+  const { data: alvo } = await supabase
+    .from('local_estoques')
+    .select('descricao')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
   const { error } = await supabase
     .from('local_estoques')
     .delete()
@@ -24,6 +31,7 @@ export async function excluirLocalEstoque(id: number) {
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
+  await registrarAuditoria('excluir', 'local de estoque', id, alvo?.descricao ?? null)
   revalidatePath('/local-estoque')
   return { ok: true }
 }
@@ -52,6 +60,7 @@ export async function criarLocalEstoque(dados: { descricao: string; codigo?: str
     })
     // Re-sincroniza para o novo local aparecer no banco com o codigo gerado.
     await syncLocaisEstoque(loja)
+    await registrarAuditoria('criar', 'local de estoque', null, dados.descricao.trim())
     revalidatePath('/local-estoque')
     return { ok: true }
   } catch (e) {
@@ -88,6 +97,7 @@ export async function editarLocalEstoque(dados: {
       codigo: dados.codigo?.trim() || undefined,
     })
     await syncLocaisEstoque(loja)
+    await registrarAuditoria('editar', 'local de estoque', dados.codigoLocalEstoque, dados.descricao.trim())
     revalidatePath('/local-estoque')
     return { ok: true }
   } catch (e) {

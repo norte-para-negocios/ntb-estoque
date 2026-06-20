@@ -7,6 +7,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
+import { registrarAuditoria } from '@/lib/auditoria'
 import type { TipoTransferencia } from '@/lib/transferencia-tipos'
 
 export async function createTransferencia(data: {
@@ -47,6 +48,7 @@ export async function createTransferencia(data: {
     })
     .select('id')
     .single()
+  await registrarAuditoria('criar', 'transferência', trans?.id ?? null, `${data.tipo === 'TPQ' ? 'Perda/quebra' : 'Transferência'}`)
   revalidatePath('/transferencia')
   return { id: trans?.id }
 }
@@ -582,6 +584,7 @@ export async function excluirTransferencia(transferenciaId: number) {
 
   await supabase.from('transferencias').delete().eq('id', transferenciaId).eq('loja_id', lojaId)
 
+  await registrarAuditoria('excluir', 'transferência', transferenciaId, null)
   revalidatePath('/transferencia')
   return { ok: true }
 }

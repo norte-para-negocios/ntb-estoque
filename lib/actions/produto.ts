@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { incluirProduto, alterarProduto, excluirProdutoOmie } from '@/lib/omie/produto'
+import { registrarAuditoria } from '@/lib/auditoria'
 import { FAIXA_CODIGO_POR_TIPO } from '@/lib/constants-omie'
 import type { LojaOmie } from '@/lib/omie/client'
 
@@ -144,6 +145,7 @@ export async function criarProduto(dados: {
       )
     }
 
+    await registrarAuditoria('criar', 'produto', codigoProduto ?? null, dados.descricao)
     revalidatePath('/produto')
     return { ok: true, codigoProduto }
   } catch (e) {
@@ -261,6 +263,7 @@ export async function editarProduto(
     .eq('loja_id', lojaId)
 
   if (dbError) return { error: dbError.message }
+  await registrarAuditoria('editar', 'produto', (atual.codigo_produto as number | null) ?? id, novo.descricao)
   revalidatePath('/produto')
 
   // Envia alteracao ao Omie (AlterarProduto). Se falhar, o save local ja foi feito
@@ -318,6 +321,7 @@ export async function excluirProduto(codigoProduto: number) {
   try {
     await excluirProdutoOmie(loja, codigoProduto)
     await supabase.from('produtos').delete().eq('loja_id', lojaId).eq('codigo_produto', codigoProduto)
+    await registrarAuditoria('excluir', 'produto', codigoProduto, null)
     revalidatePath('/produto')
     return { ok: true }
   } catch (e) {
