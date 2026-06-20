@@ -295,9 +295,12 @@ async function processarMovimento(
     const valor = posicao?.n_cmc ?? 0
 
     if (valor <= 0) {
+      // 'Sem CMC' (nao 'Erro'): o produto ainda nao tem custo medio fechado no Omie.
+      // Nao e falha de integracao nossa; o placar trata separado e reenviar resolve
+      // quando o custo aparecer. Igual ao fluxo do inventario.
       await supabase
         .from('movimentos')
-        .update({ status: 'Erro', descricao_status: 'Sem CMC' })
+        .update({ status: 'Sem CMC', descricao_status: 'Sem CMC' })
         .eq('id', mov.id)
       return
     }

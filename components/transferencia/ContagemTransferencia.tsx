@@ -154,7 +154,11 @@ export function ContagemTransferencia({
       setItens((prev) =>
         prev.map((i) => (i.id === movId ? { ...i, status: statusUi } : i))
       )
-      if (res.status === 'Erro') {
+      if (res.status === 'Sem CMC') {
+        toast.warning('Sem custo no Omie ainda', {
+          description: 'O produto ainda não tem custo médio fechado no Omie. Reenvie quando o custo aparecer.',
+        })
+      } else if (res.status === 'Erro') {
         toast.error('Falha ao integrar item', { description: res.descricao_status || 'Tente reenviar' })
       } else if (res.status === 'Concluido') {
         toast.success('Item integrado ao Omie')
@@ -210,23 +214,27 @@ export function ContagemTransferencia({
   const comQtd = itens.filter((i) => !(i.status === 'Vazio' || (i.quan == null || i.quan <= 0)))
   const total = comQtd.length
   const integrados = comQtd.filter((i) => i.status === 'Concluido').length
-  const comErro = comQtd.filter((i) => i.status === 'Erro' || i.status === 'Sem CMC').length
+  // 'Erro' = falha real; 'Sem CMC' = o produto ainda nao tem custo medio fechado no
+  // Omie (nao e erro nosso). Contamos separado para nao virar alerta vermelho eterno.
+  const comErro = comQtd.filter((i) => i.status === 'Erro').length
+  const semCusto = comQtd.filter((i) => i.status === 'Sem CMC').length
+  // Cor do aviso: vermelho so com erro real; amarelo com sem-custo; verde ok.
+  const tomBanner = comErro > 0 ? 'border-err/40 bg-err/5' : semCusto > 0 ? 'border-warn/40 bg-warn/10' : 'border-ok/40 bg-ok/5'
 
   return (
     <div className="pb-28 lg:pb-20">
-      {total > 0 && (integrados > 0 || comErro > 0 || finalizado) && (
+      {total > 0 && (integrados > 0 || comErro > 0 || semCusto > 0 || finalizado) && (
         <div
-          className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
-            comErro ? 'border-err/40 bg-err/5' : 'border-ok/40 bg-ok/5'
-          }`}
+          className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${tomBanner}`}
         >
           <span className="text-sm font-medium text-text">
             <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
+            {semCusto > 0 && <span className="text-warn"> · {semCusto} sem custo (aguardando o Omie)</span>}
             {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
           </span>
           <span className="inline-flex items-center gap-2">
-            {comErro > 0 && (
+            {(comErro > 0 || semCusto > 0) && (
               <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
                 {pending && <Spinner />}
                 {pending ? 'Reenviando...' : 'Reenviar pendentes'}
