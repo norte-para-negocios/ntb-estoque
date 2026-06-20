@@ -4,8 +4,8 @@ import { useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { criarProduto } from '@/lib/actions/produto'
-import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { criarProduto, sugerirProximoCodigo } from '@/lib/actions/produto'
+import { PRODUTO_TIPO_ITEM, FAIXA_CODIGO_POR_TIPO } from '@/lib/constants-omie'
 import { parseNumBR } from '@/lib/num-br'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
@@ -59,10 +59,36 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
   const [origem, setOrigem] = useState('0')
   const [extra, setExtra] = useState({ ...EXTRA_VAZIO })
   const setX = (k: keyof typeof extra, v: string) => setExtra((e) => ({ ...e, [k]: v }))
+  // Marca se o codigo atual foi sugerido pelo sistema (e nao digitado a mao): só
+  // sobrescrevemos ao trocar o tipo enquanto o usuario nao editou manualmente.
+  const [codigoSugerido, setCodigoSugerido] = useState(false)
+  const [sugerindo, setSugerindo] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
+  // Ao escolher o tipo: sugere o proximo codigo livre na faixa do tipo (reuniao 18/06).
+  // Não sobrescreve um codigo que o usuario digitou a mao.
+  async function onChangeTipo(novoTipo: string) {
+    setTipo(novoTipo)
+    if (!FAIXA_CODIGO_POR_TIPO[novoTipo]) return
+    if (codigo.trim() && !codigoSugerido) return // respeita codigo digitado a mao
+    setSugerindo(true)
+    try {
+      const sugestao = await sugerirProximoCodigo(novoTipo)
+      if (sugestao) {
+        setCodigo(sugestao)
+        setCodigoSugerido(true)
+      }
+    } finally {
+      setSugerindo(false)
+    }
+  }
+
   function criar() {
+    if (!tipo) {
+      toast.error('Escolha o tipo do produto')
+      return
+    }
     if (!codigo.trim() || !descricao.trim() || !unidade.trim()) {
       toast.error('Preencha código, descrição e unidade')
       return
@@ -123,11 +149,40 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
   return (
     <div className="space-y-4 pb-24">
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Tipo PRIMEIRO: define a faixa do codigo sugerido (reuniao 18/06) */}
+        <Secao titulo="Tipo do produto" span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Tipo *">
+              <select value={tipo} onChange={(e) => onChangeTipo(e.target.value)} className={inputClass}>
+                <option value="">Selecione o tipo</option>
+                {PRODUTO_TIPO_ITEM.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </Campo>
+            <div className="flex items-end">
+              <p className="text-[12px] text-text-muted">
+                {sugerindo
+                  ? 'Sugerindo código pela faixa...'
+                  : 'Escolha o tipo primeiro: o código é sugerido pela faixa (matéria-prima ~80 mil, revenda ~90 mil, acabado ~91 mil, processo/consumo ~70 mil, ativo ~50 mil).'}
+              </p>
+            </div>
+          </div>
+        </Secao>
+
         {/* Identificacao */}
         <Secao titulo="Identificação" span>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Campo label="Código *">
-              <input value={codigo} onChange={(e) => setCodigo(e.target.value)} className={inputClass} placeholder="Ex.: 90999" />
+              <input
+                value={codigo}
+                onChange={(e) => { setCodigo(e.target.value); setCodigoSugerido(false) }}
+                className={inputClass}
+                placeholder={tipo ? 'Sugerido pelo tipo' : 'Escolha o tipo acima'}
+              />
+              {codigoSugerido && (
+                <p className="text-[11px] text-brand">Código sugerido pela faixa do tipo. Pode editar.</p>
+              )}
             </Campo>
             <Campo label="Unidade *">
               <input value={unidade} onChange={(e) => setUnidade(e.target.value)} className={inputClass} placeholder="UN, KG..." />
@@ -160,14 +215,6 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
                 <option value="">Selecione</option>
                 {familias.map((f) => (
                   <option key={f.codigo} value={f.codigo}>{f.descricao}</option>
-                ))}
-              </select>
-            </Campo>
-            <Campo label="Tipo">
-              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputClass}>
-                <option value="">Padrão</option>
-                {PRODUTO_TIPO_ITEM.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </Campo>
@@ -225,7 +272,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
 
       {/* Barra de acoes fixa */}
       <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/95 px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8">
-        <span className="text-[12px] text-text-muted">Obrigatórios: código, descrição, unidade, NCM e família.</span>
+        <span className="text-[12px] text-text-muted">Obrigatórios: tipo, código, descrição, unidade, NCM e família.</span>
         <div className="flex items-center gap-2">
           <Link href="/produto" className={btnClass('outline')}>Cancelar</Link>
           <button onClick={criar} disabled={pending} className={btnClass('primary')}>

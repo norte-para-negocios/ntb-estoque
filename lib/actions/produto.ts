@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { incluirProduto, alterarProduto, excluirProdutoOmie } from '@/lib/omie/produto'
+import { FAIXA_CODIGO_POR_TIPO } from '@/lib/constants-omie'
 import type { LojaOmie } from '@/lib/omie/client'
 
 // Familias existentes na loja (codigo + descricao), para o seletor do cadastro.
@@ -26,6 +27,33 @@ export async function buscarFamilias(): Promise<{ codigo: number; descricao: str
     codigo: (f.codigo_familia as number | null) ?? -(f.id as number),
     descricao: f.nome as string,
   }))
+}
+
+// Sugere o PROXIMO codigo livre na faixa do tipo (pedido reuniao 18/06). Ex.: ao
+// escolher "Materia Prima", retorna o maior codigo existente entre 80000-89999 + 1
+// (ou o inicio da faixa se nao houver). Tipos sem faixa definida retornam null.
+export async function sugerirProximoCodigo(tipo: string): Promise<string | null> {
+  const faixa = FAIXA_CODIGO_POR_TIPO[tipo]
+  if (!faixa) return null
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  // So a coluna codigo (leve). Filtra/calcula o maximo numerico na faixa em memoria
+  // (codigo e text e pode ter nao-numericos como PRD00011, que sao ignorados).
+  const { data } = await supabase
+    .from('produtos')
+    .select('codigo')
+    .eq('loja_id', lojaId)
+  let maxNaFaixa = faixa.ini - 1
+  for (const row of data ?? []) {
+    const c = String(row.codigo ?? '').trim()
+    if (!/^\d+$/.test(c)) continue
+    const n = Number(c)
+    if (n >= faixa.ini && n <= faixa.fim && n > maxNaFaixa) maxNaFaixa = n
+  }
+  const proximo = maxNaFaixa + 1
+  // Se a faixa estourou (cheia), nao sugere fora dela.
+  if (proximo > faixa.fim) return String(faixa.fim)
+  return String(proximo)
 }
 
 /**
