@@ -153,9 +153,23 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     erros: errosCount.count ?? 0,
   }
 
-  const lojaTag = multiLoja ? { label: 'Loja' } : null
+  const lista = await listarCategoria(supabase, lojaIds, dataISO, cat, contagem, multiLoja)
+  return { contagem, cat, lista, multiLoja }
+}
 
-  // --- LISTA DA CATEGORIA SELECIONADA ---
+// Monta a lista de UMA categoria (colunas + linhas). Reutilizada pelo painel (uma
+// categoria por vez) e pelo PDF completo (todas as categorias do dia).
+async function listarCategoria(
+  supabase: Supa,
+  lojaIds: number[],
+  dataISO: string,
+  cat: CategoriaKey,
+  contagem: Contagem,
+  multiLoja: boolean,
+): Promise<CategoriaLista> {
+  const { ini, fim } = janelaDiaBahia(dataISO)
+  const proxDia = proximoDiaISO(dataISO)
+  const lojaTag = multiLoja ? { label: 'Loja' } : null
   let lista: CategoriaLista = vazia
 
   if (cat === 'notas') {
@@ -295,5 +309,26 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     }
   }
 
-  return { contagem, cat, lista, multiLoja }
+  return lista
+}
+
+export const CATEGORIA_LABEL: Record<CategoriaKey, string> = {
+  notas: 'Notas Fiscais', transferencias: 'Transferências', inventarios: 'Inventários',
+  producao: 'Produção', movimentacoes: 'Movimentações', etiquetas: 'Etiquetas', erros: 'Erros',
+}
+export const CATEGORIA_ORDEM: CategoriaKey[] = [
+  'notas', 'transferencias', 'inventarios', 'producao', 'movimentacoes', 'etiquetas', 'erros',
+]
+
+// Relatório COMPLETO do dia: contagem + a lista de TODAS as categorias (para o PDF).
+export async function carregarResumoDiaCompleto(lojaIds: number[], dataISO: string) {
+  const base = await carregarResumoDia(lojaIds, dataISO, 'notas')
+  const { contagem, multiLoja } = base
+  const supabase = createServiceClient()
+  const listas: { cat: CategoriaKey; label: string; lista: CategoriaLista }[] = []
+  for (const c of CATEGORIA_ORDEM) {
+    const lista = c === 'notas' ? base.lista : await listarCategoria(supabase, lojaIds, dataISO, c, contagem, multiLoja)
+    listas.push({ cat: c, label: CATEGORIA_LABEL[c], lista })
+  }
+  return { contagem, multiLoja, listas }
 }
