@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 
 function formatar(raw: string | null): string {
   if (!raw) return '-'
@@ -25,9 +26,32 @@ export type LogRowData = {
 }
 
 function Detalhe({ log }: { log: LogRowData }) {
+  const exp = explicarErroOmie(log.error_message)
   return (
     <>
-      {log.error_message && <p className="mb-2 text-sm text-err">{log.error_message}</p>}
+      {exp && (
+        <div
+          className={`mb-3 rounded-md border px-3 py-2.5 ${
+            exp.tipo === 'acao'
+              ? 'border-err/30 bg-err/10'
+              : exp.tipo === 'transitorio'
+                ? 'border-warn/30 bg-warn/10'
+                : 'border-border bg-surface-2/50'
+          }`}
+        >
+          <div
+            className={`text-[13px] font-semibold ${
+              exp.tipo === 'acao' ? 'text-err' : exp.tipo === 'transitorio' ? 'text-warn' : 'text-text'
+            }`}
+          >
+            {exp.titulo}
+          </div>
+          <div className="mt-0.5 text-[13px] text-text">{exp.explicacao}</div>
+        </div>
+      )}
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+        Detalhes técnicos
+      </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
