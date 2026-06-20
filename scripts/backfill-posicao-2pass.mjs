@@ -73,22 +73,28 @@ for (const loja of lojas) {
   } while (pag <= total)
   await flush(true)
 
-  // 2) saldos por local ativo (cExibeTodos='N')
+  // 2) saldos por local ativo (cExibeTodos='N'), cada local isolado: um local
+  // orfao/invalido no Omie nao pode abortar a loja inteira.
   const { rows: locais } = await client.query("select codigo_local_estoque from local_estoques where loja_id=$1 and coalesce(inativo,'N')<>'S'", [loja.id])
+  let pulados = 0
   for (const l of locais) {
-    pag = 1; total = 1
-    do {
-      const res = await omie(loja, { nPagina: pag, codigo_local_estoque: l.codigo_local_estoque, cExibeTodos: 'N' })
-      total = res?.nTotPaginas || 1
-      for (const p of res?.produtos ?? []) buffer.push({ loja_id: loja.id, codigo_local_estoque: l.codigo_local_estoque, n_cod_prod: p.nCodProd, data_posicao: dataISO, c_codigo: p.cCodigo, c_descricao: p.cDescricao, n_preco_unitario: p.nPrecoUnitario, n_saldo: p.nSaldo, n_cmc: p.nCMC, n_pendente: p.nPendente, estoque_minimo: 0, fisico: p.fisico ?? 0, reservado: p.reservado ?? 0, updated_at: new Date().toISOString() })
-      await flush(); pag++
-    } while (pag <= total)
+    try {
+      const linhas = []
+      pag = 1; total = 1
+      do {
+        const res = await omie(loja, { nPagina: pag, codigo_local_estoque: l.codigo_local_estoque, cExibeTodos: 'N' })
+        total = res?.nTotPaginas || 1
+        for (const p of res?.produtos ?? []) linhas.push({ loja_id: loja.id, codigo_local_estoque: l.codigo_local_estoque, n_cod_prod: p.nCodProd, data_posicao: dataISO, c_codigo: p.cCodigo, c_descricao: p.cDescricao, n_preco_unitario: p.nPrecoUnitario, n_saldo: p.nSaldo, n_cmc: p.nCMC, n_pendente: p.nPendente, estoque_minimo: 0, fisico: p.fisico ?? 0, reservado: p.reservado ?? 0, updated_at: new Date().toISOString() })
+        pag++
+      } while (pag <= total)
+      await client.query("delete from posicao_estoques where loja_id=$1 and data_posicao=$2 and codigo_local_estoque=$3", [loja.id, dataISO, l.codigo_local_estoque])
+      for (let i = 0; i < linhas.length; i += 400) { await upsertChunk(linhas.slice(i, i + 400)); gravados += Math.min(400, linhas.length - i) }
+    } catch (e) {
+      pulados++
+      console.error(`  loja ${loja.id} local ${l.codigo_local_estoque} pulado: ${e.message}`)
+    }
   }
-  await flush(true)
-
-  // limpa linhas por-local de hoje nao reescritas neste run
-  const del = await client.query("delete from posicao_estoques where loja_id=$1 and data_posicao=$2 and codigo_local_estoque<>$3 and updated_at<$4", [loja.id, dataISO, LOCAL_MINIMO, runStart])
-  console.log(`loja ${loja.id}: ${gravados} linhas gravadas (1 consolidada de minimo + saldos por local), ${del.rowCount} obsoletas removidas, ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+  console.log(`loja ${loja.id}: ${gravados} linhas gravadas, ${pulados} local(is) pulado(s), ${((Date.now() - t0) / 1000).toFixed(0)}s`)
 }
 
 await client.end()

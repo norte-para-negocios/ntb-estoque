@@ -85,10 +85,6 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
   const supabase = createServiceClient()
   const hoje = new Date().toLocaleDateString('pt-BR') // d/m/Y
   const dataISO = new Date().toISOString().split('T')[0]
-  // Marca o inicio do run: as linhas gravadas agora terao updated_at >= runStart.
-  // Serve para limpar, no fim, as linhas por-local de hoje que NAO foram reescritas
-  // neste run (produto que zerou num local some do cExibeTodos='N').
-  const runStart = new Date().toISOString()
 
   const omieBase = {
     loja_id: loja.id,
@@ -147,53 +143,61 @@ export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
     .neq('inativo', 'S')
 
   for (const local of locais ?? []) {
-    let pagina = 1
-    let total = 1
-    do {
-      const res = await omieRequest<OmiePosResponse>({
-        ...omieBase,
-        data: {
-          nPagina: pagina,
-          nRegPorPagina: 50,
-          dDataPosicao: hoje,
-          codigo_local_estoque: local.codigo_local_estoque,
-          cExibeTodos: 'N',
-        },
-      })
-      total = res.nTotPaginas || 1
-      await upsert(
-        (res.produtos ?? []).map((p) => ({
-          loja_id: loja.id,
-          codigo_local_estoque: local.codigo_local_estoque,
-          n_cod_prod: p.nCodProd,
-          data_posicao: dataISO,
-          c_codigo: p.cCodigo,
-          c_descricao: p.cDescricao,
-          n_preco_unitario: p.nPrecoUnitario,
-          n_saldo: p.nSaldo,
-          n_cmc: p.nCMC,
-          n_pendente: p.nPendente,
-          estoque_minimo: 0,
-          fisico: p.fisico ?? 0,
-          reservado: p.reservado ?? 0,
-          updated_at: new Date().toISOString(),
-        }))
+    // Cada local isolado: um local invalido/orfao no Omie (ex.: "ZZ VARREDURA
+    // EXCLUIR", que existe no cadastro mas o Omie diz "nao cadastrado") ou uma
+    // falha pontual NAO pode abortar a loja inteira. Pula e segue os demais.
+    try {
+      const linhas: Record<string, unknown>[] = []
+      let pagina = 1
+      let total = 1
+      do {
+        const res = await omieRequest<OmiePosResponse>({
+          ...omieBase,
+          data: {
+            nPagina: pagina,
+            nRegPorPagina: 50,
+            dDataPosicao: hoje,
+            codigo_local_estoque: local.codigo_local_estoque,
+            cExibeTodos: 'N',
+          },
+        })
+        total = res.nTotPaginas || 1
+        for (const p of res.produtos ?? []) {
+          linhas.push({
+            loja_id: loja.id,
+            codigo_local_estoque: local.codigo_local_estoque,
+            n_cod_prod: p.nCodProd,
+            data_posicao: dataISO,
+            c_codigo: p.cCodigo,
+            c_descricao: p.cDescricao,
+            n_preco_unitario: p.nPrecoUnitario,
+            n_saldo: p.nSaldo,
+            n_cmc: p.nCMC,
+            n_pendente: p.nPendente,
+            estoque_minimo: 0,
+            fisico: p.fisico ?? 0,
+            reservado: p.reservado ?? 0,
+            updated_at: new Date().toISOString(),
+          })
+        }
+        pagina++
+      } while (pagina <= total)
+      // Substitui as linhas de HOJE deste local (deletar so apos buscar tudo: se a
+      // busca falhar, as linhas antigas ficam de pe em vez de zerar). Com 'N' so
+      // vem saldo != 0, entao o delete remove o que zerou desde o ultimo sync.
+      await supabase
+        .from('posicao_estoques')
+        .delete()
+        .eq('loja_id', loja.id)
+        .eq('data_posicao', dataISO)
+        .eq('codigo_local_estoque', local.codigo_local_estoque)
+      await upsert(linhas)
+    } catch (e) {
+      console.error(
+        `[posicao] loja ${loja.id} local ${local.codigo_local_estoque} pulado: ${(e as Error).message}`
       )
-      pagina++
-    } while (pagina <= total)
+    }
   }
-
-  // Limpa as linhas por-local de HOJE que nao foram reescritas neste run: com
-  // cExibeTodos='N' so gravamos saldo != 0, entao um produto que zerou num local
-  // some da varredura e sua linha antiga (com saldo) precisa sair pra nao inflar a
-  // soma. Linhas deste run tem updated_at >= runStart; as nao-tocadas, < runStart.
-  await supabase
-    .from('posicao_estoques')
-    .delete()
-    .eq('loja_id', loja.id)
-    .eq('data_posicao', dataISO)
-    .neq('codigo_local_estoque', LOCAL_MINIMO)
-    .lt('updated_at', runStart)
 
   // Mantem as DUAS fotos mais recentes (nao necessariamente dias consecutivos).
   // A foto do dia corrente as vezes vem SEM CMC (o Omie so fecha o custo no fim
