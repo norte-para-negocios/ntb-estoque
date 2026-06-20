@@ -56,70 +56,145 @@ export async function getPosicaoProduto(
   return { n_cmc: p.nCMC ?? 0, n_saldo: p.nSaldo ?? 0 }
 }
 
+// Local sentinela da linha que carrega o ESTOQUE MINIMO (e o custo base) do
+// produto. O minimo do Omie so vem na varredura "sem local" (= local padrao) e
+// inclui ate produtos com saldo zero; essa linha guarda o minimo com saldo 0
+// para NAO entrar na soma dos saldos. Ver syncPosicaoEstoque.
+const LOCAL_MINIMO = 0
+
 /**
- * Sincroniza a posição de estoque (CMC, saldo, preço) de TODA a loja para a
- * tabela posicao_estoques, percorrendo cada local de estoque ativo. Só leitura
- * do Omie. Usado para alimentar custo/margem na tela de produtos.
+ * Sincroniza a posição de estoque (saldo por local, mínimo e custo) de toda a
+ * loja para posicao_estoques. Só leitura do Omie. O único leitor da tabela é a
+ * tela de produtos, que SOMA os saldos dos locais — o total real é a soma. O Omie
+ * NÃO tem endpoint que devolva o consolidado somado: chamar sem `codigo_local_estoque`
+ * retorna apenas o Local de Estoque Padrão, não a soma.
+ *
+ * Duas varreduras enxutas (o ListarPosEstoque trava em 50 itens/página):
+ *  1) Mínimo + custo: varredura sem local (= local padrão) com cExibeTodos='S',
+ *     que traz TODOS os produtos com o estoque mínimo do Omie, inclusive os de
+ *     saldo 0. Guardada como local = LOCAL_MINIMO com saldo 0.
+ *  2) Saldos: por local ativo, com cExibeTodos='N' (só produtos COM saldo),
+ *     reduzindo de ~58 para ~3 páginas por local.
+ *
+ * Antes era cExibeTodos='S' POR local (~58 páginas × N locais = centenas de
+ * chamadas numa execução só), o que estourava o tempo/limite do Omie ("Já existe
+ * uma requisição desse método") e cortava o último local — o estoque dele sumia
+ * (ex.: o almoxarifado NUCLEO da Brotas). Agora são ~85 chamadas no total.
  */
 export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
   const supabase = createServiceClient()
   const hoje = new Date().toLocaleDateString('pt-BR') // d/m/Y
   const dataISO = new Date().toISOString().split('T')[0]
+  // Marca o inicio do run: as linhas gravadas agora terao updated_at >= runStart.
+  // Serve para limpar, no fim, as linhas por-local de hoje que NAO foram reescritas
+  // neste run (produto que zerou num local some do cExibeTodos='N').
+  const runStart = new Date().toISOString()
 
+  const omieBase = {
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/estoque/consulta',
+    call: 'ListarPosEstoque',
+  }
+
+  let gravados = 0
+  async function upsert(rows: Record<string, unknown>[]) {
+    if (!rows.length) return
+    await supabase
+      .from('posicao_estoques')
+      .upsert(rows, { onConflict: 'loja_id,codigo_local_estoque,n_cod_prod,data_posicao' })
+    gravados += rows.length
+  }
+
+  // 1) MINIMO + custo: varredura sem local (todos os produtos, inclusive saldo 0).
+  {
+    let pagina = 1
+    let total = 1
+    do {
+      const res = await omieRequest<OmiePosResponse>({
+        ...omieBase,
+        data: { nPagina: pagina, nRegPorPagina: 50, dDataPosicao: hoje, cExibeTodos: 'S' },
+      })
+      total = res.nTotPaginas || 1
+      await upsert(
+        (res.produtos ?? []).map((p) => ({
+          loja_id: loja.id,
+          codigo_local_estoque: LOCAL_MINIMO,
+          n_cod_prod: p.nCodProd,
+          data_posicao: dataISO,
+          c_codigo: p.cCodigo,
+          c_descricao: p.cDescricao,
+          n_preco_unitario: p.nPrecoUnitario,
+          n_saldo: 0, // saldo vem das varreduras por local; aqui só mínimo/custo
+          n_cmc: p.nCMC,
+          n_pendente: 0,
+          estoque_minimo: p.estoque_minimo ?? 0,
+          fisico: 0,
+          reservado: 0,
+          updated_at: new Date().toISOString(),
+        }))
+      )
+      pagina++
+    } while (pagina <= total)
+  }
+
+  // 2) SALDOS por local ativo (cExibeTodos='N' = só produtos com saldo).
   const { data: locais } = await supabase
     .from('local_estoques')
     .select('codigo_local_estoque')
     .eq('loja_id', loja.id)
     .neq('inativo', 'S')
 
-  let gravados = 0
   for (const local of locais ?? []) {
     let pagina = 1
     let total = 1
     do {
       const res = await omieRequest<OmiePosResponse>({
-        loja_id: loja.id,
-        omie_app_key: loja.omie_app_key,
-        omie_app_secret: loja.omie_app_secret,
-        endpoint: 'v1/estoque/consulta',
-        call: 'ListarPosEstoque',
+        ...omieBase,
         data: {
           nPagina: pagina,
-          nRegPorPagina: 500,
+          nRegPorPagina: 50,
           dDataPosicao: hoje,
           codigo_local_estoque: local.codigo_local_estoque,
-          cExibeTodos: 'S',
+          cExibeTodos: 'N',
         },
       })
       total = res.nTotPaginas || 1
-      const rows = (res.produtos ?? []).map((p) => ({
-        loja_id: loja.id,
-        codigo_local_estoque: local.codigo_local_estoque,
-        n_cod_prod: p.nCodProd,
-        data_posicao: dataISO,
-        c_codigo: p.cCodigo,
-        c_descricao: p.cDescricao,
-        n_preco_unitario: p.nPrecoUnitario,
-        n_saldo: p.nSaldo,
-        n_cmc: p.nCMC,
-        n_pendente: p.nPendente,
-        estoque_minimo: p.estoque_minimo ?? 0,
-        fisico: p.fisico ?? 0,
-        reservado: p.reservado ?? 0,
-        // Re-sync no mesmo dia colide na unique key (vira UPDATE). Sem setar
-        // updated_at aqui ele congelaria no 1o INSERT e o cron (que escolhe a
-        // loja por updated_at) distorceria o rodizio. Igual aos outros syncs.
-        updated_at: new Date().toISOString(),
-      }))
-      if (rows.length) {
-        await supabase
-          .from('posicao_estoques')
-          .upsert(rows, { onConflict: 'loja_id,codigo_local_estoque,n_cod_prod,data_posicao' })
-        gravados += rows.length
-      }
+      await upsert(
+        (res.produtos ?? []).map((p) => ({
+          loja_id: loja.id,
+          codigo_local_estoque: local.codigo_local_estoque,
+          n_cod_prod: p.nCodProd,
+          data_posicao: dataISO,
+          c_codigo: p.cCodigo,
+          c_descricao: p.cDescricao,
+          n_preco_unitario: p.nPrecoUnitario,
+          n_saldo: p.nSaldo,
+          n_cmc: p.nCMC,
+          n_pendente: p.nPendente,
+          estoque_minimo: 0,
+          fisico: p.fisico ?? 0,
+          reservado: p.reservado ?? 0,
+          updated_at: new Date().toISOString(),
+        }))
+      )
       pagina++
     } while (pagina <= total)
   }
+
+  // Limpa as linhas por-local de HOJE que nao foram reescritas neste run: com
+  // cExibeTodos='N' so gravamos saldo != 0, entao um produto que zerou num local
+  // some da varredura e sua linha antiga (com saldo) precisa sair pra nao inflar a
+  // soma. Linhas deste run tem updated_at >= runStart; as nao-tocadas, < runStart.
+  await supabase
+    .from('posicao_estoques')
+    .delete()
+    .eq('loja_id', loja.id)
+    .eq('data_posicao', dataISO)
+    .neq('codigo_local_estoque', LOCAL_MINIMO)
+    .lt('updated_at', runStart)
+
   // Mantem as DUAS fotos mais recentes (nao necessariamente dias consecutivos).
   // A foto do dia corrente as vezes vem SEM CMC (o Omie so fecha o custo no fim
   // do dia), entao a tela cai pra foto anterior (que tem custo). Usar "ontem fixo"
