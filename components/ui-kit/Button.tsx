@@ -19,12 +19,14 @@ export function btnClass(variant: BtnVariant = 'primary'): string {
 // Tailwind). Evita estouro horizontal nas listas de operação. Use sempre junto
 // de <RotuloAcao> no rótulo.
 export function btnLinhaClass(variant: BtnVariant = 'outline'): string {
-  return `inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium u-motion u-press disabled:opacity-60 disabled:active:scale-100 size-8 shrink-0 sm:size-auto sm:px-3 sm:py-1.5 ${VARIANTS[variant]}`
+  return `inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium u-motion u-press disabled:opacity-60 disabled:active:scale-100 size-8 shrink-0 2xl:size-auto 2xl:px-3 2xl:py-1.5 ${VARIANTS[variant]}`
 }
 
-// Rótulo de ação que some no celular (só ícone) e aparece no desktop.
+// Rótulo de ação que some em telas estreitas (só ícone) e aparece quando há
+// folga de sobra (2xl). Mantém a linha de ações compacta no celular e no
+// desktop apertado, evitando estouro/corte; com texto só onde cabe numa linha.
 export function RotuloAcao({ children }: { children: React.ReactNode }) {
-  return <span className="hidden sm:inline">{children}</span>
+  return <span className="hidden 2xl:inline">{children}</span>
 }
 
 export function Button({

@@ -277,7 +277,7 @@ export default async function TransferenciaPage({
           const concluido = t.status === 'Concluido'
           const labelAcao = concluido || !podeEditar ? 'Ver' : 'Contar'
           return (
-            <div className="flex items-center justify-end gap-1 sm:gap-2">
+            <div className="flex items-center justify-end gap-1 2xl:gap-2">
               <Link
                 href={`/transferencia/${t.id}/contagem`}
                 className={btnLinhaClass('outline')}

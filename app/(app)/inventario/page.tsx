@@ -244,7 +244,7 @@ export default async function InventarioPage({
           const finalizado = inv.status === 'Finalizado'
           const labelAcao = finalizado || !podeEditar ? 'Ver' : 'Contar'
           return (
-            <div className="flex items-center justify-end gap-1 sm:gap-2">
+            <div className="flex items-center justify-end gap-1 2xl:gap-2">
               <Link
                 href={`/inventario/${inv.id}/contagem`}
                 className={btnLinhaClass('outline')}

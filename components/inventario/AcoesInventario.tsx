@@ -59,7 +59,7 @@ export function AcoesInventario({
   }
 
   return (
-    <span className="inline-flex items-center gap-1 sm:gap-2">
+    <span className="inline-flex items-center gap-1 2xl:gap-2">
       <button
         onClick={duplicar}
         disabled={pending}
