@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
-import { Trash2, CheckCircle, Minus, Plus, Search } from 'lucide-react'
+import { Trash2, CheckCircle, Minus, Plus, Search, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
@@ -68,8 +68,17 @@ export function ContagemTransferencia({
   const [filtro, setFiltro] = useState('')
   // id do item recem-adicionado: a linha nova ganha o flash de entrada (u-flash-in).
   const [novoId, setNovoId] = useState<number | null>(null)
+  // Transferencia finalizada entra em modo leitura; "Editar itens" destrava os
+  // controles para corrigir/adicionar/excluir um item depois de finalizada (o
+  // servidor exclui o ajuste antigo no Omie e relanca a nova quantidade).
+  const [editando, setEditando] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  // Controles de quantidade/adicao/remocao liberados: durante a contagem (nao
+  // finalizado) ou quando o usuario clica em "Editar itens" numa transferencia
+  // finalizada. Requer tambem podeEditar (permissao Transferencias - Editar):
+  // editar e por PERMISSAO, nao por status — quem pode editar, edita o concluido.
+  const editavel = podeEditar && (!finalizado || editando)
 
   const visiveis = useMemo(() => {
     const q = filtro.trim().toLowerCase()
@@ -154,10 +163,19 @@ export function ContagemTransferencia({
   }
 
   function remover(movId: number) {
+    if (finalizado && !window.confirm('Excluir este item? O ajuste já lançado no Omie será removido.')) {
+      return
+    }
+    const anterior = itens
     setItens((prev) => prev.filter((i) => i.id !== movId))
     startTransition(async () => {
-      await removeMovimento(movId)
-      toast.success('Item removido')
+      const res = await removeMovimento(movId)
+      if (res?.error) {
+        setItens(anterior) // desfaz o otimismo se o Omie recusar
+        toast.error('Erro ao remover', { description: res.error })
+      } else {
+        toast.success('Item removido')
+      }
     })
   }
 
@@ -207,16 +225,42 @@ export function ContagemTransferencia({
             {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
             {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
           </span>
-          {comErro > 0 && (
-            <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
-              {pending && <Spinner />}
-              {pending ? 'Reenviando...' : 'Reenviar pendentes'}
-            </button>
-          )}
+          <span className="inline-flex items-center gap-2">
+            {comErro > 0 && (
+              <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
+                {pending && <Spinner />}
+                {pending ? 'Reenviando...' : 'Reenviar pendentes'}
+              </button>
+            )}
+            {finalizado && podeEditar && (
+              <button
+                onClick={() => setEditando((v) => !v)}
+                disabled={pending}
+                className={btnClass(editando ? 'primary' : 'outline')}
+              >
+                {editando ? (
+                  <>
+                    <X className="size-4" /> Concluir edição
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="size-4" /> Editar itens
+                  </>
+                )}
+              </button>
+            )}
+          </span>
         </div>
       )}
 
-      {podeEditar && !finalizado && (
+      {editando && (
+        <p className="mb-4 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Editando uma transferência finalizada. Ao adicionar, alterar a quantidade ou excluir um item, o
+          ajuste já lançado no Omie é refeito ou removido na hora.
+        </p>
+      )}
+
+      {editavel && (
         <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           {/* Busca manual ACIMA do QR (padrao em todas as contagens) */}
           <ProdutoSearch
@@ -271,7 +315,7 @@ export function ContagemTransferencia({
                       </div>
                     )}
                   </div>
-                  {podeEditar && !finalizado && (
+                  {editavel && (
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending}
@@ -286,7 +330,7 @@ export function ContagemTransferencia({
                 <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end">
                   <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
-                  {finalizado || !podeEditar ? (
+                  {!editavel ? (
                     <span className="num text-lg font-semibold text-text lg:text-base">{formatNumBR(q ?? 0)}</span>
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">

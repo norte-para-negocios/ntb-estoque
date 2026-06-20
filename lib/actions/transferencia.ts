@@ -220,8 +220,25 @@ export async function removeMovimento(movimentoId: number) {
     return { error: 'Sem permissao para editar transferencia' }
   }
   const supabase = createServiceClient()
+  // Se o movimento ja foi lancado no Omie (id_ajuste), exclui o ajuste de estoque
+  // antes de remover a linha — senao o estoque ficaria ajustado sem o item no
+  // sistema. Vale para transferencia finalizada tambem (editar pos-fato).
+  const { data: mov } = await supabase
+    .from('movimentos')
+    .select('id, id_ajuste, transferencia:transferencias(loja:lojas(id, omie_app_key, omie_app_secret))')
+    .eq('id', movimentoId)
+    .eq('loja_id', lojaId)
+    .single<{ id: number; id_ajuste: number | null; transferencia: { loja: LojaOmie } | null }>()
+  if (mov?.id_ajuste && mov.transferencia?.loja) {
+    try {
+      await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Falha ao excluir o ajuste no Omie' }
+    }
+  }
   await supabase.from('movimentos').delete().eq('id', movimentoId).eq('loja_id', lojaId)
   revalidatePath('/transferencia')
+  return { ok: true }
 }
 
 type MovimentoRow = {
