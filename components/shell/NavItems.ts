@@ -17,6 +17,7 @@ import {
   Truck,
   ScanLine,
   Settings,
+  CalendarCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -47,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
+  { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
 ]
