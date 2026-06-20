@@ -1,37 +1,33 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import { PdfCabecalho, PdfRodape, PdfResumoBar, pdfTabela } from './PdfChrome'
-import type { EventoFeed, ResumoKpis } from '@/lib/resumo-dia'
-
-const col = StyleSheet.create({
-  hora:   { width: '9%' },
-  pessoa: { width: '20%' },
-  acao:   { width: '20%' },
-  alvo:   { width: '27%' },
-  status: { width: '12%' },
-  loja:   { width: '12%' },
-})
+import type { CategoriaLista, Contagem } from '@/lib/resumo-dia'
 
 const s = StyleSheet.create({
   page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 9, fontFamily: 'Helvetica', color: '#111' },
 })
 
-function fmt(n: number): string {
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
-}
+const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
+const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export function ResumoDiaPDF({
   loja,
   dataBR,
-  kpis,
-  feed,
+  catLabel,
+  contagem,
+  lista,
 }: {
   loja: string
   dataBR: string
-  kpis: ResumoKpis
-  feed: EventoFeed[]
+  catLabel: string
+  contagem: Contagem
+  lista: CategoriaLista
 }) {
-  const haLoja = feed.some((e) => e.lojaNome)
   const sub = [loja, `Dia: ${dataBR}`].filter(Boolean).join(' · ')
+  const temStatus = lista.linhas.some((l) => l.status)
+  const cols = [...lista.colunas, ...(temStatus ? [{ label: 'Situação' }] : [])]
+  const ncol = cols.length || 1
+  const wCol = (alinharDir?: boolean) =>
+    ({ width: `${100 / ncol}%`, textAlign: (alinharDir ? 'right' : 'left') as 'right' | 'left' })
 
   return (
     <Document>
@@ -40,38 +36,43 @@ export function ResumoDiaPDF({
 
         <PdfResumoBar
           campos={[
-            { label: 'Transferências', valor: fmt(kpis.transferencias) },
-            { label: 'Inventários', valor: fmt(kpis.inventarios) },
-            { label: 'OPs (concl.)', valor: `${fmt(kpis.opsCriadas)} (${fmt(kpis.opsConcluidas)})` },
-            { label: 'Mov. (E/S)', valor: `${fmt(kpis.movEntradas)}/${fmt(kpis.movSaidas)}` },
-            { label: 'Etiquetas', valor: fmt(kpis.etiquetas) },
-            { label: 'Erros', valor: fmt(kpis.erros) },
+            { label: 'Notas Fiscais', valor: fmt(contagem.notas) },
+            { label: 'Transferências', valor: fmt(contagem.transferencias) },
+            { label: 'Inventários', valor: fmt(contagem.inventarios) },
+            { label: 'Produção', valor: `${fmt(contagem.opsConcluidas)}/${fmt(contagem.opsPrevistas)}` },
+            { label: 'Etiquetas', valor: fmt(contagem.etiquetas) },
+            { label: 'Erros', valor: fmt(contagem.erros) },
           ]}
         />
 
+        {contagem.valorNotas > 0 ? (
+          <Text style={{ fontSize: 9, marginBottom: 6, color: '#444' }}>
+            Total em Notas Fiscais: {fmtMoeda(contagem.valorNotas)}
+          </Text>
+        ) : null}
+
+        <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 4 }}>
+          {catLabel} ({fmt(lista.total)})
+        </Text>
+
         <View style={pdfTabela.table}>
           <View style={pdfTabela.thead} fixed>
-            <Text style={[pdfTabela.th, col.hora]}>Hora</Text>
-            <Text style={[pdfTabela.th, col.pessoa]}>Pessoa</Text>
-            <Text style={[pdfTabela.th, col.acao]}>Ação</Text>
-            <Text style={[pdfTabela.th, col.alvo]}>Onde</Text>
-            <Text style={[pdfTabela.th, col.status]}>Status</Text>
-            {haLoja ? <Text style={[pdfTabela.th, col.loja]}>Loja</Text> : null}
+            {cols.map((c, i) => (
+              <Text key={i} style={[pdfTabela.th, wCol((c as { alinharDir?: boolean }).alinharDir)]}>{c.label}</Text>
+            ))}
           </View>
 
-          {feed.length === 0 ? (
+          {lista.linhas.length === 0 ? (
             <View style={pdfTabela.tr}>
-              <Text style={[pdfTabela.tdMuted, { flex: 1 }]}>Nada registrado neste dia.</Text>
+              <Text style={[pdfTabela.tdMuted, { flex: 1 }]}>Nada registrado nesta categoria.</Text>
             </View>
           ) : (
-            feed.map((e, i) => (
-              <View key={i} style={[pdfTabela.tr, i % 2 === 1 ? pdfTabela.trAlt : {}]} wrap={false}>
-                <Text style={[pdfTabela.tdMuted, col.hora]}>{e.hora || '-'}</Text>
-                <Text style={[pdfTabela.td, col.pessoa]}>{e.pessoa ?? 'Sistema'}</Text>
-                <Text style={[pdfTabela.td, col.acao]}>{e.acao}</Text>
-                <Text style={[pdfTabela.td, col.alvo]}>{e.alvo}</Text>
-                <Text style={[pdfTabela.tdMuted, col.status]}>{e.status ?? '-'}</Text>
-                {haLoja ? <Text style={[pdfTabela.tdMuted, col.loja]}>{e.lojaNome ?? '-'}</Text> : null}
+            lista.linhas.map((linha, ri) => (
+              <View key={ri} style={[pdfTabela.tr, ri % 2 === 1 ? pdfTabela.trAlt : {}]} wrap={false}>
+                {linha.celulas.map((cel, ci) => (
+                  <Text key={ci} style={[pdfTabela.td, wCol(lista.colunas[ci]?.alinharDir)]}>{cel ?? '-'}</Text>
+                ))}
+                {temStatus && <Text style={[pdfTabela.tdMuted, wCol(false)]}>{linha.status?.label ?? '-'}</Text>}
               </View>
             ))
           )}

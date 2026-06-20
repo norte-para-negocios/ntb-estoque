@@ -1,28 +1,33 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
+import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 
-// "Resumo do dia" — painel gerencial. Consulta ao vivo das tabelas existentes,
-// escopado por loja, para um dia (fuso America/Bahia, UTC-3 sem horario de verao).
+// "Resumo do dia" — painel gerencial. Consulta ao vivo, escopado por loja, para um
+// dia (fuso America/Bahia, UTC-3). Organizado por CATEGORIA: cada uma tem a sua
+// contagem e a sua lista. O painel mostra os números de todas e a lista da escolhida.
 
-// Dado 'YYYY-MM-DD' (dia em Bahia), devolve o intervalo UTC [ini, fim).
-export function janelaDiaBahia(dataISO: string): { ini: string; fim: string } {
-  const ini = `${dataISO}T03:00:00.000Z`
-  const [y, m, d] = dataISO.split('-').map(Number)
-  const prox = new Date(Date.UTC(y, m - 1, d + 1))
-  const fim = `${prox.toISOString().slice(0, 10)}T03:00:00.000Z`
-  return { ini, fim }
+export type CategoriaKey =
+  | 'notas' | 'transferencias' | 'inventarios' | 'producao' | 'movimentacoes' | 'etiquetas' | 'erros'
+
+export type Tom = 'ok' | 'warn' | 'err' | 'info' | 'neutro'
+
+export type LinhaCategoria = {
+  celulas: (string | null)[]
+  status?: { label: string; tom: Tom } | null
 }
 
-// Data de hoje em Bahia (YYYY-MM-DD).
-export function hojeBahia(): string {
-  const agora = new Date()
-  return new Date(agora.getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+export type CategoriaLista = {
+  colunas: { label: string; alinharDir?: boolean }[]
+  linhas: LinhaCategoria[]
+  total: number // total real (a lista pode estar capada)
 }
 
-export type ResumoKpis = {
+export type Contagem = {
+  notas: number
+  valorNotas: number
   transferencias: number
   inventarios: number
-  opsCriadas: number
+  opsPrevistas: number
   opsConcluidas: number
   movEntradas: number
   movSaidas: number
@@ -30,169 +35,265 @@ export type ResumoKpis = {
   erros: number
 }
 
-export type EventoFeed = {
-  ts: number // epoch ms, para ordenar
-  hora: string // HH:MM (Bahia)
-  pessoa: string | null
-  acao: string // ex.: "criou transferência"
-  alvo: string // ex.: "ADEGA → BAR"
-  status: string | null
-  lojaNome: string | null // preenchido quando o escopo tem mais de uma loja
-}
-
-export type ResumoPorLoja = { lojaId: number; nome: string; total: number }
-
 export type ResumoDia = {
-  kpis: ResumoKpis
-  feed: EventoFeed[]
-  porLoja: ResumoPorLoja[]
+  contagem: Contagem
+  cat: CategoriaKey
+  lista: CategoriaLista
+  multiLoja: boolean
 }
 
+const LIMITE_LISTA = 300
+
+// --- helpers de data (fuso Bahia) ---
+export function janelaDiaBahia(dataISO: string): { ini: string; fim: string } {
+  const ini = `${dataISO}T03:00:00.000Z`
+  const [y, m, d] = dataISO.split('-').map(Number)
+  const prox = new Date(Date.UTC(y, m - 1, d + 1))
+  const fim = `${prox.toISOString().slice(0, 10)}T03:00:00.000Z`
+  return { ini, fim }
+}
+export function proximoDiaISO(dataISO: string): string {
+  const [y, m, d] = dataISO.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+}
+export function hojeBahia(): string {
+  return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+}
 function horaBahia(iso: string): string {
   const t = new Date(new Date(iso).getTime() - 3 * 3600 * 1000)
   return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`
 }
+function fmtNum(n: number): string {
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 12 })
+}
+function fmtMoeda(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function fmtDataBR(d: string | null): string {
+  if (!d) return '-'
+  const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(d)
+}
+const tomDoToken = (t: string): Tom =>
+  (['ok', 'warn', 'err', 'info', 'neutro'].includes(t) ? t : 'neutro') as Tom
 
-/**
- * Carrega o resumo de um dia para as lojas no escopo (lojaIds ja filtrado pela
- * permissao do usuario na page). multiLoja=true exibe a loja em cada evento.
- */
-export async function carregarResumoDia(lojaIds: number[], dataISO: string): Promise<ResumoDia> {
-  const vazio: ResumoDia = {
-    kpis: { transferencias: 0, inventarios: 0, opsCriadas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0 },
-    feed: [],
-    porLoja: [],
+type Supa = ReturnType<typeof createServiceClient>
+
+async function nomesUsuarios(supabase: Supa, ids: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const uniq = [...new Set(ids.filter(Boolean) as string[])]
+  const map = new Map<string, string>()
+  if (!uniq.length) return map
+  const { data } = await supabase.from('profiles').select('id, name').in('id', uniq)
+  for (const p of (data ?? []) as { id: string; name: string }[]) map.set(p.id, p.name)
+  return map
+}
+async function nomesLocais(supabase: Supa, lojaIds: number[], codigos: (number | null | undefined)[]): Promise<Map<string, string>> {
+  const uniq = [...new Set(codigos.filter((v) => v != null) as number[])]
+  const map = new Map<string, string>()
+  if (!uniq.length) return map
+  const { data } = await supabase
+    .from('local_estoques')
+    .select('loja_id, codigo_local_estoque, descricao')
+    .in('loja_id', lojaIds)
+    .in('codigo_local_estoque', uniq)
+  for (const l of (data ?? []) as { loja_id: number; codigo_local_estoque: number; descricao: string }[])
+    map.set(`${l.loja_id}-${l.codigo_local_estoque}`, l.descricao)
+  return map
+}
+async function nomesLojas(supabase: Supa, lojaIds: number[]): Promise<Map<number, string>> {
+  const map = new Map<number, string>()
+  const { data } = await supabase.from('lojas').select('id, nome, nome_fantasia').in('id', lojaIds)
+  for (const l of (data ?? []) as { id: number; nome: string | null; nome_fantasia: string | null }[])
+    map.set(l.id, l.nome_fantasia || l.nome || `Loja ${l.id}`)
+  return map
+}
+
+const vazia: CategoriaLista = { colunas: [], linhas: [], total: 0 }
+
+export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat: CategoriaKey): Promise<ResumoDia> {
+  const contagemVazia: Contagem = {
+    notas: 0, valorNotas: 0, transferencias: 0, inventarios: 0,
+    opsPrevistas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0,
   }
-  if (!lojaIds.length) return vazio
+  if (!lojaIds.length) return { contagem: contagemVazia, cat, lista: vazia, multiLoja: false }
 
   const supabase = createServiceClient()
   const { ini, fim } = janelaDiaBahia(dataISO)
+  const proxDia = proximoDiaISO(dataISO)
   const multiLoja = lojaIds.length > 1
 
-  const [transf, invent, opsDia, opsConcl, mov, etiq, erros, lojas] = await Promise.all([
-    supabase.from('transferencias').select('id, loja_id, codigo_local_origem, codigo_local_destino, status, created_at, user_id')
-      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
-    supabase.from('inventarios').select('id, loja_id, codigo_local_estoque, status, finalizado, created_at, user_id')
-      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
-    // OPs vêm do Omie via sync, então created_at = data do sync (não da equipe).
-    // "OPs do dia" = previstas para o dia; concluídas = data de conclusão real.
-    supabase.from('ordens_producao').select('id', { count: 'exact', head: true })
-      .in('loja_id', lojaIds).eq('identificacao_d_dt_previsao', dataISO),
-    supabase.from('ordens_producao').select('id', { count: 'exact', head: true })
-      .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO),
-    supabase.from('movimentos_historico').select('loja_id, entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO),
-    supabase.from('impressao_etiquetas').select('id, loja_id, qtd_etiquetas, user_id, created_at')
-      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
-    supabase.from('integration_attempts').select('id', { count: 'exact', head: true })
-      .in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
-    supabase.from('lojas').select('id, nome, nome_fantasia').in('id', lojaIds),
+  // --- CONTAGENS (todas, baratas) ---
+  const [
+    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount,
+  ] = await Promise.all([
+    supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
+      .gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null),
+    supabase.from('transferencias').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
+    supabase.from('inventarios').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
+    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('identificacao_d_dt_previsao', dataISO),
+    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO),
+    supabase.from('movimentos_historico').select('entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO),
+    supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
+    supabase.from('integration_attempts').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
   ])
 
-  const transfRows = transf.data ?? []
-  const inventRows = invent.data ?? []
-  const etiqRows = etiq.data ?? []
-
-  // --- Resolver nomes (usuarios, locais, lojas) em lote ---
-  const userIds = [...new Set([
-    ...transfRows.map((r) => r.user_id),
-    ...inventRows.map((r) => r.user_id),
-    ...etiqRows.map((r) => r.user_id),
-  ].filter(Boolean) as string[])]
-  const codigosLocais = [...new Set([
-    ...transfRows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino]),
-    ...inventRows.map((r) => r.codigo_local_estoque),
-  ].filter((v) => v != null) as number[])]
-
-  const [profilesRes, locaisRes] = await Promise.all([
-    userIds.length ? supabase.from('profiles').select('id, name').in('id', userIds) : Promise.resolve({ data: [] }),
-    codigosLocais.length
-      ? supabase.from('local_estoques').select('loja_id, codigo_local_estoque, descricao').in('loja_id', lojaIds).in('codigo_local_estoque', codigosLocais)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const nomePorUser = new Map<string, string>()
-  for (const p of (profilesRes.data ?? []) as { id: string; name: string }[]) nomePorUser.set(p.id, p.name)
-  const nomeLocal = new Map<string, string>()
-  for (const l of (locaisRes.data ?? []) as { loja_id: number; codigo_local_estoque: number; descricao: string }[]) {
-    nomeLocal.set(`${l.loja_id}-${l.codigo_local_estoque}`, l.descricao)
+  let movEntradas = 0, movSaidas = 0
+  for (const m of (movRows.data ?? []) as { entradas: number | null; saidas: number | null }[]) {
+    movEntradas += Number(m.entradas ?? 0); movSaidas += Number(m.saidas ?? 0)
   }
-  const nomeLoja = new Map<number, string>()
-  for (const l of (lojas.data ?? []) as { id: number; nome: string | null; nome_fantasia: string | null }[]) {
-    nomeLoja.set(l.id, l.nome_fantasia || l.nome || `Loja ${l.id}`)
-  }
-  const local = (loja: number, cod: number | null) => (cod != null ? nomeLocal.get(`${loja}-${cod}`) ?? `Local ${cod}` : '-')
-  const lojaTag = (loja: number) => (multiLoja ? nomeLoja.get(loja) ?? null : null)
-
-  // --- KPIs ---
-  let movEntradas = 0
-  let movSaidas = 0
-  for (const m of (mov.data ?? []) as { entradas: number | null; saidas: number | null }[]) {
-    movEntradas += Number(m.entradas ?? 0)
-    movSaidas += Number(m.saidas ?? 0)
-  }
-  const etiquetasTotal = etiqRows.reduce((s, e) => s + Number(e.qtd_etiquetas ?? 0), 0)
-
-  const kpis: ResumoKpis = {
-    transferencias: transfRows.length,
-    inventarios: inventRows.length,
-    opsCriadas: opsDia.count ?? 0,
-    opsConcluidas: opsConcl.count ?? 0,
-    movEntradas,
-    movSaidas,
-    etiquetas: etiquetasTotal,
-    erros: erros.count ?? 0,
+  const contagem: Contagem = {
+    notas: (notasRows.data ?? []).length,
+    valorNotas: (notasRows.data ?? []).reduce((s, n) => s + Number((n as { n_valor_nfe: number }).n_valor_nfe ?? 0), 0),
+    transferencias: transfCount.count ?? 0,
+    inventarios: inventCount.count ?? 0,
+    opsPrevistas: opsPrevCount.count ?? 0,
+    opsConcluidas: opsConclCount.count ?? 0,
+    movEntradas, movSaidas,
+    etiquetas: (etiqRows.data ?? []).reduce((s, e) => s + Number((e as { qtd_etiquetas: number }).qtd_etiquetas ?? 0), 0),
+    erros: errosCount.count ?? 0,
   }
 
-  // --- Feed (quem fez o que) ---
-  const feed: EventoFeed[] = []
-  for (const t of transfRows) {
-    feed.push({
-      ts: new Date(t.created_at).getTime(),
-      hora: horaBahia(t.created_at),
-      pessoa: t.user_id ? nomePorUser.get(t.user_id) ?? null : null,
-      acao: 'criou transferência',
-      alvo: `${local(t.loja_id, t.codigo_local_origem)} → ${local(t.loja_id, t.codigo_local_destino)}`,
-      status: statusInfo(t.status).label,
-      lojaNome: lojaTag(t.loja_id),
-    })
-  }
-  for (const inv of inventRows) {
-    feed.push({
-      ts: new Date(inv.created_at).getTime(),
-      hora: horaBahia(inv.created_at),
-      pessoa: inv.user_id ? nomePorUser.get(inv.user_id) ?? null : null,
-      acao: inv.finalizado ? 'finalizou inventário' : 'iniciou inventário',
-      alvo: local(inv.loja_id, inv.codigo_local_estoque),
-      status: statusInfo(inv.status).label,
-      lojaNome: lojaTag(inv.loja_id),
-    })
-  }
-  for (const e of etiqRows) {
-    feed.push({
-      ts: new Date(e.created_at).getTime(),
-      hora: horaBahia(e.created_at),
-      pessoa: e.user_id ? nomePorUser.get(e.user_id) ?? null : null,
-      acao: 'imprimiu etiquetas',
-      alvo: `${Number(e.qtd_etiquetas ?? 0)} etiqueta(s)`,
-      status: null,
-      lojaNome: lojaTag(e.loja_id),
-    })
-  }
-  feed.sort((a, b) => b.ts - a.ts)
+  const lojaTag = multiLoja ? { label: 'Loja' } : null
 
-  // --- Por loja (so quando ha mais de uma loja no escopo) ---
-  const porLoja: ResumoPorLoja[] = []
-  if (multiLoja) {
-    const cont = new Map<number, number>()
-    const inc = (loja: number) => cont.set(loja, (cont.get(loja) ?? 0) + 1)
-    transfRows.forEach((t) => inc(t.loja_id))
-    inventRows.forEach((i) => inc(i.loja_id))
-    etiqRows.forEach((e) => inc(e.loja_id))
-    for (const id of lojaIds) {
-      porLoja.push({ lojaId: id, nome: nomeLoja.get(id) ?? `Loja ${id}`, total: cont.get(id) ?? 0 })
+  // --- LISTA DA CATEGORIA SELECIONADA ---
+  let lista: CategoriaLista = vazia
+
+  if (cat === 'notas') {
+    const { data } = await supabase.from('notas_fiscais')
+      .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
+      .in('loja_id', lojaIds).gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
+      .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
+    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+    const rows = (data ?? []) as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
+    lista = {
+      colunas: [{ label: 'Emissão' }, { label: 'NFe' }, { label: 'Fornecedor' }, ...(lojaTag ? [lojaTag] : []), { label: 'Valor', alinharDir: true }],
+      total: contagem.notas,
+      linhas: rows.map((n) => ({
+        celulas: [
+          fmtDataBR(n.d_emissao_nfe), n.c_numero_nfe ?? '-', (n.c_nome || n.c_razao_social || '-'),
+          ...(lojas ? [lojas.get(n.loja_id) ?? '-'] : []),
+          fmtMoeda(Number(n.n_valor_nfe ?? 0)),
+        ],
+        status: n.c_etapa === '60' ? { label: 'Concluída', tom: 'ok' } : { label: 'Pendente', tom: 'warn' },
+      })),
     }
-    porLoja.sort((a, b) => b.total - a.total)
+  } else if (cat === 'transferencias') {
+    const { data } = await supabase.from('transferencias')
+      .select('id, loja_id, codigo_local_origem, codigo_local_destino, status, created_at, user_id')
+      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim).order('created_at', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; codigo_local_origem: number | null; codigo_local_destino: number | null; status: string; created_at: string; user_id: string | null }[]
+    const [users, locais, lojas] = await Promise.all([
+      nomesUsuarios(supabase, rows.map((r) => r.user_id)),
+      nomesLocais(supabase, lojaIds, rows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino])),
+      multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
+    ])
+    const loc = (loja: number, c: number | null) => (c != null ? locais.get(`${loja}-${c}`) ?? `Local ${c}` : '-')
+    lista = {
+      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, { label: 'Origem → Destino' }, ...(lojaTag ? [lojaTag] : [])],
+      total: contagem.transferencias,
+      linhas: rows.map((t) => {
+        const si = statusInfo(t.status)
+        return {
+          celulas: [horaBahia(t.created_at), t.user_id ? users.get(t.user_id) ?? 'Sistema' : 'Sistema',
+            `${loc(t.loja_id, t.codigo_local_origem)} → ${loc(t.loja_id, t.codigo_local_destino)}`,
+            ...(lojas ? [lojas.get(t.loja_id) ?? '-'] : [])],
+          status: { label: si.label, tom: tomDoToken(si.token) },
+        }
+      }),
+    }
+  } else if (cat === 'inventarios') {
+    const { data } = await supabase.from('inventarios')
+      .select('id, loja_id, codigo_local_estoque, status, finalizado, created_at, user_id')
+      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim).order('created_at', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; codigo_local_estoque: number | null; status: string; finalizado: string | null; created_at: string; user_id: string | null }[]
+    const [users, locais, lojas] = await Promise.all([
+      nomesUsuarios(supabase, rows.map((r) => r.user_id)),
+      nomesLocais(supabase, lojaIds, rows.map((r) => r.codigo_local_estoque)),
+      multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
+    ])
+    lista = {
+      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, { label: 'Local' }, ...(lojaTag ? [lojaTag] : [])],
+      total: contagem.inventarios,
+      linhas: rows.map((inv) => {
+        const si = statusInfo(inv.status)
+        return {
+          celulas: [horaBahia(inv.created_at), inv.user_id ? users.get(inv.user_id) ?? 'Sistema' : 'Sistema',
+            inv.codigo_local_estoque != null ? locais.get(`${inv.loja_id}-${inv.codigo_local_estoque}`) ?? `Local ${inv.codigo_local_estoque}` : '-',
+            ...(lojas ? [lojas.get(inv.loja_id) ?? '-'] : [])],
+          status: { label: si.label, tom: tomDoToken(si.token) },
+        }
+      }),
+    }
+  } else if (cat === 'producao') {
+    const { data } = await supabase.from('ordens_producao')
+      .select('id, loja_id, num_ordem, produto_descricao, quantidade, produto_unidade')
+      .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO).order('num_ordem', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; num_ordem: string | null; produto_descricao: string | null; quantidade: number | null; produto_unidade: string | null }[]
+    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+    lista = {
+      colunas: [{ label: 'OP' }, { label: 'Produto' }, ...(lojaTag ? [lojaTag] : []), { label: 'Quantidade', alinharDir: true }],
+      total: contagem.opsConcluidas,
+      linhas: rows.map((o) => ({
+        celulas: [o.num_ordem ?? '-', o.produto_descricao ?? '-',
+          ...(lojas ? [lojas.get(o.loja_id) ?? '-'] : []),
+          o.quantidade != null ? `${fmtNum(Number(o.quantidade))} ${o.produto_unidade ?? ''}`.trim() : '-'],
+        status: { label: 'Concluída', tom: 'ok' },
+      })),
+    }
+  } else if (cat === 'movimentacoes') {
+    const { data } = await supabase.from('movimentos_historico')
+      .select('loja_id, codigo, descricao, entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO)
+      .order('saidas', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
+    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+    lista = {
+      colunas: [{ label: 'Produto' }, ...(lojaTag ? [lojaTag] : []), { label: 'Entradas', alinharDir: true }, { label: 'Saídas', alinharDir: true }],
+      total: rows.length,
+      linhas: rows.map((m) => ({
+        celulas: [[m.codigo, m.descricao].filter(Boolean).join(' - ') || '-',
+          ...(lojas ? [lojas.get(m.loja_id) ?? '-'] : []),
+          fmtNum(Number(m.entradas ?? 0)), fmtNum(Number(m.saidas ?? 0))],
+        status: null,
+      })),
+    }
+  } else if (cat === 'etiquetas') {
+    const { data } = await supabase.from('impressao_etiquetas')
+      .select('id, loja_id, qtd_etiquetas, user_id, created_at').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim)
+      .order('created_at', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; qtd_etiquetas: number | null; user_id: string | null; created_at: string }[]
+    const [users, lojas] = await Promise.all([
+      nomesUsuarios(supabase, rows.map((r) => r.user_id)),
+      multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
+    ])
+    lista = {
+      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, ...(lojaTag ? [lojaTag] : []), { label: 'Etiquetas', alinharDir: true }],
+      total: rows.length,
+      linhas: rows.map((e) => ({
+        celulas: [horaBahia(e.created_at), e.user_id ? users.get(e.user_id) ?? 'Sistema' : 'Sistema',
+          ...(lojas ? [lojas.get(e.loja_id) ?? '-'] : []),
+          fmtNum(Number(e.qtd_etiquetas ?? 0))],
+        status: null,
+      })),
+    }
+  } else if (cat === 'erros') {
+    const { data } = await supabase.from('integration_attempts')
+      .select('id, loja_id, model, error_message, created_at').in('loja_id', lojaIds).eq('error', true)
+      .gte('created_at', ini).lt('created_at', fim).order('created_at', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { loja_id: number; model: string | null; error_message: string | null; created_at: string }[]
+    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+    lista = {
+      colunas: [{ label: 'Hora' }, { label: 'Origem' }, { label: 'Problema' }, ...(lojaTag ? [lojaTag] : [])],
+      total: contagem.erros,
+      linhas: rows.map((er) => {
+        const exp = explicarErroOmie(er.error_message)
+        return {
+          celulas: [horaBahia(er.created_at), er.model ?? '-', exp?.titulo ?? 'Erro',
+            ...(lojas ? [lojas.get(er.loja_id) ?? '-'] : [])],
+          status: exp ? { label: exp.tipo === 'acao' ? 'Resolver' : exp.tipo === 'transitorio' ? 'Temporário' : 'Info', tom: exp.tipo === 'acao' ? 'err' : exp.tipo === 'transitorio' ? 'warn' : 'neutro' } : null,
+        }
+      }),
+    }
   }
 
-  return { kpis, feed, porLoja }
+  return { contagem, cat, lista, multiLoja }
 }

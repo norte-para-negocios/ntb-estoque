@@ -18,18 +18,20 @@ export function ResumoFiltros({
   lojaSel,
   lojas,
   hoje,
+  cat,
 }: {
   data: string
   lojaSel: number | null
   lojas: { id: number; nome: string }[]
   hoje: string
+  cat: string
 }) {
   const router = useRouter()
   // Selecao atual como parametro de URL: 'todas' ou o id da loja.
   const lojaParam = lojaSel != null ? String(lojaSel) : 'todas'
 
   function ir(novaData: string, novaLojaParam: string) {
-    const p = new URLSearchParams({ data: novaData, loja: novaLojaParam })
+    const p = new URLSearchParams({ data: novaData, loja: novaLojaParam, cat })
     router.push(`/resumo?${p.toString()}`)
   }
 
