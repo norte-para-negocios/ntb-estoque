@@ -13,6 +13,20 @@ export function btnClass(variant: BtnVariant = 'primary'): string {
   return `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium u-motion u-press disabled:opacity-60 disabled:active:scale-100 ${VARIANTS[variant]}`
 }
 
+// Botão de AÇÃO DE LINHA: no celular vira só ícone (o rótulo se esconde via
+// <RotuloAcao>), quadrado size-8 sem padding; no desktop mostra o texto com o
+// padding normal. Não herda o px-3 do btnClass (evita conflito de padding do
+// Tailwind). Evita estouro horizontal nas listas de operação. Use sempre junto
+// de <RotuloAcao> no rótulo.
+export function btnLinhaClass(variant: BtnVariant = 'outline'): string {
+  return `inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium u-motion u-press disabled:opacity-60 disabled:active:scale-100 size-8 shrink-0 sm:size-auto sm:px-3 sm:py-1.5 ${VARIANTS[variant]}`
+}
+
+// Rótulo de ação que some no celular (só ícone) e aparece no desktop.
+export function RotuloAcao({ children }: { children: React.ReactNode }) {
+  return <span className="hidden sm:inline">{children}</span>
+}
+
 export function Button({
   variant = 'primary',
   className = '',

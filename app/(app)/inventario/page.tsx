@@ -15,7 +15,7 @@ import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
 const POR_PAGINA = 50
@@ -244,19 +244,24 @@ export default async function InventarioPage({
           const finalizado = inv.status === 'Finalizado'
           const labelAcao = finalizado || !podeEditar ? 'Ver' : 'Contar'
           return (
-            <div className="flex items-center justify-end gap-2">
-              <Link href={`/inventario/${inv.id}/contagem`} className={btnClass('outline')}>
-                <Pencil className="size-4" /> {labelAcao}
+            <div className="flex items-center justify-end gap-1 sm:gap-2">
+              <Link
+                href={`/inventario/${inv.id}/contagem`}
+                className={btnLinhaClass('outline')}
+                aria-label={labelAcao}
+                title={labelAcao}
+              >
+                <Pencil className="size-4" /> <RotuloAcao>{labelAcao}</RotuloAcao>
               </Link>
               <a
                 href={`/inventario/${inv.id}/imprimir`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={btnClass('outline')}
+                className={btnLinhaClass('outline')}
                 aria-label="Imprimir"
                 title="Imprimir"
               >
-                <Printer className="size-4" /> Imprimir
+                <Printer className="size-4" /> <RotuloAcao>Imprimir</RotuloAcao>
               </a>
               <AcoesInventario
                 inventarioId={inv.id}

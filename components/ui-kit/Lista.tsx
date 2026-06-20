@@ -28,6 +28,10 @@ export function Lista<T>({
   // A coluna flexível absorve o espaço e trunca; se nenhuma marcada, usa a primária.
   const flexivel = colunas.find((c) => c.flexivel) ?? primaria
   const demais = colunas.filter((c) => c !== primaria && !c.ocultarMobile)
+  // No mobile, as colunas numéricas (alinhadas à direita) viram "valor do lado":
+  // vão para a borda direita da linha, estilo extrato. As demais ficam no subtítulo.
+  const subColunas = demais.filter((c) => c.alinhar !== 'right')
+  const valColunas = demais.filter((c) => c.alinhar === 'right')
 
   // Classes da célula no desktop: flexível encolhe e trunca; o resto fica natural (nowrap).
   const tdClasse = (c: Coluna<T>) =>
@@ -97,32 +101,50 @@ export function Lista<T>({
         </table>
       </div>
 
-      {/* Mobile: linhas estilo extrato — compactas, padding reduzido,
-          dados secundarios em linha unica abaixo do titulo.
-          Altura minima 40px por linha clicavel (alvo de toque). */}
+      {/* Mobile: linhas estilo extrato — finas, padding enxuto. Titulo + dados
+          secundarios a esquerda; numeros (colunas .alinhar=right) na borda
+          direita; acao por ultimo. Alvo de toque min 38px. */}
       <div className="lg:hidden divide-y divide-border rounded-lg border border-border bg-surface">
         {linhas.map((row, i) => (
           <div
             key={chaveLinha(row)}
             style={stagger(i)}
-            className="u-stagger flex min-h-[40px] items-center gap-2 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg"
+            className="u-stagger flex min-h-[38px] items-center gap-2.5 px-3 py-2 first:rounded-t-lg last:rounded-b-lg"
           >
-            {/* Coluna esquerda: titulo + dados secundarios em linha */}
+            {/* Esquerda: titulo + dados secundarios em linha */}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-text leading-snug">
+              <div className="truncate text-[13px] font-medium text-text leading-snug">
                 {primaria.render(row)}
               </div>
-              {demais.length > 0 && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-                  {demais.map((c, idx) => (
-                    <span key={idx} className="text-xs text-text-muted leading-none">
+              {subColunas.length > 0 && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {subColunas.map((c, idx) => (
+                    <span key={idx} className="text-[11px] text-text-muted leading-none">
                       {c.render(row)}
                     </span>
                   ))}
                 </div>
               )}
             </div>
-            {/* Coluna direita: acao */}
+            {/* Direita: valores numericos, alinhados (estilo extrato). Com 2+
+                valores, cada um ganha um rotulo pequeno pra nao confundir; com 1
+                so, fica limpo (o cabecalho ja diz o que e no desktop). */}
+            {valColunas.length > 0 && (
+              <div className="flex shrink-0 flex-col items-end gap-0.5 text-right leading-none">
+                {valColunas.map((c, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-baseline justify-end gap-1 text-[13px] leading-none text-text"
+                  >
+                    {valColunas.length > 1 && (
+                      <span className="text-[10px] font-normal text-text-muted">{c.label}</span>
+                    )}
+                    <span className="num">{c.render(row)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Acao */}
             {acao && <div className="shrink-0">{acao(row)}</div>}
           </div>
         ))}

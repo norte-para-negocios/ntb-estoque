@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import {
   duplicarInventario,
   excluirInventario,
@@ -59,36 +59,36 @@ export function AcoesInventario({
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex items-center gap-1 sm:gap-2">
       <button
         onClick={duplicar}
         disabled={pending}
-        className={btnClass('outline')}
+        className={btnLinhaClass('outline')}
         aria-label="Duplicar"
         title="Duplicar"
       >
-        <Copy className="size-4" /> Duplicar
+        <Copy className="size-4" /> <RotuloAcao>Duplicar</RotuloAcao>
       </button>
       {temErro && (
         <button
           onClick={reprocessar}
           disabled={pending}
-          className={btnClass('outline')}
+          className={btnLinhaClass('outline')}
           aria-label="Reprocessar"
           title="Reprocessar itens com erro"
         >
-          <RefreshCw className="size-4" /> Reprocessar
+          <RefreshCw className="size-4" /> <RotuloAcao>Reprocessar</RotuloAcao>
         </button>
       )}
       {podeExcluir && (
         <button
           onClick={excluir}
           disabled={pending}
-          className={btnClass('danger')}
+          className={btnLinhaClass('danger')}
           aria-label="Excluir"
           title="Excluir"
         >
-          <Trash2 className="size-4" /> Excluir
+          <Trash2 className="size-4" /> <RotuloAcao>Excluir</RotuloAcao>
         </button>
       )}
     </span>

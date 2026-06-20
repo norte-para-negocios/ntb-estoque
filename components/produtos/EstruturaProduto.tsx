@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Layers, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { verEstrutura, type EstruturaView } from '@/lib/actions/estrutura'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -48,8 +48,8 @@ export function EstruturaProduto({
     <Dialog open={open} onOpenChange={abrir}>
       <DialogTrigger
         render={
-          <button type="button" className={btnClass('ghost')} title="Ver ficha técnica">
-            <Layers className="size-4" /> Estrutura
+          <button type="button" className={btnLinhaClass('ghost')} title="Ver ficha técnica" aria-label="Estrutura">
+            <Layers className="size-4" /> <RotuloAcao>Estrutura</RotuloAcao>
           </button>
         }
       />
