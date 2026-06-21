@@ -16,7 +16,7 @@ import {
   toggleLocal,
   type PerfilUsuario,
 } from '@/lib/actions/usuario'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
@@ -169,8 +169,8 @@ export function EditarUsuario({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <button type="button" className={`${btnClass('outline')} shrink-0`}>
-            <Pencil className="size-4" /> Editar
+          <button type="button" className={`${btnLinhaClass('outline')} shrink-0`} aria-label="Editar" title="Editar">
+            <Pencil className="size-4" /> <RotuloAcao>Editar</RotuloAcao>
           </button>
         }
       />

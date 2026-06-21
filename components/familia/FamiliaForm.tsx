@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarFamilia, editarFamilia, type FamiliaInput } from '@/lib/actions/familia'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
@@ -58,8 +58,8 @@ export function FamiliaForm({ familia }: { familia?: FamiliaExistente }) {
       <DialogTrigger
         render={
           editando ? (
-            <button type="button" className={btnClass('ghost')}>
-              <Pencil className="size-4" /> Editar
+            <button type="button" className={btnLinhaClass('ghost')} aria-label="Editar" title="Editar">
+              <Pencil className="size-4" /> <RotuloAcao>Editar</RotuloAcao>
             </button>
           ) : (
             <button type="button" className={btnClass('primary')}>

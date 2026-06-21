@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { editarLocalEstoque } from '@/lib/actions/local-estoque'
@@ -56,9 +57,9 @@ export function EditarLocalEstoque({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" aria-label="Editar local" title="Editar local">
-            <Pencil className="size-4" />
-          </Button>
+          <button type="button" className={btnLinhaClass('ghost')} aria-label="Editar" title="Editar local">
+            <Pencil className="size-4" /> <RotuloAcao>Editar</RotuloAcao>
+          </button>
         }
       />
       <DialogContent>

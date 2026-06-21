@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { excluirLocalEstoque } from '@/lib/actions/local-estoque'
-import { btnClass } from '@/components/ui-kit/Button'
+import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 
 export function ExcluirLocalEstoque({ id, descricao }: { id: number; descricao: string }) {
   const [pending, startTransition] = useTransition()
@@ -24,8 +24,15 @@ export function ExcluirLocalEstoque({ id, descricao }: { id: number; descricao: 
   }
 
   return (
-    <button type="button" onClick={excluir} disabled={pending} className={btnClass('ghost')}>
-      <Trash2 className="size-4" /> Excluir
+    <button
+      type="button"
+      onClick={excluir}
+      disabled={pending}
+      className={btnLinhaClass('ghost')}
+      aria-label="Excluir"
+      title="Excluir"
+    >
+      <Trash2 className="size-4" /> <RotuloAcao>Excluir</RotuloAcao>
     </button>
   )
 }
