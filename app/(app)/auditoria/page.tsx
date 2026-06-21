@@ -6,6 +6,7 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { Lista, type Coluna } from '@/components/ui-kit/Lista'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { History, Inbox } from 'lucide-react'
@@ -77,6 +78,47 @@ export default async function AuditoriaPage({
     : { data: [] as { id: number; nome_fantasia: string | null; nome: string | null }[] }
   const lojaMap = new Map((lojasRaw ?? []).map((l) => [l.id, l.nome_fantasia || l.nome || `Loja ${l.id}`]))
 
+  // Colunas via Lista: desktop = tabela; mobile = linha extrato (item no título,
+  // ação/responsável/quando no subtítulo). Antes era <table> cru e cortava no celular.
+  const colunas: Coluna<LinhaAudit>[] = [
+    {
+      label: 'Item',
+      primaria: true,
+      flexivel: true,
+      render: (l) => (
+        <span>
+          <span className="text-text-muted">{l.entidade}</span>{' '}
+          {l.descricao || (l.entidade_id ? `#${l.entidade_id}` : '')}
+        </span>
+      ),
+    },
+    {
+      label: 'Ação',
+      render: (l) => (
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ACAO_CLASSE[l.acao] ?? 'bg-surface-2 text-text-muted'}`}
+        >
+          {l.acao}
+        </span>
+      ),
+    },
+    { label: 'Responsável', render: (l) => <span className="text-text">{l.user_nome || '-'}</span> },
+    {
+      label: 'Quando',
+      render: (l) => <span className="num text-text-muted">{fmtDataHora(l.created_at)}</span>,
+    },
+    ...(multiLoja
+      ? [
+          {
+            label: 'Loja',
+            render: (l: LinhaAudit) => (
+              <span className="text-text-muted">{l.loja_id ? lojaMap.get(l.loja_id) ?? l.loja_id : '-'}</span>
+            ),
+          },
+        ]
+      : []),
+  ]
+
   return (
     <div className="space-y-4">
       <ListaHeader>
@@ -99,41 +141,18 @@ export default async function AuditoriaPage({
 
       <BuscaSimples basePath="/auditoria" placeholder="Buscar por usuário, item ou tipo..." defaultValue={sp.q ?? ''} />
 
-      <div className="overflow-clip rounded-lg border border-border bg-surface">
-        {linhas.length === 0 ? (
-          <EmptyState icon={Inbox} title="Nenhum registro de auditoria" hint="As ações de criar, editar e excluir aparecem aqui." />
-        ) : (
-          <table data-sticky-table className="w-full text-sm">
-            <thead className="bg-surface-2">
-              <tr>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Quando</th>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Responsável</th>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Ação</th>
-                <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Item</th>
-                {multiLoja && <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Loja</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((l) => (
-                <tr key={l.id} className="border-t border-border/60 even:bg-surface-2/30 hover:bg-surface-2/60">
-                  <td className="num whitespace-nowrap px-4 py-2 text-text-muted">{fmtDataHora(l.created_at)}</td>
-                  <td className="px-4 py-2 text-text">{l.user_nome || '-'}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ACAO_CLASSE[l.acao] ?? 'bg-surface-2 text-text-muted'}`}>
-                      {l.acao}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-text">
-                    <span className="text-text-muted">{l.entidade}</span>{' '}
-                    {l.descricao || (l.entidade_id ? `#${l.entidade_id}` : '')}
-                  </td>
-                  {multiLoja && <td className="px-4 py-2 text-text-muted">{l.loja_id ? lojaMap.get(l.loja_id) ?? l.loja_id : '-'}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Lista
+        linhas={linhas}
+        chaveLinha={(l) => l.id}
+        colunas={colunas}
+        vazio={
+          <EmptyState
+            icon={Inbox}
+            title="Nenhum registro de auditoria"
+            hint="As ações de criar, editar e excluir aparecem aqui."
+          />
+        }
+      />
 
       {(page > 1 || temProxima) && <Paginacao basePath="/auditoria" page={page} temProxima={temProxima} />}
     </div>

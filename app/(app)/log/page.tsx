@@ -166,8 +166,8 @@ export default async function LogPage({
               </tbody>
             </DataTable>
           </div>
-          {/* Mobile: cards com detalhe expansivel */}
-          <div className="space-y-3 lg:hidden">
+          {/* Mobile: lista compacta com detalhe expansivel */}
+          <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface lg:hidden">
             {logs.map((log) => (
               <LogCard key={log.id} log={log} />
             ))}

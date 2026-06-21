@@ -110,42 +110,31 @@ export function LogDetalhe({ log }: { log: LogRowData }) {
   )
 }
 
-// Card (mobile) com o mesmo detalhe expansível.
+// Linha compacta (mobile), estilo extrato, com detalhe expansível.
 export function LogCard({ log }: { log: LogRowData }) {
   const [aberto, setAberto] = useState(false)
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-semibold text-text">{log.model || '-'}</div>
-          <div className="num text-[11px] text-text-muted">#{log.id}</div>
-        </div>
-        <StatusPill status={log.error ? 'Erro' : 'OK'} />
-      </div>
-      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-        <div>
-          <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            Data/hora
-          </dt>
-          <dd className="num text-sm text-text">
-            {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            HTTP
-          </dt>
-          <dd className="num text-sm text-text">{log.code ? `HTTP ${log.code}` : '-'}</dd>
-        </div>
-      </dl>
+    <div className="px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg">
       <button
         type="button"
         onClick={() => setAberto((a) => !a)}
-        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand"
+        className="flex w-full items-center gap-2.5 text-left"
       >
-        {aberto ? 'Ocultar detalhe' : 'Ver detalhe'}
-        <ChevronDown className={`size-3.5 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium text-text">{log.model || '-'}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
+            <span className="num">#{log.id}</span>
+            <span className="num">
+              {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}
+            </span>
+            {log.code != null && <span className="num">HTTP {log.code}</span>}
+          </div>
+        </div>
+        <StatusPill status={log.error ? 'Erro' : 'OK'} />
+        <ChevronDown
+          className={`size-4 shrink-0 text-text-muted transition-transform ${aberto ? 'rotate-180' : ''}`}
+        />
       </button>
       {aberto && (
         <div className="mt-3">

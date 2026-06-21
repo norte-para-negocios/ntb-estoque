@@ -11,7 +11,7 @@ import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Num } from '@/components/ui-kit/Num'
-import { formatQtdExata, formatQtdResumo } from '@/lib/num-br'
+import { formatQtdResumo } from '@/lib/num-br'
 import { Money } from '@/components/ui-kit/Money'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -269,8 +269,10 @@ export default async function MovimentacoesPage({
     if (n <= 0) return <span className="text-text-muted">-</span>
     return <Money value={n} className="font-medium" />
   }
+  // Quantidade AGREGADA (soma de vários dias): usa o resumo (2 casas) em vez do
+  // exato (12 casas), senão a soma vira ruído de float ("155.001,7324").
   const colQtd = (n: number) =>
-    n > 0 ? <span className="num font-medium">{formatQtdExata(n)}</span> : <span className="text-text-muted">-</span>
+    n > 0 ? <span className="num font-medium">{formatQtdResumo(n)}</span> : <span className="text-text-muted">-</span>
 
   // Quantos produtos sem CMC ha nas linhas exibidas (para aviso).
   const semCmc = linhas.filter((l) => !l.temCmc && (l.entradas > 0 || l.saidas > 0)).length
@@ -361,11 +363,8 @@ export default async function MovimentacoesPage({
         </p>
       ) : (
         <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
-          <strong>Valores em R$ ocultos por enquanto.</strong> O custo médio (CMC) está com inconsistências no
-          Omie (estoque negativo e custos errados), então a estimativa de valor não é confiável ainda. A tela
-          mostra só a <strong>quantidade</strong> movimentada, que é confiável. Os valores voltam quando o custo
-          for corrigido na origem. <strong>Origem/destino não disponível:</strong> o histórico vem agregado por
-          produto/dia, sem o movimento individual.
+          <strong>Valores em R$ ocultos por enquanto</strong> (o custo do Omie está furado). A tela mostra só a
+          quantidade movimentada, agregada por produto/dia.
         </p>
       )}
 
