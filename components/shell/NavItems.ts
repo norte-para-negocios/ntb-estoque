@@ -19,6 +19,7 @@ import {
   ScanLine,
   Settings,
   CalendarCheck,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -50,6 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
+  { href: '/relatorio-compras', label: 'Compras (BETA)', icon: ShoppingCart, group: 'Administração', gestaoUsuarios: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
   { href: '/auditoria', label: 'Auditoria', icon: History, group: 'Administração', gestaoUsuarios: true },
