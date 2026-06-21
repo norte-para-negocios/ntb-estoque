@@ -426,8 +426,8 @@ export default async function OrdemProducaoPage({
                   </tbody>
                 </DataTable>
               </div>
-              {/* Mobile: cards empilhados com steppers em bloco vertical */}
-              <div className="space-y-3 lg:hidden">
+              {/* Mobile: lista compacta (extrato); edição no dialog "Editar" */}
+              <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface lg:hidden">
                 {linhas.map((op) => (
                   <OrdemProducaoCard key={op.id} op={op} />
                 ))}

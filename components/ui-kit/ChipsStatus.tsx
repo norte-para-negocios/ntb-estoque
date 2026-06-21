@@ -39,7 +39,9 @@ export function ChipsStatus({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    // Mobile: uma linha só, rola na horizontal (não empilha em 2 fileiras e come
+    // espaço vertical). Desktop (sm+): quebra normalmente. Scrollbar escondida.
+    <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
       {opcoes.map((o) => {
         const ativo = atual === o.value
         return (
@@ -48,7 +50,7 @@ export function ChipsStatus({
             type="button"
             aria-pressed={ativo}
             onClick={() => selecionar(o.value)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
               ativo
                 ? 'border-brand bg-brand/10 text-brand'
                 : 'border-border bg-surface text-text-muted hover:border-brand/50 hover:bg-surface-2 hover:text-text'

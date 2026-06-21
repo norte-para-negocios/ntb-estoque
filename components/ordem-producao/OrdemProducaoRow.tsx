@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck } from 'lucide-react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP, reverterOP, excluirOP } from '@/lib/actions/ordem-producao'
 import type { OpStatus } from '@/lib/op-status'
@@ -12,6 +12,17 @@ import { btnClass } from '@/components/ui-kit/Button'
 
 const stepBtnClass =
   'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-7'
+
+// Botao de acao da LINHA da OP no mobile: so icone, alvo de toque 32px.
+const acaoIconeClass =
+  'flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-60'
+
+// Validade -> DD/MM (compacto) para o subtitulo da linha.
+function fmtValidade(v: string | null | undefined): string | null {
+  if (!v) return null
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}` : null
+}
 
 interface OPData {
   id: number
@@ -126,6 +137,9 @@ function useOP(op: OPData) {
     return `${hoje.getFullYear()}-${mm}-${dd}`
   })()
   const [dialogConclusao, setDialogConclusao] = useState(false)
+  // Editar (mobile): abre os steppers de validade/quantidade num dialog enxuto,
+  // pra a linha da OP ficar compacta como as outras telas.
+  const [dialogEditar, setDialogEditar] = useState(false)
   const [dataConclusao, setDataConclusao] = useState(dataPrevistaISO)
   // Conclusao PARCIAL: quanto concluir (default = quantidade da OP). Ex.: OP de
   // 10 kg, concluir so 4 kg.
@@ -185,6 +199,8 @@ function useOP(op: OPData) {
     excluir,
     dialogConclusao,
     setDialogConclusao,
+    dialogEditar,
+    setDialogEditar,
     dataConclusao,
     setDataConclusao,
     dataPrevistaISO,
@@ -356,6 +372,43 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
   )
 }
 
+// Dialog "Editar OP" (mobile): validade + quantidade nos mesmos steppers, num
+// popup enxuto, pra a LINHA da OP ficar compacta como as outras telas. Os steppers
+// salvam sozinhos (onBlur/onChange); o botao so fecha.
+function DialogEditar({ op, ctrl }: StepperProps) {
+  return (
+    <Dialog open={ctrl.dialogEditar} onOpenChange={ctrl.setDialogEditar}>
+      <DialogContent className="bg-surface" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="size-4 text-brand" />
+            Editar OP {op.numOP}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="truncate text-[13px] text-text-muted">{op.produto}</div>
+          <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Validade</label>
+            <StepperValidade op={op} ctrl={ctrl} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Quantidade</label>
+            <StepperQuantidade op={op} ctrl={ctrl} />
+          </div>
+          <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-text-muted">
+            A validade fica só no nosso sistema. A quantidade da OP no Omie não muda por aqui.
+          </p>
+        </div>
+        <DialogFooter>
+          <button type="button" onClick={() => ctrl.setDialogEditar(false)} className={btnClass('primary')}>
+            Pronto
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function Acoes({ op, ctrl }: StepperProps) {
   return (
     <>
@@ -448,55 +501,91 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   )
 }
 
-// Card empilhado (mobile).
+// Linha compacta (mobile), estilo extrato: produto + OP/data/validade/status à
+// esquerda, Qtd OP à direita, ações em ícone. A edição de validade/quantidade vai
+// pro dialog "Editar" (pencil), pra a lista não virar um formulário gigante.
 export function OrdemProducaoCard({ op }: { op: OPData }) {
   const ctrl = useOP(op)
+  const val = fmtValidade(op.validade)
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-medium text-text">{op.produto}</div>
-          <div className="text-[11px] text-text-muted">{op.unidade}</div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="num text-[11px] font-semibold text-text-muted">OP</div>
-          <div className="num font-medium text-text">{op.numOP}</div>
-          {op.data && (
-            <div className="text-[11px] text-text-muted" title="Data prevista da OP">
-              Prev. {op.data}
-            </div>
-          )}
-          <div className="mt-1 flex justify-end">
-            <StatusBadge status={op.status} />
-          </div>
+    <div className="flex items-center gap-2 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-medium leading-snug text-text">{op.produto}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
+          <StatusBadge status={op.status} />
+          <span className="num">{op.numOP}</span>
+          {op.data && <span className="num" title="Data prevista">{op.data}</span>}
+          {val && <span className="num" title="Validade">val {val}</span>}
         </div>
       </div>
 
-      <div className="mt-3 text-sm">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Qtd OP{' '}
-        </span>
-        <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
+      <div className="shrink-0 whitespace-nowrap text-right text-[13px] text-text">
+        <QtdOP value={op.qtdOP} /> <span className="text-[11px] text-text-muted">{op.unidade}</span>
       </div>
 
-      <div className="mt-3">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Validade
-        </div>
-        <StepperValidade op={op} ctrl={ctrl} />
+      <div className="flex shrink-0 items-center gap-0.5">
+        {op.podeEditar && (
+          <button
+            type="button"
+            onClick={() => ctrl.setDialogEditar(true)}
+            className={`${acaoIconeClass} hover:text-brand`}
+            aria-label="Editar"
+            title="Editar validade/quantidade"
+          >
+            <Pencil className="size-4" />
+          </button>
+        )}
+        {!op.concluida && op.podeConcluir && (
+          <button
+            type="button"
+            onClick={() => ctrl.setDialogConclusao(true)}
+            disabled={ctrl.pending}
+            className={`${acaoIconeClass} hover:text-brand`}
+            aria-label="Concluir"
+            title="Concluir"
+          >
+            <Check className="size-4" />
+          </button>
+        )}
+        {op.concluida && op.podeReverter && (
+          <button
+            type="button"
+            onClick={ctrl.reverter}
+            disabled={ctrl.pending}
+            className={`${acaoIconeClass} hover:text-warn`}
+            aria-label="Reverter"
+            title="Reverter conclusão"
+          >
+            <Undo2 className="size-4" />
+          </button>
+        )}
+        {op.podeExcluir && (
+          <button
+            type="button"
+            onClick={ctrl.excluir}
+            disabled={ctrl.pending}
+            className={`${acaoIconeClass} hover:text-err`}
+            aria-label="Excluir"
+            title="Excluir"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        )}
+        <a
+          href={`/ordem-producao/${op.id}/imprimir`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={acaoIconeClass}
+          aria-label="Imprimir"
+          title="Imprimir"
+        >
+          <Printer className="size-4" />
+        </a>
       </div>
 
-      <div className="mt-3">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Quantidade
-        </div>
-        <StepperQuantidade op={op} ctrl={ctrl} />
-      </div>
-
-      <div className="mt-4 flex items-center gap-4 border-t border-border/60 pt-3">
-        <Acoes op={op} ctrl={ctrl} />
-      </div>
+      {op.podeEditar && <DialogEditar op={op} ctrl={ctrl} />}
+      {!op.concluida && op.podeConcluir && <DialogConclusao op={op} ctrl={ctrl} />}
     </div>
   )
 }
