@@ -85,12 +85,15 @@ function buildStyles(opts: {
   const { larguraCm, alturaCm, offsetX, offsetY, escala, cor, corFilete, borda } = opts
   const W = larguraCm * CM
   const H = alturaCm * CM
-  const hCabecalho = 6 * MM
-  const hRodape = 5 * MM
-  const padH = 2.5 * MM
-  const padOX = (3 + offsetX) * MM
-  const padOY = (2 + offsetY) * MM
+  // Tudo escala junto (fonte, QR, cabeçalho/rodapé, paddings) conforme a etiqueta.
+  const hCabecalho = 6 * MM * escala
+  const hRodape = 5 * MM * escala
+  const padH = 2.5 * MM * escala
+  const padOX = (3 * escala + offsetX) * MM
+  const padOY = (2 * escala + offsetY) * MM
   const fs = (n: number) => n * escala
+  const qrSize = 36 * escala
+  const rightW = 40 * escala
 
   return StyleSheet.create({
     page: {
@@ -129,13 +132,13 @@ function buildStyles(opts: {
     },
     corpo: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
     left: { flex: 1, minWidth: 0, paddingRight: 3, overflow: 'hidden' },
-    right: { width: 38, flexShrink: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 1 },
+    right: { width: rightW, flexShrink: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 1 },
     descricao: { fontSize: fs(8), marginBottom: 3, lineHeight: 1.25 },
     campoLinha: { flexDirection: 'row', marginBottom: 2, alignItems: 'baseline' },
     label: { fontSize: fs(5.5), color: '#555', marginRight: 2 },
     valor: { fontSize: fs(7) },
     linha: { fontSize: fs(6.5), marginBottom: 1 },
-    qr: { width: 36, height: 36 },
+    qr: { width: qrSize, height: qrSize },
     rodape: {
       height: hRodape,
       borderTopWidth: 0.5,
@@ -156,7 +159,9 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
   const alturaCm = config.alturaCm ?? ALTURA_CM_PADRAO
   const offsetX = config.offsetX ?? 0
   const offsetY = config.offsetY ?? 0
-  const escala = config.fonteEscala ?? 1
+  // Escala automática: o conteúdo acompanha o tamanho da etiqueta (quadrada ou
+  // retangular). Usa a dimensão mais apertada pra não estourar. Sem ajuste manual.
+  const escala = Math.min(Math.max(Math.min(larguraCm / LARGURA_CM_PADRAO, alturaCm / ALTURA_CM_PADRAO), 0.55), 2.4)
   const cor = (config.corDestaque || '').trim() || '#000000'
   const corFilete = cor === '#000000' ? '#ccc' : cor
   const borda = config.mostrarBorda ?? false

@@ -6,7 +6,11 @@ import { toast } from 'sonner'
 import { ChevronUp, ChevronDown, Printer } from 'lucide-react'
 import { salvarEtiquetaConfig } from '@/lib/actions/minha-loja'
 import { formParaConfig, type EtiquetaFormValores } from '@/lib/etiqueta-config'
-import { CAMPOS_ETIQUETA, type CampoEtiqueta } from '@/components/etiqueta/EtiquetaPDF'
+import { CAMPOS_ETIQUETA, type CampoEtiqueta, LARGURA_CM_PADRAO, ALTURA_CM_PADRAO } from '@/components/etiqueta/EtiquetaPDF'
+
+// Mesma escala automática do PDF: o conteúdo acompanha o tamanho da etiqueta.
+const autoEscala = (larguraCm: number, alturaCm: number) =>
+  Math.min(Math.max(Math.min(larguraCm / LARGURA_CM_PADRAO, alturaCm / ALTURA_CM_PADRAO), 0.55), 2.4)
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
@@ -54,7 +58,7 @@ function Preview({ f }: { f: EtiquetaFormValores }) {
   const filete = cor === '#111111' ? '#d4d4d8' : cor
   const Wpx = 320
   const Hpx = Math.max(90, Math.round((Wpx * Number(f.altura_cm)) / Number(f.largura_cm)))
-  const esc = Number(f.fonte_escala) || 1
+  const esc = autoEscala(Number(f.largura_cm), Number(f.altura_cm))
   const px = (n: number) => `${(n * esc).toFixed(1)}px`
   const nome = (f.nome_exibido || 'SUA LOJA').toUpperCase()
   const visiveis = f.ordem_campos.filter((k) => f[MOSTRAR_KEY[k as CampoEtiqueta]]) as CampoEtiqueta[]
@@ -163,16 +167,12 @@ export function EtiquetaEditor({ inicial }: { inicial: EtiquetaFormValores }) {
             </div>
           </div>
 
-          {/* Tipografia + cor */}
+          {/* Estilo + cor */}
           <div className={secao}>
-            <div className={tituloSecao}>Tipografia e cor</div>
-            <label className={labelClass}>Tamanho da fonte</label>
-            <select className={inputClass} value={f.fonte_escala} onChange={(e) => set('fonte_escala', Number(e.target.value))}>
-              <option value={0.85}>Pequena</option>
-              <option value={1}>Normal</option>
-              <option value={1.15}>Grande</option>
-              <option value={1.3}>Muito grande</option>
-            </select>
+            <div className={tituloSecao}>Estilo e cor</div>
+            <p className="mb-2 text-[12px] text-text-muted">
+              O tamanho do texto se ajusta sozinho ao tamanho da etiqueta (em cm).
+            </p>
             <div className="mt-2 flex flex-col gap-1.5">
               <Check on={f.negrito_nome} onToggle={() => toggle('negrito_nome')}>Nome em negrito</Check>
               <Check on={f.negrito_descricao} onToggle={() => toggle('negrito_descricao')}>Descrição em negrito</Check>
