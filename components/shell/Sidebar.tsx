@@ -4,7 +4,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react'
 import { NAV_ITEMS, type NavItem } from './NavItems'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
@@ -184,6 +184,7 @@ export function Sidebar({
                     <SideLink
                       key={item.href}
                       item={item}
+                      isAdmin={isAdmin}
                       active={
                         pathname === item.href || pathname.startsWith(item.href + '/')
                       }
@@ -290,16 +291,20 @@ function GrupoSanfona({
   )
 }
 
-function SideLink({ item, active }: { item: NavItem; active: boolean }) {
+function SideLink({ item, active, isAdmin }: { item: NavItem; active: boolean; isAdmin: boolean }) {
   const Icon = item.icon
+  // Bloqueada para quem nao e admin global: cadeado e cinza, mas ainda navega
+  // (a propria pagina mostra o "em breve").
+  const bloqueada = !!item.cadeadoSemAdmin && !isAdmin
   return (
     <Link
       href={item.href}
       className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm u-motion u-press-sm ${
         active
           ? 'bg-brand-soft text-text font-medium'
-          : 'text-text-muted hover:bg-surface-2 hover:text-text'
+          : `text-text-muted hover:bg-surface-2 hover:text-text ${bloqueada ? 'opacity-70' : ''}`
       }`}
+      title={bloqueada ? 'Em breve' : undefined}
     >
       {active && (
         <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
@@ -310,7 +315,8 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
         }`}
         strokeWidth={2}
       />
-      {item.label}
+      <span className="flex-1">{item.label}</span>
+      {bloqueada && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} />}
     </Link>
   )
 }

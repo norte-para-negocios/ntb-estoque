@@ -31,6 +31,8 @@ export type NavItem = {
   admin?: boolean
   // gestaoUsuarios: admin global OU AdminLoja veem (gestao de usuarios escopada).
   gestaoUsuarios?: boolean
+  // cadeadoSemAdmin: aparece pra quem nao e admin global com cadeado (em breve).
+  cadeadoSemAdmin?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -51,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-compras', label: 'Compras (BETA)', icon: ShoppingCart, group: 'Administração', gestaoUsuarios: true },
-  { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true },
+  { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
 ]

@@ -7,11 +7,12 @@ import { revalidatePath } from 'next/cache'
 import { ORDEM_CAMPOS_PADRAO, type CampoEtiqueta } from '@/components/etiqueta/EtiquetaPDF'
 import type { EtiquetaFormValores } from '@/lib/etiqueta-config'
 
-// Quem pode mexer na "Minha loja": admin global ou admin da loja, e a loja ATUAL
-// precisa estar entre as lojas que ele gere. Retorna o id da loja ou null.
+// Quem pode mexer na "Minha loja": POR ENQUANTO só o administrador GERAL (admin
+// global), e a loja ATUAL precisa estar entre as lojas dele. Retorna o id ou null.
+// (Os admins de loja veem a aba com cadeado / "em breve".)
 async function lojaGerivel(): Promise<number | null> {
   const ator = await getAtorGestao()
-  if (!ator.podeGerir) return null
+  if (!ator.isAdminGlobal) return null
   const lojaId = await getCurrentLojaId()
   return ator.lojaIds.includes(lojaId) ? lojaId : null
 }

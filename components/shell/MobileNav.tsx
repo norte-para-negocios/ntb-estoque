@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Lock,
   LayoutDashboard,
   FileText,
   ClipboardList,
@@ -209,18 +210,21 @@ export function MobileNav({
                         const Icon = item.icon
                         const active =
                           pathname === item.href || pathname.startsWith(item.href + '/')
+                        const bloqueada = !!item.cadeadoSemAdmin && !isAdmin
                         return (
                           <Link
                             key={item.href}
                             href={item.href}
+                            title={bloqueada ? 'Em breve' : undefined}
                             className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm u-motion active:bg-surface-2 ${
-                              active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted'
+                              active ? 'bg-brand-soft text-text font-medium' : `text-text-muted ${bloqueada ? 'opacity-70' : ''}`
                             }`}
                           >
                             <Icon
                               className={`size-[18px] shrink-0 ${active ? 'text-brand' : ''}`}
                             />
-                            {item.label}
+                            <span className="flex-1">{item.label}</span>
+                            {bloqueada && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} />}
                           </Link>
                         )
                       })}
