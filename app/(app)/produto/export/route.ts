@@ -19,6 +19,17 @@ export async function GET(request: Request) {
     familia: searchParams.get('familia') || undefined,
     tipo: searchParams.get('tipo') || undefined,
     situacao: searchParams.get('situacao') || undefined,
+    fornecedor: searchParams.get('fornecedor') || undefined,
+  }
+
+  // Filtro por fornecedor: códigos que a loja já comprou daquele fornecedor (NF).
+  let codigosFornecedor: number[] | null = null
+  if (params.fornecedor) {
+    const { data } = await supabase.rpc('compras_produtos_do_fornecedor', {
+      p_loja_id: lojaId,
+      p_fornecedor: params.fornecedor,
+    })
+    codigosFornecedor = ((data ?? []) as { cod: number }[]).map((r) => Number(r.cod))
   }
 
   // Paginação interna para não truncar a exportação (PostgREST limita 1000 linhas).
@@ -47,6 +58,7 @@ export async function GET(request: Request) {
     }
     if (params.familia) q = q.eq('descricao_familia', params.familia)
     if (params.tipo) q = q.eq('tipo_item', params.tipo)
+    if (codigosFornecedor !== null) q = q.in('codigo_produto', codigosFornecedor.length ? codigosFornecedor : [-1])
     if (!params.situacao || params.situacao === 'ativos') q = q.neq('full_object->>inativo', 'S')
     else if (params.situacao === 'inativos') q = q.eq('full_object->>inativo', 'S')
 

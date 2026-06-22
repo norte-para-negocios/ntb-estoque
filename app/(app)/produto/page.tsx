@@ -65,7 +65,7 @@ function precoSugerido(custo: number | null, alvo: number): number | null {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -91,7 +91,7 @@ export default async function ProdutoPage({
   // Compras) nao dependem da query principal de produtos.
   // Familias via RPC com DISTINCT no banco: evita o teto de 1000 do PostgREST
   // (que cortava familias do dropdown) e a varredura da tabela inteira a cada render.
-  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos, familiasComCodigo] = await Promise.all([
+  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos, familiasComCodigo, fornecedoresList, fornecedorCodigos] = await Promise.all([
     supabase
       .from('lojas')
       .select('produto_ultima_atualizacao, produto_status')
@@ -103,6 +103,14 @@ export default async function ProdutoPage({
       : Promise.resolve<number[] | null>(null),
     // Familias com codigo+descricao para o select do form de edicao (o RPC acima so traz descricao).
     buscarFamilias(),
+    // Fornecedores que a loja ja comprou (dropdown do filtro de sugestao por fornecedor).
+    supabase.rpc('compras_fornecedores', { p_loja_id: lojaId }).then(({ data }) => (data ?? []) as { fornecedor: string }[]),
+    // Codigos de produto comprados do fornecedor filtrado (so quando ha filtro).
+    params.fornecedor
+      ? supabase
+          .rpc('compras_produtos_do_fornecedor', { p_loja_id: lojaId, p_fornecedor: params.fornecedor })
+          .then(({ data }) => ((data ?? []) as { cod: number }[]).map((r) => Number(r.cod)))
+      : Promise.resolve<number[] | null>(null),
   ])
   const familiasOpcoes = ((familiasRows ?? []) as { descricao_familia: string }[]).map((r) => ({
     value: r.descricao_familia,
@@ -133,11 +141,16 @@ export default async function ProdutoPage({
   if (!params.situacao || params.situacao === 'ativos') query = query.eq('inativo', false)
   else if (params.situacao === 'inativos') query = query.eq('inativo', true)
 
-  // Modo Compras + "Só repor": restringe aos produtos abaixo do minimo (codigos
-  // ja resolvidos em paralelo acima via RPC produtos_repor).
-  if (repor) {
-    const cods = reporCodigos ?? []
-    query = query.in('codigo_produto', cods.length ? cods : [-1])
+  // Restrição por codigo_produto: "Só repor" (abaixo do mínimo) e/ou Fornecedor
+  // (produtos que a loja já comprou daquele fornecedor). Com os dois, interseção.
+  let restricaoCods: number[] | null = null
+  if (repor) restricaoCods = reporCodigos ?? []
+  if (params.fornecedor) {
+    const fc = fornecedorCodigos ?? []
+    restricaoCods = restricaoCods === null ? fc : restricaoCods.filter((c) => fc.includes(c))
+  }
+  if (restricaoCods !== null) {
+    query = query.in('codigo_produto', restricaoCods.length ? restricaoCods : [-1])
   }
 
   const { data: produtosRaw } = await query
@@ -303,6 +316,7 @@ export default async function ProdutoPage({
   if (params.q) exportParams.set('q', params.q)
   if (params.familia) exportParams.set('familia', params.familia)
   if (params.tipo) exportParams.set('tipo', params.tipo)
+  if (params.fornecedor) exportParams.set('fornecedor', params.fornecedor)
   if (params.situacao) exportParams.set('situacao', params.situacao)
   // ord viaja junto para que trocar vista/margem/repor preserve a ordenacao.
   // O export (CSV) ignora o param; sem efeito colateral.
@@ -314,6 +328,7 @@ export default async function ProdutoPage({
     { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
     { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
     { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'select', nome: 'fornecedor', label: 'Fornecedor (já comprado)', opcoes: fornecedoresList.map((f) => ({ value: f.fornecedor, label: f.fornecedor })) },
     {
       tipo: 'select',
       nome: 'situacao',
@@ -348,7 +363,7 @@ export default async function ProdutoPage({
               <FiltrosGaveta
                 basePath="/produto"
                 campos={campos}
-                defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
+                defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', fornecedor: params.fornecedor ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
                 persistirEm="/produto"
               />
               {podeCriar && (
