@@ -13,6 +13,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { ShoppingCart, Download } from 'lucide-react'
 
 // Dimensões de abertura do relatório (espelham as planilhas do Ramon).
@@ -35,7 +36,14 @@ type LinhaDim = { rotulo: string; valor: number; itens: number }
 export default async function RelatorioComprasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; dim?: string }>
+  searchParams: Promise<{
+    data_inicio?: string
+    data_final?: string
+    dim?: string
+    familia?: string
+    tipo?: string
+    fornecedor?: string
+  }>
 }) {
   const lojaId = await getCurrentLojaId()
   // Relatório com R$ de compras é sensível: só gestores (admin global ou de loja).
@@ -49,11 +57,16 @@ export default async function RelatorioComprasPage({
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
+  // Filtros opcionais (também valem no Excel detalhado).
+  const familia = sp.familia || null
+  const tipo = sp.tipo || null
+  const fornecedor = sp.fornecedor || null
+  const filtros = { p_familia: familia, p_tipo: tipo, p_fornecedor: fornecedor }
 
   const supabase = await createClient()
   const [{ data: totalRows }, { data: linhasRaw }] = await Promise.all([
-    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: ini, p_fim: fim }),
-    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim }),
+    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
+    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
   ])
   const total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
   const nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
@@ -66,12 +79,19 @@ export default async function RelatorioComprasPage({
     return l.rotulo
   }
 
+  const familias = await buscarFamilias()
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'select', nome: 'tipo', label: 'Tipo de mercadoria', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor (nome)' },
   ]
 
   const exportParams = new URLSearchParams({ data_inicio: ini, data_final: fim, dim })
+  if (familia) exportParams.set('familia', familia)
+  if (tipo) exportParams.set('tipo', tipo)
+  if (fornecedor) exportParams.set('fornecedor', fornecedor)
 
   return (
     <div className="space-y-4">
@@ -85,7 +105,13 @@ export default async function RelatorioComprasPage({
               <FiltrosGaveta
                 basePath="/relatorio-compras"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                defaults={{
+                  data_inicio: sp.data_inicio ?? '',
+                  data_final: sp.data_final ?? '',
+                  tipo: sp.tipo ?? '',
+                  familia: sp.familia ?? '',
+                  fornecedor: sp.fornecedor ?? '',
+                }}
                 persistirEm="/relatorio-compras"
               />
               <a
@@ -93,6 +119,7 @@ export default async function RelatorioComprasPage({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={btnClass('outline')}
+                title="Excel detalhado (item a item) com filtros"
               >
                 <Download className="size-4" /> Excel
               </a>

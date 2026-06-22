@@ -21,6 +21,9 @@ export interface PlanilhaOpts {
   titulo: string
   // Subtitulo opcional (ex.: "Donana Rio Vermelho · 19/05/2026 a 18/06/2026").
   subtitulo?: string
+  // Liga o AutoFiltro do Excel no cabecalho (dropdowns de filtrar/ordenar por
+  // coluna). Ideal para planilhas de detalhe que a pessoa vai fatiar na mao.
+  autoFiltro?: boolean
 }
 
 /**
@@ -139,6 +142,14 @@ export async function gerarPlanilha(
     }
     ws.getColumn(i + 1).width = largura
   })
+
+  // AutoFiltro no cabecalho: dropdowns de filtrar/ordenar por coluna no Excel.
+  if (opts.autoFiltro) {
+    ws.autoFilter = {
+      from: { row: linhaCabecalho, column: 1 },
+      to: { row: linhaCabecalho, column: totalCols },
+    }
+  }
 
   const arrayBuffer = await wb.xlsx.writeBuffer()
   return Buffer.from(arrayBuffer)
