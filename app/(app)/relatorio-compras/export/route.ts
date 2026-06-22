@@ -69,9 +69,25 @@ export async function GET(request: Request) {
   const filtros = { p_familia: familia, p_tipo: tipo, p_fornecedor: fornecedor }
 
   const supabase = await createClient()
-  const [{ data: detalheRaw }, { data: matrizRaw }] = await Promise.all([
-    supabase.rpc('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
-    supabase.rpc('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
+  // RPC pode devolver muito mais de 1000 linhas (detalhe item a item, ou matriz
+  // por produto). O PostgREST limita a 1000 por resposta, entao paginamos com
+  // .range ate vir uma pagina incompleta. Sem isso o Excel truncava em 1000.
+  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
+    const PAGE_SIZE = 1000
+    const todos: T[] = []
+    for (let pagina = 0; ; pagina++) {
+      const from = pagina * PAGE_SIZE
+      const { data, error } = await supabase.rpc(fn, args).range(from, from + PAGE_SIZE - 1)
+      if (error || !data?.length) break
+      todos.push(...(data as T[]))
+      if (data.length < PAGE_SIZE) break
+    }
+    return todos
+  }
+
+  const [detalheRaw, matrizRaw] = await Promise.all([
+    rpcTodos<LinhaDetalhe>('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
+    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
   ])
 
   // Rótulo amigável conforme a dimensão (tipo -> nome do SPED; produto -> título limpo).
@@ -82,7 +98,7 @@ export async function GET(request: Request) {
   }
 
   // --- Aba "Resumo": matriz (linha = dimensão, coluna = mês), como o Ramon manda ---
-  const matriz = (matrizRaw ?? []) as LinhaMatriz[]
+  const matriz = matrizRaw
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()
   for (const r of matriz) {
@@ -107,7 +123,7 @@ export async function GET(request: Request) {
   ]
 
   // --- Aba "Detalhado": uma linha por item de NF, com AutoFiltro ---
-  const detalheRows = ((detalheRaw ?? []) as LinhaDetalhe[]).map((l) => ({
+  const detalheRows = detalheRaw.map((l) => ({
     data: fmtData(l.data),
     mes: l.mes ?? '',
     nota: l.nota ?? '',
