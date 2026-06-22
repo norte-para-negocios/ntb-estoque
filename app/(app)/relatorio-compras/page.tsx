@@ -120,9 +120,18 @@ export default async function RelatorioComprasPage({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={btnClass('outline')}
-                title="Excel com 2 abas: Resumo mês a mês + Detalhado (item a item, com filtros)"
+                title="Excel desta abertura: Resumo mês a mês + Detalhado (com filtros)"
               >
                 <Download className="size-4" /> Excel
+              </a>
+              <a
+                href={`/relatorio-compras/export-completo?${exportParams.toString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('primary')}
+                title="Pasta completa: matriz mês a mês por Tipo, Família, Fornecedor, CFOP e Produto + Detalhado"
+              >
+                <Download className="size-4" /> Baixar tudo
               </a>
             </>
           }
