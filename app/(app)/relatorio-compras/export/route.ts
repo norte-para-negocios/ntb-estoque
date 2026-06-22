@@ -13,6 +13,7 @@ const DIM_LABEL: Record<string, string> = {
   fornecedor: 'Fornecedor',
   produto: 'Produto',
   tipo: 'Tipo',
+  cfop: 'CFOP',
 }
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']

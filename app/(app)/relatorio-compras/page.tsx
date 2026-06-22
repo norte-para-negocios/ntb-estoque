@@ -22,6 +22,7 @@ const DIMS = [
   { value: 'fornecedor', label: 'Fornecedor' },
   { value: 'produto', label: 'Produto' },
   { value: 'tipo', label: 'Tipo' },
+  { value: 'cfop', label: 'CFOP' },
 ] as const
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
