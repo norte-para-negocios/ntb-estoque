@@ -4,23 +4,42 @@ import { formatNumBR } from '@/lib/num-br'
 
 // Fator de conversao mm -> pt (1 mm = 2.83465 pt)
 const MM = 2.83465
+const CM = 10 * MM
 
-// Largura fixa original (72.56 mm). Altura parametrizavel.
-const W = 72.56 * MM
+// Tamanho padrao em cm (largura original 72.56mm = 7.256cm; altura 40.04mm = 4.0cm)
+export const LARGURA_CM_PADRAO = 7.26
+export const ALTURA_CM_PADRAO = 4.0
 
-// Presets de altura
-export const ALTURA_PRESETS = {
-  padrao: 40.04,   // mesma do sistema Laravel original
-  compacta: 32,    // reduzida -- elimina sobra vertical
-} as const
-export type AlturaPreset = keyof typeof ALTURA_PRESETS
+// Campos opcionais do corpo, na ordem que podem ser reordenados pelo admin.
+export type CampoEtiqueta =
+  | 'fabricacao' | 'validade' | 'qtde_nf' | 'qtde_etiqueta' | 'lote' | 'recebido' | 'fornecedor'
 
-// Config de impressao por loja (persiste em localStorage via EtiquetaConfigStore)
+export const CAMPOS_ETIQUETA: { key: CampoEtiqueta; label: string }[] = [
+  { key: 'fabricacao', label: 'Fabricação' },
+  { key: 'validade', label: 'Validade' },
+  { key: 'qtde_nf', label: 'Qtde NF' },
+  { key: 'qtde_etiqueta', label: 'Qtde Etiqueta' },
+  { key: 'lote', label: 'Lote' },
+  { key: 'recebido', label: 'Recebido' },
+  { key: 'fornecedor', label: 'Fornecedor' },
+]
+export const ORDEM_CAMPOS_PADRAO: CampoEtiqueta[] = CAMPOS_ETIQUETA.map((c) => c.key)
+
+// Config do padrao da etiqueta (vem da tabela etiqueta_config, por loja). O
+// tamanho (larguraCm/alturaCm) pode ser sobrescrito pelo usuario na hora.
 export interface EtiquetaConfig {
-  nomeExibido?: string    // nome custom da loja na etiqueta; '' usa o nome do banco
-  alturaPreset?: AlturaPreset
-  offsetX?: number        // deslocamento horizontal em mm (negativo = esquerda)
-  offsetY?: number        // deslocamento vertical em mm (negativo = cima)
+  nomeExibido?: string
+  larguraCm?: number
+  alturaCm?: number
+  offsetX?: number // mm (negativo = esquerda)
+  offsetY?: number // mm (negativo = cima)
+  corDestaque?: string | null // hex (#1C8D99); null/vazio = preto
+  fonteEscala?: number // 1.0 = padrao
+  negritoNome?: boolean
+  negritoDescricao?: boolean
+  mostrarLogo?: boolean
+  mostrarBorda?: boolean
+  ordemCampos?: CampoEtiqueta[]
   // Visibilidade de campos (todos true por padrão)
   mostrarFabricacao?: boolean
   mostrarValidade?: boolean
@@ -45,8 +64,7 @@ export interface Etiqueta {
   fornecedor: string
   cnpj: string
   qr: string // data URL do QR code
-  // Novos campos 3.1
-  nome_loja?: string // nome do restaurante/loja a exibir no cabecalho
+  nome_loja?: string
 }
 
 export interface EtiquetaPDFProps {
@@ -54,124 +72,118 @@ export interface EtiquetaPDFProps {
   config?: EtiquetaConfig
 }
 
-function buildStyles(alturaPreset: AlturaPreset, offsetX: number, offsetY: number) {
-  const H = ALTURA_PRESETS[alturaPreset] * MM
-  // Alturas das zonas em mm
-  const hCabecalho = 6 * MM    // 6 mm para o nome da loja
-  const hRodape    = 5 * MM    // 5 mm para CNPJ + logo mini
-
-  const padH = 2.5 * MM  // padding horizontal interno
-  const padOX = (3 + offsetX) * MM   // margem esquerda com offset de calibração
-  const padOY = (2 + offsetY) * MM   // margem topo com offset de calibração
+function buildStyles(opts: {
+  larguraCm: number
+  alturaCm: number
+  offsetX: number
+  offsetY: number
+  escala: number
+  cor: string
+  corFilete: string
+  borda: boolean
+}) {
+  const { larguraCm, alturaCm, offsetX, offsetY, escala, cor, corFilete, borda } = opts
+  const W = larguraCm * CM
+  const H = alturaCm * CM
+  const hCabecalho = 6 * MM
+  const hRodape = 5 * MM
+  const padH = 2.5 * MM
+  const padOX = (3 + offsetX) * MM
+  const padOY = (2 + offsetY) * MM
+  const fs = (n: number) => n * escala
 
   return StyleSheet.create({
     page: {
       width: W,
       height: H,
       padding: 0,
-      fontSize: 8,
+      fontSize: fs(8),
       color: '#000',
     },
-    // Offset: wrapper interno com margens (evita deslocamento da pagina)
-    inner: {
-      marginLeft: padOX < 0 ? 0 : padOX,
-      marginTop: padOY < 0 ? 0 : padOY,
-      marginRight: padH,
-      flex: 1,
+    // Box de tamanho FIXO (= página) com overflow hidden: garante que a etiqueta
+    // saia exatamente no tamanho em cm pedido, clipando conteúdo que sobra em vez
+    // de crescer/encolher a página.
+    root: {
+      width: W,
+      height: H,
+      overflow: 'hidden',
+      flexDirection: 'column',
+      paddingLeft: padOX < 0 ? 0 : padOX,
+      paddingTop: padOY < 0 ? 0 : padOY,
+      paddingRight: padH,
+      ...(borda ? { borderWidth: 0.7, borderColor: cor, borderStyle: 'solid' } : {}),
     },
-    // --- CABECALHO ---
     cabecalho: {
       height: hCabecalho,
       borderBottomWidth: 0.5,
-      borderBottomColor: '#ccc',
+      borderBottomColor: corFilete,
       justifyContent: 'center',
       paddingHorizontal: 2,
       marginBottom: 1.5,
     },
     nomeLoja: {
-      fontSize: 7,
-      fontFamily: 'Helvetica-Bold',
+      fontSize: fs(7),
       textTransform: 'uppercase',
       letterSpacing: 0.3,
+      color: cor,
     },
-    // --- CORPO (coluna esquerda + coluna direita) ---
-    // flex:1 (nao altura fixa): o corpo absorve o espaco restante e NUNCA estoura
-    // alem da pagina (o que jogava conteudo pra uma 2a etiqueta/pagina).
-    corpo: {
-      flex: 1,
-      flexDirection: 'row',
-      overflow: 'hidden',
-    },
-    left: {
-      flex: 1,
-      minWidth: 0,
-      paddingRight: 3,
-      overflow: 'hidden',
-    },
-    right: {
-      width: 38,
-      flexShrink: 0,
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      paddingTop: 1,
-    },
-    descricao: {
-      fontSize: 8,
-      fontFamily: 'Helvetica-Bold',
-      marginBottom: 3,
-      lineHeight: 1.25,
-    },
-    campoRow: { flexDirection: 'row', marginBottom: 3 },
-    campo: { flex: 1, minWidth: 0, paddingRight: 3, overflow: 'hidden' },
-    label: { fontSize: 5.5, color: '#555' },
-    valor: { fontSize: 7, fontFamily: 'Helvetica-Bold' },
-    linha: { fontSize: 6.5, marginBottom: 1 },
+    corpo: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
+    left: { flex: 1, minWidth: 0, paddingRight: 3, overflow: 'hidden' },
+    right: { width: 38, flexShrink: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 1 },
+    descricao: { fontSize: fs(8), marginBottom: 3, lineHeight: 1.25 },
+    campoLinha: { flexDirection: 'row', marginBottom: 2, alignItems: 'baseline' },
+    label: { fontSize: fs(5.5), color: '#555', marginRight: 2 },
+    valor: { fontSize: fs(7) },
+    linha: { fontSize: fs(6.5), marginBottom: 1 },
     qr: { width: 36, height: 36 },
-    // --- RODAPE ---
     rodape: {
       height: hRodape,
       borderTopWidth: 0.5,
-      borderTopColor: '#ccc',
+      borderTopColor: corFilete,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 2,
       paddingTop: 1,
     },
-    rodapeTexto: { fontSize: 5.5, color: '#444', flex: 1 },
+    rodapeTexto: { fontSize: fs(5.5), color: '#444', flex: 1 },
     logo: { width: 32, height: 'auto' },
   })
 }
 
 export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
-  const alturaPreset: AlturaPreset = config.alturaPreset ?? 'padrao'
+  const larguraCm = config.larguraCm ?? LARGURA_CM_PADRAO
+  const alturaCm = config.alturaCm ?? ALTURA_CM_PADRAO
   const offsetX = config.offsetX ?? 0
   const offsetY = config.offsetY ?? 0
+  const escala = config.fonteEscala ?? 1
+  const cor = (config.corDestaque || '').trim() || '#000000'
+  const corFilete = cor === '#000000' ? '#ccc' : cor
+  const borda = config.mostrarBorda ?? false
+  const negritoNome = config.negritoNome ?? true
+  const negritoDescricao = config.negritoDescricao ?? true
+  const mostrarLogo = config.mostrarLogo ?? true
+  const ordem = (config.ordemCampos?.length ? config.ordemCampos : ORDEM_CAMPOS_PADRAO)
 
-  // Defaults de visibilidade (tudo visivel quando nao configurado)
   const mostrar = {
-    fabricacao:     config.mostrarFabricacao    ?? true,
-    validade:       config.mostrarValidade       ?? true,
-    qtdeNf:         config.mostrarQtdeNf         ?? true,
-    qtdeEtiqueta:   config.mostrarQtdeEtiqueta   ?? true,
-    lote:           config.mostrarLote           ?? true,
-    recebido:       config.mostrarRecebido       ?? true,
-    fornecedor:     config.mostrarFornecedor     ?? true,
-    cnpj:           config.mostrarCnpj           ?? true,
+    fabricacao: config.mostrarFabricacao ?? true,
+    validade: config.mostrarValidade ?? true,
+    qtdeNf: config.mostrarQtdeNf ?? true,
+    qtdeEtiqueta: config.mostrarQtdeEtiqueta ?? true,
+    lote: config.mostrarLote ?? true,
+    recebido: config.mostrarRecebido ?? true,
+    fornecedor: config.mostrarFornecedor ?? true,
+    cnpj: config.mostrarCnpj ?? true,
   }
 
-  const s = buildStyles(alturaPreset, offsetX, offsetY)
+  const s = buildStyles({ larguraCm, alturaCm, offsetX, offsetY, escala, cor, corFilete, borda })
+  const bold = (b: boolean) => ({ fontFamily: b ? 'Helvetica-Bold' : 'Helvetica' })
 
   return (
     <Document>
       {etiquetas.map((e, i) => {
-        const H = ALTURA_PRESETS[alturaPreset] * MM
         const nomeLoja = (config.nomeExibido?.trim() || e.nome_loja?.trim() || '').toUpperCase()
-
-        // Descricao: sem truncamento forcado — deixa quebrar em ate 2 linhas
         const descricao = e.descricao.trim()
-
-        // Qtde formatada com num-br
         const qtdeNf = e.qtde_nf
           ? e.qtde_nf.replace(/^(\d+[\d.,]*)/, (m) => formatNumBR(parseFloat(m.replace(',', '.'))))
           : ''
@@ -179,103 +191,64 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
           ? e.qtde_etiqueta.replace(/^(\d+[\d.,]*)/, (m) => formatNumBR(parseFloat(m.replace(',', '.'))))
           : ''
 
+        // Resolve cada campo opcional -> { label, valor } | null (oculto/vazio)
+        const valores: Record<CampoEtiqueta, { label: string; valor: string } | null> = {
+          fabricacao: mostrar.fabricacao && e.produzido ? { label: 'Fabricação', valor: e.produzido.trim().slice(0, 10) } : null,
+          validade: mostrar.validade && e.validade ? { label: 'Validade', valor: e.validade.trim().slice(0, 10) } : null,
+          qtde_nf: mostrar.qtdeNf && e.qtde_nf ? { label: 'Qtde NF', valor: qtdeNf.slice(0, 16) } : null,
+          qtde_etiqueta: mostrar.qtdeEtiqueta && e.qtde_etiqueta ? { label: 'Qtde Etiqueta', valor: qtdeEtiqueta.slice(0, 16) } : null,
+          lote: mostrar.lote && e.lote ? { label: 'Lote', valor: e.lote.trim().slice(0, 24) } : null,
+          recebido: mostrar.recebido && e.inclusao ? { label: 'Recebido', valor: e.inclusao.trim().slice(0, 10) } : null,
+          fornecedor: mostrar.fornecedor && e.fornecedor ? { label: '', valor: e.fornecedor.trim().slice(0, 30) } : null,
+        }
+        const linhas = ordem.map((k) => valores[k]).filter(Boolean) as { label: string; valor: string }[]
+        const temRodape = mostrar.cnpj || mostrarLogo
+
         return (
-          <Page key={i} size={[W, H]} style={s.page} wrap={false}>
-            <View style={s.inner}>
-              {/* === ZONA 1: CABECALHO — nome da loja === */}
+          <Page key={i} size={{ width: larguraCm * CM, height: alturaCm * CM }} style={s.page} wrap={false}>
+            <View style={s.root}>
+              {/* CABECALHO — nome da loja */}
               <View style={s.cabecalho}>
-                <Text style={s.nomeLoja}>{nomeLoja || 'NTB NORTE PARA NEGOCIOS'}</Text>
+                <Text style={[s.nomeLoja, bold(negritoNome)]}>{nomeLoja || 'NTB NORTE PARA NEGOCIOS'}</Text>
               </View>
 
-              {/* === ZONA 2: CORPO === */}
+              {/* CORPO */}
               <View style={s.corpo}>
-                {/* Coluna esquerda: dados do produto */}
                 <View style={s.left}>
-                  {/* Descricao: quebra natural, maximo 2 linhas via lineClamp nao disponivel no react-pdf
-                      Usamos numberOfLines=2 via maxLines — react-pdf suporta via wrap implicito */}
-                  <Text style={s.descricao}>{descricao}</Text>
+                  <Text style={[s.descricao, bold(negritoDescricao)]}>{descricao}</Text>
 
-                  {/* Fabricacao + Validade */}
-                  {(mostrar.fabricacao || mostrar.validade) &&
-                    (e.produzido !== '' || e.validade !== '') && (
-                    <View style={s.campoRow}>
-                      {mostrar.fabricacao && e.produzido !== '' && (
-                        <View style={s.campo}>
-                          <Text style={s.label}>Fabricação:</Text>
-                          <Text style={s.valor}>{e.produzido.trim().slice(0, 10)}</Text>
-                        </View>
-                      )}
-                      {mostrar.validade && e.validade !== '' && (
-                        <View style={s.campo}>
-                          <Text style={s.label}>Validade:</Text>
-                          <Text style={s.valor}>{e.validade.trim().slice(0, 10)}</Text>
-                        </View>
-                      )}
-                      {/* Qtde Etiqueta sozinha (sem qtde NF) */}
-                      {mostrar.qtdeEtiqueta && e.qtde_etiqueta !== '' && e.qtde_nf === '' && (
-                        <View style={s.campo}>
-                          <Text style={s.label}>Qtde Et.:</Text>
-                          <Text style={s.valor}>{qtdeEtiqueta.slice(0, 14)}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Qtde NF + Qtde Etiqueta */}
-                  {(mostrar.qtdeNf || mostrar.qtdeEtiqueta) &&
-                    e.qtde_nf !== '' && e.qtde_etiqueta !== '' && (
-                    <View style={s.campoRow}>
-                      {mostrar.qtdeNf && (
-                        <View style={s.campo}>
-                          <Text style={s.label}>Qtde NF</Text>
-                          <Text style={s.valor}>{qtdeNf.slice(0, 16)}</Text>
-                        </View>
-                      )}
-                      {mostrar.qtdeEtiqueta && (
-                        <View style={s.campo}>
-                          <Text style={s.label}>Qtde Etiqueta</Text>
-                          <Text style={s.valor}>{qtdeEtiqueta.slice(0, 16)}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Produto + Quantidade */}
-                  <View style={s.campoRow}>
-                    <Text style={[s.linha, { flex: 1 }]}>
-                      Prod: {e.codigo_produto.trim().slice(0, 8)}
-                    </Text>
+                  {/* Produto + quantidade (linha fixa) */}
+                  <View style={s.campoLinha}>
+                    <Text style={[s.linha, { flex: 1 }]}>Prod: {e.codigo_produto.trim().slice(0, 8)}</Text>
                     {e.quantidade !== '' && (
                       <Text style={[s.linha, { flex: 1 }]}>{e.quantidade.trim().slice(0, 14)}</Text>
                     )}
                   </View>
 
-                  {mostrar.lote && e.lote !== '' && (
-                    <Text style={s.linha}>Lote: {e.lote.trim().slice(0, 24)}</Text>
-                  )}
-                  {mostrar.recebido && e.inclusao !== '' && (
-                    <Text style={s.linha}>Recebido: {e.inclusao.trim().slice(0, 10)}</Text>
-                  )}
-                  {mostrar.fornecedor && e.fornecedor !== '' && (
-                    <Text style={s.linha}>{e.fornecedor.trim().slice(0, 30)}</Text>
-                  )}
+                  {/* Campos opcionais na ordem escolhida */}
+                  {linhas.map((c, idx) => (
+                    <View key={idx} style={s.campoLinha}>
+                      {c.label !== '' && <Text style={s.label}>{c.label}:</Text>}
+                      <Text style={[s.valor, bold(true)]}>{c.valor}</Text>
+                    </View>
+                  ))}
                 </View>
 
-                {/* Coluna direita: QR code */}
+                {/* QR code */}
                 <View style={s.right}>
                   {/* eslint-disable-next-line jsx-a11y/alt-text */}
                   <Image style={s.qr} src={e.qr} />
                 </View>
               </View>
 
-              {/* === ZONA 3: RODAPE — CNPJ + logo NTB === */}
-              <View style={s.rodape}>
-                {mostrar.cnpj && (
-                  <Text style={s.rodapeTexto}>CNPJ: {e.cnpj || '-'}</Text>
-                )}
-                {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                <Image style={s.logo} src={NTB_LOGO_DATA_URL} />
-              </View>
+              {/* RODAPE — CNPJ + logo */}
+              {temRodape && (
+                <View style={s.rodape}>
+                  {mostrar.cnpj ? <Text style={s.rodapeTexto}>CNPJ: {e.cnpj || '-'}</Text> : <Text style={s.rodapeTexto} />}
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  {mostrarLogo && <Image style={s.logo} src={NTB_LOGO_DATA_URL} />}
+                </View>
+              )}
             </View>
           </Page>
         )

@@ -9,6 +9,7 @@ import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { parseNumBR } from '@/lib/num-br'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
+import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 
 const stepBtnClass =
   'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-7'
@@ -412,14 +413,14 @@ function DialogEditar({ op, ctrl }: StepperProps) {
 function Acoes({ op, ctrl }: StepperProps) {
   return (
     <>
-      <a
+      <DialogImprimirEtiqueta
         href={`/ordem-producao/${op.id}/imprimir`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-brand hover:underline"
-      >
-        <Printer className="size-3.5" /> Imprimir
-      </a>
+        trigger={
+          <button type="button" className="inline-flex items-center gap-1 text-brand hover:underline">
+            <Printer className="size-3.5" /> Imprimir
+          </button>
+        }
+      />
       {!op.concluida && op.podeConcluir && (
         <>
           <button
@@ -572,16 +573,14 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
             <Trash2 className="size-4" />
           </button>
         )}
-        <a
+        <DialogImprimirEtiqueta
           href={`/ordem-producao/${op.id}/imprimir`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={acaoIconeClass}
-          aria-label="Imprimir"
-          title="Imprimir"
-        >
-          <Printer className="size-4" />
-        </a>
+          trigger={
+            <button type="button" className={acaoIconeClass} aria-label="Imprimir" title="Imprimir">
+              <Printer className="size-4" />
+            </button>
+          }
+        />
       </div>
 
       {op.podeEditar && <DialogEditar op={op} ctrl={ctrl} />}

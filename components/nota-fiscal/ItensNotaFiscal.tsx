@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
 import { btnClass } from '@/components/ui-kit/Button'
 import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
+import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 import { FileText } from 'lucide-react'
 
 export type ItemNF = {
@@ -34,32 +35,32 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
     setSel((s) => (s.size === itens.length ? new Set() : new Set(itens.map((i) => i.id))))
   }
 
-  function imprimir(ids?: number[]) {
-    const base = `/nota-fiscal/${notaId}/imprimir`
-    const url = ids && ids.length ? `${base}?itens=${ids.join(',')}` : base
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
   if (!itens.length) {
     return <EmptyState icon={FileText} title="Nenhum item nesta nota" />
   }
 
+  const base = `/nota-fiscal/${notaId}/imprimir`
   const todosMarcados = sel.size === itens.length && itens.length > 0
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => imprimir([...sel])}
-          disabled={sel.size === 0}
-          className={`${btnClass('outline')} disabled:opacity-50`}
-        >
-          <Printer className="size-4" /> Imprimir selecionados{sel.size ? ` (${sel.size})` : ''}
-        </button>
-        <button type="button" onClick={() => imprimir()} className={btnClass('primary')}>
-          <Printer className="size-4" /> Imprimir todos
-        </button>
+        <DialogImprimirEtiqueta
+          href={sel.size ? `${base}?itens=${[...sel].join(',')}` : base}
+          trigger={
+            <button type="button" disabled={sel.size === 0} className={`${btnClass('outline')} disabled:opacity-50`}>
+              <Printer className="size-4" /> Imprimir selecionados{sel.size ? ` (${sel.size})` : ''}
+            </button>
+          }
+        />
+        <DialogImprimirEtiqueta
+          href={base}
+          trigger={
+            <button type="button" className={btnClass('primary')}>
+              <Printer className="size-4" /> Imprimir todos
+            </button>
+          }
+        />
       </div>
 
       {/* Desktop: tabela */}
@@ -107,13 +108,14 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
                   </div>
                 </td>
                 <td className="text-right">
-                  <button
-                    type="button"
-                    onClick={() => imprimir([item.id])}
-                    className="text-brand hover:underline whitespace-nowrap"
-                  >
-                    Imprimir
-                  </button>
+                  <DialogImprimirEtiqueta
+                    href={`${base}?itens=${item.id}`}
+                    trigger={
+                      <button type="button" className="text-brand hover:underline whitespace-nowrap">
+                        Imprimir
+                      </button>
+                    }
+                  />
                 </td>
               </tr>
             ))}
@@ -170,13 +172,14 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
             </div>
 
             <div className="mt-4 border-t border-border/60 pt-3">
-              <button
-                type="button"
-                onClick={() => imprimir([item.id])}
-                className="inline-flex items-center gap-1 text-brand hover:underline"
-              >
-                <Printer className="size-3.5" /> Imprimir
-              </button>
+              <DialogImprimirEtiqueta
+                href={`${base}?itens=${item.id}`}
+                trigger={
+                  <button type="button" className="inline-flex items-center gap-1 text-brand hover:underline">
+                    <Printer className="size-3.5" /> Imprimir
+                  </button>
+                }
+              />
             </div>
           </div>
         ))}

@@ -7,6 +7,7 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 import { SELO_CLASSE } from '@/lib/status-cor'
 import { Printer } from 'lucide-react'
 
@@ -149,17 +150,7 @@ export default async function ImpressoesPage({
           const imprimirHref = isNF
             ? `/nota-fiscal/${imp.referencia_id}/imprimir`
             : `/ordem-producao/${imp.referencia_id}/imprimir`
-          return (
-            <a
-              href={imprimirHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
-            >
-              <Printer className="size-3.5" strokeWidth={2} />
-              Reimprimir
-            </a>
-          )
+          return <DialogImprimirEtiqueta href={imprimirHref} label="Reimprimir" />
         }}
         vazio={
           <EmptyState

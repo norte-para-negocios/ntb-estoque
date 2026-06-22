@@ -4,7 +4,8 @@ import { createElement } from 'react'
 import QRCode from 'qrcode'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
-import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig, type AlturaPreset, ALTURA_PRESETS } from '@/components/etiqueta/EtiquetaPDF'
+import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig } from '@/components/etiqueta/EtiquetaPDF'
+import { carregarEtiquetaConfig } from '@/lib/etiqueta-config'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 // Quantidade EXATA do Omie na etiqueta: ate 12 casas, sem arredondar.
@@ -15,15 +16,16 @@ function num(v: unknown, _dec?: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 12 })
 }
 
-function parseConfig(url: string): EtiquetaConfig {
+// Override de TAMANHO que o usuario escolheu no dialogo (largura/altura em cm).
+// O resto do padrao (campos, cor, nome, etc.) vem do etiqueta_config da loja.
+function parseTamanho(url: string): EtiquetaConfig {
   const sp = new URL(url).searchParams
-  const preset = sp.get('altura') as AlturaPreset | null
-  return {
-    alturaPreset: preset && preset in ALTURA_PRESETS ? preset : undefined,
-    offsetX: sp.has('ox') ? Number(sp.get('ox')) : undefined,
-    offsetY: sp.has('oy') ? Number(sp.get('oy')) : undefined,
-    nomeExibido: sp.get('nome') ?? undefined,
-  }
+  const lc = Number(sp.get('lc'))
+  const ac = Number(sp.get('ac'))
+  const cfg: EtiquetaConfig = {}
+  if (lc >= 2 && lc <= 30) cfg.larguraCm = lc
+  if (ac >= 2 && ac <= 30) cfg.alturaCm = ac
+  return cfg
 }
 
 function fmtData(d: string | null): string {
@@ -93,7 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     })
   }
 
-  const config = parseConfig(request.url)
+  const config: EtiquetaConfig = { ...(await carregarEtiquetaConfig(supabase, lojaId)), ...parseTamanho(request.url) }
   const element = createElement(EtiquetaPDF, { etiquetas, config }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
 
