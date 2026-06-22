@@ -10,7 +10,6 @@ import {
   Package,
   Warehouse,
   ScrollText,
-  History,
   Activity,
   Store,
   Users,
@@ -54,5 +53,4 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/relatorio-compras', label: 'Compras (BETA)', icon: ShoppingCart, group: 'Administração', gestaoUsuarios: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
-  { href: '/auditoria', label: 'Auditoria', icon: History, group: 'Administração', gestaoUsuarios: true },
 ]

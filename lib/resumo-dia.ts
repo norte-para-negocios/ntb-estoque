@@ -8,7 +8,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 // contagem e a sua lista. O painel mostra os números de todas e a lista da escolhida.
 
 export type CategoriaKey =
-  | 'notas' | 'transferencias' | 'inventarios' | 'producao' | 'movimentacoes' | 'etiquetas' | 'erros'
+  | 'notas' | 'transferencias' | 'inventarios' | 'producao' | 'movimentacoes' | 'etiquetas' | 'erros' | 'auditoria'
 
 export type Tom = 'ok' | 'warn' | 'err' | 'info' | 'neutro'
 
@@ -47,6 +47,7 @@ export type Contagem = {
   movSaidas: number
   etiquetas: number
   erros: number
+  auditoria: number
 }
 
 export type ResumoDia = {
@@ -127,7 +128,7 @@ const vazia: CategoriaLista = { colunas: [], linhas: [], total: 0 }
 export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat: CategoriaKey): Promise<ResumoDia> {
   const contagemVazia: Contagem = {
     notas: 0, valorNotas: 0, transferencias: 0, inventarios: 0,
-    opsPrevistas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0,
+    opsPrevistas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0, auditoria: 0,
   }
   if (!lojaIds.length) return { contagem: contagemVazia, cat, lista: vazia, multiLoja: false }
 
@@ -138,7 +139,7 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
 
   // --- CONTAGENS (todas, baratas) ---
   const [
-    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount,
+    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount, auditCount,
   ] = await Promise.all([
     supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
       .gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null),
@@ -149,6 +150,7 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     supabase.from('movimentos_historico').select('entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO),
     supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('integration_attempts').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
+    supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
   ])
 
   let movEntradas = 0, movSaidas = 0
@@ -165,6 +167,7 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     movEntradas, movSaidas,
     etiquetas: (etiqRows.data ?? []).reduce((s, e) => s + Number((e as { qtd_etiquetas: number }).qtd_etiquetas ?? 0), 0),
     erros: errosCount.count ?? 0,
+    auditoria: auditCount.count ?? 0,
   }
 
   const lista = await listarCategoria(supabase, lojaIds, dataISO, cat, contagem, multiLoja)
@@ -372,6 +375,36 @@ async function listarCategoria(
       errTipo.set(t, (errTipo.get(t) ?? 0) + 1)
     }
     lista.grafico = { titulo: 'Por tipo', unidade: 'num', itens: topN(errTipo) }
+  } else if (cat === 'auditoria') {
+    // Quem criou/editou/excluiu o quê no dia, escopado pela(s) loja(s) do usuário.
+    // O selo (status) faz a cor da ação: criar=ok, editar=warn, excluir=err.
+    const { data } = await supabase.from('audit_log')
+      .select('created_at, user_nome, acao, entidade, entidade_id, descricao, loja_id')
+      .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim)
+      .order('created_at', { ascending: false }).limit(LIMITE_LISTA)
+    const rows = (data ?? []) as { created_at: string; user_nome: string | null; acao: string; entidade: string; entidade_id: string | null; descricao: string | null; loja_id: number | null }[]
+    const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
+    const seloAcao: Record<string, { label: string; tom: Tom }> = {
+      criar: { label: 'Criação', tom: 'ok' },
+      editar: { label: 'Edição', tom: 'warn' },
+      excluir: { label: 'Exclusão', tom: 'err' },
+    }
+    lista = {
+      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, { label: 'Item' }, ...(lojaTag ? [lojaTag] : [])],
+      total: contagem.auditoria,
+      linhas: rows.map((a) => ({
+        celulas: [
+          horaBahia(a.created_at),
+          a.user_nome || 'Sistema',
+          `${a.entidade}${a.descricao ? ` ${a.descricao}` : a.entidade_id ? ` #${a.entidade_id}` : ''}`,
+          ...(lojas ? [a.loja_id ? lojas.get(a.loja_id) ?? '-' : '-'] : []),
+        ],
+        status: seloAcao[a.acao] ?? { label: a.acao, tom: 'neutro' },
+      })),
+    }
+    const auditPessoa = new Map<string, number>()
+    for (const a of rows) auditPessoa.set(a.user_nome || 'Sistema', (auditPessoa.get(a.user_nome || 'Sistema') ?? 0) + 1)
+    lista.grafico = { titulo: 'Por pessoa', unidade: 'num', itens: topN(auditPessoa) }
   }
 
   return lista
@@ -380,9 +413,10 @@ async function listarCategoria(
 export const CATEGORIA_LABEL: Record<CategoriaKey, string> = {
   notas: 'Notas Fiscais', transferencias: 'Transferências', inventarios: 'Inventários',
   producao: 'Produção', movimentacoes: 'Movimentações', etiquetas: 'Etiquetas', erros: 'Erros',
+  auditoria: 'Auditoria',
 }
 export const CATEGORIA_ORDEM: CategoriaKey[] = [
-  'notas', 'transferencias', 'inventarios', 'producao', 'movimentacoes', 'etiquetas', 'erros',
+  'notas', 'transferencias', 'inventarios', 'producao', 'movimentacoes', 'etiquetas', 'erros', 'auditoria',
 ]
 
 // Relatório COMPLETO do dia: contagem + a lista de TODAS as categorias (para o PDF).

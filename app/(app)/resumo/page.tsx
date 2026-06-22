@@ -26,6 +26,7 @@ const CATS: { key: CategoriaKey; label: string; valor: (c: Contagem) => string; 
   { key: 'movimentacoes', label: 'Movimentações', valor: (c) => fmt(c.movEntradas + c.movSaidas), sub: (c) => `${fmt(c.movEntradas)} E · ${fmt(c.movSaidas)} S` },
   { key: 'etiquetas', label: 'Etiquetas', valor: (c) => fmt(c.etiquetas) },
   { key: 'erros', label: 'Erros', valor: (c) => fmt(c.erros) },
+  { key: 'auditoria', label: 'Auditoria', valor: (c) => fmt(c.auditoria), sub: () => 'alterações' },
 ]
 const KEYS = CATS.map((c) => c.key)
 
@@ -82,7 +83,7 @@ export default async function ResumoPage({
       </ListaHeader>
 
       {/* FILTRO POR CATEGORIA: cada tile mostra a contagem e seleciona a lista */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
         {CATS.map((c) => {
           const sel = c.key === cat
           const sub = c.sub?.(contagem)
