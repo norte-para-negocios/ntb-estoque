@@ -119,7 +119,7 @@ export default async function RelatorioComprasPage({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={btnClass('outline')}
-                title="Excel detalhado (item a item) com filtros"
+                title="Excel com 2 abas: Resumo mês a mês + Detalhado (item a item, com filtros)"
               >
                 <Download className="size-4" /> Excel
               </a>

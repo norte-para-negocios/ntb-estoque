@@ -32,20 +32,46 @@ export interface PlanilhaOpts {
  * Retorna o buffer pronto para download. Substitui o CSV cru por uma planilha
  * de verdade, bem feita.
  */
+// Uma aba do arquivo (para gerarPlanilha e gerarPlanilhaMulti).
+export interface AbaPlanilha {
+  rows: Record<string, unknown>[]
+  colunas: ColunaExcel[]
+  opts: PlanilhaOpts
+  // Nome da aba (default: opts.titulo). Útil quando o título é longo.
+  nome?: string
+}
+
 export async function gerarPlanilha(
   rows: Record<string, unknown>[],
   colunas: ColunaExcel[],
   opts: PlanilhaOpts,
 ): Promise<Buffer> {
+  return gerarPlanilhaMulti([{ rows, colunas, opts }])
+}
+
+/**
+ * Gera um .xlsx com VÁRIAS abas (ex.: "Resumo" + "Detalhado"). Cada aba tem o
+ * mesmo padrão de gerarPlanilha (cabeçalho de marca, zebra, totais, AutoFiltro).
+ */
+export async function gerarPlanilhaMulti(abas: AbaPlanilha[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'NTB Estoque'
   wb.created = new Date()
-  // Nome da aba: Excel limita a 31 chars e proibe alguns caracteres.
-  const nomeAba = opts.titulo.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Relatório'
-  const ws = wb.addWorksheet(nomeAba, {
-    views: [{ state: 'frozen', ySplit: opts.subtitulo ? 3 : 2 }],
-  })
+  const usados = new Set<string>()
+  for (const aba of abas) {
+    // Nome da aba: Excel limita a 31 chars, proibe alguns caracteres e exige unico.
+    let nomeAba = (aba.nome ?? aba.opts.titulo).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Relatório'
+    let n = 2
+    while (usados.has(nomeAba.toLowerCase())) nomeAba = `${nomeAba.slice(0, 28)} ${n++}`
+    usados.add(nomeAba.toLowerCase())
+    montarAba(wb.addWorksheet(nomeAba, { views: [{ state: 'frozen', ySplit: aba.opts.subtitulo ? 3 : 2 }] }), aba)
+  }
+  const arrayBuffer = await wb.xlsx.writeBuffer()
+  return Buffer.from(arrayBuffer)
+}
 
+// Preenche uma worksheet já criada com título, cabeçalho, dados, totais e filtro.
+function montarAba(ws: ExcelJS.Worksheet, { rows, colunas, opts }: AbaPlanilha): void {
   const totalCols = colunas.length
 
   // Linha 1: titulo (mesclado em todas as colunas).
@@ -150,9 +176,6 @@ export async function gerarPlanilha(
       to: { row: linhaCabecalho, column: totalCols },
     }
   }
-
-  const arrayBuffer = await wb.xlsx.writeBuffer()
-  return Buffer.from(arrayBuffer)
 }
 
 /**
