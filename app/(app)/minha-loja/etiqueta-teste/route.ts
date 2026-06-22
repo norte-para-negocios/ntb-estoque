@@ -35,9 +35,20 @@ export async function GET(request: Request) {
     nome_loja: config.nomeExibido?.trim() || 'SUA LOJA',
     qr,
   }
+  // Uma única etiqueta de exemplo, com todos os campos preenchidos, para o admin
+  // ver o padrão completo (os campos ocultos somem conforme a config).
   const etiquetas: Etiqueta[] = [
-    { ...base, lote: 'OP-1234', quantidade: '1 de 10 (UN)', qtde_nf: '', qtde_etiqueta: '1', validade: '28/06/2026', produzido: '21/06/2026', inclusao: '', fornecedor: '' },
-    { ...base, lote: '', quantidade: '', qtde_nf: '10 (CX)', qtde_etiqueta: '1 (CX)', validade: '30/06/2026', produzido: '', inclusao: '20/06/2026', fornecedor: 'SENDAS DISTRIBUIDORA S/A' },
+    {
+      ...base,
+      lote: 'OP-1234',
+      quantidade: '1 de 10 (UN)',
+      qtde_nf: '10 (CX)',
+      qtde_etiqueta: '1 (CX)',
+      validade: '28/06/2026',
+      produzido: '21/06/2026',
+      inclusao: '20/06/2026',
+      fornecedor: 'SENDAS DISTRIBUIDORA S/A',
+    },
   ]
 
   const element = createElement(EtiquetaPDF, { etiquetas, config }) as Parameters<typeof renderToBuffer>[0]
