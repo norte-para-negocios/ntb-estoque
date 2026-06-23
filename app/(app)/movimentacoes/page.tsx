@@ -116,6 +116,7 @@ export default async function MovimentacoesPage({
         .lte('data', fim)
         .order('data', { ascending: false })
         .order('saidas', { ascending: false })
+        .order('cod_prod', { ascending: true }) // desempate: (cod_prod,data) é único por loja; sem ele a paginação somava errado
         .range(off, off + LOTE - 1)
       if (termo) q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
       if (codigosIn) q = q.in('cod_prod', codigosIn)
@@ -202,6 +203,7 @@ export default async function MovimentacoesPage({
       .lte('data', fim)
       .order('data', { ascending: false })
       .order('saidas', { ascending: false })
+      .order('cod_prod', { ascending: true }) // desempate p/ a paginação não pular itens
       .range((page - 1) * POR_PAGINA, page * POR_PAGINA)
     if (termo) query = query.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
     if (codigosIn) query = query.in('cod_prod', codigosIn)

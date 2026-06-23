@@ -1,5 +1,6 @@
 import { getProfile, getPermissoesNomes } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import Link from 'next/link'
 import {
   Package,
@@ -65,14 +66,12 @@ export default async function HomePage() {
     }
   }
 
-  // Datas via hora local (evita off-by-one de fuso UTC).
+  // Datas ancoradas em HOJE (America/Bahia) + offset, com aritmética UTC. O servidor
+  // roda em UTC na Vercel; usar new Date() local dava off-by-one à noite de Bahia.
   function localISO(offsetDias: number): string {
-    const d = new Date()
-    d.setDate(d.getDate() + offsetDias)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const dia = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${dia}`
+    const d = new Date(`${hojeBahiaISO()}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + offsetDias)
+    return d.toISOString().slice(0, 10)
   }
   const trintaDias = localISO(-30)
   const hojeLocal = localISO(0)

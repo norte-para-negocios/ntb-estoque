@@ -36,7 +36,9 @@ export async function GET(request: Request) {
       .from('inventarios')
       .select('id, data, codigo_local_estoque, status, user_id, items:inventario_items(count)')
       .eq('loja_id', lojaId)
+      // desempate por PK: paginar por 'data' (não-única) pulava/duplicava linhas
       .order('data', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
     if (dataInicio) q = q.gte('data', dataInicio)
     if (dataFinal) q = q.lte('data', `${dataFinal}T23:59:59`)

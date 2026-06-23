@@ -39,7 +39,9 @@ export async function GET(request: Request) {
       .from('transferencias')
       .select('id, data, codigo_local_origem, codigo_local_destino, status, motivo, user_id')
       .eq('loja_id', lojaId)
+      // desempate por PK: paginar por 'data' (não-única) pulava/duplicava linhas
       .order('data', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
     if (dataInicio) q = q.gte('data', dataInicio)
     if (dataFinal) q = q.lte('data', `${dataFinal}T23:59:59`)

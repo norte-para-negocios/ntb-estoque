@@ -14,6 +14,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { CalendarClock } from 'lucide-react'
 
 const LIMITE = 200
@@ -21,19 +22,18 @@ const LIMITE = 200
 // "7 dias" = vence de hoje ate +7. Cada um vira um chip de triagem com contagem.
 const PERIODOS = [0, 7, 15, 30, 60] as const
 
-// Retorna 'YYYY-MM-DD' de hoje + d dias.
+// Retorna 'YYYY-MM-DD' de HOJE (em America/Bahia) + d dias. Ancorar em Bahia evita
+// o off-by-one que o new Date() do servidor (UTC na Vercel) causava à noite.
 function hojeMais(d: number): string {
-  const dt = new Date()
-  dt.setHours(0, 0, 0, 0)
-  dt.setDate(dt.getDate() + d)
+  const dt = new Date(`${hojeBahiaISO()}T00:00:00Z`)
+  dt.setUTCDate(dt.getUTCDate() + d)
   return dt.toISOString().slice(0, 10)
 }
 
-// Diferença em dias entre a validade e hoje (negativo = vencido).
+// Diferença em dias entre a validade e hoje (Bahia). Negativo = vencido.
 function diasAte(validade: string): number {
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const v = new Date(`${validade}T00:00:00`)
+  const hoje = new Date(`${hojeBahiaISO()}T00:00:00Z`)
+  const v = new Date(`${validade}T00:00:00Z`)
   return Math.round((v.getTime() - hoje.getTime()) / 86400000)
 }
 
