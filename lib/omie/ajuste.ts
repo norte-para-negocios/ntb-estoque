@@ -23,13 +23,17 @@ export async function excluirAjusteEstoque(loja: LojaOmie, idAjuste: number): Pr
     return true
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    // Ajuste já não existe no Omie (excluído antes / nunca existiu) = idempotente: ok.
+    // Só falha de comunicação real (rate limit, rede, mês fechado) retorna false, para
+    // o chamador NÃO zerar o id_ajuste e NÃO relançar (senão duplica o ajuste no Omie).
+    const naoExiste = /n.o encontrad|n.o existe|inexistente|n.o localizad/i.test(msg)
     await logIntegrationAttempt({
       loja_id: loja.id,
       model: 'ExcluirAjuste',
       request: JSON.stringify({ id_ajuste: idAjuste }),
-      error: true,
+      error: !naoExiste,
       error_message: msg,
     })
-    return false
+    return naoExiste
   }
 }

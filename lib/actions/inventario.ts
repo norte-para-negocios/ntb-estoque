@@ -128,8 +128,12 @@ export async function enviarInventarioItem(
   }
 
   // Ja lancado -> exclui o ajuste antigo antes de relancar (reprocessa ao mexer).
+  // Falha real na exclusão: aborta (não zera id_ajuste nem relança) p/ não duplicar.
   if (item.id_ajuste) {
-    await excluirAjusteEstoque(item.inventario.loja, item.id_ajuste)
+    const ok = await excluirAjusteEstoque(item.inventario.loja, item.id_ajuste)
+    if (!ok) {
+      return { status: 'Erro', descricao_status: 'Falha ao remover o ajuste antigo no Omie', valor: null, id_ajuste: item.id_ajuste, error: 'Não foi possível remover o ajuste antigo no Omie. Tente reenviar.' }
+    }
     await supabase
       .from('inventario_items')
       .update({ id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null })
@@ -315,12 +319,15 @@ async function processarItemInventario(
       code: res.codigo_status ?? '200',
     })
 
+    // Sucesso confiável = id_ajuste presente. O Omie pode recusar com codigo_status≠0
+    // sem faultstring (200); sem id_ajuste, não marcar 'Concluido' (vira furo de estoque).
+    const sucesso = res.id_ajuste != null
     await supabase
       .from('inventario_items')
       .update({
-        status: 'Concluido',
+        status: sucesso ? 'Concluido' : 'Erro',
         codigo_status: res.codigo_status ?? null,
-        descricao_status: res.descricao_status ?? null,
+        descricao_status: res.descricao_status ?? (sucesso ? null : 'Omie não retornou id do ajuste'),
         id_movest: res.id_movest ?? null,
         id_ajuste: res.id_ajuste ?? null,
         response: JSON.stringify(res),
@@ -564,7 +571,8 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
   if (!item) return { error: 'Item não encontrado' }
 
   if (item.id_ajuste && item.loja) {
-    await excluirAjusteEstoque(item.loja, item.id_ajuste)
+    const ok = await excluirAjusteEstoque(item.loja, item.id_ajuste)
+    if (!ok) return { error: 'Não foi possível remover o ajuste antigo no Omie. Tente de novo.' }
     await supabase
       .from('inventario_items')
       .update({

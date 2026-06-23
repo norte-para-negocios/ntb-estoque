@@ -154,8 +154,13 @@ export async function enviarMovimento(
 
   // Se ja foi lancado, exclui o ajuste antigo antes de relancar (mexeu na quantidade
   // -> reprocessa). Limpa os campos de integracao pra nao deixar estado velho.
+  // Se a exclusao FALHAR (comunicacao), aborta: nao zera id_ajuste nem relança, senão
+  // o ajuste antigo fica no Omie e o novo duplica (estoque dobrado, irreversível).
   if (mov.id_ajuste) {
-    await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
+    const ok = await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
+    if (!ok) {
+      return { status: 'Erro', descricao_status: 'Falha ao remover o ajuste antigo no Omie', valor: null, id_ajuste: mov.id_ajuste, error: 'Não foi possível remover o ajuste antigo no Omie. Tente reenviar.' }
+    }
     await supabase
       .from('movimentos')
       .update({ id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null })
@@ -351,12 +356,17 @@ async function processarMovimento(
       code: res.codigo_status ?? '200',
     })
 
+    // O omieRequest só lança em faultstring/HTTP-erro. Mas o IncluirAjusteEstoque pode
+    // recusar com codigo_status≠0 SEM faultstring (200). O sinal confiável de sucesso é
+    // ter id_ajuste; sem ele, NÃO marcar 'Concluido' (senão vira furo de estoque que
+    // nunca é reenviado, pois o filtro de pendentes exclui 'Concluido').
+    const sucesso = res.id_ajuste != null
     await supabase
       .from('movimentos')
       .update({
-        status: 'Concluido',
+        status: sucesso ? 'Concluido' : 'Erro',
         codigo_status: res.codigo_status ?? null,
-        descricao_status: res.descricao_status ?? null,
+        descricao_status: res.descricao_status ?? (sucesso ? null : 'Omie não retornou id do ajuste'),
         id_movest: res.id_movest ?? null,
         id_ajuste: res.id_ajuste ?? null,
         response: JSON.stringify(res),
@@ -614,7 +624,10 @@ export async function editQuantidadeMovimento(movId: number, quan: number | null
   if (!mov) return { error: 'Movimento não encontrado' }
 
   if (mov.id_ajuste && mov.loja) {
-    await excluirAjusteEstoque(mov.loja, mov.id_ajuste)
+    // Falha real ao excluir o ajuste antigo: aborta para não zerar a referência e
+    // duplicar o ajuste no Omie depois.
+    const ok = await excluirAjusteEstoque(mov.loja, mov.id_ajuste)
+    if (!ok) return { error: 'Não foi possível remover o ajuste antigo no Omie. Tente de novo.' }
     await supabase
       .from('movimentos')
       .update({
