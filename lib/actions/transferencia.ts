@@ -321,7 +321,10 @@ async function processarMovimento(
       valor,
       obs: obsCarimbo,
       origem: 'AJU',
-      tipo: mov.tipo,
+      // O `tipo` do ajuste no Omie só aceita ENT/SAI/SLD/TRF. A transferência (inclusive
+      // Perda e Quebra) é sempre um TRF entre locais; o "TPQ" é o MOTIVO, não o tipo.
+      // Sem isto, a TPQ dava "preenchimento inválido da tag [tipo]".
+      tipo: mov.tipo === 'TPQ' ? 'TRF' : mov.tipo,
       motivo: trans.motivo || 'TRF',
       codigo_local_estoque_destino: mov.codigo_local_estoque_destino,
     }
