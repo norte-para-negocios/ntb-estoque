@@ -6,6 +6,9 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -68,6 +71,11 @@ export default async function AuditoriaFiscalPage({
     itensSel = (data ?? []) as LinhaItem[]
   }
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+  ]
+
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
   const qs = (extra: Record<string, string>) => {
     const p = new URLSearchParams()
@@ -85,13 +93,22 @@ export default async function AuditoriaFiscalPage({
           icon={ShieldCheck}
           description="Como cada compra foi classificada (CFOP), o que credita ICMS e o que entra no estoque — BETA"
           actions={
-            linhas.length > 0 ? (
-              <a href={`/auditoria-fiscal/export?data_inicio=${ini}&data_final=${fim}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: classificação por CFOP (com filtros)">
-                <Download className="size-4" /> Baixar
-              </a>
-            ) : undefined
+            <>
+              <FiltrosGaveta
+                basePath="/auditoria-fiscal"
+                campos={campos}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                persistirEm="/auditoria-fiscal"
+              />
+              {linhas.length > 0 && (
+                <a href={`/auditoria-fiscal/export?data_inicio=${ini}&data_final=${fim}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: classificação por CFOP (com filtros)">
+                  <Download className="size-4" /> Baixar
+                </a>
+              )}
+            </>
           }
         />
+        <ChipsFiltrosAtivos basePath="/auditoria-fiscal" campos={campos} persistirEm="/auditoria-fiscal" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

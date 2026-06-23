@@ -6,6 +6,9 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { ImportarMovimentacao } from '@/components/movimentacao/ImportarMovimentacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -40,6 +43,10 @@ export default async function RelatorioMovimentacaoPage({
   const exportQs = new URLSearchParams()
   if (sp.data_inicio) exportQs.set('data_inicio', sp.data_inicio)
   if (sp.data_final) exportQs.set('data_final', sp.data_final)
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+  ]
   const header = (
     <ListaHeader>
       <PageHeader
@@ -48,6 +55,14 @@ export default async function RelatorioMovimentacaoPage({
         description="Consumo e baixas — em quantidade por produto ou em R$ por tipo (BETA)"
         actions={
           <>
+            {modo !== 'valor' && (
+              <FiltrosGaveta
+                basePath="/relatorio-movimentacao"
+                campos={campos}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                persistirEm="/relatorio-movimentacao"
+              />
+            )}
             <a href={`/relatorio-movimentacao/export${exportQs.toString() ? `?${exportQs}` : ''}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: baixas por tipo (R$) + saídas/entradas por produto (com filtros)">
               <Download className="size-4" /> Baixar
             </a>
@@ -55,6 +70,7 @@ export default async function RelatorioMovimentacaoPage({
           </>
         }
       />
+      {modo !== 'valor' && <ChipsFiltrosAtivos basePath="/relatorio-movimentacao" campos={campos} persistirEm="/relatorio-movimentacao" />}
     </ListaHeader>
   )
 
