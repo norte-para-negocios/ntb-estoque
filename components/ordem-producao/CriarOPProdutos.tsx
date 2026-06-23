@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
 import { parseNumBR } from '@/lib/num-br'
+import { gerarDatasOP, type FreqOP } from '@/lib/op-recorrencia'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -28,28 +29,16 @@ function previewValidadeBR(base: string, dias: number): string {
   return dt.toLocaleDateString('pt-BR')
 }
 
-// Datas a partir da base, repetindo a cada 7 dias (recorrencia semanal).
-function gerarDatas(base: string, semanas: number): string[] {
-  if (!base) return []
-  const out: string[] = []
-  const [a, m, d] = base.split('-').map(Number)
-  for (let i = 0; i < Math.max(1, semanas); i++) {
-    const dt = new Date(a, m - 1, d + i * 7)
-    const mm = String(dt.getMonth() + 1).padStart(2, '0')
-    const dd = String(dt.getDate()).padStart(2, '0')
-    out.push(`${dt.getFullYear()}-${mm}-${dd}`)
-  }
-  return out
-}
-
 export function CriarOPProdutos({
   data,
-  semanas,
+  freq,
+  vezes,
   localCodigo,
   obs,
 }: {
   data: string
-  semanas: number
+  freq: FreqOP
+  vezes: number
   localCodigo: number | null
   localNome: string | null
   obs: string
@@ -59,7 +48,7 @@ export function CriarOPProdutos({
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
-  const datas = useMemo(() => gerarDatas(data, semanas), [data, semanas])
+  const datas = useMemo(() => gerarDatasOP(data, freq, vezes), [data, freq, vezes])
   const totalOPs = itens.length * datas.length
 
   const visiveis = useMemo(() => {

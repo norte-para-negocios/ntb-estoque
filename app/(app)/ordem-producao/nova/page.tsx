@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { CriarOPProdutos } from '@/components/ordem-producao/CriarOPProdutos'
+import { FREQ_OP_LABEL, FREQ_OP_VALIDAS, type FreqOP } from '@/lib/op-recorrencia'
 
 // Passo 2 da criacao de OP: escolher os produtos. O cabecalho (data/recorrencia/
 // local/obs) vem por query da tela anterior (modal "Criar OP"). Espelha o fluxo
@@ -14,7 +15,7 @@ import { CriarOPProdutos } from '@/components/ordem-producao/CriarOPProdutos'
 export default async function NovaOPPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; semanas?: string; local?: string; obs?: string }>
+  searchParams: Promise<{ data?: string; freq?: string; vezes?: string; local?: string; obs?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   // Passo 2 da criacao de OP: exige a permissao de Criar (pode ser aberta por URL).
@@ -22,7 +23,8 @@ export default async function NovaOPPage({
 
   const sp = await searchParams
   const data = (sp.data ?? '').match(/^\d{4}-\d{2}-\d{2}$/) ? sp.data! : ''
-  const semanas = Math.max(1, Math.min(12, Number(sp.semanas) || 1))
+  const freq: FreqOP = FREQ_OP_VALIDAS.includes(sp.freq as FreqOP) ? (sp.freq as FreqOP) : 'nao'
+  const vezes = freq === 'nao' ? 1 : Math.max(2, Math.min(24, Number(sp.vezes) || 4))
   const localCodigo = sp.local && /^\d+$/.test(sp.local) ? Number(sp.local) : null
   const obs = sp.obs ?? ''
 
@@ -82,16 +84,16 @@ export default async function NovaOPPage({
             <span className="num">{dataBR}</span>
             <span aria-hidden>·</span>
             <span>{localNome ?? 'Padrão do produto'}</span>
-            {semanas > 1 && (
+            {freq !== 'nao' && (
               <>
                 <span aria-hidden>·</span>
-                <span>repete por {semanas} semanas</span>
+                <span>{FREQ_OP_LABEL[freq].toLowerCase()}, {vezes}×</span>
               </>
             )}
           </span>
         }
       />
-      <CriarOPProdutos data={data} semanas={semanas} localCodigo={localCodigo} localNome={localNome} obs={obs} />
+      <CriarOPProdutos data={data} freq={freq} vezes={vezes} localCodigo={localCodigo} localNome={localNome} obs={obs} />
     </div>
   )
 }

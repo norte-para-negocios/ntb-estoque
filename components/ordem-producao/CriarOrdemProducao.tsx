@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
+import { FREQ_OP_LABEL, type FreqOP } from '@/lib/op-recorrencia'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
@@ -27,7 +28,8 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState('')
   const [data, setData] = useState(hojeISO())
-  const [recorrencia, setRecorrencia] = useState('1')
+  const [freq, setFreq] = useState<FreqOP>('nao')
+  const [vezes, setVezes] = useState('4')
   const [obs, setObs] = useState('')
   const router = useRouter()
 
@@ -38,7 +40,8 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
     }
     const params = new URLSearchParams()
     params.set('data', data)
-    params.set('semanas', recorrencia)
+    params.set('freq', freq)
+    if (freq !== 'nao') params.set('vezes', vezes)
     if (local) params.set('local', local)
     if (obs.trim()) params.set('obs', obs.trim())
     setOpen(false)
@@ -65,17 +68,25 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
               <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Repetir (semanas)</label>
-              <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value)} className={inputClass}>
-                <option value="1">Não repetir</option>
-                <option value="2">2 semanas</option>
-                <option value="3">3 semanas</option>
-                <option value="4">4 semanas</option>
-                <option value="8">8 semanas</option>
-                <option value="12">12 semanas</option>
+              <label className={labelClass}>Repetir</label>
+              <select value={freq} onChange={(e) => setFreq(e.target.value as FreqOP)} className={inputClass}>
+                {(Object.keys(FREQ_OP_LABEL) as FreqOP[]).map((f) => (
+                  <option key={f} value={f}>{FREQ_OP_LABEL[f]}</option>
+                ))}
               </select>
             </div>
           </div>
+
+          {freq !== 'nao' && (
+            <div>
+              <label className={labelClass}>Quantas vezes (total de datas)</label>
+              <select value={vezes} onChange={(e) => setVezes(e.target.value)} className={inputClass}>
+                {[2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
+                  <option key={n} value={String(n)}>{n} vezes</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>Local de estoque</label>
