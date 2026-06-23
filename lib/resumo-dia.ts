@@ -280,31 +280,47 @@ async function listarCategoria(
       .select('identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
       .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO).limit(5000)
     const rows = (data ?? []) as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
-    // Nome do produto: OPs do Omie vêm sem produto_descricao -> resolve pelo código.
+    // Nome E TIPO do produto: OPs do Omie vêm sem descrição/tipo -> resolve pelo código.
+    // Ramon quer ver a produção de EM PROCESSO/intermediário separada do ACABADO
+    // (em processo = trabalho da cozinha; acabado = frente de loja).
     const codigos = [...new Set(rows.map((r) => r.identificacao_n_cod_produto).filter((v) => v != null) as number[])]
     const nomeProd = new Map<number, string>()
+    const tipoProd = new Map<number, string>()
     if (codigos.length) {
-      const { data: prods } = await supabase.from('produtos').select('codigo_produto, descricao').in('loja_id', lojaIds).in('codigo_produto', codigos)
-      for (const p of (prods ?? []) as { codigo_produto: number; descricao: string }[]) nomeProd.set(p.codigo_produto, formatarNomeProduto(p.descricao))
+      const { data: prods } = await supabase.from('produtos').select('codigo_produto, descricao, tipo_item').in('loja_id', lojaIds).in('codigo_produto', codigos)
+      for (const p of (prods ?? []) as { codigo_produto: number; descricao: string; tipo_item: string | null }[]) {
+        nomeProd.set(p.codigo_produto, formatarNomeProduto(p.descricao))
+        if (p.tipo_item) tipoProd.set(p.codigo_produto, p.tipo_item)
+      }
     }
-    const grupo = new Map<string, { produto: string; qtd: number; ops: number }>()
+    // tipo_item: '04' acabado; '03' em processo; '06' intermediário. Agrupa em processo+intermediário.
+    const classificar = (cod: number | null): 'Em processo' | 'Acabado' | 'Outro' => {
+      const t = cod != null ? tipoProd.get(cod) : null
+      if (t === '04') return 'Acabado'
+      if (t === '03' || t === '06') return 'Em processo'
+      return 'Outro'
+    }
+    const grupo = new Map<string, { produto: string; tipo: string; qtd: number; ops: number }>()
     for (const o of rows) {
       const produto = o.produto_descricao
         ? formatarNomeProduto(o.produto_descricao)
         : o.identificacao_n_cod_produto != null
           ? nomeProd.get(o.identificacao_n_cod_produto) ?? `Produto ${o.identificacao_n_cod_produto}`
           : '-'
-      const g = grupo.get(produto) ?? { produto, qtd: 0, ops: 0 }
+      const tipo = classificar(o.identificacao_n_cod_produto)
+      const g = grupo.get(produto) ?? { produto, tipo, qtd: 0, ops: 0 }
       g.qtd += Number(o.identificacao_n_qtde ?? 0)
       g.ops += 1
       grupo.set(produto, g)
     }
-    const grupos = [...grupo.values()].sort((a, b) => b.qtd - a.qtd)
+    // Em processo primeiro (o que o Ramon quer enxergar mais), depois acabado, depois outro.
+    const ordemTipo: Record<string, number> = { 'Em processo': 0, 'Acabado': 1, 'Outro': 2 }
+    const grupos = [...grupo.values()].sort((a, b) => (ordemTipo[a.tipo] - ordemTipo[b.tipo]) || (b.qtd - a.qtd))
     lista = {
-      colunas: [{ label: 'Produto' }, { label: 'OPs', alinharDir: true }, { label: 'Produzido', alinharDir: true }],
+      colunas: [{ label: 'Tipo' }, { label: 'Produto' }, { label: 'OPs', alinharDir: true }, { label: 'Produzido', alinharDir: true }],
       total: grupos.length,
       linhas: grupos.map((g) => ({
-        celulas: [g.produto, fmtNum(g.ops), fmtNum(g.qtd)],
+        celulas: [g.tipo, g.produto, fmtNum(g.ops), fmtNum(g.qtd)],
         status: null,
       })),
     }
