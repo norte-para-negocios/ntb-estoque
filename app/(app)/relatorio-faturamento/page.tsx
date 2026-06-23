@@ -7,7 +7,8 @@ import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { ImportarFaturamento } from '@/components/faturamento/ImportarFaturamento'
-import { DollarSign } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { DollarSign, Download } from 'lucide-react'
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -68,7 +69,16 @@ export default async function RelatorioFaturamentoPage({
           title="Faturamento"
           icon={DollarSign}
           description="Vendas do PDV, importado do Omie (BETA)"
-          actions={<ImportarFaturamento />}
+          actions={
+            <>
+              {matriz.length > 0 && (
+                <a href="/relatorio-faturamento/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: matriz mês a mês por tipo, família e forma de pgto (com filtros)">
+                  <Download className="size-4" /> Baixar
+                </a>
+              )}
+              <ImportarFaturamento />
+            </>
+          }
         />
       </ListaHeader>
 

@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
-import { ShieldCheck, X } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { ShieldCheck, X, Download } from 'lucide-react'
 
 const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
 const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -79,7 +80,18 @@ export default async function AuditoriaFiscalPage({
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Auditoria fiscal" icon={ShieldCheck} description="Como cada compra foi classificada (CFOP), o que credita ICMS e o que entra no estoque — BETA" />
+        <PageHeader
+          title="Auditoria fiscal"
+          icon={ShieldCheck}
+          description="Como cada compra foi classificada (CFOP), o que credita ICMS e o que entra no estoque — BETA"
+          actions={
+            linhas.length > 0 ? (
+              <a href={`/auditoria-fiscal/export?data_inicio=${ini}&data_final=${fim}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: classificação por CFOP (com filtros)">
+                <Download className="size-4" /> Baixar
+              </a>
+            ) : undefined
+          }
+        />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

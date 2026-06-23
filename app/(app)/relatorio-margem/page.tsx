@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ImportarMargem } from '@/components/margem/ImportarMargem'
-import { Percent, AlertTriangle } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { Percent, AlertTriangle, Download } from 'lucide-react'
 
 const fmtMoeda = (n: number | null) => (n == null ? '-' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
 const fmtPct = (n: number | null) => (n == null ? '-' : `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`)
@@ -61,7 +62,19 @@ export default async function RelatorioMargemPage() {
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} />
+        <PageHeader
+          title="Margem"
+          icon={Percent}
+          description="Margem por produto (preço de venda × custo) — BETA"
+          actions={
+            <>
+              <a href="/relatorio-margem/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: margem por produto (com filtros)">
+                <Download className="size-4" /> Baixar
+              </a>
+              <ImportarMargem />
+            </>
+          }
+        />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

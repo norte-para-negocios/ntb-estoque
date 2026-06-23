@@ -6,7 +6,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
-import { Scale } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
+import { Scale, Download } from 'lucide-react'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => {
@@ -103,7 +104,16 @@ export default async function RelatorioIndicadoresPage() {
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Fat × Compras" icon={Scale} description="Quanto você comprou para cada real vendido (BETA)" />
+        <PageHeader
+          title="Fat × Compras"
+          icon={Scale}
+          description="Quanto você comprou para cada real vendido (BETA)"
+          actions={
+            <a href="/relatorio-indicadores/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">
+              <Download className="size-4" /> Baixar
+            </a>
+          }
+        />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

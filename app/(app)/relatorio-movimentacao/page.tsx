@@ -7,8 +7,9 @@ import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { ImportarMovimentacao } from '@/components/movimentacao/ImportarMovimentacao'
+import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { ArrowDownUp } from 'lucide-react'
+import { ArrowDownUp, Download } from 'lucide-react'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => { const [a, m] = ym.split('-'); return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}` }
@@ -36,13 +37,23 @@ export default async function RelatorioMovimentacaoPage({
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 
+  const exportQs = new URLSearchParams()
+  if (sp.data_inicio) exportQs.set('data_inicio', sp.data_inicio)
+  if (sp.data_final) exportQs.set('data_final', sp.data_final)
   const header = (
     <ListaHeader>
       <PageHeader
         title="Movimentação"
         icon={ArrowDownUp}
         description="Consumo e baixas — em quantidade por produto ou em R$ por tipo (BETA)"
-        actions={modo === 'valor' ? <ImportarMovimentacao /> : undefined}
+        actions={
+          <>
+            <a href={`/relatorio-movimentacao/export${exportQs.toString() ? `?${exportQs}` : ''}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: baixas por tipo (R$) + saídas/entradas por produto (com filtros)">
+              <Download className="size-4" /> Baixar
+            </a>
+            {modo === 'valor' && <ImportarMovimentacao />}
+          </>
+        }
       />
     </ListaHeader>
   )

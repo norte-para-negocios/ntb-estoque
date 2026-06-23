@@ -178,6 +178,62 @@ function montarAba(ws: ExcelJS.Worksheet, { rows, colunas, opts }: AbaPlanilha):
   }
 }
 
+const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+/** "2026-01" -> "jan/26". */
+export function mesLabelCurto(ym: string): string {
+  const [a, m] = ym.split('-')
+  return `${MESES_ABREV[Number(m) - 1] ?? m}/${(a ?? '').slice(2)}`
+}
+
+/**
+ * Monta uma aba de MATRIZ MENSAL (linha = rótulo, colunas = meses + Total + %),
+ * no mesmo padrão das planilhas DRV do Ramon, a partir do formato longo
+ * (rotulo, mes 'YYYY-MM', valor). AutoFiltro ligado. Use em gerarPlanilhaMulti.
+ */
+export function abaMatrizMensal(params: {
+  titulo: string
+  dimLabel: string
+  linhas: { rotulo: string; mes: string; valor: number }[]
+  subtitulo?: string
+  nome?: string
+  moeda?: boolean // colunas em R$ (default) vs número
+  pct?: boolean // adiciona coluna "%" do total geral (default true)
+}): AbaPlanilha {
+  const { titulo, dimLabel, linhas, subtitulo, nome } = params
+  const moeda = params.moeda !== false
+  const comPct = params.pct !== false
+
+  const meses = [...new Set(linhas.map((l) => l.mes))].sort()
+  const porRotulo = new Map<string, Record<string, number>>()
+  let totalGeral = 0
+  for (const l of linhas) {
+    const ent = porRotulo.get(l.rotulo) ?? {}
+    const v = Number(l.valor) || 0
+    ent[l.mes] = (ent[l.mes] ?? 0) + v
+    porRotulo.set(l.rotulo, ent)
+    totalGeral += v
+  }
+
+  const colunas: ColunaExcel[] = [{ key: 'rotulo', label: dimLabel, tipo: 'texto' }]
+  for (const m of meses) colunas.push({ key: m, label: mesLabelCurto(m), tipo: moeda ? 'moeda' : 'numero', somar: true })
+  colunas.push({ key: '__total', label: 'Total', tipo: moeda ? 'moeda' : 'numero', somar: true })
+  if (comPct) colunas.push({ key: '__pct', label: '%', tipo: 'texto' })
+
+  const rows = [...porRotulo.entries()]
+    .map(([rotulo, mm]) => {
+      const total = meses.reduce((s, m) => s + (mm[m] ?? 0), 0)
+      const row: Record<string, unknown> = { rotulo }
+      for (const m of meses) row[m] = mm[m] ?? 0
+      row.__total = total
+      if (comPct) row.__pct = totalGeral > 0 ? `${((total / totalGeral) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'
+      return { row, total }
+    })
+    .sort((a, b) => b.total - a.total)
+    .map((x) => x.row)
+
+  return { rows, colunas, opts: { titulo, subtitulo, autoFiltro: true }, nome }
+}
+
 /**
  * Monta a Response de download para o .xlsx gerado.
  */
