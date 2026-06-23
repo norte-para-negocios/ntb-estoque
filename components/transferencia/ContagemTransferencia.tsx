@@ -109,8 +109,10 @@ export function ContagemTransferencia({
         setQuans((prev) => ({ ...prev, [novo.id]: null }))
         setTextos((prev) => ({ ...prev, [novo.id]: '' }))
         setNovoId(novo.id)
+        toast.success('Produto adicionado')
+      } else {
+        toast.error('Falha ao adicionar produto', { description: 'Tente novamente.' })
       }
-      toast.success('Produto adicionado')
     })
   }
 
