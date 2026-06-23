@@ -21,6 +21,11 @@ const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { t
 
 type LinhaMatriz = { rotulo: string; mes: string; valor: number }
 
+// Meta do Ramon: Compras ÷ Faturamento ideal abaixo de 40% (na indústria), alguns
+// miram 35%. Quanto menos, melhor. Cor por faixa: <=40% no alvo, <=50% atenção, acima vermelho.
+const META_PCT = 40
+const corMeta = (pct: number) => (!Number.isFinite(pct) ? 'text-text-muted' : pct <= META_PCT ? 'text-ok' : pct <= 50 ? 'text-warn' : 'text-err')
+
 export default async function RelatorioIndicadoresPage() {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -124,7 +129,15 @@ export default async function RelatorioIndicadoresPage() {
           Comprado <span className="num font-semibold text-text"><Money value={totComp} /></span>
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Compras ÷ Fat <span className="num font-semibold text-text">{fmtPct(pctTotal)}</span>
+          Compras ÷ Fat <span className={`num font-semibold ${corMeta(pctTotal)}`}>{fmtPct(pctTotal)}</span>
+        </span>
+        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+          Meta <span className="num font-semibold text-text">≤ {META_PCT}%</span>
+          {Number.isFinite(pctTotal) && (
+            <span className={`ml-1 font-semibold ${corMeta(pctTotal)}`}>
+              {pctTotal <= META_PCT ? '· no alvo' : `· ${(pctTotal - META_PCT).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p. acima`}
+            </span>
+          )}
         </span>
         {metaRow?.importado_em && (
           <span className="text-[13px] text-text-muted">Faturamento importado em {fmtQuando(metaRow.importado_em as string)}</span>
@@ -149,14 +162,14 @@ export default async function RelatorioIndicadoresPage() {
                 <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={ind.nome}>{ind.nome}</td>
                 {meses.map((m) => {
                   const v = ind.porMes(m)
-                  const cls = ind.tipo === 'res' ? corRes(v) : ind.destaque ? 'text-text' : 'text-text-muted'
+                  const cls = ind.tipo === 'res' ? corRes(v) : ind.tipo === 'pct' ? corMeta(v) : ind.destaque ? 'text-text' : 'text-text-muted'
                   return (
                     <td key={m} className={`num whitespace-nowrap px-3 py-2 text-right ${cls}`}>
                       {ind.tipo === 'pct' ? fmtPct(v) : fmtCelOrPct(v, 'money')}
                     </td>
                   )
                 })}
-                <td className={`num whitespace-nowrap px-3 py-2 text-right ${ind.tipo === 'res' ? corRes(ind.total) : 'text-text'} font-medium`}>
+                <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${ind.tipo === 'res' ? corRes(ind.total) : ind.tipo === 'pct' ? corMeta(ind.total) : 'text-text'}`}>
                   {ind.tipo === 'pct' ? fmtPct(ind.total) : fmtMoeda(ind.total)}
                 </td>
               </tr>
@@ -167,8 +180,9 @@ export default async function RelatorioIndicadoresPage() {
 
       <p className="px-1 text-[11px] text-text-muted">
         Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item). &quot;Compras ÷ Faturamento&quot; é
-        quanto você gastou comprando para cada real vendido. &quot;Faturamento − Compras&quot; não é lucro: Compras é a entrada de
-        mercadoria do mês, não o custo do que foi consumido (margem real vem do Módulo de Margem).
+        quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {META_PCT}%</span> no alvo,
+        <span className="font-medium text-warn"> até 50% atenção</span>, <span className="font-medium text-err">acima de 50% alto</span> (na indústria, alguns miram 35%).
+        &quot;Faturamento − Compras&quot; não é lucro: Compras é a entrada de mercadoria do mês, não o custo do que foi consumido (margem real vem do Módulo de Margem).
       </p>
     </div>
   )
