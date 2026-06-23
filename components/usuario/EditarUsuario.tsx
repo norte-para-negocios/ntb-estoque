@@ -7,7 +7,7 @@ import {
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Pencil, Trash2, ShieldCheck, ShieldHalf, User as UserIcon, Store, Warehouse } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, ShieldHalf, User as UserIcon, Store, Warehouse, IdCard } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   editarUsuario,
@@ -16,6 +16,7 @@ import {
   toggleLocal,
   type PerfilUsuario,
 } from '@/lib/actions/usuario'
+import { definirCargoUsuario } from '@/lib/actions/cargo'
 import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
@@ -27,6 +28,7 @@ const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 type Permissao = { id: number; nome: string }
 type Local = { id: number; loja_id: number; descricao: string | null }
+type Cargo = { id: number; nome: string }
 
 export type UsuarioEditavel = {
   id: string
@@ -36,6 +38,8 @@ export type UsuarioEditavel = {
   // chaves "lojaId:permissaoId" e "lojaId:localId" ativas
   permissoesAtivas: string[]
   locaisAtivos: string[]
+  // cargo do usuario por loja (lojaId -> cargoId ou null)
+  cargosPorLoja: Record<number, number | null>
 }
 
 export function EditarUsuario({
@@ -43,6 +47,7 @@ export function EditarUsuario({
   lojas,
   permissoes,
   locais,
+  cargos,
   podeExcluir = true,
   // Escopo (frente C): AdminLoja nao promove ninguem a AdminLoja/Admin global.
   podeEscolherPerfilAlto = true,
@@ -51,6 +56,7 @@ export function EditarUsuario({
   lojas: Loja[]
   permissoes: Permissao[]
   locais: Local[]
+  cargos: Cargo[]
   podeExcluir?: boolean
   podeEscolherPerfilAlto?: boolean
 }) {
@@ -70,6 +76,9 @@ export function EditarUsuario({
   )
   const [locaisAtivos, setLocaisAtivos] = useState<Set<string>>(
     new Set(usuario.locaisAtivos)
+  )
+  const [cargoPorLoja, setCargoPorLoja] = useState<Record<number, number | null>>(
+    usuario.cargosPorLoja
   )
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -145,6 +154,14 @@ export function EditarUsuario({
       toast.success('Usuário excluído')
       setOpen(false)
       router.refresh()
+    })
+  }
+
+  function escolherCargo(lojaId: number, cargoId: number | null) {
+    setCargoPorLoja((prev) => ({ ...prev, [lojaId]: cargoId }))
+    startTransition(async () => {
+      const res = await definirCargoUsuario(usuario.id, lojaId, cargoId)
+      if (res?.error) toast.error('Erro', { description: res.error })
     })
   }
 
@@ -296,6 +313,30 @@ export function EditarUsuario({
                     <Store className="size-3.5 text-text-muted" />
                     {loja.nome_fantasia || loja.nome}
                   </p>
+
+                  <div className="space-y-1.5">
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                      <IdCard className="size-3" /> Cargo
+                    </p>
+                    <select
+                      value={cargoPorLoja[loja.id] ?? ''}
+                      onChange={(e) =>
+                        escolherCargo(loja.id, e.target.value ? Number(e.target.value) : null)
+                      }
+                      disabled={pending}
+                      className={inputClass}
+                    >
+                      <option value="">Sem cargo (só permissões avulsas)</option>
+                      {cargos.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-text-muted">
+                      O cargo concede um conjunto de permissões; as marcadas abaixo somam por cima.
+                    </p>
+                  </div>
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">

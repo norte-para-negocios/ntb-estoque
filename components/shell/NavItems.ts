@@ -16,6 +16,7 @@ import {
   Percent,
   Store,
   Users,
+  IdCard,
   FolderTree,
   Truck,
   ScanLine,
@@ -65,4 +66,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
+  { href: '/cargo', label: 'Cargos', icon: IdCard, group: 'Administração', gestaoUsuarios: true },
 ]

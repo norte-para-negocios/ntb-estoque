@@ -127,15 +127,34 @@ export async function requirePermissao(lojaId: number, permissaoNome: string): P
 
   if (!permissao) return false
 
-  const { data } = await supabase
+  // Permissão DIRETA do usuário (override avulso por loja).
+  const { data: direta } = await supabase
     .from('permissao_user')
     .select('id')
     .eq('loja_id', lojaId)
     .eq('user_id', user.id)
     .eq('permissao_id', permissao.id)
     .maybeSingle()
+  if (direta) return true
 
-  return !!data
+  // Permissão herdada do CARGO do usuário NESTA loja (loja_user.cargo_id).
+  const { data: vinc } = await supabase
+    .from('loja_user')
+    .select('cargo_id')
+    .eq('user_id', user.id)
+    .eq('loja_id', lojaId)
+    .maybeSingle<{ cargo_id: number | null }>()
+  if (vinc?.cargo_id) {
+    const { data: doCargo } = await supabase
+      .from('cargo_permissao')
+      .select('cargo_id')
+      .eq('cargo_id', vinc.cargo_id)
+      .eq('permissao_id', permissao.id)
+      .maybeSingle()
+    if (doCargo) return true
+  }
+
+  return false
 }
 
 export async function getCurrentLojaId(): Promise<number> {
@@ -240,14 +259,30 @@ export async function getPermissoesNomes(lojaId: number | null): Promise<Set<str
     .returns<{ permissoes: { nome: string } | { nome: string }[] | null }[]>()
 
   const nomes = new Set<string>()
-  for (const row of data ?? []) {
-    const p = row.permissoes
-    if (!p) continue
-    if (Array.isArray(p)) {
-      for (const x of p) if (x?.nome) nomes.add(x.nome)
-    } else if (p.nome) {
-      nomes.add(p.nome)
+  const addNomes = (rows: { permissoes: { nome: string } | { nome: string }[] | null }[] | null) => {
+    for (const row of rows ?? []) {
+      const p = row.permissoes
+      if (!p) continue
+      if (Array.isArray(p)) for (const x of p) { if (x?.nome) nomes.add(x.nome) }
+      else if (p.nome) nomes.add(p.nome)
     }
+  }
+  addNomes(data)
+
+  // + permissões herdadas do CARGO do usuário nesta loja.
+  const { data: vinc } = await supabase
+    .from('loja_user')
+    .select('cargo_id')
+    .eq('user_id', user.id)
+    .eq('loja_id', lojaId)
+    .maybeSingle<{ cargo_id: number | null }>()
+  if (vinc?.cargo_id) {
+    const { data: doCargo } = await supabase
+      .from('cargo_permissao')
+      .select('permissoes(nome)')
+      .eq('cargo_id', vinc.cargo_id)
+      .returns<{ permissoes: { nome: string } | { nome: string }[] | null }[]>()
+    addNomes(doCargo)
   }
   return nomes
 }

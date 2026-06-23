@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAtorGestao } from '@/lib/auth'
+import { listarCargos } from '@/lib/actions/cargo'
 import { notFound } from 'next/navigation'
 import { NovoUsuario } from '@/components/usuario/NovoUsuario'
 import { EditarUsuario, type UsuarioEditavel } from '@/components/usuario/EditarUsuario'
@@ -20,7 +21,7 @@ type UsuarioRow = {
   email: string | null
   perfil: string | null
   status: string | null
-  loja_user: { loja_id: number }[]
+  loja_user: { loja_id: number; cargo_id: number | null }[]
   permissao_user: { loja_id: number; permissao_id: number }[]
   local_estoque_user: { loja_id: number; local_estoque_id: number }[]
 }
@@ -51,7 +52,7 @@ export default async function UsuarioPage({
   let usuariosQuery = supabase
     .from('profiles')
     .select(
-      'id, name, email, perfil, status, loja_user(loja_id), permissao_user(loja_id, permissao_id), local_estoque_user(loja_id, local_estoque_id)'
+      'id, name, email, perfil, status, loja_user(loja_id, cargo_id), permissao_user(loja_id, permissao_id), local_estoque_user(loja_id, local_estoque_id)'
     )
     .order('name')
 
@@ -79,6 +80,10 @@ export default async function UsuarioPage({
     .from('permissoes')
     .select('id, nome')
     .order('id')
+
+  // Cargos (globais) para o dropdown de atribuição por loja.
+  const cargosLista = await listarCargos()
+  const cargos = cargosLista.map((c) => ({ id: c.id, nome: c.nome }))
 
   // Locais so das lojas no escopo do ator.
   let locaisQuery = supabase
@@ -210,6 +215,8 @@ export default async function UsuarioPage({
             const localVisivel = ator.isAdminGlobal
               ? localUser
               : localUser.filter((r) => lojaIdsEscopo.includes(r.loja_id))
+            const cargosPorLoja: Record<number, number | null> = {}
+            for (const r of lojaUserVisivel) cargosPorLoja[r.loja_id] = r.cargo_id ?? null
             const editavel: UsuarioEditavel = {
               id: u.id,
               name: u.name,
@@ -217,6 +224,7 @@ export default async function UsuarioPage({
               lojaIds: lojaUserVisivel.map((r) => r.loja_id),
               permissoesAtivas: permVisivel.map((r) => `${r.loja_id}:${r.permissao_id}`),
               locaisAtivos: localVisivel.map((r) => `${r.loja_id}:${r.local_estoque_id}`),
+              cargosPorLoja,
             }
             return (
               <div
@@ -238,6 +246,7 @@ export default async function UsuarioPage({
                     lojas={lojas}
                     permissoes={permissoes ?? []}
                     locais={locais ?? []}
+                    cargos={cargos}
                     podeExcluir={u.id !== ator.id}
                     podeEscolherPerfilAlto={ator.isAdminGlobal}
                   />
