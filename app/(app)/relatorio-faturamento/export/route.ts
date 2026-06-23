@@ -1,5 +1,6 @@
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { gerarPlanilhaMulti, planilhaResponse, abaMatrizMensal, type AbaPlanilha } from '@/lib/excel'
 
 export const dynamic = 'force-dynamic'
@@ -18,8 +19,7 @@ export async function GET() {
   const supabase = createServiceClient()
   const abas: AbaPlanilha[] = []
   for (const d of DIMS) {
-    const { data } = await supabase.rpc('relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: d.dim })
-    const linhas = (data ?? []) as Linha[]
+    const linhas = await rpcTodos<Linha>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: d.dim })
     if (linhas.length) {
       abas.push(abaMatrizMensal({ titulo: `Faturamento — ${d.label}`, dimLabel: d.label, linhas, nome: d.nome }))
     }

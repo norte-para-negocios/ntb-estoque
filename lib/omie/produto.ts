@@ -238,7 +238,10 @@ export async function syncProdutos(loja: LojaOmie) {
         const comEdicao = rows.filter((r) => editadosPorProduto.has(r.codigo_produto))
 
         if (semEdicao.length) {
-          await supabase.from('produtos').upsert(semEdicao, { onConflict: 'codigo_produto,loja_id' })
+          // Sem checar o erro, um produto fora de faixa derrubava o lote da página em
+          // silêncio enquanto o status virava "Concluido". Agora propaga.
+          const { error } = await supabase.from('produtos').upsert(semEdicao, { onConflict: 'codigo_produto,loja_id' })
+          if (error) throw new Error(`Falha ao gravar lote de produtos: ${error.message}`)
         }
         for (const row of comEdicao) {
           const protegidos = editadosPorProduto.get(row.codigo_produto)!
@@ -249,11 +252,12 @@ export async function syncProdutos(loja: LojaOmie) {
             if (CAMPOS_PROTEGIVEIS.includes(k as (typeof CAMPOS_PROTEGIVEIS)[number]) && protegidos.has(k)) continue
             patch[k] = v
           }
-          await supabase
+          const { error } = await supabase
             .from('produtos')
             .update(patch)
             .eq('loja_id', loja.id)
             .eq('codigo_produto', row.codigo_produto)
+          if (error) throw new Error(`Falha ao gravar produto ${row.codigo_produto}: ${error.message}`)
         }
       }
 

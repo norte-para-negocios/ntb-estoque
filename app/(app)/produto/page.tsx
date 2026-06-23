@@ -579,8 +579,6 @@ export default async function ProdutoPage({
               <EstruturaProduto
                 codigoProduto={p.codigo_produto}
                 descricao={formatarNomeProduto(p.descricao)}
-                tipoItem={p.tipo_item}
-                podeEditar={podeEditar}
               />
               {podeExcluir && <ExcluirProdutoBtn codigoProduto={p.codigo_produto} />}
             </div>

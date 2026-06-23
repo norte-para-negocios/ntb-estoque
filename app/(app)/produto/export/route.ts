@@ -59,8 +59,11 @@ export async function GET(request: Request) {
     if (params.familia) q = q.eq('descricao_familia', params.familia)
     if (params.tipo) q = q.eq('tipo_item', params.tipo)
     if (codigosFornecedor !== null) q = q.in('codigo_produto', codigosFornecedor.length ? codigosFornecedor : [-1])
-    if (!params.situacao || params.situacao === 'ativos') q = q.neq('full_object->>inativo', 'S')
-    else if (params.situacao === 'inativos') q = q.eq('full_object->>inativo', 'S')
+    // Usa a coluna `inativo` (igual à tela de Produtos). Antes filtrava por
+    // full_object->>inativo, que podia divergir da coluna → tela e Excel mostravam
+    // conjuntos diferentes para o mesmo filtro.
+    if (!params.situacao || params.situacao === 'ativos') q = q.eq('inativo', false)
+    else if (params.situacao === 'inativos') q = q.eq('inativo', true)
 
     return q
   }

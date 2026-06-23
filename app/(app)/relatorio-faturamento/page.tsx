@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -39,11 +40,10 @@ export default async function RelatorioFaturamentoPage({
   const dim = DIMS.some((d) => d.value === sp.dim) ? sp.dim! : 'tipo'
 
   const supabase = createServiceClient()
-  const [{ data: matrizRaw }, { data: metaRow }] = await Promise.all([
-    supabase.rpc('relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: dim }),
+  const [matriz, { data: metaRow }] = await Promise.all([
+    rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: dim }),
     supabase.from('faturamento_import_meta').select('importado_em, arquivo').eq('loja_id', lojaId).maybeSingle(),
   ])
-  const matriz = (matrizRaw ?? []) as LinhaMatriz[]
 
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()

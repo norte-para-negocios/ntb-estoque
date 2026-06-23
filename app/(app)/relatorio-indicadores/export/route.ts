@@ -1,5 +1,6 @@
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { gerarPlanilha, planilhaResponse, mesLabelCurto, type ColunaExcel } from '@/lib/excel'
 
 export const dynamic = 'force-dynamic'
@@ -13,8 +14,7 @@ export async function GET() {
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
 
   const supabase = createServiceClient()
-  const { data: fatRaw } = await supabase.rpc('relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
-  const fat = (fatRaw ?? []) as Linha[]
+  const fat = await rpcTodos<Linha>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
   if (!fat.length) return new Response('Sem faturamento importado', { status: 404 })
 
   const fatPorMes: Record<string, number> = {}
@@ -23,11 +23,11 @@ export async function GET() {
   const anoIni = fatMeses[0].slice(0, 4)
   const anoFim = fatMeses[fatMeses.length - 1].slice(0, 4)
 
-  const { data: compRaw } = await supabase.rpc('relatorio_compras_matriz', {
+  const compRows = await rpcTodos<Linha>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: `${anoIni}-01-01`, p_fim: `${anoFim}-12-31`, p_dim: 'tipo',
   })
   const comprasPorMes: Record<string, number> = {}
-  for (const r of (compRaw ?? []) as Linha[]) comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+  for (const r of compRows) comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
 
   const meses = [...new Set([...Object.keys(fatPorMes), ...Object.keys(comprasPorMes)])].sort()
   const totFat = meses.reduce((s, m) => s + (fatPorMes[m] ?? 0), 0)

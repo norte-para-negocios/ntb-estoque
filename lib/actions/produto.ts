@@ -291,7 +291,9 @@ export async function editarProduto(
       ncm: novo.ncm || null,
       valorUnitario: novo.valor_unitario,
       tipoItem: novo.tipo_item,
-      codigoFamilia: novo.codigo_familia,
+      // Família só-local tem código NEGATIVO (placeholder do select); ela não existe no
+      // Omie. Enviar negativo dava rejeição — manda null (= sem família no Omie).
+      codigoFamilia: novo.codigo_familia != null && novo.codigo_familia > 0 ? novo.codigo_familia : null,
       inativo: novo.inativo,
     })
     return { ok: true }

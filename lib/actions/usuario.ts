@@ -126,17 +126,24 @@ export async function criarUsuario(input: {
 
   const userId = created.user.id
 
-  await supabase.from('profiles').insert({
+  // Sem checar o erro, uma falha aqui deixava uma conta ÓRFÃ (auth sem profile/loja),
+  // inutilizável, enquanto a UI dizia "criado". Rollback do auth user se o profile falhar.
+  const { error: errProfile } = await supabase.from('profiles').insert({
     id: userId,
     name: input.name,
     email: input.email,
     perfil: input.perfil,
     current_loja_id: lojaIds[0] ?? null,
   })
+  if (errProfile) {
+    await supabase.auth.admin.deleteUser(userId)
+    return { error: 'Falha ao criar o perfil do usuário. Tente de novo.' }
+  }
 
   // Vincular as lojas (ja escopadas ao ator)
   for (const lojaId of lojaIds) {
-    await supabase.from('loja_user').insert({ loja_id: lojaId, user_id: userId })
+    const { error: errVinc } = await supabase.from('loja_user').insert({ loja_id: lojaId, user_id: userId })
+    if (errVinc) return { error: 'Usuário criado, mas falhou ao vincular uma loja. Edite o usuário para corrigir.' }
   }
 
   // Admin de loja: acesso total = TODAS as permissoes nas lojas vinculadas.

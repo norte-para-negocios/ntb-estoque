@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -32,9 +33,9 @@ export default async function RelatorioIndicadoresPage() {
 
   const supabase = createServiceClient()
 
-  // Faturamento importado (vendas) por mês.
-  const { data: fatRaw } = await supabase.rpc('relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
-  const fat = (fatRaw ?? []) as LinhaMatriz[]
+  // Faturamento importado (vendas) por mês. (dim=tipo é pequeno, mas paginamos por
+  // robustez/consistência com o resto.)
+  const fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 
@@ -65,10 +66,9 @@ export default async function RelatorioIndicadoresPage() {
   // Compras (NF de entrada) no mesmo intervalo de anos do faturamento.
   const anoIni = fatMeses[0].slice(0, 4)
   const anoFim = fatMeses[fatMeses.length - 1].slice(0, 4)
-  const { data: compRaw } = await supabase.rpc('relatorio_compras_matriz', {
+  const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: `${anoIni}-01-01`, p_fim: `${anoFim}-12-31`, p_dim: 'tipo',
   })
-  const comp = (compRaw ?? []) as LinhaMatriz[]
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
 

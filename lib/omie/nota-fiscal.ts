@@ -56,7 +56,7 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
   const supabase = createServiceClient()
   if (!nf.cabec) return
 
-  const { data: saved } = await supabase
+  const { data: saved, error: errCabec } = await supabase
     .from('notas_fiscais')
     .upsert(
       {
@@ -85,6 +85,12 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
     .select('id')
     .single()
 
+  // Sem checar o erro, uma falha (ex.: valor fora da faixa) descartava a NF + itens
+  // em silêncio enquanto o status da loja virava "Concluido". Agora propaga.
+  if (errCabec || !saved) {
+    throw new Error(`Falha ao salvar NF ${nf.cabec.cNumeroNFe}: ${errCabec?.message ?? 'sem retorno'}`)
+  }
+
   const itens = nf.itensRecebimento ?? []
   if (saved && itens.length) {
     const rows = itens.map((it) => ({
@@ -112,9 +118,12 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
       full_object: it,
       updated_at: new Date().toISOString(),
     }))
-    await supabase
+    const { error: errItens } = await supabase
       .from('nota_fiscal_items')
       .upsert(rows, { onConflict: 'loja_id,n_id_receb,n_sequencia' })
+    if (errItens) {
+      throw new Error(`Falha ao salvar itens da NF ${nf.cabec.cNumeroNFe}: ${errItens.message}`)
+    }
   }
 }
 
