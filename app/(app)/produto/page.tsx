@@ -513,8 +513,10 @@ export default async function ProdutoPage({
                     const saldo = saldoDe(p.codigo_produto)
                     if (saldo == null) return <span className="text-text-muted">-</span>
                     const min = minEfetivo(p)
-                    // min 0 (caso dominante no Omie) = sem politica de minimo: nao marca baixo.
-                    const baixo = min != null && min > 0 && saldo <= min
+                    // Vermelho quando: passou do minimo (saldo <= min, com min>0) OU saldo
+                    // NEGATIVO (sempre errado, mesmo sem minimo definido — Omie traz min=0
+                    // como "sem politica"; negativo passou do minimo de qualquer jeito).
+                    const baixo = saldo < 0 || (min != null && min > 0 && saldo <= min)
                     // Quantidade EXATA do Omie (sem arredondar): 0,0139203299 aparece inteiro.
                     return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}>{formatQtdExata(saldo)}</span>
                   },
