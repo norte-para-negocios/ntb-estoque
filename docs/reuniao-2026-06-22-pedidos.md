@@ -36,7 +36,11 @@ O de Movimentação ainda não está no formato da planilha dele. Falta:
   MOV_DRV de cada loja quando o Ramon mandar.
 
 ## Pedidos NOVOS (features)
-1. **OP — recorrência (repetir)**: opções diário (todo dia), semanal (a cada 2/3/4 semanas), quinzenal, mensal (1/2/3 por mês).
+1. **OP — recorrência (repetir)** ✅ FEITO (23/06): no "Criar OP", campo **Repetir**
+   (Não repetir / Todo dia / Toda semana / De 15 em 15 dias / Todo mês) + **Quantas vezes**
+   (total de datas, 2 a 12). Mensal mantém o dia com clamp (31/01→28/02). Testado loja 3.
+   Pendente confirmar com o Ramon se ele quer "a cada N semanas" e "X por mês em datas fixas"
+   (o que ele citou na reunião), além do ritmo simples que entregamos.
 2. **Cadastro — aba ESTRUTURA (ficha técnica / BOM)**: ao cadastrar **produto acabado** ou **produto em processo**, liberar a criação da estrutura ali. Só esses dois tipos têm estrutura.
 3. **Cadastro — "vender no PDV / frente de loja"**: flag em informações adicionais ("vender através do cupom fiscal no PDV") para **produto acabado** e **revenda**. Só esses aparecem no PDV.
 4. **Cadastro — estoque mínimo no produto NOVO**: testar mandar o mínimo + local pro Omie no momento da criação (o bloqueio da API era para produto já existente; para novo talvez funcione).
