@@ -36,24 +36,26 @@ O de Movimentação ainda não está no formato da planilha dele. Falta:
   MOV_DRV de cada loja quando o Ramon mandar.
 
 ## Pedidos NOVOS (features)
-1. **OP — recorrência (repetir)** ✅ FEITO (23/06): no "Criar OP", campo **Repetir**
-   (Não repetir / Todo dia / Toda semana / De 15 em 15 dias / Todo mês) + **Quantas vezes**
-   (total de datas, 2 a 12). Mensal mantém o dia com clamp (31/01→28/02). Testado loja 3.
-   Pendente confirmar com o Ramon se ele quer "a cada N semanas" e "X por mês em datas fixas"
-   (o que ele citou na reunião), além do ritmo simples que entregamos.
-2. **Cadastro — aba ESTRUTURA (ficha técnica / BOM)**: ao cadastrar **produto acabado** ou **produto em processo**, liberar a criação da estrutura ali. Só esses dois tipos têm estrutura.
-3. **Cadastro — "vender no PDV / frente de loja"**: flag em informações adicionais ("vender através do cupom fiscal no PDV") para **produto acabado** e **revenda**. Só esses aparecem no PDV.
-4. **Cadastro — estoque mínimo no produto NOVO**: testar mandar o mínimo + local pro Omie no momento da criação (o bloqueio da API era para produto já existente; para novo talvez funcione).
-5. **Resumo do dia / Produção — separar produção ACABADO × EM PROCESSO (intermediário)**: ele quer ver mais a produção de intermediário (mostra o trabalho da cozinha; acabado é frente de loja).
-6. **Usuários — cargos/permissões CONFIGURÁVEIS (RBAC)**: gerente não pode ter acesso de dono. Criar cargos diferentes com permissões diferentes; o que cada um acessa é configurável (ex.: gerente não vê parte de cadastro). Relacionado ao login por código (a pessoa da loja faz o login do funcionário).
-7. **Etiqueta — logo OBRIGATÓRIA**: tirar o "logo no rodapé" opcional; a logo passa a ser sempre exibida.
+1. **OP — recorrência (repetir)** ✅ FEITO (23/06): no "Criar OP", campo **Repetir** (Não
+   repetir / Dia(s) / Semana(s) / Mês(es)) + **A cada N** + **Quantas vezes**. Cobre todo
+   dia, de 15 em 15 dias (dia/15), a cada 2/3/4 semanas, todo mês, a cada N meses. Mensal com
+   clamp (31/01→28/02). Resumo mostra "a cada 3 semanas, 4×". Testado loja 3.
+   Pendente confirmar com o Ramon se quer "X por mês em DATAS FIXAS" (dia 1, 10, 20).
+2. **Cadastro — aba ESTRUTURA (ficha técnica / BOM)**: ao cadastrar **produto acabado** ou **produto em processo**, liberar a criação da estrutura ali. Só esses dois tipos têm estrutura. ⏳ PENDENTE (precisa API Omie de estrutura; maior).
+3. **Cadastro — "vender no PDV / frente de loja"**: flag em informações adicionais ("vender através do cupom fiscal no PDV") para **produto acabado** e **revenda**. ⏳ PENDENTE (escreve no Omie; testar com Ramon).
+4. **Cadastro — estoque mínimo no produto NOVO**: testar mandar o mínimo + local pro Omie no momento da criação. ⏳ PENDENTE (escreve no Omie; risco de bloqueio — testar com Ramon).
+5. **Resumo do dia / Produção — separar produção ACABADO × EM PROCESSO** ✅ FEITO (23/06): tabela de Produção ganhou coluna **Tipo** (Em processo / Acabado / Outro por tipo_item 03+06 / 04), com Em processo no topo. Testado loja 3 em 22/06 (3 em processo no topo, 97 acabados).
+6. **Usuários — cargos/permissões CONFIGURÁVEIS (RBAC)**: gerente não pode ter acesso de dono. ⏳ PENDENTE (feature grande; precisa design + decisão de escopo).
+7. **Etiqueta — logo OBRIGATÓRIA** ✅ FEITO (23/06): tirado o toggle "logo no rodapé"; a logo da NTB é sempre exibida. PDF de teste verificado.
 
-## Indicador Fat × Compras (validação da meta)
-- A tela de Indicadores está certa. Meta dele: **Compras ÷ Faturamento ideal < 40%** (na indústria), alguns miram **35%** — quanto menos melhor. (Nosso número atual: 39,7%.)
-- Sugestão: marcar o limite/meta (40%) visualmente na tela. Fecha de vez quando entrar o faturamento real (via André).
+## Indicador Fat × Compras (validação da meta) ✅ FEITO (23/06)
+- Meta dele: **Compras ÷ Faturamento ideal < 40%** (na indústria), alguns miram **35%**.
+- A linha % agora colore por faixa: verde ≤40% (no alvo), amarelo até 50%, vermelho acima.
+  Chip "Meta ≤ 40%" com "no alvo"/"X p.p. acima". (Número atual: 39,7% → no alvo, verde.)
 
-## BUG identificado (Joaquim já reconheceu)
-- **Estoque negativo com estoque mínimo = 0 não fica vermelho.** Deve ficar vermelho sempre que o saldo passou do mínimo (negativo). Joaquim já vai consertar.
+## BUG identificado (Joaquim já reconheceu) ✅ FEITO (23/06)
+- **Estoque negativo com estoque mínimo = 0 não fica vermelho.** Corrigido: saldo < 0 fica
+  vermelho sempre, mesmo sem mínimo. Testado loja 3 (Stella Artois -128 em vermelho).
 
 ## Aprovado / elogiado nesta reunião
 - Cadastro de produto com **sugestão de código por faixa** (revenda 90k, acabado 91k, uso/consumo 60k, processo 70k, ativo 50k). ✅
