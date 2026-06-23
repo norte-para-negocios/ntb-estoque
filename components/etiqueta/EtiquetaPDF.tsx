@@ -167,7 +167,9 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
   const borda = config.mostrarBorda ?? false
   const negritoNome = config.negritoNome ?? true
   const negritoDescricao = config.negritoDescricao ?? true
-  const mostrarLogo = config.mostrarLogo ?? true
+  // Logo da NTB é OBRIGATÓRIA na etiqueta (pedido da reunião 22/06): sempre exibida,
+  // independente da config antiga. O campo mostrar_logo fica ignorado.
+  const mostrarLogo = true
   const ordem = (config.ordemCampos?.length ? config.ordemCampos : ORDEM_CAMPOS_PADRAO)
 
   const mostrar = {

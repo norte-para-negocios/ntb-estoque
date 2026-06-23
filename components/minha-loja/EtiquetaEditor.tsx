@@ -62,7 +62,8 @@ function Preview({ f }: { f: EtiquetaFormValores }) {
   const px = (n: number) => `${(n * esc).toFixed(1)}px`
   const nome = (f.nome_exibido || 'SUA LOJA').toUpperCase()
   const visiveis = f.ordem_campos.filter((k) => f[MOSTRAR_KEY[k as CampoEtiqueta]]) as CampoEtiqueta[]
-  const temRodape = f.mostrar_cnpj || f.mostrar_logo
+  // Logo sempre exibida (obrigatória) -> o rodapé sempre aparece.
+  const temRodape = true
 
   return (
     <div
@@ -93,7 +94,7 @@ function Preview({ f }: { f: EtiquetaFormValores }) {
         {temRodape && (
           <div style={{ borderTop: `1px solid ${filete}`, paddingTop: 2, marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: px(7), color: '#444' }}>{f.mostrar_cnpj ? 'CNPJ: 12.345.678/0001-90' : ''}</span>
-            {f.mostrar_logo && <span style={{ fontSize: px(8), fontWeight: 800, color: '#111' }}>NTB</span>}
+            <span style={{ fontSize: px(8), fontWeight: 800, color: '#111' }}>NTB</span>
           </div>
         )}
       </div>
@@ -194,9 +195,9 @@ export function EtiquetaEditor({ inicial }: { inicial: EtiquetaFormValores }) {
           <div className={secao}>
             <div className={tituloSecao}>Elementos</div>
             <div className="flex flex-col gap-1.5">
-              <Check on={f.mostrar_logo} onToggle={() => toggle('mostrar_logo')}>Logo no rodapé</Check>
               <Check on={f.mostrar_borda} onToggle={() => toggle('mostrar_borda')}>Borda ao redor</Check>
               <Check on={f.mostrar_cnpj} onToggle={() => toggle('mostrar_cnpj')}>CNPJ no rodapé</Check>
+              <p className="text-[12px] text-text-muted">A logo da NTB é sempre exibida no rodapé.</p>
             </div>
             <div className={`${tituloSecao} mt-3`}>Calibração (avançado)</div>
             <div className="grid grid-cols-2 gap-2">
