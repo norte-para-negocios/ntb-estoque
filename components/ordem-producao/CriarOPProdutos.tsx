@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
 import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
 import { parseNumBR } from '@/lib/num-br'
-import { gerarDatasOP, type FreqOP } from '@/lib/op-recorrencia'
+import { gerarDatasOP, type UnidadeOP } from '@/lib/op-recorrencia'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -31,13 +31,15 @@ function previewValidadeBR(base: string, dias: number): string {
 
 export function CriarOPProdutos({
   data,
-  freq,
+  unidade,
+  intervalo,
   vezes,
   localCodigo,
   obs,
 }: {
   data: string
-  freq: FreqOP
+  unidade: UnidadeOP
+  intervalo: number
   vezes: number
   localCodigo: number | null
   localNome: string | null
@@ -48,7 +50,7 @@ export function CriarOPProdutos({
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
-  const datas = useMemo(() => gerarDatasOP(data, freq, vezes), [data, freq, vezes])
+  const datas = useMemo(() => gerarDatasOP(data, unidade, intervalo, vezes), [data, unidade, intervalo, vezes])
   const totalOPs = itens.length * datas.length
 
   const visiveis = useMemo(() => {
@@ -144,7 +146,7 @@ export function CriarOPProdutos({
 
   return (
     <div className="pb-28 lg:pb-20">
-      <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+      <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
         <ProdutoSearch onSelect={adicionar} codigosAdicionados={itens.map((i) => i.produto.codigo)} />
         <QrScanner onLeitura={onLeituraQr} />
       </div>

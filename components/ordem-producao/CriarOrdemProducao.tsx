@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
-import { FREQ_OP_LABEL, type FreqOP } from '@/lib/op-recorrencia'
+import { UNIDADE_OP_LABEL, type UnidadeOP } from '@/lib/op-recorrencia'
 
 const inputClass =
   'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
@@ -28,7 +28,8 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState('')
   const [data, setData] = useState(hojeISO())
-  const [freq, setFreq] = useState<FreqOP>('nao')
+  const [unidade, setUnidade] = useState<UnidadeOP>('nao')
+  const [intervalo, setIntervalo] = useState('1')
   const [vezes, setVezes] = useState('4')
   const [obs, setObs] = useState('')
   const router = useRouter()
@@ -40,8 +41,11 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
     }
     const params = new URLSearchParams()
     params.set('data', data)
-    params.set('freq', freq)
-    if (freq !== 'nao') params.set('vezes', vezes)
+    params.set('unidade', unidade)
+    if (unidade !== 'nao') {
+      params.set('intervalo', intervalo)
+      params.set('vezes', vezes)
+    }
     if (local) params.set('local', local)
     if (obs.trim()) params.set('obs', obs.trim())
     setOpen(false)
@@ -69,22 +73,38 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
             </div>
             <div>
               <label className={labelClass}>Repetir</label>
-              <select value={freq} onChange={(e) => setFreq(e.target.value as FreqOP)} className={inputClass}>
-                {(Object.keys(FREQ_OP_LABEL) as FreqOP[]).map((f) => (
-                  <option key={f} value={f}>{FREQ_OP_LABEL[f]}</option>
+              <select value={unidade} onChange={(e) => setUnidade(e.target.value as UnidadeOP)} className={inputClass}>
+                {(Object.keys(UNIDADE_OP_LABEL) as UnidadeOP[]).map((u) => (
+                  <option key={u} value={u}>{UNIDADE_OP_LABEL[u]}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {freq !== 'nao' && (
-            <div>
-              <label className={labelClass}>Quantas vezes (total de datas)</label>
-              <select value={vezes} onChange={(e) => setVezes(e.target.value)} className={inputClass}>
-                {[2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
-                  <option key={n} value={String(n)}>{n} vezes</option>
-                ))}
-              </select>
+          {unidade !== 'nao' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>A cada</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={intervalo}
+                  onChange={(e) => setIntervalo(e.target.value)}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-[11px] text-text-muted">
+                  {unidade === 'dia' ? 'Ex.: 15 = de 15 em 15 dias' : unidade === 'semana' ? 'Ex.: 2 = a cada 2 semanas' : 'Ex.: 1 = todo mês'}
+                </p>
+              </div>
+              <div>
+                <label className={labelClass}>Quantas vezes</label>
+                <select value={vezes} onChange={(e) => setVezes(e.target.value)} className={inputClass}>
+                  {[2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30].map((n) => (
+                    <option key={n} value={String(n)}>{n} vezes</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

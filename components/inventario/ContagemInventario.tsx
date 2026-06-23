@@ -284,7 +284,7 @@ export function ContagemInventario({
       )}
 
       {editavel && (
-        <div className="sticky top-0 z-10 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+        <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
           {/* Busca manual ACIMA do QR (padrao em todas as contagens). Liberado tambem
               ao "Editar itens" num inventario finalizado: adicionar produto pos-fato. */}
           <ProdutoSearch
