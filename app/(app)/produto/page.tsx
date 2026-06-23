@@ -213,7 +213,10 @@ export default async function ProdutoPage({
         .gte('data_posicao', dataInicio)
         .lte('data_posicao', dataPos)
         .in('n_cod_prod', codigos)
-        .order('n_saldo', { ascending: false })
+        // Desempate por PK: sem ele, paginar (>1000 linhas) ordenando por coluna
+        // não-única (n_saldo, com muitos empates em 0) pula/duplica linhas entre
+        // páginas e corrompe a SOMA do saldo/CMC. A ordem em si é irrelevante (tudo é somado).
+        .order('id', { ascending: true })
         .range(off, off + LOTE - 1)
       if (!data || !data.length) break
       posicoes.push(...(data as PosicaoRow[]))
@@ -233,7 +236,10 @@ export default async function ProdutoPage({
         .gt('estoque_minimo', 0)
         .gte('data_posicao', cutoffMin)
         .in('n_cod_prod', codigos)
+        // Desempate por PK (data_posicao não é única) para a paginação não pular linhas;
+        // a data mais recente por produto é resolvida depois no minOmieMap, não pela ordem.
         .order('data_posicao', { ascending: false })
+        .order('id', { ascending: true })
         .range(off, off + LOTE - 1)
       if (!data || !data.length) break
       minimoRows.push(...(data as PosicaoRow[]))
@@ -573,6 +579,8 @@ export default async function ProdutoPage({
               <EstruturaProduto
                 codigoProduto={p.codigo_produto}
                 descricao={formatarNomeProduto(p.descricao)}
+                tipoItem={p.tipo_item}
+                podeEditar={podeEditar}
               />
               {podeExcluir && <ExcluirProdutoBtn codigoProduto={p.codigo_produto} />}
             </div>
