@@ -19,6 +19,7 @@ import {
   Settings,
   CalendarCheck,
   ShoppingCart,
+  DollarSign,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -54,6 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-compras', label: 'Compras (BETA)', icon: ShoppingCart, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-movimentacao', label: 'Movimentação (BETA)', icon: ArrowDownUp, group: 'Administração', gestaoUsuarios: true },
+  { href: '/relatorio-faturamento', label: 'Faturamento (BETA)', icon: DollarSign, group: 'Administração', gestaoUsuarios: true },
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
