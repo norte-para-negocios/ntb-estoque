@@ -112,8 +112,7 @@ export default async function NotaFiscalPage({
     .order('d_emissao_nfe', { ascending: false })
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-  // Fornecedor: o controller original filtra por c_nome
-  if (params.fornecedor) query = query.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
+  if (params.fornecedor) query = query.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
   // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
   if (params.status === 'C') query = query.eq('c_etapa', '60')
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
@@ -129,7 +128,7 @@ export default async function NotaFiscalPage({
     .is('deleted_at', null)
     .limit(100000)
   if (params.num_nfe) totaisQuery = totaisQuery.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-  if (params.fornecedor) totaisQuery = totaisQuery.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
+  if (params.fornecedor) totaisQuery = totaisQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
   if (params.status === 'C') totaisQuery = totaisQuery.eq('c_etapa', '60')
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
