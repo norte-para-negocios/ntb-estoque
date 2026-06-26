@@ -2,10 +2,14 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { consultarEstrutura } from '@/lib/omie/malha'
+import { consultarEstrutura, incluirEstrutura, alterarEstrutura, excluirEstrutura } from '@/lib/omie/malha'
 import type { LojaOmie } from '@/lib/omie/client'
+import { registrarAuditoria } from '@/lib/auditoria'
+import { revalidatePath } from 'next/cache'
 
 export type EstruturaItemView = {
+  idMalha: number // linha da estrutura no Omie (para alterar/excluir)
+  idProdMalha: number // codigo_produto (idProduto Omie) do componente
   codigo: string
   descricao: string
   familia: string
@@ -63,6 +67,8 @@ export async function verEstrutura(
   }
 
   const itens: EstruturaItemView[] = (estrutura?.itens ?? []).map((i) => ({
+    idMalha: i.idMalha,
+    idProdMalha: i.idProdMalha,
     codigo: i.codProdMalha,
     descricao: i.descrProdMalha,
     familia: i.descrFamMalha,
@@ -132,4 +138,93 @@ export async function verEstrutura(
       semEstrutura: !itens.length,
     },
   }
+}
+
+// Item desejado da estrutura, vindo do editor. idMalha presente = já existe no Omie.
+export type ItemEstruturaInput = {
+  idMalha: number | null
+  idProdMalha: number // codigo_produto (idProduto Omie) do componente
+  codigo: string
+  descricao: string
+  quantidade: number
+  perda: number
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const quaseIgual = (a: number, b: number) => Math.abs(a - b) < 1e-9
+
+/**
+ * Salva a ESTRUTURA (ficha técnica) de um produto no Omie aplicando o diff:
+ * inclui os novos, altera os que mudaram (qtde/perda) e exclui os removidos.
+ * ESCREVE no Omie (v1/geral/malha). Sequencial com anti-rajada (a API bloqueia
+ * por "consumo indevido" em rajadas). Só para produto acabado (04) ou em processo (03).
+ */
+export async function salvarEstrutura(
+  codigoProduto: number,
+  itens: ItemEstruturaInput[]
+): Promise<{ error: string } | { ok: true; incluidos: number; alterados: number; excluidos: number }> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão para editar a ficha técnica' }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas').select('id, omie_app_key, omie_app_secret').eq('id', lojaId).single<LojaOmie>()
+  if (!loja?.omie_app_key || !loja?.omie_app_secret) return { error: 'Loja sem chave do Omie' }
+
+  // Só acabado/em processo têm estrutura (regra do Omie + pedido do Ramon).
+  const { data: prod } = await supabase
+    .from('produtos').select('tipo_item, descricao').eq('loja_id', lojaId).eq('codigo_produto', codigoProduto).maybeSingle()
+  if (prod && prod.tipo_item !== '04' && prod.tipo_item !== '03') {
+    return { error: 'Só produto acabado ou em processo tem ficha técnica' }
+  }
+  if (itens.some((i) => !(i.quantidade > 0))) return { error: 'Quantidade inválida em algum componente' }
+
+  // Estado atual no Omie (para diff).
+  let atual
+  try {
+    atual = await consultarEstrutura(loja, codigoProduto)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao ler a estrutura atual no Omie' }
+  }
+  const atuais = new Map<number, { idProdMalha: number; quant: number; perda: number }>()
+  for (const it of atual?.itens ?? []) {
+    atuais.set(it.idMalha, { idProdMalha: it.idProdMalha, quant: Number(it.quantProdMalha) || 0, perda: Number(it.percPerdaProdMalha) || 0 })
+  }
+
+  const idMalhasDesejados = new Set(itens.map((i) => i.idMalha).filter((v): v is number => v != null))
+  let incluidos = 0, alterados = 0, excluidos = 0
+  try {
+    // 1) Inclui os novos (sem idMalha).
+    for (const it of itens.filter((i) => i.idMalha == null)) {
+      const r = await incluirEstrutura(loja, codigoProduto, { idProdMalha: it.idProdMalha, quantProdMalha: it.quantidade, percPerdaProdMalha: it.perda })
+      if (r?.faultstring) return { error: `Incluir "${it.descricao}": ${r.faultstring}` }
+      incluidos++
+      await sleep(800)
+    }
+    // 2) Altera os que mudaram (qtde/perda).
+    for (const it of itens.filter((i) => i.idMalha != null)) {
+      const cur = atuais.get(it.idMalha!)
+      if (cur && (!quaseIgual(cur.quant, it.quantidade) || !quaseIgual(cur.perda, it.perda))) {
+        const r = await alterarEstrutura(loja, codigoProduto, it.idMalha!, { quantProdMalha: it.quantidade, percPerdaProdMalha: it.perda })
+        if (r?.faultstring) return { error: `Alterar "${it.descricao}": ${r.faultstring}` }
+        alterados++
+        await sleep(800)
+      }
+    }
+    // 3) Exclui os que sumiram.
+    for (const [idMalha] of atuais) {
+      if (!idMalhasDesejados.has(idMalha)) {
+        const r = await excluirEstrutura(loja, codigoProduto, idMalha)
+        if (r?.faultstring) return { error: `Excluir componente: ${r.faultstring}` }
+        excluidos++
+        await sleep(800)
+      }
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao salvar a estrutura no Omie' }
+  }
+
+  await registrarAuditoria('editar', 'ficha técnica', codigoProduto, `${prod?.descricao ?? ''}: +${incluidos} ~${alterados} -${excluidos}`)
+  revalidatePath('/produto')
+  return { ok: true, incluidos, alterados, excluidos }
 }

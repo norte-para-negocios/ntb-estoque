@@ -38,6 +38,69 @@ export interface EstruturaResp {
   faultcode?: string
 }
 
+// --- ESCRITA da malha (v1/geral/malha) ---
+// Shape descoberto por probe (loja 3, 23/06): IncluirEstrutura usa o wrapper
+// obrigatorio `itemMalhaIncluir`. Os campos internos espelham os da leitura
+// (idProdMalha = idProduto do componente, quantProdMalha, percPerdaProdMalha).
+// AlterarEstrutura/ExcluirEstrutura usam idMalha (a linha da estrutura).
+// CONFIRMAR os nomes internos com um probe quando a API destravar.
+
+export async function incluirEstrutura(
+  loja: LojaOmie,
+  idProduto: number,
+  item: { idProdMalha: number; quantProdMalha: number; percPerdaProdMalha?: number }
+) {
+  return omieRequest<EstruturaResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/malha',
+    call: 'IncluirEstrutura',
+    data: {
+      idProduto,
+      itemMalhaIncluir: {
+        idProdMalha: item.idProdMalha,
+        quantProdMalha: item.quantProdMalha,
+        percPerdaProdMalha: item.percPerdaProdMalha ?? 0,
+      },
+    },
+  })
+}
+
+export async function alterarEstrutura(
+  loja: LojaOmie,
+  idProduto: number,
+  idMalha: number,
+  item: { quantProdMalha: number; percPerdaProdMalha?: number }
+) {
+  return omieRequest<EstruturaResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/malha',
+    call: 'AlterarEstrutura',
+    data: {
+      idProduto,
+      idMalha,
+      itemMalhaAlterar: {
+        quantProdMalha: item.quantProdMalha,
+        percPerdaProdMalha: item.percPerdaProdMalha ?? 0,
+      },
+    },
+  })
+}
+
+export async function excluirEstrutura(loja: LojaOmie, idProduto: number, idMalha: number) {
+  return omieRequest<EstruturaResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/malha',
+    call: 'ExcluirEstrutura',
+    data: { idProduto, idMalha },
+  })
+}
+
 /**
  * Consulta a estrutura (BOM) de um produto no Omie. SO LEITURA.
  * Retorna null quando o produto nao tem estrutura cadastrada (faultcode 103).
