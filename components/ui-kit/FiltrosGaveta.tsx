@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/sheet'
 import { btnClass } from './Button'
 import type { CampoFiltro } from './Filtros'
+import { Combobox } from './Combobox'
 import { useFiltrosPersistentes } from '@/hooks/use-filtros-persistentes'
 
 export type { CampoFiltro }
@@ -149,7 +150,15 @@ export function FiltrosGaveta({
                 <label htmlFor={`fg-${c.nome}`} className={lab}>
                   {c.label}
                 </label>
-                {c.tipo === 'select' ? (
+                {c.tipo === 'combobox' ? (
+                  <Combobox
+                    id={`fg-${c.nome}`}
+                    options={c.opcoes}
+                    value={valores[c.nome] ?? ''}
+                    onChange={(v) => aplicar(c.nome, v)}
+                    placeholder="Todos"
+                  />
+                ) : c.tipo === 'select' ? (
                   <select
                     id={`fg-${c.nome}`}
                     name={c.nome}
