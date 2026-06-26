@@ -9,10 +9,14 @@ export function Paginacao({
   basePath,
   page,
   temProxima,
+  total,
+  porPagina = 50,
 }: {
   basePath: string
   page: number
   temProxima: boolean
+  total?: number
+  porPagina?: number
 }) {
   const sp = useSearchParams()
 
@@ -25,6 +29,8 @@ export function Paginacao({
   }
 
   const temAnterior = page > 1
+  const inicio = (page - 1) * porPagina + 1
+  const fim = temProxima ? page * porPagina : (page - 1) * porPagina + (total != null ? Math.min(total - (page - 1) * porPagina, porPagina) : porPagina)
 
   return (
     <div className="flex items-center justify-between gap-3 pt-1">
@@ -38,7 +44,14 @@ export function Paginacao({
         </span>
       )}
 
-      <span className="text-[13px] text-text-muted">Página {page}</span>
+      {total != null ? (
+        <span className="text-[13px] text-text-muted tabular-nums">
+          {inicio.toLocaleString('pt-BR')}–{Math.min(fim, total).toLocaleString('pt-BR')} de{' '}
+          <span className="font-medium text-text">{total.toLocaleString('pt-BR')}</span>
+        </span>
+      ) : (
+        <span className="text-[13px] text-text-muted">Página {page}</span>
+      )}
 
       {temProxima ? (
         <Link href={href(page + 1)} className={btnClass('outline')}>

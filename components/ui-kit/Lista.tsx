@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 
 export type Coluna<T> = {
   label: string
@@ -8,6 +9,7 @@ export type Coluna<T> = {
   flexivel?: boolean // no desktop, absorve o espaço restante e trunca (texto longo)
   ocultarMobile?: boolean // não aparece no card
   larguraDesktop?: string // aceito por compatibilidade (largura é automática agora)
+  sort?: string // chave para ordenação server-side; gera link no th
 }
 
 export function Lista<T>({
@@ -16,12 +18,18 @@ export function Lista<T>({
   chaveLinha,
   acao,
   vazio,
+  sortAtual,
+  dirAtual,
+  sortHref,
 }: {
   colunas: Coluna<T>[]
   linhas: T[]
   chaveLinha: (row: T) => string | number
   acao?: (row: T) => React.ReactNode
   vazio?: React.ReactNode
+  sortAtual?: string
+  dirAtual?: 'asc' | 'desc'
+  sortHref?: (key: string, dir: 'asc' | 'desc') => string
 }) {
   if (!linhas.length) return <>{vazio ?? null}</>
   const primaria = colunas.find((c) => c.primaria) ?? colunas[0]
@@ -43,6 +51,22 @@ export function Lista<T>({
   // "assentar" ao carregar sem atrasar o uso. Da 12 em diante entra sem delay.
   const stagger = (i: number): React.CSSProperties =>
     ({ '--stagger': `${Math.min(i, 11) * 24}ms` } as React.CSSProperties)
+
+  function thContent(c: Coluna<T>) {
+    if (!c.sort || !sortHref) return c.label
+    const ativo = sortAtual === c.sort
+    const proxDir: 'asc' | 'desc' = ativo && dirAtual === 'asc' ? 'desc' : 'asc'
+    const Icon = ativo ? (dirAtual === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown
+    return (
+      <a
+        href={sortHref(c.sort, proxDir)}
+        className="inline-flex items-center gap-1 hover:text-text transition-colors"
+      >
+        {c.label}
+        <Icon className={`size-3 ${ativo ? 'text-brand' : 'opacity-40'}`} />
+      </a>
+    )
+  }
 
   return (
     <>
@@ -71,7 +95,7 @@ export function Lista<T>({
                     i === colunas.length - 1 && !acao ? 'rounded-tr-lg' : ''
                   }`}
                 >
-                  {c.label}
+                  {thContent(c)}
                 </th>
               ))}
               {acao && <th className="rounded-tr-lg px-4 py-2" />}

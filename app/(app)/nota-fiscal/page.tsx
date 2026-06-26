@@ -26,6 +26,9 @@ function fmtData(d: string | null): string {
   return `${day}/${m}/${y}`
 }
 
+const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 export default async function NotaFiscalPage({
   searchParams,
 }: {
@@ -38,6 +41,8 @@ export default async function NotaFiscalPage({
     tipo?: string
     produto?: string
     page?: string
+    ord?: string
+    dir?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -45,6 +50,9 @@ export default async function NotaFiscalPage({
 
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
+  const ordRaw = params.ord ?? 'd_emissao_nfe'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'd_emissao_nfe'
+  const dir = params.dir === 'asc' ? 'asc' : 'desc'
   const supabase = await createClient()
   // Sync (Atualizar agora) virou admin-only. NF e importada do Omie (so leitura).
   const podeSync = await isAdmin()
@@ -109,7 +117,7 @@ export default async function NotaFiscalPage({
     .gte('d_emissao_nfe', dataInicio)
     .lte('d_emissao_nfe', dataFinal)
     .is('deleted_at', null)
-    .order('d_emissao_nfe', { ascending: false })
+    .order(ord, { ascending: dir === 'asc' })
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
   if (params.fornecedor) query = query.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
@@ -118,10 +126,10 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
   if (idsIn) query = query.in('id', idsIn)
 
-  // Query dos totais (mesmos filtros, sem paginacao): soma R$ + contagem do topo.
+  // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
   let totaisQuery = supabase
     .from('notas_fiscais')
-    .select('n_valor_nfe')
+    .select('n_valor_nfe', { count: 'exact' })
     .eq('loja_id', lojaId)
     .gte('d_emissao_nfe', dataInicio)
     .lte('d_emissao_nfe', dataFinal)
@@ -133,12 +141,27 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
-  const [{ data: notasRaw }, { data: totaisRaw }] = await Promise.all([query, totaisQuery])
+  const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
   const temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
   const notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
 
-  const qtdNotas = totaisRaw?.length ?? 0
+  const qtdNotas = totalNotas ?? (totaisRaw?.length ?? 0)
   const totalValor = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+
+  // Helper para construir URL de sort (mantém todos os searchParams existentes)
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const sp = new URLSearchParams()
+    if (params.data_inicio) sp.set('data_inicio', params.data_inicio)
+    if (params.data_final) sp.set('data_final', params.data_final)
+    if (params.num_nfe) sp.set('num_nfe', params.num_nfe)
+    if (params.fornecedor) sp.set('fornecedor', params.fornecedor)
+    if (params.status) sp.set('status', params.status)
+    if (params.tipo) sp.set('tipo', params.tipo)
+    if (params.produto) sp.set('produto', params.produto)
+    sp.set('ord', key)
+    sp.set('dir', newDir)
+    return `/nota-fiscal?${sp.toString()}`
+  }
 
   const relatorioParams = new URLSearchParams()
   relatorioParams.set('data_inicio', dataInicio)
@@ -223,12 +246,15 @@ export default async function NotaFiscalPage({
       <Lista
         linhas={notas ?? []}
         chaveLinha={(nf) => nf.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
-          { label: 'Fornecedor', primaria: true, render: (nf) => nf.c_razao_social || nf.c_nome || '-' },
-          { label: 'Emissão', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
-          { label: 'NFe', larguraDesktop: 'w-28', render: (nf) => <span className="num">{nf.c_numero_nfe ?? '-'}</span> },
-          { label: 'Etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa === '60' ? 'Concluida' : 'Pendente'} /> },
-          { label: 'Valor', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
+          { label: 'Fornecedor', primaria: true, sort: 'c_razao_social', render: (nf) => nf.c_razao_social || nf.c_nome || '-' },
+          { label: 'Emissão', sort: 'd_emissao_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
+          { label: 'NFe', sort: 'c_numero_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num">{nf.c_numero_nfe ?? '-'}</span> },
+          { label: 'Etapa', sort: 'c_etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa === '60' ? 'Concluida' : 'Pendente'} /> },
+          { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
         ]}
         acao={(nf) => (
           <Link href={`/nota-fiscal/${nf.id}`} className="text-brand hover:underline whitespace-nowrap">
@@ -245,7 +271,7 @@ export default async function NotaFiscalPage({
       />
 
       {(page > 1 || temProxima) && (
-        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} />
+        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} total={totalNotas ?? undefined} porPagina={POR_PAGINA} />
       )}
     </div>
   )
