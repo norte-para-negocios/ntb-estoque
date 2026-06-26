@@ -330,7 +330,8 @@ async function processarMovimento(
       // Perda e Quebra) é sempre um TRF entre locais; o "TPQ" é o MOTIVO, não o tipo.
       // Sem isto, a TPQ dava "preenchimento inválido da tag [tipo]".
       tipo: mov.tipo === 'TPQ' ? 'TRF' : mov.tipo,
-      motivo: trans.motivo || 'TRF',
+      // Omie nao aceita 'TPQ' no campo motivo; TPQ e um tipo interno que mapeia para TRF
+      motivo: (trans.motivo === 'TPQ' ? 'TRF' : trans.motivo) || 'TRF',
       codigo_local_estoque_destino: mov.codigo_local_estoque_destino,
     }
 
