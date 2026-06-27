@@ -24,6 +24,7 @@ import {
   CalendarCheck,
   ShoppingCart,
   DollarSign,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -57,6 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
+  { href: '/relatorios', label: 'Relatórios', icon: BarChart3, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-compras', label: 'Compras (BETA)', icon: ShoppingCart, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-movimentacao', label: 'Movimentação (BETA)', icon: ArrowDownUp, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorio-faturamento', label: 'Faturamento (BETA)', icon: DollarSign, group: 'Administração', gestaoUsuarios: true },
