@@ -11,6 +11,7 @@ import { ResumoGrafico } from '@/components/resumo/ResumoGrafico'
 import { SELO_CLASSE } from '@/lib/status-cor'
 import { LayoutDashboard, Download, Inbox } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,10 +31,14 @@ const CATS: { key: CategoriaKey; label: string; valor: (c: Contagem) => string; 
 ]
 const KEYS = CATS.map((c) => c.key)
 
+type PeriodoCob = 'dia' | 'semana' | 'mes'
+type RowCobertura = { periodo_inicio: string; qtd_inventarios: number; produtos_contados: number; total_produtos: number }
+type ProdutoSemContagem = { codigo: string; descricao: string; tipo_item: string | null; descricao_familia: string | null }
+
 export default async function ResumoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; loja?: string; cat?: string }>
+  searchParams: Promise<{ data?: string; loja?: string; cat?: string; periodo?: string }>
 }) {
   const ator = await getAtorGestao()
   if (!ator.podeGerir) notFound()
@@ -65,6 +70,65 @@ export default async function ResumoPage({
 
   const temStatus = lista.linhas.some((l) => l.status)
   const tomClasse: Record<Tom, string> = SELO_CLASSE as Record<Tom, string>
+
+  // --- DADOS EXTRAS DA AUDITORIA DE INVENTÁRIO ---
+  const periodo: PeriodoCob = (['dia', 'semana', 'mes'] as const).includes(sp.periodo as PeriodoCob)
+    ? (sp.periodo as PeriodoCob)
+    : 'dia'
+
+  let coberturaData: RowCobertura[] = []
+  let produtosSemContagem: ProdutoSemContagem[] = []
+  let totalSemContagem = 0
+
+  if (cat === 'auditoria' && lojaIdsEfetivos.length > 0) {
+    const lojaIdCob = lojaIdsEfetivos[0]
+    // Janela da barra de cobertura: 30d/12 semanas/12 meses
+    const janelasDias: Record<PeriodoCob, number> = { dia: 30, semana: 84, mes: 365 }
+    const dataIniCob = new Date(Date.now() - janelasDias[periodo] * 86400000).toISOString().slice(0, 10)
+
+    // Produtos contados nos últimos 30 dias (para lista de sem contagem)
+    const [cobRes, recentsRes] = await Promise.all([
+      supabase.rpc('inventario_cobertura', {
+        p_loja_id: lojaIdCob,
+        p_ini: dataIniCob,
+        p_fim: hoje,
+        p_periodo: periodo,
+      }),
+      supabase
+        .from('inventario_items')
+        .select('produto_codigo_produto')
+        .eq('loja_id', lojaIdCob)
+        .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+    ])
+
+    coberturaData = (cobRes.data ?? []) as RowCobertura[]
+
+    const codigosRecentes = new Set(
+      ((recentsRes.data ?? []) as { produto_codigo_produto: number | null }[])
+        .map((r) => r.produto_codigo_produto)
+        .filter((v): v is number => v != null)
+    )
+
+    const { data: produtosRaw } = await supabase
+      .from('produtos')
+      .select('codigo, descricao, tipo_item, descricao_familia, codigo_produto')
+      .eq('loja_id', lojaIdCob)
+      .eq('inativo', false)
+      .order('descricao')
+      .limit(5000)
+
+    const semContagem = ((produtosRaw ?? []) as (ProdutoSemContagem & { codigo_produto: number })[])
+      .filter((p) => !codigosRecentes.has(p.codigo_produto))
+
+    totalSemContagem = semContagem.length
+    produtosSemContagem = semContagem.slice(0, 100).map(({ codigo, descricao, tipo_item, descricao_familia }) => ({
+      codigo, descricao, tipo_item, descricao_familia,
+    }))
+  }
+
+  const linkPeriodo = (p: PeriodoCob) => `/resumo?data=${data}&loja=${lojaParam}&cat=auditoria&periodo=${p}`
+  const labelPeriodo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
+  const labelJanela: Record<PeriodoCob, string> = { dia: 'últimos 30 dias', semana: 'últimas 12 semanas', mes: 'últimos 12 meses' }
 
   return (
     <div className="space-y-4">
@@ -109,6 +173,115 @@ export default async function ResumoPage({
       {/* GRÁFICO DA CATEGORIA (visão visual) */}
       {lista.grafico && lista.grafico.itens.length > 0 && <ResumoGrafico grafico={lista.grafico} />}
 
+      {/* PAINEL DE INVENTÁRIO (só quando cat=auditoria) */}
+      {cat === 'auditoria' && (
+        <div className="space-y-3">
+          {/* Chips de período */}
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] text-text-muted">Cobertura:</span>
+            {(['dia', 'semana', 'mes'] as const).map((p) => (
+              <Link
+                key={p}
+                href={linkPeriodo(p)}
+                className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                  periodo === p
+                    ? 'border-brand bg-brand/10 text-brand'
+                    : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
+                }`}
+              >
+                {labelPeriodo[p]}
+              </Link>
+            ))}
+          </div>
+
+          {/* Barra de cobertura por período */}
+          {coberturaData.length > 0 ? (
+            <div className="overflow-clip rounded-lg border border-border bg-surface">
+              <div className="border-b border-border bg-surface-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                Cobertura de contagem ({labelJanela[periodo]})
+              </div>
+              <div className="divide-y divide-border">
+                {coberturaData.map((row) => {
+                  const pct = row.total_produtos > 0
+                    ? Math.round((Number(row.produtos_contados) / Number(row.total_produtos)) * 100)
+                    : 0
+                  const d = new Date(row.periodo_inicio + 'T12:00:00')
+                  const label =
+                    periodo === 'dia'
+                      ? d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+                      : periodo === 'semana'
+                      ? `Sem. de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+                      : d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                  return (
+                    <div key={row.periodo_inicio} className="flex items-center gap-3 px-4 py-2">
+                      <span className="w-40 shrink-0 text-[13px] capitalize text-text-muted">{label}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+                          <div
+                            className={`h-full rounded-full transition-all ${pct >= 80 ? 'bg-ok' : pct >= 40 ? 'bg-warn' : 'bg-err/60'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className="w-20 shrink-0 text-right text-[12px] text-text-muted num">
+                        {row.produtos_contados}/{row.total_produtos}
+                      </span>
+                      <span className={`w-10 shrink-0 text-right num text-[12px] font-medium ${pct >= 80 ? 'text-ok' : pct >= 40 ? 'text-warn' : 'text-err'}`}>
+                        {pct}%
+                      </span>
+                      <span className="hidden w-20 shrink-0 text-right text-[11px] text-text-muted sm:block">
+                        {row.qtd_inventarios} {Number(row.qtd_inventarios) === 1 ? 'inv.' : 'invs.'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-surface px-4 py-6 text-center text-sm text-text-muted">
+              Nenhum inventário encontrado no período.
+            </div>
+          )}
+
+          {/* Produtos sem contagem nos últimos 30 dias */}
+          {totalSemContagem > 0 && (
+            <div className="overflow-clip rounded-lg border border-border bg-surface">
+              <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                  Sem contagem nos últimos 30 dias
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${totalSemContagem > 0 ? 'bg-err/10 text-err' : 'bg-ok/10 text-ok'}`}>
+                  {totalSemContagem} produto{totalSemContagem !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="divide-y divide-border">
+                {produtosSemContagem.map((p) => (
+                  <div key={p.codigo} className="flex items-center gap-3 px-4 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-text">{formatarNomeProduto(p.descricao)}</p>
+                      <div className="mt-0.5 flex gap-2">
+                        <span className="num text-[11px] text-text-muted">{p.codigo}</span>
+                        {p.descricao_familia && (
+                          <span className="text-[11px] text-text-muted">{p.descricao_familia}</span>
+                        )}
+                      </div>
+                    </div>
+                    {p.tipo_item && (
+                      <span className="shrink-0 text-[11px] text-text-muted">{p.tipo_item}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {totalSemContagem > 100 && (
+                <div className="border-t border-border px-4 py-2 text-center text-[12px] text-text-muted">
+                  Mostrando 100 de {totalSemContagem}. Acesse a tela de Inventários para ver todos.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* LISTA DA CATEGORIA SELECIONADA (detalhe) */}
       <div className="overflow-clip rounded-lg border border-border bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -138,7 +311,7 @@ export default async function ResumoPage({
               {lista.linhas.map((linha, ri) => (
                 <tr key={ri} className="border-t border-border/60 even:bg-surface-2/30 hover:bg-surface-2/60">
                   {linha.celulas.map((cel, ci) => (
-                    <td key={ci} className={`px-4 py-2 ${lista.colunas[ci]?.alinharDir ? 'num text-right' : 'text-text'}`}>
+                    <td key={ci} className={`px-4 py-2 ${lista.colunas[ci]?.alinharDir ? 'num text-right' : 'text-text'} ${ci === 3 && cat === 'erros' ? 'max-w-xs truncate text-text-muted' : ''}`}>
                       {cel ?? '-'}
                     </td>
                   ))}

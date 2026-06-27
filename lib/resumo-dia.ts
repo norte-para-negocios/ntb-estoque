@@ -374,12 +374,13 @@ async function listarCategoria(
     const rows = (data ?? []) as { loja_id: number; model: string | null; error_message: string | null; created_at: string }[]
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
     lista = {
-      colunas: [{ label: 'Hora' }, { label: 'Origem' }, { label: 'Problema' }, ...(lojaTag ? [lojaTag] : [])],
+      colunas: [{ label: 'Hora' }, { label: 'Origem' }, { label: 'Problema' }, { label: 'Mensagem Omie' }, ...(lojaTag ? [lojaTag] : [])],
       total: contagem.erros,
       linhas: rows.map((er) => {
         const exp = explicarErroOmie(er.error_message)
+        const msgLimpa = (er.error_message ?? '').replace(/^ERROR:\s*/i, '').trim()
         return {
-          celulas: [horaBahia(er.created_at), er.model ?? '-', exp?.titulo ?? 'Erro',
+          celulas: [horaBahia(er.created_at), er.model ?? '-', exp?.titulo ?? 'Erro', msgLimpa.slice(0, 150) || '-',
             ...(lojas ? [lojas.get(er.loja_id) ?? '-'] : [])],
           status: exp ? { label: exp.tipo === 'acao' ? 'Resolver' : exp.tipo === 'transitorio' ? 'Temporário' : 'Info', tom: exp.tipo === 'acao' ? 'err' : exp.tipo === 'transitorio' ? 'warn' : 'neutro' } : null,
         }
