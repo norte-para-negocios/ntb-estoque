@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -257,6 +258,27 @@ export default async function MovimentacoesPage({
     }
   }
 
+  // Tipos de operação (compra, perda, produção, ajuste) — o histórico do Omie não
+  // traz o tipo de cada movimento; ele só vem do detalhamento MOV_DRV importado
+  // (por ora, só nas lojas com import). Mostramos um resumo por tipo quando existir.
+  // movimentacao_operacao tem RLS; lê via service client filtrando pela loja atual.
+  const { data: opsRaw } = await createServiceClient()
+    .from('movimentacao_operacao')
+    .select('origem, sentido, inventario, valor')
+    .eq('loja_id', lojaId)
+    .gte('mes', ini.slice(0, 7))
+    .lte('mes', fim.slice(0, 7))
+    .limit(5000)
+  const ops = (opsRaw ?? []) as { origem: string; sentido: string; inventario: boolean; valor: number }[]
+  const temOps = ops.length > 0
+  const somaOp = (fn: (r: (typeof ops)[number]) => boolean) => ops.filter(fn).reduce((s, r) => s + Number(r.valor ?? 0), 0)
+  const opTipos = temOps ? [
+    { label: 'Compras', valor: somaOp((r) => /compra/i.test(r.origem) && r.sentido === 'E'), cor: 'var(--info)' },
+    { label: 'Perdas', valor: somaOp((r) => /manual/i.test(r.origem) && r.sentido === 'S' && !r.inventario), cor: 'var(--err)' },
+    { label: 'Ajuste de inventário', valor: somaOp((r) => /manual/i.test(r.origem) && r.sentido === 'S' && r.inventario), cor: 'var(--warn)' },
+    { label: 'Consumo de produção', valor: somaOp((r) => /consumo da ordem/i.test(r.origem) && r.sentido === 'S'), cor: 'var(--text-muted)' },
+  ].filter((t) => t.valor > 0) : []
+
   const familias = await buscarFamilias()
 
   const campos: CampoFiltro[] = [
@@ -352,6 +374,28 @@ export default async function MovimentacoesPage({
           )}
         </span>
       </div>
+
+      {/* Por tipo de operação (quando há detalhamento importado) */}
+      {temOps && opTipos.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[12px] font-semibold text-text">Por tipo de operação no período</span>
+            <Link href="/relatorio-movimentacao?modo=operacao" className="text-[12px] text-brand hover:underline">
+              Ver detalhe →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {opTipos.map((t) => (
+              <div key={t.label} className="rounded-lg border border-border bg-surface-2/40 px-3 py-2">
+                <div className="text-[11px] text-text-muted">{t.label}</div>
+                <div className="num mt-0.5 text-[15px] font-semibold text-text" style={{ color: t.cor }}>
+                  <Money value={t.valor} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Avisos de valor so aparecem quando os valores estao visiveis (MOSTRAR_VALORES) */}
       {MOSTRAR_VALORES && temCmcAbsurdo && (
