@@ -9,6 +9,11 @@ const ref = u.hostname.replace(/^db\./, '').replace(/\.supabase\.co$/, '')
 const [hh, pp] = fs.readFileSync(`${PROJ}/scripts/.pooler-host`, 'utf8').trim().split(':')
 const db = new pg.Client({ host: hh, port: Number(pp), user: `postgres.${ref}`, password: senha, database: 'postgres', ssl: { rejectUnauthorized: false } })
 await db.connect()
+
+// Lock exclusivo: impede dois syncs paralelos de corromper dados
+const { rows: [lock] } = await db.query('SELECT pg_try_advisory_lock(20260626) AS ok')
+if (!lock.ok) { console.error('Sync ja rodando em outro processo. Abortando.'); await db.end(); process.exit(1) }
+
 const { rows: lojas } = await db.query('select id, omie_app_key k, omie_app_secret s from lojas where omie_app_key is not null order by id')
 
 const STATUS_ABERTOS = ['EMABERTO', 'ATRASADO', 'AVENCER', 'VENCEHOJE', 'PAGTO_PARCIAL']
@@ -20,7 +25,9 @@ async function omie(key, secret, ep, call, data) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ call, app_key: key, app_secret: secret, param: [data] })
   })
-  return r.json()
+  const json = await r.json()
+  if (json?.faultstring || json?.faultcode) throw new Error(`Omie fault: ${json.faultstring ?? json.faultcode}`)
+  return json
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -63,16 +70,23 @@ for (const loja of lojas) {
   console.log(`\n[Loja ${loja.id}] sincronizando...`)
 
   // ---- Contas a pagar ----
+  let cpError = false
   const cpTodos = []
   for (const s of STATUS_ABERTOS) {
-    const items = await paginatCP(loja.k, loja.s, s)
-    for (const it of items) it._status = s
-    cpTodos.push(...items)
-    process.stdout.write(`  CP ${s}: ${items.length} | `)
+    try {
+      const items = await paginatCP(loja.k, loja.s, s)
+      for (const it of items) it._status = s
+      cpTodos.push(...items)
+      process.stdout.write(`  CP ${s}: ${items.length} | `)
+    } catch (e) {
+      console.error(`\n  [CP ${s} ERRO] ${e.message} -- loja ${loja.id} pulada`)
+      cpError = true
+      break
+    }
   }
-  console.log(`\n  CP total: ${cpTodos.length}`)
+  console.log(`\n  CP total: ${cpTodos.length}${cpError ? ' (ERRO -- sem delete)' : ''}`)
 
-  if (cpTodos.length) {
+  if (cpTodos.length && !cpError) {
     const oids = cpTodos.map(i => i.codigo_lancamento_omie)
     // Remove do banco o que nao apareceu nos abertos (foi pago/cancelado)
     await db.query('delete from contas_pagar where loja_id=$1 and codigo_lancamento_omie != all($2::bigint[])', [loja.id, oids])
@@ -97,17 +111,24 @@ for (const loja of lojas) {
     console.log(`  CP upserted: ${cpTodos.length}`)
   }
 
-  // ---- Contas a receber (so EMABERTO para nao encher o banco) ----
+  // ---- Contas a receber ----
+  let crError = false
   const crTodos = []
   for (const s of STATUS_ABERTOS) {
-    const items = await paginateCR(loja.k, loja.s, s)
-    for (const it of items) it._status = s
-    crTodos.push(...items)
-    process.stdout.write(`  CR ${s}: ${items.length} | `)
+    try {
+      const items = await paginateCR(loja.k, loja.s, s)
+      for (const it of items) it._status = s
+      crTodos.push(...items)
+      process.stdout.write(`  CR ${s}: ${items.length} | `)
+    } catch (e) {
+      console.error(`\n  [CR ${s} ERRO] ${e.message} -- loja ${loja.id} pulada`)
+      crError = true
+      break
+    }
   }
-  console.log(`\n  CR total: ${crTodos.length}`)
+  console.log(`\n  CR total: ${crTodos.length}${crError ? ' (ERRO -- sem delete)' : ''}`)
 
-  if (crTodos.length) {
+  if (crTodos.length && !crError) {
     const oids = crTodos.map(i => i.codigo_lancamento_omie)
     await db.query('delete from contas_receber where loja_id=$1 and codigo_lancamento_omie != all($2::bigint[])', [loja.id, oids])
     for (const it of crTodos) {
@@ -130,5 +151,6 @@ for (const loja of lojas) {
   }
 }
 
+await db.query('SELECT pg_advisory_unlock(20260626)')
 await db.end()
 console.log('\nSync financeiro concluido.')
