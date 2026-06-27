@@ -101,7 +101,7 @@ export default async function RelatorioFaturamentoPage({
         <PageHeader
           title="Faturamento"
           icon={DollarSign}
-          description="Vendas do PDV, importado do Omie (BETA)"
+          description="Vendas do PDV (NFC-e), puxadas direto da API do Omie (BETA)"
           actions={
             <>
               {matrizTodos.length > 0 && (
@@ -118,8 +118,8 @@ export default async function RelatorioFaturamentoPage({
       {!matrizTodos.length ? (
         <EmptyState
           icon={DollarSign}
-          title="Sem faturamento importado"
-          hint='As vendas do PDV (NFC-e) não vêm pela API do Omie. Exporte o "FAT_DRV" no Omie, remova a aba "BD" (dados brutos), e clique em "Importar do Omie".'
+          title="Faturamento ainda não sincronizado"
+          hint="As vendas do PDV desta loja ainda não foram puxadas da API do Omie. A sincronização dos cupons fiscais roda pelo suporte (script sync-faturamento-api)."
         />
       ) : (
         <>
