@@ -66,6 +66,36 @@ function parseBR(d) {
   return `${yyyy}-${mm}-${dd}`
 }
 
+// ---- Contas correntes + saldos (cabecalho do ListarExtrato) ----
+const DELAY_EXTRATO = 600 // ListarExtrato e sensivel a rate limit ("consumo indevido")
+
+async function listarCC(key, secret) {
+  const items = []
+  let pagina = 1, totalPags = 1
+  while (pagina <= totalPags) {
+    const r = await omie(key, secret, 'v1/geral/contacorrente', 'ListarContasCorrentes', { pagina, registros_por_pagina: 50 })
+    totalPags = r.total_de_paginas ?? 1
+    items.push(...(r?.ListarContasCorrentes ?? []))
+    pagina++
+    if (pagina <= totalPags) await sleep(DELAY)
+  }
+  return items
+}
+
+async function saldoCC(key, secret, codigoCC, dataBR) {
+  // Periodo minimo (so hoje): so queremos o cabecalho com os saldos atuais.
+  const r = await omie(key, secret, 'v1/financas/extrato', 'ListarExtrato', {
+    nCodCC: codigoCC, dPeriodoInicial: dataBR, dPeriodoFinal: dataBR,
+  })
+  return {
+    saldo_atual: r.nSaldoAtual ?? null,
+    saldo_previsto: r.nSaldoAtualPrevisto ?? null,
+    saldo_disponivel: r.nSaldoDisponivel ?? null,
+    saldo_conciliado: r.nSaldoConciliado ?? null,
+    inclui_fluxo_caixa: r.cFluxoCaixa === 'S',
+  }
+}
+
 for (const loja of lojas) {
   console.log(`\n[Loja ${loja.id}] sincronizando...`)
 
@@ -148,6 +178,41 @@ for (const loja of lojas) {
       ])
     }
     console.log(`  CR upserted: ${crTodos.length}`)
+  }
+
+  // ---- Contas correntes + saldos ----
+  try {
+    const hojeBR = new Date().toLocaleDateString('pt-BR')
+    const ccs = await listarCC(loja.k, loja.s)
+    let ok = 0
+    for (const cc of ccs) {
+      await sleep(DELAY_EXTRATO)
+      let saldos = { saldo_atual: null, saldo_previsto: null, saldo_disponivel: null, saldo_conciliado: null, inclui_fluxo_caixa: true }
+      try {
+        saldos = await saldoCC(loja.k, loja.s, cc.nCodCC, hojeBR)
+        ok++
+      } catch (e) {
+        // sem saldo (ex.: tipo sem extrato); grava cadastro mesmo assim
+      }
+      await db.query(`
+        insert into contas_correntes (loja_id, codigo_cc, descricao, tipo, tipo_descricao, codigo_banco, numero_conta, saldo_atual, saldo_previsto, saldo_disponivel, saldo_conciliado, inclui_fluxo_caixa, synced_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
+        on conflict (loja_id, codigo_cc) do update set
+          descricao=excluded.descricao, tipo=excluded.tipo, tipo_descricao=excluded.tipo_descricao,
+          codigo_banco=excluded.codigo_banco, numero_conta=excluded.numero_conta,
+          saldo_atual=excluded.saldo_atual, saldo_previsto=excluded.saldo_previsto,
+          saldo_disponivel=excluded.saldo_disponivel, saldo_conciliado=excluded.saldo_conciliado,
+          inclui_fluxo_caixa=excluded.inclui_fluxo_caixa, synced_at=now()
+      `, [
+        loja.id, cc.nCodCC, cc.descricao || null, cc.tipo_conta_corrente || null, cc.cDesTipo || cc.descricao_tipo || null,
+        String(cc.codigo_banco ?? ''), cc.numero_conta_corrente || null,
+        saldos.saldo_atual, saldos.saldo_previsto, saldos.saldo_disponivel, saldos.saldo_conciliado,
+        saldos.inclui_fluxo_caixa,
+      ])
+    }
+    console.log(`  CC: ${ccs.length} contas (${ok} com saldo)`)
+  } catch (e) {
+    console.error(`  [CC ERRO] ${e.message} -- loja ${loja.id}`)
   }
 }
 

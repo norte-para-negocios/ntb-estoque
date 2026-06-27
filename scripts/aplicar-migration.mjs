@@ -45,6 +45,7 @@ for (const pre of prefixos) {
     console.log(`CONECTOU em ${host}`)
     fs.writeFileSync(`${PROJ}/scripts/.pooler-host`, `${host}:5432`)
     try {
+      await client.query('SET default_transaction_read_only = off')
       await client.query(sql)
       console.log('MIGRATION APLICADA.')
       await client.end()

@@ -170,6 +170,7 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 
 > Endpoints Omie: v1/financas/contapagar (ListarContasPagar) e v1/financas/contareceber (ListarContasReceber). Paginacao: pagina/registros_por_pagina. Array: conta_pagar_cadastro / conta_receber_cadastro (com filtrar_por_status). Status validos: EMABERTO, ATRASADO, AVENCER, VENCEHOJE, PAGTO_PARCIAL, PAGO, LIQUIDADO, CANCELADO.
 > Advisory lock no sync (pg_try_advisory_lock 20260626) previne race condition entre syncs paralelos.
+> Extrato/posicao de caixa: v1/geral/contacorrente (ListarContasCorrentes) lista as contas; v1/financas/extrato (ListarExtrato) exige nCodCC + dPeriodoInicial/dPeriodoFinal (dd/mm/yyyy) e devolve no CABECALHO os saldos (nSaldoAtual, nSaldoDisponivel, nSaldoConciliado, cFluxoCaixa). listaMovimentos e majoritariamente ruido (linha SALDO por dia). ListarExtrato e sensivel a rate limit ("consumo indevido", bloqueio 300s) -- sync usa DELAY_EXTRATO=600ms e periodo de 1 dia (so quer o saldo). Fluxo PROJETADO vem dos dados que ja temos (CP/CR por mes de vencimento), custo zero de sync extra.
 
 | # | O que | Status |
 |---|---|---|
@@ -177,7 +178,7 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 | B.3.2 | Tela /beta/financeiro: cards totais + lista CP/CR com status/dias, tabs, chips | ✅ |
 | B.3.3 | Filtros prazo (7/30/90d) + tipo de documento | ✅ |
 | B.3.4 | Resumo CR por mes via RPC financeiro_resumo_cr (migration 053) | ✅ |
-| B.3.5 | Extrato/fluxo de caixa: endpoint a descobrir | Pendente |
+| B.3.5 | Aba Fluxo de caixa: posicao de caixa (contas_correntes, migration 054) + fluxo projetado por mes (RPC financeiro_fluxo_caixa) + alerta de atrasados | ✅ |
 
 ### B.4 CRM
 
