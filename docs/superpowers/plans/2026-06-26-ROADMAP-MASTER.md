@@ -112,14 +112,16 @@ Isso e a PRIORIDADE 1. Antes de adicionar qualquer modulo novo (que so adiciona 
 | Combobox com busca inline (Combobox.tsx + FiltrosGaveta) | 2423f27 |
 | Export produtos com CMC, saldo, minimo, sugestao, margem | dfc608b |
 
-### A.3 UI Base -- PENDENTE
+### A.3 UI Base -- FEITO (commit d647f76)
 
-| # | O que | Onde |
+| # | O que | Status |
 |---|---|---|
-| A.3.1 | Filtros de data no relatorio de faturamento | `relatorio-faturamento/page.tsx` |
-| A.3.2 | Dashboard: valor monetario total do estoque | `home/page.tsx` |
-| A.3.3 | Dashboard: data de sync com dia+hora, aviso se >24h | `home/page.tsx` |
-| A.3.4 | Lista "Repor estoque" com saldo e minimo ao lado | `home/page.tsx` |
+| A.3.1 | Chips de periodo (Este mes/3m/6m/Todos) no faturamento; migration 050 pendente (DNS) | ✅ |
+| A.3.2 | Dashboard: card valor monetario total (SUM saldo*CMC posicao mais recente) | ✅ |
+| A.3.3 | Dashboard: sync badge com data+hora, aviso "+24h" no badge e na fila de alertas | ✅ |
+| A.3.4 | Lista "Repor estoque" com saldo atual / minimo lado a lado | ✅ |
+
+> Migration 050 (`relatorio_faturamento_matriz` + p_mes_ini/p_mes_fim): DNS dos poolers Supabase sem resolucao nesta sessao. Filtro ja funciona no lado do servidor (JS). Aplicar quando DNS voltar: `node scripts/aplicar-migration.mjs 050_faturamento_filtro_mes.sql`
 
 ### A.4 Resumo do Dia -- Auditoria de Inventario ✅ FEITO (commit 45f77d4)
 
