@@ -8,7 +8,7 @@ import {
   Wallet, AlertTriangle, Clock, CheckCircle2, TrendingDown, TrendingUp, Package,
 } from 'lucide-react'
 
-type SearchParams = Promise<{ status?: string; aba?: string }>
+type SearchParams = Promise<{ status?: string; aba?: string; dias?: string; tipo?: string }>
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -60,6 +60,13 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
 
   const aba = sp.aba ?? 'pagar'
   const filtroStatus = sp.status ?? ''
+  const filtroDias = sp.dias ?? ''
+  const filtroTipo = sp.tipo ?? ''
+
+  // Data limite para filtro de prazo
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const dataLimite = filtroDias ? new Date(hoje.getTime() + Number(filtroDias) * 86400000).toISOString().slice(0, 10) : null
+  const dataHoje = hoje.toISOString().slice(0, 10)
 
   const sb = await createClient()
 
@@ -69,6 +76,8 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
     .eq('loja_id', lojaId)
     .order('data_vencimento', { ascending: true })
   if (filtroStatus) cpQuery = cpQuery.eq('status_titulo', filtroStatus)
+  if (filtroTipo) cpQuery = cpQuery.eq('codigo_tipo_documento', filtroTipo)
+  if (dataLimite) { cpQuery = cpQuery.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite) }
 
   // Dados CR
   let crQuery = sb.from('contas_receber')
@@ -76,23 +85,28 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
     .eq('loja_id', lojaId)
     .order('data_vencimento', { ascending: true })
   if (filtroStatus) crQuery = crQuery.eq('status_titulo', filtroStatus)
+  if (dataLimite) { crQuery = crQuery.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite) }
 
   let cpCountQ = sb.from('contas_pagar').select('*', { count: 'exact', head: true }).eq('loja_id', lojaId)
   let crCountQ = sb.from('contas_receber').select('*', { count: 'exact', head: true }).eq('loja_id', lojaId)
   if (filtroStatus) { cpCountQ = cpCountQ.eq('status_titulo', filtroStatus); crCountQ = crCountQ.eq('status_titulo', filtroStatus) }
+  if (filtroTipo) cpCountQ = cpCountQ.eq('codigo_tipo_documento', filtroTipo)
+  if (dataLimite) { cpCountQ = cpCountQ.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite); crCountQ = crCountQ.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite) }
 
-  const [cpRes, crRes, syncAtRes, cpCountRes, crCountRes] = await Promise.all([
+  const [cpRes, crRes, syncAtRes, cpCountRes, crCountRes, tiposRes] = await Promise.all([
     cpQuery.limit(500),
     crQuery.limit(500),
     sb.from('contas_pagar').select('synced_at').eq('loja_id', lojaId).order('synced_at', { ascending: false }).limit(1).maybeSingle(),
     cpCountQ,
     crCountQ,
+    sb.from('contas_pagar').select('codigo_tipo_documento').eq('loja_id', lojaId).not('codigo_tipo_documento', 'is', null),
   ])
 
   const cpAll = cpRes.data ?? []
   const crAll = crRes.data ?? []
   const cpCount = cpCountRes.count ?? cpAll.length
   const crCount = crCountRes.count ?? crAll.length
+  const tipos = [...new Set((tiposRes.data ?? []).map((r: { codigo_tipo_documento: string }) => r.codigo_tipo_documento).filter(Boolean))].sort()
   const syncAt = syncAtRes.data?.synced_at
     ? new Date(syncAtRes.data.synced_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null
@@ -111,7 +125,15 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
   const totalCR = crTot.reduce((s, i) => s + Number(i.valor_documento ?? 0), 0)
 
   const lista = aba === 'pagar' ? cpAll : crAll
-  const chipBase = (v: string) => `?aba=${aba}${v ? `&status=${v}` : ''}`
+
+  function qs(overrides: Record<string, string>) {
+    const p: Record<string, string> = { aba }
+    if (filtroStatus) p.status = filtroStatus
+    if (filtroDias) p.dias = filtroDias
+    if (filtroTipo) p.tipo = filtroTipo
+    Object.entries(overrides).forEach(([k, v]) => { if (v) p[k] = v; else delete p[k] })
+    return '?' + new URLSearchParams(p).toString()
+  }
 
   if (!cpTot.length && !crTot.length) {
     return (
@@ -143,7 +165,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
         {(['pagar', 'receber'] as const).map(a => (
           <Link
             key={a}
-            href={`?aba=${a}${filtroStatus ? `&status=${filtroStatus}` : ''}`}
+            href={qs({ aba: a, dias: a === 'receber' ? '' : filtroDias, tipo: a === 'receber' ? '' : filtroTipo })}
             className={`rounded-md px-4 py-1.5 text-sm font-medium u-motion ${aba === a ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}`}
           >
             {a === 'pagar' ? `A Pagar (${cpCount})` : `A Receber (${crCount})`}
@@ -156,18 +178,37 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
         {CHIPS.map(chip => {
           const active = filtroStatus === chip.value
           return (
-            <Link
-              key={chip.value}
-              href={chipBase(chip.value)}
-              className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${
-                active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
-              }`}
-            >
-              {chip.label}
-            </Link>
+            <Link key={chip.value} href={qs({ status: chip.value })}
+              className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'}`}
+            >{chip.label}</Link>
           )
         })}
       </div>
+
+      {/* Chips de prazo (so CP) */}
+      {aba === 'pagar' && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-[11px] text-text-muted">Vence em:</span>
+          {[{ v: '', l: 'Qualquer' }, { v: '7', l: '7 dias' }, { v: '30', l: '30 dias' }, { v: '90', l: '90 dias' }].map(({ v, l }) => (
+            <Link key={v} href={qs({ dias: v })}
+              className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${filtroDias === v ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'}`}
+            >{l}</Link>
+          ))}
+          {tipos.length > 0 && (
+            <>
+              <span className="text-[11px] text-text-muted ml-3">Tipo:</span>
+              <Link href={qs({ tipo: '' })}
+                className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${!filtroTipo ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'}`}
+              >Todos</Link>
+              {tipos.map(t => (
+                <Link key={t} href={qs({ tipo: t })}
+                  className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${filtroTipo === t ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'}`}
+                >{t}</Link>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Tabela */}
       {lista.length === 0 ? (
