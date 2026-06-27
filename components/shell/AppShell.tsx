@@ -10,6 +10,7 @@ import { BuscaGlobal } from './BuscaGlobal'
 
 export function AppShell({
   isAdmin,
+  isSuperAdmin = false,
   podeGerirUsuarios = false,
   rotasVisiveis,
   lojaSelector,
@@ -17,6 +18,7 @@ export function AppShell({
   children,
 }: {
   isAdmin: boolean
+  isSuperAdmin?: boolean
   // AdminLoja: ve a gestao de usuarios (escopada) mesmo sem ser admin global.
   podeGerirUsuarios?: boolean
   // null = admin (ve tudo). Array = rotas que o nao-admin pode ver (4.2).
@@ -59,9 +61,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+      <Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <MobileNav isAdmin={isAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o

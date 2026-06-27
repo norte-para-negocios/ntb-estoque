@@ -8,6 +8,7 @@ import { rotasPermitidas } from '@/lib/permissoes-menu'
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
   const isAdmin = profile.perfil === 'Admin'
+  const superAdmin = profile.is_super_admin === true
   // AdminLoja tambem gerencia usuarios (escopado a loja dele) -> ve a rota /usuario.
   const podeGerirUsuarios = isAdmin || profile.perfil === 'AdminLoja'
 
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AppShell
       isAdmin={isAdmin}
+      isSuperAdmin={superAdmin}
       podeGerirUsuarios={podeGerirUsuarios}
       rotasVisiveis={rotasVisiveis}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}

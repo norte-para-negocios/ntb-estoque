@@ -16,6 +16,7 @@ export type Profile = {
   current_loja_id: number | null
   perfil: string | null
   status: string | null
+  is_super_admin: boolean
   loja: { id: number; nome: string; nome_fantasia: string | null } | null
 }
 
@@ -28,7 +29,7 @@ export async function getProfile(): Promise<Profile> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, name, current_loja_id, perfil, status, loja:lojas(id, nome, nome_fantasia)')
+    .select('id, name, current_loja_id, perfil, status, is_super_admin, loja:lojas(id, nome, nome_fantasia)')
     .eq('id', user.id)
     .single<Profile>()
 
@@ -61,6 +62,13 @@ export async function carimboUsuario(): Promise<string> {
 export async function isAdmin(): Promise<boolean> {
   const profile = await getProfile()
   return profile.perfil === 'Admin'
+}
+
+// Super admin total: único flag que libera acesso à área VTBstock Beta.
+// Ortogonal ao Admin global (Admin pode não ser super admin e vice-versa).
+export async function isSuperAdmin(): Promise<boolean> {
+  const profile = await getProfile()
+  return profile.is_super_admin === true
 }
 
 // Admin de loja: acesso TOTAL aos módulos das lojas vinculadas (loja_user), mas
