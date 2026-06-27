@@ -93,13 +93,14 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
   if (filtroTipo) cpCountQ = cpCountQ.eq('codigo_tipo_documento', filtroTipo)
   if (dataLimite) { cpCountQ = cpCountQ.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite); crCountQ = crCountQ.gte('data_vencimento', dataHoje).lte('data_vencimento', dataLimite) }
 
-  const [cpRes, crRes, syncAtRes, cpCountRes, crCountRes, tiposRes] = await Promise.all([
+  const [cpRes, crRes, syncAtRes, cpCountRes, crCountRes, tiposRes, crResumoRes] = await Promise.all([
     cpQuery.limit(500),
     crQuery.limit(500),
     sb.from('contas_pagar').select('synced_at').eq('loja_id', lojaId).order('synced_at', { ascending: false }).limit(1).maybeSingle(),
     cpCountQ,
     crCountQ,
     sb.from('contas_pagar').select('codigo_tipo_documento').eq('loja_id', lojaId).not('codigo_tipo_documento', 'is', null),
+    sb.rpc('financeiro_resumo_cr', { p_loja_id: lojaId }),
   ])
 
   const cpAll = cpRes.data ?? []
@@ -107,6 +108,14 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
   const cpCount = cpCountRes.count ?? cpAll.length
   const crCount = crCountRes.count ?? crAll.length
   const tipos = [...new Set((tiposRes.data ?? []).map((r: { codigo_tipo_documento: string }) => r.codigo_tipo_documento).filter(Boolean))].sort()
+
+  // Resumo CR por mes via RPC (GROUP BY no banco)
+  const crResumo = (crResumoRes.data ?? []).map((r: { mes: string; total: string | number; n: string | number; atrasado: string | number }) => ({
+    mes: r.mes as string,
+    total: Number(r.total),
+    n: Number(r.n),
+    atrasado: Number(r.atrasado),
+  }))
   const syncAt = syncAtRes.data?.synced_at
     ? new Date(syncAtRes.data.synced_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null
@@ -259,6 +268,44 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* B.3.4 Resumo CR por mes */}
+      {aba === 'receber' && crResumo.length > 0 && !filtroDias && !filtroStatus && (
+        <div>
+          <h3 className="mb-3 text-[13px] font-semibold text-text">Resumo por vencimento</h3>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-border bg-surface-2">
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-muted">Mes</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-text-muted">Qtd</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-text-muted">Total</th>
+                  <th className="hidden px-3 py-2.5 text-right font-semibold text-text-muted sm:table-cell">Atrasados</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {crResumo.map(({ mes, total, n, atrasado }: { mes: string; total: number; n: number; atrasado: number }) => {
+                  const [y, m] = mes.split('-')
+                  const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                  const isPast = mes < dataHoje.slice(0, 7)
+                  return (
+                    <tr key={mes} className="hover:bg-surface-2/50">
+                      <td className={`px-3 py-2.5 font-medium ${isPast ? 'text-danger' : 'text-text'}`}>{label}</td>
+                      <td className="px-3 py-2.5 text-right text-text-muted num">{n}</td>
+                      <td className={`px-3 py-2.5 text-right font-semibold num ${isPast ? 'text-danger' : 'text-text'}`}>
+                        <Money value={total} />
+                      </td>
+                      <td className="hidden px-3 py-2.5 text-right sm:table-cell">
+                        {atrasado > 0 ? <span className="rounded-full bg-danger/10 border border-danger/30 px-2 py-0.5 text-[10px] font-medium text-danger">{atrasado} atrasado{atrasado > 1 ? 's' : ''}</span> : <span className="text-text-muted">-</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
