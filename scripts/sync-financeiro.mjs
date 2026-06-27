@@ -20,17 +20,29 @@ const STATUS_ABERTOS = ['EMABERTO', 'ATRASADO', 'AVENCER', 'VENCEHOJE', 'PAGTO_P
 const POR_PAGINA = 50
 const DELAY = 310
 
-async function omie(key, secret, ep, call, data) {
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+// Erros transitorios do Omie que valem retry (request ainda em execucao, rate limit).
+function transitorio(msg) {
+  return /j[aá] existe uma requisi|consumo indevido|tente novamente|em execu/i.test(msg)
+}
+
+async function omie(key, secret, ep, call, data, tentativa = 1) {
   const r = await fetch(`https://app.omie.com.br/api/${ep}/`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ call, app_key: key, app_secret: secret, param: [data] })
   })
   const json = await r.json()
-  if (json?.faultstring || json?.faultcode) throw new Error(`Omie fault: ${json.faultstring ?? json.faultcode}`)
+  const fault = json?.faultstring ?? json?.faultcode
+  if (fault) {
+    if (transitorio(String(fault)) && tentativa <= 4) {
+      await sleep(1500 * tentativa) // backoff: 1.5s, 3s, 4.5s, 6s
+      return omie(key, secret, ep, call, data, tentativa + 1)
+    }
+    throw new Error(`Omie fault: ${fault}`)
+  }
   return json
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 async function paginatCP(key, secret, status) {
   const items = []
