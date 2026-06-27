@@ -39,6 +39,7 @@ export default async function NotaFiscalPage({
     fornecedor?: string
     status?: string
     tipo?: string
+    natureza?: string
     produto?: string
     page?: string
     ord?: string
@@ -112,7 +113,7 @@ export default async function NotaFiscalPage({
   // Query da listagem (paginada).
   let query = supabase
     .from('notas_fiscais')
-    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
+    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
     .eq('loja_id', lojaId)
     .gte('d_emissao_nfe', dataInicio)
     .lte('d_emissao_nfe', dataFinal)
@@ -124,6 +125,7 @@ export default async function NotaFiscalPage({
   // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
   if (params.status === 'C') query = query.eq('c_etapa', '60')
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
+  if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (idsIn) query = query.in('id', idsIn)
 
   // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
@@ -139,6 +141,7 @@ export default async function NotaFiscalPage({
   if (params.fornecedor) totaisQuery = totaisQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
   if (params.status === 'C') totaisQuery = totaisQuery.eq('c_etapa', '60')
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
+  if (params.natureza) totaisQuery = totaisQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
   const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
@@ -157,6 +160,7 @@ export default async function NotaFiscalPage({
     if (params.fornecedor) sp.set('fornecedor', params.fornecedor)
     if (params.status) sp.set('status', params.status)
     if (params.tipo) sp.set('tipo', params.tipo)
+    if (params.natureza) sp.set('natureza', params.natureza)
     if (params.produto) sp.set('produto', params.produto)
     sp.set('ord', key)
     sp.set('dir', newDir)
@@ -170,6 +174,7 @@ export default async function NotaFiscalPage({
   if (params.fornecedor) relatorioParams.set('fornecedor', params.fornecedor)
   if (params.status) relatorioParams.set('status', params.status)
   if (params.tipo) relatorioParams.set('tipo', params.tipo)
+  if (params.natureza) relatorioParams.set('natureza', params.natureza)
   if (params.produto) relatorioParams.set('produto', params.produto)
 
   const campos: CampoFiltro[] = [
@@ -187,6 +192,7 @@ export default async function NotaFiscalPage({
       ],
     },
     { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'texto', nome: 'natureza', label: 'Natureza da operacao' },
     { tipo: 'texto', nome: 'produto', label: 'Produto' },
   ]
 
@@ -209,6 +215,7 @@ export default async function NotaFiscalPage({
                   fornecedor: params.fornecedor ?? '',
                   status: params.status ?? '',
                   tipo: params.tipo ?? '',
+                  natureza: params.natureza ?? '',
                   produto: params.produto ?? '',
                 }}
                 persistirEm="/nota-fiscal"
@@ -250,9 +257,21 @@ export default async function NotaFiscalPage({
         dirAtual={dir}
         sortHref={buildSortHref}
         colunas={[
-          { label: 'Fornecedor', primaria: true, sort: 'c_razao_social', render: (nf) => nf.c_razao_social || nf.c_nome || '-' },
+          {
+            label: 'Fornecedor',
+            primaria: true,
+            sort: 'c_razao_social',
+            render: (nf) => (
+              <div className="min-w-0">
+                <div className="truncate text-text">{nf.c_razao_social || nf.c_nome || '-'}</div>
+                {nf.c_natureza_operacao && (
+                  <div className="truncate text-[11px] text-text-muted" title={nf.c_natureza_operacao}>{nf.c_natureza_operacao}</div>
+                )}
+              </div>
+            ),
+          },
           { label: 'Emissão', sort: 'd_emissao_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
-          { label: 'NFe', sort: 'c_numero_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num">{nf.c_numero_nfe ?? '-'}</span> },
+          { label: 'NFe', sort: 'c_numero_nfe', larguraDesktop: 'w-28', render: (nf) => (<span className="num">{nf.c_numero_nfe ?? '-'}{nf.c_serie_nfe ? <span className="text-text-muted">/{nf.c_serie_nfe}</span> : null}</span>) },
           { label: 'Etapa', sort: 'c_etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa === '60' ? 'Concluida' : 'Pendente'} /> },
           { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
         ]}
