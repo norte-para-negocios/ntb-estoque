@@ -180,12 +180,15 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 | B.3.4 | Resumo CR por mes via RPC financeiro_resumo_cr (migration 053) | ✅ |
 | B.3.5 | Aba Fluxo de caixa: posicao de caixa (contas_correntes, migration 054) + fluxo projetado por mes (RPC financeiro_fluxo_caixa) + alerta de atrasados | ✅ |
 
-### B.4 CRM
+### B.4 CRM -- FEITO
 
-| # | O que |
-|---|---|
-| B.4.1 | Clientes: tabela + sync (ListarClientes) + tela + detalhe (histo NF saida + a receber) |
-| B.4.2 | Fornecedores: tabela + sync (ListarFornecedores) + tela + detalhe (histo NF entrada + ultimo preco) |
+> Cadastro unificado no Omie (v1/geral/clientes / ListarClientes); a tag Cliente/Fornecedor distingue. Sync ja existia (lib/omie/cliente-fornecedor.ts -> tabelas clientes/fornecedores). Conexao: contas_receber/contas_pagar.codigo_cliente_fornecedor = codigo_omie; notas_fiscais.n_id_fornecedor = codigo_omie (NFs sao de ENTRADA, lojas nao emitem saida no Omie). Area /beta/crm: lista por aba (cliente/fornecedor) com busca e paginacao; detalhe /beta/crm/[tipo]/[codigo] com cards (a receber/pagar, atrasado, total comprado/titulos), contato, NFs de entrada e contas em aberto. Totais via RPC crm_resumo_contas / crm_fornecedor_nf (migration 055) -- corretos mesmo com >500 titulos (ex.: consumidor generico 3344).
+
+| # | O que | Status |
+|---|---|---|
+| B.4.1 | Clientes: tela /beta/crm (aba) + detalhe com contas a receber e totais agregados | ✅ |
+| B.4.2 | Fornecedores: tela (aba) + detalhe com NFs de entrada + contas a pagar + total comprado | ✅ |
+| B.4.3 | Ultimo preco por produto no detalhe do fornecedor (de nota_fiscal_items) | Pendente (enhancement) |
 
 ### B.5 Relatorios (espelho Omie/DRV do Ramon)
 

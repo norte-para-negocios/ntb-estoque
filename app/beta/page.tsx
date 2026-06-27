@@ -28,7 +28,8 @@ const MODULOS: {
     titulo: 'CRM',
     descricao: 'Clientes e fornecedores com historico de NFs, ultimos precos e contas abertas.',
     icon: Users,
-    status: 'planejado',
+    status: 'disponivel',
+    href: '/beta/crm',
   },
   {
     titulo: 'Relatorios Avancados',
