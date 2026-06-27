@@ -12,6 +12,7 @@ import {
   CalendarClock,
   AlertTriangle,
   CheckCircle2,
+  DollarSign,
   type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -42,12 +43,10 @@ export default async function HomePage() {
   const lojaId = profile.current_loja_id
   const supabase = await createClient()
 
-  // Tudo na home respeita permissao: o usuario so ve o bloco que ele pode acessar.
   const isAdmin = profile.perfil === 'Admin'
   const perms = await getPermissoesNomes(lojaId)
   const pode = (nome: string) => perms.has('*') || perms.has(nome)
 
-  // Multi-tenant: nao-admin so pode ver dados de lojas que tem em loja_user.
   if (!isAdmin) {
     const { data: vinculo } = await supabase
       .from('loja_user')
@@ -66,8 +65,7 @@ export default async function HomePage() {
     }
   }
 
-  // Datas ancoradas em HOJE (America/Bahia) + offset, com aritmética UTC. O servidor
-  // roda em UTC na Vercel; usar new Date() local dava off-by-one à noite de Bahia.
+  // Datas ancoradas em HOJE (America/Bahia) + offset, com aritmética UTC.
   function localISO(offsetDias: number): string {
     const d = new Date(`${hojeBahiaISO()}T00:00:00Z`)
     d.setUTCDate(d.getUTCDate() + offsetDias)
@@ -79,112 +77,80 @@ export default async function HomePage() {
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
-  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas] =
+  // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas, maxPosRes] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
-      supabase
-        .from('notas_fiscais')
-        .select('id', head)
-        .eq('loja_id', lojaId)
-        .gte('d_emissao_nfe', trintaDias)
-        .is('deleted_at', null),
+      supabase.from('notas_fiscais').select('id', head).eq('loja_id', lojaId).gte('d_emissao_nfe', trintaDias).is('deleted_at', null),
       supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId),
-      supabase
-        .from('inventarios')
-        .select('id', head)
-        .eq('loja_id', lojaId)
-        .neq('status', 'Finalizado'),
-      // OPs vencendo nos proximos 7 dias (excluindo ja vencidas e saldo zero).
-      // Alinhado com a lista de /validade: janela [hoje, hoje+7], quantidade > 0.
-      supabase
-        .from('ordens_producao')
-        .select('id', head)
-        .eq('loja_id', lojaId)
-        .not('validade', 'is', null)
-        .gte('validade', hojeLocal)
-        .lte('validade', seteDias)
-        .gt('quantidade', 0),
-      // Erros de sincronizacao da loja nas ultimas 24h
-      supabase
-        .from('integration_attempts')
-        .select('id', head)
-        .eq('loja_id', lojaId)
-        .eq('error', true)
-        .gte('created_at', desde24h),
+      supabase.from('inventarios').select('id', head).eq('loja_id', lojaId).neq('status', 'Finalizado'),
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).gt('quantidade', 0),
+      supabase.from('integration_attempts').select('id', head).eq('loja_id', lojaId).eq('error', true).gte('created_at', desde24h),
       supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
-      supabase
-        .from('notas_fiscais')
-        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe')
-        .eq('loja_id', lojaId)
-        .is('deleted_at', null)
-        .order('d_emissao_nfe', { ascending: false })
-        .limit(5),
-      // Produtos abaixo do minimo (a repor) — mesma RPC da tela de Compras.
+      supabase.from('notas_fiscais').select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe').eq('loja_id', lojaId).is('deleted_at', null).order('d_emissao_nfe', { ascending: false }).limit(5),
       supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
-      // Transferencias ainda nao concluidas (em contagem/abertas).
       supabase.from('transferencias').select('id', head).eq('loja_id', lojaId).neq('status', 'Concluido'),
+      supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
     ])
 
-  // D1: produtos prestes a ruptura (abaixo do minimo). Lista os principais + ver todos.
   const codigosRepor = (reporRes.data ?? []) as number[]
   const qtdRepor = codigosRepor.length
-  const { data: prodsRepor } = qtdRepor
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, codigo, descricao')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', codigosRepor.slice(0, 8))
-        .order('descricao')
-    : { data: [] }
+  const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
-  const ultimaSync = loja.data?.produto_ultima_atualizacao
-    ? new Date(loja.data.produto_ultima_atualizacao).toLocaleTimeString('pt-BR', {
-        timeZone: 'America/Bahia',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+  // Phase 2: produtos a repor + valor total do estoque + saldo/mínimo para a lista
+  const [prodsReporRes, valorEstoqueRes, posReporRes] = await Promise.all([
+    qtdRepor
+      ? supabase.from('produtos').select('codigo_produto, codigo, descricao').eq('loja_id', lojaId).in('codigo_produto', codigosRepor.slice(0, 8)).order('descricao')
+      : (Promise.resolve({ data: [] }) as Promise<{ data: { codigo_produto: number; codigo: string; descricao: string }[] }>),
+    maxDate
+      ? supabase.from('posicao_estoques').select('n_saldo, n_cmc').eq('loja_id', lojaId).eq('data_posicao', maxDate)
+      : (Promise.resolve({ data: [] }) as Promise<{ data: { n_saldo: number; n_cmc: number }[] }>),
+    maxDate && qtdRepor
+      ? supabase.from('posicao_estoques').select('n_cod_prod, n_saldo, estoque_minimo').eq('loja_id', lojaId).eq('data_posicao', maxDate).in('n_cod_prod', codigosRepor.slice(0, 8))
+      : (Promise.resolve({ data: [] }) as Promise<{ data: { n_cod_prod: number; n_saldo: number; estoque_minimo: number | null }[] }>),
+  ])
+
+  const prodsRepor = prodsReporRes.data ?? []
+
+  // A.3.2: valor total do estoque = soma(saldo * CMC) em todos os locais da posicao
+  const valorTotalEstoque = (valorEstoqueRes.data ?? []).reduce(
+    (acc, r) => acc + (Number(r.n_saldo) || 0) * (Number(r.n_cmc) || 0),
+    0,
+  )
+
+  // A.3.4: mapa de saldo/mínimo por produto (acumula locais)
+  const saldoMap = new Map<number, { saldo: number; minimo: number }>()
+  for (const r of posReporRes.data ?? []) {
+    const cod = Number(r.n_cod_prod)
+    const e = saldoMap.get(cod) ?? { saldo: 0, minimo: 0 }
+    e.saldo += Number(r.n_saldo) || 0
+    e.minimo += Number(r.estoque_minimo) || 0
+    saldoMap.set(cod, e)
+  }
+
+  // A.3.3: último sync - data+hora completa + aviso se >24h
+  const syncTs = loja.data?.produto_ultima_atualizacao ? new Date(loja.data.produto_ultima_atualizacao) : null
+  const ultimaSync = syncTs
+    ? syncTs.toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : 'nunca'
+  const syncAtraso = !syncTs || Date.now() - syncTs.getTime() > 24 * 3600 * 1000
 
   const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
 
-  // Fila "Precisa de atenção": só itens com contagem > 0 E que o usuário pode acessar.
   type Alerta = { icon: LucideIcon; token: CorToken; texto: string; href: string }
   const alertas: Alerta[] = []
   if (qtdRepor > 0 && pode('Produtos'))
-    alertas.push({
-      icon: AlertTriangle,
-      token: 'err',
-      texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`,
-      href: '/produto?vista=compras&repor=1',
-    })
+    alertas.push({ icon: AlertTriangle, token: 'err', texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`, href: '/produto?vista=compras&repor=1' })
   if ((errosSync.count ?? 0) > 0 && isAdmin)
-    alertas.push({
-      icon: AlertTriangle,
-      token: 'err',
-      texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`,
-      href: '/sync-status',
-    })
+    alertas.push({ icon: AlertTriangle, token: 'err', texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`, href: '/sync-status' })
+  if (syncAtraso && isAdmin)
+    alertas.push({ icon: TrendingUp, token: 'warn', texto: 'Sincronização com Omie atrasada (mais de 24h)', href: '/sync-status' })
   if ((vencendo.count ?? 0) > 0)
-    alertas.push({
-      icon: CalendarClock,
-      token: 'warn',
-      texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`,
-      href: '/validade',
-    })
+    alertas.push({ icon: CalendarClock, token: 'warn', texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`, href: '/validade' })
   if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))
-    alertas.push({
-      icon: ClipboardList,
-      token: 'brand',
-      texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`,
-      href: '/inventario',
-    })
+    alertas.push({ icon: ClipboardList, token: 'brand', texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`, href: '/inventario' })
   if ((transfAbertas.count ?? 0) > 0 && pode('Transferencias - Ver'))
-    alertas.push({
-      icon: ArrowLeftRight,
-      token: 'brand',
-      texto: `${transfAbertas.count} transferência(s) em aberto`,
-      href: '/transferencia',
-    })
+    alertas.push({ icon: ArrowLeftRight, token: 'brand', texto: `${transfAbertas.count} transferência(s) em aberto`, href: '/transferencia' })
 
   const secundarios = [
     { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal', perm: 'Notas Fiscais' },
@@ -197,6 +163,9 @@ export default async function HomePage() {
     { label: 'Nova transferência', desc: 'Entre locais', href: '/transferencia', icon: ArrowLeftRight, perm: 'Transferencias - Criar' },
     { label: 'Etiquetas de NF', desc: 'Imprimir', href: '/nota-fiscal', icon: FileText, perm: 'Notas Fiscais' },
   ].filter((a) => pode(a.perm))
+
+  const fmtQtd = (n: number) =>
+    n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
   return (
     <div className="space-y-8">
@@ -219,14 +188,42 @@ export default async function HomePage() {
               </div>
               <div className="mt-4 h-1 w-24 rounded-full bg-brand" />
             </div>
-            <div className="flex items-center gap-1.5 rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1.5 text-[12px] text-white/70">
-              <TrendingUp className="size-3.5 text-brand" /> sync {ultimaSync}
+            {/* A.3.3: badge de sync com data+hora e aviso se atrasado */}
+            <div className="flex flex-col items-end gap-1.5">
+              <div
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] ring-1 ${
+                  syncAtraso ? 'bg-warn/20 ring-warn/30 text-warn' : 'bg-white/5 ring-white/10 text-white/70'
+                }`}
+              >
+                <TrendingUp className={`size-3.5 ${syncAtraso ? 'text-warn' : 'text-brand'}`} />
+                sync {ultimaSync}
+              </div>
+              {syncAtraso && (
+                <span className="text-[11px] text-warn/70">atrasado (+24h)</span>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Precisa de atenção — fila acionável */}
+      {/* A.3.2: Card valor monetário total do estoque */}
+      {valorTotalEstoque > 0 && (
+        <section>
+          <div className="relative overflow-hidden rounded-xl border border-border bg-surface p-5">
+            <span className="absolute left-0 top-0 h-full w-1 bg-ok/50 rounded-l-xl" />
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="size-4 text-ok" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">Valor em estoque</p>
+              {maxDate && <span className="ml-auto text-[11px] text-text-muted">posição {fmtData(maxDate)}</span>}
+            </div>
+            <div className="num text-[2rem] leading-none font-bold tracking-tight text-text">
+              <Money value={valorTotalEstoque} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Precisa de atenção */}
       <section>
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">
           Precisa de atenção
@@ -239,9 +236,7 @@ export default async function HomePage() {
                 href={a.href}
                 className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 u-motion u-press hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
               >
-                <span
-                  className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}
-                >
+                <span className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}>
                   <a.icon className="size-4" strokeWidth={2} />
                 </span>
                 <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
@@ -306,7 +301,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Repor estoque — produtos abaixo do minimo (D1) */}
+      {/* A.3.4: Repor estoque com saldo e mínimo lado a lado */}
       {qtdRepor > 0 && pode('Produtos') && (
         <section>
           <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
@@ -316,15 +311,25 @@ export default async function HomePage() {
             </Link>
           </div>
           <ul className="divide-y divide-border">
-            {(prodsRepor ?? []).map((p) => (
-              <li key={p.codigo_produto} className="flex items-center gap-3 py-3">
-                <span className="flex size-7 items-center justify-center rounded-md bg-err/10 text-err shrink-0">
-                  <AlertTriangle className="size-3.5" strokeWidth={2} />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-text">{formatarNomeProduto(p.descricao)}</span>
-                <span className="num text-[12px] text-text-muted shrink-0">{p.codigo}</span>
-              </li>
-            ))}
+            {prodsRepor.map((p) => {
+              const pos = saldoMap.get(p.codigo_produto)
+              return (
+                <li key={p.codigo_produto} className="flex items-center gap-3 py-3">
+                  <span className="flex size-7 items-center justify-center rounded-md bg-err/10 text-err shrink-0">
+                    <AlertTriangle className="size-3.5" strokeWidth={2} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-text">{formatarNomeProduto(p.descricao)}</span>
+                  {pos && (
+                    <span className="flex items-center gap-1 shrink-0 text-[12px]">
+                      <span className="num text-err font-medium" title="Saldo atual">{fmtQtd(pos.saldo)}</span>
+                      <span className="text-text-muted">/</span>
+                      <span className="num text-text-muted" title="Estoque mínimo">{fmtQtd(pos.minimo)}</span>
+                    </span>
+                  )}
+                  <span className="num text-[12px] text-text-muted shrink-0">{p.codigo}</span>
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}
