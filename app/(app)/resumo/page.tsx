@@ -8,6 +8,7 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ResumoFiltros } from '@/components/resumo/ResumoFiltros'
 import { ResumoGrafico } from '@/components/resumo/ResumoGrafico'
+import { ErroDetalhe } from '@/components/resumo/ErroDetalhe'
 import { SELO_CLASSE } from '@/lib/status-cor'
 import { LayoutDashboard, Download, Inbox } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -318,9 +319,18 @@ export default async function ResumoPage({
                   {temStatus && (
                     <td className="px-4 py-2 text-right">
                       {linha.status && (
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tomClasse[linha.status.tom]}`}>
-                          {linha.status.label}
-                        </span>
+                        cat === 'erros' && linha.detalhe ? (
+                          <ErroDetalhe
+                            label={linha.status.label}
+                            tomClasse={tomClasse[linha.status.tom]}
+                            mensagem={linha.detalhe}
+                            titulo={linha.celulas[2] ?? 'Detalhe do erro'}
+                          />
+                        ) : (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tomClasse[linha.status.tom]}`}>
+                            {linha.status.label}
+                          </span>
+                        )
                       )}
                     </td>
                   )}

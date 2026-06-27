@@ -15,6 +15,8 @@ export type Tom = 'ok' | 'warn' | 'err' | 'info' | 'neutro'
 export type LinhaCategoria = {
   celulas: (string | null)[]
   status?: { label: string; tom: Tom } | null
+  // Texto completo (ex.: mensagem de erro do Omie) para abrir ao clicar no selo.
+  detalhe?: string | null
 }
 
 export type ItemGrafico = { label: string; valor: number }
@@ -379,10 +381,13 @@ async function listarCategoria(
       linhas: rows.map((er) => {
         const exp = explicarErroOmie(er.error_message)
         const msgLimpa = (er.error_message ?? '').replace(/^ERROR:\s*/i, '').trim()
+        // Detalhe completo: explicacao amigavel (se houver) + mensagem crua do Omie.
+        const detalhe = [exp?.explicacao, msgLimpa].filter(Boolean).join('\n\n') || msgLimpa || null
         return {
           celulas: [horaBahia(er.created_at), er.model ?? '-', exp?.titulo ?? 'Erro', msgLimpa.slice(0, 150) || '-',
             ...(lojas ? [lojas.get(er.loja_id) ?? '-'] : [])],
-          status: exp ? { label: exp.tipo === 'acao' ? 'Resolver' : exp.tipo === 'transitorio' ? 'Temporário' : 'Info', tom: exp.tipo === 'acao' ? 'err' : exp.tipo === 'transitorio' ? 'warn' : 'neutro' } : null,
+          status: exp ? { label: exp.tipo === 'acao' ? 'Resolver' : exp.tipo === 'transitorio' ? 'Temporário' : 'Info', tom: exp.tipo === 'acao' ? 'err' : exp.tipo === 'transitorio' ? 'warn' : 'neutro' } : { label: 'Ver erro', tom: 'err' },
+          detalhe,
         }
       }),
     }
