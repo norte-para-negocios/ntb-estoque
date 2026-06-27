@@ -121,19 +121,15 @@ Isso e a PRIORIDADE 1. Antes de adicionar qualquer modulo novo (que so adiciona 
 | A.3.3 | Dashboard: data de sync com dia+hora, aviso se >24h | `home/page.tsx` |
 | A.3.4 | Lista "Repor estoque" com saldo e minimo ao lado | `home/page.tsx` |
 
-### A.4 Resumo do Dia -- Auditoria de Inventario (PUBLICO, usuario pediu)
+### A.4 Resumo do Dia -- Auditoria de Inventario ✅ FEITO (commit 45f77d4)
 
-> IMPORTANTE: o usuario esclareceu que essas melhorias sao na tela **`/resumo?cat=auditoria`** (resumo do dia), NAO na tela `/inventario` que ja esta ok. A listagem de nao-contados tambem pode ir num link publico.
-
-| # | O que | Onde |
+| # | O que | Status |
 |---|---|---|
-| A.4.1 | Status "Erro" mostra a MENSAGEM REAL do Omie (`descricao_status`) -- hoje so diz "Erro" sem dizer qual | `resumo/page.tsx` + `ContagemInventario.tsx` |
-| A.4.2 | Listagem inventario: coluna de erros clicavel -> modal com item + mensagem exata do Omie | `inventario/page.tsx` |
-| A.4.3 | Chips Hoje/Semana/Mes no resumo de auditoria | `resumo/page.tsx` |
-| A.4.4 | Barra de cobertura: % produtos contados por periodo (RPC inventario_cobertura) | `resumo` + migration |
-| A.4.5 | Lista de produtos sem contagem ha +30 dias, filtravel por tipo/familia/busca (RPC inventario_nao_contados) | `resumo` + migration |
-
-> Detalhe tecnico dessas RPCs ja existe no plano `2026-06-26-inventario-auditoria.md` (mas naquele plano estava na tela errada -- corrigir para `/resumo`).
+| A.4.1 | Erros no /resumo mostram mensagem real do Omie (coluna Mensagem Omie) | ✅ |
+| A.4.2 | RPCs inventario_nao_contados e inventario_cobertura (migration 049) | ✅ |
+| A.4.3 | Chips Diario/Semanal/Mensal no resumo/auditoria | ✅ |
+| A.4.4 | Barra de cobertura % por periodo em /resumo?cat=auditoria | ✅ |
+| A.4.5 | Lista de produtos sem contagem nos ultimos 30 dias em /resumo?cat=auditoria | ✅ |
 
 ---
 
@@ -252,7 +248,7 @@ d655e77 docs: expandir spec Omie com mapa completo de todos os endpoints
 bbe9f60 docs: spec completo varredura API Omie (17 agentes)
 ```
 
-**Migrations:** ultima aplicada = 047. Proxima disponivel = 048.
+**Migrations:** ultima aplicada = 049. Proxima disponivel = 050.
 
 **Documentos de apoio neste repo:**
 - `docs/superpowers/specs/2026-06-26-omie-varredura-spec.md` -- mapa COMPLETO de todos os endpoints da API Omie (calls, campos, status NTB, priorizacao)
@@ -264,7 +260,7 @@ bbe9f60 docs: spec completo varredura API Omie (17 agentes)
 
 ## CONTEXTO TECNICO RAPIDO
 
-- **Stack:** Next.js 16 + Supabase (projeto `ocpytiqhjfxfqcosytdx`, free tier) + Vercel + Omie ERP
+- **Stack:** Next.js 16 + Supabase (projeto `waubqgkftwrufepwhctc`, free tier, migrado 2026-06-26) + Vercel + Omie ERP
 - **6 lojas** em restaurantes/distribuidoras na Bahia, cada uma com AppKey Omie propria
 - **Design system proprio:** `components/ui-kit/` (Linear/Vercel claro) -- usar o kit, nao classes antigas
 - **RBAC:** `requirePermissao(lojaId, 'Nome Permissao')` nas server actions
