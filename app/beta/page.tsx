@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { Zap, DollarSign, Wallet, Users, BarChart3, ShoppingBag, Clock, ArrowUpRight } from 'lucide-react'
+import { Zap, DollarSign, Wallet, Users, BarChart3, ShoppingBag, ShoppingCart, Clock, ArrowUpRight } from 'lucide-react'
 
 type StatusBeta = 'planejado' | 'em-dev' | 'disponivel'
 
@@ -32,8 +32,15 @@ const MODULOS: {
     href: '/beta/crm',
   },
   {
+    titulo: 'Compras',
+    descricao: 'Ranking de fornecedores por valor e evolucao de precos dos insumos (ultimo x menor x medio).',
+    icon: ShoppingCart,
+    status: 'disponivel',
+    href: '/beta/compras',
+  },
+  {
     titulo: 'Relatorios Avancados',
-    descricao: 'DRE, estoque valorizado, margem por produto, ranking de fornecedores. Todos com export Excel.',
+    descricao: 'DRE, estoque valorizado, margem por produto. Todos com export Excel.',
     icon: BarChart3,
     status: 'planejado',
   },

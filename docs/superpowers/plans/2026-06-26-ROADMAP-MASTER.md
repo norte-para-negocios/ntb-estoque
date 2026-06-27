@@ -192,13 +192,15 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 
 ### B.5 Relatorios (espelho Omie/DRV do Ramon)
 
-| # | O que |
-|---|---|
-| B.5.1 | DRE: Receita bruta, CMV, Margem bruta, Despesas, Resultado |
-| B.5.2 | Estoque valorizado: valor total, evolucao diaria, giro, produtos parados >60d |
-| B.5.3 | Margem por produto: ranking mais/menos rentaveis, alerta margem negativa |
-| B.5.4 | Compras: preco atual vs menor historico, ranking fornecedores |
-| B.5.5 | Export Excel em todos |
+> B.5.4 feito: tela /beta/compras (migration 056, RPCs compras_ranking_fornecedores + compras_precos_produtos). Ranking de fornecedores por valor (linka pro detalhe no CRM) e precos de insumos com ultimo/menor/tipico (MEDIANA, resistente a erro de digitacao na NF) + tendencia. Dados de nota_fiscal_items + notas_fiscais, sem sync novo.
+
+| # | O que | Status |
+|---|---|---|
+| B.5.1 | DRE: Receita bruta, CMV, Margem bruta, Despesas, Resultado | Pendente (depende de receita/faturamento, B.2 bloqueado) |
+| B.5.2 | Estoque valorizado: valor total, evolucao diaria, giro, produtos parados >60d | Pendente |
+| B.5.3 | Margem por produto: ranking mais/menos rentaveis, alerta margem negativa | Pendente |
+| B.5.4 | Compras: ultimo vs tipico (mediana), ranking fornecedores | ✅ |
+| B.5.5 | Export Excel em todos | Pendente |
 
 ### B.6 Pedidos e Producao
 
