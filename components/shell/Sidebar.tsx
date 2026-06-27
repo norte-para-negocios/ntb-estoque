@@ -4,7 +4,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Lock, Zap } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react'
 import { NAV_ITEMS, type NavItem } from './NavItems'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
@@ -197,7 +197,6 @@ export function Sidebar({
             })}
           </nav>
 
-          {isSuperAdmin && <BetaButton pathname={pathname} />}
           <div className="border-t border-border p-3">{userMenu}</div>
         </div>
       </aside>
@@ -294,24 +293,6 @@ function GrupoSanfona({
   )
 }
 
-function BetaButton({ pathname }: { pathname: string }) {
-  const active = pathname === '/beta' || pathname.startsWith('/beta/')
-  return (
-    <div className="border-t border-border px-3 py-2">
-      <Link
-        href="/beta"
-        className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm u-motion u-press-sm ${
-          active ? 'bg-brand-soft text-text font-medium' : 'text-text-muted hover:bg-surface-2 hover:text-text'
-        }`}
-      >
-        {active && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />}
-        <Zap className={`size-[17px] shrink-0 ${active ? 'text-brand' : 'text-text-muted/70 group-hover:text-text-muted'}`} strokeWidth={2} />
-        <span className="flex-1">VTBstock Beta</span>
-        <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Beta</span>
-      </Link>
-    </div>
-  )
-}
 
 function SideLink({ item, active, isAdmin }: { item: NavItem; active: boolean; isAdmin: boolean }) {
   const Icon = item.icon

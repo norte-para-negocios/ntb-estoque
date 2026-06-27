@@ -9,7 +9,6 @@ import {
   X,
   ChevronDown,
   Lock,
-  Zap,
   LayoutDashboard,
   FileText,
   ClipboardList,
@@ -239,22 +238,6 @@ export function MobileNav({
           })}
         </nav>
 
-        {isSuperAdmin && (
-          <div className="border-t border-border px-3 py-2 shrink-0">
-            <Link
-              href="/beta"
-              className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm u-motion active:bg-surface-2 ${
-                pathname === '/beta' || pathname.startsWith('/beta/')
-                  ? 'bg-brand-soft text-text font-medium'
-                  : 'text-text-muted'
-              }`}
-            >
-              <Zap className="size-[18px] shrink-0 text-brand" strokeWidth={2} />
-              <span className="flex-1">VTBstock Beta</span>
-              <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Beta</span>
-            </Link>
-          </div>
-        )}
         <div
           className="border-t border-border p-3 shrink-0"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
