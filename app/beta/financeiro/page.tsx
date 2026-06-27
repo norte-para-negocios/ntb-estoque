@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -7,11 +8,7 @@ import {
   Wallet, AlertTriangle, Clock, CheckCircle2, TrendingDown, TrendingUp, Package,
 } from 'lucide-react'
 
-function parseBR(d: string | null): Date | null {
-  if (!d) return null
-  const [y, m, day] = d.split('-')
-  return new Date(Number(y), Number(m) - 1, Number(day))
-}
+type SearchParams = { status?: string; aba?: string }
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -23,22 +20,10 @@ function diasAte(venc: string | null): number | null {
   if (!venc) return null
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
-  const v = parseBR(venc)
-  if (!v) return null
+  const [y, m, day] = venc.split('-')
+  const v = new Date(Number(y), Number(m) - 1, Number(day))
   v.setHours(0, 0, 0, 0)
   return Math.round((v.getTime() - hoje.getTime()) / 86400000)
-}
-
-type CP = {
-  codigo_lancamento_omie: number
-  codigo_cliente_fornecedor: number | null
-  data_vencimento: string | null
-  data_previsao: string | null
-  valor_documento: number
-  status_titulo: string
-  codigo_tipo_documento: string | null
-  numero_documento: string | null
-  numero_parcela: string | null
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -57,7 +42,15 @@ const STATUS_COR: Record<string, string> = {
   PAGTO_PARCIAL: 'bg-brand/10 text-brand border-brand/30',
 }
 
-export default async function FinanceiroPage() {
+const CHIPS = [
+  { value: '', label: 'Todos' },
+  { value: 'ATRASADO', label: 'Atrasados' },
+  { value: 'VENCEHOJE', label: 'Hoje' },
+  { value: 'AVENCER', label: 'A vencer' },
+  { value: 'EMABERTO', label: 'Em aberto' },
+]
+
+export default async function FinanceiroPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await getProfile()
   const lojaId = profile.current_loja_id
 
@@ -65,128 +58,160 @@ export default async function FinanceiroPage() {
     return <EmptyState icon={Package} title="Selecione uma loja" hint="Escolha uma loja para ver o financeiro." />
   }
 
+  const aba = searchParams.aba ?? 'pagar'
+  const filtroStatus = searchParams.status ?? ''
+
   const sb = await createClient()
 
-  const [cpRes, crRes] = await Promise.all([
-    sb.from('contas_pagar')
-      .select('codigo_lancamento_omie,codigo_cliente_fornecedor,data_vencimento,data_previsao,valor_documento,status_titulo,codigo_tipo_documento,numero_documento,numero_parcela')
-      .eq('loja_id', lojaId)
-      .order('data_vencimento', { ascending: true }),
-    sb.from('contas_receber')
-      .select('codigo_lancamento_omie,valor_documento,status_titulo,data_vencimento')
-      .eq('loja_id', lojaId),
+  // Dados CP
+  let cpQuery = sb.from('contas_pagar')
+    .select('codigo_lancamento_omie,codigo_cliente_fornecedor,data_vencimento,data_previsao,valor_documento,status_titulo,codigo_tipo_documento,numero_documento,numero_parcela')
+    .eq('loja_id', lojaId)
+    .order('data_vencimento', { ascending: true })
+  if (filtroStatus) cpQuery = cpQuery.eq('status_titulo', filtroStatus)
+
+  // Dados CR
+  let crQuery = sb.from('contas_receber')
+    .select('codigo_lancamento_omie,codigo_cliente_fornecedor,data_vencimento,valor_documento,status_titulo,numero_documento')
+    .eq('loja_id', lojaId)
+    .order('data_vencimento', { ascending: true })
+  if (filtroStatus) crQuery = crQuery.eq('status_titulo', filtroStatus)
+
+  const [cpRes, crRes, syncAtRes] = await Promise.all([
+    cpQuery,
+    crQuery,
+    sb.from('contas_pagar').select('synced_at').eq('loja_id', lojaId).order('synced_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
-  const cp: CP[] = (cpRes.data ?? []) as CP[]
-  const cr = crRes.data ?? []
-
-  if (!cp.length && !cr.length) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Financeiro" icon={Wallet} description="Contas a pagar e receber sincronizadas do Omie." />
-        <EmptyState icon={Clock} title="Sincronizando..." hint="Aguarde o primeiro sync do financeiro. Rode: node scripts/sync-financeiro.mjs" />
-      </div>
-    )
-  }
-
-  // --- Totalizadores CP ---
-  const cpAtrasado = cp.filter(i => i.status_titulo === 'ATRASADO')
-  const cpHoje = cp.filter(i => i.status_titulo === 'VENCEHOJE')
-  const cpAvencer = cp.filter(i => i.status_titulo !== 'ATRASADO' && i.status_titulo !== 'VENCEHOJE')
-
-  const totalCP = cp.reduce((acc, i) => acc + Number(i.valor_documento ?? 0), 0)
-  const totalAtrasado = cpAtrasado.reduce((acc, i) => acc + Number(i.valor_documento ?? 0), 0)
-  const totalHoje = cpHoje.reduce((acc, i) => acc + Number(i.valor_documento ?? 0), 0)
-
-  // --- Totalizadores CR ---
-  const totalCR = cr.reduce((acc, i) => acc + Number(i.valor_documento ?? 0), 0)
-  const crAtrasado = cr.filter(i => i.status_titulo === 'ATRASADO')
-  const totalCRAtrasado = crAtrasado.reduce((acc, i) => acc + Number(i.valor_documento ?? 0), 0)
-
-  // Data do último sync
-  const syncAtRes = await sb.from('contas_pagar').select('synced_at').eq('loja_id', lojaId).order('synced_at', { ascending: false }).limit(1).maybeSingle()
+  const cpAll = cpRes.data ?? []
+  const crAll = crRes.data ?? []
   const syncAt = syncAtRes.data?.synced_at
     ? new Date(syncAtRes.data.synced_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null
+
+  // Totalizadores globais (sem filtro de status nos cards)
+  const [cpTotRes, crTotRes] = await Promise.all([
+    sb.from('contas_pagar').select('valor_documento,status_titulo').eq('loja_id', lojaId),
+    sb.from('contas_receber').select('valor_documento,status_titulo').eq('loja_id', lojaId),
+  ])
+  const cpTot = cpTotRes.data ?? []
+  const crTot = crTotRes.data ?? []
+
+  const totalCP = cpTot.reduce((s, i) => s + Number(i.valor_documento ?? 0), 0)
+  const totalAtrasCP = cpTot.filter(i => i.status_titulo === 'ATRASADO').reduce((s, i) => s + Number(i.valor_documento ?? 0), 0)
+  const totalHojeCP = cpTot.filter(i => i.status_titulo === 'VENCEHOJE').reduce((s, i) => s + Number(i.valor_documento ?? 0), 0)
+  const totalCR = crTot.reduce((s, i) => s + Number(i.valor_documento ?? 0), 0)
+
+  const lista = aba === 'pagar' ? cpAll : crAll
+  const chipBase = (v: string) => `?aba=${aba}${v ? `&status=${v}` : ''}`
+
+  if (!cpTot.length && !crTot.length) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Financeiro" icon={Wallet} description="Contas a pagar e receber sincronizadas do Omie." />
+        <EmptyState icon={Clock} title="Sincronizando..." hint="Aguarde o primeiro sync. Rode: node scripts/sync-financeiro.mjs" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Financeiro"
         icon={Wallet}
-        description={syncAt ? `Ultima sincronizacao: ${syncAt}` : 'Dados do Omie.'}
+        description={syncAt ? `Ultima sincronizacao: ${syncAt}` : 'Dados do Omie (itens em aberto).'}
       />
 
-      {/* Cards resumo */}
+      {/* Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MoneyCard label="A pagar (total)" value={totalCP} icon={TrendingDown} cor="var(--text-muted)" />
-        <MoneyCard label="Atrasado (pagar)" value={totalAtrasado} icon={AlertTriangle} cor="var(--danger)" />
-        <MoneyCard label="Vence hoje" value={totalHoje} icon={Clock} cor="var(--warn)" />
+        <MoneyCard label="Atrasado (pagar)" value={totalAtrasCP} icon={AlertTriangle} cor="var(--danger)" />
+        <MoneyCard label="Vence hoje" value={totalHojeCP} icon={Clock} cor="var(--warn)" />
         <MoneyCard label="A receber" value={totalCR} icon={TrendingUp} cor="var(--ok)" />
       </div>
 
-      {crAtrasado.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-[13px] text-danger">
-          <AlertTriangle className="size-4 shrink-0" />
-          <span>Recebimento atrasado: <strong><Money value={totalCRAtrasado} /></strong> em {crAtrasado.length} titulos</span>
+      {/* Abas */}
+      <div className="flex gap-1 rounded-lg border border-border bg-surface-2 p-1 w-fit">
+        {(['pagar', 'receber'] as const).map(a => (
+          <Link
+            key={a}
+            href={`?aba=${a}${filtroStatus ? `&status=${filtroStatus}` : ''}`}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium u-motion ${aba === a ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}`}
+          >
+            {a === 'pagar' ? `A Pagar (${cpAll.length})` : `A Receber (${crAll.length})`}
+          </Link>
+        ))}
+      </div>
+
+      {/* Chips de status */}
+      <div className="flex flex-wrap gap-2">
+        {CHIPS.map(chip => {
+          const active = filtroStatus === chip.value
+          return (
+            <Link
+              key={chip.value}
+              href={chipBase(chip.value)}
+              className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion u-press-sm ${
+                active ? 'border-brand bg-brand/10 text-brand' : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
+              }`}
+            >
+              {chip.label}
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* Tabela */}
+      {lista.length === 0 ? (
+        <EmptyState icon={CheckCircle2} title="Nenhum item" hint={filtroStatus ? 'Sem itens com esse status.' : 'Nenhuma conta em aberto.'} />
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-border bg-surface-2">
+                <th className="px-3 py-2.5 text-left font-semibold text-text-muted">Documento</th>
+                <th className="hidden px-3 py-2.5 text-left font-semibold text-text-muted sm:table-cell">Vencimento</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-text-muted">Valor</th>
+                <th className="hidden px-3 py-2.5 text-left font-semibold text-text-muted sm:table-cell">Status</th>
+                <th className="hidden px-3 py-2.5 text-right font-semibold text-text-muted sm:table-cell">Dias</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {lista.map((item) => {
+                const dias = diasAte(item.data_vencimento)
+                const overdue = (dias ?? 0) < 0
+                const cor = STATUS_COR[item.status_titulo] ?? STATUS_COR.EMABERTO
+                return (
+                  <tr key={item.codigo_lancamento_omie} className="hover:bg-surface-2/50">
+                    <td className="px-3 py-2.5">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                      {(() => { const it = item as any; return (<>
+                        <span className="font-medium text-text">{it.numero_documento || '-'}</span>
+                        {it.numero_parcela ? <span className="ml-1.5 text-[11px] text-text-muted">{it.numero_parcela}</span> : null}
+                        {it.codigo_tipo_documento ? <span className="ml-1.5 text-[10px] text-text-muted/60">{it.codigo_tipo_documento}</span> : null}
+                      </>) })()}
+                    </td>
+                    <td className="hidden px-3 py-2.5 text-text-muted sm:table-cell">
+                      {fmtData(item.data_vencimento)}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-danger' : 'text-text'}`}>
+                      <Money value={Number(item.valor_documento)} />
+                    </td>
+                    <td className="hidden px-3 py-2.5 sm:table-cell">
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cor}`}>
+                        {STATUS_LABEL[item.status_titulo] ?? item.status_titulo}
+                      </span>
+                    </td>
+                    <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-danger font-semibold' : 'text-text-muted'}`}>
+                      {dias !== null ? (dias < 0 ? `${Math.abs(dias)}d atras` : dias === 0 ? 'Hoje' : `${dias}d`) : '-'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
-
-      {/* Lista de contas a pagar */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-text">Contas a pagar ({cp.length})</h2>
-        {cp.length === 0 ? (
-          <EmptyState icon={CheckCircle2} title="Nenhuma conta em aberto" hint="Todas as contas estao pagas." />
-        ) : (
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-border bg-surface-2">
-                  <th className="px-3 py-2.5 text-left font-semibold text-text-muted">Documento</th>
-                  <th className="hidden px-3 py-2.5 text-left font-semibold text-text-muted sm:table-cell">Vencimento</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-text-muted">Valor</th>
-                  <th className="hidden px-3 py-2.5 text-left font-semibold text-text-muted sm:table-cell">Status</th>
-                  <th className="hidden px-3 py-2.5 text-right font-semibold text-text-muted sm:table-cell">Dias</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {cp.map((item) => {
-                  const dias = diasAte(item.data_vencimento)
-                  const overdue = (dias ?? 0) < 0
-                  const cor = STATUS_COR[item.status_titulo] ?? STATUS_COR.EMABERTO
-                  return (
-                    <tr key={item.codigo_lancamento_omie} className="hover:bg-surface-2/50">
-                      <td className="px-3 py-2.5">
-                        <span className="font-medium text-text">{item.numero_documento || '-'}</span>
-                        {item.numero_parcela && (
-                          <span className="ml-1.5 text-[11px] text-text-muted">{item.numero_parcela}</span>
-                        )}
-                        {item.codigo_tipo_documento && (
-                          <span className="ml-1.5 text-[11px] text-text-muted">{item.codigo_tipo_documento}</span>
-                        )}
-                      </td>
-                      <td className="hidden px-3 py-2.5 text-text-muted sm:table-cell">
-                        {fmtData(item.data_vencimento)}
-                      </td>
-                      <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-danger' : 'text-text'}`}>
-                        <Money value={Number(item.valor_documento)} />
-                      </td>
-                      <td className="hidden px-3 py-2.5 sm:table-cell">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cor}`}>
-                          {STATUS_LABEL[item.status_titulo] ?? item.status_titulo}
-                        </span>
-                      </td>
-                      <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-danger font-semibold' : 'text-text-muted'}`}>
-                        {dias !== null ? (dias < 0 ? `${Math.abs(dias)}d atras` : dias === 0 ? 'Hoje' : `${dias}d`) : '-'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </div>
   )
 }

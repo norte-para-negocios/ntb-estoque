@@ -166,14 +166,17 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 | B.2.4 | NF-e de saida: tabela + sync + tela | aguarda |
 | B.2.5 | Download XML e DANFE | aguarda |
 
-### B.3 Financeiro
+### B.3 Financeiro (commit 6bec77a) -- EM PROGRESSO
 
-| # | O que |
-|---|---|
-| B.3.1 | Contas a pagar: tabela + sync (ListarContasPagar) + tela com filtros venc/fornecedor/status |
-| B.3.2 | Contas a receber: tabela + sync (ListarContasReceber) + tela |
-| B.3.3 | Fluxo de caixa: extrato (ListarLancFinanceiros), entradas vs saidas por semana |
-| B.3.4 | Cards: a pagar / a receber / saldo projetado / vencidas |
+> Endpoints Omie: v1/financas/contapagar (ListarContasPagar) e v1/financas/contareceber (ListarContasReceber). Paginacao: pagina/registros_por_pagina. Array: conta_pagar_cadastro / conta_receber_cadastro (com filtrar_por_status). Status validos: EMABERTO, ATRASADO, AVENCER, VENCEHOJE, PAGTO_PARCIAL, PAGO, LIQUIDADO, CANCELADO.
+
+| # | O que | Status |
+|---|---|---|
+| B.3.1 | Migration 052: contas_pagar + contas_receber; sync-financeiro.mjs (so abertos) | ✅ |
+| B.3.2 | Tela /beta/financeiro: cards totais + lista CP com status/dias | ✅ |
+| B.3.3 | Filtros: por vencimento, fornecedor, tipo | Pendente |
+| B.3.4 | Contas a receber: lista + resumo por periodo | Pendente |
+| B.3.5 | Extrato/fluxo de caixa: endpoint a descobrir | Pendente |
 
 ### B.4 CRM
 
