@@ -9,6 +9,19 @@ import { Users, Truck, Search, ChevronRight, Package } from 'lucide-react'
 
 const PER_PAGE = 50
 
+function iniciais(nome: string): string {
+  const palavras = nome.trim().split(/\s+/).filter(w => w.length > 1)
+  if (palavras.length === 0) return nome.slice(0, 2).toUpperCase()
+  if (palavras.length === 1) return palavras[0].slice(0, 2).toUpperCase()
+  return (palavras[0][0] + palavras[palavras.length - 1][0]).toUpperCase()
+}
+
+function hueNome(nome: string): number {
+  let h = 0
+  for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) % 360
+  return h
+}
+
 type SearchParams = Promise<{ tipo?: string; q?: string; page?: string }>
 
 type ParceiroRow = {
@@ -129,17 +142,26 @@ export default async function CrmPage({ searchParams }: { searchParams: SearchPa
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {lista.map((p) => (
+              {lista.map((p) => {
+                const hue = hueNome(p.razao_social)
+                return (
                 <tr key={p.codigo_omie} className="group hover:bg-surface-2/50">
                   <td className="px-3 py-2.5">
-                    <Link href={`/beta/crm/${tipo}/${p.codigo_omie}`} className="block min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-medium text-text group-hover:text-brand">{p.razao_social}</span>
-                        {p.inativo && <span className="shrink-0 rounded-full border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-muted">Inativo</span>}
-                      </div>
-                      {p.nome_fantasia && p.nome_fantasia !== p.razao_social && (
-                        <div className="truncate text-[12px] text-text-muted">{p.nome_fantasia}</div>
-                      )}
+                    <Link href={`/beta/crm/${tipo}/${p.codigo_omie}`} className="flex min-w-0 items-center gap-3">
+                      <span
+                        className="grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold"
+                        style={{ background: `hsl(${hue} 45% 50% / 0.14)`, color: `hsl(${hue} 45% 40%)` }}
+                        aria-hidden
+                      >{iniciais(p.razao_social)}</span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate font-medium text-text group-hover:text-brand">{p.razao_social}</span>
+                          {p.inativo && <span className="shrink-0 rounded-full border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-muted">Inativo</span>}
+                        </span>
+                        {p.nome_fantasia && p.nome_fantasia !== p.razao_social && (
+                          <span className="block truncate text-[12px] text-text-muted">{p.nome_fantasia}</span>
+                        )}
+                      </span>
                     </Link>
                   </td>
                   <td className="hidden px-3 py-2.5 text-text-muted num sm:table-cell">{p.cnpj_cpf || '-'}</td>
@@ -150,7 +172,8 @@ export default async function CrmPage({ searchParams }: { searchParams: SearchPa
                     </Link>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

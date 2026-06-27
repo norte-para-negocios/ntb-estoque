@@ -108,7 +108,7 @@ export default async function ParceiroDetalhe({ params }: { params: Params }) {
           label={ehForn ? 'A pagar (aberto)' : 'A receber (aberto)'}
           value={totalAberto}
           icon={ehForn ? TrendingDown : TrendingUp}
-          cor={ehForn ? 'var(--danger)' : 'var(--ok)'}
+          cor={ehForn ? 'var(--err)' : 'var(--ok)'}
         />
         <MoneyCard label="Em atraso" value={totalAtrasado} icon={AlertTriangle} cor="var(--warn)" />
         {ehForn
@@ -183,8 +183,8 @@ export default async function ParceiroDetalhe({ params }: { params: Params }) {
                     <tr key={c.codigo_lancamento_omie} className="hover:bg-surface-2/50">
                       <td className="px-3 py-2.5 font-medium text-text">{c.numero_documento || '-'}</td>
                       <td className="px-3 py-2.5 text-text-muted">{fmtData(c.data_vencimento)}</td>
-                      <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-danger' : 'text-text'}`}><Money value={Number(c.valor_documento)} /></td>
-                      <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-danger font-semibold' : 'text-text-muted'}`}>
+                      <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-err' : 'text-text'}`}><Money value={Number(c.valor_documento)} /></td>
+                      <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-err font-semibold' : 'text-text-muted'}`}>
                         {dias !== null ? (dias < 0 ? `${Math.abs(dias)}d atras` : dias === 0 ? 'Hoje' : `${dias}d`) : '-'}
                       </td>
                     </tr>

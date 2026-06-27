@@ -7,6 +7,7 @@ import { Money } from '@/components/ui-kit/Money'
 import {
   Wallet, AlertTriangle, Clock, CheckCircle2, TrendingDown, TrendingUp, Package, Landmark,
 } from 'lucide-react'
+import { FluxoChart } from './FluxoChart'
 
 type SearchParams = Promise<{ status?: string; aba?: string; dias?: string; tipo?: string }>
 
@@ -35,7 +36,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_COR: Record<string, string> = {
-  ATRASADO: 'bg-danger/10 text-danger border-danger/30',
+  ATRASADO: 'bg-err/10 text-err border-err/30',
   VENCEHOJE: 'bg-warn/10 text-warn border-warn/30',
   AVENCER: 'bg-ok/10 text-ok border-ok/30',
   EMABERTO: 'bg-surface-2 text-text-muted border-border',
@@ -192,7 +193,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
       {/* Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MoneyCard label="A pagar (total)" value={totalCP} icon={TrendingDown} cor="var(--text-muted)" />
-        <MoneyCard label="Atrasado (pagar)" value={totalAtrasCP} icon={AlertTriangle} cor="var(--danger)" />
+        <MoneyCard label="Atrasado (pagar)" value={totalAtrasCP} icon={AlertTriangle} cor="var(--err)" />
         <MoneyCard label="Vence hoje" value={totalHojeCP} icon={Clock} cor="var(--warn)" />
         <MoneyCard label="A receber" value={totalCR} icon={TrendingUp} cor="var(--ok)" />
       </div>
@@ -282,7 +283,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
                     <td className="hidden px-3 py-2.5 text-text-muted sm:table-cell">
                       {fmtData(item.data_vencimento)}
                     </td>
-                    <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-danger' : 'text-text'}`}>
+                    <td className={`px-3 py-2.5 text-right font-semibold num ${overdue ? 'text-err' : 'text-text'}`}>
                       <Money value={Number(item.valor_documento)} />
                     </td>
                     <td className="hidden px-3 py-2.5 sm:table-cell">
@@ -290,7 +291,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
                         {STATUS_LABEL[item.status_titulo] ?? item.status_titulo}
                       </span>
                     </td>
-                    <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-danger font-semibold' : 'text-text-muted'}`}>
+                    <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${overdue ? 'text-err font-semibold' : 'text-text-muted'}`}>
                       {dias !== null ? (dias < 0 ? `${Math.abs(dias)}d atras` : dias === 0 ? 'Hoje' : `${dias}d`) : '-'}
                     </td>
                   </tr>
@@ -336,13 +337,13 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
                   const isPast = mes < dataHoje.slice(0, 7)
                   return (
                     <tr key={mes} className="hover:bg-surface-2/50">
-                      <td className={`px-3 py-2.5 font-medium ${isPast ? 'text-danger' : 'text-text'}`}>{label}</td>
+                      <td className={`px-3 py-2.5 font-medium ${isPast ? 'text-err' : 'text-text'}`}>{label}</td>
                       <td className="px-3 py-2.5 text-right text-text-muted num">{n}</td>
-                      <td className={`px-3 py-2.5 text-right font-semibold num ${isPast ? 'text-danger' : 'text-text'}`}>
+                      <td className={`px-3 py-2.5 text-right font-semibold num ${isPast ? 'text-err' : 'text-text'}`}>
                         <Money value={total} />
                       </td>
                       <td className="hidden px-3 py-2.5 text-right sm:table-cell">
-                        {atrasado > 0 ? <span className="rounded-full bg-danger/10 border border-danger/30 px-2 py-0.5 text-[10px] font-medium text-danger">{atrasado} atrasado{atrasado > 1 ? 's' : ''}</span> : <span className="text-text-muted">-</span>}
+                        {atrasado > 0 ? <span className="rounded-full bg-err/10 border border-err/30 px-2 py-0.5 text-[10px] font-medium text-err">{atrasado} atrasado{atrasado > 1 ? 's' : ''}</span> : <span className="text-text-muted">-</span>}
                       </td>
                     </tr>
                   )
@@ -382,8 +383,8 @@ function FluxoCaixa({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MoneyCard label="Saldo em caixa hoje" value={saldoCaixa} icon={Landmark} cor="var(--brand)" />
         <MoneyCard label="A receber (entradas)" value={totalCR} icon={TrendingUp} cor="var(--ok)" />
-        <MoneyCard label="A pagar (saidas)" value={totalCP} icon={TrendingDown} cor="var(--danger)" />
-        <MoneyCard label="Saldo projetado" value={saldoProjetado} icon={Wallet} cor={saldoProjetado < 0 ? 'var(--danger)' : 'var(--ok)'} />
+        <MoneyCard label="A pagar (saidas)" value={totalCP} icon={TrendingDown} cor="var(--err)" />
+        <MoneyCard label="Saldo projetado" value={saldoProjetado} icon={Wallet} cor={saldoProjetado < 0 ? 'var(--err)' : 'var(--ok)'} />
       </div>
 
       {semCaixa && (
@@ -391,6 +392,9 @@ function FluxoCaixa({
           Posicao de caixa ainda nao sincronizada. Rode <code className="rounded bg-surface-2 px-1">node scripts/sync-financeiro.mjs</code> para puxar os saldos das contas correntes do Omie.
         </p>
       )}
+
+      {/* Grafico de fluxo */}
+      {fluxoProjetado.length > 0 && <FluxoChart dados={fluxoProjetado} />}
 
       {/* Vencidos (atrasados de meses passados) */}
       {(totalVencidoEntra > 0 || totalVencidoSai > 0) && (
@@ -400,7 +404,7 @@ function FluxoCaixa({
           </div>
           <div className="mt-2 flex flex-wrap gap-6 text-[13px]">
             <span>A receber atrasado: <strong className="text-ok num"><Money value={totalVencidoEntra} /></strong></span>
-            <span>A pagar atrasado: <strong className="text-danger num"><Money value={totalVencidoSai} /></strong></span>
+            <span>A pagar atrasado: <strong className="text-err num"><Money value={totalVencidoSai} /></strong></span>
             <span className="text-text-muted">{fluxoVencido.length} {fluxoVencido.length === 1 ? 'mes' : 'meses'}</span>
           </div>
         </div>
@@ -424,7 +428,7 @@ function FluxoCaixa({
                   <tr key={i} className="hover:bg-surface-2/50">
                     <td className="px-3 py-2.5 font-medium text-text">{c.descricao}</td>
                     <td className="hidden px-3 py-2.5 text-text-muted sm:table-cell">{TIPO_CC[c.tipo] ?? c.tipo}</td>
-                    <td className={`px-3 py-2.5 text-right font-semibold num ${c.saldo < 0 ? 'text-danger' : 'text-text'}`}>
+                    <td className={`px-3 py-2.5 text-right font-semibold num ${c.saldo < 0 ? 'text-err' : 'text-text'}`}>
                       <Money value={c.saldo} />
                     </td>
                   </tr>
@@ -433,7 +437,7 @@ function FluxoCaixa({
               <tfoot>
                 <tr className="border-t border-border bg-surface-2">
                   <td className="px-3 py-2.5 font-semibold text-text" colSpan={2}>Total</td>
-                  <td className={`px-3 py-2.5 text-right font-bold num ${saldoCaixa < 0 ? 'text-danger' : 'text-text'}`}>
+                  <td className={`px-3 py-2.5 text-right font-bold num ${saldoCaixa < 0 ? 'text-err' : 'text-text'}`}>
                     <Money value={saldoCaixa} />
                   </td>
                 </tr>
@@ -465,9 +469,9 @@ function FluxoCaixa({
                   <tr key={f.mes} className="hover:bg-surface-2/50">
                     <td className="px-3 py-2.5 font-medium text-text capitalize">{mesLabel(f.mes)}</td>
                     <td className="px-3 py-2.5 text-right text-ok num">{f.entradas > 0 ? <Money value={f.entradas} /> : '-'}</td>
-                    <td className="px-3 py-2.5 text-right text-danger num">{f.saidas > 0 ? <Money value={f.saidas} /> : '-'}</td>
-                    <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${f.saldoMes < 0 ? 'text-danger' : 'text-text'}`}><Money value={f.saldoMes} /></td>
-                    <td className={`px-3 py-2.5 text-right font-semibold num ${f.acumulado < 0 ? 'text-danger' : 'text-text'}`}><Money value={f.acumulado} /></td>
+                    <td className="px-3 py-2.5 text-right text-err num">{f.saidas > 0 ? <Money value={f.saidas} /> : '-'}</td>
+                    <td className={`hidden px-3 py-2.5 text-right sm:table-cell num ${f.saldoMes < 0 ? 'text-err' : 'text-text'}`}><Money value={f.saldoMes} /></td>
+                    <td className={`px-3 py-2.5 text-right font-semibold num ${f.acumulado < 0 ? 'text-err' : 'text-text'}`}><Money value={f.acumulado} /></td>
                   </tr>
                 ))}
               </tbody>

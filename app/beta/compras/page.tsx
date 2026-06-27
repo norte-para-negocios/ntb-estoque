@@ -46,6 +46,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Sear
   const precos = (precosRes.data ?? []) as { codigo: string; descricao: string; ultimo_preco: number; ultima_data: string | null; menor_preco: number; maior_preco: number; preco_tipico: number; qtd_compras: number }[]
 
   const totalComprado = ranking.reduce((s, r) => s + Number(r.total ?? 0), 0)
+  const maxTotal = Number(ranking[0]?.total ?? 0)
 
   return (
     <div className="space-y-6">
@@ -98,20 +99,29 @@ export default async function ComprasPage({ searchParams }: { searchParams: Sear
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {ranking.map((r, i) => (
-                    <tr key={r.codigo_omie} className="group hover:bg-surface-2/50">
-                      <td className="px-3 py-2.5 text-text-muted num">{i + 1}</td>
-                      <td className="px-3 py-2.5">
-                        <Link href={`/beta/crm/fornecedor/${r.codigo_omie}`} className="font-medium text-text group-hover:text-brand">{r.razao_social}</Link>
-                      </td>
-                      <td className="hidden px-3 py-2.5 text-right text-text-muted num sm:table-cell">{r.qtd_nf}</td>
-                      <td className="hidden px-3 py-2.5 text-text-muted md:table-cell">{fmtData(r.ultima_compra)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-text num"><Money value={Number(r.total)} /></td>
-                      <td className="px-3 py-2.5">
-                        <Link href={`/beta/crm/fornecedor/${r.codigo_omie}`} className="inline-flex text-text-muted/40 group-hover:text-brand"><ChevronRight className="size-4" /></Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {ranking.map((r, i) => {
+                    const pct = maxTotal > 0 ? (Number(r.total) / maxTotal) * 100 : 0
+                    return (
+                      <tr key={r.codigo_omie} className="group hover:bg-surface-2/50">
+                        <td className="px-3 py-2.5 text-text-muted num tabular-nums">{i + 1}</td>
+                        <td className="px-3 py-2.5">
+                          <Link href={`/beta/crm/fornecedor/${r.codigo_omie}`} className="block font-medium text-text group-hover:text-brand">{r.razao_social}</Link>
+                          <div className="mt-1.5 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-surface-2">
+                            <div className="h-full rounded-full bg-brand/70" style={{ width: `${Math.max(2, pct)}%` }} />
+                          </div>
+                        </td>
+                        <td className="hidden px-3 py-2.5 text-right text-text-muted num sm:table-cell">{r.qtd_nf}</td>
+                        <td className="hidden px-3 py-2.5 text-text-muted md:table-cell">{fmtData(r.ultima_compra)}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-text num">
+                          <Money value={Number(r.total)} />
+                          <div className="text-[10px] font-normal text-text-muted">{pct.toFixed(0)}% do topo</div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Link href={`/beta/crm/fornecedor/${r.codigo_omie}`} className="inline-flex text-text-muted/40 group-hover:text-brand"><ChevronRight className="size-4" /></Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -153,7 +163,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Sear
                     const acima = variacao > 0.05
                     const abaixo = variacao < -0.05
                     const Icon = acima ? TrendingUp : abaixo ? TrendingDown : Minus
-                    const cor = acima ? 'text-danger' : abaixo ? 'text-ok' : 'text-text-muted'
+                    const cor = acima ? 'text-err' : abaixo ? 'text-ok' : 'text-text-muted'
                     return (
                       <tr key={p.codigo} className="hover:bg-surface-2/50">
                         <td className="px-3 py-2.5">
