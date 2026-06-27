@@ -166,16 +166,17 @@ A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos d
 | B.2.4 | NF-e de saida: tabela + sync + tela | aguarda |
 | B.2.5 | Download XML e DANFE | aguarda |
 
-### B.3 Financeiro (commit 6bec77a) -- EM PROGRESSO
+### B.3 Financeiro -- FEITO (commits 6bec77a, 85385ae, e1d627d, a0bb34a, 51b4b93, 77c8dfe)
 
 > Endpoints Omie: v1/financas/contapagar (ListarContasPagar) e v1/financas/contareceber (ListarContasReceber). Paginacao: pagina/registros_por_pagina. Array: conta_pagar_cadastro / conta_receber_cadastro (com filtrar_por_status). Status validos: EMABERTO, ATRASADO, AVENCER, VENCEHOJE, PAGTO_PARCIAL, PAGO, LIQUIDADO, CANCELADO.
+> Advisory lock no sync (pg_try_advisory_lock 20260626) previne race condition entre syncs paralelos.
 
 | # | O que | Status |
 |---|---|---|
 | B.3.1 | Migration 052: contas_pagar + contas_receber; sync-financeiro.mjs (so abertos) | ✅ |
-| B.3.2 | Tela /beta/financeiro: cards totais + lista CP com status/dias | ✅ |
-| B.3.3 | Filtros: por vencimento, fornecedor, tipo | Pendente |
-| B.3.4 | Contas a receber: lista + resumo por periodo | Pendente |
+| B.3.2 | Tela /beta/financeiro: cards totais + lista CP/CR com status/dias, tabs, chips | ✅ |
+| B.3.3 | Filtros prazo (7/30/90d) + tipo de documento | ✅ |
+| B.3.4 | Resumo CR por mes via RPC financeiro_resumo_cr (migration 053) | ✅ |
 | B.3.5 | Extrato/fluxo de caixa: endpoint a descobrir | Pendente |
 
 ### B.4 CRM
