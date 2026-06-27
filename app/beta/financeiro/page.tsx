@@ -8,7 +8,7 @@ import {
   Wallet, AlertTriangle, Clock, CheckCircle2, TrendingDown, TrendingUp, Package,
 } from 'lucide-react'
 
-type SearchParams = { status?: string; aba?: string }
+type SearchParams = Promise<{ status?: string; aba?: string }>
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -51,15 +51,15 @@ const CHIPS = [
 ]
 
 export default async function FinanceiroPage({ searchParams }: { searchParams: SearchParams }) {
-  const profile = await getProfile()
+  const [profile, sp] = await Promise.all([getProfile(), searchParams])
   const lojaId = profile.current_loja_id
 
   if (!lojaId) {
     return <EmptyState icon={Package} title="Selecione uma loja" hint="Escolha uma loja para ver o financeiro." />
   }
 
-  const aba = searchParams.aba ?? 'pagar'
-  const filtroStatus = searchParams.status ?? ''
+  const aba = sp.aba ?? 'pagar'
+  const filtroStatus = sp.status ?? ''
 
   const sb = await createClient()
 
@@ -77,14 +77,22 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
     .order('data_vencimento', { ascending: true })
   if (filtroStatus) crQuery = crQuery.eq('status_titulo', filtroStatus)
 
-  const [cpRes, crRes, syncAtRes] = await Promise.all([
-    cpQuery,
-    crQuery,
+  let cpCountQ = sb.from('contas_pagar').select('*', { count: 'exact', head: true }).eq('loja_id', lojaId)
+  let crCountQ = sb.from('contas_receber').select('*', { count: 'exact', head: true }).eq('loja_id', lojaId)
+  if (filtroStatus) { cpCountQ = cpCountQ.eq('status_titulo', filtroStatus); crCountQ = crCountQ.eq('status_titulo', filtroStatus) }
+
+  const [cpRes, crRes, syncAtRes, cpCountRes, crCountRes] = await Promise.all([
+    cpQuery.limit(500),
+    crQuery.limit(500),
     sb.from('contas_pagar').select('synced_at').eq('loja_id', lojaId).order('synced_at', { ascending: false }).limit(1).maybeSingle(),
+    cpCountQ,
+    crCountQ,
   ])
 
   const cpAll = cpRes.data ?? []
   const crAll = crRes.data ?? []
+  const cpCount = cpCountRes.count ?? cpAll.length
+  const crCount = crCountRes.count ?? crAll.length
   const syncAt = syncAtRes.data?.synced_at
     ? new Date(syncAtRes.data.synced_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null
@@ -138,7 +146,7 @@ export default async function FinanceiroPage({ searchParams }: { searchParams: S
             href={`?aba=${a}${filtroStatus ? `&status=${filtroStatus}` : ''}`}
             className={`rounded-md px-4 py-1.5 text-sm font-medium u-motion ${aba === a ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'}`}
           >
-            {a === 'pagar' ? `A Pagar (${cpAll.length})` : `A Receber (${crAll.length})`}
+            {a === 'pagar' ? `A Pagar (${cpCount})` : `A Receber (${crCount})`}
           </Link>
         ))}
       </div>
