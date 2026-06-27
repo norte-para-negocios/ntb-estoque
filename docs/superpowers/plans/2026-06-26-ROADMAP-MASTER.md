@@ -34,15 +34,22 @@ O NTB Estoque hoje e um **espelho de leitura do Omie ERP** (puxa estoque, NFs, p
 
 ---
 
-## ACHADO CRITICO: BANCO ESTOUROU O FREE TIER
+## ACHADO CRITICO: BANCO -- SITUACAO ATUAL
 
-**Medido em 2026-06-26 (query read-only):** banco em **733 MB**. Limite free do Supabase = **500 MB**. **JA PASSOU.**
+**Medicao inicial (dashboard Supabase 2026-06-26):** 733 MB -- ja passou do limite free (500 MB).
 
-Isso e a PRIORIDADE 1. Antes de adicionar qualquer modulo novo (que so adiciona dados), tem que reduzir o banco. Suspeitos principais (a confirmar com diagnostico):
-- `full_object` JSONB das notas fiscais e posicoes de estoque
-- `posicao_estoques`: 1 foto por dia por produto por loja = cresce rapido
-- `response` TEXT em movimentos/inventario_items
-- bloat por falta de VACUUM
+**Diagnostico read-only 2026-06-26 (pg_database_size):** banco em **241 MB**. As tabelas publicas totalizam 229 MB.
+
+A diferenca (733 vs 241 MB) e porque o dashboard Supabase inclui WAL, arquivos do pg_wal e overhead do sistema -- o PostgreSQL em si (pg_database_size) e 241 MB. Esse e o numero que realmente conta para o uso de disco.
+
+**Maiores tabelas (pg_total_relation_size):**
+- `ordens_producao`: 92 MB (279K linhas, full_object NULL em todas -- dado real)
+- `movimentos_historico`: 62 MB (437K linhas, sem full_object)
+- `nota_fiscal_items`: 44 MB (56K linhas; 17.7K tem full_object = 24 MB)
+- `posicao_estoques`: 12 MB (40K linhas)
+- demais tabelas: < 4 MB cada
+
+**Conclusao:** banco esta em 241 MB, ABAIXO do limite 500 MB. Prioridade passou de critica para monitorar. Adicionar modulos novos e ok, mas monitorar crescimento (ordens_producao + movimentos_historico crescem com o tempo).
 
 ---
 
@@ -137,25 +144,27 @@ Isso e a PRIORIDADE 1. Antes de adicionar qualquer modulo novo (que so adiciona 
 
 ## BLOCO B -- VTBstock Beta (SO super admin total)
 
-### B.1 Estrutura da area Beta (fazer PRIMEIRO antes de qualquer modulo beta)
+### B.1 Estrutura da area Beta -- FEITO (commit ded9364)
 
-| # | O que |
-|---|---|
-| B.1.1 | Coluna `is_super_admin boolean` em `profiles` |
-| B.1.2 | Helper `isSuperAdmin()` em `lib/auth.ts` |
-| B.1.3 | Layout `/beta/layout.tsx` com guard (bloqueia nao-super-admin) + banner "VTBstock Beta" |
-| B.1.4 | Botao "VTBstock Beta" no menu lateral, visivel SO p/ super admin, badge "Beta" |
-| B.1.5 | Index `/beta` com status de cada modulo (estavel/experimental) |
+| # | O que | Status |
+|---|---|---|
+| B.1.1 | Coluna `is_super_admin boolean` em `profiles` (migration 051) | ✅ |
+| B.1.2 | Helper `isSuperAdmin()` em `lib/auth.ts` | ✅ |
+| B.1.3 | Layout `/beta/layout.tsx` com guard + banner "VTBstock Beta" | ✅ |
+| B.1.4 | Botao "VTBstock Beta" no menu lateral e mobile, badge laranja | ✅ |
+| B.1.5 | Index `/beta` com 5 modulos planejados | ✅ |
 
-### B.2 Faturamento Nativo (caminho pra largar o Omie)
+### B.2 Faturamento Nativo -- BLOQUEADO (sem NF no Omie destas lojas)
 
-| # | O que |
-|---|---|
-| B.2.1 | Probe NFC-e na loja 3 (read-only, valida endpoint antes de criar tabelas) |
-| B.2.2 | Tabelas `cupons_fiscais` + `cupom_fiscal_items` + wrapper sync NFC-e (cupomfiscalconsultar) |
-| B.2.3 | Tela `/beta/faturamento` por produto/familia, grafico por semana, badge fonte (Omie vs import) |
-| B.2.4 | NF-e de saida: tabela + sync (nfconsultar tpNF=1) + tela `/beta/nf-saida` |
-| B.2.5 | Download XML e DANFE de qualquer NF (dfedocs ObterNfe) |
+> **Probe 2026-06-26:** todos os endpoints NFC-e (v1/pos, v1/pdv, v1/faturamento) retornam 404. `v1/produtos/nfe / ListarNFe` existe mas retorna 0 registros em todas as 6 lojas. Conclusao: os restaurantes emitem NFC-e via PDV proprio (nao pelo Omie) e nao emitem NF-e de saida. Faturamento continua vindo SO do import manual (MOV_DRV). Desbloquear quando: (a) integrar PDV externo ou (b) lojas comecar a emitir NF via Omie.
+
+| # | O que | Status |
+|---|---|---|
+| B.2.1 | Probe NFC-e na loja 3 | BLOQUEADO |
+| B.2.2 | Tabelas cupons_fiscais + cupom_fiscal_items + sync NFC-e | aguarda |
+| B.2.3 | Tela /beta/faturamento por produto/familia | aguarda |
+| B.2.4 | NF-e de saida: tabela + sync + tela | aguarda |
+| B.2.5 | Download XML e DANFE | aguarda |
 
 ### B.3 Financeiro
 

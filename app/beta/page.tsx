@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { Zap, DollarSign, Wallet, Users, BarChart3, ShoppingBag, Clock } from 'lucide-react'
+import { Zap, DollarSign, Wallet, Users, BarChart3, ShoppingBag, Clock, ArrowUpRight } from 'lucide-react'
 
 type StatusBeta = 'planejado' | 'em-dev' | 'disponivel'
 
@@ -18,9 +19,10 @@ const MODULOS: {
   },
   {
     titulo: 'Financeiro',
-    descricao: 'Contas a pagar e receber, fluxo de caixa, extrato de lancamentos. Espelho do Omie em tempo real.',
+    descricao: 'Contas a pagar e receber sincronizadas do Omie: atrasados, a vencer, totais por loja.',
     icon: Wallet,
-    status: 'planejado',
+    status: 'disponivel',
+    href: '/beta/financeiro',
   },
   {
     titulo: 'CRM',
@@ -67,8 +69,8 @@ export default function BetaPage() {
         {MODULOS.map((m) => {
           const Icon = m.icon
           const corClasse = STATUS_COR[m.status]
-          return (
-            <div key={m.titulo} className="relative overflow-hidden rounded-xl border border-border bg-surface p-5">
+          const card = (
+            <div className={`group relative overflow-hidden rounded-xl border bg-surface p-5 u-motion ${m.href ? 'border-brand/30 hover:border-brand/60 cursor-pointer' : 'border-border'}`}>
               <div className="flex items-start gap-3">
                 <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand shrink-0 mt-0.5">
                   <Icon className="size-4" strokeWidth={2} />
@@ -79,12 +81,14 @@ export default function BetaPage() {
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${corClasse}`}>
                       {STATUS_LABEL[m.status]}
                     </span>
+                    {m.href && <ArrowUpRight className="ml-auto size-4 text-text-muted/30 group-hover:text-text-muted" />}
                   </div>
                   <p className="mt-1.5 text-[12px] text-text-muted leading-relaxed">{m.descricao}</p>
                 </div>
               </div>
             </div>
           )
+          return m.href ? <Link key={m.titulo} href={m.href}>{card}</Link> : card
         })}
       </div>
 
