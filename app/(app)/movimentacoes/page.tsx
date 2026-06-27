@@ -62,6 +62,7 @@ export default async function MovimentacoesPage({
     familia?: string
     tipo?: string
     modo?: string
+    mov?: string
     page?: string
   }>
 }) {
@@ -72,6 +73,8 @@ export default async function MovimentacoesPage({
   const page = Math.max(1, Number(sp.page) || 1)
   // Padrao: por mes. So vai para "por data" quando modo=data esta explicitamente na URL.
   const porMes = sp.modo !== 'data'
+  // Filtro de movimento: '' (tudo), 'entrada' (so quem teve entrada), 'saida' (so quem teve saida)
+  const filtroMov = sp.mov === 'entrada' ? 'entrada' : sp.mov === 'saida' ? 'saida' : ''
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   const ini = sp.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const fim = sp.data_final || hojeISO
@@ -186,6 +189,9 @@ export default async function MovimentacoesPage({
       totalValEntradas += g.valEntradas
       totalValSaidas += g.valSaidas
     }
+    // Filtro entradas/saidas (totais acima ja contam o periodo inteiro)
+    if (filtroMov === 'entrada') arr = arr.filter((g) => g.entradas > 0)
+    else if (filtroMov === 'saida') arr = arr.filter((g) => g.saidas > 0)
     // Ordena: mes mais recente primeiro; dentro do mes, maior saida primeiro.
     arr.sort((a, b) => {
       if (a.quando !== b.quando) return a.quando < b.quando ? 1 : -1
@@ -207,6 +213,8 @@ export default async function MovimentacoesPage({
       .range((page - 1) * POR_PAGINA, page * POR_PAGINA)
     if (termo) query = query.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
     if (codigosIn) query = query.in('cod_prod', codigosIn)
+    if (filtroMov === 'entrada') query = query.gt('entradas', 0)
+    else if (filtroMov === 'saida') query = query.gt('saidas', 0)
     const { data: movsRaw } = await query
     temProxima = (movsRaw?.length ?? 0) > POR_PAGINA
     const movs = (temProxima ? movsRaw!.slice(0, POR_PAGINA) : movsRaw ?? []) as LinhaRaw[]
@@ -299,7 +307,7 @@ export default async function MovimentacoesPage({
         <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} persistirEm="/movimentacoes" />
       </ListaHeader>
 
-      {/* Controle de agrupamento: padrao por mes */}
+      {/* Controles: agrupamento (mes/data) e movimento (tudo/entradas/saidas) */}
       <div className="flex flex-wrap items-center gap-2.5">
         <SegmentLinks
           basePath="/movimentacoes"
@@ -308,6 +316,16 @@ export default async function MovimentacoesPage({
           opcoes={[
             { value: '', label: 'Por mês' },
             { value: 'data', label: 'Por data' },
+          ]}
+        />
+        <SegmentLinks
+          basePath="/movimentacoes"
+          param="mov"
+          aria-label="Tipo de movimento"
+          opcoes={[
+            { value: '', label: 'Tudo' },
+            { value: 'entrada', label: 'Entradas' },
+            { value: 'saida', label: 'Saídas' },
           ]}
         />
       </div>
