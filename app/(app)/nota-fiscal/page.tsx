@@ -122,9 +122,10 @@ export default async function NotaFiscalPage({
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
   if (params.fornecedor) query = query.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-  // Status: espelha NotafiscalController (C = etapa 60 concluida, P = etapa diferente de 60)
+  // Status: 'C'/'P' (compat com links antigos) ou a etapa real direta (ex.: '60', '40').
   if (params.status === 'C') query = query.eq('c_etapa', '60')
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
+  else if (params.status) query = query.eq('c_etapa', params.status)
   if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (idsIn) query = query.in('id', idsIn)
 
@@ -141,6 +142,7 @@ export default async function NotaFiscalPage({
   if (params.fornecedor) totaisQuery = totaisQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
   if (params.status === 'C') totaisQuery = totaisQuery.eq('c_etapa', '60')
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
+  else if (params.status) totaisQuery = totaisQuery.eq('c_etapa', params.status)
   if (params.natureza) totaisQuery = totaisQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
@@ -185,10 +187,10 @@ export default async function NotaFiscalPage({
     {
       tipo: 'select',
       nome: 'status',
-      label: 'Status',
+      label: 'Etapa',
       opcoes: [
-        { value: 'P', label: 'Pendente' },
-        { value: 'C', label: 'Concluída' },
+        { value: '60', label: 'Concluída (autorizada)' },
+        { value: '40', label: 'Em recebimento' },
       ],
     },
     { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
