@@ -3,6 +3,8 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { ItensNotaFiscal, type ItemNF } from '@/components/nota-fiscal/ItensNotaFiscal'
+import { btnClass } from '@/components/ui-kit/Button'
+import { FileText, Download } from 'lucide-react'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -17,7 +19,7 @@ export default async function NotaFiscalItensPage({
 
   const { data: nf } = await supabase
     .from('notas_fiscais')
-    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa')
+    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
@@ -59,6 +61,27 @@ export default async function NotaFiscalItensPage({
             </div>
             {nf.c_chave_nfe && (
               <p className="num text-[11px] text-text-muted break-all">{nf.c_chave_nfe}</p>
+            )}
+            {nf.n_id_receb && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={`/api/nota-fiscal/${nf.id}/xml`}
+                  download
+                  className={btnClass('outline')}
+                  title="Baixar XML da NF-e"
+                >
+                  <Download className="size-4" /> XML
+                </a>
+                <a
+                  href={`/api/nota-fiscal/${nf.id}/danfe`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={btnClass('outline')}
+                  title="Abrir DANFE em PDF"
+                >
+                  <FileText className="size-4" /> DANFE
+                </a>
+              </div>
             )}
           </div>
         }
