@@ -29,6 +29,18 @@ function fmtData(d: string | null): string {
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
 type ColSort = (typeof COLUNAS_SORT)[number]
 
+// Categorias semanticas de NF baseadas em keyword matching na natureza da operacao.
+// 'venda' = tudo que nao e bonificacao/cupom/comodato/remessa.
+const CATEGORIAS_NF = [
+  { value: 'bonificacao', label: 'Bonificação / Brinde', keywords: ['BONIF', 'BRINDE', 'DOACAO', 'DOACÃO'] },
+  { value: 'cupom', label: 'Cupom / NFC-e / ECF', keywords: ['CUPOM', 'ECF', 'NFC-E', 'NFC_E', 'NF VIA CUPOM'] },
+  { value: 'comodato', label: 'Comodato', keywords: ['COMODATO'] },
+  { value: 'remessa', label: 'Remessa', keywords: ['REMESSA'] },
+  { value: 'devolucao', label: 'Devolução', keywords: ['DEVOL', 'RETORNO', 'RETORN'] },
+  { value: 'venda', label: 'Venda (demais)', keywords: [] },
+] as const
+type CategoriaKey = (typeof CATEGORIAS_NF)[number]['value']
+
 export default async function NotaFiscalPage({
   searchParams,
 }: {
@@ -41,6 +53,7 @@ export default async function NotaFiscalPage({
     tipo?: string
     natureza?: string
     produto?: string
+    categoria?: string
     page?: string
     ord?: string
     dir?: string
@@ -61,6 +74,16 @@ export default async function NotaFiscalPage({
   const dataInicio =
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
+
+  // Resolve categoria → string para usar em .or() ou array de not-keywords.
+  const categoriaKey = (CATEGORIAS_NF.map((c) => c.value) as string[]).includes(params.categoria ?? '')
+    ? (params.categoria as CategoriaKey)
+    : null
+  const catCond = categoriaKey
+    ? CATEGORIAS_NF.find((c) => c.value === categoriaKey) ?? null
+    : null
+  // Para categoria "venda" precisamos excluir tudo que bate com as outras keywords.
+  const todasOutrasKeywords = CATEGORIAS_NF.filter((c) => c.keywords.length > 0).flatMap((c) => c.keywords)
 
   // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
   // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
@@ -127,6 +150,13 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
   else if (params.status) query = query.eq('c_etapa', params.status)
   if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+  if (catCond) {
+    if (catCond.value === 'venda') {
+      for (const kw of todasOutrasKeywords) query = query.not('c_natureza_operacao', 'ilike', `%${kw}%`)
+    } else if (catCond.keywords.length > 0) {
+      query = query.or(catCond.keywords.map((kw) => `c_natureza_operacao.ilike.%${kw}%`).join(','))
+    }
+  }
   if (idsIn) query = query.in('id', idsIn)
 
   // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
@@ -144,6 +174,13 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
   else if (params.status) totaisQuery = totaisQuery.eq('c_etapa', params.status)
   if (params.natureza) totaisQuery = totaisQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+  if (catCond) {
+    if (catCond.value === 'venda') {
+      for (const kw of todasOutrasKeywords) totaisQuery = totaisQuery.not('c_natureza_operacao', 'ilike', `%${kw}%`)
+    } else if (catCond.keywords.length > 0) {
+      totaisQuery = totaisQuery.or(catCond.keywords.map((kw) => `c_natureza_operacao.ilike.%${kw}%`).join(','))
+    }
+  }
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
   const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
@@ -164,6 +201,7 @@ export default async function NotaFiscalPage({
     if (params.tipo) sp.set('tipo', params.tipo)
     if (params.natureza) sp.set('natureza', params.natureza)
     if (params.produto) sp.set('produto', params.produto)
+    if (params.categoria) sp.set('categoria', params.categoria)
     sp.set('ord', key)
     sp.set('dir', newDir)
     return `/nota-fiscal?${sp.toString()}`
@@ -178,6 +216,7 @@ export default async function NotaFiscalPage({
   if (params.tipo) relatorioParams.set('tipo', params.tipo)
   if (params.natureza) relatorioParams.set('natureza', params.natureza)
   if (params.produto) relatorioParams.set('produto', params.produto)
+  if (params.categoria) relatorioParams.set('categoria', params.categoria)
 
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
@@ -196,6 +235,12 @@ export default async function NotaFiscalPage({
     { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'texto', nome: 'natureza', label: 'Natureza da operacao' },
     { tipo: 'texto', nome: 'produto', label: 'Produto' },
+    {
+      tipo: 'select',
+      nome: 'categoria',
+      label: 'Categoria',
+      opcoes: CATEGORIAS_NF.map((c) => ({ value: c.value, label: c.label })),
+    },
   ]
 
   return (
@@ -219,6 +264,7 @@ export default async function NotaFiscalPage({
                   tipo: params.tipo ?? '',
                   natureza: params.natureza ?? '',
                   produto: params.produto ?? '',
+                  categoria: params.categoria ?? '',
                 }}
                 persistirEm="/nota-fiscal"
               />
