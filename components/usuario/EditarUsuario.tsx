@@ -7,13 +7,14 @@ import {
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { Pencil, Trash2, ShieldCheck, ShieldHalf, User as UserIcon, Store, Warehouse, IdCard } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, ShieldHalf, User as UserIcon, Store, Warehouse, IdCard, KeyRound, Copy, Check, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   editarUsuario,
   excluirUsuario,
   togglePermissao,
   toggleLocal,
+  redefinirSenha,
   type PerfilUsuario,
 } from '@/lib/actions/usuario'
 import { definirCargoUsuario } from '@/lib/actions/cargo'
@@ -80,6 +81,8 @@ export function EditarUsuario({
   const [cargoPorLoja, setCargoPorLoja] = useState<Record<number, number | null>>(
     usuario.cargosPorLoja
   )
+  const [senhaRedefinida, setSenhaRedefinida] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -155,6 +158,32 @@ export function EditarUsuario({
       setOpen(false)
       router.refresh()
     })
+  }
+
+  function redefinir() {
+    startTransition(async () => {
+      const res = await redefinirSenha(usuario.id)
+      if (res?.error) {
+        toast.error('Erro', { description: res.error })
+        return
+      }
+      setSenhaRedefinida(res.senha ?? null)
+    })
+  }
+
+  function copiarSenha() {
+    if (!senhaRedefinida) return
+    navigator.clipboard.writeText(senhaRedefinida)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  function permCountParaLoja(lojaId: number): number {
+    let n = 0
+    for (const chave of permAtivas) {
+      if (chave.startsWith(`${lojaId}:`)) n++
+    }
+    return n
   }
 
   function escolherCargo(lojaId: number, cargoId: number | null) {
@@ -249,6 +278,7 @@ export function EditarUsuario({
               <div className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-surface-2/30 p-2 sm:grid-cols-2">
                 {lojas.map((l) => {
                   const on = lojaIds.includes(l.id)
+                  const qtdPerms = permCountParaLoja(l.id)
                   return (
                     <button
                       key={l.id}
@@ -267,13 +297,18 @@ export function EditarUsuario({
                       >
                         {on && <span className="text-[10px] leading-none">✓</span>}
                       </span>
-                      <span className="truncate">{l.nome_fantasia || l.nome}</span>
+                      <span className="min-w-0 flex-1 truncate">{l.nome_fantasia || l.nome}</span>
+                      {on && qtdPerms > 0 && (
+                        <span className="shrink-0 rounded-full bg-brand/20 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                          {qtdPerms}p
+                        </span>
+                      )}
                     </button>
                   )
                 })}
               </div>
               <p className="mt-1.5 text-[12px] text-text-muted">
-                Salve os dados antes de ajustar permissões e locais das lojas recém-adicionadas.
+                Desmarcar uma loja <span className="font-medium text-warn">apaga permanentemente todas as permissões dela.</span> Salve antes de ajustar permissões de lojas recém-adicionadas.
               </p>
             </div>
           )}
@@ -426,6 +461,40 @@ export function EditarUsuario({
                 </div>
               )
             })}
+
+          {/* Reset de senha */}
+          <div className="rounded-md border border-border bg-surface-2/30 p-3">
+            <p className="mb-2 text-[13px] font-medium text-text">Redefinir senha</p>
+            {senhaRedefinida ? (
+              <div className="space-y-2">
+                <p className="text-[12px] text-text-muted">Nova senha provisória gerada. Envie ao usuário.</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={senhaRedefinida}
+                    readOnly
+                    className="num min-w-[10rem] flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium tracking-wider text-text outline-none"
+                  />
+                  <button type="button" onClick={copiarSenha} className={`${btnClass('primary')} shrink-0`}>
+                    {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
+                    {copiado ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={redefinir}
+                disabled={pending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                <KeyRound className="size-4 text-text-muted" />
+                Gerar nova senha provisória
+              </button>
+            )}
+            <p className="mt-1.5 text-[11px] text-text-muted">
+              Use se o usuário não recebeu ou perdeu a senha inicial.
+            </p>
+          </div>
 
           {podeExcluir && (
             <div className="mt-2 rounded-md border border-err/30 bg-err/5 p-3">

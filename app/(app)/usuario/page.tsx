@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { escapeIlike } from '@/lib/utils-busca'
-import { Users, UserPlus, Ticket } from 'lucide-react'
+import { Users, UserPlus, Ticket, AlertTriangle } from 'lucide-react'
 
 type UsuarioRow = {
   id: string
@@ -238,6 +238,12 @@ export default async function UsuarioPage({
                     <span>
                       <span className="num text-text">{lojaUserVisivel.length}</span> loja(s)
                     </span>
+                    {u.perfil === 'Usuario' && lojaUserVisivel.length > 0 && permVisivel.length === 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn">
+                        <AlertTriangle className="size-3" />
+                        sem permissões
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="shrink-0">

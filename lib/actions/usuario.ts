@@ -154,6 +154,9 @@ export async function criarUsuario(input: {
       const { data: permissoes } = await supabase.from('permissoes').select('id')
       permissaoIds = (permissoes ?? []).map((p) => p.id as number)
     } else {
+      if (input.permissaoIds.length === 0) {
+        return { error: 'Selecione ao menos uma permissão para o usuário.' }
+      }
       permissaoIds = input.permissaoIds
     }
     const rows = lojaIds.flatMap((lojaId) =>
@@ -431,6 +434,19 @@ export async function togglePermissao(
 
   revalidatePath('/usuario')
   return { ok: true }
+}
+
+export async function redefinirSenha(userId: string) {
+  const ator = await getAtorGestao()
+  if (!ator.podeGerir) return { error: 'Sem permissão.' }
+  const supabase = createServiceClient()
+  if (!(await podeGerirAlvo(ator, supabase, userId))) {
+    return { error: 'Você não pode alterar este usuário.' }
+  }
+  const senha = senhaAleatoria()
+  const { error } = await supabase.auth.admin.updateUserById(userId, { password: senha })
+  if (error) return { error: 'Não foi possível redefinir a senha.' }
+  return { ok: true, senha }
 }
 
 export async function toggleLocal(
