@@ -186,6 +186,9 @@ export function ContagemTransferencia({
   }
 
   function finalizar() {
+    if (itens.length === 0) {
+      if (!window.confirm('Esta transferência não tem nenhum produto adicionado.\n\nConcluir agora vai deixá-la como 0/0 no histórico (sem registro de itens).\n\nDeseja continuar mesmo assim?')) return
+    }
     // Avisa antes de fechar se ha item sem quantidade (sera ignorado) ou com erro
     // (nao integrou). Evita concluir sem querer deixando produto de fora.
     const semQtd = itens.filter((i) => i.status === 'Vazio' || i.quan == null || i.quan <= 0).length

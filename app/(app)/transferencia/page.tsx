@@ -262,6 +262,7 @@ export default async function TransferenciaPage({
               const concluidos = movStatus.filter((m: { status: string | null }) => m.status === 'Concluido').length
               const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
               if (t.status !== 'Concluido') return <span className="num text-text-muted">{total}</span>
+              if (total === 0) return <span className="text-text-muted">-</span>
               return (
                 <span className={`num font-medium ${temErro ? 'text-err' : 'text-ok'}`}>
                   {concluidos}/{total}
