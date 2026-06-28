@@ -440,25 +440,25 @@ export default async function OrdemProducaoPage({
                 <DataTable>
                   <thead>
                     <tr>
-                      <th className="w-40">OP</th>
+                      <th className="w-32">OP</th>
                       <th className="w-28">Status</th>
                       <th>
                         <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
                           Produto {setaIcone('produto_az', 'produto_za')}
                         </Link>
                       </th>
-                      <th className="w-28 !text-right">
+                      <th className="w-24 !text-right">
                         <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-end gap-1 hover:text-text">
                           Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
                         </Link>
                       </th>
-                      <th className="w-44 !text-center">
+                      <th className="w-40 !text-center">
                         <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
                           Validade {setaIcone('validade_asc', 'validade_desc')}
                         </Link>
                       </th>
-                      <th className="w-36 !text-center">Quantidade</th>
-                      <th className="w-60"></th>
+                      <th className="w-32 !text-center">Quantidade</th>
+                      <th className="w-44"></th>
                     </tr>
                   </thead>
                   <tbody>

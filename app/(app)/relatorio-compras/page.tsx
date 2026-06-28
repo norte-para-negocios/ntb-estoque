@@ -224,14 +224,14 @@ export default async function RelatorioComprasPage({
               <tbody>
                 {linhas.map((l) => (
                   <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                    <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={l.rotulo}>
-                      {l.rotulo}
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}>
+                      <div className="max-w-[140px] truncate">{l.rotulo}</div>
                     </td>
                     {meses.map((m) => (
-                      <td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>
+                      <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>
                     ))}
-                    <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(l.total)}</td>
-                    <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
+                    <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtMoeda(l.total)}</td>
+                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">
                       {total > 0 ? `${((l.total / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}
                     </td>
                   </tr>
@@ -239,11 +239,11 @@ export default async function RelatorioComprasPage({
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                  <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total</td>
+                  <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total</div></td>
                   {meses.map((m) => (
-                    <td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>
+                    <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>
                   ))}
-                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(total)}</td>
+                  <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtMoeda(total)}</td>
                   <td className="px-3 py-2" />
                 </tr>
               </tfoot>

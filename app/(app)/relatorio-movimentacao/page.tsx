@@ -270,17 +270,17 @@ export default async function RelatorioMovimentacaoPage({
                 <tbody>
                   {linhasDim.slice(0, LIMITE_LINHAS).map(([rot, e]) => (
                     <tr key={rot} className="border-t border-border/60 hover:bg-surface-2/40">
-                      <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={rot}>{formatarNomeProduto(rot) || rot}</td>
-                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtCel(e.meses[m] ?? 0)}</td>))}
-                      <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtCel(e.total)}</td>
+                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={rot}><div className="max-w-[140px] truncate">{formatarNomeProduto(rot) || rot}</div></td>
+                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(e.meses[m] ?? 0)}</td>))}
+                      <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCel(e.total)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total</td>
-                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtCel(totalGeral)}</td>
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total</div></td>
+                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
+                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalGeral)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -403,17 +403,17 @@ export default async function RelatorioMovimentacaoPage({
               <tbody>
                 {linhas.map((l) => (
                   <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                    <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={l.rotulo}>{l.rotulo}</td>
-                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(l.meses[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtQtd(l.total)}</td>
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}><div className="max-w-[140px] truncate">{l.rotulo}</div></td>
+                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text-muted">{fmtQtd(l.meses[m] ?? 0)}</td>))}
+                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-medium text-text">{fmtQtd(l.total)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                  <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total (qtde)</td>
-                  {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtQtd(totalPorMes[m] ?? 0)}</td>))}
-                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtQtd(Object.values(totalPorMes).reduce((s, v) => s + v, 0))}</td>
+                  <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total (qtde)</div></td>
+                  {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text">{fmtQtd(totalPorMes[m] ?? 0)}</td>))}
+                  <td className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text">{fmtQtd(Object.values(totalPorMes).reduce((s, v) => s + v, 0))}</td>
                 </tr>
               </tfoot>
             </table>

@@ -152,8 +152,8 @@ export default async function RelatorioEstoqueValorizadoPage({
                 <th className={`text-left ${th} hidden lg:table-cell`}>Tipo</th>
                 <th className={`text-right ${th}`}>Saldo</th>
                 <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>
-                <th className={`text-right ${th} hidden md:table-cell`}>PDV</th>
-                <th className={`text-right ${th} hidden md:table-cell`}>Margem</th>
+                <th className={`text-right ${th} hidden 2xl:table-cell`}>PDV</th>
+                <th className={`text-right ${th} hidden 2xl:table-cell`}>Margem</th>
                 <th className={`text-right ${th}`}>Valor total</th>
               </tr>
             </thead>
@@ -182,10 +182,10 @@ export default async function RelatorioEstoqueValorizadoPage({
                   <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
                     {fmtMoeda(Number(l.n_cmc))}
                   </td>
-                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted md:table-cell">
+                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted 2xl:table-cell">
                     {l.n_preco_unitario ? fmtMoeda(Number(l.n_preco_unitario)) : '-'}
                   </td>
-                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right md:table-cell">
+                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right 2xl:table-cell">
                     <span
                       className={
                         l.margem_pct != null && l.margem_pct < 0
@@ -213,8 +213,8 @@ export default async function RelatorioEstoqueValorizadoPage({
                 <td className="hidden lg:table-cell" />
                 <td />
                 <td className="hidden sm:table-cell" />
-                <td className="hidden md:table-cell" />
-                <td className="hidden md:table-cell" />
+                <td className="hidden 2xl:table-cell" />
+                <td className="hidden 2xl:table-cell" />
                 <td className="num whitespace-nowrap px-3 py-2 text-right text-text">
                   {fmtMoeda(totalValor)}
                 </td>
