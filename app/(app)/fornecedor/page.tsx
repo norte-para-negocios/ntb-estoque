@@ -150,6 +150,11 @@ export default async function FornecedorPage({
                 {p.nome_fantasia && (
                   <div className="truncate text-[12px] text-text-muted">{p.nome_fantasia}</div>
                 )}
+                {(p.email || p.telefone) && (
+                  <div className="truncate text-[11px] text-text-muted">
+                    {[p.email, p.telefone].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
             ),
           },
