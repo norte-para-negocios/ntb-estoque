@@ -3,7 +3,7 @@ import { getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import {
-  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight,
+  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes,
 } from 'lucide-react'
 
 type Rel = {
@@ -26,6 +26,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
     grupo: 'Compras e custo',
     itens: [
       { href: '/relatorio-compras', titulo: 'Compras', icon: ShoppingCart, descricao: 'Quanto e de quem voce compra; evolucao do preco dos insumos.', pergunta: 'Estou pagando mais caro?' },
+      { href: '/relatorio-estoque-valorizado', titulo: 'Estoque valorizado', icon: Boxes, descricao: 'Valor do estoque por produto: saldo x CMC da ultima foto do Omie.', pergunta: 'Quanto vale o meu estoque?' },
       { href: '/relatorio-margem', titulo: 'Margem', icon: Percent, descricao: 'Margem por produto e familia, mais e menos rentaveis.', pergunta: 'O que da mais lucro?' },
     ],
   },
