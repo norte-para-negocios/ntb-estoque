@@ -35,6 +35,7 @@ type ProdutoLinha = {
   codigo_produto: number | null
   codigo: string | null
   descricao: string | null
+  ean: string | null
   codigo_familia: number | null
   descricao_familia: string | null
   tipo_item: string | null
@@ -123,7 +124,7 @@ export default async function ProdutoPage({
   const ord = params.ord ?? ''
   let query = supabase
     .from('produtos')
-    .select('id, codigo_produto, codigo, descricao, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo')
+    .select('id, codigo_produto, codigo, descricao, ean, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo')
     .eq('loja_id', lojaId)
   if (ord === 'descricao_za') query = query.order('descricao', { ascending: false })
   else if (ord === 'venda_asc') query = query.order('valor_unitario', { ascending: true, nullsFirst: false }).order('descricao')
@@ -133,7 +134,7 @@ export default async function ProdutoPage({
 
   if (params.q) {
     const q = escapeIlikeOr(params.q)
-    query = query.or(`descricao.ilike.%${q}%,codigo.ilike.%${q}%`)
+    query = query.or(`descricao.ilike.%${q}%,codigo.ilike.%${q}%,ean.ilike.%${q}%`)
   }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
@@ -454,7 +455,12 @@ export default async function ProdutoPage({
             label: 'Descrição',
             primaria: true,
             flexivel: true,
-            render: (p) => <span>{formatarNomeProduto(p.descricao)}</span>,
+            render: (p) => (
+              <span>
+                {formatarNomeProduto(p.descricao)}
+                {p.ean && <span className="ml-1.5 num text-[11px] text-text-muted">{p.ean}</span>}
+              </span>
+            ),
           },
           ...(vista === 'precos'
             ? [

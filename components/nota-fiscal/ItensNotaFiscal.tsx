@@ -14,8 +14,11 @@ export type ItemNF = {
   id: number
   c_codigo_produto: string | null
   c_descricao_produto: string | null
+  c_cfop: string | null
   n_qtde_nfe: number | null
   c_unidade_nfe: string | null
+  n_preco_unit: number | null
+  v_total_item: number | null
   quantidade: number | null
 }
 
@@ -79,7 +82,10 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
               </th>
               <th>Código</th>
               <th>Produto</th>
+              <th>CFOP</th>
               <th className="text-right">Qtd NFe</th>
+              <th className="text-right">Preço unit.</th>
+              <th className="text-right">Total</th>
               <th className="text-right">Qtd p/ etiqueta</th>
               <th></th>
             </tr>
@@ -98,9 +104,16 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
                 </td>
                 <td className="num text-text-muted">{item.c_codigo_produto}</td>
                 <td className="max-w-md truncate">{item.c_descricao_produto}</td>
+                <td className="num text-text-muted">{item.c_cfop || '-'}</td>
                 <td className="text-right">
                   <Num value={item.n_qtde_nfe} frac={3} />{' '}
                   <span className="text-text-muted">{item.c_unidade_nfe}</span>
+                </td>
+                <td className="num text-right text-text-muted">
+                  {item.n_preco_unit != null ? Number(item.n_preco_unit).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                </td>
+                <td className="num text-right font-medium">
+                  {item.v_total_item != null ? Number(item.v_total_item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
                 </td>
                 <td className="text-right">
                   <div className="flex justify-end">
