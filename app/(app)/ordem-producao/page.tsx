@@ -212,6 +212,47 @@ export default async function OrdemProducaoPage({
     prodMap = await resolverProdutos(ordens)
   }
 
+  // Ingredientes da malha: busca full_object so para as OPs da pagina atual
+  type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
+  const { data: opsFullObj } = await supabase
+    .from('ordens_producao')
+    .select('id, full_object')
+    .in('id', ordens.map((o) => o.id))
+  const fullObjMap = new Map(
+    (opsFullObj ?? []).map((o) => [
+      o.id as number,
+      (o.full_object as { itensDetalhes?: { nIdProdutoMalha: number; nQtde: number }[] | null } | null)
+        ?.itensDetalhes ?? [],
+    ])
+  )
+  const ingCodesSet = new Set<number>()
+  for (const items of fullObjMap.values()) {
+    for (const i of items) if (i.nIdProdutoMalha) ingCodesSet.add(i.nIdProdutoMalha)
+  }
+  const { data: ingProds } = ingCodesSet.size
+    ? await supabase
+        .from('produtos')
+        .select('codigo_produto, descricao, unidade')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', [...ingCodesSet])
+    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
+  const ingProdMap = new Map((ingProds ?? []).map((p) => [p.codigo_produto, p]))
+  const ingredientesMap = new Map<number, Ingrediente[]>()
+  for (const [opId, items] of fullObjMap) {
+    const ings: Ingrediente[] = items
+      .filter((i) => i.nIdProdutoMalha)
+      .map((i) => {
+        const p = ingProdMap.get(i.nIdProdutoMalha)
+        return {
+          cod: i.nIdProdutoMalha,
+          nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`,
+          unidade: p?.unidade ?? '',
+          qtd: Number(i.nQtde),
+        }
+      })
+    if (ings.length) ingredientesMap.set(opId, ings)
+  }
+
   // Locais de estoque ativos da loja para o seletor de "Criar OP"
   const { data: locais } = await supabase
     .from('local_estoques')
@@ -389,6 +430,7 @@ export default async function OrdemProducaoPage({
               podeExcluir,
               podeConcluir,
               podeReverter,
+              ingredientes: ingredientesMap.get(op.id) ?? [],
             }
           })
           return (

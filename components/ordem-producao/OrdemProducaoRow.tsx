@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil } from 'lucide-react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { setValidadeOP, setQuantidadeOP, finishOP, reverterOP, excluirOP } from '@/lib/actions/ordem-producao'
 import type { OpStatus } from '@/lib/op-status'
@@ -41,6 +41,7 @@ interface OPData {
   podeExcluir?: boolean // excluir OP aberta
   podeConcluir?: boolean // concluir OP aberta
   podeReverter?: boolean // reverter OP concluida
+  ingredientes?: { cod: number; nome: string; unidade: string; qtd: number }[]
 }
 
 // Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
@@ -466,39 +467,72 @@ function Acoes({ op, ctrl }: StepperProps) {
 // Linha da tabela (desktop).
 export function OrdemProducaoRow({ op }: { op: OPData }) {
   const ctrl = useOP(op)
+  const [expandido, setExpandido] = useState(false)
+  const temIng = (op.ingredientes?.length ?? 0) > 0
 
   return (
-    <tr>
-      <td className="num font-medium text-text align-top">
-        <span>{op.numOP}</span>
-        {op.data && (
-          <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
-            Prev. {op.data}
+    <>
+      <tr>
+        <td className="num font-medium text-text align-top">
+          <span>{op.numOP}</span>
+          {op.data && (
+            <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
+              Prev. {op.data}
+            </div>
+          )}
+        </td>
+        <td className="align-top">
+          <StatusBadge status={op.status} />
+        </td>
+        <td className="max-w-xs align-top">
+          <div className="truncate font-medium text-text">{op.produto}</div>
+          <div className="text-[11px] text-text-muted">{op.unidade}</div>
+        </td>
+        <td className="text-right align-top">
+          <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
+        </td>
+        <td className="align-top">
+          <StepperValidade op={op} ctrl={ctrl} />
+        </td>
+        <td className="align-top">
+          <StepperQuantidade op={op} ctrl={ctrl} />
+        </td>
+        <td className="text-right align-top">
+          <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
+            {temIng && (
+              <button
+                type="button"
+                onClick={() => setExpandido((e) => !e)}
+                className="inline-flex items-center gap-1 text-text-muted hover:text-text"
+                title={expandido ? 'Ocultar ingredientes' : 'Ver ingredientes'}
+              >
+                <ChevronDown className={`size-3.5 transition-transform duration-150 ${expandido ? 'rotate-180' : ''}`} />
+                <span className="hidden 2xl:inline text-[12px]">{op.ingredientes!.length} ingrediente{op.ingredientes!.length !== 1 ? 's' : ''}</span>
+              </button>
+            )}
+            <Acoes op={op} ctrl={ctrl} />
           </div>
-        )}
-      </td>
-      <td className="align-top">
-        <StatusBadge status={op.status} />
-      </td>
-      <td className="max-w-xs align-top">
-        <div className="truncate font-medium text-text">{op.produto}</div>
-        <div className="text-[11px] text-text-muted">{op.unidade}</div>
-      </td>
-      <td className="text-right align-top">
-        <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
-      </td>
-      <td className="align-top">
-        <StepperValidade op={op} ctrl={ctrl} />
-      </td>
-      <td className="align-top">
-        <StepperQuantidade op={op} ctrl={ctrl} />
-      </td>
-      <td className="text-right align-top">
-        <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
-          <Acoes op={op} ctrl={ctrl} />
-        </div>
-      </td>
-    </tr>
+        </td>
+      </tr>
+      {expandido && temIng && (
+        <tr className="bg-surface-2/30">
+          <td colSpan={7} className="px-4 py-2.5">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
+              {op.ingredientes!.map((i) => (
+                <span key={i.cod} className="text-[12px] text-text">
+                  {i.nome}{' '}
+                  <span className="num text-text-muted">
+                    {i.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                    {i.unidade ? ` ${i.unidade}` : ''}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -508,80 +542,112 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
 export function OrdemProducaoCard({ op }: { op: OPData }) {
   const ctrl = useOP(op)
   const val = fmtValidade(op.validade)
+  const [expandido, setExpandido] = useState(false)
+  const temIng = (op.ingredientes?.length ?? 0) > 0
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium leading-snug text-text">{op.produto}</div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
-          <StatusBadge status={op.status} />
-          <span className="num">{op.numOP}</span>
-          {op.data && <span className="num" title="Data prevista">{op.data}</span>}
-          {val && <span className="num" title="Validade">val {val}</span>}
+    <div className="first:rounded-t-lg last:rounded-b-lg">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium leading-snug text-text">{op.produto}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
+            <StatusBadge status={op.status} />
+            <span className="num">{op.numOP}</span>
+            {op.data && <span className="num" title="Data prevista">{op.data}</span>}
+            {val && <span className="num" title="Validade">val {val}</span>}
+          </div>
+        </div>
+
+        <div className="shrink-0 whitespace-nowrap text-right text-[13px] text-text">
+          <QtdOP value={op.qtdOP} /> <span className="text-[11px] text-text-muted">{op.unidade}</span>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          {temIng && (
+            <button
+              type="button"
+              onClick={() => setExpandido((e) => !e)}
+              className={`${acaoIconeClass} hover:text-text`}
+              aria-label={expandido ? 'Ocultar ingredientes' : 'Ver ingredientes'}
+              title={expandido ? 'Ocultar ingredientes' : `${op.ingredientes!.length} ingrediente(s)`}
+            >
+              <ChevronDown className={`size-4 transition-transform duration-150 ${expandido ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          {op.podeEditar && (
+            <button
+              type="button"
+              onClick={() => ctrl.setDialogEditar(true)}
+              className={`${acaoIconeClass} hover:text-brand`}
+              aria-label="Editar"
+              title="Editar validade/quantidade"
+            >
+              <Pencil className="size-4" />
+            </button>
+          )}
+          {!op.concluida && op.podeConcluir && (
+            <button
+              type="button"
+              onClick={() => ctrl.setDialogConclusao(true)}
+              disabled={ctrl.pending}
+              className={`${acaoIconeClass} hover:text-brand`}
+              aria-label="Concluir"
+              title="Concluir"
+            >
+              <Check className="size-4" />
+            </button>
+          )}
+          {op.concluida && op.podeReverter && (
+            <button
+              type="button"
+              onClick={ctrl.reverter}
+              disabled={ctrl.pending}
+              className={`${acaoIconeClass} hover:text-warn`}
+              aria-label="Reverter"
+              title="Reverter conclusão"
+            >
+              <Undo2 className="size-4" />
+            </button>
+          )}
+          {op.podeExcluir && (
+            <button
+              type="button"
+              onClick={ctrl.excluir}
+              disabled={ctrl.pending}
+              className={`${acaoIconeClass} hover:text-err`}
+              aria-label="Excluir"
+              title="Excluir"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
+          <DialogImprimirEtiqueta
+            href={`/ordem-producao/${op.id}/imprimir`}
+            trigger={
+              <button type="button" className={acaoIconeClass} aria-label="Imprimir" title="Imprimir">
+                <Printer className="size-4" />
+              </button>
+            }
+          />
         </div>
       </div>
 
-      <div className="shrink-0 whitespace-nowrap text-right text-[13px] text-text">
-        <QtdOP value={op.qtdOP} /> <span className="text-[11px] text-text-muted">{op.unidade}</span>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        {op.podeEditar && (
-          <button
-            type="button"
-            onClick={() => ctrl.setDialogEditar(true)}
-            className={`${acaoIconeClass} hover:text-brand`}
-            aria-label="Editar"
-            title="Editar validade/quantidade"
-          >
-            <Pencil className="size-4" />
-          </button>
-        )}
-        {!op.concluida && op.podeConcluir && (
-          <button
-            type="button"
-            onClick={() => ctrl.setDialogConclusao(true)}
-            disabled={ctrl.pending}
-            className={`${acaoIconeClass} hover:text-brand`}
-            aria-label="Concluir"
-            title="Concluir"
-          >
-            <Check className="size-4" />
-          </button>
-        )}
-        {op.concluida && op.podeReverter && (
-          <button
-            type="button"
-            onClick={ctrl.reverter}
-            disabled={ctrl.pending}
-            className={`${acaoIconeClass} hover:text-warn`}
-            aria-label="Reverter"
-            title="Reverter conclusão"
-          >
-            <Undo2 className="size-4" />
-          </button>
-        )}
-        {op.podeExcluir && (
-          <button
-            type="button"
-            onClick={ctrl.excluir}
-            disabled={ctrl.pending}
-            className={`${acaoIconeClass} hover:text-err`}
-            aria-label="Excluir"
-            title="Excluir"
-          >
-            <Trash2 className="size-4" />
-          </button>
-        )}
-        <DialogImprimirEtiqueta
-          href={`/ordem-producao/${op.id}/imprimir`}
-          trigger={
-            <button type="button" className={acaoIconeClass} aria-label="Imprimir" title="Imprimir">
-              <Printer className="size-4" />
-            </button>
-          }
-        />
-      </div>
+      {expandido && temIng && (
+        <div className="border-t border-border bg-surface-2/30 px-3 pb-2.5 pt-2">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
+          <div className="flex flex-col gap-1">
+            {op.ingredientes!.map((i) => (
+              <div key={i.cod} className="flex items-baseline justify-between gap-2 text-[12px]">
+                <span className="min-w-0 truncate text-text">{i.nome}</span>
+                <span className="num shrink-0 text-text-muted">
+                  {i.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                  {i.unidade ? ` ${i.unidade}` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {op.podeEditar && <DialogEditar op={op} ctrl={ctrl} />}
       {!op.concluida && op.podeConcluir && <DialogConclusao op={op} ctrl={ctrl} />}
