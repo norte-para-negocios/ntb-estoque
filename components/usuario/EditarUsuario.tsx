@@ -29,7 +29,7 @@ const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 type Permissao = { id: number; nome: string }
 type Local = { id: number; loja_id: number; descricao: string | null }
-type Cargo = { id: number; nome: string }
+type Cargo = { id: number; nome: string; permissaoIds?: number[] }
 
 export type UsuarioEditavel = {
   id: string
@@ -132,7 +132,16 @@ export function EditarUsuario({
     })
     startTransition(async () => {
       const res = await togglePermissao(usuario.id, lojaId, permissaoId, ativar)
-      if (res?.error) toast.error('Erro', { description: res.error })
+      if (res?.error) {
+        // Reverte o estado otimista em caso de erro
+        setPermAtivas((prev) => {
+          const n = new Set(prev)
+          if (ativar) n.delete(chave)
+          else n.add(chave)
+          return n
+        })
+        toast.error('Erro ao salvar permissão', { description: res.error })
+      }
     })
   }
 
@@ -377,57 +386,73 @@ export function EditarUsuario({
                     <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
                       Permissões
                     </p>
-                    {CATALOGO_PERMISSOES.map((mod) => {
-                      const itens = mod.permissoes
-                        .map((p) => ({ ...p, id: idPorNome.get(p.nome) }))
-                        .filter((p): p is { nome: string; label: string; id: number } => p.id != null)
-                      if (!itens.length) return null
-                      const ids = itens.map((i) => i.id)
-                      const marcados = ids.filter((id) => permAtivas.has(`${loja.id}:${id}`)).length
-                      const todos = marcados === ids.length
-                      return (
-                        <div
-                          key={mod.modulo}
-                          className="rounded-md border border-border bg-surface p-2.5"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => alternarModulo(loja.id, ids, todos)}
-                            className="flex w-full items-center justify-between gap-2 text-left"
-                          >
-                            <span className="text-[13px] font-medium text-text">{mod.modulo}</span>
-                            <span
-                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                                marcados > 0
-                                  ? 'bg-brand-soft text-brand'
-                                  : 'bg-surface-2 text-text-muted'
-                              }`}
-                            >
-                              {marcados}/{ids.length}
-                            </span>
-                          </button>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {itens.map((p) => {
-                              const on = permAtivas.has(`${loja.id}:${p.id}`)
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => alternarPermissao(loja.id, p.id)}
-                                  className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
-                                    on
-                                      ? 'border-brand bg-brand text-white'
-                                      : 'border-border bg-surface text-text-muted hover:text-text'
-                                  }`}
-                                >
-                                  {p.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
+                    {(() => {
+                      const cargoId = cargoPorLoja[loja.id]
+                      const cargoPerms = new Set<number>(
+                        cargoId ? (cargos.find((c) => c.id === cargoId)?.permissaoIds ?? []) : []
                       )
-                    })}
+                      return CATALOGO_PERMISSOES.map((mod) => {
+                        const itens = mod.permissoes
+                          .map((p) => ({ ...p, id: idPorNome.get(p.nome) }))
+                          .filter((p): p is { nome: string; label: string; id: number } => p.id != null)
+                        if (!itens.length) return null
+                        const ids = itens.map((i) => i.id)
+                        const marcados = ids.filter(
+                          (id) => permAtivas.has(`${loja.id}:${id}`) || cargoPerms.has(id)
+                        ).length
+                        const todos = ids.every(
+                          (id) => permAtivas.has(`${loja.id}:${id}`) || cargoPerms.has(id)
+                        )
+                        return (
+                          <div
+                            key={mod.modulo}
+                            className="rounded-md border border-border bg-surface p-2.5"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => alternarModulo(loja.id, ids, todos)}
+                              className="flex w-full items-center justify-between gap-2 text-left"
+                            >
+                              <span className="text-[13px] font-medium text-text">{mod.modulo}</span>
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                  marcados > 0
+                                    ? 'bg-brand-soft text-brand'
+                                    : 'bg-surface-2 text-text-muted'
+                                }`}
+                              >
+                                {marcados}/{ids.length}
+                              </span>
+                            </button>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {itens.map((p) => {
+                                const individual = permAtivas.has(`${loja.id}:${p.id}`)
+                                const viaCargo = !individual && cargoPerms.has(p.id)
+                                const on = individual || viaCargo
+                                return (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => alternarPermissao(loja.id, p.id)}
+                                    title={viaCargo ? 'Concedido pelo cargo' : undefined}
+                                    className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                                      individual
+                                        ? 'border-brand bg-brand text-white'
+                                        : viaCargo
+                                        ? 'border-brand/50 bg-brand/15 text-brand'
+                                        : 'border-border bg-surface text-text-muted hover:text-text'
+                                    }`}
+                                  >
+                                    {p.label}
+                                    {viaCargo && <span className="ml-1 text-[10px] opacity-70">cargo</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
 
                   <div className="space-y-2">

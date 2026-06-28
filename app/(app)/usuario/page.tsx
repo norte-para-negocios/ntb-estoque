@@ -83,7 +83,7 @@ export default async function UsuarioPage({
 
   // Cargos (globais) para o dropdown de atribuição por loja.
   const cargosLista = await listarCargos()
-  const cargos = cargosLista.map((c) => ({ id: c.id, nome: c.nome }))
+  const cargos = cargosLista.map((c) => ({ id: c.id, nome: c.nome, permissaoIds: c.permissaoIds }))
 
   // Locais so das lojas no escopo do ator.
   let locaisQuery = supabase

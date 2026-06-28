@@ -411,25 +411,21 @@ export async function togglePermissao(
   }
 
   if (ativar) {
-    const { data: existe } = await supabase
+    const { error: insErr } = await supabase
       .from('permissao_user')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('loja_id', lojaId)
-      .eq('permissao_id', permissaoId)
-      .maybeSingle()
-    if (!existe) {
-      await supabase
-        .from('permissao_user')
-        .insert({ user_id: userId, loja_id: lojaId, permissao_id: permissaoId })
-    }
+      .upsert(
+        { user_id: userId, loja_id: lojaId, permissao_id: permissaoId },
+        { onConflict: 'loja_id,permissao_id,user_id', ignoreDuplicates: true }
+      )
+    if (insErr) return { error: mensagemAmigavel(insErr) }
   } else {
-    await supabase
+    const { error: delErr } = await supabase
       .from('permissao_user')
       .delete()
       .eq('user_id', userId)
       .eq('loja_id', lojaId)
       .eq('permissao_id', permissaoId)
+    if (delErr) return { error: mensagemAmigavel(delErr) }
   }
 
   revalidatePath('/usuario')
