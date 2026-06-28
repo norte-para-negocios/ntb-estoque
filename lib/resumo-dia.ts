@@ -220,21 +220,54 @@ async function listarCategoria(
     const { data } = await supabase.from('transferencias')
       .select('id, loja_id, codigo_local_origem, codigo_local_destino, status, created_at, user_id')
       .in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim).order('created_at', { ascending: false }).limit(LIMITE_LISTA)
-    const rows = (data ?? []) as { loja_id: number; codigo_local_origem: number | null; codigo_local_destino: number | null; status: string; created_at: string; user_id: string | null }[]
-    const [users, locais, lojas] = await Promise.all([
+    const rows = (data ?? []) as { id: number; loja_id: number; codigo_local_origem: number | null; codigo_local_destino: number | null; status: string; created_at: string; user_id: string | null }[]
+
+    const transfIds = rows.map((r) => r.id)
+    const [users, locais, lojas, movRes] = await Promise.all([
       nomesUsuarios(supabase, rows.map((r) => r.user_id)),
       nomesLocais(supabase, lojaIds, rows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino])),
       multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
+      transfIds.length
+        ? supabase.from('movimentos').select('transferencia_id, id_prod').in('transferencia_id', transfIds).limit(5000)
+        : Promise.resolve({ data: [] as { transferencia_id: number; id_prod: number }[] }),
     ])
+
+    // Resolve product names
+    const movItens = (movRes.data ?? []) as { transferencia_id: number; id_prod: number }[]
+    const prodCods = [...new Set(movItens.map((m) => m.id_prod).filter(Boolean))]
+    const nomeProd = new Map<number, string>()
+    if (prodCods.length) {
+      const { data: prods } = await supabase.from('produtos').select('codigo_produto, descricao').in('loja_id', lojaIds).in('codigo_produto', prodCods)
+      for (const p of (prods ?? []) as { codigo_produto: number; descricao: string }[])
+        nomeProd.set(p.codigo_produto, formatarNomeProduto(p.descricao))
+    }
+
+    // Produtos por transferência (deduplicados)
+    const prodsPorTransf = new Map<number, string[]>()
+    for (const m of movItens) {
+      if (!m.transferencia_id || !m.id_prod) continue
+      const arr = prodsPorTransf.get(m.transferencia_id) ?? []
+      const nome = nomeProd.get(m.id_prod) ?? `Cód ${m.id_prod}`
+      if (!arr.includes(nome)) arr.push(nome)
+      prodsPorTransf.set(m.transferencia_id, arr)
+    }
+    const resumoProdutos = (id: number) => {
+      const itens = prodsPorTransf.get(id) ?? []
+      if (!itens.length) return '-'
+      const head = itens.slice(0, 2).map((n) => n.slice(0, 22)).join(', ')
+      return itens.length > 2 ? `${head} +${itens.length - 2}` : head
+    }
+
     const loc = (loja: number, c: number | null) => (c != null ? locais.get(`${loja}-${c}`) ?? `Local ${c}` : '-')
     lista = {
-      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, { label: 'Origem → Destino' }, ...(lojaTag ? [lojaTag] : [])],
+      colunas: [{ label: 'Hora' }, { label: 'Pessoa' }, { label: 'Origem → Destino' }, { label: 'Produtos' }, ...(lojaTag ? [lojaTag] : [])],
       total: contagem.transferencias,
       linhas: rows.map((t) => {
         const si = statusInfo(t.status)
         return {
           celulas: [horaBahia(t.created_at), t.user_id ? users.get(t.user_id) ?? 'Sistema' : 'Sistema',
             `${loc(t.loja_id, t.codigo_local_origem)} → ${loc(t.loja_id, t.codigo_local_destino)}`,
+            resumoProdutos(t.id),
             ...(lojas ? [lojas.get(t.loja_id) ?? '-'] : [])],
           status: { label: si.label, tom: tomDoToken(si.token) },
         }
