@@ -74,10 +74,10 @@ export function AcoesInventario({
           onClick={reprocessar}
           disabled={pending}
           className={btnLinhaClass('outline')}
-          aria-label="Reprocessar"
-          title="Reprocessar itens com erro"
+          aria-label="Reenviar erros"
+          title="Tentar reenviar itens com erro ao Omie"
         >
-          <RefreshCw className="size-4" /> <RotuloAcao>Reprocessar</RotuloAcao>
+          <RefreshCw className="size-4" /> <RotuloAcao>Reenviar erros</RotuloAcao>
         </button>
       )}
       {podeExcluir && (

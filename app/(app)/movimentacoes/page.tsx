@@ -1,5 +1,4 @@
-import Link from 'next/link'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -65,11 +64,6 @@ export default async function MovimentacoesPage({
     modo?: string
     mov?: string
     page?: string
-    // filtros do modo operacao
-    origem?: string
-    local?: string
-    tipo_sped?: string
-    sentido?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -77,9 +71,8 @@ export default async function MovimentacoesPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
-  const porOperacao = sp.modo === 'operacao'
   // Padrao: por mes. So vai para "por data" quando modo=data esta explicitamente na URL.
-  const porMes = !porOperacao && sp.modo !== 'data'
+  const porMes = sp.modo !== 'data'
   // Filtro de movimento: '' (tudo), 'entrada' (so quem teve entrada), 'saida' (so quem teve saida)
   const filtroMov = sp.mov === 'entrada' ? 'entrada' : sp.mov === 'saida' ? 'saida' : ''
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
@@ -87,191 +80,6 @@ export default async function MovimentacoesPage({
   const fim = sp.data_final || hojeISO
 
   const supabase = await createClient()
-
-  // --- Modo: Por Operação (usa movimentacao_operacao — tem local, origem, tipo_sped) ---
-  if (porOperacao) {
-    type LinhaOper = {
-      origem: string; sentido: 'E' | 'S'; local: string; tipo_sped: string
-      familia: string; mes: string; inventario: boolean; qtde: number; valor: number
-    }
-    const svcOp = createServiceClient()
-    async function lerTodasOper(): Promise<LinhaOper[]> {
-      const PAGE = 1000; const todos: LinhaOper[] = []
-      for (let p = 0; ; p++) {
-        const { data, error } = await svcOp
-          .from('movimentacao_operacao')
-          .select('origem, sentido, local, tipo_sped, familia, mes, inventario, qtde, valor')
-          .eq('loja_id', lojaId)
-          .order('mes', { ascending: false })
-          .order('valor', { ascending: false })
-          .range(p * PAGE, p * PAGE + PAGE - 1)
-        if (error || !data?.length) break
-        todos.push(...(data as LinhaOper[]))
-        if (data.length < PAGE) break
-      }
-      return todos
-    }
-    const todosOper = await lerTodasOper()
-
-    const origensOper = [...new Set(todosOper.map((r) => r.origem))].sort()
-    const locaisOper = [...new Set(todosOper.map((r) => r.local))].sort()
-    const tiposSpedOper = [...new Set(todosOper.map((r) => r.tipo_sped))].sort()
-    const familiasOper = [...new Set(todosOper.map((r) => r.familia).filter(Boolean))].sort()
-
-    const mesIni = ini.slice(0, 7)
-    const mesFim = fim.slice(0, 7)
-    const linhasOper = todosOper.filter((r) =>
-      r.mes >= mesIni && r.mes <= mesFim &&
-      (!sp.origem || r.origem === sp.origem) &&
-      (!sp.local || r.local === sp.local) &&
-      (!sp.tipo_sped || r.tipo_sped === sp.tipo_sped) &&
-      (!sp.sentido || r.sentido === sp.sentido) &&
-      (!sp.familia || r.familia === sp.familia)
-    )
-
-    const totalEntOper = linhasOper.filter((r) => r.sentido === 'E').reduce((s, r) => s + Number(r.qtde), 0)
-    const totalSaiOper = linhasOper.filter((r) => r.sentido === 'S').reduce((s, r) => s + Number(r.qtde), 0)
-
-    const camposOper: CampoFiltro[] = [
-      { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
-      { tipo: 'data', nome: 'data_final', label: 'Data final' },
-      { tipo: 'select', nome: 'origem', label: 'Operação', opcoes: origensOper.map((o) => ({ value: o, label: o })) },
-      { tipo: 'select', nome: 'local', label: 'Local de estoque', opcoes: locaisOper.map((l) => ({ value: l, label: l })) },
-      { tipo: 'select', nome: 'tipo_sped', label: 'Tipo SPED', opcoes: tiposSpedOper.map((t) => ({ value: t, label: t })) },
-      { tipo: 'select', nome: 'sentido', label: 'Sentido', opcoes: [{ value: 'E', label: 'Entrada' }, { value: 'S', label: 'Saída' }] },
-      { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOper.map((f) => ({ value: f, label: f })) },
-    ]
-
-    const OPER_POR_PAG = 100
-    const temProximaOper = linhasOper.length > page * OPER_POR_PAG
-    const paginaOper = linhasOper.slice((page - 1) * OPER_POR_PAG, page * OPER_POR_PAG)
-
-    const fmtQtdOper = (n: number) =>
-      n > 0 ? <span className="num font-medium">{formatQtdResumo(n)}</span> : <span className="text-text-muted">-</span>
-
-    return (
-      <div className="space-y-4">
-        <ListaHeader>
-          <PageHeader
-            title="Movimentações"
-            icon={ArrowLeftRight}
-            description="Por operação — local, origem, tipo SPED (importado do MOV_DRV)"
-            actions={
-              <FiltrosGaveta
-                basePath="/movimentacoes"
-                campos={camposOper}
-                defaults={{
-                  data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '',
-                  origem: sp.origem ?? '', local: sp.local ?? '',
-                  tipo_sped: sp.tipo_sped ?? '', sentido: sp.sentido ?? '',
-                  familia: sp.familia ?? '',
-                }}
-                naoContar={['data_inicio', 'data_final']}
-                persistirEm="/movimentacoes"
-              />
-            }
-          />
-          <ChipsFiltrosAtivos basePath="/movimentacoes" campos={camposOper} naoMostrar={['data_inicio', 'data_final']} persistirEm="/movimentacoes" />
-        </ListaHeader>
-
-        <SegmentLinks
-          basePath="/movimentacoes"
-          param="modo"
-          aria-label="Agrupar por"
-          opcoes={[
-            { value: '', label: 'Por mês' },
-            { value: 'data', label: 'Por data' },
-            { value: 'operacao', label: 'Por operação' },
-          ]}
-        />
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Entradas <span className="num font-semibold text-ok">{formatQtdResumo(totalEntOper)}</span>
-          </span>
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Saídas <span className="num font-semibold text-err">{formatQtdResumo(totalSaiOper)}</span>
-          </span>
-          {linhasOper.length > 0 && (
-            <span className="text-[12px] text-text-muted">{linhasOper.length} linhas</span>
-          )}
-        </div>
-
-        {!todosOper.length ? (
-          <EmptyState
-            icon={ArrowLeftRight}
-            title="Sem dados de operação importados"
-            hint='A operação, local e tipo só vêm do arquivo MOV_DRV importado via script. Fale com o Joaquim para atualizar.'
-          />
-        ) : (
-          <>
-            <Lista
-              linhas={paginaOper}
-              chaveLinha={(r) => `${r.mes}|${r.origem}|${r.sentido}|${r.local}|${r.tipo_sped}|${r.familia}`}
-              colunas={[
-                {
-                  label: 'Mês',
-                  larguraDesktop: 'w-20',
-                  render: (r) => <span className="num text-text-muted">{fmtMes(r.mes)}</span>,
-                },
-                {
-                  label: 'Operação',
-                  primaria: true,
-                  flexivel: true,
-                  render: (r) => (
-                    <span>
-                      {r.origem}
-                      {r.inventario && (
-                        <span className="ml-1.5 rounded bg-warn/20 px-1 py-0.5 text-[10px] font-semibold text-warn">
-                          inventário
-                        </span>
-                      )}
-                    </span>
-                  ),
-                },
-                {
-                  label: 'Sentido',
-                  larguraDesktop: 'w-20',
-                  render: (r) => (
-                    <span className={r.sentido === 'E' ? 'font-medium text-ok' : 'font-medium text-err'}>
-                      {r.sentido === 'E' ? 'Entrada' : 'Saída'}
-                    </span>
-                  ),
-                },
-                {
-                  label: 'Local',
-                  larguraDesktop: 'w-44',
-                  render: (r) => <span className="text-text-muted">{r.local || '-'}</span>,
-                },
-                {
-                  label: 'Tipo SPED',
-                  larguraDesktop: 'w-52',
-                  render: (r) => <span className="text-text-muted">{r.tipo_sped || '-'}</span>,
-                },
-                {
-                  label: 'Qtde',
-                  alinhar: 'right',
-                  larguraDesktop: 'w-28',
-                  render: (r) => fmtQtdOper(Number(r.qtde)),
-                },
-              ]}
-              vazio={
-                <EmptyState
-                  icon={ArrowLeftRight}
-                  title="Nenhuma movimentação no recorte"
-                  hint="Ajuste os filtros ou o período."
-                />
-              }
-            />
-            {(page > 1 || temProximaOper) && (
-              <Paginacao basePath="/movimentacoes" page={page} temProxima={temProximaOper} />
-            )}
-          </>
-        )}
-      </div>
-    )
-  }
 
   // Tipo/familia nao existem em movimentos_historico -> resolve os codigos dos
   // produtos que batem e restringe os movimentos a eles.
@@ -449,27 +257,6 @@ export default async function MovimentacoesPage({
     }
   }
 
-  // Tipos de operação (compra, perda, produção, ajuste) — o histórico do Omie não
-  // traz o tipo de cada movimento; ele só vem do detalhamento MOV_DRV importado
-  // (por ora, só nas lojas com import). Mostramos um resumo por tipo quando existir.
-  // movimentacao_operacao tem RLS; lê via service client filtrando pela loja atual.
-  const { data: opsRaw } = await createServiceClient()
-    .from('movimentacao_operacao')
-    .select('origem, sentido, inventario, valor')
-    .eq('loja_id', lojaId)
-    .gte('mes', ini.slice(0, 7))
-    .lte('mes', fim.slice(0, 7))
-    .limit(5000)
-  const ops = (opsRaw ?? []) as { origem: string; sentido: string; inventario: boolean; valor: number }[]
-  const temOps = ops.length > 0
-  const somaOp = (fn: (r: (typeof ops)[number]) => boolean) => ops.filter(fn).reduce((s, r) => s + Number(r.valor ?? 0), 0)
-  const opTipos = temOps ? [
-    { label: 'Compras', valor: somaOp((r) => /compra/i.test(r.origem) && r.sentido === 'E'), cor: 'var(--info)' },
-    { label: 'Perdas', valor: somaOp((r) => /manual/i.test(r.origem) && r.sentido === 'S' && !r.inventario), cor: 'var(--err)' },
-    { label: 'Ajuste de inventário', valor: somaOp((r) => /manual/i.test(r.origem) && r.sentido === 'S' && r.inventario), cor: 'var(--warn)' },
-    { label: 'Consumo de produção', valor: somaOp((r) => /consumo da ordem/i.test(r.origem) && r.sentido === 'S'), cor: 'var(--text-muted)' },
-  ].filter((t) => t.valor > 0) : []
-
   const familias = await buscarFamilias()
 
   const campos: CampoFiltro[] = [
@@ -529,7 +316,6 @@ export default async function MovimentacoesPage({
           opcoes={[
             { value: '', label: 'Por mês' },
             { value: 'data', label: 'Por data' },
-            { value: 'operacao', label: 'Por operação' },
           ]}
         />
         <SegmentLinks
@@ -566,28 +352,6 @@ export default async function MovimentacoesPage({
           )}
         </span>
       </div>
-
-      {/* Por tipo de operação (quando há detalhamento importado) */}
-      {temOps && opTipos.length > 0 && (
-        <div className="rounded-lg border border-border bg-surface p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[12px] font-semibold text-text">Por tipo de operação no período</span>
-            <Link href="/relatorio-movimentacao?modo=operacao" className="text-[12px] text-brand hover:underline">
-              Ver detalhe →
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {opTipos.map((t) => (
-              <div key={t.label} className="rounded-lg border border-border bg-surface-2/40 px-3 py-2">
-                <div className="text-[11px] text-text-muted">{t.label}</div>
-                <div className="num mt-0.5 text-[15px] font-semibold text-text" style={{ color: t.cor }}>
-                  <Money value={t.valor} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Avisos de valor so aparecem quando os valores estao visiveis (MOSTRAR_VALORES) */}
       {MOSTRAR_VALORES && temCmcAbsurdo && (
