@@ -9,7 +9,11 @@ import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 
-export async function createInventario(codigoLocalEstoque: number, dataEscolhida?: string) {
+export async function createInventario(
+  codigoLocalEstoque: number,
+  dataEscolhida?: string,
+  filtros?: { tipos?: string[]; familias?: string[] }
+) {
   const hojeBahia = hojeBahiaISO()
   if (dataEscolhida && dataEscolhida > hojeBahia) {
     return { error: 'A data não pode ser futura' }
@@ -20,8 +24,6 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
   }
   const userId = (await getUser()).id
   const supabase = createServiceClient()
-  // Inventario costuma ser considerado D-1; grava data ancorada ao meio-dia
-  // Bahia (a escolhida, ou hoje se vazia) em vez de cair no now() do banco.
   const dataInventario = dataCriacaoBahia(dataEscolhida) ?? dataCriacaoBahia(hojeBahia)!
   const { data: inv, error } = await supabase
     .from('inventarios')
@@ -36,6 +38,34 @@ export async function createInventario(codigoLocalEstoque: number, dataEscolhida
     .single()
   if (error || !inv) return { error: 'Falha ao criar inventário' }
   await registrarAuditoria('criar', 'inventário', inv.id, null)
+
+  // Auto-popular com produtos se filtros informados
+  const temFiltro = filtros && ((filtros.tipos?.length ?? 0) > 0 || (filtros.familias?.length ?? 0) > 0)
+  if (temFiltro) {
+    let pq = supabase
+      .from('produtos')
+      .select('codigo_produto, codigo, descricao, descricao_familia')
+      .eq('loja_id', lojaId)
+      .neq('inativo', 'S')
+    if (filtros!.tipos?.length) pq = pq.in('tipo_item', filtros!.tipos)
+    if (filtros!.familias?.length) pq = pq.in('descricao_familia', filtros!.familias)
+    const { data: prods } = await pq
+    if (prods?.length) {
+      await supabase.from('inventario_items').insert(
+        prods.map((p) => ({
+          loja_id: lojaId,
+          inventario_id: inv.id,
+          produto_codigo_produto: p.codigo_produto,
+          produto_codigo: p.codigo,
+          produto_descricao: p.descricao,
+          produto_familia: p.descricao_familia,
+          quan: null,
+          status: 'Iniciado',
+        }))
+      )
+    }
+  }
+
   revalidatePath('/inventario')
   return inv
 }

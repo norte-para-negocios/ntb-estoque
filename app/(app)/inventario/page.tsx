@@ -179,7 +179,7 @@ export default async function InventarioPage({
               >
                 <Download className="size-4" /> Excel
               </a>
-              {podeCriar ? <NovoInventario locais={locais ?? []} /> : null}
+              {podeCriar ? <NovoInventario locais={locais ?? []} familias={familias} /> : null}
             </>
           }
         />
