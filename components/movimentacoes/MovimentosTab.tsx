@@ -85,7 +85,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(300),
         supabase
           .from('nota_fiscal_items')
-          .select('n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe)')
+          .select('n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao)')
           .eq('loja_id', lojaId)
           .in('n_id_produto', idsProdDetalhes)
           .limit(500),
@@ -99,7 +99,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
       type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
-      type RawNFI = { n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null }[] }
+      type RawNFI = { n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null }[] }
       type RawInv = { produto_codigo_produto: number; quan: number | null; inventarios: { id: number; data: string }[] }
 
       const movLines: LinhaDetalhe[] = ((movs ?? []) as RawMov[]).map((m) => ({
@@ -133,13 +133,13 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         .map((nfi, idx) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
           return {
-            chave: `ent-${nfi.n_id_produto}-${nf?.d_emissao_nfe?.slice(0, 10)}-${idx}`,
+            chave: `sai-${nfi.n_id_produto}-${nf?.d_emissao_nfe?.slice(0, 10)}-${idx}`,
             data: nf?.d_emissao_nfe ?? ini,
-            tipo: 'ENT',
+            tipo: 'SAI',
             quan: Number(nfi.n_qtde_nfe) || 0,
             local: null,
             destino: null,
-            obs: nf?.c_numero_nfe ? `NF ${nf.c_numero_nfe}` : 'Entrada (NF)',
+            obs: [nf?.c_numero_nfe ? `NF ${nf.c_numero_nfe}` : null, nf?.c_natureza_operacao ?? null].filter(Boolean).join(' — ') || 'Saída (NF)',
             status: 'Concluido',
           }
         })
