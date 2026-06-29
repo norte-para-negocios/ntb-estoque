@@ -4,7 +4,7 @@
 // Estratégia: varrer das últimas páginas para as primeiras.
 //   - Backfill (padrão): para quando todos os registros da página são mais antigos que cutoff.
 //   - Incremental (--incremental): para quando todos os ids são <= max_id já salvo.
-//   - Ambos salvam só o que passa no filtro.
+//   - Checkpoint: salva em .ajustes-checkpoint-<loja>.json e retoma de onde parou.
 //
 // SEGURANÇA: aborta ao atingir 480 MB para não estourar free tier Supabase (500 MB).
 // PROTEÇÃO: nunca toca na loja 4 (O SERTAO VAI VIRAR MAR - produção).
@@ -14,6 +14,7 @@
 //   node scripts/sync-ajustes-omie.mjs 3             → só loja 3
 //   node scripts/sync-ajustes-omie.mjs 3 --full      → histórico completo (sem cutoff de data)
 //   node scripts/sync-ajustes-omie.mjs 3 --incremental → só ids novos (> max salvo)
+//   node scripts/sync-ajustes-omie.mjs 3 --reset     → apaga checkpoint e reinicia do fim
 //
 import fs from 'node:fs'
 import pg from 'pg'
@@ -37,7 +38,25 @@ await db.connect()
 const LOJA_ARG = Number(process.argv[2]) || 0
 const FULL_HISTORY = process.argv.includes('--full')
 const INCREMENTAL = process.argv.includes('--incremental')
+const RESET_CHECKPOINT = process.argv.includes('--reset')
 const LIMITE_MB = 480
+
+// Checkpoint: persiste em qual página cada loja parou para retomar sem repetir
+function checkpointPath(lojaId) {
+  return `${PROJ}/scripts/.ajustes-checkpoint-${lojaId}.json`
+}
+function lerCheckpoint(lojaId) {
+  try {
+    const c = JSON.parse(fs.readFileSync(checkpointPath(lojaId), 'utf8'))
+    return c.pagina ?? null
+  } catch { return null }
+}
+function salvarCheckpoint(lojaId, pagina) {
+  fs.writeFileSync(checkpointPath(lojaId), JSON.stringify({ pagina, updated: new Date().toISOString() }))
+}
+function apagarCheckpoint(lojaId) {
+  try { fs.unlinkSync(checkpointPath(lojaId)) } catch {}
+}
 
 const hoje = new Date()
 const cutoffDate = FULL_HISTORY
@@ -175,6 +194,8 @@ for (const loja of lojas) {
   }
   console.log(`  Banco: ${mbAtual.toFixed(1)} MB`)
 
+  if (RESET_CHECKPOINT) apagarCheckpoint(loja.id)
+
   let resp1
   try { resp1 = await omieListar(loja.k, loja.s, 1) } catch (e) {
     console.error(`  Erro página 1: ${e.message}`); continue
@@ -197,8 +218,15 @@ for (const loja of lojas) {
   let totalLoja = 0
   let paginasProcessadas = 0
 
+  // Checkpoint: retoma da página onde parou (evita repetir e acionar REDUNDANT do Omie)
+  const checkpointPagina = INCREMENTAL ? null : lerCheckpoint(loja.id)
+  const paginaInicio = checkpointPagina ?? totalPaginas
+  if (checkpointPagina) {
+    console.log(`  Retomando do checkpoint: página ${checkpointPagina.toLocaleString('pt-BR')}`)
+  }
+
   // Varre da última página para a primeira (sort ASC → última tem registros mais recentes)
-  for (let pagina = totalPaginas; pagina >= 1; pagina--) {
+  for (let pagina = paginaInicio; pagina >= 1; pagina--) {
     // Verifica banco a cada 500 páginas processadas
     if (paginasProcessadas > 0 && paginasProcessadas % 500 === 0) {
       const mb = await tamanhoDbMB()
@@ -209,6 +237,7 @@ for (const loja of lojas) {
       }
     }
 
+    // resp1 foi buscado para pagina=1 — reutiliza só na iteração final do loop
     const resp = pagina === 1 ? resp1 : await omieListar(loja.k, loja.s, pagina)
     const ajustes = resp.ajuste_estoque_lista ?? []
 
@@ -249,8 +278,16 @@ for (const loja of lojas) {
       process.stdout.write(`\r  Pág ${pagina.toLocaleString('pt-BR')} (${pct}% varrido) — ${totalLoja.toLocaleString('pt-BR')} salvos`)
     }
 
+    // Salva checkpoint a cada 10 páginas (retoma sem repetir se interrompido)
+    if (!INCREMENTAL && paginasProcessadas % 10 === 0) {
+      salvarCheckpoint(loja.id, pagina)
+    }
+
     await sleep(80)
   }
+
+  // Limpeza do checkpoint ao concluir normalmente
+  if (!INCREMENTAL && !abortado) apagarCheckpoint(loja.id)
 
   console.log(`\n  ✓ Loja ${loja.id}: ${totalLoja.toLocaleString('pt-BR')} registros importados`)
   totalGeral += totalLoja
