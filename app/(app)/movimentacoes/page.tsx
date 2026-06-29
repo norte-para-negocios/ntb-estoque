@@ -18,6 +18,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ArrowLeftRight, AlertTriangle } from 'lucide-react'
+import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 
 const POR_PAGINA = 100
 // Teto de linhas lidas para os totais e para o agrupamento por mes (em memoria).
@@ -71,8 +72,9 @@ export default async function MovimentacoesPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
-  // Padrao: por mes. So vai para "por data" quando modo=data esta explicitamente na URL.
-  const porMes = sp.modo !== 'data'
+  // Padrao: por mes. Quando ha produto selecionado, vai para "por data" automaticamente
+  // para mostrar o historico granular daquele produto.
+  const porMes = sp.modo !== 'data' && !sp.produto
   // Filtro de movimento: '' (tudo), 'entrada' (so quem teve entrada), 'saida' (so quem teve saida)
   const filtroMov = sp.mov === 'entrada' ? 'entrada' : sp.mov === 'saida' ? 'saida' : ''
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
@@ -306,6 +308,9 @@ export default async function MovimentacoesPage({
         />
         <ChipsFiltrosAtivos basePath="/movimentacoes" campos={campos} naoMostrar={['data_inicio', 'data_final']} persistirEm="/movimentacoes" />
       </ListaHeader>
+
+      {/* Busca por produto: visivel no topo para historico granular por produto/data */}
+      <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
 
       {/* Controles: agrupamento (mes/data) e movimento (tudo/entradas/saidas) */}
       <div className="flex flex-wrap items-center gap-2.5">

@@ -446,7 +446,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           type="button"
           onClick={ctrl.reverter}
           disabled={ctrl.pending}
-          className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-warn`}
+          className={`${acaoDesktopClass} text-warn hover:bg-warn/10`}
           title="Reverter a conclusão (estorna no Omie)"
         >
           <Undo2 className="size-3.5" />
@@ -457,7 +457,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           type="button"
           onClick={ctrl.excluir}
           disabled={ctrl.pending}
-          className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-err`}
+          className={`${acaoDesktopClass} text-err hover:bg-err/10`}
           title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : 'Excluir a OP no Omie'}
         >
           <Trash2 className="size-3.5" />
@@ -483,8 +483,10 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
           <StatusBadge status={op.status} />
         </td>
         <td className="max-w-xs align-middle">
-          <div className="truncate font-medium text-text">{op.produto}</div>
-          <div className="text-[11px] text-text-muted">{op.unidade}</div>
+          <div className="truncate font-medium text-text">
+            {op.produto}
+            <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
+          </div>
         </td>
         <td className="text-right align-middle">
           <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
@@ -599,7 +601,7 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
               type="button"
               onClick={ctrl.reverter}
               disabled={ctrl.pending}
-              className={`${acaoIconeClass} hover:text-warn`}
+              className={`${acaoIconeClass} text-warn`}
               aria-label="Reverter"
               title="Reverter conclusão"
             >
@@ -611,7 +613,7 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
               type="button"
               onClick={ctrl.excluir}
               disabled={ctrl.pending}
-              className={`${acaoIconeClass} hover:text-err`}
+              className={`${acaoIconeClass} text-err`}
               aria-label="Excluir"
               title="Excluir"
             >
