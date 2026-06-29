@@ -261,6 +261,45 @@ export default async function MovimentacoesPage({
 
   const familias = await buscarFamilias()
 
+  // Detalhamento granular por tipo (tabela movimentos) — exibido quando produto esta filtrado.
+  // A movimentos_historico e agregada (sem tipo); a movimentos tem ENT/SAI/SLD/TRF/TPQ.
+  type LinhaDetalhe = {
+    id: number
+    data: string
+    tipo: string
+    quan: number | null
+    codigo_local_estoque: number
+    codigo_local_estoque_destino: number | null
+    obs: string | null
+    status: string | null
+  }
+  let movDetalhes: LinhaDetalhe[] = []
+  let idsProdDetalhes: number[] = []
+
+  if (termo) {
+    const { data: prodsMatch } = await supabase
+      .from('produtos')
+      .select('codigo_produto')
+      .eq('loja_id', lojaId)
+      .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+      .limit(100)
+    idsProdDetalhes = [...new Set((prodsMatch ?? []).map((p) => Number(p.codigo_produto)).filter(Boolean))]
+    if (idsProdDetalhes.length) {
+      // fim + 1 dia em UTC para cobrir o dia inteiro no fuso de Brasilia
+      const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
+      const { data: det } = await supabase
+        .from('movimentos')
+        .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status')
+        .eq('loja_id', lojaId)
+        .in('id_prod', idsProdDetalhes)
+        .gte('data', ini)
+        .lt('data', fimExcl)
+        .order('data', { ascending: false })
+        .limit(500)
+      movDetalhes = (det ?? []) as LinhaDetalhe[]
+    }
+  }
+
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
@@ -452,6 +491,112 @@ export default async function MovimentacoesPage({
       />
 
       {(page > 1 || temProxima) && <Paginacao basePath="/movimentacoes" page={page} temProxima={temProxima} />}
+
+      {/* Tabela de tipo de movimentacao: so aparece quando produto esta filtrado */}
+      {sp.produto && (
+        <div className="space-y-3 border-t border-border pt-6">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[13px] font-medium text-text">Tipo de movimentação</h3>
+            {movDetalhes.length > 0 && (
+              <span className="num rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
+                {movDetalhes.length}
+              </span>
+            )}
+          </div>
+          <Lista
+            linhas={movDetalhes}
+            chaveLinha={(m) => String(m.id)}
+            colunas={[
+              {
+                label: 'Data',
+                larguraDesktop: 'w-36',
+                render: (m) => {
+                  const dt = new Date(m.data)
+                  return (
+                    <span className="num text-[12px] text-text-muted">
+                      {dt.toLocaleString('pt-BR', {
+                        timeZone: 'America/Bahia',
+                        day: '2-digit', month: '2-digit', year: '2-digit',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                  )
+                },
+              },
+              {
+                label: 'Tipo',
+                primaria: true,
+                larguraDesktop: 'w-40',
+                render: (m) => {
+                  const TIPOS: Record<string, { label: string; cor: string }> = {
+                    ENT: { label: 'Entrada', cor: 'text-ok' },
+                    SAI: { label: 'Saída', cor: 'text-err' },
+                    SLD: { label: 'Inventário', cor: 'text-text' },
+                    TRF: { label: 'Transferência', cor: 'text-warn' },
+                    TPQ: { label: 'Perda / Quebra', cor: 'text-text-muted' },
+                  }
+                  const t = TIPOS[m.tipo] ?? { label: m.tipo, cor: 'text-text-muted' }
+                  return (
+                    <span>
+                      <span className={`font-medium text-[13px] ${t.cor}`}>{t.label}</span>
+                      {m.obs && (
+                        <span className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-text-muted">
+                          {m.obs}
+                        </span>
+                      )}
+                    </span>
+                  )
+                },
+              },
+              {
+                label: 'Quantidade',
+                alinhar: 'right',
+                larguraDesktop: 'w-28',
+                render: (m) => {
+                  const q = Number(m.quan) || 0
+                  const negativo = m.tipo === 'SAI' || m.tipo === 'TPQ'
+                  const cor = negativo ? 'text-err' : m.tipo === 'ENT' ? 'text-ok' : 'text-text'
+                  const sinal = negativo ? '-' : m.tipo === 'ENT' ? '+' : ''
+                  return (
+                    <span className={`num font-medium ${cor}`}>
+                      {sinal}{q.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+                    </span>
+                  )
+                },
+              },
+              {
+                label: 'Local / Destino',
+                larguraDesktop: 'w-28',
+                render: (m) => (
+                  <span className="num text-[12px] text-text-muted">
+                    {m.codigo_local_estoque}
+                    {m.codigo_local_estoque_destino != null && ` → ${m.codigo_local_estoque_destino}`}
+                  </span>
+                ),
+              },
+              {
+                label: 'Status',
+                larguraDesktop: 'w-28',
+                render: (m) => {
+                  const cor = m.status === 'Erro' ? 'text-err' : m.status === 'Concluido' ? 'text-ok' : 'text-text-muted'
+                  return <span className={`text-[11px] ${cor}`}>{m.status ?? '-'}</span>
+                },
+              },
+            ]}
+            vazio={
+              <EmptyState
+                icon={ArrowLeftRight}
+                title="Sem registros granulares"
+                hint={
+                  idsProdDetalhes.length === 0
+                    ? 'Produto não encontrado no cadastro.'
+                    : 'Não há movimentações individuais registradas neste período para este produto.'
+                }
+              />
+            }
+          />
+        </div>
+      )}
     </div>
   )
 }
