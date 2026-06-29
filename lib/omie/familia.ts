@@ -14,6 +14,63 @@ interface OmieFamiliasResp {
   total_de_paginas?: number
   famCadastro?: OmieFamilia[]
 }
+interface OmieFamiliaWriteResp {
+  codigo?: number
+  codigo_status?: string
+  descricao_status?: string
+}
+
+/** Cria uma familia no Omie (IncluirFamilia). Retorna o codigo gerado. */
+export async function incluirFamilia(
+  loja: LojaOmie,
+  dados: { nomeFamilia: string; codInt?: string }
+): Promise<{ codigo: number }> {
+  const res = await omieRequest<OmieFamiliaWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/familias',
+    call: 'IncluirFamilia',
+    data: {
+      nomeFamilia: dados.nomeFamilia,
+      ...(dados.codInt ? { codInt: dados.codInt } : {}),
+    },
+  })
+  if (!res?.codigo) throw new Error('Omie nao retornou codigo da familia criada')
+  return { codigo: res.codigo }
+}
+
+/** Altera uma familia no Omie (AlterarFamilia). */
+export async function alterarFamilia(
+  loja: LojaOmie,
+  dados: { codigo: number; nomeFamilia: string; codInt?: string; inativo?: boolean }
+) {
+  return omieRequest<OmieFamiliaWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/familias',
+    call: 'AlterarFamilia',
+    data: {
+      codigo: dados.codigo,
+      nomeFamilia: dados.nomeFamilia,
+      ...(dados.codInt ? { codInt: dados.codInt } : {}),
+      ...(dados.inativo != null ? { inativo: dados.inativo ? 'S' : 'N' } : {}),
+    },
+  })
+}
+
+/** Exclui uma familia no Omie (ExcluirFamilia). Pode falhar se houver produtos vinculados. */
+export async function excluirFamiliaOmie(loja: LojaOmie, codigo: number) {
+  return omieRequest<OmieFamiliaWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/familias',
+    call: 'ExcluirFamilia',
+    data: { codigo },
+  })
+}
 
 /**
  * Puxa as familias do Omie (PesquisarFamilias, SO LEITURA) e grava no banco.

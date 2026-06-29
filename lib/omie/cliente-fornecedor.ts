@@ -139,6 +139,95 @@ export function syncClientes(loja: LojaOmie) {
   return syncPorTag(loja, 'Cliente', 'clientes', 'cliente_status', 'cliente_ultima_atualizacao')
 }
 
+interface OmieClienteWriteResp {
+  codigo_cliente_omie?: number
+  codigo_status?: string
+  descricao_status?: string
+}
+
+type ParceiroPayload = {
+  razao_social: string
+  nome_fantasia?: string | null
+  cnpj_cpf?: string | null
+  pessoa_fisica?: boolean
+  inscricao_estadual?: string | null
+  email?: string | null
+  telefone?: string | null
+  cep?: string | null
+  uf?: string | null
+  cidade?: string | null
+  bairro?: string | null
+  logradouro?: string | null
+  numero?: string | null
+  inativo?: boolean
+}
+
+function buildClientePayload(dados: ParceiroPayload, tags: string[]) {
+  // Separa "(XX) NNNNN" em ddd + numero para o Omie
+  let ddd = ''
+  let numero = ''
+  if (dados.telefone) {
+    const m = dados.telefone.match(/^\((\d+)\)\s*(.+)$/)
+    if (m) { ddd = m[1]; numero = m[2] } else { numero = dados.telefone }
+  }
+  return {
+    razao_social: dados.razao_social,
+    ...(dados.nome_fantasia ? { nome_fantasia: dados.nome_fantasia } : {}),
+    ...(dados.cnpj_cpf ? { cnpj_cpf: dados.cnpj_cpf } : {}),
+    pessoa_fisica: dados.pessoa_fisica ? 'S' : 'N',
+    ...(dados.inscricao_estadual ? { inscricao_estadual: dados.inscricao_estadual } : {}),
+    ...(dados.email ? { email: dados.email } : {}),
+    ...(ddd ? { telefone1_ddd: ddd } : {}),
+    ...(numero ? { telefone1_numero: numero } : {}),
+    ...(dados.cep ? { cep: dados.cep } : {}),
+    ...(dados.uf ? { estado: dados.uf } : {}),
+    ...(dados.cidade ? { cidade: dados.cidade } : {}),
+    ...(dados.bairro ? { bairro: dados.bairro } : {}),
+    ...(dados.logradouro ? { endereco: dados.logradouro } : {}),
+    ...(dados.numero ? { endereco_numero: dados.numero } : {}),
+    ...(dados.inativo != null ? { inativo: dados.inativo ? 'S' : 'N' } : {}),
+    tags: tags.map((tag) => ({ tag })),
+  }
+}
+
+/** Cria um fornecedor no Omie (IncluirCliente com tag Fornecedor). Retorna codigo_cliente_omie. */
+export async function incluirFornecedor(loja: LojaOmie, dados: ParceiroPayload) {
+  const res = await omieRequest<OmieClienteWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/clientes',
+    call: 'IncluirCliente',
+    data: buildClientePayload(dados, ['Fornecedor']),
+  })
+  if (!res?.codigo_cliente_omie) throw new Error('Omie nao retornou codigo do fornecedor criado')
+  return { codigo: res.codigo_cliente_omie }
+}
+
+/** Altera um fornecedor no Omie (AlterarCliente). */
+export async function alterarFornecedor(loja: LojaOmie, codigoOmie: number, dados: ParceiroPayload) {
+  return omieRequest<OmieClienteWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/clientes',
+    call: 'AlterarCliente',
+    data: { codigo_cliente_omie: codigoOmie, ...buildClientePayload(dados, ['Fornecedor']) },
+  })
+}
+
+/** Exclui um fornecedor no Omie (ExcluirCliente). Pode falhar se houver vinculos. */
+export async function excluirFornecedorOmie(loja: LojaOmie, codigoOmie: number) {
+  return omieRequest<OmieClienteWriteResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/geral/clientes',
+    call: 'ExcluirCliente',
+    data: { codigo_cliente_omie: codigoOmie },
+  })
+}
+
 export type ParceiroOmie = {
   codigo_omie: number
   razao_social: string

@@ -3,7 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import { syncFornecedores } from '@/lib/omie/cliente-fornecedor'
+import { syncFornecedores, incluirFornecedor, alterarFornecedor, excluirFornecedorOmie } from '@/lib/omie/cliente-fornecedor'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 
@@ -43,24 +43,44 @@ function normalizar(d: ParceiroInput) {
   }
 }
 
+async function getLoja(lojaId: number) {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret')
+    .eq('id', lojaId)
+    .single<LojaOmie>()
+  return data
+}
+
 /**
- * Cria fornecedor LOCAL no banco (fonte da verdade). NAO escreve no Omie.
- * A escrita no Omie (Incluir/Alterar cliente) fica para validar com o Ramon.
+ * Cria um fornecedor no Omie (IncluirCliente com tag Fornecedor) e grava no banco.
+ * Se o Omie falhar, retorna erro e nao salva localmente para manter sincronia.
  */
 export async function criarFornecedor(dados: ParceiroInput) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Criar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
 
-  const supabase = createServiceClient()
-  const { error } = await supabase
-    .from('fornecedores')
-    .insert({ loja_id: lojaId, origem: 'local', ...normalizar(dados) })
-  if (error) return { error: error.message }
+  const loja = await getLoja(lojaId)
+  if (!loja?.omie_app_key) return { error: 'Loja sem chave do Omie' }
 
-  await registrarAuditoria('criar', 'fornecedor', null, dados.razao_social.trim())
-  revalidatePath('/fornecedor')
-  return { ok: true }
+  const norm = normalizar(dados)
+  try {
+    const res = await incluirFornecedor(loja, norm)
+
+    const supabase = createServiceClient()
+    const { error } = await supabase
+      .from('fornecedores')
+      .insert({ loja_id: lojaId, codigo_omie: res.codigo, origem: 'omie', ...norm })
+    if (error) return { error: error.message }
+
+    await registrarAuditoria('criar', 'fornecedor', res.codigo, dados.razao_social.trim())
+    revalidatePath('/fornecedor')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao criar o fornecedor no Omie' }
+  }
 }
 
 export async function editarFornecedor(id: number, dados: ParceiroInput) {
@@ -69,16 +89,47 @@ export async function editarFornecedor(id: number, dados: ParceiroInput) {
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
 
   const supabase = createServiceClient()
+
+  const { data: atual } = await supabase
+    .from('fornecedores')
+    .select('codigo_omie, razao_social')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .single()
+  if (!atual) return { error: 'Fornecedor não encontrado' }
+
+  const norm = normalizar(dados)
   const { error } = await supabase
     .from('fornecedores')
-    .update({ ...normalizar(dados), updated_at: new Date().toISOString() })
+    .update({ ...norm, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
   await registrarAuditoria('editar', 'fornecedor', id, dados.razao_social.trim())
   revalidatePath('/fornecedor')
-  return { ok: true }
+
+  const codigoOmie = (atual.codigo_omie as number | null) ?? null
+  const loja = await getLoja(lojaId)
+  if (!loja?.omie_app_key) return { ok: true, omieError: 'Loja sem chave do Omie: alteração salva localmente.' }
+
+  try {
+    if (codigoOmie) {
+      await alterarFornecedor(loja, codigoOmie, norm)
+    } else {
+      // Fornecedor criado localmente antes desta feature: cria no Omie e salva o codigo.
+      const res = await incluirFornecedor(loja, norm)
+      await supabase
+        .from('fornecedores')
+        .update({ codigo_omie: res.codigo, origem: 'omie' })
+        .eq('id', id)
+        .eq('loja_id', lojaId)
+    }
+    return { ok: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Falha ao enviar ao Omie'
+    return { ok: true, omieError: msg }
+  }
 }
 
 export async function excluirFornecedor(id: number) {
@@ -86,25 +137,38 @@ export async function excluirFornecedor(id: number) {
   if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 
   const supabase = createServiceClient()
-  const { data: alvo } = await supabase.from('fornecedores').select('razao_social').eq('id', id).eq('loja_id', lojaId).maybeSingle()
+  const { data: alvo } = await supabase
+    .from('fornecedores')
+    .select('razao_social, codigo_omie')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
   const { error } = await supabase.from('fornecedores').delete().eq('id', id).eq('loja_id', lojaId)
   if (error) return { error: error.message }
 
   await registrarAuditoria('excluir', 'fornecedor', id, alvo?.razao_social ?? null)
   revalidatePath('/fornecedor')
-  return { ok: true }
+
+  const codigoOmie = (alvo?.codigo_omie as number | null) ?? null
+  if (!codigoOmie) return { ok: true }
+
+  const loja = await getLoja(lojaId)
+  if (!loja?.omie_app_key) return { ok: true }
+
+  try {
+    await excluirFornecedorOmie(loja, codigoOmie)
+    return { ok: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Falha ao excluir no Omie'
+    return { ok: true, omieError: msg }
+  }
 }
 
 export async function puxarFornecedoresDoOmie() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Sincronizar'))) return { error: 'Sem permissão' }
 
-  const supabase = createServiceClient()
-  const { data: loja } = await supabase
-    .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
-    .eq('id', lojaId)
-    .single<LojaOmie>()
+  const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key || !loja?.omie_app_secret) return { error: 'Loja sem chave do Omie' }
 
   try {
