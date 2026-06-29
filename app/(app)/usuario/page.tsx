@@ -217,6 +217,12 @@ export default async function UsuarioPage({
               : localUser.filter((r) => lojaIdsEscopo.includes(r.loja_id))
             const cargosPorLoja: Record<number, number | null> = {}
             for (const r of lojaUserVisivel) cargosPorLoja[r.loja_id] = r.cargo_id ?? null
+            // Verdadeiramente sem permissoes: sem individuais E sem nenhum cargo com permissoes.
+            const temPermissoesViaCargo = lojaUserVisivel.some((r) => {
+              if (!r.cargo_id) return false
+              const cargo = cargos.find((c) => c.id === r.cargo_id)
+              return (cargo?.permissaoIds?.length ?? 0) > 0
+            })
             const editavel: UsuarioEditavel = {
               id: u.id,
               name: u.name,
@@ -238,7 +244,7 @@ export default async function UsuarioPage({
                     <span>
                       <span className="num text-text">{lojaUserVisivel.length}</span> loja(s)
                     </span>
-                    {u.perfil === 'Usuario' && lojaUserVisivel.length > 0 && permVisivel.length === 0 && (
+                    {u.perfil === 'Usuario' && lojaUserVisivel.length > 0 && permVisivel.length === 0 && !temPermissoesViaCargo && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn">
                         <AlertTriangle className="size-3" />
                         sem permissões

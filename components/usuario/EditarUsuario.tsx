@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Sheet,
@@ -85,6 +85,8 @@ export function EditarUsuario({
   const [copiado, setCopiado] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  // Rastreia se alguma permissão foi alterada para atualizar o card ao fechar.
+  const permDirty = useRef(false)
 
   const idPorNome = useMemo(() => {
     const m = new Map<string, number>()
@@ -116,6 +118,7 @@ export function EditarUsuario({
         return
       }
       toast.success('Usuário atualizado')
+      permDirty.current = false
       setOpen(false)
       router.refresh()
     })
@@ -141,6 +144,8 @@ export function EditarUsuario({
           return n
         })
         toast.error('Erro ao salvar permissão', { description: res.error })
+      } else {
+        permDirty.current = true
       }
     })
   }
@@ -221,7 +226,13 @@ export function EditarUsuario({
   const lojasSelecionadas = lojas.filter((l) => lojaIds.includes(l.id))
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={(v) => {
+      setOpen(v)
+      if (!v && permDirty.current) {
+        permDirty.current = false
+        router.refresh()
+      }
+    }}>
       <SheetTrigger
         render={
           <button type="button" className={`${btnLinhaClass('outline')} shrink-0`} aria-label="Editar" title="Editar">
