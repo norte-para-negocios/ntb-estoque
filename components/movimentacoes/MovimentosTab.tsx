@@ -64,7 +64,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
     if (idsProdDetalhes.length) {
       const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
 
-      const [{ data: movs }, { data: ops }] = await Promise.all([
+      const [{ data: movs }, { data: ops }, { data: nfItems }, { data: invItems }] = await Promise.all([
         supabase
           .from('movimentos')
           .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status')
@@ -83,10 +83,24 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .lte('identificacao_d_dt_previsao', fim)
           .order('identificacao_d_dt_previsao', { ascending: false })
           .limit(300),
+        supabase
+          .from('nota_fiscal_items')
+          .select('n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe)')
+          .eq('loja_id', lojaId)
+          .in('n_id_produto', idsProdDetalhes)
+          .limit(500),
+        supabase
+          .from('inventario_items')
+          .select('produto_codigo_produto, quan, inventarios!inner(id, data)')
+          .eq('loja_id', lojaId)
+          .in('produto_codigo_produto', idsProdDetalhes)
+          .limit(200),
       ])
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
       type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
+      type RawNFI = { n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null }[] }
+      type RawInv = { produto_codigo_produto: number; quan: number | null; inventarios: { id: number; data: string }[] }
 
       const movLines: LinhaDetalhe[] = ((movs ?? []) as RawMov[]).map((m) => ({
         chave: `mov-${m.id}`,
@@ -110,6 +124,46 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         status: op.concluida ? 'Concluido' : 'Iniciado',
       }))
 
+      const entLines: LinhaDetalhe[] = ((nfItems ?? []) as unknown as RawNFI[])
+        .filter((nfi) => {
+          const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
+          const d = nf?.d_emissao_nfe?.slice(0, 10)
+          return d && d >= ini && d <= fim
+        })
+        .map((nfi, idx) => {
+          const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
+          return {
+            chave: `ent-${nfi.n_id_produto}-${nf?.d_emissao_nfe?.slice(0, 10)}-${idx}`,
+            data: nf?.d_emissao_nfe ?? ini,
+            tipo: 'ENT',
+            quan: Number(nfi.n_qtde_nfe) || 0,
+            local: null,
+            destino: null,
+            obs: nf?.c_numero_nfe ? `NF ${nf.c_numero_nfe}` : 'Entrada (NF)',
+            status: 'Concluido',
+          }
+        })
+
+      const sldLines: LinhaDetalhe[] = ((invItems ?? []) as unknown as RawInv[])
+        .filter((ii) => {
+          const inv = Array.isArray(ii.inventarios) ? ii.inventarios[0] : ii.inventarios
+          const d = inv?.data?.slice(0, 10)
+          return d && d >= ini && d <= fim
+        })
+        .map((ii) => {
+          const inv = Array.isArray(ii.inventarios) ? ii.inventarios[0] : ii.inventarios
+          return {
+            chave: `sld-${ii.produto_codigo_produto}-${inv?.id}`,
+            data: inv?.data ?? ini,
+            tipo: 'SLD',
+            quan: Number(ii.quan) || 0,
+            local: null,
+            destino: null,
+            obs: 'Inventário',
+            status: 'Concluido',
+          }
+        })
+
       const codigosLocais = [...new Set(
         movLines.flatMap((m) => [m.local, m.destino]).filter((c): c is number => c != null)
       )]
@@ -124,7 +178,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         }
       }
 
-      movDetalhes = [...movLines, ...opLines].sort((a, b) =>
+      movDetalhes = [...movLines, ...opLines, ...entLines, ...sldLines].sort((a, b) =>
         a.data > b.data ? -1 : a.data < b.data ? 1 : 0
       )
     }
