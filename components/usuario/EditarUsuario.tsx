@@ -370,27 +370,41 @@ export function EditarUsuario({
                   </p>
 
                   <div className="space-y-1.5">
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                      <IdCard className="size-3" /> Cargo
-                    </p>
-                    <select
-                      value={cargoPorLoja[loja.id] ?? ''}
-                      onChange={(e) =>
-                        escolherCargo(loja.id, e.target.value ? Number(e.target.value) : null)
-                      }
-                      disabled={pending}
-                      className={inputClass}
-                    >
-                      <option value="">Sem cargo (só permissões avulsas)</option>
-                      {cargos.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-text-muted">
-                      O cargo concede um conjunto de permissões; as marcadas abaixo somam por cima.
-                    </p>
+                    {(() => {
+                      const cargoId = cargoPorLoja[loja.id]
+                      const temIndividuaisNestaLoja = [...permAtivas].some(k => k.startsWith(`${loja.id}:`))
+                      const isPersonalizado = !!cargoId && temIndividuaisNestaLoja
+                      return (
+                        <>
+                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                            <IdCard className="size-3" /> Cargo
+                            {isPersonalizado && (
+                              <span className="rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-brand">
+                                personalizado
+                              </span>
+                            )}
+                          </p>
+                          <select
+                            value={cargoId ?? ''}
+                            onChange={(e) =>
+                              escolherCargo(loja.id, e.target.value ? Number(e.target.value) : null)
+                            }
+                            disabled={pending}
+                            className={inputClass}
+                          >
+                            <option value="">Sem cargo (só permissões avulsas)</option>
+                            {cargos.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.nome}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-text-muted">
+                            O cargo concede um conjunto de permissões; as marcadas abaixo somam por cima.
+                          </p>
+                        </>
+                      )
+                    })()}
                   </div>
 
                   <div className="space-y-2">

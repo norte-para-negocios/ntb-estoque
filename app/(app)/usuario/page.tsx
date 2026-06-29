@@ -223,6 +223,11 @@ export default async function UsuarioPage({
               const cargo = cargos.find((c) => c.id === r.cargo_id)
               return (cargo?.permissaoIds?.length ?? 0) > 0
             })
+            // Cargo personalizado: tem cargo atribuido E permissoes individuais somadas por cima.
+            const cargoPersonalizado = lojaUserVisivel.some((r) => {
+              if (!r.cargo_id) return false
+              return permVisivel.some((p) => p.loja_id === r.loja_id)
+            })
             const editavel: UsuarioEditavel = {
               id: u.id,
               name: u.name,
@@ -244,6 +249,11 @@ export default async function UsuarioPage({
                     <span>
                       <span className="num text-text">{lojaUserVisivel.length}</span> loja(s)
                     </span>
+                    {u.perfil === 'Usuario' && cargoPersonalizado && (
+                      <span className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                        personalizado
+                      </span>
+                    )}
                     {u.perfil === 'Usuario' && lojaUserVisivel.length > 0 && permVisivel.length === 0 && !temPermissoesViaCargo && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn">
                         <AlertTriangle className="size-3" />
