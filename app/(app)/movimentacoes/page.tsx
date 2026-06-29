@@ -26,6 +26,18 @@ const TETO_LINHAS = 100_000
 // CMC absurdo: produto com CMC acima deste limite aciona aviso de guarda-corpo.
 const CMC_ALERTA_UNITARIO = 500_000
 
+// Para a tabela de tipo: movimentos tem timestamptz; OPs tem data (YYYY-MM-DD) sem hora.
+function fmtDataDetalhe(d: string): string {
+  if (d.includes('T')) {
+    return new Date(d).toLocaleString('pt-BR', {
+      timeZone: 'America/Bahia', day: '2-digit', month: '2-digit',
+      year: '2-digit', hour: '2-digit', minute: '2-digit',
+    })
+  }
+  const [y, mo, dia] = d.slice(0, 10).split('-')
+  return `${dia}/${mo}/${y}`
+}
+
 function fmtData(d: string | null): string {
   if (!d) return '-'
   const [y, m, dia] = String(d).slice(0, 10).split('-')
@@ -261,15 +273,16 @@ export default async function MovimentacoesPage({
 
   const familias = await buscarFamilias()
 
-  // Detalhamento granular por tipo (tabela movimentos) — exibido quando produto esta filtrado.
-  // A movimentos_historico e agregada (sem tipo); a movimentos tem ENT/SAI/SLD/TRF/TPQ.
+  // Detalhamento granular por tipo — combina duas fontes quando produto filtrado:
+  // 1. movimentos: transferencias/ajustes feitos pelo NTB + importacoes MOV_DRV (ENT/SAI/SLD/TRF/TPQ)
+  // 2. ordens_producao: OPs criadas/concluidas no proprio sistema NTB
   type LinhaDetalhe = {
-    id: number
-    data: string
-    tipo: string
-    quan: number | null
-    codigo_local_estoque: number
-    codigo_local_estoque_destino: number | null
+    chave: string
+    data: string     // timestamptz (movimentos) ou YYYY-MM-DD (OPs)
+    tipo: string     // ENT | SAI | SLD | TRF | TPQ | OP
+    quan: number
+    local: number | null
+    destino: number | null
     obs: string | null
     status: string | null
   }
@@ -284,10 +297,12 @@ export default async function MovimentacoesPage({
       .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
       .limit(100)
     idsProdDetalhes = [...new Set((prodsMatch ?? []).map((p) => Number(p.codigo_produto)).filter(Boolean))]
+
     if (idsProdDetalhes.length) {
-      // fim + 1 dia em UTC para cobrir o dia inteiro no fuso de Brasilia
       const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
-      const { data: det } = await supabase
+
+      // Fonte 1: movimentos (transferencias internas do NTB + importacoes do MOV_DRV)
+      const { data: movs } = await supabase
         .from('movimentos')
         .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status')
         .eq('loja_id', lojaId)
@@ -296,7 +311,46 @@ export default async function MovimentacoesPage({
         .lt('data', fimExcl)
         .order('data', { ascending: false })
         .limit(500)
-      movDetalhes = (det ?? []) as LinhaDetalhe[]
+
+      // Fonte 2: ordens_producao criadas/concluidas no NTB
+      const { data: ops } = await supabase
+        .from('ordens_producao')
+        .select('id, identificacao_d_dt_previsao, dt_conclusao_real, concluida, identificacao_n_qtde, quantidade, identificacao_c_num_op, num_ordem')
+        .eq('loja_id', lojaId)
+        .in('identificacao_n_cod_produto', idsProdDetalhes)
+        .gte('identificacao_d_dt_previsao', ini)
+        .lte('identificacao_d_dt_previsao', fim)
+        .order('identificacao_d_dt_previsao', { ascending: false })
+        .limit(300)
+
+      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
+      type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
+
+      const movLines: LinhaDetalhe[] = ((movs ?? []) as RawMov[]).map((m) => ({
+        chave: `mov-${m.id}`,
+        data: m.data,
+        tipo: m.tipo,
+        quan: Number(m.quan) || 0,
+        local: m.codigo_local_estoque,
+        destino: m.codigo_local_estoque_destino,
+        obs: m.obs,
+        status: m.status,
+      }))
+
+      const opLines: LinhaDetalhe[] = ((ops ?? []) as RawOP[]).map((op) => ({
+        chave: `op-${op.id}`,
+        data: op.dt_conclusao_real || op.identificacao_d_dt_previsao || ini,
+        tipo: 'OP',
+        quan: Number(op.quantidade) || Number(op.identificacao_n_qtde) || 0,
+        local: null,
+        destino: null,
+        obs: `OP ${op.identificacao_c_num_op || op.num_ordem || op.id}${op.concluida ? '' : ' (em andamento)'}`,
+        status: op.concluida ? 'Concluido' : 'Iniciado',
+      }))
+
+      movDetalhes = [...movLines, ...opLines].sort((a, b) =>
+        a.data > b.data ? -1 : a.data < b.data ? 1 : 0
+      )
     }
   }
 
@@ -505,28 +559,19 @@ export default async function MovimentacoesPage({
           </div>
           <Lista
             linhas={movDetalhes}
-            chaveLinha={(m) => String(m.id)}
+            chaveLinha={(m) => m.chave}
             colunas={[
               {
                 label: 'Data',
                 larguraDesktop: 'w-36',
-                render: (m) => {
-                  const dt = new Date(m.data)
-                  return (
-                    <span className="num text-[12px] text-text-muted">
-                      {dt.toLocaleString('pt-BR', {
-                        timeZone: 'America/Bahia',
-                        day: '2-digit', month: '2-digit', year: '2-digit',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </span>
-                  )
-                },
+                render: (m) => (
+                  <span className="num text-[12px] text-text-muted">{fmtDataDetalhe(m.data)}</span>
+                ),
               },
               {
                 label: 'Tipo',
                 primaria: true,
-                larguraDesktop: 'w-40',
+                larguraDesktop: 'w-44',
                 render: (m) => {
                   const TIPOS: Record<string, { label: string; cor: string }> = {
                     ENT: { label: 'Entrada', cor: 'text-ok' },
@@ -534,6 +579,7 @@ export default async function MovimentacoesPage({
                     SLD: { label: 'Inventário', cor: 'text-text' },
                     TRF: { label: 'Transferência', cor: 'text-warn' },
                     TPQ: { label: 'Perda / Quebra', cor: 'text-text-muted' },
+                    OP:  { label: 'Ordem de Produção', cor: 'text-brand' },
                   }
                   const t = TIPOS[m.tipo] ?? { label: m.tipo, cor: 'text-text-muted' }
                   return (
@@ -553,13 +599,12 @@ export default async function MovimentacoesPage({
                 alinhar: 'right',
                 larguraDesktop: 'w-28',
                 render: (m) => {
-                  const q = Number(m.quan) || 0
                   const negativo = m.tipo === 'SAI' || m.tipo === 'TPQ'
-                  const cor = negativo ? 'text-err' : m.tipo === 'ENT' ? 'text-ok' : 'text-text'
-                  const sinal = negativo ? '-' : m.tipo === 'ENT' ? '+' : ''
+                  const cor = negativo ? 'text-err' : m.tipo === 'ENT' || m.tipo === 'OP' ? 'text-ok' : 'text-text'
+                  const sinal = negativo ? '-' : m.tipo === 'ENT' || m.tipo === 'OP' ? '+' : ''
                   return (
                     <span className={`num font-medium ${cor}`}>
-                      {sinal}{q.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+                      {sinal}{m.quan.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
                     </span>
                   )
                 },
@@ -567,12 +612,14 @@ export default async function MovimentacoesPage({
               {
                 label: 'Local / Destino',
                 larguraDesktop: 'w-28',
-                render: (m) => (
-                  <span className="num text-[12px] text-text-muted">
-                    {m.codigo_local_estoque}
-                    {m.codigo_local_estoque_destino != null && ` → ${m.codigo_local_estoque_destino}`}
-                  </span>
-                ),
+                render: (m) =>
+                  m.local != null ? (
+                    <span className="num text-[12px] text-text-muted">
+                      {m.local}{m.destino != null && ` → ${m.destino}`}
+                    </span>
+                  ) : (
+                    <span className="text-text-muted">-</span>
+                  ),
               },
               {
                 label: 'Status',
@@ -586,11 +633,11 @@ export default async function MovimentacoesPage({
             vazio={
               <EmptyState
                 icon={ArrowLeftRight}
-                title="Sem registros granulares"
+                title="Sem movimentações registradas"
                 hint={
                   idsProdDetalhes.length === 0
                     ? 'Produto não encontrado no cadastro.'
-                    : 'Não há movimentações individuais registradas neste período para este produto.'
+                    : 'Nenhuma OP ou movimento interno encontrado neste período para este produto.'
                 }
               />
             }
