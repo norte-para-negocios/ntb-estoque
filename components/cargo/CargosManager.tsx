@@ -7,7 +7,7 @@ import { IdCard, Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarCargo, editarCargo, excluirCargo, type CargoComPermissoes } from '@/lib/actions/cargo'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
-import { btnClass, btnLinhaClass } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 
@@ -39,7 +39,7 @@ export function CargosManager({ cargos, permissoes }: { cargos: CargoComPermisso
                 <span className="shrink-0 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[12px] text-text-muted">{c.permissaoIds.length} perm.</span>
               </div>
               <div className="mt-3 flex items-center gap-1">
-                <EditorCargo idPorNome={idPorNome} cargo={c} trigger={<button className={btnLinhaClass('ghost')}><Pencil className="size-4" /> Editar</button>} />
+                <EditorCargo idPorNome={idPorNome} cargo={c} trigger={<button className={btnLinhaClass('ghost')}><Pencil className="size-4" /><RotuloAcao>Editar</RotuloAcao></button>} />
                 <ExcluirCargoBtn id={c.id} nome={c.nome} />
               </div>
             </div>
@@ -62,12 +62,12 @@ function ExcluirCargoBtn({ id, nome }: { id: number; nome: string }) {
     })
   }
   if (!confirmar) {
-    return <button onClick={() => setConfirmar(true)} className={btnLinhaClass('ghost')}><Trash2 className="size-4" /> Excluir</button>
+    return <button onClick={() => setConfirmar(true)} className={btnLinhaClass('ghost')}><Trash2 className="size-4" /><RotuloAcao>Excluir</RotuloAcao></button>
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <button onClick={excluir} disabled={pending} className={`${btnLinhaClass('ghost')} text-err`}>{pending ? <Spinner /> : 'Confirmar'}</button>
-      <button onClick={() => setConfirmar(false)} className={btnLinhaClass('ghost')}>Cancelar</button>
+      <button onClick={excluir} disabled={pending} className={`${btnClass('ghost')} text-err`}>{pending ? <Spinner /> : 'Confirmar'}</button>
+      <button onClick={() => setConfirmar(false)} className={btnClass('ghost')}>Cancelar</button>
     </span>
   )
 }
