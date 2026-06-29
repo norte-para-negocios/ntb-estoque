@@ -214,7 +214,7 @@ export async function finishOP(
 
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, quantidade, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
@@ -222,7 +222,6 @@ export async function finishOP(
       identificacao_d_dt_previsao: string | null
       identificacao_n_qtde: number | null
       quantidade: number | null
-      full_object: { infAdicionais?: { dDtInicio?: string } } | null
       loja: LojaOmie
     }>()
 
@@ -237,17 +236,12 @@ export async function finishOP(
       : op.quantidade ?? op.identificacao_n_qtde ?? 1
 
   try {
-    // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a DATA DA OP
-    // (data de inicio no Omie), NUNCA o dia de hoje; 3) a previsao do banco;
-    // 4) hoje como ultimo fallback.
+    // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
+    // 3) hoje como ultimo fallback.
     let dataConclusao = ''
     if (dataEscolhidaISO) {
       const me = dataEscolhidaISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)
       if (me) dataConclusao = `${me[3]}/${me[2]}/${me[1]}`
-    }
-    if (!dataConclusao) {
-      const dInicio = op.full_object?.infAdicionais?.dDtInicio
-      dataConclusao = dInicio && /^\d{2}\/\d{2}\/\d{4}$/.test(dInicio) ? dInicio : ''
     }
     if (!dataConclusao) {
       const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)

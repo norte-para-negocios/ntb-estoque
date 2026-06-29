@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: op } = await supabase
     .from('ordens_producao')
     .select(
-      'identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade, full_object'
+      'identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, validade, quantidade, dt_conclusao_real'
     )
     .eq('id', id)
     .eq('loja_id', lojaId)
@@ -65,8 +65,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const codigoProduto = prod?.codigo || String(op.identificacao_n_cod_produto)
   const descricao = formatarNomeProduto(prod?.descricao)
   const qtdeOP = op.identificacao_n_qtde ?? 1
-  const fo = (op.full_object ?? {}) as { outrasInf?: { dConclusao?: string } }
-  const produzido = fo.outrasInf?.dConclusao || new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+  const produzido = op.dt_conclusao_real
+    ? fmtData(op.dt_conclusao_real as string)
+    : new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
   const validade = op.validade ? fmtData(op.validade) : '-'
   const numOP = op.identificacao_c_num_op || op.num_ordem || ''
   const qr = await QRCode.toDataURL(String(codigoProduto), { margin: 1, width: 160 })

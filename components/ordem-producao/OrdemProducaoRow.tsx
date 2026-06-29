@@ -12,7 +12,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 
 const stepBtnClass =
-  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-6'
+  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-5'
 
 // Botao de acao da LINHA da OP no mobile: so icone, alvo de toque 32px.
 const acaoIconeClass =
@@ -225,7 +225,7 @@ type StepperProps = {
 function StepperValidade({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar
   return (
-    <div className="flex items-center gap-1.5 lg:justify-center">
+    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarValidade(-1)}
@@ -233,7 +233,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         aria-label="Diminuir validade"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5" />
+        <Minus className="size-3.5 lg:size-3" />
       </button>
       <input
         type="date"
@@ -242,7 +242,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         onBlur={ctrl.salvarValidade}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-7 lg:w-24 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -251,7 +251,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         aria-label="Aumentar validade"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-3.5 lg:size-3" />
       </button>
     </div>
   )
@@ -261,7 +261,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
 function StepperQuantidade({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar
   return (
-    <div className="flex items-center gap-1.5 lg:justify-center">
+    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
       <button
         type="button"
         onClick={() => ctrl.ajustarQuantidade(-1)}
@@ -269,7 +269,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         aria-label="Diminuir quantidade"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5" />
+        <Minus className="size-3.5 lg:size-3" />
       </button>
       <input
         type="text"
@@ -281,7 +281,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-7 lg:w-16 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -290,7 +290,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         aria-label="Aumentar quantidade"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-3.5 lg:size-3" />
       </button>
     </div>
   )
@@ -491,10 +491,10 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
         <td className="text-right align-middle">
           <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
         </td>
-        <td className="align-middle">
+        <td className="align-middle !px-0 overflow-hidden">
           <StepperValidade op={op} ctrl={ctrl} />
         </td>
-        <td className="align-middle">
+        <td className="align-middle !px-0 overflow-hidden">
           <StepperQuantidade op={op} ctrl={ctrl} />
         </td>
         <td className="text-right align-middle">

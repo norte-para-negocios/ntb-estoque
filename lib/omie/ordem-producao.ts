@@ -71,6 +71,13 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
       const ordens = res.cadastros ?? []
 
       if (ordens.length) {
+        // Guarda apenas itensDetalhes — o resto do payload Omie ja tem colunas escalares
+        // e inflar full_object enchia o banco (cada OP completa ~2-3KB de JSONB).
+        const toSlim = (op: OmieOP) => {
+          const itens = (op as Record<string, unknown>).itensDetalhes as unknown[] | undefined
+          return (itens?.length ? { itensDetalhes: itens } : null) as unknown as OmieOP
+        }
+
         const rows = ordens.map((op) => ({
           loja_id: loja.id,
           num_ordem: op.identificacao.cNumOP,
@@ -82,13 +89,13 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           identificacao_n_qtde: op.identificacao.nQtde,
           identificacao_codigo_local_estoque: op.identificacao.codigo_local_estoque,
           ...mapOutrasInf(op),
-          full_object: op,
+          full_object: toSlim(op),
           updated_at: new Date().toISOString(),
         }))
 
         // Preserva itensDetalhes existentes quando a API nao os retorna (ocorre para
         // OPs concluidas — a API ListarOrdemProducao omite itensDetalhes apos a conclusao).
-        const semItens = rows.filter((r) => !(r.full_object as Record<string, unknown>)?.itensDetalhes)
+        const semItens = rows.filter((r) => !r.full_object)
         if (semItens.length) {
           const cods = semItens.map((r) => r.identificacao_n_cod_op).filter(Boolean)
           const { data: existentes } = await supabase
@@ -104,9 +111,8 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
             }
           }
           for (const r of rows) {
-            const fo = r.full_object as Record<string, unknown>
-            if (!fo?.itensDetalhes && itensMapExist.has(Number(r.identificacao_n_cod_op))) {
-              r.full_object = { ...fo, itensDetalhes: itensMapExist.get(Number(r.identificacao_n_cod_op)) } as unknown as OmieOP
+            if (!r.full_object && itensMapExist.has(Number(r.identificacao_n_cod_op))) {
+              r.full_object = { itensDetalhes: itensMapExist.get(Number(r.identificacao_n_cod_op)) } as unknown as OmieOP
             }
           }
         }
@@ -151,6 +157,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
     data: { nCodOP },
   })
   if (res?.identificacao) {
+    const itens = (res as Record<string, unknown>).itensDetalhes as unknown[] | undefined
     await supabase.from('ordens_producao').upsert(
       {
         loja_id: loja.id,
@@ -163,7 +170,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
         identificacao_n_qtde: res.identificacao.nQtde,
         identificacao_codigo_local_estoque: res.identificacao.codigo_local_estoque,
         ...mapOutrasInf(res),
-        full_object: res,
+        full_object: itens?.length ? { itensDetalhes: itens } : null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'loja_id,identificacao_n_cod_op' }
