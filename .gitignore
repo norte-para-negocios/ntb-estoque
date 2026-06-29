@@ -46,3 +46,6 @@ scripts/.pooler-host
 .superpowers/
 _qa_*.png
 _qa_*.mjs
+
+# checkpoints de sync (estado de runtime)
+scripts/.ajustes-checkpoint-*.json
