@@ -452,13 +452,13 @@ export default async function OrdemProducaoPage({
                           Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
                         </Link>
                       </th>
-                      <th className="w-40 !text-center">
+                      <th className="w-36 !text-center">
                         <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
                           Validade {setaIcone('validade_asc', 'validade_desc')}
                         </Link>
                       </th>
-                      <th className="w-32 !text-center">Quantidade</th>
-                      <th className="w-44"></th>
+                      <th className="w-28 !text-center">Quantidade</th>
+                      <th className="w-36"></th>
                     </tr>
                   </thead>
                   <tbody>

@@ -12,7 +12,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 
 const stepBtnClass =
-  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-7'
+  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-6'
 
 // Botao de acao da LINHA da OP no mobile: so icone, alvo de toque 32px.
 const acaoIconeClass =
@@ -242,7 +242,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         onBlur={ctrl.salvarValidade}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-28 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-7 lg:w-24 lg:flex-none"
       />
       <button
         type="button"
@@ -281,7 +281,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8 lg:w-20 lg:flex-none"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-7 lg:w-16 lg:flex-none"
       />
       <button
         type="button"
@@ -476,15 +476,8 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   return (
     <>
       <tr>
-        <td className="num font-medium text-text align-middle">
-          <div className="flex items-center gap-1.5">
-            <span>{op.numOP}</span>
-            {op.data && (
-              <span className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
-                {op.data}
-              </span>
-            )}
-          </div>
+        <td className="num font-medium text-text align-middle" title={op.data ? `Data prevista: ${op.data}` : undefined}>
+          {op.numOP}
         </td>
         <td className="align-middle">
           <StatusBadge status={op.status} />

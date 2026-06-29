@@ -328,10 +328,10 @@ export function ContagemTransferencia({
                       <span className="truncate text-sm font-medium text-text">{item.descricao}</span>
                       {item.status && (
                         <span className="hidden shrink-0 lg:inline">
-                          {item.status === 'Erro' && item.descricao_status ? (
+                          {item.status === 'Erro' ? (
                             <button
                               type="button"
-                              onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? undefined })}
+                              onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? 'Sem detalhe disponível. Tente reenviar.' })}
                               title="Clique para ver o detalhe do erro"
                               className="cursor-pointer"
                             >
@@ -346,10 +346,10 @@ export function ContagemTransferencia({
                     <div className="num mt-0.5 text-xs text-text-muted">{item.codigo}</div>
                     {item.status && (
                       <div className="mt-1.5 lg:hidden">
-                        {item.status === 'Erro' && item.descricao_status ? (
+                        {item.status === 'Erro' ? (
                           <button
                             type="button"
-                            onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? undefined })}
+                            onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? 'Sem detalhe disponível. Tente reenviar.' })}
                             title="Clique para ver o detalhe do erro"
                             className="cursor-pointer"
                           >
