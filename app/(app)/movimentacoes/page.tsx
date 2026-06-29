@@ -19,6 +19,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ArrowLeftRight, AlertTriangle } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
+import { FiltroDataInline } from '@/components/movimentacoes/FiltroDataInline'
 
 const POR_PAGINA = 100
 // Teto de linhas lidas para os totais e para o agrupamento por mes (em memoria).
@@ -288,6 +289,7 @@ export default async function MovimentacoesPage({
   }
   let movDetalhes: LinhaDetalhe[] = []
   let idsProdDetalhes: number[] = []
+  const locaisMap = new Map<number, string>()
 
   if (termo) {
     const { data: prodsMatch } = await supabase
@@ -331,8 +333,8 @@ export default async function MovimentacoesPage({
         data: m.data,
         tipo: m.tipo,
         quan: Number(m.quan) || 0,
-        local: m.codigo_local_estoque,
-        destino: m.codigo_local_estoque_destino,
+        local: m.codigo_local_estoque != null ? Number(m.codigo_local_estoque) : null,
+        destino: m.codigo_local_estoque_destino != null ? Number(m.codigo_local_estoque_destino) : null,
         obs: m.obs,
         status: m.status,
       }))
@@ -347,6 +349,21 @@ export default async function MovimentacoesPage({
         obs: `OP ${op.identificacao_c_num_op || op.num_ordem || op.id}${op.concluida ? '' : ' (em andamento)'}`,
         status: op.concluida ? 'Concluido' : 'Iniciado',
       }))
+
+      // Traduz códigos numéricos de local para nomes
+      const codigosLocais = [...new Set(
+        movLines.flatMap((m) => [m.local, m.destino]).filter((c): c is number => c != null)
+      )]
+      if (codigosLocais.length) {
+        const { data: locais } = await supabase
+          .from('local_estoques')
+          .select('codigo_local_estoque, descricao')
+          .eq('loja_id', lojaId)
+          .in('codigo_local_estoque', codigosLocais)
+        for (const l of (locais ?? []) as { codigo_local_estoque: number; descricao: string | null }[]) {
+          if (l.descricao) locaisMap.set(Number(l.codigo_local_estoque), l.descricao)
+        }
+      }
 
       movDetalhes = [...movLines, ...opLines].sort((a, b) =>
         a.data > b.data ? -1 : a.data < b.data ? 1 : 0
@@ -405,7 +422,7 @@ export default async function MovimentacoesPage({
       {/* Busca por produto: visivel no topo para historico granular por produto/data */}
       <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
 
-      {/* Controles: agrupamento (mes/data) e movimento (tudo/entradas/saidas) */}
+      {/* Controles: agrupamento (mes/data), movimento (tudo/entradas/saidas) e periodo inline */}
       <div className="flex flex-wrap items-center gap-2.5">
         <SegmentLinks
           basePath="/movimentacoes"
@@ -426,11 +443,11 @@ export default async function MovimentacoesPage({
             { value: 'saida', label: 'Saídas' },
           ]}
         />
+        <FiltroDataInline ini={ini} fim={fim} />
       </div>
 
       {/* Barra de totais do periodo */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
           Entradas{' '}
           <span className="num font-semibold text-ok">{formatQtdResumo(totalEntradas)}</span>
@@ -486,69 +503,9 @@ export default async function MovimentacoesPage({
         </p>
       )}
 
-      <Lista
-        linhas={linhas}
-        chaveLinha={(m) => m.chave}
-        colunas={[
-          {
-            label: porMes ? 'Mês' : 'Data',
-            larguraDesktop: 'w-24',
-            render: (m) => <span className="num text-text-muted">{porMes ? fmtMes(m.quando) : fmtData(m.quando)}</span>,
-          },
-          {
-            label: 'Produto',
-            primaria: true,
-            flexivel: true,
-            render: (m) => (
-              <span>
-                <span className="num text-text-muted">{m.codigo}</span>{' '}
-                {formatarNomeProduto(m.descricao) || `Produto ${m.cod_prod}`}
-              </span>
-            ),
-          },
-          {
-            label: 'Entradas (qtd)',
-            alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (m) => <span className="text-ok">{colQtd(m.entradas)}</span>,
-          },
-          ...(MOSTRAR_VALORES
-            ? [{
-                label: 'Entradas (R$)',
-                alinhar: 'right' as const,
-                larguraDesktop: 'w-32',
-                render: (m: LinhaExibida) => <span className="text-ok">{colValor(m.valEntradas, m.temCmc)}</span>,
-              }]
-            : []),
-          {
-            label: 'Saídas (qtd)',
-            alinhar: 'right',
-            larguraDesktop: 'w-28',
-            render: (m) => <span className="text-err">{colQtd(m.saidas)}</span>,
-          },
-          ...(MOSTRAR_VALORES
-            ? [{
-                label: 'Saídas (R$)',
-                alinhar: 'right' as const,
-                larguraDesktop: 'w-32',
-                render: (m: LinhaExibida) => <span className="text-err">{colValor(m.valSaidas, m.temCmc)}</span>,
-              }]
-            : []),
-        ]}
-        vazio={
-          <EmptyState
-            icon={ArrowLeftRight}
-            title="Nenhuma movimentação"
-            hint="Ajuste o período ou o produto. O histórico cobre 2026."
-          />
-        }
-      />
-
-      {(page > 1 || temProxima) && <Paginacao basePath="/movimentacoes" page={page} temProxima={temProxima} />}
-
-      {/* Tabela de tipo de movimentacao: so aparece quando produto esta filtrado */}
+      {/* Tipo de movimentação: detalhe granular por produto — aparece quando produto filtrado */}
       {sp.produto && (
-        <div className="space-y-3 border-t border-border pt-6">
+        <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h3 className="text-[13px] font-medium text-text">Tipo de movimentação</h3>
             {movDetalhes.length > 0 && (
@@ -611,15 +568,18 @@ export default async function MovimentacoesPage({
               },
               {
                 label: 'Local / Destino',
-                larguraDesktop: 'w-28',
-                render: (m) =>
-                  m.local != null ? (
-                    <span className="num text-[12px] text-text-muted">
-                      {m.local}{m.destino != null && ` → ${m.destino}`}
+                larguraDesktop: 'w-48',
+                render: (m) => {
+                  if (m.local == null) return <span className="text-text-muted">-</span>
+                  const nomeOrig = locaisMap.get(m.local) ?? String(m.local)
+                  const nomeDest = m.destino != null ? (locaisMap.get(m.destino) ?? String(m.destino)) : null
+                  return (
+                    <span className="text-[12px] text-text-muted">
+                      {nomeOrig}
+                      {nomeDest && <span> → {nomeDest}</span>}
                     </span>
-                  ) : (
-                    <span className="text-text-muted">-</span>
-                  ),
+                  )
+                },
               },
               {
                 label: 'Status',
@@ -644,6 +604,67 @@ export default async function MovimentacoesPage({
           />
         </div>
       )}
+
+      {/* Resumo agregado por produto/dia ou mês */}
+      <Lista
+        linhas={linhas}
+        chaveLinha={(m) => m.chave}
+        colunas={[
+          {
+            label: porMes ? 'Mês' : 'Data',
+            larguraDesktop: 'w-24',
+            render: (m) => <span className="num text-text-muted">{porMes ? fmtMes(m.quando) : fmtData(m.quando)}</span>,
+          },
+          {
+            label: 'Produto',
+            primaria: true,
+            flexivel: true,
+            render: (m) => (
+              <span>
+                <span className="num text-text-muted">{m.codigo}</span>{' '}
+                {formatarNomeProduto(m.descricao) || `Produto ${m.cod_prod}`}
+              </span>
+            ),
+          },
+          {
+            label: 'Entradas (qtd)',
+            alinhar: 'right',
+            larguraDesktop: 'w-28',
+            render: (m) => <span className="text-ok">{colQtd(m.entradas)}</span>,
+          },
+          ...(MOSTRAR_VALORES
+            ? [{
+                label: 'Entradas (R$)',
+                alinhar: 'right' as const,
+                larguraDesktop: 'w-32',
+                render: (m: LinhaExibida) => <span className="text-ok">{colValor(m.valEntradas, m.temCmc)}</span>,
+              }]
+            : []),
+          {
+            label: 'Saídas (qtd)',
+            alinhar: 'right',
+            larguraDesktop: 'w-28',
+            render: (m) => <span className="text-err">{colQtd(m.saidas)}</span>,
+          },
+          ...(MOSTRAR_VALORES
+            ? [{
+                label: 'Saídas (R$)',
+                alinhar: 'right' as const,
+                larguraDesktop: 'w-32',
+                render: (m: LinhaExibida) => <span className="text-err">{colValor(m.valSaidas, m.temCmc)}</span>,
+              }]
+            : []),
+        ]}
+        vazio={
+          <EmptyState
+            icon={ArrowLeftRight}
+            title="Nenhuma movimentação"
+            hint="Ajuste o período ou o produto. O histórico cobre 2026."
+          />
+        }
+      />
+
+      {(page > 1 || temProxima) && <Paginacao basePath="/movimentacoes" page={page} temProxima={temProxima} />}
     </div>
   )
 }
