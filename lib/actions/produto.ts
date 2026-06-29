@@ -67,6 +67,7 @@ export async function criarProduto(dados: {
   unidade: string
   ncm: string
   valorUnitario: number
+  estoqueMinimo?: number | null
   tipoItem?: string
   codigoFamilia?: number | null
   descricaoFamilia?: string | null
@@ -135,6 +136,7 @@ export async function criarProduto(dados: {
           unidade: dados.unidade.trim(),
           ncm,
           valor_unitario: Number(dados.valorUnitario) || 0,
+          estoque_minimo: dados.estoqueMinimo ?? null,
           tipo_item: dados.tipoItem?.trim() || null,
           codigo_familia: dados.codigoFamilia || null,
           descricao_familia: dados.descricaoFamilia || null,

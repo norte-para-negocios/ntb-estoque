@@ -54,6 +54,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
   const [unidade, setUnidade] = useState('UN')
   const [ncm, setNcm] = useState('')
   const [valor, setValor] = useState('')
+  const [minimo, setMinimo] = useState('')
   const [tipo, setTipo] = useState('')
   const [familia, setFamilia] = useState('')
   const [origem, setOrigem] = useState('0')
@@ -107,6 +108,11 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
       toast.error('Valor unitário inválido')
       return
     }
+    const minNum = parseNumBR(minimo)
+    if (minNum != null && (Number.isNaN(minNum) || minNum < 0)) {
+      toast.error('Estoque mínimo inválido')
+      return
+    }
     const num = (s: string) => {
       const n = parseNumBR(s)
       return n != null && Number.isFinite(n) && n > 0 ? n : undefined
@@ -121,6 +127,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         unidade,
         ncm,
         valorUnitario: valNum ?? 0,
+        estoqueMinimo: minNum ?? null,
         tipoItem: tipo || undefined,
         codigoFamilia: codigoFamiliaOmie,
         descricaoFamilia: fam ? fam.descricao : null,
@@ -223,6 +230,17 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
             </Campo>
             <Campo label="Modelo">
               <input value={extra.modelo} onChange={(e) => setX('modelo', e.target.value)} className={inputClass} placeholder="Opcional" />
+            </Campo>
+            <Campo label="Estoque mínimo">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={minimo}
+                onChange={(e) => setMinimo(e.target.value)}
+                className={inputClass}
+                placeholder="0"
+              />
+              <p className="text-[11px] text-text-muted">Salvo localmente, não enviado ao Omie.</p>
             </Campo>
           </div>
         </Secao>
