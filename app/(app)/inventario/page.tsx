@@ -15,7 +15,7 @@ import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
-import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
+import { btnClass, btnLinhaClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
 const POR_PAGINA = 50
@@ -251,7 +251,7 @@ export default async function InventarioPage({
                 aria-label={labelAcao}
                 title={labelAcao}
               >
-                <Pencil className="size-4" /> <RotuloAcao>{labelAcao}</RotuloAcao>
+                <Pencil className="size-4" />
               </Link>
               <a
                 href={`/inventario/${inv.id}/imprimir`}
@@ -261,7 +261,7 @@ export default async function InventarioPage({
                 aria-label="Imprimir"
                 title="Imprimir"
               >
-                <Printer className="size-4" /> <RotuloAcao>Imprimir</RotuloAcao>
+                <Printer className="size-4" />
               </a>
               <AcoesInventario
                 inventarioId={inv.id}

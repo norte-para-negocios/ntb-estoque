@@ -40,6 +40,7 @@ export type ItemMovimento = {
   unidade?: string | null
   quan: number | null
   status: string | null
+  descricao_status?: string | null
 }
 
 export function ContagemTransferencia({
@@ -327,14 +328,36 @@ export function ContagemTransferencia({
                       <span className="truncate text-sm font-medium text-text">{item.descricao}</span>
                       {item.status && (
                         <span className="hidden shrink-0 lg:inline">
-                          <StatusPill status={item.status} />
+                          {item.status === 'Erro' && item.descricao_status ? (
+                            <button
+                              type="button"
+                              onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? undefined })}
+                              title="Clique para ver o detalhe do erro"
+                              className="cursor-pointer"
+                            >
+                              <StatusPill status={item.status} />
+                            </button>
+                          ) : (
+                            <StatusPill status={item.status} />
+                          )}
                         </span>
                       )}
                     </div>
                     <div className="num mt-0.5 text-xs text-text-muted">{item.codigo}</div>
                     {item.status && (
                       <div className="mt-1.5 lg:hidden">
-                        <StatusPill status={item.status} />
+                        {item.status === 'Erro' && item.descricao_status ? (
+                          <button
+                            type="button"
+                            onClick={() => toast.error('Erro neste item', { description: item.descricao_status ?? undefined })}
+                            title="Clique para ver o detalhe do erro"
+                            className="cursor-pointer"
+                          >
+                            <StatusPill status={item.status} />
+                          </button>
+                        ) : (
+                          <StatusPill status={item.status} />
+                        )}
                       </div>
                     )}
                   </div>

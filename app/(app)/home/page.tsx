@@ -12,7 +12,6 @@ import {
   CalendarClock,
   AlertTriangle,
   CheckCircle2,
-  DollarSign,
   type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -97,26 +96,17 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
-  // Phase 2: produtos a repor + valor total do estoque + saldo/mínimo para a lista
-  const [prodsReporRes, valorEstoqueRes, posReporRes] = await Promise.all([
+  // Phase 2: produtos a repor + saldo/mínimo para a lista
+  const [prodsReporRes, posReporRes] = await Promise.all([
     qtdRepor
       ? supabase.from('produtos').select('codigo_produto, codigo, descricao').eq('loja_id', lojaId).in('codigo_produto', codigosRepor.slice(0, 8)).order('descricao')
       : (Promise.resolve({ data: [] }) as Promise<{ data: { codigo_produto: number; codigo: string; descricao: string }[] }>),
-    maxDate
-      ? supabase.from('posicao_estoques').select('n_saldo, n_cmc').eq('loja_id', lojaId).eq('data_posicao', maxDate)
-      : (Promise.resolve({ data: [] }) as Promise<{ data: { n_saldo: number; n_cmc: number }[] }>),
     maxDate && qtdRepor
       ? supabase.from('posicao_estoques').select('n_cod_prod, n_saldo, estoque_minimo').eq('loja_id', lojaId).eq('data_posicao', maxDate).in('n_cod_prod', codigosRepor.slice(0, 8))
       : (Promise.resolve({ data: [] }) as Promise<{ data: { n_cod_prod: number; n_saldo: number; estoque_minimo: number | null }[] }>),
   ])
 
   const prodsRepor = prodsReporRes.data ?? []
-
-  // A.3.2: valor total do estoque = soma(saldo * CMC) em todos os locais da posicao
-  const valorTotalEstoque = (valorEstoqueRes.data ?? []).reduce(
-    (acc, r) => acc + (Number(r.n_saldo) || 0) * (Number(r.n_cmc) || 0),
-    0,
-  )
 
   // A.3.4: mapa de saldo/mínimo por produto (acumula locais)
   const saldoMap = new Map<number, { saldo: number; minimo: number }>()
@@ -205,23 +195,6 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* A.3.2: Card valor monetário total do estoque */}
-      {valorTotalEstoque > 0 && (
-        <section>
-          <div className="relative overflow-hidden rounded-xl border border-border bg-surface p-5">
-            <span className="absolute left-0 top-0 h-full w-1 bg-ok/50 rounded-l-xl" />
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="size-4 text-ok" />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">Valor em estoque</p>
-              {maxDate && <span className="ml-auto text-[11px] text-text-muted">posição {fmtData(maxDate)}</span>}
-            </div>
-            <div className="num text-[2rem] leading-none font-bold tracking-tight text-text">
-              <Money value={valorTotalEstoque} />
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Precisa de atenção */}
       <section>

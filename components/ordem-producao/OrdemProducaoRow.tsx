@@ -18,6 +18,10 @@ const stepBtnClass =
 const acaoIconeClass =
   'flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-60'
 
+// Botao de acao na tabela desktop: icone compacto size-7, sem texto.
+const acaoDesktopClass =
+  'flex size-7 shrink-0 items-center justify-center rounded-md transition-colors disabled:opacity-60'
+
 // Validade -> DD/MM (compacto) para o subtitulo da linha.
 function fmtValidade(v: string | null | undefined): string | null {
   if (!v) return null
@@ -417,8 +421,8 @@ function Acoes({ op, ctrl }: StepperProps) {
       <DialogImprimirEtiqueta
         href={`/ordem-producao/${op.id}/imprimir`}
         trigger={
-          <button type="button" className="inline-flex items-center gap-1 text-brand hover:underline">
-            <Printer className="size-3.5" /> Imprimir
+          <button type="button" className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`} title="Imprimir">
+            <Printer className="size-3.5" />
           </button>
         }
       />
@@ -428,25 +432,24 @@ function Acoes({ op, ctrl }: StepperProps) {
             type="button"
             onClick={() => ctrl.setDialogConclusao(true)}
             disabled={ctrl.pending}
-            className="inline-flex items-center gap-1 text-brand hover:underline disabled:opacity-60"
+            className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
+            title="Concluir OP"
           >
-            <Check className="size-3.5" /> Concluir
+            <Check className="size-3.5" />
           </button>
           <DialogConclusao op={op} ctrl={ctrl} />
         </>
       )}
-      {/* Reverter: so na concluida (estorna sem excluir). Excluir: qualquer estado
-          (na concluida o servidor reverte a producao automaticamente antes de
-          excluir). Cada acao atras da sua permissao. */}
+      {/* Reverter: so na concluida (estorna sem excluir). Excluir: qualquer estado. */}
       {op.concluida && op.podeReverter && (
         <button
           type="button"
           onClick={ctrl.reverter}
           disabled={ctrl.pending}
-          className="inline-flex items-center gap-1 text-text-muted hover:text-warn hover:underline disabled:opacity-60"
+          className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-warn`}
           title="Reverter a conclusão (estorna no Omie)"
         >
-          <Undo2 className="size-3.5" /> Reverter
+          <Undo2 className="size-3.5" />
         </button>
       )}
       {op.podeExcluir && (
@@ -454,10 +457,10 @@ function Acoes({ op, ctrl }: StepperProps) {
           type="button"
           onClick={ctrl.excluir}
           disabled={ctrl.pending}
-          className="inline-flex items-center gap-1 text-text-muted hover:text-err hover:underline disabled:opacity-60"
+          className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-err`}
           title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : 'Excluir a OP no Omie'}
         >
-          <Trash2 className="size-3.5" /> Excluir
+          <Trash2 className="size-3.5" />
         </button>
       )}
     </>
@@ -473,41 +476,42 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   return (
     <>
       <tr>
-        <td className="num font-medium text-text align-top">
-          <span>{op.numOP}</span>
-          {op.data && (
-            <div className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
-              Prev. {op.data}
-            </div>
-          )}
+        <td className="num font-medium text-text align-middle">
+          <div className="flex items-center gap-1.5">
+            <span>{op.numOP}</span>
+            {op.data && (
+              <span className="text-[11px] font-normal text-text-muted" title="Data prevista da OP">
+                {op.data}
+              </span>
+            )}
+          </div>
         </td>
-        <td className="align-top">
+        <td className="align-middle">
           <StatusBadge status={op.status} />
         </td>
-        <td className="max-w-xs align-top">
+        <td className="max-w-xs align-middle">
           <div className="truncate font-medium text-text">{op.produto}</div>
           <div className="text-[11px] text-text-muted">{op.unidade}</div>
         </td>
-        <td className="text-right align-top">
+        <td className="text-right align-middle">
           <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
         </td>
-        <td className="align-top">
+        <td className="align-middle">
           <StepperValidade op={op} ctrl={ctrl} />
         </td>
-        <td className="align-top">
+        <td className="align-middle">
           <StepperQuantidade op={op} ctrl={ctrl} />
         </td>
-        <td className="text-right align-top">
-          <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
+        <td className="text-right align-middle">
+          <div className="flex items-center justify-end gap-0.5">
             {temIng && (
               <button
                 type="button"
                 onClick={() => setExpandido((e) => !e)}
-                className="inline-flex items-center gap-1 text-text-muted hover:text-text"
-                title={expandido ? 'Ocultar ingredientes' : 'Ver ingredientes'}
+                className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2`}
+                title={expandido ? 'Ocultar ingredientes' : `${op.ingredientes!.length} ingrediente(s)`}
               >
                 <ChevronDown className={`size-3.5 transition-transform duration-150 ${expandido ? 'rotate-180' : ''}`} />
-                <span className="hidden 2xl:inline text-[12px]">{op.ingredientes!.length} ingrediente{op.ingredientes!.length !== 1 ? 's' : ''}</span>
               </button>
             )}
             <Acoes op={op} ctrl={ctrl} />

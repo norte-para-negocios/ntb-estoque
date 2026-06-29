@@ -37,7 +37,7 @@ export default async function ContagemTransferenciaPage({
 
   const { data: movimentos } = await supabase
     .from('movimentos')
-    .select('id, id_prod, quan, status')
+    .select('id, id_prod, quan, status, descricao_status')
     .eq('transferencia_id', id)
     .order('id')
 
@@ -62,6 +62,7 @@ export default async function ContagemTransferenciaPage({
       unidade: p?.unidade ?? null,
       quan: m.quan,
       status: m.status,
+      descricao_status: (m as { descricao_status?: string | null }).descricao_status ?? null,
     }
   })
 

@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
+import { btnLinhaClass } from '@/components/ui-kit/Button'
 import {
   duplicarInventario,
   excluirInventario,
@@ -67,7 +67,7 @@ export function AcoesInventario({
         aria-label="Duplicar"
         title="Duplicar"
       >
-        <Copy className="size-4" /> <RotuloAcao>Duplicar</RotuloAcao>
+        <Copy className="size-4" />
       </button>
       {temErro && (
         <button
@@ -75,9 +75,9 @@ export function AcoesInventario({
           disabled={pending}
           className={btnLinhaClass('outline')}
           aria-label="Reenviar erros"
-          title="Tentar reenviar itens com erro ao Omie"
+          title="Reenviar itens com erro ao Omie"
         >
-          <RefreshCw className="size-4" /> <RotuloAcao>Reenviar erros</RotuloAcao>
+          <RefreshCw className="size-4" />
         </button>
       )}
       {podeExcluir && (
@@ -88,7 +88,7 @@ export function AcoesInventario({
           aria-label="Excluir"
           title="Excluir"
         >
-          <Trash2 className="size-4" /> <RotuloAcao>Excluir</RotuloAcao>
+          <Trash2 className="size-4" />
         </button>
       )}
     </span>
