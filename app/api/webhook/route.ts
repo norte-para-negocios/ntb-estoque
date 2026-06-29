@@ -20,17 +20,6 @@ export async function POST(request: Request) {
 
   const supabase = createServiceClient()
 
-  // Observabilidade: registra TODA batida recebida do Omie (mesmo as que nao casam
-  // com loja), para diagnostico de conectividade do webhook.
-  await supabase.from('integration_attempts').insert({
-    loja_id: null,
-    model: 'Webhook-IN',
-    request: JSON.stringify(body).slice(0, 4000),
-    response: null,
-    code: '200',
-    error: false,
-  })
-
   if (!body?.messageId || !body?.appKey) {
     return NextResponse.json({ ok: true })
   }
