@@ -46,7 +46,11 @@ export function FamiliaForm({ familia }: { familia?: FamiliaExistente }) {
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success(editando ? 'Família atualizada' : 'Família criada')
+      if (res?.omieError) {
+        toast.warning('Salvo localmente — Omie não sincronizado', { description: res.omieError })
+      } else {
+        toast.success(editando ? 'Família atualizada' : 'Família criada')
+      }
       setOpen(false)
       if (!editando) setForm({ nome: '', codigo: '', inativo: false })
       router.refresh()

@@ -28,7 +28,7 @@ async function getLoja(lojaId: number) {
  * Se o Omie falhar, retorna erro e nao salva localmente (o codigo e obrigatorio para
  * manter sincronia — uma familia local sem codigo_familia nao pode ser usada no Omie).
  */
-export async function criarFamilia(dados: FamiliaInput) {
+export async function criarFamilia(dados: FamiliaInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Criar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
@@ -61,7 +61,7 @@ export async function criarFamilia(dados: FamiliaInput) {
   }
 }
 
-export async function editarFamilia(id: number, dados: FamiliaInput) {
+export async function editarFamilia(id: number, dados: FamiliaInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Editar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
@@ -124,7 +124,7 @@ export async function editarFamilia(id: number, dados: FamiliaInput) {
   }
 }
 
-export async function excluirFamilia(id: number) {
+export async function excluirFamilia(id: number): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Excluir'))) return { error: 'Sem permissão' }
 

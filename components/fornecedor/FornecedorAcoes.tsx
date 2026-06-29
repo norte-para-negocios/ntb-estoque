@@ -67,11 +67,10 @@ export function ExcluirFornecedor({ id, nome }: { id: number; nome: string }) {
     if (!window.confirm(`Excluir o fornecedor "${nome}"?`)) return
     startTransition(async () => {
       const res = await excluirFornecedor(id)
-      if (res?.error) toast.error('Erro', { description: res.error })
-      else {
-        toast.success('Fornecedor excluído')
-        router.refresh()
-      }
+      if (res?.error) { toast.error('Erro', { description: res.error }); return }
+      if (res?.omieError) toast.warning('Excluído localmente — Omie não sincronizado', { description: res.omieError })
+      else toast.success('Fornecedor excluído')
+      router.refresh()
     })
   }
 

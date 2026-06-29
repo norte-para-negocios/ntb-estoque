@@ -57,7 +57,7 @@ async function getLoja(lojaId: number) {
  * Cria um fornecedor no Omie (IncluirCliente com tag Fornecedor) e grava no banco.
  * Se o Omie falhar, retorna erro e nao salva localmente para manter sincronia.
  */
-export async function criarFornecedor(dados: ParceiroInput) {
+export async function criarFornecedor(dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Criar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -83,7 +83,7 @@ export async function criarFornecedor(dados: ParceiroInput) {
   }
 }
 
-export async function editarFornecedor(id: number, dados: ParceiroInput) {
+export async function editarFornecedor(id: number, dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Editar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -132,7 +132,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput) {
   }
 }
 
-export async function excluirFornecedor(id: number) {
+export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 

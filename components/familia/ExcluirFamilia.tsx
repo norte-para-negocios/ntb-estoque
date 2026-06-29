@@ -15,11 +15,10 @@ export function ExcluirFamilia({ id, nome }: { id: number; nome: string }) {
     if (!window.confirm(`Excluir a família "${nome}"?`)) return
     startTransition(async () => {
       const res = await excluirFamilia(id)
-      if (res?.error) toast.error('Erro', { description: res.error })
-      else {
-        toast.success('Família excluída')
-        router.refresh()
-      }
+      if (res?.error) { toast.error('Erro', { description: res.error }); return }
+      if (res?.omieError) toast.warning('Excluída localmente — Omie não sincronizado', { description: res.omieError })
+      else toast.success('Família excluída')
+      router.refresh()
     })
   }
 

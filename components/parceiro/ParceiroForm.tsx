@@ -62,7 +62,7 @@ export function ParceiroForm({
   rotuloNovo: string // "Novo fornecedor"
   comCest?: boolean
   existente?: { id: number; values: ParceiroFormValues }
-  onSubmit: (id: number | null, values: ParceiroFormValues) => Promise<{ error?: string; ok?: boolean }>
+  onSubmit: (id: number | null, values: ParceiroFormValues) => Promise<{ error?: string; ok?: boolean; omieError?: string }>
 }) {
   const editando = !!existente
   const [open, setOpen] = useState(false)
@@ -85,7 +85,11 @@ export function ParceiroForm({
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success(editando ? 'Cadastro atualizado' : 'Cadastro criado')
+      if (res?.omieError) {
+        toast.warning('Salvo localmente — Omie não sincronizado', { description: res.omieError })
+      } else {
+        toast.success(editando ? 'Cadastro atualizado' : 'Cadastro criado')
+      }
       setOpen(false)
       if (!editando) setForm(vazio(comCest))
       router.refresh()
