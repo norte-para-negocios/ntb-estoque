@@ -85,6 +85,32 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           full_object: op,
           updated_at: new Date().toISOString(),
         }))
+
+        // Preserva itensDetalhes existentes quando a API nao os retorna (ocorre para
+        // OPs concluidas — a API ListarOrdemProducao omite itensDetalhes apos a conclusao).
+        const semItens = rows.filter((r) => !(r.full_object as Record<string, unknown>)?.itensDetalhes)
+        if (semItens.length) {
+          const cods = semItens.map((r) => r.identificacao_n_cod_op).filter(Boolean)
+          const { data: existentes } = await supabase
+            .from('ordens_producao')
+            .select('identificacao_n_cod_op, full_object')
+            .eq('loja_id', loja.id)
+            .in('identificacao_n_cod_op', cods as number[])
+          const itensMapExist = new Map<number, unknown>()
+          for (const e of (existentes ?? []) as { identificacao_n_cod_op: number; full_object: Record<string, unknown> | null }[]) {
+            const fo = e.full_object
+            if (fo && Array.isArray(fo.itensDetalhes) && (fo.itensDetalhes as unknown[]).length) {
+              itensMapExist.set(Number(e.identificacao_n_cod_op), fo.itensDetalhes)
+            }
+          }
+          for (const r of rows) {
+            const fo = r.full_object as Record<string, unknown>
+            if (!fo?.itensDetalhes && itensMapExist.has(Number(r.identificacao_n_cod_op))) {
+              r.full_object = { ...fo, itensDetalhes: itensMapExist.get(Number(r.identificacao_n_cod_op)) } as unknown as OmieOP
+            }
+          }
+        }
+
         await supabase
           .from('ordens_producao')
           .upsert(rows, { onConflict: 'loja_id,identificacao_n_cod_op' })
