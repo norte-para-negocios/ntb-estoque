@@ -46,7 +46,7 @@ export async function createInventario(
       .from('produtos')
       .select('codigo_produto, codigo, descricao, descricao_familia')
       .eq('loja_id', lojaId)
-      .neq('inativo', 'S')
+      .eq('inativo', false)
     if (filtros!.tipos?.length) pq = pq.in('tipo_item', filtros!.tipos)
     if (filtros!.familias?.length) pq = pq.in('descricao_familia', filtros!.familias)
     const { data: prods } = await pq
