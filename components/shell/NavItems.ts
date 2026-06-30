@@ -19,6 +19,7 @@ import {
   Settings,
   CalendarCheck,
   BarChart3,
+  Database,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -33,6 +34,8 @@ export type NavItem = {
   gestaoUsuarios?: boolean
   // cadeadoSemAdmin: aparece pra quem nao e admin global com cadeado (em breve).
   cadeadoSemAdmin?: boolean
+  // superAdmin: so quem tem is_super_admin = true ve a rota.
+  superAdmin?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -55,5 +58,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3, group: 'Administração', gestaoUsuarios: true },
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
+  { href: '/saude-banco', label: 'Saúde do Banco', icon: Database, group: 'Administração', superAdmin: true },
   { href: '/usuario', label: 'Usuários', icon: Users, group: 'Administração', gestaoUsuarios: true },
 ]

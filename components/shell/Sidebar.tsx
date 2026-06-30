@@ -58,9 +58,10 @@ export function Sidebar({
         (i) =>
           (!i.admin || isAdmin) &&
           (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
+          (!i.superAdmin || isSuperAdmin) &&
           (permitidas === null || permitidas.has(i.href))
       ),
-    [isAdmin, podeGerirUsuarios, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Só os grupos que sobraram itens depois do filtro.

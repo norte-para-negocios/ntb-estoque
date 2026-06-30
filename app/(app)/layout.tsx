@@ -14,9 +14,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createClient()
 
-  // Quais rotas do menu o usuario pode ver (4.2). Admin recebe null = todas.
+  // Quais rotas do menu o usuario pode ver (4.2). Admin e super admin recebem null = todas.
   const permissoes = await getPermissoesNomes(profile.current_loja_id)
-  const rotasVisiveis = isAdmin ? null : Array.from(rotasPermitidas(permissoes))
+  const rotasVisiveis = isAdmin || superAdmin ? null : Array.from(rotasPermitidas(permissoes))
 
   let lojasQuery = supabase
     .from('lojas')

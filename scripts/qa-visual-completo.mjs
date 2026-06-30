@@ -36,6 +36,7 @@ const ROTAS = [
   '/local-estoque',
   '/loja',
   '/minha-loja',
+  '/saude-banco',
   '/auditoria',
   '/auditoria-fiscal',
   '/log',
