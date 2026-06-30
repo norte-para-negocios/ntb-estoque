@@ -41,18 +41,20 @@ const INCREMENTAL = process.argv.includes('--incremental')
 const RESET_CHECKPOINT = process.argv.includes('--reset')
 const LIMITE_MB = 480
 
-// Checkpoint: persiste em qual página cada loja parou para retomar sem repetir
+// Checkpoint: persiste estado completo para retomar sem chamadas extras à API
 function checkpointPath(lojaId) {
   return `${PROJ}/scripts/.ajustes-checkpoint-${lojaId}.json`
 }
 function lerCheckpoint(lojaId) {
   try {
-    const c = JSON.parse(fs.readFileSync(checkpointPath(lojaId), 'utf8'))
-    return c.pagina ?? null
+    return JSON.parse(fs.readFileSync(checkpointPath(lojaId), 'utf8'))
   } catch { return null }
 }
-function salvarCheckpoint(lojaId, pagina) {
-  fs.writeFileSync(checkpointPath(lojaId), JSON.stringify({ pagina, updated: new Date().toISOString() }))
+function salvarCheckpoint(lojaId, pagina, extra = {}) {
+  const atual = lerCheckpoint(lojaId) ?? {}
+  fs.writeFileSync(checkpointPath(lojaId), JSON.stringify({
+    ...atual, ...extra, pagina, updated: new Date().toISOString()
+  }))
 }
 function apagarCheckpoint(lojaId) {
   try { fs.unlinkSync(checkpointPath(lojaId)) } catch {}
@@ -71,6 +73,41 @@ async function tamanhoDbMB() {
     'SELECT pg_database_size(current_database()) / 1048576.0 AS mb'
   )
   return Number(r.mb)
+}
+
+// Busca binária: encontra a página mais baixa onde algum registro é >= cutoffISO.
+// Assume que datas crescem monotonicamente com o número da página (aproximadamente).
+// Retorna a página estimada menos uma margem de segurança de 50 páginas.
+async function encontrarPaginaCutoff(key, secret, paginaMax) {
+  console.log(`\n  [binary search] Localizando página de corte para >= ${cutoffISO}...`)
+  let lo = 1, hi = paginaMax
+  let tentativas = 0
+  while (lo < hi && tentativas < 20) {
+    tentativas++
+    const mid = Math.floor((lo + hi) / 2)
+    await sleep(2000)
+    let resp
+    try {
+      resp = await omieListar(key, secret, mid)
+    } catch (e) {
+      console.log(`\n  [binary search] Rate limit na pág ${mid} — usando estimativa conservadora (lo=${lo})`)
+      return Math.max(1, lo - 100)
+    }
+    const ajustes = resp.ajuste_estoque_lista ?? []
+    const maxData = ajustes.reduce((max, a) => {
+      const iso = omieDataParaISO(a.data)
+      return (iso && iso > max) ? iso : max
+    }, '0000-00-00')
+    process.stdout.write(`\r  [binary search] Pág ${mid.toLocaleString('pt-BR')}: max_data=${maxData}          `)
+    if (maxData < cutoffISO) {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  const resultado = Math.max(1, lo - 50)
+  console.log(`\n  [binary search] Página de corte: ${lo} → início conservador: ${resultado}`)
+  return resultado
 }
 
 const mbInicial = await tamanhoDbMB()
@@ -100,30 +137,48 @@ function omieDataParaISO(d) {
 }
 
 // Chama Omie com retry em rate-limits (concorrência 8020 + redundância Client-6)
+// Timeout de 90s por fetch para evitar hang indefinido
 async function omieListar(key, secret, pagina) {
   for (let t = 1; t <= 8; t++) {
-    const r = await fetch('https://app.omie.com.br/api/v1/estoque/ajuste/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        call: 'ListarAjusteEstoque',
-        app_key: key, app_secret: secret,
-        param: [{ pagina, registros_por_pagina: 50 }],
-      }),
-    })
-    const j = await r.json()
+    const ctrl = new AbortController()
+    const tid = setTimeout(() => ctrl.abort(), 90000)
+    let j
+    try {
+      const r = await fetch('https://app.omie.com.br/api/v1/estoque/ajuste/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          call: 'ListarAjusteEstoque',
+          app_key: key, app_secret: secret,
+          param: [{ pagina, registros_por_pagina: 50 }],
+        }),
+      })
+      j = await r.json()
+    } catch (err) {
+      clearTimeout(tid)
+      if (err.name === 'AbortError') {
+        console.log(`\n    timeout 90s pág ${pagina} (t${t}), aguardando 10s...`)
+        await sleep(10000); continue
+      }
+      throw err
+    }
+    clearTimeout(tid)
     const fault = j?.faultstring ?? ''
     if (j?.faultcode?.includes('8020') || /requisição.*executada/i.test(fault)) {
       console.log(`\n    concorrência Omie (t${t}), aguardando ${2 * t}s...`)
       await sleep(2000 * t); continue
     }
-    if (/REDUNDANT/i.test(fault) || /redundante/i.test(fault)) {
+    if (/REDUNDAN[TT]|redundan[TT]|indevid|bloqueado|Client.6/i.test(fault)) {
       const m = fault.match(/Aguarde (\d+) segundo/)
-      const espera = m ? (Number(m[1]) + 10) * 1000 : 70000
-      console.log(`\n    redundância Omie (t${t}), aguardando ${Math.round(espera / 1000)}s...`)
+      const espera = m ? (Number(m[1]) + 60) * 1000 : 300000
+      console.log(`\n    redundância Omie (t${t}): "${fault.slice(0,80)}", aguardando ${Math.round(espera / 1000)}s...`)
       await sleep(espera); continue
     }
-    if (fault) throw new Error(`Omie: ${fault}`)
+    if (fault) {
+      console.log(`\n    erro Omie desconhecido (t${t}): "${fault.slice(0,100)}", aguardando 90s...`)
+      await sleep(90000); continue
+    }
     return j
   }
   throw new Error('Rate limit persistente após 8 tentativas')
@@ -196,13 +251,25 @@ for (const loja of lojas) {
 
   if (RESET_CHECKPOINT) apagarCheckpoint(loja.id)
 
-  let resp1
-  try { resp1 = await omieListar(loja.k, loja.s, 1) } catch (e) {
-    console.error(`  Erro página 1: ${e.message}`); continue
+  // Checkpoint: retoma o estado completo salvo (pagina, totalPaginas, paginaFim)
+  const cp = INCREMENTAL ? null : lerCheckpoint(loja.id)
+  const checkpointPagina = cp?.pagina ?? null
+
+  // Metadados: usa cache do checkpoint para evitar chamada extra à API
+  let totalPaginas, totalRegs, resp1 = null
+  if (cp?.totalPaginas) {
+    totalPaginas = cp.totalPaginas
+    totalRegs = cp.totalRegs ?? 0
+    console.log(`  Total Omie (cache): ${totalRegs.toLocaleString('pt-BR')} registros em ${totalPaginas.toLocaleString('pt-BR')} páginas`)
+  } else {
+    const paginaRef = checkpointPagina ?? 1
+    try { resp1 = await omieListar(loja.k, loja.s, paginaRef) } catch (e) {
+      console.error(`  Erro página ${paginaRef}: ${e.message}`); continue
+    }
+    totalPaginas = resp1.total_de_paginas ?? 1
+    totalRegs = resp1.total_de_registros ?? 0
+    console.log(`  Total Omie: ${totalRegs.toLocaleString('pt-BR')} registros em ${totalPaginas.toLocaleString('pt-BR')} páginas`)
   }
-  const totalPaginas = resp1.total_de_paginas ?? 1
-  const totalRegs = resp1.total_de_registros ?? 0
-  console.log(`  Total Omie: ${totalRegs.toLocaleString('pt-BR')} registros em ${totalPaginas.toLocaleString('pt-BR')} páginas`)
 
   // Cursor para modo incremental
   let cursorId = 0
@@ -218,15 +285,27 @@ for (const loja of lojas) {
   let totalLoja = 0
   let paginasProcessadas = 0
 
-  // Checkpoint: retoma da página onde parou (evita repetir e acionar REDUNDANT do Omie)
-  const checkpointPagina = INCREMENTAL ? null : lerCheckpoint(loja.id)
   const paginaInicio = checkpointPagina ?? totalPaginas
   if (checkpointPagina) {
     console.log(`  Retomando do checkpoint: página ${checkpointPagina.toLocaleString('pt-BR')}`)
   }
 
+  // Busca binária: usa cache do checkpoint se já calculado; senão calcula e salva
+  let paginaFim = 1
+  if (!FULL_HISTORY && !INCREMENTAL) {
+    if (cp?.paginaFim) {
+      paginaFim = cp.paginaFim
+      console.log(`  Página de corte (cache): ${paginaFim.toLocaleString('pt-BR')}`)
+    } else {
+      paginaFim = await encontrarPaginaCutoff(loja.k, loja.s, paginaInicio)
+      // Salva o resultado para não repetir a busca em próximos restarts
+      salvarCheckpoint(loja.id, paginaInicio, { paginaFim, totalPaginas, totalRegs })
+    }
+    console.log(`  Varredura: página ${paginaInicio.toLocaleString('pt-BR')} → ${paginaFim.toLocaleString('pt-BR')} (${(paginaInicio - paginaFim + 1).toLocaleString('pt-BR')} páginas)`)
+  }
+
   // Varre da última página para a primeira (sort ASC → última tem registros mais recentes)
-  for (let pagina = paginaInicio; pagina >= 1; pagina--) {
+  for (let pagina = paginaInicio; pagina >= paginaFim; pagina--) {
     // Verifica banco a cada 500 páginas processadas
     if (paginasProcessadas > 0 && paginasProcessadas % 500 === 0) {
       const mb = await tamanhoDbMB()
@@ -237,8 +316,23 @@ for (const loja of lojas) {
       }
     }
 
-    // resp1 foi buscado para pagina=1 — reutiliza só na iteração final do loop
-    const resp = pagina === 1 ? resp1 : await omieListar(loja.k, loja.s, pagina)
+    // resp1 só existe quando os metadados vieram da API (não do cache); reutiliza na paginaInicio
+    let resp
+    try {
+      resp = (resp1 && pagina === paginaInicio) ? resp1 : await omieListar(loja.k, loja.s, pagina)
+    } catch (e) {
+      // Pula a página bloqueada (salva pagina-1) para evitar loop infinito.
+      // Os registros da página pulada podem ser re-sincronizados manualmente depois.
+      const proximaPagina = pagina - 1
+      console.log(`\n  Rate limit persistente na pág ${pagina} — PULANDO para ${proximaPagina} e encerrando.`)
+      if (proximaPagina >= paginaFim) {
+        salvarCheckpoint(loja.id, proximaPagina)
+      } else {
+        apagarCheckpoint(loja.id)
+      }
+      abortado = true
+      break
+    }
     const ajustes = resp.ajuste_estoque_lista ?? []
 
     // Em modo incremental: para quando todos os ids desta página ≤ cursor
@@ -273,17 +367,20 @@ for (const loja of lojas) {
       }
     }
 
-    if (paginasProcessadas % 50 === 0) {
-      const pct = Math.round(((totalPaginas - pagina + 1) / totalPaginas) * 100)
-      process.stdout.write(`\r  Pág ${pagina.toLocaleString('pt-BR')} (${pct}% varrido) — ${totalLoja.toLocaleString('pt-BR')} salvos`)
+    // Log a cada página para manter output fluindo (ambiente mata processos silenciosos)
+    if (paginasProcessadas % 10 === 0) {
+      const pct = Math.round(((paginaInicio - pagina) / (paginaInicio - paginaFim + 1)) * 100)
+      console.log(`  [${paginasProcessadas}] Pág ${pagina.toLocaleString('pt-BR')} (${pct}%) — acum ${totalLoja.toLocaleString('pt-BR')} salvos`)
+    } else {
+      process.stdout.write(`\r  pág ${pagina}...`)
     }
 
-    // Salva checkpoint a cada 10 páginas (retoma sem repetir se interrompido)
-    if (!INCREMENTAL && paginasProcessadas % 10 === 0) {
+    // Salva checkpoint a cada 5 páginas (menos re-processamento entre ciclos)
+    if (!INCREMENTAL && paginasProcessadas % 5 === 0) {
       salvarCheckpoint(loja.id, pagina)
     }
 
-    await sleep(80)
+    await sleep(5000)
   }
 
   // Limpeza do checkpoint ao concluir normalmente
