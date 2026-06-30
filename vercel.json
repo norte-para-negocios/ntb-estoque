@@ -8,6 +8,7 @@
     { "path": "/api/cron/prune", "schedule": "0 2 * * *" },
     { "path": "/api/cron/sync-movimentos", "schedule": "0 4 * * *" },
     { "path": "/api/cron/sync-ajustes", "schedule": "30 4 * * *" },
-    { "path": "/api/cron/arquivar?dry_run=false", "schedule": "0 3 1 * *" }
+    { "path": "/api/cron/arquivar?dry_run=false", "schedule": "0 3 1 * *" },
+    { "path": "/api/cron/arquivar?tabela=ordens_producao&meses=3&dry_run=false", "schedule": "30 3 1 * *" }
   ]
 }
