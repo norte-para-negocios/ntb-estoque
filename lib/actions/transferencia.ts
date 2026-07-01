@@ -496,11 +496,17 @@ export async function forceSyncTransferencia(transferenciaId: number) {
 /**
  * Duplica uma transferencia: copia origem/destino/motivo (status 'Em contagem') e
  * os movimentos com quan zerada e status 'Iniciado'. Retorna o id da nova.
+ * novaData (YYYY-MM-DD, opcional): data escolhida pelo usuario; cai em hoje se
+ * vazia. Nao pode ser futura (mesma regra de createTransferencia).
  */
-export async function duplicarTransferencia(transferenciaId: number) {
+export async function duplicarTransferencia(transferenciaId: number, novaData?: string) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Criar'))) {
     return { error: 'Sem permissao para criar transferencia' }
+  }
+  const hojeBahia = hojeBahiaISO()
+  if (novaData && novaData > hojeBahia) {
+    return { error: 'A data não pode ser futura' }
   }
   const supabase = createServiceClient()
 
@@ -518,10 +524,10 @@ export async function duplicarTransferencia(transferenciaId: number) {
 
   if (!original) return { error: 'Transferência não encontrada' }
 
-  // A duplicata e uma NOVA transferencia: responsavel = quem duplicou, data = hoje.
-  // Antes ficava sem responsavel (user_id nulo) e sem data.
+  // A duplicata e uma NOVA transferencia: responsavel = quem duplicou, data
+  // escolhida pelo usuario (ou hoje se nao informada).
   const userId = (await getUser()).id
-  const dataNova = dataCriacaoBahia(hojeBahiaISO())!
+  const dataNova = dataCriacaoBahia(novaData) ?? dataCriacaoBahia(hojeBahia)!
   const { data: nova } = await supabase
     .from('transferencias')
     .insert({

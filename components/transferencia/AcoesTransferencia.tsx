@@ -1,10 +1,19 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
+import { btnLinhaClass, btnClass, RotuloAcao } from '@/components/ui-kit/Button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import {
   duplicarTransferencia,
   excluirTransferencia,
@@ -22,13 +31,17 @@ export function AcoesTransferencia({
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  const [dialogAberto, setDialogAberto] = useState(false)
+  const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const [dataNova, setDataNova] = useState(hojeBahia)
 
   function duplicar() {
     startTransition(async () => {
-      const res = await duplicarTransferencia(transferenciaId)
+      const res = await duplicarTransferencia(transferenciaId, dataNova)
       if (res?.error) toast.error('Erro', { description: res.error })
       else if (res?.id) {
         toast.success('Transferência duplicada')
+        setDialogAberto(false)
         router.push(`/transferencia/${res.id}/contagem`)
       }
     })
@@ -64,15 +77,44 @@ export function AcoesTransferencia({
 
   return (
     <span className="inline-flex items-center gap-1 2xl:gap-2">
-      <button
-        onClick={duplicar}
-        disabled={pending}
-        className={btnLinhaClass('outline')}
-        aria-label="Duplicar"
-        title="Duplicar"
+      <Dialog
+        open={dialogAberto}
+        onOpenChange={(open) => {
+          setDialogAberto(open)
+          if (open) setDataNova(hojeBahia)
+        }}
       >
-        <Copy className="size-4" /> <RotuloAcao>Duplicar</RotuloAcao>
-      </button>
+        <button
+          onClick={() => setDialogAberto(true)}
+          disabled={pending}
+          className={btnLinhaClass('outline')}
+          aria-label="Duplicar"
+          title="Duplicar"
+        >
+          <Copy className="size-4" /> <RotuloAcao>Duplicar</RotuloAcao>
+        </button>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicar transferência</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Data da nova transferência</Label>
+            <input
+              type="date"
+              value={dataNova}
+              max={hojeBahia}
+              onChange={(e) => setDataNova(e.target.value)}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+            />
+          </div>
+          <DialogFooter>
+            <button onClick={duplicar} disabled={pending} className={btnClass('primary')}>
+              {pending && <Spinner />}
+              {pending ? 'Duplicando...' : 'Duplicar'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {temErro && (
         <button
           onClick={reprocessar}

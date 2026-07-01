@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnLinhaClass, btnClass } from '@/components/ui-kit/Button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui-kit/Spinner'
 import {
   duplicarInventario,
   excluirInventario,
@@ -23,19 +31,17 @@ export function AcoesInventario({
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
-
-  // Duplicar pede a data ANTES de criar (dialog), em vez de sempre usar hoje.
+  const [dialogAberto, setDialogAberto] = useState(false)
   const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-  const [dialogDuplicar, setDialogDuplicar] = useState(false)
-  const [dataDuplicar, setDataDuplicar] = useState(hojeBahia)
+  const [dataNova, setDataNova] = useState(hojeBahia)
 
   function duplicar() {
     startTransition(async () => {
-      const res = await duplicarInventario(inventarioId, dataDuplicar)
+      const res = await duplicarInventario(inventarioId, dataNova)
       if (res?.error) toast.error('Erro', { description: res.error })
       else if (res?.id) {
         toast.success('Inventário duplicado')
-        setDialogDuplicar(false)
+        setDialogAberto(false)
         router.push(`/inventario/${res.id}/contagem`)
       }
     })
@@ -67,47 +73,39 @@ export function AcoesInventario({
 
   return (
     <span className="inline-flex items-center gap-1 2xl:gap-2">
-      <button
-        onClick={() => setDialogDuplicar(true)}
-        disabled={pending}
-        className={btnLinhaClass('outline')}
-        aria-label="Duplicar"
-        title="Duplicar"
+      <Dialog
+        open={dialogAberto}
+        onOpenChange={(open) => {
+          setDialogAberto(open)
+          if (open) setDataNova(hojeBahia)
+        }}
       >
-        <Copy className="size-4" />
-      </button>
-      <Dialog open={dialogDuplicar} onOpenChange={setDialogDuplicar}>
-        <DialogContent className="bg-surface" showCloseButton={false}>
+        <button
+          onClick={() => setDialogAberto(true)}
+          disabled={pending}
+          className={btnLinhaClass('outline')}
+          aria-label="Duplicar"
+          title="Duplicar"
+        >
+          <Copy className="size-4" />
+        </button>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Copy className="size-4 text-brand" />
-              Duplicar inventário
-            </DialogTitle>
+            <DialogTitle>Duplicar inventário</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-1">
-            <label className="block text-[13px] font-medium text-text-muted">Data do novo inventário</label>
+          <div className="space-y-2">
+            <Label>Data do novo inventário</Label>
             <input
               type="date"
-              value={dataDuplicar}
+              value={dataNova}
               max={hojeBahia}
-              onChange={(e) => setDataDuplicar(e.target.value)}
-              disabled={pending}
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+              onChange={(e) => setDataNova(e.target.value)}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
             />
-            <p className="text-[11px] text-text-muted">
-              Mesmo local e itens do original, contagem zerada. Padrão: hoje.
-            </p>
           </div>
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setDialogDuplicar(false)}
-              disabled={pending}
-              className={btnClass('ghost')}
-            >
-              Cancelar
-            </button>
-            <button type="button" onClick={duplicar} disabled={pending} className={btnClass('primary')}>
+            <button onClick={duplicar} disabled={pending} className={btnClass('primary')}>
+              {pending && <Spinner />}
               {pending ? 'Duplicando...' : 'Duplicar'}
             </button>
           </DialogFooter>
