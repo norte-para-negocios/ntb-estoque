@@ -1,9 +1,16 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil, ChevronDown } from 'lucide-react'
+import { useRef, useState, useTransition } from 'react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, CalendarDays, Pencil, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { setValidadeOP, setQuantidadeOP, finishOP, reverterOP, excluirOP } from '@/lib/actions/ordem-producao'
+import {
+  setValidadeOP,
+  setQuantidadeOP,
+  setDataOP as setDataOPAction,
+  finishOP,
+  reverterOP,
+  excluirOP,
+} from '@/lib/actions/ordem-producao'
 import type { OpStatus } from '@/lib/op-status'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { parseNumBR } from '@/lib/num-br'
@@ -142,6 +149,39 @@ function useOP(op: OPData) {
     const dd = String(hoje.getDate()).padStart(2, '0')
     return `${hoje.getFullYear()}-${mm}-${dd}`
   })()
+  // Data da OP (previsao). AO CONTRARIO da validade (so no nosso banco), esta data e
+  // a mesma do Omie: editar aqui reescreve a OP la (AlterarOrdemProducao). Otimista,
+  // com revert se o Omie recusar. Bloqueada quando a OP esta concluida.
+  const [dataOP, setDataOP] = useState(dataPrevistaISO)
+  const dataOPSalva = useRef(dataPrevistaISO)
+
+  function salvarDataOP(novo: string) {
+    if (!novo || novo === dataOPSalva.current) return
+    const anterior = dataOPSalva.current
+    startTransition(async () => {
+      const res = await setDataOPAction(op.id, novo)
+      if (res?.error) {
+        toast.error('Erro ao alterar a data', { description: res.error })
+        setDataOP(anterior) // desfaz o otimismo
+      } else {
+        dataOPSalva.current = novo
+        toast.success('Data da OP alterada no Omie')
+      }
+    })
+  }
+
+  function ajustarDataOP(delta: number) {
+    // Parsing local (sem UTC) para evitar off-by-one em fuso UTC-3 (Bahia).
+    const partes = dataOP ? dataOP.split('-').map(Number) : null
+    const base = partes ? new Date(partes[0], partes[1] - 1, partes[2]) : new Date()
+    base.setDate(base.getDate() + delta)
+    const mm = String(base.getMonth() + 1).padStart(2, '0')
+    const dd = String(base.getDate()).padStart(2, '0')
+    const novo = `${base.getFullYear()}-${mm}-${dd}`
+    setDataOP(novo)
+    salvarDataOP(novo)
+  }
+
   const [dialogConclusao, setDialogConclusao] = useState(false)
   // Editar (mobile): abre os steppers de validade/quantidade num dialog enxuto,
   // pra a linha da OP ficar compacta como as outras telas.
@@ -195,6 +235,10 @@ function useOP(op: OPData) {
     setValidade,
     quantidade,
     setQuantidade,
+    dataOP,
+    setDataOP,
+    salvarDataOP,
+    ajustarDataOP,
     pending,
     salvarValidade,
     salvarQuantidade,
@@ -288,6 +332,44 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         onClick={() => ctrl.ajustarQuantidade(1)}
         disabled={ctrl.pending || bloqueado}
         aria-label="Aumentar quantidade"
+        className={stepBtnClass}
+      >
+        <Plus className="size-3.5 lg:size-3" />
+      </button>
+    </div>
+  )
+}
+
+// Stepper da DATA da OP (previsao). Escreve no Omie (AlterarOrdemProducao). Bloqueado
+// sem permissao de Editar OU quando a OP ja esta concluida (nao da pra remarcar uma
+// OP concluida sem antes reverter).
+function StepperData({ op, ctrl }: StepperProps) {
+  const bloqueado = !op.podeEditar || op.concluida
+  return (
+    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+      <button
+        type="button"
+        onClick={() => ctrl.ajustarDataOP(-1)}
+        disabled={ctrl.pending || bloqueado}
+        aria-label="Dia anterior"
+        className={stepBtnClass}
+      >
+        <Minus className="size-3.5 lg:size-3" />
+      </button>
+      <input
+        type="date"
+        value={ctrl.dataOP}
+        onChange={(e) => ctrl.setDataOP(e.target.value)}
+        onBlur={() => ctrl.salvarDataOP(ctrl.dataOP)}
+        disabled={ctrl.pending || bloqueado}
+        readOnly={bloqueado}
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+      />
+      <button
+        type="button"
+        onClick={() => ctrl.ajustarDataOP(1)}
+        disabled={ctrl.pending || bloqueado}
+        aria-label="Próximo dia"
         className={stepBtnClass}
       >
         <Plus className="size-3.5 lg:size-3" />
@@ -394,6 +476,15 @@ function DialogEditar({ op, ctrl }: StepperProps) {
         <div className="space-y-4 py-1">
           <div className="truncate text-[13px] text-text-muted">{op.produto}</div>
           <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Data da OP</label>
+            <StepperData op={op} ctrl={ctrl} />
+            {op.concluida && (
+              <p className="mt-1 text-[11px] text-text-muted">
+                OP concluída — reverta a conclusão para poder remarcar a data.
+              </p>
+            )}
+          </div>
+          <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Validade</label>
             <StepperValidade op={op} ctrl={ctrl} />
           </div>
@@ -402,7 +493,8 @@ function DialogEditar({ op, ctrl }: StepperProps) {
             <StepperQuantidade op={op} ctrl={ctrl} />
           </div>
           <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-text-muted">
-            A validade fica só no nosso sistema. A quantidade da OP no Omie não muda por aqui.
+            A <strong>data da OP</strong> é gravada no Omie. Já a validade e a quantidade
+            ficam só no nosso sistema.
           </p>
         </div>
         <DialogFooter>
@@ -418,6 +510,20 @@ function DialogEditar({ op, ctrl }: StepperProps) {
 function Acoes({ op, ctrl }: StepperProps) {
   return (
     <>
+      {op.podeEditar && (
+        <>
+          <button
+            type="button"
+            onClick={() => ctrl.setDialogEditar(true)}
+            disabled={ctrl.pending}
+            className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
+            title="Editar data / validade / quantidade"
+          >
+            <CalendarDays className="size-3.5" />
+          </button>
+          <DialogEditar op={op} ctrl={ctrl} />
+        </>
+      )}
       <DialogImprimirEtiqueta
         href={`/ordem-producao/${op.id}/imprimir`}
         trigger={

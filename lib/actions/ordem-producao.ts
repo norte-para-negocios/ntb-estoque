@@ -9,6 +9,7 @@ import {
   fetchOrdemProducao,
   excluirOrdemProducao,
   reverterOrdemProducao,
+  alterarDataOrdemProducao,
 } from '@/lib/omie/ordem-producao'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -198,6 +199,57 @@ export async function setQuantidadeOP(opId: number, quantidade: number | null) {
     .eq('id', opId)
     .eq('loja_id', lojaId)
   revalidatePath('/ordem-producao')
+}
+
+/**
+ * Troca a DATA (previsao) de uma OP ABERTA — escreve de verdade no Omie via
+ * AlterarOrdemProducao e reflete no banco. Diferente da validade (so local), a data
+ * da OP e a mesma do Omie. Bloqueia OP concluida: mudar data de OP concluida nao faz
+ * sentido (e o Omie recusa) — reverter primeiro. `dataISO`: 'YYYY-MM-DD'.
+ */
+export async function setDataOP(opId: number, dataISO: string) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
+
+  const dData = dataParaBR(dataISO)
+  if (!dData) return { error: 'Data inválida' }
+
+  const supabase = createServiceClient()
+  const { data: op } = await supabase
+    .from('ordens_producao')
+    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .single<{
+      identificacao_n_cod_op: number | null
+      identificacao_n_cod_produto: number | null
+      identificacao_n_qtde: number | null
+      identificacao_codigo_local_estoque: number | null
+      concluida: boolean | null
+      loja: LojaOmie
+    }>()
+
+  if (!op?.identificacao_n_cod_op || !op.loja) return { error: 'Ordem de produção não encontrada' }
+  if (op.concluida) return { error: 'Não dá para mudar a data de uma OP concluída. Reverta a conclusão primeiro.' }
+  if (!op.identificacao_n_cod_produto) return { error: 'OP sem produto vinculado. Aguarde o próximo sync.' }
+
+  try {
+    await alterarDataOrdemProducao(op.loja, {
+      nCodOP: op.identificacao_n_cod_op,
+      nCodProduto: op.identificacao_n_cod_produto,
+      dData,
+      nQtde: op.identificacao_n_qtde ?? 1,
+      codigoLocalEstoque: op.identificacao_codigo_local_estoque,
+    })
+
+    // Traz o estado canonico do Omie (data, num etc.) de volta pro banco.
+    await fetchOrdemProducao(op.loja, op.identificacao_n_cod_op)
+    await registrarAuditoria('editar', 'ordem de produção', op.identificacao_n_cod_op, `data → ${dData}`)
+    revalidatePath('/ordem-producao')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao alterar a data no Omie' }
+  }
 }
 
 // qtdeProduzida (opcional): conclusao PARCIAL — concluir so parte da OP. Ex.: OP de

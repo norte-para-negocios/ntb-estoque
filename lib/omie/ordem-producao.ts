@@ -221,6 +221,46 @@ export async function incluirOrdemProducao(
 }
 
 /**
+ * Altera a DATA de uma OP ABERTA no Omie (AlterarOrdemProducao). Reescreve as tres
+ * datas (previsao/inicio/conclusao) com o MESMO dia — igual ao incluir, onde o Omie
+ * exige as tres iguais. Reenvia produto/quantidade/local existentes porque o Alterar
+ * espera a identificacao completa. NAO mexe em OP concluida (a action bloqueia antes).
+ */
+export async function alterarDataOrdemProducao(
+  loja: LojaOmie,
+  params: {
+    nCodOP: number
+    nCodProduto: number
+    dData: string // d/m/Y (usada para inicio, conclusao e previsao)
+    nQtde: number
+    codigoLocalEstoque?: number | null
+  }
+) {
+  const data: Record<string, unknown> = {
+    identificacao: {
+      nCodOP: params.nCodOP,
+      nCodProduto: params.nCodProduto,
+      dDtPrevisao: params.dData,
+      nQtde: params.nQtde,
+      ...(params.codigoLocalEstoque ? { codigo_local_estoque: params.codigoLocalEstoque } : {}),
+    },
+    infAdicionais: {
+      dDtInicio: params.dData,
+      dDtConclusao: params.dData,
+    },
+  }
+
+  return omieRequest<{ nCodOP?: number; cCodIntOP?: string; cNumOP?: string }>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/op',
+    call: 'AlterarOrdemProducao',
+    data,
+  })
+}
+
+/**
  * Exclui uma Ordem de Producao no Omie (ExcluirOrdemProducao). So vale para OP
  * ABERTA/pendente. Param: { nCodOP }. Validada em teste real anterior.
  */

@@ -49,3 +49,6 @@ _qa_*.mjs
 
 # checkpoints de sync (estado de runtime)
 scripts/.ajustes-checkpoint-*.json
+
+.vercel
+.env*
