@@ -237,11 +237,11 @@ export async function removeMovimento(movimentoId: number) {
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; transferencia: { loja: LojaOmie } | null }>()
   if (mov?.id_ajuste && mov.transferencia?.loja) {
-    try {
-      await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Falha ao excluir o ajuste no Omie' }
-    }
+    // excluirAjusteEstoque nunca lança (sempre devolve boolean); precisa checar o
+    // retorno, senão uma falha real de comunicação passa despercebida e o
+    // movimento é apagado localmente com o ajuste ainda vivo no Omie.
+    const ok = await excluirAjusteEstoque(mov.transferencia.loja, mov.id_ajuste)
+    if (!ok) return { error: 'Não foi possível remover o ajuste antigo no Omie. Tente de novo.' }
   }
   await supabase.from('movimentos').delete().eq('id', movimentoId).eq('loja_id', lojaId)
   revalidatePath('/transferencia')
@@ -598,7 +598,13 @@ export async function excluirTransferencia(transferenciaId: number) {
 
   for (const mov of trans.movimentos) {
     if (mov.id_ajuste) {
-      await excluirAjusteEstoque(trans.loja, mov.id_ajuste)
+      // excluirAjusteEstoque nunca lança, sempre devolve boolean: se ignorado, uma
+      // falha real de comunicação passa despercebida e a transferência é apagada
+      // localmente com ajustes ainda vivos (órfãos) no Omie.
+      const ok = await excluirAjusteEstoque(trans.loja, mov.id_ajuste)
+      if (!ok) {
+        return { error: `Não foi possível remover o ajuste do movimento ${mov.id} no Omie. Tente excluir de novo.` }
+      }
     }
   }
 

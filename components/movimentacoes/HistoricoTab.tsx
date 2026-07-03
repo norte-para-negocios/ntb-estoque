@@ -137,13 +137,18 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
       const cmc = cmcDe(g.cod_prod)
       g.valEntradas = g.entradas * cmc
       g.valSaidas = g.saidas * cmc
+    }
+    if (filtroMov === 'entrada') arr = arr.filter((g) => g.entradas > 0)
+    else if (filtroMov === 'saida') arr = arr.filter((g) => g.saidas > 0)
+    // Totais SEMPRE depois do filtro entrada/saída: senão o card do topo mostra
+    // soma de linhas que nem aparecem na tabela (ex.: filtrar "Entradas" mas o
+    // total de Saídas exibido incluir saídas de linhas ocultas).
+    for (const g of arr) {
       totalEntradas += g.entradas
       totalSaidas += g.saidas
       totalValEntradas += g.valEntradas
       totalValSaidas += g.valSaidas
     }
-    if (filtroMov === 'entrada') arr = arr.filter((g) => g.entradas > 0)
-    else if (filtroMov === 'saida') arr = arr.filter((g) => g.saidas > 0)
     arr.sort((a, b) => {
       if (a.quando !== b.quando) return a.quando < b.quando ? 1 : -1
       return b.saidas - a.saidas
@@ -191,6 +196,10 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
       .limit(TETO_LINHAS)
     if (termo) totaisQuery = totaisQuery.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
     if (codigosIn) totaisQuery = totaisQuery.in('cod_prod', codigosIn)
+    // Mesmo filtro entrada/saída da query principal: senão o total do topo soma
+    // linhas que o filtro escondeu da tabela.
+    if (filtroMov === 'entrada') totaisQuery = totaisQuery.gt('entradas', 0)
+    else if (filtroMov === 'saida') totaisQuery = totaisQuery.gt('saidas', 0)
     const { data: totaisRaw } = await totaisQuery
     for (const r of (totaisRaw ?? []) as { cod_prod: number; entradas: number; saidas: number }[]) {
       const e = Number(r.entradas) || 0

@@ -193,11 +193,16 @@ export async function salvarEstrutura(
 
   const idMalhasDesejados = new Set(itens.map((i) => i.idMalha).filter((v): v is number => v != null))
   let incluidos = 0, alterados = 0, excluidos = 0
+  // O diff aplica em varias chamadas sequenciais ao Omie; se uma falhar no meio,
+  // as anteriores ja foram gravadas la. A mensagem de erro sempre reporta quantas
+  // ja foram aplicadas com sucesso antes da falha, pra nao passar a impressao de
+  // "nada foi salvo" quando na verdade uma parte ja foi.
+  const progresso = () => `(já aplicado: +${incluidos} ~${alterados} -${excluidos})`
   try {
     // 1) Inclui os novos (sem idMalha).
     for (const it of itens.filter((i) => i.idMalha == null)) {
       const r = await incluirEstrutura(loja, codigoProduto, { idProdMalha: it.idProdMalha, quantProdMalha: it.quantidade, percPerdaProdMalha: it.perda })
-      if (r?.faultstring) return { error: `Incluir "${it.descricao}": ${r.faultstring}` }
+      if (r?.faultstring) return { error: `Incluir "${it.descricao}": ${r.faultstring} ${progresso()}` }
       incluidos++
       await sleep(800)
     }
@@ -206,7 +211,7 @@ export async function salvarEstrutura(
       const cur = atuais.get(it.idMalha!)
       if (cur && (!quaseIgual(cur.quant, it.quantidade) || !quaseIgual(cur.perda, it.perda))) {
         const r = await alterarEstrutura(loja, codigoProduto, it.idMalha!, { quantProdMalha: it.quantidade, percPerdaProdMalha: it.perda })
-        if (r?.faultstring) return { error: `Alterar "${it.descricao}": ${r.faultstring}` }
+        if (r?.faultstring) return { error: `Alterar "${it.descricao}": ${r.faultstring} ${progresso()}` }
         alterados++
         await sleep(800)
       }
@@ -215,13 +220,14 @@ export async function salvarEstrutura(
     for (const [idMalha] of atuais) {
       if (!idMalhasDesejados.has(idMalha)) {
         const r = await excluirEstrutura(loja, codigoProduto, idMalha)
-        if (r?.faultstring) return { error: `Excluir componente: ${r.faultstring}` }
+        if (r?.faultstring) return { error: `Excluir componente: ${r.faultstring} ${progresso()}` }
         excluidos++
         await sleep(800)
       }
     }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Falha ao salvar a estrutura no Omie' }
+    const msg = e instanceof Error ? e.message : 'Falha ao salvar a estrutura no Omie'
+    return { error: `${msg} ${progresso()}` }
   }
 
   await registrarAuditoria('editar', 'ficha técnica', codigoProduto, `${prod?.descricao ?? ''}: +${incluidos} ~${alterados} -${excluidos}`)

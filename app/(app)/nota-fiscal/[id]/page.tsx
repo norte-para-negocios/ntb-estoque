@@ -30,6 +30,7 @@ export default async function NotaFiscalItensPage({
     .from('nota_fiscal_items')
     .select('id, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade')
     .eq('nota_fiscal_id', id)
+    .eq('loja_id', lojaId)
     .order('n_sequencia')
 
   function fmtData(d: string | null) {

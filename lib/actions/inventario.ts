@@ -238,11 +238,11 @@ export async function removeInventarioItem(itemId: number) {
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; loja: LojaOmie }>()
   if (item?.id_ajuste && item.loja) {
-    try {
-      await excluirAjusteEstoque(item.loja, item.id_ajuste)
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Falha ao excluir o ajuste no Omie' }
-    }
+    // excluirAjusteEstoque nunca lança (sempre devolve boolean); precisa checar o
+    // retorno, senão uma falha real de comunicação passa despercebida e o item é
+    // apagado localmente com o ajuste ainda vivo no Omie.
+    const ok = await excluirAjusteEstoque(item.loja, item.id_ajuste)
+    if (!ok) return { error: 'Não foi possível remover o ajuste antigo no Omie. Tente de novo.' }
   }
   await supabase.from('inventario_items').delete().eq('id', itemId).eq('loja_id', lojaId)
   revalidatePath('/inventario')
@@ -575,7 +575,13 @@ export async function excluirInventario(inventarioId: number) {
 
   for (const item of inventario.items) {
     if (item.id_ajuste) {
-      await excluirAjusteEstoque(inventario.loja, item.id_ajuste)
+      // excluirAjusteEstoque nunca lança, sempre devolve boolean: se ignorado, uma
+      // falha real de comunicação passa despercebida e o inventário é apagado
+      // localmente com ajustes ainda vivos (órfãos) no Omie.
+      const ok = await excluirAjusteEstoque(inventario.loja, item.id_ajuste)
+      if (!ok) {
+        return { error: `Não foi possível remover o ajuste do item ${item.id} no Omie. Tente excluir de novo.` }
+      }
     }
   }
 

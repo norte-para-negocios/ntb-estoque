@@ -58,28 +58,19 @@ async function tentarConcluirSemInsumosSemCmc(
   const itens = estrutura?.itens ?? []
   if (!itens.length) return { error: erroOriginal }
 
-  // Local pra checar CMC: o da OP se veio; senão o de maior saldo do insumo.
+  // Sem local explícito da OP não dá pra checar CMC com confiança: um "local de
+  // maior saldo" adivinhado pode ser DIFERENTE do local que o Omie realmente usa
+  // pra consumir o insumo, gerando falso positivo (removeria um insumo que tem
+  // custo certinho no local real). Mais vale não mexer na malha do que arriscar
+  // isso — devolve o erro original pro usuário resolver manualmente no Omie.
+  if (!codigoLocalEstoque) return { error: erroOriginal }
+
   const hojeBR = new Date().toLocaleDateString('pt-BR')
   const semCmc: { idMalha: number; idProdMalha: number; quant: number; perda: number; nome: string }[] = []
 
   for (const item of itens) {
-    let local = codigoLocalEstoque
-    if (!local) {
-      const supabase = createServiceClient()
-      const { data: pos } = await supabase
-        .from('posicao_estoques')
-        .select('codigo_local_estoque')
-        .eq('loja_id', loja.id)
-        .eq('n_cod_prod', item.idProdMalha)
-        .gt('n_saldo', 0)
-        .order('n_saldo', { ascending: false })
-        .limit(1)
-        .maybeSingle<{ codigo_local_estoque: number }>()
-      local = pos?.codigo_local_estoque ?? null
-    }
-    if (!local) continue
     try {
-      const posicao = await getPosicaoProduto(loja, local, item.idProdMalha, hojeBR)
+      const posicao = await getPosicaoProduto(loja, codigoLocalEstoque, item.idProdMalha, hojeBR)
       if (!posicao || posicao.n_cmc <= 0) {
         semCmc.push({
           idMalha: item.idMalha,
@@ -424,10 +415,14 @@ export async function finishOP(
   }
 
   // Quantidade a concluir: a escolhida (parcial) se valida; senao a cheia da OP.
+  const qtdMaxima = op.quantidade ?? op.identificacao_n_qtde ?? 1
   const qtdConcluir =
     qtdeProduzida != null && Number.isFinite(qtdeProduzida) && qtdeProduzida > 0
       ? qtdeProduzida
-      : op.quantidade ?? op.identificacao_n_qtde ?? 1
+      : qtdMaxima
+  if (qtdConcluir > qtdMaxima) {
+    return { error: `Quantidade a concluir (${qtdConcluir}) não pode ser maior que a quantidade da OP (${qtdMaxima}).` }
+  }
 
   // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
   // 3) hoje como ultimo fallback.

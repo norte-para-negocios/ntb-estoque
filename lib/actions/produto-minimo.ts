@@ -13,11 +13,16 @@ export async function setEstoqueMinimo(produtoId: number, valor: number | null) 
     return { error: 'Valor inválido' }
   }
   const supabase = createServiceClient()
-  await supabase
+  const { data, error } = await supabase
     .from('produtos')
     .update({ estoque_minimo: valor, updated_at: new Date().toISOString() })
     .eq('id', produtoId)
     .eq('loja_id', lojaId)
+    .select('id')
+  if (error) return { error: error.message }
+  // .update() nao erra quando o WHERE nao bate com nenhuma linha (ex.: produto de
+  // outra loja); sem checar o retorno, a funcao dizia "ok" sem ter salvo nada.
+  if (!data?.length) return { error: 'Produto não encontrado' }
   revalidatePath('/produto')
   return { ok: true }
 }
