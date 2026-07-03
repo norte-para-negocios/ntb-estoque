@@ -11,8 +11,148 @@ import {
   reverterOrdemProducao,
   alterarDataOrdemProducao,
 } from '@/lib/omie/ordem-producao'
+import { consultarEstrutura, incluirEstrutura, excluirEstrutura } from '@/lib/omie/malha'
+import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// Detecta o erro do Omie "existe item na estrutura com CMC (custo médio) zerado"
+// ao concluir uma OP. É regra do próprio Omie no ConcluirOrdemProducao (calcula o
+// custo da produção a partir do CMC dos insumos); não há parâmetro na API pra
+// pular essa checagem por insumo.
+function pareceErroCmc(msg: string): boolean {
+  return /\bcmc\b|custo m.dio/i.test(msg)
+}
+
+/**
+ * Decisão explícita (04/07, com o fundador ciente do risco): quando o Omie
+ * recusa concluir por CMC zerado num insumo, ao invés de travar a OP inteira,
+ * remove TEMPORARIAMENTE da ficha técnica (malha) do produto os insumos sem
+ * custo, conclui sem eles, e RECOLOCA os insumos de volta na malha logo em
+ * seguida (mesma quantidade/perda de antes) — pra não deixar a receita
+ * incompleta pra próximas OPs. O insumo pulado NÃO é baixado do estoque nem
+ * entra no custo do produto acabado NESTA produção.
+ *
+ * ATENÇÃO: mexe na malha (ficha técnica) global do produto, não só desta OP —
+ * regra crítica de sessão anterior pede isso só "com o Ramon". Mantido restrito
+ * a este fallback automático de CMC, sempre restaurando a malha ao final.
+ */
+async function tentarConcluirSemInsumosSemCmc(
+  loja: LojaOmie,
+  codigoProduto: number,
+  codigoLocalEstoque: number | null,
+  nCodOP: number,
+  dataConclusao: string,
+  qtdConcluir: number,
+  obs: string,
+  erroOriginal: string
+): Promise<{ ok: true; insumosPulados: string[]; avisoRestaurar?: string } | { error: string }> {
+  let estrutura
+  try {
+    estrutura = await consultarEstrutura(loja, codigoProduto)
+  } catch {
+    return { error: erroOriginal }
+  }
+  const itens = estrutura?.itens ?? []
+  if (!itens.length) return { error: erroOriginal }
+
+  // Local pra checar CMC: o da OP se veio; senão o de maior saldo do insumo.
+  const hojeBR = new Date().toLocaleDateString('pt-BR')
+  const semCmc: { idMalha: number; idProdMalha: number; quant: number; perda: number; nome: string }[] = []
+
+  for (const item of itens) {
+    let local = codigoLocalEstoque
+    if (!local) {
+      const supabase = createServiceClient()
+      const { data: pos } = await supabase
+        .from('posicao_estoques')
+        .select('codigo_local_estoque')
+        .eq('loja_id', loja.id)
+        .eq('n_cod_prod', item.idProdMalha)
+        .gt('n_saldo', 0)
+        .order('n_saldo', { ascending: false })
+        .limit(1)
+        .maybeSingle<{ codigo_local_estoque: number }>()
+      local = pos?.codigo_local_estoque ?? null
+    }
+    if (!local) continue
+    try {
+      const posicao = await getPosicaoProduto(loja, local, item.idProdMalha, hojeBR)
+      if (!posicao || posicao.n_cmc <= 0) {
+        semCmc.push({
+          idMalha: item.idMalha,
+          idProdMalha: item.idProdMalha,
+          quant: item.quantProdMalha,
+          perda: item.percPerdaProdMalha,
+          nome: item.descrProdMalha,
+        })
+      }
+    } catch {
+      // Falha ao consultar posicao: nao arrisca mexer na malha por esse insumo.
+    }
+    await sleep(400)
+  }
+
+  if (!semCmc.length) return { error: erroOriginal }
+
+  // Remove temporariamente da malha os insumos sem CMC.
+  const removidos: typeof semCmc = []
+  for (const it of semCmc) {
+    try {
+      await excluirEstrutura(loja, codigoProduto, it.idMalha)
+      removidos.push(it)
+      await sleep(800)
+    } catch {
+      // Nao conseguiu remover este: segue tentando os outros; a conclusao
+      // pode falhar de novo por causa dele, mas nao mexemos no que nao mudou.
+    }
+  }
+
+  if (!removidos.length) return { error: erroOriginal }
+
+  // Tenta concluir sem os insumos removidos. SEMPRE restaura a malha depois,
+  // sucesso ou falha, pra nao deixar a ficha tecnica incompleta.
+  let resultadoConclusao: { ok: true } | { error: string }
+  try {
+    await concluirOrdemProducao(loja, nCodOP, dataConclusao, qtdConcluir, obs)
+    resultadoConclusao = { ok: true }
+  } catch (e) {
+    resultadoConclusao = { error: e instanceof Error ? e.message : erroOriginal }
+  }
+
+  const falhasRestaurar: string[] = []
+  for (const it of removidos) {
+    try {
+      await incluirEstrutura(loja, codigoProduto, {
+        idProdMalha: it.idProdMalha,
+        quantProdMalha: it.quant,
+        percPerdaProdMalha: it.perda,
+      })
+      await sleep(800)
+    } catch {
+      falhasRestaurar.push(it.nome)
+    }
+  }
+
+  if (falhasRestaurar.length) {
+    // Nao pode ficar em silencio: a ficha tecnica do produto ficou incompleta.
+    console.error(
+      `[ordem-producao] FALHA AO RESTAURAR MALHA do produto ${codigoProduto} (loja ${loja.id}): ${falhasRestaurar.join(', ')} — corrigir manualmente no Omie.`
+    )
+  }
+
+  if ('error' in resultadoConclusao) return resultadoConclusao
+
+  return {
+    ok: true,
+    insumosPulados: removidos.map((r) => r.nome),
+    avisoRestaurar: falhasRestaurar.length
+      ? `Atenção: falha ao recolocar na ficha técnica: ${falhasRestaurar.join(', ')}. Corrija manualmente no Omie.`
+      : undefined,
+  }
+}
 
 // 'YYYY-MM-DD' (input date) -> 'DD/MM/YYYY' (formato que o Omie espera).
 function dataParaBR(iso: string): string | null {
@@ -259,20 +399,22 @@ export async function finishOP(
   opId: number,
   dataEscolhidaISO?: string | null,
   qtdeProduzida?: number | null,
-) {
+): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string } | { error: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
 
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
       identificacao_n_cod_op: number | null
       identificacao_d_dt_previsao: string | null
       identificacao_n_qtde: number | null
+      identificacao_n_cod_produto: number | null
+      identificacao_codigo_local_estoque: number | null
       quantidade: number | null
       loja: LojaOmie
     }>()
@@ -287,24 +429,23 @@ export async function finishOP(
       ? qtdeProduzida
       : op.quantidade ?? op.identificacao_n_qtde ?? 1
 
-  try {
-    // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
-    // 3) hoje como ultimo fallback.
-    let dataConclusao = ''
-    if (dataEscolhidaISO) {
-      const me = dataEscolhidaISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-      if (me) dataConclusao = `${me[3]}/${me[2]}/${me[1]}`
-    }
-    if (!dataConclusao) {
-      const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
-      dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
-    }
-    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, qtdConcluir, await carimboUsuario())
+  // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
+  // 3) hoje como ultimo fallback.
+  let dataConclusao = ''
+  if (dataEscolhidaISO) {
+    const me = dataEscolhidaISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (me) dataConclusao = `${me[3]}/${me[2]}/${me[1]}`
+  }
+  if (!dataConclusao) {
+    const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
+  }
+  const obs = await carimboUsuario()
 
-    // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer
-    // como pendente ate o proximo sync trazer cConcluida='S' do Omie. dataConclusao
-    // vem DD/MM/AAAA -> grava dt_conclusao_real em YYYY-MM-DD. Reflete tambem a
-    // quantidade efetivamente concluida (parcial) na coluna `quantidade`.
+  // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer como
+  // pendente ate o proximo sync trazer cConcluida='S' do Omie. Reusado pelos dois
+  // caminhos (conclusao direta e fallback sem insumo sem CMC).
+  async function marcarConcluidaLocal() {
     const mc = dataConclusao.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
     await supabase
       .from('ordens_producao')
@@ -316,11 +457,31 @@ export async function finishOP(
       })
       .eq('id', opId)
       .eq('loja_id', lojaId)
-
     revalidatePath('/ordem-producao')
+  }
+
+  try {
+    await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, qtdConcluir, obs)
+    await marcarConcluidaLocal()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Falha ao concluir no Omie' }
+    const msg = e instanceof Error ? e.message : 'Falha ao concluir no Omie'
+    if (!pareceErroCmc(msg) || !op.identificacao_n_cod_produto) {
+      return { error: msg }
+    }
+    const fallback = await tentarConcluirSemInsumosSemCmc(
+      op.loja,
+      op.identificacao_n_cod_produto,
+      op.identificacao_codigo_local_estoque,
+      op.identificacao_n_cod_op,
+      dataConclusao,
+      qtdConcluir,
+      obs,
+      msg
+    )
+    if ('error' in fallback) return fallback
+    await marcarConcluidaLocal()
+    return fallback
   }
 }
 

@@ -200,11 +200,12 @@ function useOP(op: OPData) {
     }
     startTransition(async () => {
       const res = await finishOP(op.id, dataConclusao || null, q)
-      if (res?.error) {
+      if ('error' in res) {
         // O Omie recusa concluir a OP se algum insumo da ficha técnica está com
-        // CMC (custo médio) zerado — regra do próprio Omie, a API não tem
-        // parâmetro pra pular essa checagem. Corrige lá: ajuste manual de
-        // estoque no insumo (tipo "Ajustar saldo do dia") com o valor unitário.
+        // CMC (custo médio) zerado. O sistema já tenta automaticamente remover
+        // temporariamente o insumo sem custo da ficha técnica, concluir sem ele
+        // e recolocar em seguida; se chegou erro aqui, é porque nem esse
+        // fallback resolveu (ex.: não achou qual insumo é, ou falhou de novo).
         const semCmc = /\bcmc\b|custo m.dio/i.test(res.error)
         toast.error(
           semCmc ? 'Insumo sem custo médio (CMC) no Omie' : 'Erro ao concluir',
@@ -216,7 +217,20 @@ function useOP(op: OPData) {
           }
         )
       } else {
-        toast.success('Ordem concluída no Omie')
+        if (res.insumosPulados?.length) {
+          toast.warning('Concluída pulando insumo sem custo', {
+            description: `Não baixou do estoque nem entrou no custo desta produção: ${res.insumosPulados.join(', ')}.`,
+            duration: 15000,
+          })
+        } else {
+          toast.success('Ordem concluída no Omie')
+        }
+        if (res.avisoRestaurar) {
+          toast.error('Atenção: ficha técnica pode estar incompleta', {
+            description: res.avisoRestaurar,
+            duration: 20000,
+          })
+        }
         setDialogConclusao(false)
       }
     })
