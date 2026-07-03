@@ -200,8 +200,22 @@ function useOP(op: OPData) {
     }
     startTransition(async () => {
       const res = await finishOP(op.id, dataConclusao || null, q)
-      if (res?.error) toast.error('Erro ao concluir', { description: res.error })
-      else {
+      if (res?.error) {
+        // O Omie recusa concluir a OP se algum insumo da ficha técnica está com
+        // CMC (custo médio) zerado — regra do próprio Omie, a API não tem
+        // parâmetro pra pular essa checagem. Corrige lá: ajuste manual de
+        // estoque no insumo (tipo "Ajustar saldo do dia") com o valor unitário.
+        const semCmc = /\bcmc\b|custo m.dio/i.test(res.error)
+        toast.error(
+          semCmc ? 'Insumo sem custo médio (CMC) no Omie' : 'Erro ao concluir',
+          {
+            description: semCmc
+              ? `${res.error} — ajuste o CMC do insumo no Omie (Estoque > Movimentação Manual > Ajustar saldo do dia, com o valor unitário) e tente concluir de novo.`
+              : res.error,
+            duration: semCmc ? 15000 : undefined,
+          }
+        )
+      } else {
         toast.success('Ordem concluída no Omie')
         setDialogConclusao(false)
       }
@@ -582,8 +596,11 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
   return (
     <>
       <tr>
-        <td className="num font-medium text-text align-middle" title={op.data ? `Data prevista: ${op.data}` : undefined}>
+        <td className="num font-medium text-text align-middle">
           {op.numOP}
+        </td>
+        <td className="num text-text-muted align-middle" title={op.data ? `Data prevista: ${op.data}` : undefined}>
+          {op.data ?? '-'}
         </td>
         <td className="align-middle">
           <StatusBadge status={op.status} />
@@ -621,7 +638,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
       </tr>
       {expandido && temIng && (
         <tr className="bg-surface-2/30">
-          <td colSpan={7} className="px-4 py-2.5">
+          <td colSpan={8} className="px-4 py-2.5">
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1">
               {op.ingredientes!.map((i) => (

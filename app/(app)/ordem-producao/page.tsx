@@ -441,6 +441,7 @@ export default async function OrdemProducaoPage({
                   <thead>
                     <tr>
                       <th className="w-32">OP</th>
+                      <th className="w-24">Data</th>
                       <th className="w-28">Status</th>
                       <th>
                         <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
