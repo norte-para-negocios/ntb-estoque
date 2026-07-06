@@ -483,11 +483,17 @@ export async function forceSyncInventario(inventarioId: number) {
 /**
  * Duplica um inventario: cria um novo (mesmo local, status 'Em contagem') e copia
  * os itens com quan zerada e status 'Iniciado'. Retorna o id do novo inventario.
+ * dataEscolhida (opcional, 'YYYY-MM-DD'): data do novo inventario; sem ela cai em
+ * hoje. Mesma regra do createInventario: nao aceita data futura.
  */
-export async function duplicarInventario(inventarioId: number) {
+export async function duplicarInventario(inventarioId: number, dataEscolhida?: string) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Criar'))) {
     return { error: 'Sem permissao para criar inventario' }
+  }
+  const hojeBahia = hojeBahiaISO()
+  if (dataEscolhida && dataEscolhida > hojeBahia) {
+    return { error: 'A data não pode ser futura' }
   }
   const supabase = createServiceClient()
 
@@ -500,10 +506,11 @@ export async function duplicarInventario(inventarioId: number) {
 
   if (!original) return { error: 'Inventário não encontrado' }
 
-  // A duplicata e uma NOVA contagem: responsavel = quem duplicou, data = hoje.
-  // Antes ficava sem responsavel (user_id nulo) e sem data. Mesmo local e itens.
+  // A duplicata e uma NOVA contagem: responsavel = quem duplicou, data = a escolhida
+  // (ou hoje, se nao informada). Antes ficava sem responsavel (user_id nulo) e sempre
+  // com a data de hoje. Mesmo local e itens.
   const userId = (await getUser()).id
-  const dataNova = dataCriacaoBahia(hojeBahiaISO())!
+  const dataNova = dataCriacaoBahia(dataEscolhida) ?? dataCriacaoBahia(hojeBahia)!
   const { data: novo } = await supabase
     .from('inventarios')
     .insert({

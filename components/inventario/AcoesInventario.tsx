@@ -1,10 +1,11 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Trash2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
-import { btnLinhaClass } from '@/components/ui-kit/Button'
+import { btnLinhaClass, btnClass } from '@/components/ui-kit/Button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   duplicarInventario,
   excluirInventario,
@@ -23,12 +24,18 @@ export function AcoesInventario({
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
+  // Duplicar pede a data ANTES de criar (dialog), em vez de sempre usar hoje.
+  const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const [dialogDuplicar, setDialogDuplicar] = useState(false)
+  const [dataDuplicar, setDataDuplicar] = useState(hojeBahia)
+
   function duplicar() {
     startTransition(async () => {
-      const res = await duplicarInventario(inventarioId)
+      const res = await duplicarInventario(inventarioId, dataDuplicar)
       if (res?.error) toast.error('Erro', { description: res.error })
       else if (res?.id) {
         toast.success('Inventário duplicado')
+        setDialogDuplicar(false)
         router.push(`/inventario/${res.id}/contagem`)
       }
     })
@@ -61,7 +68,7 @@ export function AcoesInventario({
   return (
     <span className="inline-flex items-center gap-1 2xl:gap-2">
       <button
-        onClick={duplicar}
+        onClick={() => setDialogDuplicar(true)}
         disabled={pending}
         className={btnLinhaClass('outline')}
         aria-label="Duplicar"
@@ -69,6 +76,43 @@ export function AcoesInventario({
       >
         <Copy className="size-4" />
       </button>
+      <Dialog open={dialogDuplicar} onOpenChange={setDialogDuplicar}>
+        <DialogContent className="bg-surface" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="size-4 text-brand" />
+              Duplicar inventário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <label className="block text-[13px] font-medium text-text-muted">Data do novo inventário</label>
+            <input
+              type="date"
+              value={dataDuplicar}
+              max={hojeBahia}
+              onChange={(e) => setDataDuplicar(e.target.value)}
+              disabled={pending}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+            />
+            <p className="text-[11px] text-text-muted">
+              Mesmo local e itens do original, contagem zerada. Padrão: hoje.
+            </p>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setDialogDuplicar(false)}
+              disabled={pending}
+              className={btnClass('ghost')}
+            >
+              Cancelar
+            </button>
+            <button type="button" onClick={duplicar} disabled={pending} className={btnClass('primary')}>
+              {pending ? 'Duplicando...' : 'Duplicar'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {temErro && (
         <button
           onClick={reprocessar}
