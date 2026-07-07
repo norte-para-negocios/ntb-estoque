@@ -35,7 +35,8 @@ export async function proxy(request: NextRequest) {
     path.startsWith('/cadastro') ||
     path === '/manifest.webmanifest' ||
     path.startsWith('/api/webhook') ||
-    path.startsWith('/api/cron')
+    path.startsWith('/api/cron') ||
+    path.startsWith('/api/integracao')
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
