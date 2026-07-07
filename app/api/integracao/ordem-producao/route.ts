@@ -1,0 +1,122 @@
+import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
+import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
+
+// Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
+// uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
+// 061), diferente do resto do sistema que e Server Action presa a sessao logada.
+// ATENCAO: escreve de verdade no Omie da loja. Cria E conclui a OP na hora (o
+// lojista nao acompanha OP aberta pra esse fluxo — a venda ja aconteceu).
+
+interface ItemPedido {
+  codigo: string
+  quantidade: number
+}
+
+interface ResultadoItem {
+  codigo: string
+  ok: boolean
+  nCodOP?: number
+  erro?: string
+}
+
+function hojeBR(): string {
+  const d = new Date()
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getFullYear()}`
+}
+
+export async function POST(request: Request) {
+  const auth = request.headers.get('authorization') ?? ''
+  const apiKey = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Authorization: Bearer <chave> ausente' }, { status: 401 })
+  }
+
+  const body = (await request.json().catch(() => null)) as { itens?: ItemPedido[]; pedidoRef?: string } | null
+  if (!body?.itens?.length) {
+    return NextResponse.json({ error: 'Informe itens: [{ codigo, quantidade }]' }, { status: 400 })
+  }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret')
+    .eq('integracao_api_key', apiKey)
+    .eq('ativo', true)
+    .maybeSingle<LojaOmie>()
+
+  if (!loja) {
+    return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
+  }
+
+  const dData = hojeBR()
+  const resultados: ResultadoItem[] = []
+
+  // Sequencial (nao Promise.all): evita "consumo redundante" do Omie por chamadas
+  // concorrentes na mesma conta.
+  for (let i = 0; i < body.itens.length; i++) {
+    const item = body.itens[i]
+    if (!item?.codigo || !item.quantidade || item.quantidade <= 0) {
+      resultados.push({ codigo: item?.codigo ?? '?', ok: false, erro: 'Item inválido' })
+      continue
+    }
+
+    const { data: produto } = await supabase
+      .from('produtos')
+      .select('codigo_produto')
+      .eq('loja_id', loja.id)
+      .eq('codigo', item.codigo)
+      .maybeSingle<{ codigo_produto: number }>()
+
+    if (!produto) {
+      resultados.push({ codigo: item.codigo, ok: false, erro: 'Produto sem cadastro correspondente no ntb-estoque' })
+      continue
+    }
+
+    const cCodIntOP = `NTBV${Date.now()}${i}`.slice(0, 20)
+
+    try {
+      const criada = await incluirOrdemProducao(loja, {
+        cCodIntOP,
+        nCodProduto: produto.codigo_produto,
+        dData,
+        nQtde: item.quantidade,
+        obs: body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas',
+      })
+
+      const nCodOP = criada?.nCodOP
+      if (!nCodOP) {
+        resultados.push({ codigo: item.codigo, ok: false, erro: 'Omie não retornou a OP criada' })
+        continue
+      }
+
+      await concluirOrdemProducao(loja, nCodOP, dData, item.quantidade, 'Concluída automaticamente (venda ntb-vendas)')
+      await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+
+      await logIntegrationAttempt({
+        loja_id: loja.id,
+        model: 'OrdemProducao',
+        request: `integracao/ordem-producao codigo=${item.codigo} qtde=${item.quantidade}`,
+        response: `nCodOP=${nCodOP}`,
+        code: String(nCodOP),
+      })
+
+      resultados.push({ codigo: item.codigo, ok: true, nCodOP })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Falha desconhecida na chamada Omie'
+      await logIntegrationAttempt({
+        loja_id: loja.id,
+        model: 'OrdemProducao',
+        request: `integracao/ordem-producao codigo=${item.codigo} qtde=${item.quantidade}`,
+        error: true,
+        error_message: msg,
+      })
+      resultados.push({ codigo: item.codigo, ok: false, erro: msg })
+    }
+  }
+
+  return NextResponse.json({ lojaId: loja.id, resultados })
+}
