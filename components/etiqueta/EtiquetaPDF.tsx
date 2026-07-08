@@ -78,20 +78,24 @@ function buildStyles(opts: {
   offsetX: number
   offsetY: number
   escala: number
+  fontScale: number
   cor: string
   corFilete: string
   borda: boolean
 }) {
-  const { larguraCm, alturaCm, offsetX, offsetY, escala, cor, corFilete, borda } = opts
+  const { larguraCm, alturaCm, offsetX, offsetY, escala, fontScale, cor, corFilete, borda } = opts
   const W = larguraCm * CM
   const H = alturaCm * CM
-  // Tudo escala junto (fonte, QR, cabeçalho/rodapé, paddings) conforme a etiqueta.
+  // QR, cabecalho/rodape e paddings escalam com o TAMANHO da etiqueta (escala).
+  // A fonte escala com o tamanho da etiqueta E com o ajuste manual do admin
+  // (fontScale, config.fonteEscala) -- por isso fs() usa os dois fatores, os
+  // demais elementos usam so escala.
   const hCabecalho = 6 * MM * escala
   const hRodape = 5 * MM * escala
   const padH = 2.5 * MM * escala
   const padOX = (3 * escala + offsetX) * MM
   const padOY = (2 * escala + offsetY) * MM
-  const fs = (n: number) => n * escala
+  const fs = (n: number) => n * escala * fontScale
   const qrSize = 36 * escala
   const rightW = 40 * escala
 
@@ -125,7 +129,7 @@ function buildStyles(opts: {
       marginBottom: 1.5,
     },
     nomeLoja: {
-      fontSize: fs(7),
+      fontSize: fs(7.5),
       textTransform: 'uppercase',
       letterSpacing: 0.3,
       color: cor,
@@ -133,11 +137,14 @@ function buildStyles(opts: {
     corpo: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
     left: { flex: 1, minWidth: 0, paddingRight: 3, overflow: 'hidden' },
     right: { width: rightW, flexShrink: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 1 },
-    descricao: { fontSize: fs(8), marginBottom: 3, lineHeight: 1.25 },
-    campoLinha: { flexDirection: 'row', marginBottom: 2, alignItems: 'baseline' },
-    label: { fontSize: fs(5.5), color: '#555', marginRight: 2 },
-    valor: { fontSize: fs(7) },
-    linha: { fontSize: fs(6.5), marginBottom: 1 },
+    // minHeight reserva sempre 2 linhas (o motor de layout do PDF as vezes nao
+    // conta a altura da 2a linha quando o texto quebra, e o proximo campo
+    // desenha por cima -- achado real ao testar nome de produto longo).
+    descricao: { fontSize: fs(9), marginBottom: fs(2.2), lineHeight: 1.15, minHeight: fs(9) * 1.15 * 2 },
+    campoLinha: { flexDirection: 'row', marginBottom: fs(1.1), alignItems: 'baseline' },
+    label: { fontSize: fs(6.25), color: '#555', marginRight: 2 },
+    valor: { fontSize: fs(8) },
+    linha: { fontSize: fs(7.25), marginBottom: fs(0.6) },
     qr: { width: qrSize, height: qrSize },
     rodape: {
       height: hRodape,
@@ -149,7 +156,7 @@ function buildStyles(opts: {
       paddingHorizontal: 2,
       paddingTop: 1,
     },
-    rodapeTexto: { fontSize: fs(5.5), color: '#444', flex: 1 },
+    rodapeTexto: { fontSize: fs(6.5), color: '#444', flex: 1 },
     logo: { width: 32, height: 'auto' },
   })
 }
@@ -160,8 +167,11 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
   const offsetX = config.offsetX ?? 0
   const offsetY = config.offsetY ?? 0
   // Escala automática: o conteúdo acompanha o tamanho da etiqueta (quadrada ou
-  // retangular). Usa a dimensão mais apertada pra não estourar. Sem ajuste manual.
+  // retangular). Usa a dimensão mais apertada pra não estourar.
   const escala = Math.min(Math.max(Math.min(larguraCm / LARGURA_CM_PADRAO, alturaCm / ALTURA_CM_PADRAO), 0.55), 2.4)
+  // Ajuste manual do admin (config.fonteEscala, 0.7-1.5): so a fonte, nao QR/paddings/
+  // cabecalho -- clamp de novo aqui porque o valor pode vir de uma config antiga.
+  const fontScale = Math.min(Math.max(config.fonteEscala ?? 1, 0.7), 1.5)
   const cor = (config.corDestaque || '').trim() || '#000000'
   const corFilete = cor === '#000000' ? '#ccc' : cor
   const borda = config.mostrarBorda ?? false
@@ -183,7 +193,7 @@ export function EtiquetaPDF({ etiquetas, config = {} }: EtiquetaPDFProps) {
     cnpj: config.mostrarCnpj ?? true,
   }
 
-  const s = buildStyles({ larguraCm, alturaCm, offsetX, offsetY, escala, cor, corFilete, borda })
+  const s = buildStyles({ larguraCm, alturaCm, offsetX, offsetY, escala, fontScale, cor, corFilete, borda })
   const bold = (b: boolean) => ({ fontFamily: b ? 'Helvetica-Bold' : 'Helvetica' })
 
   return (
