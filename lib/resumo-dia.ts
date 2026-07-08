@@ -144,7 +144,7 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount, auditCount,
   ] = await Promise.all([
     supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
-      .gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null),
+      .gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60'),
     supabase.from('transferencias').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('inventarios').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('identificacao_d_dt_previsao', dataISO),
@@ -195,6 +195,7 @@ async function listarCategoria(
     const { data } = await supabase.from('notas_fiscais')
       .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
+      .eq('c_etapa', '60')
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
     const rows = (data ?? []) as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
