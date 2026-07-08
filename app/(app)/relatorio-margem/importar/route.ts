@@ -6,9 +6,17 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { parseMargemProduto, type AbaLida } from '@/lib/margem-import'
 
 export const dynamic = 'force-dynamic'
+// Parse + insert em lotes pode passar do default da função em arquivos grandes
+// (os outros importadores de Excel do sistema também usam 300s).
+export const maxDuration = 300
 const MAX = 25 * 1024 * 1024 // 25MB: o FAT_DRV COM a aba BD tem 306MB; tem que vir sem ela.
 
 function clean(v: unknown): string | number | null {
+  // Cabeçalho de mês do pivot pode vir como data real (não texto) — serializa pra
+  // ISO antes de descartar, senão vira um objeto Date cru (nem string nem number)
+  // e o parser de margem não reconhece o mês (linhaMes[pdv] não bate com nenhum
+  // "jan"/"fev"/... e a aba MARGEM inteira é descartada como vazia).
+  if (v instanceof Date) return v.toISOString()
   if (v && typeof v === 'object') {
     const o = v as Record<string, unknown>
     if ('result' in o) return clean(o.result)

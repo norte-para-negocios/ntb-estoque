@@ -28,7 +28,15 @@ const MESES: Record<string, string> = {
 const txt = (v: unknown): string => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim())
 // minúsculo + sem acento (detecção de cabeçalho robusta a acento/encoding).
 const norm = (v: unknown): string => txt(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-const mesDe = (v: unknown): string | null => MESES[txt(v).toLowerCase().slice(0, 3)] ?? null
+// Mês do cabeçalho: aceita texto ("jan", "Janeiro") OU célula de data real (o Excel
+// as vezes guarda o mês do pivot como data formatada "mmm/aa", que a leitura do
+// Workbook devolve como ISO "YYYY-MM-DD..." depois do clean() da rota de import).
+const mesDe = (v: unknown): string | null => {
+  const t = txt(v)
+  const iso = t.match(/^\d{4}-(\d{2})-\d{2}/)
+  if (iso) return iso[1]
+  return MESES[t.toLowerCase().slice(0, 3)] ?? null
+}
 
 // Número pt-BR/numérico; erros de fórmula ("#DIV/0!", "#N/D") e texto viram NaN.
 function num(v: unknown): number {
@@ -48,7 +56,9 @@ function parseMargem(linhas: AbaLida['linhas'], ano: number): LinhaMargem[] {
   let hdr = -1
   let codigoCol = -1
   let descCol = -1
-  for (let r = 0; r < Math.min(linhas.length, 15); r++) {
+  // 30 linhas: a aba MARGEM tem 2 linhas de cabeçalho (mês + Código/Descrição), então
+  // precisa de mais folga que faturamento/movimentação (20/25) pra filtros no topo.
+  for (let r = 0; r < Math.min(linhas.length, 30); r++) {
     const row = linhas[r] ?? []
     const cc = row.findIndex((c) => /codigo/.test(norm(c)))
     const dc = row.findIndex((c) => /descri/.test(norm(c)))
