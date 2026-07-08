@@ -634,8 +634,8 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
         <td className="align-middle !px-0 overflow-hidden">
           <StepperQuantidade op={op} ctrl={ctrl} />
         </td>
-        <td className="text-right align-middle">
-          <div className="flex items-center justify-end gap-0.5">
+        <td className="text-right align-middle pl-3">
+          <div className="flex items-center justify-end gap-1">
             {temIng && (
               <button
                 type="button"
