@@ -21,11 +21,21 @@ interface ResultadoItem {
   erro?: string
 }
 
+// O servidor (Vercel) roda em UTC, nao em horario de Brasilia -- perto da
+// meia-noite UTC (~21h em Brasilia) `new Date()` local ja seria "amanha" pro
+// Omie, que valida dDtConclusao contra o PROPRIO relogio (America/Sao_Paulo).
+// Bug real encontrado em producao: OP criada com data de amanha, conclusao
+// rejeitada ("data de conclusao nao pode ser maior que hoje"), OP ficava
+// pendente e sumia dos filtros de "hoje". Forcar o timezone explicitamente.
 function hojeBR(): string {
-  const d = new Date()
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}/${mm}/${d.getFullYear()}`
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const get = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? ''
+  return `${get('day')}/${get('month')}/${get('year')}`
 }
 
 export async function POST(request: Request) {
@@ -78,6 +88,7 @@ export async function POST(request: Request) {
 
     const cCodIntOP = `NTBV${Date.now()}${i}`.slice(0, 20)
 
+    let nCodOP: number | undefined
     try {
       const criada = await incluirOrdemProducao(loja, {
         cCodIntOP,
@@ -87,14 +98,13 @@ export async function POST(request: Request) {
         obs: body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas',
       })
 
-      const nCodOP = criada?.nCodOP
+      nCodOP = criada?.nCodOP
       if (!nCodOP) {
         resultados.push({ codigo: item.codigo, ok: false, erro: 'Omie não retornou a OP criada' })
         continue
       }
 
       await concluirOrdemProducao(loja, nCodOP, dData, item.quantidade, 'Concluída automaticamente (venda ntb-vendas)')
-      await fetchOrdemProducao(loja, nCodOP).catch(() => {})
 
       await logIntegrationAttempt({
         loja_id: loja.id,
@@ -112,9 +122,16 @@ export async function POST(request: Request) {
         model: 'OrdemProducao',
         request: `integracao/ordem-producao codigo=${item.codigo} qtde=${item.quantidade}`,
         error: true,
-        error_message: msg,
+        // nCodOP presente aqui = a OP foi CRIADA mas a conclusao falhou (fica
+        // pendente no Omie, precisa concluir manualmente ou reprocessar) --
+        // diferente de falha na criacao, onde nenhuma OP chega a existir.
+        error_message: nCodOP ? `[OP ${nCodOP} criada, conclusão falhou] ${msg}` : msg,
       })
-      resultados.push({ codigo: item.codigo, ok: false, erro: msg })
+      resultados.push({ codigo: item.codigo, ok: false, nCodOP, erro: msg })
+    } finally {
+      // Reflete o estado real (concluida ou nao) no banco local do ntb-estoque
+      // mesmo quando a conclusao falha, pra a OP nao ficar invisivel na tela.
+      if (nCodOP) await fetchOrdemProducao(loja, nCodOP).catch(() => {})
     }
   }
 
