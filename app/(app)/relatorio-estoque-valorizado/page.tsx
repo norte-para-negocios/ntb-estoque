@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -49,27 +50,37 @@ const LIMITE = 500
 export default async function RelatorioEstoqueValorizadoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ familia?: string; tipo?: string }>
+  searchParams: Promise<{ familia?: string; tipo?: string; local?: string; busca?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   const ator = await getAtorGestao()
   if (!ator.podeGerir) notFound()
 
   const sp = await searchParams
-  const familia = sp.familia || null
-  const tipo = sp.tipo || null
+  const familias = valoresMulti(sp.familia)
+  const tipos = valoresMulti(sp.tipo)
+  const locais = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
+  const busca = sp.busca?.trim() || null
 
   const supabase = await createClient()
 
-  const [linhasRaw, familiasOpcoes] = await Promise.all([
+  const [linhasRaw, familiasOpcoes, locaisOpcoes] = await Promise.all([
     supabase
       .rpc('relatorio_estoque_valorizado', {
         p_loja_id: lojaId,
-        p_familia: familia,
-        p_tipo: tipo,
+        p_familia: familias.length ? familias : null,
+        p_tipo: tipos.length ? tipos : null,
+        p_local: locais.length ? locais : null,
+        p_busca: busca,
       })
       .range(0, LIMITE - 1),
     buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .neq('inativo', 'S')
+      .order('descricao'),
   ])
 
   const linhas = (linhasRaw.data ?? []) as Linha[]
@@ -80,16 +91,30 @@ export default async function RelatorioEstoqueValorizadoPage({
 
   const campos: CampoFiltro[] = [
     {
-      tipo: 'select',
+      tipo: 'texto',
+      nome: 'busca',
+      label: 'Produto (nome ou codigo)',
+    },
+    {
+      tipo: 'multi-select',
       nome: 'tipo',
       label: 'Tipo de mercadoria',
       opcoes: PRODUTO_TIPO_ITEM,
     },
     {
-      tipo: 'select',
+      tipo: 'multi-select',
       nome: 'familia',
       label: 'Familia',
       opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })),
+    },
+    {
+      tipo: 'multi-select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisOpcoes.data ?? []).map((l) => ({
+        value: String(l.codigo_local_estoque),
+        label: l.descricao ?? String(l.codigo_local_estoque),
+      })),
     },
   ]
 
@@ -106,7 +131,12 @@ export default async function RelatorioEstoqueValorizadoPage({
             <FiltrosGaveta
               basePath="/relatorio-estoque-valorizado"
               campos={campos}
-              defaults={{ tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+              defaults={{
+                busca: sp.busca ?? '',
+                tipo: sp.tipo ?? '',
+                familia: sp.familia ?? '',
+                local: sp.local ?? '',
+              }}
               persistirEm="/relatorio-estoque-valorizado"
             />
           }
