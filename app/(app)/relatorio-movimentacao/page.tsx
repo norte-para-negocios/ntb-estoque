@@ -7,9 +7,13 @@ import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { escapeIlike } from '@/lib/utils-busca'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { ArrowDownUp, Download, AlertTriangle } from 'lucide-react'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -30,7 +34,11 @@ const valorConfiavel = (origem: string, sentido: 'E' | 'S') => !(/pdv/i.test(ori
 export default async function RelatorioMovimentacaoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; sentido?: string; modo?: string; op?: string; loc?: string; sent?: string; dim?: string }>
+  searchParams: Promise<{
+    data_inicio?: string; data_final?: string; sentido?: string; modo?: string
+    op?: string; loc?: string; sent?: string; dim?: string
+    produto?: string; tipo?: string; familia?: string; local?: string
+  }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -78,16 +86,18 @@ export default async function RelatorioMovimentacaoPage({
       supabase.from('movimentacao_operacao_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     ])
 
-    // Filtros (selects): operação, local, sentido. Dimensão da matriz: família/local/tipo.
-    const sent = sp.sent === 'E' ? 'E' : sp.sent === 'S' ? 'S' : ''
+    // Filtros (multi-select): operação, local, sentido. Dimensão da matriz: família/local/tipo.
+    const opsSel = valoresMulti(sp.op)
+    const locsSel = valoresMulti(sp.loc)
+    const sentSel = valoresMulti(sp.sent).filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
     const dim = sp.dim === 'local' ? 'local' : sp.dim === 'tipo_sped' ? 'tipo_sped' : 'familia'
     const origens = [...new Set(rows.map((r) => r.origem))].sort()
     const locais = [...new Set(rows.map((r) => r.local))].sort()
 
     const campos: CampoFiltro[] = [
-      { tipo: 'select', nome: 'op', label: 'Operação', opcoes: origens.map((o) => ({ value: o, label: o })) },
-      { tipo: 'select', nome: 'loc', label: 'Local de estoque', opcoes: locais.map((l) => ({ value: l, label: l })) },
-      { tipo: 'select', nome: 'sent', label: 'Sentido', opcoes: [{ value: 'E', label: 'Entrada' }, { value: 'S', label: 'Saída' }] },
+      { tipo: 'multi-select', nome: 'op', label: 'Operação', opcoes: origens.map((o) => ({ value: o, label: o })) },
+      { tipo: 'multi-select', nome: 'loc', label: 'Local de estoque', opcoes: locais.map((l) => ({ value: l, label: l })) },
+      { tipo: 'multi-select', nome: 'sent', label: 'Sentido', opcoes: [{ value: 'E', label: 'Entrada' }, { value: 'S', label: 'Saída' }] },
     ]
 
     const header = (
@@ -101,11 +111,11 @@ export default async function RelatorioMovimentacaoPage({
               <FiltrosGaveta
                 basePath="/relatorio-movimentacao"
                 campos={campos}
-                defaults={{ op: sp.op ?? '', loc: sp.loc ?? '', sent: sent }}
+                defaults={{ op: sp.op ?? '', loc: sp.loc ?? '', sent: sp.sent ?? '' }}
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
-                href={`/relatorio-movimentacao/export?modo=operacao${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sent ? `&sent=${sent}` : ''}&dim=${dim}`}
+                href={`/relatorio-movimentacao/export?modo=operacao${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}&dim=${dim}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Excel: operações + perdas + matriz (com filtros)"
               >
@@ -140,7 +150,7 @@ export default async function RelatorioMovimentacaoPage({
     const consumoOP = somaSe((r) => /consumo da ordem/i.test(r.origem) && r.sentido === 'S')
 
     // --- Tabela por operação (origem × sentido), respeitando filtro de local ---
-    const baseLocal = sp.loc ? rows.filter((r) => r.local === sp.loc) : rows
+    const baseLocal = locsSel.length ? rows.filter((r) => locsSel.includes(r.local)) : rows
     const porOper = new Map<string, { origem: string; sentido: 'E' | 'S'; qtde: number; valor: number; conf: boolean }>()
     for (const r of baseLocal) {
       const k = `${r.origem}|${r.sentido}`
@@ -153,7 +163,9 @@ export default async function RelatorioMovimentacaoPage({
 
     // --- Matriz mês a mês pela dimensão escolhida, com filtros op/loc/sent ---
     const filtradas = rows.filter((r) =>
-      (!sp.op || r.origem === sp.op) && (!sp.loc || r.local === sp.loc) && (!sent || r.sentido === sent)
+      (!opsSel.length || opsSel.includes(r.origem)) &&
+      (!locsSel.length || locsSel.includes(r.local)) &&
+      (!sentSel.length || sentSel.includes(r.sentido))
     )
     // Se o recorte ficou só com PDV-saída (valor lixo), a matriz mostra QUANTIDADE.
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido))
@@ -213,7 +225,7 @@ export default async function RelatorioMovimentacaoPage({
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="bg-surface-2">
-                <th className={`text-left ${th}`}>Operação{sp.loc ? ` · ${sp.loc}` : ''}</th>
+                <th className={`text-left ${th}`}>Operação{locsSel.length ? ` · ${locsSel.join(', ')}` : ''}</th>
                 <th className={`text-left ${th}`}>Sentido</th>
                 <th className={`text-right ${th}`}>Quantidade</th>
                 <th className={`text-right ${th}`}>Valor</th>
@@ -298,12 +310,66 @@ export default async function RelatorioMovimentacaoPage({
   }
 
   // ---------- Modo: Em quantidade (por produto, dado nativo) ----------
+  const tiposSel = valoresMulti(sp.tipo)
+  const familiasSel = valoresMulti(sp.familia)
+  const locaisSel = valoresMulti(sp.local)
+  const produtoBusca = sp.produto?.trim() || null
+
+  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .neq('inativo', 'S')
+      .order('descricao'),
+  ])
+  const locaisOpcoes = locaisRaw ?? []
+
+  // Produtos que casam com tipo/família — mesmo padrão de codigosFiltro usado em
+  // /movimentacoes e /ordem-producao (cruza via a tabela produtos).
+  let codigosFiltro: number[] | null = null
+  if (tiposSel.length || familiasSel.length) {
+    let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
+    if (tiposSel.length) pq = pq.in('tipo_item', tiposSel)
+    if (familiasSel.length) pq = pq.in('descricao_familia', familiasSel)
+    const { data } = await pq
+    codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null))]
+  }
+  // Local de estoque: movimentos_historico não guarda local por movimento (o
+  // ListarMovimentos do Omie não traz essa informação) — restringe aos produtos
+  // que têm posição de estoque no(s) local(is) escolhido(s) (mesmo padrão de
+  // relatorio_estoque_valorizado).
+  if (locaisSel.length) {
+    const { data } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', locaisSel.map(Number))
+    const codigosLocal = new Set((data ?? []).map((p) => p.n_cod_prod as number))
+    codigosFiltro = codigosFiltro === null ? [...codigosLocal] : codigosFiltro.filter((c) => codigosLocal.has(c))
+  }
+  const codigosIn = codigosFiltro !== null ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
+
   const exportQs = new URLSearchParams()
   if (sp.data_inicio) exportQs.set('data_inicio', sp.data_inicio)
   if (sp.data_final) exportQs.set('data_final', sp.data_final)
+  if (sp.produto) exportQs.set('produto', sp.produto)
+  if (sp.tipo) exportQs.set('tipo', sp.tipo)
+  if (sp.familia) exportQs.set('familia', sp.familia)
+  if (sp.local) exportQs.set('local', sp.local)
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'multi-select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: locaisOpcoes.map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
   const header = (
     <ListaHeader>
@@ -316,7 +382,14 @@ export default async function RelatorioMovimentacaoPage({
             <FiltrosGaveta
               basePath="/relatorio-movimentacao"
               campos={campos}
-              defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+              defaults={{
+                data_inicio: sp.data_inicio ?? '',
+                data_final: sp.data_final ?? '',
+                produto: sp.produto ?? '',
+                tipo: sp.tipo ?? '',
+                familia: sp.familia ?? '',
+                local: sp.local ?? '',
+              }}
               persistirEm="/relatorio-movimentacao"
             />
             <a href={`/relatorio-movimentacao/export${exportQs.toString() ? `?${exportQs}` : ''}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: saídas/entradas por produto (com filtros)">
@@ -348,6 +421,7 @@ export default async function RelatorioMovimentacaoPage({
 
   const matriz = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
     p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
+    p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
   })
 
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()

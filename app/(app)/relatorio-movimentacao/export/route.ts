@@ -2,6 +2,8 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { gerarPlanilhaMulti, planilhaResponse, abaMatrizMensal, type AbaPlanilha, type ColunaExcel } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { escapeIlike } from '@/lib/utils-busca'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +21,11 @@ export async function GET(request: Request) {
 
   // ---------- Export do modo "Por operação" (BD do MOV_DRV) ----------
   if (searchParams.get('modo') === 'operacao') {
-    const op = searchParams.get('op') || ''
-    const loc = searchParams.get('loc') || ''
-    const sent = searchParams.get('sent') === 'E' ? 'E' : searchParams.get('sent') === 'S' ? 'S' : ''
+    // op/loc/sent vêm da URL como lista separada por vírgula (multi-select), mesmo
+    // padrão de tipo/família em outras telas.
+    const opsSel = valoresMulti(searchParams.get('op') ?? '')
+    const locsSel = valoresMulti(searchParams.get('loc') ?? '')
+    const sentSel = valoresMulti(searchParams.get('sent') ?? '').filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
     const dim = searchParams.get('dim') === 'local' ? 'local' : searchParams.get('dim') === 'tipo_sped' ? 'tipo_sped' : 'familia'
 
     const rows: LinhaOper[] = []
@@ -41,7 +45,7 @@ export async function GET(request: Request) {
     const abas: AbaPlanilha[] = []
 
     // Aba 1: Por operação (origem × sentido), respeitando filtro de local.
-    const baseLocal = loc ? rows.filter((r) => r.local === loc) : rows
+    const baseLocal = locsSel.length ? rows.filter((r) => locsSel.includes(r.local)) : rows
     const porOper = new Map<string, { origem: string; sentido: string; qtde: number; valor: number; conf: boolean }>()
     for (const r of baseLocal) {
       const k = `${r.origem}|${r.sentido}`
@@ -58,7 +62,7 @@ export async function GET(request: Request) {
     const rowsOper = [...porOper.values()]
       .sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
       .map((o) => ({ origem: o.origem, sentido: o.sentido, qtde: o.qtde, valor: o.conf ? o.valor : 0 }))
-    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: loc ? `Local: ${loc}` : 'Todos os locais', autoFiltro: true }, nome: 'Por operação' })
+    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: locsSel.length ? `Local: ${locsSel.join(', ')}` : 'Todos os locais', autoFiltro: true }, nome: 'Por operação' })
 
     // Aba 2: Perdas reais (manual saída, fora inventário) por família e mês.
     const perdas = rows.filter((r) => r.origem === 'Movimento Manual de Estoque' && r.sentido === 'S' && !r.inventario)
@@ -66,7 +70,11 @@ export async function GET(request: Request) {
     if (perdas.length) abas.push(abaMatrizMensal({ titulo: 'Perdas reais (baixa manual) por família', dimLabel: 'Família', linhas: perdas, nome: 'Perdas (R$)' }))
 
     // Aba 3: matriz da dimensão escolhida, com os filtros aplicados (PDV-saída = 0).
-    const filtradas = rows.filter((r) => (!op || r.origem === op) && (!loc || r.local === loc) && (!sent || r.sentido === sent))
+    const filtradas = rows.filter((r) =>
+      (!opsSel.length || opsSel.includes(r.origem)) &&
+      (!locsSel.length || locsSel.includes(r.local)) &&
+      (!sentSel.length || sentSel.includes(r.sentido))
+    )
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido))
     const linhasDim = filtradas.map((r) => ({
       rotulo: (dim === 'local' ? r.local : dim === 'tipo_sped' ? r.tipo_sped : r.familia) || 'N/D',
@@ -74,7 +82,11 @@ export async function GET(request: Request) {
       valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido) ? Number(r.valor) : 0),
     }))
     const dimLabel = dim === 'local' ? 'Local' : dim === 'tipo_sped' ? 'Tipo (SPED)' : 'Família'
-    const recorte = [op || 'Todas as operações', loc || 'Todos os locais', sent === 'E' ? 'Entrada' : sent === 'S' ? 'Saída' : 'Entrada+Saída'].join(' · ')
+    const recorte = [
+      opsSel.length ? opsSel.join(', ') : 'Todas as operações',
+      locsSel.length ? locsSel.join(', ') : 'Todos os locais',
+      sentSel.length === 1 ? (sentSel[0] === 'E' ? 'Entrada' : 'Saída') : 'Entrada+Saída',
+    ].join(' · ')
     if (linhasDim.length) {
       abas.push(abaMatrizMensal({
         titulo: `Matriz por ${dimLabel.toLowerCase()} (${soPdvSaida ? 'quantidade' : 'R$'})`,
@@ -91,6 +103,32 @@ export async function GET(request: Request) {
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_inicio') ?? '') ? searchParams.get('data_inicio')! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_final') ?? '') ? searchParams.get('data_final')! : hojeISO
+
+  // Mesma lógica da page: tipo/família/local viram um conjunto de cod_prod, e a
+  // busca de produto vai direto pro parâmetro p_produto da função.
+  const tiposSel = valoresMulti(searchParams.get('tipo') ?? '')
+  const familiasSel = valoresMulti(searchParams.get('familia') ?? '')
+  const locaisSel = valoresMulti(searchParams.get('local') ?? '')
+  const produtoBusca = searchParams.get('produto')?.trim() || null
+
+  let codigosFiltro: number[] | null = null
+  if (tiposSel.length || familiasSel.length) {
+    let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
+    if (tiposSel.length) pq = pq.in('tipo_item', tiposSel)
+    if (familiasSel.length) pq = pq.in('descricao_familia', familiasSel)
+    const { data } = await pq
+    codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null))]
+  }
+  if (locaisSel.length) {
+    const { data } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', locaisSel.map(Number))
+    const codigosLocal = new Set((data ?? []).map((p) => p.n_cod_prod as number))
+    codigosFiltro = codigosFiltro === null ? [...codigosLocal] : codigosFiltro.filter((c) => codigosLocal.has(c))
+  }
+  const codigosIn = codigosFiltro !== null ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
 
   async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
     const PAGE = 1000
@@ -109,7 +147,10 @@ export async function GET(request: Request) {
     ['saidas', 'Saídas por produto', 'Saídas (consumo/venda)'],
     ['entradas', 'Entradas por produto', 'Entradas'],
   ] as const) {
-    const q = await rpcTodos<Qtd>('relatorio_movimentacao_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'produto', p_sentido: sentido })
+    const q = await rpcTodos<Qtd>('relatorio_movimentacao_matriz', {
+      p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
+      p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
+    })
     const linhas = q.map((r) => ({ rotulo: formatarNomeProduto(r.rotulo) || r.rotulo, mes: r.mes, valor: Number(r.qtde) || 0 }))
     if (linhas.length) abas.push(abaMatrizMensal({ titulo: `Movimentação — ${label} (quantidade)`, dimLabel: 'Produto', linhas, nome, moeda: false }))
   }
