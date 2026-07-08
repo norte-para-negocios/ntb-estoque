@@ -3,12 +3,12 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Toolbar } from './Toolbar'
 import { btnClass } from './Button'
+import type { CampoFiltro } from './filtros-utils'
 
-export type CampoFiltro =
-  | { tipo: 'texto'; nome: string; label: string }
-  | { tipo: 'data'; nome: string; label: string }
-  | { tipo: 'select'; nome: string; label: string; opcoes: { value: string; label: string }[] }
-  | { tipo: 'combobox'; nome: string; label: string; opcoes: { value: string; label: string }[] }
+// Re-exportados por compatibilidade (varios componentes client importam daqui).
+// Server Components devem importar direto de './filtros-utils' — ver o motivo lá.
+export type { CampoFiltro }
+export { valoresMulti } from './filtros-utils'
 
 const field =
   'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:border-brand focus:shadow-[0_0_0_3px_var(--brand-soft)]'

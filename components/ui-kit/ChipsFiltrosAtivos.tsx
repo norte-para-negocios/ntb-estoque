@@ -18,6 +18,11 @@ function rotuloValor(campo: CampoFiltro, valor: string): string {
     const op = campo.opcoes.find((o) => o.value === valor)
     return op ? op.label : valor
   }
+  if (campo.tipo === 'multi-select') {
+    const vs = valor.split(',').map((v) => v.trim()).filter(Boolean)
+    if (vs.length > 2) return `${vs.length} selecionados`
+    return vs.map((v) => campo.opcoes.find((o) => o.value === v)?.label ?? v).join(', ')
+  }
   if (campo.tipo === 'data') return fmtData(valor)
   return valor
 }
