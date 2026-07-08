@@ -5,9 +5,13 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
+import { descreverCFOP } from '@/lib/cfop'
 import { Scale, Download } from 'lucide-react'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -27,14 +31,28 @@ type LinhaMatriz = { rotulo: string; mes: string; valor: number }
 const META_PCT = 40
 const corMeta = (pct: number) => (!Number.isFinite(pct) ? 'text-text-muted' : pct <= META_PCT ? 'text-ok' : pct <= 50 ? 'text-warn' : 'text-err')
 
-export default async function RelatorioIndicadoresPage() {
+export default async function RelatorioIndicadoresPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data_inicio?: string; data_final?: string }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
+
+  const sp = await searchParams
+  const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
+  const filtroFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : null
+
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+  ]
 
   const supabase = createServiceClient()
 
   // Faturamento importado (vendas) por mês. (dim=tipo é pequeno, mas paginamos por
-  // robustez/consistência com o resto.)
+  // robustez/consistência com o resto.) A RPC não aceita período (removido na
+  // migration 057); o filtro de data_inicio/data_final é aplicado aqui no app.
   const fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -59,18 +77,33 @@ export default async function RelatorioIndicadoresPage() {
     )
   }
 
-  const fatPorMes: Record<string, number> = {}
-  for (const r of fat) fatPorMes[r.mes] = (fatPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
-  const fatMeses = Object.keys(fatPorMes).sort()
+  const fatPorMesTudo: Record<string, number> = {}
+  for (const r of fat) fatPorMesTudo[r.mes] = (fatPorMesTudo[r.mes] ?? 0) + (Number(r.valor) || 0)
+  const todosMeses = Object.keys(fatPorMesTudo).sort()
 
-  // Compras (NF de entrada) no mesmo intervalo de anos do faturamento.
-  const anoIni = fatMeses[0].slice(0, 4)
-  const anoFim = fatMeses[fatMeses.length - 1].slice(0, 4)
+  // Filtro de período (AAAA-MM-DD) vira corte por mês (AAAA-MM) no faturamento.
+  const iniYM = filtroIni ? filtroIni.slice(0, 7) : null
+  const fimYM = filtroFim ? filtroFim.slice(0, 7) : null
+  const fatPorMes = Object.fromEntries(
+    Object.entries(fatPorMesTudo).filter(([m]) => (!iniYM || m >= iniYM) && (!fimYM || m <= fimYM))
+  )
+
+  // Compras (NF de entrada): mesmo período do filtro quando informado; senão, o
+  // intervalo de anos do faturamento (comportamento padrão de sempre).
+  const anoIni = todosMeses[0].slice(0, 4)
+  const anoFim = todosMeses[todosMeses.length - 1].slice(0, 4)
+  const compIni = filtroIni ?? `${anoIni}-01-01`
+  const compFim = filtroFim ?? `${anoFim}-12-31`
+  // dim=cfop (em vez de tipo) pra poder excluir Ativo imobilizado da conta: é
+  // investimento, não gasto operacional (pedido do Ramon, reunião 06/07).
   const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
-    p_loja_id: lojaId, p_ini: `${anoIni}-01-01`, p_fim: `${anoFim}-12-31`, p_dim: 'tipo',
+    p_loja_id: lojaId, p_ini: compIni, p_fim: compFim, p_dim: 'cfop',
   })
   const comprasPorMes: Record<string, number> = {}
-  for (const r of comp) comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+  for (const r of comp) {
+    if (descreverCFOP(r.rotulo).cat === 'Ativo imobilizado') continue
+    comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+  }
 
   const { data: metaRow } = await supabase
     .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
@@ -106,6 +139,11 @@ export default async function RelatorioIndicadoresPage() {
 
   const corRes = (v: number) => (v >= 0 ? 'text-ok' : 'text-err')
 
+  const exportParams = new URLSearchParams()
+  if (filtroIni) exportParams.set('data_inicio', filtroIni)
+  if (filtroFim) exportParams.set('data_final', filtroFim)
+  const exportHref = `/relatorio-indicadores/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
+
   return (
     <div className="space-y-4">
       <ListaHeader>
@@ -114,11 +152,20 @@ export default async function RelatorioIndicadoresPage() {
           icon={Scale}
           description="Quanto você comprou para cada real vendido (BETA)"
           actions={
-            <a href="/relatorio-indicadores/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">
-              <Download className="size-4" /> Baixar
-            </a>
+            <>
+              <FiltrosGaveta
+                basePath="/relatorio-indicadores"
+                campos={campos}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                persistirEm="/relatorio-indicadores"
+              />
+              <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">
+                <Download className="size-4" /> Baixar
+              </a>
+            </>
           }
         />
+        <ChipsFiltrosAtivos basePath="/relatorio-indicadores" campos={campos} persistirEm="/relatorio-indicadores" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
@@ -179,7 +226,8 @@ export default async function RelatorioIndicadoresPage() {
       </div>
 
       <p className="px-1 text-[11px] text-text-muted">
-        Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item). &quot;Compras ÷ Faturamento&quot; é
+        Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
+        e sem ativo imobilizado (compra de bem para a empresa é investimento, não gasto). &quot;Compras ÷ Faturamento&quot; é
         quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {META_PCT}%</span> no alvo,
         <span className="font-medium text-warn"> até 50% atenção</span>, <span className="font-medium text-err">acima de 50% alto</span> (na indústria, alguns miram 35%).
         &quot;Faturamento − Compras&quot; não é lucro: Compras é a entrada de mercadoria do mês, não o custo do que foi consumido (margem real vem do Módulo de Margem).

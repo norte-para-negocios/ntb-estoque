@@ -6,14 +6,20 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { descreverCFOP } from '@/lib/cfop'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { ShoppingCart, Download } from 'lucide-react'
+
+// Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
+// com `= any()` não bateria com nada).
+const arrOrNull = (a: string[]): string[] | null => (a.length ? a : null)
 
 // Dimensões de abertura do relatório (espelham as planilhas do Ramon).
 const DIMS = [
@@ -54,6 +60,7 @@ export default async function RelatorioComprasPage({
     familia?: string
     tipo?: string
     fornecedor?: string
+    cfop?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -68,10 +75,16 @@ export default async function RelatorioComprasPage({
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
-  const familia = sp.familia || null
-  const tipo = sp.tipo || null
+  const familiasSel = valoresMulti(sp.familia)
+  const tiposSel = valoresMulti(sp.tipo)
+  const cfopsSel = valoresMulti(sp.cfop)
   const fornecedor = sp.fornecedor || null
-  const filtros = { p_familia: familia, p_tipo: tipo, p_fornecedor: fornecedor }
+  const filtros = {
+    p_familias: arrOrNull(familiasSel),
+    p_tipos: arrOrNull(tiposSel),
+    p_fornecedor: fornecedor,
+    p_cfops: arrOrNull(cfopsSel),
+  }
 
   const supabase = await createClient()
   // A matriz pode passar de 1000 linhas (PostgREST corta) em dim=produto: pagina.
@@ -87,9 +100,11 @@ export default async function RelatorioComprasPage({
     return todos
   }
 
-  const [{ data: totalRows }, matrizRaw] = await Promise.all([
+  const [{ data: totalRows }, matrizRaw, { data: cfopDimRaw }] = await Promise.all([
     supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
     rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
+    // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
+    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'cfop' }),
   ])
   const total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
   const nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
@@ -119,18 +134,26 @@ export default async function RelatorioComprasPage({
   const dimLabel = DIMS.find((d) => d.value === dim)?.label ?? 'Item'
 
   const familias = await buscarFamilias()
+  // Opções de CFOP: só os que apareceram no período (bonificação/comodato já não
+  // aparecem aqui, pois a RPC os exclui sempre; não contam como compra).
+  const opcoesCfop = ((cfopDimRaw ?? []) as { rotulo: string }[]).map((r) => ({
+    value: r.rotulo,
+    label: `${r.rotulo} · ${descreverCFOP(r.rotulo).desc}`,
+  }))
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
-    { tipo: 'select', nome: 'tipo', label: 'Tipo de mercadoria', opcoes: PRODUTO_TIPO_ITEM },
-    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de mercadoria', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
     { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor (nome)' },
+    { tipo: 'multi-select', nome: 'cfop', label: 'CFOP', opcoes: opcoesCfop },
   ]
 
   const exportParams = new URLSearchParams({ data_inicio: ini, data_final: fim, dim })
-  if (familia) exportParams.set('familia', familia)
-  if (tipo) exportParams.set('tipo', tipo)
+  if (sp.familia) exportParams.set('familia', sp.familia)
+  if (sp.tipo) exportParams.set('tipo', sp.tipo)
   if (fornecedor) exportParams.set('fornecedor', fornecedor)
+  if (sp.cfop) exportParams.set('cfop', sp.cfop)
 
   // Cabeçalho de coluna (th) padrão.
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -153,6 +176,7 @@ export default async function RelatorioComprasPage({
                   tipo: sp.tipo ?? '',
                   familia: sp.familia ?? '',
                   fornecedor: sp.fornecedor ?? '',
+                  cfop: sp.cfop ?? '',
                 }}
                 persistirEm="/relatorio-compras"
               />
@@ -192,6 +216,9 @@ export default async function RelatorioComprasPage({
           Notas <span className="num font-semibold text-text">{nNotas}</span>
         </span>
       </div>
+      <p className="px-1 text-[11px] text-text-muted">
+        Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra/gasto e não entram nestes números.
+      </p>
 
       <SegmentLinks
         basePath="/relatorio-compras"

@@ -4,6 +4,11 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { gerarPlanilhaMulti, planilhaResponse, type AbaPlanilha, type ColunaExcel } from '@/lib/excel'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+
+// Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
+// com `= any()` não bateria com nada).
+const arrOrNull = (a: string[]): string[] | null => (a.length ? a : null)
 
 // "Baixar tudo": uma pasta de trabalho com uma matriz mensal por dimensão
 // (Tipo/Família/Fornecedor/CFOP/Produto) + a aba Detalhado, no estilo das
@@ -52,10 +57,16 @@ export async function GET(request: Request) {
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_final') ?? '')
     ? (searchParams.get('data_final') as string)
     : hojeISO
-  const familia = searchParams.get('familia') || null
-  const tipo = searchParams.get('tipo') || null
+  const familias = valoresMulti(searchParams.get('familia') ?? undefined)
+  const tipos = valoresMulti(searchParams.get('tipo') ?? undefined)
+  const cfops = valoresMulti(searchParams.get('cfop') ?? undefined)
   const fornecedor = searchParams.get('fornecedor') || null
-  const filtros = { p_familia: familia, p_tipo: tipo, p_fornecedor: fornecedor }
+  const filtros = {
+    p_familias: arrOrNull(familias),
+    p_tipos: arrOrNull(tipos),
+    p_fornecedor: fornecedor,
+    p_cfops: arrOrNull(cfops),
+  }
 
   const supabase = await createClient()
   // RPC pode passar de 1000 linhas (PostgREST corta): pagina com .range.
@@ -77,7 +88,7 @@ export async function GET(request: Request) {
     return raw
   }
 
-  const sub = `${ini} a ${fim}${familia ? ` · Família: ${familia}` : ''}${tipo ? ` · Tipo: ${TIPO_LABEL.get(tipo) ?? tipo}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}`
+  const sub = `${ini} a ${fim}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}`
 
   const abas: AbaPlanilha[] = []
 

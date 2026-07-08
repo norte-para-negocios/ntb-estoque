@@ -4,6 +4,11 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+
+// Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
+// com `= any()` não bateria com nada).
+const arrOrNull = (a: string[]): string[] | null => (a.length ? a : null)
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 
@@ -64,10 +69,16 @@ export async function GET(request: Request) {
     ? (searchParams.get('data_final') as string)
     : hojeISO
   const dim = DIM_LABEL[searchParams.get('dim') ?? ''] ? (searchParams.get('dim') as string) : 'familia'
-  const familia = searchParams.get('familia') || null
-  const tipo = searchParams.get('tipo') || null
+  const familias = valoresMulti(searchParams.get('familia') ?? undefined)
+  const tipos = valoresMulti(searchParams.get('tipo') ?? undefined)
+  const cfops = valoresMulti(searchParams.get('cfop') ?? undefined)
   const fornecedor = searchParams.get('fornecedor') || null
-  const filtros = { p_familia: familia, p_tipo: tipo, p_fornecedor: fornecedor }
+  const filtros = {
+    p_familias: arrOrNull(familias),
+    p_tipos: arrOrNull(tipos),
+    p_fornecedor: fornecedor,
+    p_cfops: arrOrNull(cfops),
+  }
 
   const supabase = await createClient()
   // RPC pode devolver muito mais de 1000 linhas (detalhe item a item, ou matriz
@@ -158,7 +169,7 @@ export async function GET(request: Request) {
     { key: 'total', label: 'Total', tipo: 'moeda', largura: 14, somar: true },
   ]
 
-  const sub = `${ini} a ${fim}${familia ? ` · Família: ${familia}` : ''}${tipo ? ` · Tipo: ${TIPO_LABEL.get(tipo) ?? tipo}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}`
+  const sub = `${ini} a ${fim}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}`
 
   const buffer = await gerarPlanilhaMulti([
     {
