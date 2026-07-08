@@ -13,6 +13,10 @@ import { SELO_CLASSE } from '@/lib/status-cor'
 import { LayoutDashboard, Download, Inbox } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { valoresMulti, type CampoFiltro } from '@/components/ui-kit/filtros-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +43,7 @@ type ProdutoSemContagem = { codigo: string; descricao: string; tipo_item: string
 export default async function ResumoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; loja?: string; cat?: string; periodo?: string }>
+  searchParams: Promise<{ data?: string; loja?: string; cat?: string; periodo?: string; tipo?: string; local?: string }>
 }) {
   const ator = await getAtorGestao()
   if (!ator.podeGerir) notFound()
@@ -80,6 +84,9 @@ export default async function ResumoPage({
   let coberturaData: RowCobertura[] = []
   let produtosSemContagem: ProdutoSemContagem[] = []
   let totalSemContagem = 0
+  let locaisOpcoes: { value: string; label: string }[] = []
+  const tiposSel = valoresMulti(sp.tipo)
+  const locaisSel = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
 
   if (cat === 'auditoria' && lojaIdsEfetivos.length > 0) {
     const lojaIdCob = lojaIdsEfetivos[0]
@@ -87,22 +94,32 @@ export default async function ResumoPage({
     const janelasDias: Record<PeriodoCob, number> = { dia: 30, semana: 84, mes: 365 }
     const dataIniCob = new Date(Date.now() - janelasDias[periodo] * 86400000).toISOString().slice(0, 10)
 
-    // Produtos contados nos últimos 30 dias (para lista de sem contagem)
-    const [cobRes, recentsRes] = await Promise.all([
+    // Cada inventário é feito num local de estoque específico (inventarios.codigo_local_estoque);
+    // quando o filtro de local está ativo, só conta como "contado" o item cujo inventário
+    // pai foi feito num dos locais selecionados.
+    let recentsQuery = supabase
+      .from('inventario_items')
+      .select('produto_codigo_produto, inventarios!inner(codigo_local_estoque)')
+      .eq('loja_id', lojaIdCob)
+      .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+    if (locaisSel.length) recentsQuery = recentsQuery.in('inventarios.codigo_local_estoque', locaisSel)
+
+    const [cobRes, recentsRes, locaisRes] = await Promise.all([
       supabase.rpc('inventario_cobertura', {
         p_loja_id: lojaIdCob,
         p_ini: dataIniCob,
         p_fim: hoje,
         p_periodo: periodo,
       }),
-      supabase
-        .from('inventario_items')
-        .select('produto_codigo_produto')
-        .eq('loja_id', lojaIdCob)
-        .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      recentsQuery,
+      supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaIdCob).neq('inativo', 'S'),
     ])
 
     coberturaData = (cobRes.data ?? []) as RowCobertura[]
+    locaisOpcoes = (locaisRes.data ?? []).map((l) => ({
+      value: String(l.codigo_local_estoque as number),
+      label: (l.descricao as string | null) ?? String(l.codigo_local_estoque),
+    }))
 
     const codigosRecentes = new Set(
       ((recentsRes.data ?? []) as { produto_codigo_produto: number | null }[])
@@ -110,22 +127,43 @@ export default async function ResumoPage({
         .filter((v): v is number => v != null)
     )
 
-    const { data: produtosRaw } = await supabase
+    let produtosQuery = supabase
       .from('produtos')
       .select('codigo, descricao, tipo_item, descricao_familia, codigo_produto')
       .eq('loja_id', lojaIdCob)
       .eq('inativo', false)
       .order('descricao')
       .limit(5000)
+    if (tiposSel.length) produtosQuery = produtosQuery.in('tipo_item', tiposSel)
+
+    const [{ data: produtosRaw }, posicaoRes] = await Promise.all([
+      produtosQuery,
+      // Restringe aos produtos que de fato têm posição num dos locais selecionados
+      // (produto "não existe" nesse local não deveria aparecer como "não contado" nele).
+      locaisSel.length
+        ? supabase.from('posicao_estoques').select('codigo_produto').eq('loja_id', lojaIdCob).in('codigo_local_estoque', locaisSel)
+        : Promise.resolve({ data: null }),
+    ])
+
+    const codigosNoLocal = locaisSel.length
+      ? new Set(((posicaoRes.data ?? []) as { codigo_produto: number }[]).map((p) => p.codigo_produto))
+      : null
 
     const semContagem = ((produtosRaw ?? []) as (ProdutoSemContagem & { codigo_produto: number })[])
       .filter((p) => !codigosRecentes.has(p.codigo_produto))
+      .filter((p) => !codigosNoLocal || codigosNoLocal.has(p.codigo_produto))
 
     totalSemContagem = semContagem.length
     produtosSemContagem = semContagem.slice(0, 100).map(({ codigo, descricao, tipo_item, descricao_familia }) => ({
       codigo, descricao, tipo_item, descricao_familia,
     }))
   }
+
+  const auditoriaCampos: CampoFiltro[] = [
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'local', label: 'Local de estoque', opcoes: locaisOpcoes },
+  ]
+  const auditoriaDefaults = { data, loja: lojaParam, cat, periodo, tipo: sp.tipo ?? '', local: sp.local ?? '' }
 
   const linkPeriodo = (p: PeriodoCob) => `/resumo?data=${data}&loja=${lojaParam}&cat=auditoria&periodo=${p}`
   const labelPeriodo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
@@ -177,8 +215,8 @@ export default async function ResumoPage({
       {/* PAINEL DE INVENTÁRIO (só quando cat=auditoria) */}
       {cat === 'auditoria' && (
         <div className="space-y-3">
-          {/* Chips de período */}
-          <div className="flex items-center gap-2">
+          {/* Chips de período + filtros (só afetam a lista "Sem contagem", não a barra de cobertura) */}
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12px] text-text-muted">Cobertura:</span>
             {(['dia', 'semana', 'mes'] as const).map((p) => (
               <Link
@@ -193,7 +231,10 @@ export default async function ResumoPage({
                 {labelPeriodo[p]}
               </Link>
             ))}
+            <span className="mx-1 h-4 w-px bg-border" />
+            <FiltrosGaveta basePath="/resumo" campos={auditoriaCampos} defaults={auditoriaDefaults} naoContar={['data', 'loja', 'cat', 'periodo']} />
           </div>
+          <ChipsFiltrosAtivos basePath="/resumo" campos={auditoriaCampos} />
 
           {/* Barra de cobertura por período */}
           {coberturaData.length > 0 ? (
@@ -268,7 +309,7 @@ export default async function ResumoPage({
                       </div>
                     </div>
                     {p.tipo_item && (
-                      <span className="shrink-0 text-[11px] text-text-muted">{p.tipo_item}</span>
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted">{labelTipoItem(p.tipo_item)}</span>
                     )}
                   </div>
                 ))}
