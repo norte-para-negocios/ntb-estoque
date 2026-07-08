@@ -200,3 +200,21 @@ function parseDate(d: string | null | undefined): string | null {
   if (!m) return null
   return `${m[3]}-${m[2]}-${m[1]}`
 }
+
+/**
+ * Checa se já existe nota fiscal com essa chave de acesso (44 dígitos) na loja,
+ * independente da origem (Omie ou SEFAZ direto). Uma futura integração de consulta
+ * direta à SEFAZ deve chamar isso antes de inserir, já que ela não tem n_id_receb
+ * (a chave usada no dedup do sync Omie) — a chave de acesso é o identificador comum
+ * entre as duas origens.
+ */
+export async function existeNotaFiscalComChave(lojaId: number, chaveNfe: string): Promise<boolean> {
+  const supabase = createServiceClient()
+  const { count } = await supabase
+    .from('notas_fiscais')
+    .select('id', { count: 'exact', head: true })
+    .eq('loja_id', lojaId)
+    .eq('c_chave_nfe', chaveNfe)
+    .is('deleted_at', null)
+  return (count ?? 0) > 0
+}

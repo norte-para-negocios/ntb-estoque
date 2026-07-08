@@ -7,14 +7,17 @@
 //   - Checkpoint: salva em .ajustes-checkpoint-<loja>.json e retoma de onde parou.
 //
 // SEGURANÇA: aborta ao atingir 480 MB para não estourar free tier Supabase (500 MB).
-// PROTEÇÃO: nunca toca na loja 4 (O SERTAO VAI VIRAR MAR - produção).
+// PROTEÇÃO: por padrão nunca toca na loja 4 (O SERTAO VAI VIRAR MAR - produção
+// ativa). Só entra passando --incluir-loja4 explicitamente (autorização
+// pontual do fundador, 04/07), pra não virar hábito acidental em runs futuros.
 //
 // Uso:
-//   node scripts/sync-ajustes-omie.mjs              → todas as lojas, últimos 12 meses
+//   node scripts/sync-ajustes-omie.mjs              → todas as lojas (exceto 4), últimos 12 meses
 //   node scripts/sync-ajustes-omie.mjs 3             → só loja 3
 //   node scripts/sync-ajustes-omie.mjs 3 --full      → histórico completo (sem cutoff de data)
 //   node scripts/sync-ajustes-omie.mjs 3 --incremental → só ids novos (> max salvo)
 //   node scripts/sync-ajustes-omie.mjs 3 --reset     → apaga checkpoint e reinicia do fim
+//   node scripts/sync-ajustes-omie.mjs 4 --incluir-loja4 → loja 4 (produção), só com essa flag
 //
 import fs from 'node:fs'
 import pg from 'pg'
@@ -39,7 +42,12 @@ const LOJA_ARG = Number(process.argv[2]) || 0
 const FULL_HISTORY = process.argv.includes('--full')
 const INCREMENTAL = process.argv.includes('--incremental')
 const RESET_CHECKPOINT = process.argv.includes('--reset')
+const INCLUIR_LOJA4 = process.argv.includes('--incluir-loja4')
 const LIMITE_MB = 480
+
+if (INCLUIR_LOJA4) {
+  console.log('⚠️  --incluir-loja4 ativo: esta rodada PODE tocar na loja 4 (produção ativa).')
+}
 
 // Checkpoint: persiste estado completo para retomar sem chamadas extras à API
 function checkpointPath(lojaId) {
@@ -120,7 +128,7 @@ console.log(`Modo: ${FULL_HISTORY ? 'HISTÓRICO COMPLETO' : `últimos 12 meses (
 
 const { rows: lojas } = await db.query(
   `SELECT id, nome_fantasia, omie_app_key k, omie_app_secret s
-   FROM lojas WHERE ativo = true AND id != 4 ${LOJA_ARG ? `AND id = ${LOJA_ARG}` : ''}
+   FROM lojas WHERE ativo = true ${INCLUIR_LOJA4 ? '' : 'AND id != 4'} ${LOJA_ARG ? `AND id = ${LOJA_ARG}` : ''}
    ORDER BY id`
 )
 if (!lojas.length) { console.error('Nenhuma loja encontrada'); await db.end(); process.exit(1) }
