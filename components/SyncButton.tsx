@@ -9,10 +9,13 @@ export function SyncButton({
   endpoint,
   endpoints,
   label,
+  title = 'O sistema sincroniza sozinho em segundo plano. Use para forçar agora.',
 }: {
   endpoint?: string
   endpoints?: string[]
   label: string
+  /** Sobrescreve o tooltip padrão (ex.: telas sem sincronização automática ainda). */
+  title?: string
 }) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -46,7 +49,7 @@ export function SyncButton({
     <button
       onClick={handleSync}
       disabled={loading}
-      title="O sistema sincroniza sozinho em segundo plano. Use para forçar agora."
+      title={title}
       className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-sm font-medium text-white u-motion u-press hover:bg-[var(--brand-strong)] disabled:opacity-60 disabled:active:scale-100 sm:px-3"
     >
       <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />

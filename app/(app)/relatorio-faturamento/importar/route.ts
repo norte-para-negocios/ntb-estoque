@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) return NextResponse.json({ error: 'Envie o arquivo' }, { status: 400 })
   if (file.size > MAX) {
     return NextResponse.json(
-      { error: 'Arquivo muito grande. Remova a aba "BD" (dados brutos) do Excel e salve de novo — só os resumos importam.' },
+      { error: 'Arquivo muito grande. Remova a aba "BD" (dados brutos) do Excel e salve de novo: só os resumos importam.' },
       { status: 413 },
     )
   }

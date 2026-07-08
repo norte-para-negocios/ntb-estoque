@@ -7,7 +7,13 @@ import { Upload } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
-export function ImportarFaturamento({ label = 'Importar do Omie' }: { label?: string }) {
+export function ImportarFaturamento({
+  label = 'Importar Excel',
+  title = 'Sobe o export FAT_DRV do Omie (.xlsx). Único jeito de trazer forma de pagamento: tipo e família já sincronizam sozinhos pelo botão Atualizar.',
+}: {
+  label?: string
+  title?: string
+}) {
   const ref = useRef<HTMLInputElement>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -32,7 +38,7 @@ export function ImportarFaturamento({ label = 'Importar do Omie' }: { label?: st
 
   return (
     <>
-      <button type="button" onClick={() => ref.current?.click()} disabled={pending} className={btnClass('primary')}>
+      <button type="button" onClick={() => ref.current?.click()} disabled={pending} title={title} className={btnClass('outline')}>
         {pending ? <Spinner /> : <Upload className="size-4" />} {pending ? 'Importando...' : label}
       </button>
       <input ref={ref} type="file" accept=".xlsx" className="hidden" onChange={onFile} />

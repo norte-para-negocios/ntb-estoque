@@ -5,9 +5,13 @@ import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { type CampoFiltro, valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { ImportarFaturamento } from '@/components/faturamento/ImportarFaturamento'
+import { SyncButton } from '@/components/SyncButton'
 import { btnClass } from '@/components/ui-kit/Button'
 import Link from 'next/link'
 import { DollarSign, Download } from 'lucide-react'
@@ -44,11 +48,20 @@ function mesOffset(refMes: string, n: number): string {
 }
 
 type LinhaMatriz = { rotulo: string; mes: string; valor: number }
+type OpcaoDim = { dimensao: string; rotulo: string }
 
 export default async function RelatorioFaturamentoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dim?: string; periodo?: string }>
+  searchParams: Promise<{
+    dim?: string
+    periodo?: string
+    data_inicio?: string
+    data_final?: string
+    tipo?: string
+    familia?: string
+    forma_pgto?: string
+  }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -57,8 +70,15 @@ export default async function RelatorioFaturamentoPage({
   const dim = DIMS.some((d) => d.value === sp.dim) ? sp.dim! : 'tipo'
   const periodo = CHIPS_PERIODO.some((c) => c.value === (sp.periodo ?? '')) ? (sp.periodo ?? '') : ''
 
+  // Período customizado (filtro livre, na gaveta) tem prioridade sobre os chips fixos.
+  const dataIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : ''
+  const dataFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : ''
+  const temPeriodoCustom = !!(dataIni || dataFim)
+
   const mesAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-  const mesIni = periodo ? mesOffset(mesAtual, -(Number(periodo) - 1)) : null
+  const mesIniChip = periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1)) : null
+  const mesIni = dataIni ? dataIni.slice(0, 7) : mesIniChip
+  const mesFim = dataFim ? dataFim.slice(0, 7) : null
 
   const dimParam = dim === 'tipo' ? '' : dim
   const chipHref = (p: string) => {
@@ -68,12 +88,40 @@ export default async function RelatorioFaturamentoPage({
     return `/relatorio-faturamento${parts.length ? '?' + parts.join('&') : ''}`
   }
 
+  // faturamento_importado já vem pré-agregado em 3 pivots separados (um por
+  // dimensão), sem uma linha de fato por cupom -- então não dá pra cruzar
+  // "família X" com "tipo Y" ao mesmo tempo. Por isso o filtro de rótulos
+  // aplicado na RPC é sempre o da dimensão que está sendo exibida (`dim`); os
+  // outros dois ficam guardados na URL e entram em ação quando o usuário troca
+  // de aba (SegmentLinks) para a dimensão correspondente.
+  const tipoFiltro = valoresMulti(sp.tipo)
+  const familiaFiltro = valoresMulti(sp.familia)
+  const formaPgtoFiltro = valoresMulti(sp.forma_pgto)
+  const rotulosFiltro = dim === 'tipo' ? tipoFiltro : dim === 'familia' ? familiaFiltro : formaPgtoFiltro
+
   const supabase = createServiceClient()
-  const [matrizTodos, { data: metaRow }] = await Promise.all([
-    rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: dim }),
-    supabase.from('faturamento_import_meta').select('importado_em, arquivo').eq('loja_id', lojaId).maybeSingle(),
+  const [matriz, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
+    rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', {
+      p_loja_id: lojaId,
+      p_dim: dim,
+      p_mes_ini: mesIni,
+      p_mes_fim: mesFim,
+      p_rotulos: rotulosFiltro.length ? rotulosFiltro : null,
+    }),
+    supabase
+      .from('faturamento_import_meta')
+      .select('importado_em, arquivo, linhas')
+      .eq('loja_id', lojaId)
+      .maybeSingle(),
+    supabase.rpc('relatorio_faturamento_opcoes', { p_loja_id: lojaId }),
   ])
-  const matriz = mesIni ? matrizTodos.filter((r) => r.mes >= mesIni) : matrizTodos
+  // "Tem faturamento importado" não pode depender do resultado já filtrado
+  // (senão um filtro sem resultado cairia no empty state errado, de "nunca
+  // sincronizou"). `linhas` vem do último import/sync, sem filtro nenhum.
+  const temImportacao = (metaRow?.linhas ?? 0) > 0
+  const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
+  const opcoesDe = (d: string) =>
+    opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))
 
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()
@@ -90,6 +138,22 @@ export default async function RelatorioFaturamentoPage({
   const totalPorMes: Record<string, number> = {}
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
 
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: opcoesDe('tipo') },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: opcoesDe('familia') },
+    { tipo: 'multi-select', nome: 'forma_pgto', label: 'Forma de pagamento', opcoes: opcoesDe('forma_pgto') },
+  ]
+
+  const exportParams = new URLSearchParams()
+  if (dataIni) exportParams.set('data_inicio', dataIni)
+  if (dataFim) exportParams.set('data_final', dataFim)
+  if (tipoFiltro.length) exportParams.set('tipo', tipoFiltro.join(','))
+  if (familiaFiltro.length) exportParams.set('familia', familiaFiltro.join(','))
+  if (formaPgtoFiltro.length) exportParams.set('forma_pgto', formaPgtoFiltro.join(','))
+  const exportHref = `/relatorio-faturamento/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
+
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
   const chipBase = 'rounded-full border px-3 py-1 text-[12px] font-medium transition-colors'
   const chipAtivo = `${chipBase} border-ink bg-ink text-white`
@@ -104,28 +168,46 @@ export default async function RelatorioFaturamentoPage({
           description="Vendas do PDV (NFC-e), puxadas direto da API do Omie (BETA)"
           actions={
             <>
-              {matrizTodos.length > 0 && (
-                <a href="/relatorio-faturamento/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: matriz mês a mês por tipo, família e forma de pgto (com filtros)">
+              {temImportacao && (
+                <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: matriz mês a mês por tipo, família e forma de pgto (com filtros)">
                   <Download className="size-4" /> Baixar
                 </a>
               )}
+              <FiltrosGaveta
+                basePath="/relatorio-faturamento"
+                campos={campos}
+                defaults={{
+                  data_inicio: sp.data_inicio ?? '',
+                  data_final: sp.data_final ?? '',
+                  tipo: sp.tipo ?? '',
+                  familia: sp.familia ?? '',
+                  forma_pgto: sp.forma_pgto ?? '',
+                }}
+                persistirEm="/relatorio-faturamento"
+              />
+              <SyncButton
+                endpoint="/api/sync/faturamento"
+                label="Atualizar"
+                title="Puxa tipo e família direto dos cupons fiscais do Omie. Ainda não roda sozinho: clique aqui sempre que quiser atualizar."
+              />
               <ImportarFaturamento />
             </>
           }
         />
+        <ChipsFiltrosAtivos basePath="/relatorio-faturamento" campos={campos} persistirEm="/relatorio-faturamento" />
       </ListaHeader>
 
-      {!matrizTodos.length ? (
+      {!temImportacao ? (
         <EmptyState
           icon={DollarSign}
           title="Faturamento ainda não sincronizado"
-          hint="As vendas do PDV desta loja ainda não foram puxadas da API do Omie. A sincronização dos cupons fiscais roda pelo suporte (script sync-faturamento-api)."
+          hint='As vendas do PDV desta loja ainda não foram puxadas da API do Omie. Clique em "Atualizar" para sincronizar agora, ou importe o export FAT_DRV.'
         />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2.5">
             {CHIPS_PERIODO.map((c) => (
-              <Link key={c.value} href={chipHref(c.value)} className={periodo === c.value ? chipAtivo : chipInativo}>
+              <Link key={c.value} href={chipHref(c.value)} className={periodo === c.value && !temPeriodoCustom ? chipAtivo : chipInativo}>
                 {c.label}
               </Link>
             ))}
@@ -151,7 +233,7 @@ export default async function RelatorioFaturamentoPage({
             <EmptyState
               icon={DollarSign}
               title="Sem dados no período"
-              hint="Tente ampliar o filtro de período."
+              hint="Tente ampliar o período ou remover filtros ativos."
             />
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
