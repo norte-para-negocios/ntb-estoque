@@ -10,6 +10,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { AlertTriangle, ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 import { FiltroDataInline } from '@/components/movimentacoes/FiltroDataInline'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 
 const POR_PAGINA = 100
 const TETO_LINHAS = 100_000
@@ -72,11 +73,14 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
   const cmcDe = (cod: number): number => cmcMap.get(Number(cod)) ?? 0
   const temCmcAbsurdo = [...cmcMap.values()].some((v) => v > CMC_ALERTA_UNITARIO)
 
+  // tipo/familia vem como lista separada por virgula (multi-select) na URL.
+  const tiposArr = valoresMulti(sp.tipo)
+  const familiasArr = valoresMulti(sp.familia)
   let codigosFiltro: number[] | null = null
-  if (sp.tipo || sp.familia) {
+  if (tiposArr.length || familiasArr.length) {
     let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-    if (sp.tipo) pq = pq.eq('tipo_item', sp.tipo)
-    if (sp.familia) pq = pq.eq('descricao_familia', sp.familia)
+    if (tiposArr.length) pq = pq.in('tipo_item', tiposArr)
+    if (familiasArr.length) pq = pq.in('descricao_familia', familiasArr)
     const { data } = await pq
     codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter(Boolean))]
   }

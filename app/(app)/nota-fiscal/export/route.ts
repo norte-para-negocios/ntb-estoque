@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -44,14 +45,16 @@ export async function GET(request: Request) {
   const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
 
   // Mesma lógica de filtro da page: resolve notaIds quando há filtro de tipo/produto.
+  // tipo vem como lista separada por virgula (multi-select) na URL.
+  const tiposArr = valoresMulti(params.tipo)
   let notaIdsFiltro: number[] | null = null
-  if (params.tipo || params.produto) {
-    if (params.tipo) {
+  if (tiposArr.length || params.produto) {
+    if (tiposArr.length) {
       const { data: prodCodigos } = await supabase
         .from('produtos')
         .select('codigo_produto')
         .eq('loja_id', lojaId)
-        .eq('tipo_item', params.tipo)
+        .in('tipo_item', tiposArr)
 
       const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
 

@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { SyncButton } from '@/components/SyncButton'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -75,28 +76,45 @@ export default async function NotaFiscalPage({
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
 
-  // Resolve categoria → string para usar em .or() ou array de not-keywords.
-  const categoriaKey = (CATEGORIAS_NF.map((c) => c.value) as string[]).includes(params.categoria ?? '')
-    ? (params.categoria as CategoriaKey)
-    : null
-  const catCond = categoriaKey
-    ? CATEGORIAS_NF.find((c) => c.value === categoriaKey) ?? null
-    : null
+  // Resolve categoria(s) → chaves válidas para montar a clausula .or() combinada.
+  // Multi-select: uma linha entra se casar com QUALQUER categoria selecionada.
+  const categoriaKeys = valoresMulti(params.categoria).filter((v): v is CategoriaKey =>
+    (CATEGORIAS_NF.map((c) => c.value) as string[]).includes(v),
+  )
   // Para categoria "venda" precisamos excluir tudo que bate com as outras keywords.
   const todasOutrasKeywords = CATEGORIAS_NF.filter((c) => c.keywords.length > 0).flatMap((c) => c.keywords)
+  const keywordsSelecionados = [
+    ...new Set(
+      categoriaKeys
+        .filter((k) => k !== 'venda')
+        .flatMap((k) => CATEGORIAS_NF.find((c) => c.value === k)?.keywords ?? []),
+    ),
+  ]
+  // Monta a clausula .or() combinada uma unica vez (reaplicada na query de lista e na de totais).
+  const categoriaOrClause: string | null = (() => {
+    if (!categoriaKeys.length) return null
+    const orParts = keywordsSelecionados.map((kw) => `c_natureza_operacao.ilike.%${kw}%`)
+    if (categoriaKeys.includes('venda')) {
+      const notParts = todasOutrasKeywords.map((kw) => `c_natureza_operacao.not.ilike.%${kw}%`)
+      orParts.push(`and(${notParts.join(',')})`)
+    }
+    return orParts.length ? orParts.join(',') : null
+  })()
 
   // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
   // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
   // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items -> notas_fiscais.id in (...).
   // Resolvido ANTES da query para que lista e totais reusem o mesmo conjunto de ids.
+  // tipo vem como lista separada por virgula (multi-select) na URL.
+  const tiposArr = valoresMulti(params.tipo)
   let notaIds: number[] | null = null
-  if (params.tipo || params.produto) {
-    if (params.tipo) {
+  if (tiposArr.length || params.produto) {
+    if (tiposArr.length) {
       const { data: prodCodigos } = await supabase
         .from('produtos')
         .select('codigo_produto')
         .eq('loja_id', lojaId)
-        .eq('tipo_item', params.tipo)
+        .in('tipo_item', tiposArr)
 
       const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
 
@@ -150,13 +168,7 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') query = query.neq('c_etapa', '60')
   else if (params.status) query = query.eq('c_etapa', params.status)
   if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-  if (catCond) {
-    if (catCond.value === 'venda') {
-      for (const kw of todasOutrasKeywords) query = query.not('c_natureza_operacao', 'ilike', `%${kw}%`)
-    } else if (catCond.keywords.length > 0) {
-      query = query.or(catCond.keywords.map((kw) => `c_natureza_operacao.ilike.%${kw}%`).join(','))
-    }
-  }
+  if (categoriaOrClause) query = query.or(categoriaOrClause)
   if (idsIn) query = query.in('id', idsIn)
 
   // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
@@ -174,13 +186,7 @@ export default async function NotaFiscalPage({
   else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
   else if (params.status) totaisQuery = totaisQuery.eq('c_etapa', params.status)
   if (params.natureza) totaisQuery = totaisQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-  if (catCond) {
-    if (catCond.value === 'venda') {
-      for (const kw of todasOutrasKeywords) totaisQuery = totaisQuery.not('c_natureza_operacao', 'ilike', `%${kw}%`)
-    } else if (catCond.keywords.length > 0) {
-      totaisQuery = totaisQuery.or(catCond.keywords.map((kw) => `c_natureza_operacao.ilike.%${kw}%`).join(','))
-    }
-  }
+  if (categoriaOrClause) totaisQuery = totaisQuery.or(categoriaOrClause)
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
   const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
@@ -232,11 +238,11 @@ export default async function NotaFiscalPage({
         { value: '40', label: 'Em recebimento' },
       ],
     },
-    { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'texto', nome: 'natureza', label: 'Natureza da operacao' },
     { tipo: 'texto', nome: 'produto', label: 'Produto' },
     {
-      tipo: 'select',
+      tipo: 'multi-select',
       nome: 'categoria',
       label: 'Categoria',
       opcoes: CATEGORIAS_NF.map((c) => ({ value: c.value, label: c.label })),

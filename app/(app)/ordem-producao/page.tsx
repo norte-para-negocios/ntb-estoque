@@ -11,7 +11,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
@@ -41,6 +42,7 @@ export default async function OrdemProducaoPage({
     ordem_producao?: string
     op_produto?: string
     tipo_produto?: string
+    familia?: string
     op_concluido?: string
     op_status?: string
     ord?: string
@@ -82,11 +84,23 @@ export default async function OrdemProducaoPage({
   // Nao ha coluna de status; derivamos da comparacao de identificacao_d_dt_previsao com hoje.
   const filtroStatus = sp.op_status ?? ''
 
-  // Filtros op_produto / tipo_produto: as colunas produto_* em ordens_producao
-  // sao 100% NULL. Cruzamos via a tabela produtos para obter os codigo_produto
-  // e filtramos por identificacao_n_cod_produto (campo preenchido).
+  // Familias distintas (produtos com ordens) para o select (melhor esforco).
+  const { data: produtosFamilia } = await supabase
+    .from('produtos')
+    .select('descricao_familia')
+    .eq('loja_id', lojaId)
+    .not('descricao_familia', 'is', null)
+  const familias = [
+    ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
+  ].sort() as string[]
+
+  // Filtros op_produto / tipo_produto / familia: as colunas produto_* em
+  // ordens_producao sao 100% NULL. Cruzamos via a tabela produtos para obter os
+  // codigo_produto e filtramos por identificacao_n_cod_produto (campo preenchido).
+  const tiposProdutoArr = valoresMulti(sp.tipo_produto)
+  const familiasArr = valoresMulti(sp.familia)
   let codigosFiltro: number[] | null = null
-  if (sp.op_produto || sp.tipo_produto) {
+  if (sp.op_produto || tiposProdutoArr.length || familiasArr.length) {
     let prodQuery = supabase
       .from('produtos')
       .select('codigo_produto')
@@ -95,7 +109,8 @@ export default async function OrdemProducaoPage({
       const termo = escapeIlikeOr(sp.op_produto)
       prodQuery = prodQuery.or(`codigo.ilike.%${termo}%,descricao.ilike.%${termo}%`)
     }
-    if (sp.tipo_produto) prodQuery = prodQuery.eq('tipo_item', sp.tipo_produto)
+    if (tiposProdutoArr.length) prodQuery = prodQuery.in('tipo_item', tiposProdutoArr)
+    if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
     const { data: prods } = await prodQuery
     codigosFiltro = [
       ...new Set((prods ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null)),
@@ -295,6 +310,7 @@ export default async function OrdemProducaoPage({
   if (sp.ordem_producao) exportParams.set('ordem_producao', sp.ordem_producao)
   if (sp.op_produto) exportParams.set('op_produto', sp.op_produto)
   if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
+  if (sp.familia) exportParams.set('familia', sp.familia)
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
   if (sp.op_status) exportParams.set('op_status', sp.op_status)
 
@@ -317,7 +333,13 @@ export default async function OrdemProducaoPage({
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     { tipo: 'texto', nome: 'ordem_producao', label: 'Ordem de produção' },
     { tipo: 'texto', nome: 'op_produto', label: 'Produto (código ou descrição)' },
-    { tipo: 'select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'tipo_produto', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'multi-select',
+      nome: 'familia',
+      label: 'Família',
+      opcoes: familias.map((f) => ({ value: f, label: f })),
+    },
     {
       tipo: 'select',
       nome: 'op_status',
@@ -363,6 +385,7 @@ export default async function OrdemProducaoPage({
                   ordem_producao: sp.ordem_producao ?? '',
                   op_produto: sp.op_produto ?? '',
                   tipo_produto: sp.tipo_produto ?? '',
+                  familia: sp.familia ?? '',
                   op_status: sp.op_status ?? '',
                   ord: sp.ord ?? '',
                 }}

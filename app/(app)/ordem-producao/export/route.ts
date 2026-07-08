@@ -4,6 +4,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -25,14 +26,18 @@ export async function GET(request: Request) {
     ordem_producao: searchParams.get('ordem_producao') || undefined,
     op_produto: searchParams.get('op_produto') || undefined,
     tipo_produto: searchParams.get('tipo_produto') || undefined,
+    familia: searchParams.get('familia') || undefined,
     op_concluido: searchParams.get('op_concluido') || undefined,
   }
 
   const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
 
   // Mesma lógica da page: cruza via produtos para obter os codigo_produto.
+  // tipo_produto/familia vem da URL como lista separada por vírgula (multi-select).
+  const tiposProdutoArr = valoresMulti(sp.tipo_produto)
+  const familiasArr = valoresMulti(sp.familia)
   let codigosFiltro: number[] | null = null
-  if (sp.op_produto || sp.tipo_produto) {
+  if (sp.op_produto || tiposProdutoArr.length || familiasArr.length) {
     let prodQuery = supabase
       .from('produtos')
       .select('codigo_produto')
@@ -41,7 +46,8 @@ export async function GET(request: Request) {
       const termo = escapeIlikeOr(sp.op_produto)
       prodQuery = prodQuery.or(`codigo.ilike.%${termo}%,descricao.ilike.%${termo}%`)
     }
-    if (sp.tipo_produto) prodQuery = prodQuery.eq('tipo_item', sp.tipo_produto)
+    if (tiposProdutoArr.length) prodQuery = prodQuery.in('tipo_item', tiposProdutoArr)
+    if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
     const { data: prods } = await prodQuery
     codigosFiltro = [
       ...new Set((prods ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null)),

@@ -9,6 +9,8 @@ import {
   type RelatorioTransferenciaItem,
 } from '@/components/relatorio/RelatorioTransferenciaPDF'
 import { PdfErro } from '@/components/relatorio/PdfChrome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { labelTipoItem } from '@/lib/constants-omie'
 
 // Mapa de motivo (TRF/TPQ) para texto legivel no PDF.
 const LABEL_MOTIVO: Record<string, string> = {
@@ -39,8 +41,11 @@ export async function GET(request: Request) {
     searchParams.get('data_inicio') ||
     new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = searchParams.get('data_final') || new Date().toISOString().split('T')[0]
+  // familia/tipo vem como lista separada por virgula (multi-select) na URL.
   const familia = searchParams.get('familia') || ''
   const tipo = searchParams.get('tipo') || ''
+  const familiasArr = valoresMulti(familia)
+  const tiposArr = valoresMulti(tipo)
   const status = searchParams.get('status') || ''
 
   const supabase = await createClient()
@@ -55,10 +60,10 @@ export async function GET(request: Request) {
 
   // Filtro de familia/tipo via produtos -> movimentos -> transferencia_id.
   let idsFiltrados: number[] | null = null
-  if (familia || tipo) {
+  if (familiasArr.length || tiposArr.length) {
     let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-    if (familia) prodQuery = prodQuery.eq('descricao_familia', familia)
-    if (tipo) prodQuery = prodQuery.eq('tipo_item', tipo)
+    if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
+    if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
     const { data: prods } = await prodQuery
     const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
 
@@ -130,8 +135,8 @@ export async function GET(request: Request) {
 
   // Monta subtitulo com filtros aplicados.
   const filtrosAtivos: string[] = []
-  if (familia) filtrosAtivos.push(`Família: ${familia}`)
-  if (tipo) filtrosAtivos.push(`Tipo: ${tipo}`)
+  if (familiasArr.length) filtrosAtivos.push(`Família: ${familiasArr.join(', ')}`)
+  if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (status) filtrosAtivos.push(`Status: ${status}`)
 
   const periodo = `${fmtDataParam(dataInicio)} a ${fmtDataParam(dataFinal)}`

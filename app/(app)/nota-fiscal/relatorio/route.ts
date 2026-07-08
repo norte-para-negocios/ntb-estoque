@@ -7,6 +7,8 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { fmtData } from '@/lib/pdf-utils'
 import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/RelatorioNFPDF'
 import { PdfErro } from '@/components/relatorio/PdfChrome'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { labelTipoItem } from '@/lib/constants-omie'
 
 function labelEtapa(etapa: string | null): string {
   return etapa === '60' ? 'Concluída' : 'Pendente'
@@ -38,7 +40,9 @@ export async function GET(request: Request) {
   const fornecedor = searchParams.get('fornecedor') || ''
   const numNfe = searchParams.get('num_nfe') || ''
   const status = searchParams.get('status') || ''
+  // tipo vem como lista separada por virgula (multi-select) na URL.
   const tipo = searchParams.get('tipo') || ''
+  const tiposArr = valoresMulti(tipo)
   const produto = searchParams.get('produto') || ''
 
   const supabase = await createClient()
@@ -53,13 +57,13 @@ export async function GET(request: Request) {
 
   // Mesma logica de filtro da tela/export.
   let notaIdsFiltro: number[] | null = null
-  if (tipo || produto) {
-    if (tipo) {
+  if (tiposArr.length || produto) {
+    if (tiposArr.length) {
       const { data: prodCodigos } = await supabase
         .from('produtos')
         .select('codigo_produto')
         .eq('loja_id', lojaId)
-        .eq('tipo_item', tipo)
+        .in('tipo_item', tiposArr)
       const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
       if (codigos.length === 0) {
         notaIdsFiltro = [-1]
@@ -147,7 +151,7 @@ export async function GET(request: Request) {
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
   if (status) filtrosAtivos.push(`Status: ${status === 'C' ? 'Concluída' : 'Pendente'}`)
-  if (tipo) filtrosAtivos.push(`Tipo: ${tipo}`)
+  if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
 
   const periodo = `${fmtData(dataInicio)} a ${fmtData(dataFinal)}`

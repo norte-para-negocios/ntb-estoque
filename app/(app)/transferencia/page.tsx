@@ -10,7 +10,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
-import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { Lista } from '@/components/ui-kit/Lista'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -30,6 +31,7 @@ export default async function TransferenciaPage({
     tipo?: string
     status?: string
     motivo?: string
+    local?: string
     page?: string
   }>
 }) {
@@ -56,11 +58,14 @@ export default async function TransferenciaPage({
   ].sort() as string[]
 
   // Filtro de familia/tipo via produtos -> movimentos -> transferencia_id
+  // (multi-select: valor na URL e uma lista separada por virgula)
+  const familiasArr = valoresMulti(sp.familia)
+  const tiposArr = valoresMulti(sp.tipo)
   let idsFiltrados: number[] | null = null
-  if (sp.familia || sp.tipo) {
+  if (familiasArr.length || tiposArr.length) {
     let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-    if (sp.familia) prodQuery = prodQuery.eq('descricao_familia', sp.familia)
-    if (sp.tipo) prodQuery = prodQuery.eq('tipo_item', sp.tipo)
+    if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
+    if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
     const { data: prods } = await prodQuery
     const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
 
@@ -95,6 +100,14 @@ export default async function TransferenciaPage({
   // Motivo guarda o tipo do ajuste: TRF (transferência) ou TPQ (perda/quebra).
   if (sp.motivo === 'TRF' || sp.motivo === 'TPQ') query = query.eq('motivo', sp.motivo)
   if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
+  // Local de estoque (origem OU destino) — multi-select.
+  const locaisArr = valoresMulti(sp.local)
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n))
+  if (locaisArr.length) {
+    const lista = locaisArr.join(',')
+    query = query.or(`codigo_local_origem.in.(${lista}),codigo_local_destino.in.(${lista})`)
+  }
   query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
   const { data: transferenciasRaw } = await query
@@ -149,12 +162,12 @@ export default async function TransferenciaPage({
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     {
-      tipo: 'select',
+      tipo: 'multi-select',
       nome: 'familia',
       label: 'Família',
       opcoes: familias.map((f) => ({ value: f, label: f })),
     },
-    { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
     {
       tipo: 'select',
       nome: 'status',
@@ -165,6 +178,8 @@ export default async function TransferenciaPage({
       ],
     },
     {
+      // Só existem 2 motivos possíveis (TRF/TPQ): marcar os dois equivale a não
+      // filtrar, então single-select já cobre o caso de uso — mantido assim.
       tipo: 'select',
       nome: 'motivo',
       label: 'Motivo',
@@ -172,6 +187,15 @@ export default async function TransferenciaPage({
         { value: 'TRF', label: 'Transferência' },
         { value: 'TPQ', label: 'Perda / quebra' },
       ],
+    },
+    {
+      tipo: 'multi-select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (todosLocais ?? [])
+        .slice()
+        .sort((a, b) => (a.descricao ?? '').localeCompare(b.descricao ?? '', 'pt-BR'))
+        .map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
     },
   ]
 
@@ -194,6 +218,7 @@ export default async function TransferenciaPage({
                   tipo: sp.tipo ?? '',
                   status: sp.status ?? '',
                   motivo: sp.motivo ?? '',
+                  local: sp.local ?? '',
                 }}
                 persistirEm="/transferencia"
               />

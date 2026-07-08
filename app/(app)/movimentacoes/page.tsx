@@ -41,8 +41,8 @@ export default async function MovimentacoesPage({
       { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
       { tipo: 'data', nome: 'data_final', label: 'Data final' },
       { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
-      { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
-      { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+      { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+      { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
     ]
   }
 
