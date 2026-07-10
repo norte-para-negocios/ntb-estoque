@@ -231,6 +231,16 @@ function useOP(op: OPData) {
             duration: 20000,
           })
         }
+        if (res.semEtiqueta) {
+          toast.warning('Etiqueta ainda não impressa', {
+            description: 'Esta OP foi concluída mas nenhuma etiqueta foi gerada pra ela.',
+            duration: 15000,
+            action: {
+              label: 'Imprimir agora',
+              onClick: () => window.open(`/ordem-producao/${op.id}/imprimir`, '_blank', 'noopener'),
+            },
+          })
+        }
         setDialogConclusao(false)
       }
     })

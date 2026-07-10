@@ -308,6 +308,36 @@ export async function criarOrdensProducao(input: {
   return { ok: true, criadas, erros }
 }
 
+// Saldo atual (soma de todos os locais) dos produtos informados, pra alertar
+// antes de criar OP de produto que ja tem estoque -- achado da reuniao 09/07
+// (#20). Le da posicao ja sincronizada (posicao_estoques), sem chamar o Omie
+// ao vivo: mais rapido e sem gastar rate limit so pra um alerta informativo.
+export async function saldoAtualProdutos(codigosProduto: number[]): Promise<Record<number, number>> {
+  if (!codigosProduto.length) return {}
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const { data: maxRow } = await supabase
+    .from('posicao_estoques')
+    .select('data_posicao')
+    .eq('loja_id', lojaId)
+    .order('data_posicao', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ data_posicao: string }>()
+  if (!maxRow) return {}
+  const { data } = await supabase
+    .from('posicao_estoques')
+    .select('n_cod_prod, n_saldo, codigo_local_estoque')
+    .eq('loja_id', lojaId)
+    .eq('data_posicao', maxRow.data_posicao)
+    .in('n_cod_prod', codigosProduto)
+    .neq('codigo_local_estoque', 0) // local 0 = linha sentinela do minimo/custo, saldo sempre 0
+  const saldos: Record<number, number> = {}
+  for (const r of (data ?? []) as { n_cod_prod: number; n_saldo: number | null; codigo_local_estoque: number }[]) {
+    saldos[r.n_cod_prod] = (saldos[r.n_cod_prod] ?? 0) + (Number(r.n_saldo) || 0)
+  }
+  return saldos
+}
+
 export async function setValidadeOP(opId: number, validade: string | null) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
@@ -390,7 +420,7 @@ export async function finishOP(
   opId: number,
   dataEscolhidaISO?: string | null,
   qtdeProduzida?: number | null,
-): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string } | { error: string }> {
+): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
@@ -456,10 +486,27 @@ export async function finishOP(
     revalidatePath('/ordem-producao')
   }
 
+  // Nenhuma etiqueta impressa pra esta OP ainda? So um lembrete (nao bloqueia a
+  // conclusao) -- achado do video da reuniao 09/07 (91 producoes, 0 etiquetas
+  // impressas num dia). Falha ao checar nao impede a conclusao (aditivo).
+  async function semEtiquetaImpressa(): Promise<boolean> {
+    try {
+      const { count } = await supabase
+        .from('impressao_etiquetas')
+        .select('id', { count: 'exact', head: true })
+        .eq('loja_id', lojaId)
+        .eq('origem', 'OP')
+        .eq('referencia_id', opId)
+      return !count
+    } catch {
+      return false
+    }
+  }
+
   try {
     await concluirOrdemProducao(op.loja, op.identificacao_n_cod_op, dataConclusao, qtdConcluir, obs)
     await marcarConcluidaLocal()
-    return { ok: true }
+    return { ok: true, semEtiqueta: await semEtiquetaImpressa() }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Falha ao concluir no Omie'
     if (!pareceErroCmc(msg) || !op.identificacao_n_cod_produto) {
@@ -477,7 +524,7 @@ export async function finishOP(
     )
     if ('error' in fallback) return fallback
     await marcarConcluidaLocal()
-    return fallback
+    return { ...fallback, semEtiqueta: await semEtiquetaImpressa() }
   }
 }
 

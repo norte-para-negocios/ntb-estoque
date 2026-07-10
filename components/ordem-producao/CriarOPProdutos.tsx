@@ -10,7 +10,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produtos-search'
-import { criarOrdensProducao } from '@/lib/actions/ordem-producao'
+import { criarOrdensProducao, saldoAtualProdutos } from '@/lib/actions/ordem-producao'
 import { parseNumBR } from '@/lib/num-br'
 import { gerarDatasOP, type UnidadeOP } from '@/lib/op-recorrencia'
 
@@ -121,6 +121,18 @@ export function CriarOPProdutos({
       return
     }
     startTransition(async () => {
+      // Alerta (nao bloqueia) se algum produto ja tem saldo em estoque -- pedido
+      // da reuniao 09/07 (#20): evitar produzir mais sem perceber que ja tem.
+      const saldos = await saldoAtualProdutos(itensValidos.map((i) => i.nCodProduto))
+      const comEstoque = itens.filter((i) => (saldos[i.produto.codigo_produto] ?? 0) > 0)
+      if (comEstoque.length) {
+        const lista = comEstoque
+          .map((i) => `${i.produto.descricao}: ${saldos[i.produto.codigo_produto].toLocaleString('pt-BR')} ${i.produto.unidade || ''}`.trim())
+          .join('\n')
+        if (!window.confirm(`Produto(s) já em estoque:\n\n${lista}\n\nProduzir mais mesmo assim?`)) {
+          return
+        }
+      }
       const res = await criarOrdensProducao({
         itens: itensValidos,
         datas,
