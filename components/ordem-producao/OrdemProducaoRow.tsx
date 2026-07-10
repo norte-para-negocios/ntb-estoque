@@ -440,7 +440,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
             </div>
             <p className="mt-1 text-[11px] text-text-muted">
               OP de {ctrl.qtdConcluirDefault.toLocaleString('pt-BR', { maximumFractionDigits: 12 })} {op.unidade}.
-              Pode concluir só uma parte (ex.: produziu menos que o previsto).
+              Pode concluir com quantidade diferente da prevista, pra mais ou pra menos.
             </p>
           </div>
           <div>

@@ -414,15 +414,16 @@ export async function finishOP(
     return { error: 'Ordem de produção não encontrada' }
   }
 
-  // Quantidade a concluir: a escolhida (parcial) se valida; senao a cheia da OP.
+  // Quantidade a concluir: a escolhida (parcial OU maior que o previsto) se vier;
+  // senao a cheia da OP. Pedido do fundador (10/07): produziu mais que o
+  // planejado (ex.: OP de 10kg, produziu 20kg) tem que poder concluir assim
+  // mesmo, sem editar a OP antes. O Omie nao exige nQtdeProduzida bater com o
+  // planejado -- essa trava era so do nosso app, removida.
   const qtdMaxima = op.quantidade ?? op.identificacao_n_qtde ?? 1
   const qtdConcluir =
     qtdeProduzida != null && Number.isFinite(qtdeProduzida) && qtdeProduzida > 0
       ? qtdeProduzida
       : qtdMaxima
-  if (qtdConcluir > qtdMaxima) {
-    return { error: `Quantidade a concluir (${qtdConcluir}) não pode ser maior que a quantidade da OP (${qtdMaxima}).` }
-  }
 
   // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
   // 3) hoje como ultimo fallback.
