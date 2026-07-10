@@ -73,6 +73,20 @@ export function proximoDiaISO(dataISO: string): string {
   const [y, m, d] = dataISO.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
 }
+export type PeriodoResumo = 'dia' | 'semana' | 'mes'
+// Janela ROLANTE terminando em dataISO (inclusive): dia = so o dia; semana = 7 dias;
+// mes = 30 dias. Pedido da reuniao 09/07 (Augusto, gerente regional, quer ver
+// semanal/mensal, nao so diario) -- mesmo padrao ja usado na cobertura de auditoria.
+// ini/fim: timestamptz (created_at); dataIni/dataFim: 'YYYY-MM-DD' (colunas de data pura).
+export function janelaPeriodoBahia(
+  dataISO: string,
+  periodo: PeriodoResumo
+): { ini: string; fim: string; dataIni: string; dataFim: string } {
+  const dias = periodo === 'mes' ? 30 : periodo === 'semana' ? 7 : 1
+  const [y, m, d] = dataISO.split('-').map(Number)
+  const dataIni = new Date(Date.UTC(y, m - 1, d - (dias - 1))).toISOString().slice(0, 10)
+  return { ini: janelaDiaBahia(dataIni).ini, fim: janelaDiaBahia(dataISO).fim, dataIni, dataFim: dataISO }
+}
 export function hojeBahia(): string {
   return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
 }
@@ -127,7 +141,12 @@ async function nomesLojas(supabase: Supa, lojaIds: number[]): Promise<Map<number
 
 const vazia: CategoriaLista = { colunas: [], linhas: [], total: 0 }
 
-export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat: CategoriaKey): Promise<ResumoDia> {
+export async function carregarResumoDia(
+  lojaIds: number[],
+  dataISO: string,
+  cat: CategoriaKey,
+  periodo: PeriodoResumo = 'dia'
+): Promise<ResumoDia> {
   const contagemVazia: Contagem = {
     notas: 0, valorNotas: 0, transferencias: 0, inventarios: 0,
     opsPrevistas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0, auditoria: 0,
@@ -135,8 +154,8 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
   if (!lojaIds.length) return { contagem: contagemVazia, cat, lista: vazia, multiLoja: false }
 
   const supabase = createServiceClient()
-  const { ini, fim } = janelaDiaBahia(dataISO)
-  const proxDia = proximoDiaISO(dataISO)
+  const { ini, fim, dataIni, dataFim } = janelaPeriodoBahia(dataISO, periodo)
+  const proxDia = proximoDiaISO(dataFim)
   const multiLoja = lojaIds.length > 1
 
   // --- CONTAGENS (todas, baratas) ---
@@ -144,12 +163,12 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount, auditCount,
   ] = await Promise.all([
     supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
-      .gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60'),
+      .gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60'),
     supabase.from('transferencias').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('inventarios').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
-    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('identificacao_d_dt_previsao', dataISO),
-    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO),
-    supabase.from('movimentos_historico').select('entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO),
+    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('identificacao_d_dt_previsao', dataIni).lte('identificacao_d_dt_previsao', dataFim),
+    supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim),
+    supabase.from('movimentos_historico').select('entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim),
     supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('integration_attempts').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
     supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
@@ -172,12 +191,12 @@ export async function carregarResumoDia(lojaIds: number[], dataISO: string, cat:
     auditoria: auditCount.count ?? 0,
   }
 
-  const lista = await listarCategoria(supabase, lojaIds, dataISO, cat, contagem, multiLoja)
+  const lista = await listarCategoria(supabase, lojaIds, dataISO, cat, contagem, multiLoja, periodo)
   return { contagem, cat, lista, multiLoja }
 }
 
 // Monta a lista de UMA categoria (colunas + linhas). Reutilizada pelo painel (uma
-// categoria por vez) e pelo PDF completo (todas as categorias do dia).
+// categoria por vez) e pelo PDF completo (todas as categorias do dia/periodo).
 async function listarCategoria(
   supabase: Supa,
   lojaIds: number[],
@@ -185,16 +204,17 @@ async function listarCategoria(
   cat: CategoriaKey,
   contagem: Contagem,
   multiLoja: boolean,
+  periodo: PeriodoResumo = 'dia',
 ): Promise<CategoriaLista> {
-  const { ini, fim } = janelaDiaBahia(dataISO)
-  const proxDia = proximoDiaISO(dataISO)
+  const { ini, fim, dataIni, dataFim } = janelaPeriodoBahia(dataISO, periodo)
+  const proxDia = proximoDiaISO(dataFim)
   const lojaTag = multiLoja ? { label: 'Loja' } : null
   let lista: CategoriaLista = vazia
 
   if (cat === 'notas') {
     const { data } = await supabase.from('notas_fiscais')
       .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
-      .in('loja_id', lojaIds).gte('d_emissao_nfe', dataISO).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
+      .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
       .eq('c_etapa', '60')
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
@@ -314,7 +334,7 @@ async function listarCategoria(
     // "previstas" NÃO entram: previsão é plano, não atividade do dia.
     const { data } = await supabase.from('ordens_producao')
       .select('identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
-      .in('loja_id', lojaIds).eq('dt_conclusao_real', dataISO).limit(5000)
+      .in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim).limit(5000)
     const rows = (data ?? []) as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
     // Nome E TIPO do produto: OPs do Omie vêm sem descrição/tipo -> resolve pelo código.
     // Ramon quer ver a produção de EM PROCESSO/intermediário separada do ACABADO
@@ -336,14 +356,18 @@ async function listarCategoria(
       if (t === '03' || t === '06') return 'Em processo'
       return 'Outro'
     }
+    // Pedido da reuniao 09/07: card Produção so deve contar produto em processo/
+    // acabado -- 'Outro' (tipo nao mapeado, ex.: material de consumo virando OP por
+    // engano) era ruido misturado no card.
     const grupo = new Map<string, { produto: string; tipo: string; qtd: number; ops: number }>()
     for (const o of rows) {
+      const tipo = classificar(o.identificacao_n_cod_produto)
+      if (tipo === 'Outro') continue
       const produto = o.produto_descricao
         ? formatarNomeProduto(o.produto_descricao)
         : o.identificacao_n_cod_produto != null
           ? nomeProd.get(o.identificacao_n_cod_produto) ?? `Produto ${o.identificacao_n_cod_produto}`
           : '-'
-      const tipo = classificar(o.identificacao_n_cod_produto)
       const g = grupo.get(produto) ?? { produto, tipo, qtd: 0, ops: 0 }
       g.qtd += Number(o.identificacao_n_qtde ?? 0)
       g.ops += 1
@@ -363,7 +387,7 @@ async function listarCategoria(
     lista.grafico = { titulo: 'Mais produzidos', unidade: 'num', itens: grupos.slice(0, 8).map((g) => ({ label: g.produto.slice(0, 28), valor: g.qtd })) }
   } else if (cat === 'movimentacoes') {
     const { data } = await supabase.from('movimentos_historico')
-      .select('loja_id, codigo, descricao, entradas, saidas').in('loja_id', lojaIds).eq('data', dataISO)
+      .select('loja_id, codigo, descricao, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim)
       .order('saidas', { ascending: false }).limit(LIMITE_LISTA)
     const rows = (data ?? []) as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null

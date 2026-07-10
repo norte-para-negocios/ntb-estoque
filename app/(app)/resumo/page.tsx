@@ -28,8 +28,7 @@ const CATS: { key: CategoriaKey; label: string; valor: (c: Contagem) => string; 
   { key: 'notas', label: 'Notas Fiscais', valor: (c) => fmt(c.notas), sub: (c) => (c.valorNotas > 0 ? fmtMoeda(c.valorNotas) : null) },
   { key: 'transferencias', label: 'Transferências', valor: (c) => fmt(c.transferencias) },
   { key: 'inventarios', label: 'Inventários', valor: (c) => fmt(c.inventarios) },
-  { key: 'producao', label: 'Produção', valor: (c) => fmt(c.opsConcluidas), sub: () => 'concluídas no dia' },
-  { key: 'movimentacoes', label: 'Movimentações', valor: (c) => fmt(c.movEntradas + c.movSaidas), sub: (c) => `${fmt(c.movEntradas)} E · ${fmt(c.movSaidas)} S` },
+  { key: 'producao', label: 'Produção', valor: (c) => fmt(c.opsConcluidas), sub: () => 'concluídas no período' },
   { key: 'etiquetas', label: 'Etiquetas', valor: (c) => fmt(c.etiquetas) },
   { key: 'erros', label: 'Erros', valor: (c) => fmt(c.erros) },
   { key: 'auditoria', label: 'Auditoria', valor: (c) => fmt(c.auditoria), sub: () => 'alterações' },
@@ -66,20 +65,25 @@ export default async function ResumoPage({
     .from('lojas').select('id, nome, nome_fantasia').in('id', ator.lojaIds.length ? ator.lojaIds : [-1]).order('nome_fantasia')
   const lojas = (lojasRaw ?? []).map((l) => ({ id: l.id as number, nome: (l.nome_fantasia || l.nome || `Loja ${l.id}`) as string }))
 
-  const { contagem, lista } = await carregarResumoDia(lojaIdsEfetivos, data, cat)
-  const catLabel = CATS.find((c) => c.key === cat)!.label
-
-  const lojaParam = lojaSel != null ? String(lojaSel) : 'todas'
-  const linkCat = (k: CategoriaKey) => `/resumo?data=${data}&loja=${lojaParam}&cat=${k}`
-  const pdfHref = `/resumo/imprimir?data=${data}&loja=${lojaParam}&cat=${cat}`
-
-  const temStatus = lista.linhas.some((l) => l.status)
-  const tomClasse: Record<Tom, string> = SELO_CLASSE as Record<Tom, string>
-
-  // --- DADOS EXTRAS DA AUDITORIA DE INVENTÁRIO ---
+  // Periodo GERAL do resumo (pedido reuniao 09/07: Augusto, gerente regional, quer
+  // ver semanal/mensal, nao so diario) -- afeta TODAS as categorias, nao so a
+  // auditoria (que ja usava esse mesmo periodo pra bucketing da cobertura desde
+  // hoje de manha; unificado aqui num unico controle).
   const periodo: PeriodoCob = (['dia', 'semana', 'mes'] as const).includes(sp.periodo as PeriodoCob)
     ? (sp.periodo as PeriodoCob)
     : 'dia'
+  const labelPeriodoResumo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
+
+  const { contagem, lista } = await carregarResumoDia(lojaIdsEfetivos, data, cat, periodo)
+  const catLabel = CATS.find((c) => c.key === cat)!.label
+
+  const lojaParam = lojaSel != null ? String(lojaSel) : 'todas'
+  const linkCat = (k: CategoriaKey) => `/resumo?data=${data}&loja=${lojaParam}&cat=${k}&periodo=${periodo}`
+  const linkPeriodoResumo = (p: PeriodoCob) => `/resumo?data=${data}&loja=${lojaParam}&cat=${cat}&periodo=${p}`
+  const pdfHref = `/resumo/imprimir?data=${data}&loja=${lojaParam}&cat=${cat}&periodo=${periodo}`
+
+  const temStatus = lista.linhas.some((l) => l.status)
+  const tomClasse: Record<Tom, string> = SELO_CLASSE as Record<Tom, string>
 
   let coberturaData: RowCobertura[] = []
   let produtosSemContagem: ProdutoSemContagem[] = []
@@ -165,25 +169,42 @@ export default async function ResumoPage({
   ]
   const auditoriaDefaults = { data, loja: lojaParam, cat, periodo, tipo: sp.tipo ?? '', local: sp.local ?? '' }
 
-  const linkPeriodo = (p: PeriodoCob) => `/resumo?data=${data}&loja=${lojaParam}&cat=auditoria&periodo=${p}`
-  const labelPeriodo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
   const labelJanela: Record<PeriodoCob, string> = { dia: 'últimos 30 dias', semana: 'últimas 12 semanas', mes: 'últimos 12 meses' }
 
   return (
     <div className="space-y-4">
       <ListaHeader>
         <PageHeader
-          title="Resumo do dia"
+          title="Resumo Operacional"
           icon={LayoutDashboard}
-          description="O que aconteceu no dia, por categoria"
+          description="O que aconteceu, por categoria — diário, semanal ou mensal"
           actions={
             <a href={pdfHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}>
-              <Download className="size-4" /> PDF do dia
+              <Download className="size-4" /> PDF
             </a>
           }
         />
         <ResumoFiltros data={data} lojaSel={lojaSel} lojas={lojas} hoje={hoje} cat={cat} />
       </ListaHeader>
+
+      {/* Período GERAL: afeta todos os cards e a lista abaixo, não só a auditoria
+          (pedido reuniao 09/07 -- Augusto, gerente regional, quer ver semanal/mensal). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[12px] text-text-muted">Período:</span>
+        {(['dia', 'semana', 'mes'] as const).map((p) => (
+          <Link
+            key={p}
+            href={linkPeriodoResumo(p)}
+            className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+              periodo === p
+                ? 'border-brand bg-brand/10 text-brand'
+                : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
+            }`}
+          >
+            {labelPeriodoResumo[p]}
+          </Link>
+        ))}
+      </div>
 
       {/* FILTRO POR CATEGORIA: cada tile mostra a contagem e seleciona a lista */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
@@ -215,20 +236,20 @@ export default async function ResumoPage({
       {/* PAINEL DE INVENTÁRIO (só quando cat=auditoria) */}
       {cat === 'auditoria' && (
         <div className="space-y-3">
-          {/* Chips de período + filtros (só afetam a lista "Sem contagem", não a barra de cobertura) */}
+          {/* Chips de período (mesmo controle global do topo -- filtram tambem a lista "Sem contagem") */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12px] text-text-muted">Cobertura:</span>
             {(['dia', 'semana', 'mes'] as const).map((p) => (
               <Link
                 key={p}
-                href={linkPeriodo(p)}
+                href={linkPeriodoResumo(p)}
                 className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                   periodo === p
                     ? 'border-brand bg-brand/10 text-brand'
                     : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
                 }`}
               >
-                {labelPeriodo[p]}
+                {labelPeriodoResumo[p]}
               </Link>
             ))}
             <span className="mx-1 h-4 w-px bg-border" />
