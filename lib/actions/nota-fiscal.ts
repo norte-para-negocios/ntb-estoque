@@ -14,3 +14,14 @@ export async function setQuantidadeNFItem(itemId: number, quantidade: number | n
     .eq('loja_id', lojaId)
   revalidatePath('/nota-fiscal', 'page')
 }
+
+export async function setCategoriaContabilNFItem(itemId: number, categoriaId: number | null) {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  await supabase
+    .from('nota_fiscal_items')
+    .update({ categoria_contabil_id: categoriaId, updated_at: new Date().toISOString() })
+    .eq('id', itemId)
+    .eq('loja_id', lojaId)
+  revalidatePath('/nota-fiscal', 'page')
+}

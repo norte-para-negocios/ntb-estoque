@@ -20,6 +20,7 @@ import {
   CalendarCheck,
   BarChart3,
   Database,
+  Tags,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -50,11 +51,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/produto', label: 'Produtos', icon: Package, group: 'Cadastros' },
   { href: '/local-estoque', label: 'Locais de Estoque', icon: Warehouse, group: 'Cadastros' },
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
+  { href: '/categoria-contabil', label: 'Categorias Contábeis', icon: Tags, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
-  { href: '/resumo', label: 'Resumo do dia', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
+  { href: '/resumo', label: 'Resumo Operacional', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3, group: 'Administração', gestaoUsuarios: true },
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },

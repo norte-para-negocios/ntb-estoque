@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Num } from '@/components/ui-kit/Num'
 import { btnClass } from '@/components/ui-kit/Button'
 import { QuantidadeInput } from '@/components/nota-fiscal/QuantidadeInput'
+import { CategoriaContabilSelect } from '@/components/nota-fiscal/CategoriaContabilSelect'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 import { FileText } from 'lucide-react'
 
@@ -20,9 +21,18 @@ export type ItemNF = {
   n_preco_unit: number | null
   v_total_item: number | null
   quantidade: number | null
+  categoria_contabil_id: number | null
 }
 
-export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: ItemNF[] }) {
+export function ItensNotaFiscal({
+  notaId,
+  itens,
+  categorias,
+}: {
+  notaId: string
+  itens: ItemNF[]
+  categorias: { id: number; nome: string }[]
+}) {
   const [sel, setSel] = useState<Set<number>>(new Set())
 
   function toggle(id: number) {
@@ -87,6 +97,7 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
               <th className="text-right">Preço unit.</th>
               <th className="text-right">Total</th>
               <th className="text-right">Qtd p/ etiqueta</th>
+              <th>Categoria contábil</th>
               <th></th>
             </tr>
           </thead>
@@ -119,6 +130,9 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
                   <div className="flex justify-end">
                     <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
                   </div>
+                </td>
+                <td>
+                  <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
                 </td>
                 <td className="text-right">
                   <DialogImprimirEtiqueta
@@ -182,6 +196,13 @@ export function ItensNotaFiscal({ notaId, itens }: { notaId: string; itens: Item
                 Qtd p/ etiqueta
               </div>
               <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                Categoria contábil
+              </div>
+              <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
             </div>
 
             <div className="mt-4 border-t border-border/60 pt-3">

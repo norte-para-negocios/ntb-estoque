@@ -26,12 +26,20 @@ export default async function NotaFiscalItensPage({
 
   if (!nf) notFound()
 
-  const { data: itens } = await supabase
-    .from('nota_fiscal_items')
-    .select('id, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade')
-    .eq('nota_fiscal_id', id)
-    .eq('loja_id', lojaId)
-    .order('n_sequencia')
+  const [{ data: itens }, { data: categorias }] = await Promise.all([
+    supabase
+      .from('nota_fiscal_items')
+      .select('id, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id')
+      .eq('nota_fiscal_id', id)
+      .eq('loja_id', lojaId)
+      .order('n_sequencia'),
+    supabase
+      .from('categorias_contabeis')
+      .select('id, nome')
+      .eq('loja_id', lojaId)
+      .eq('ativa', true)
+      .order('nome'),
+  ])
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -87,7 +95,7 @@ export default async function NotaFiscalItensPage({
           </div>
         }
       />
-      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} />
+      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} />
     </div>
   )
 }

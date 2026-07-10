@@ -114,6 +114,16 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Categorias Contábeis',
+    grupo: 'Cadastros',
+    permissoes: [
+      { nome: 'Categorias Contabeis', label: 'Acessar' },
+      { nome: 'Categorias Contabeis - Criar', label: 'Criar' },
+      { nome: 'Categorias Contabeis - Editar', label: 'Editar' },
+      { nome: 'Categorias Contabeis - Excluir', label: 'Excluir' },
+    ],
+  },
+  {
     modulo: 'Fornecedores',
     grupo: 'Cadastros',
     permissoes: [
@@ -145,6 +155,7 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/produto': 'Produtos',
   '/local-estoque': 'Locais de Estoque',
   '/familia': 'Familias',
+  '/categoria-contabil': 'Categorias Contabeis',
   '/fornecedor': 'Fornecedores',
   // /sintegra puxa fornecedor/cliente: exige uma das duas
   '/sintegra': 'Fornecedores',
