@@ -65,8 +65,11 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
   {
     modulo: 'Movimentações',
     grupo: 'Operação',
-    // Modulo de leitura: historico de entradas/saidas importado do Omie.
-    permissoes: [{ nome: 'Movimentacoes', label: 'Acessar' }],
+    // Historico de entradas/saidas importado do Omie + criar ajuste manual (ENT/SAI/TPQ).
+    permissoes: [
+      { nome: 'Movimentacoes', label: 'Acessar' },
+      { nome: 'Movimentacoes - Criar', label: 'Criar' },
+    ],
   },
   {
     modulo: 'Validade',

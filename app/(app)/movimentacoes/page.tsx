@@ -25,6 +25,7 @@ export default async function MovimentacoesPage({
     mov?: string
     page?: string
     aba?: string
+    local?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
