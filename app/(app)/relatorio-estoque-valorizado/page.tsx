@@ -127,6 +127,7 @@ export default async function RelatorioEstoqueValorizadoPage({
           title="Estoque Valorizado"
           icon={Boxes}
           description="Valor do estoque atual: saldo x CMC da ultima foto do Omie."
+          voltarHref="/relatorios"
           actions={
             <FiltrosGaveta
               basePath="/relatorio-estoque-valorizado"

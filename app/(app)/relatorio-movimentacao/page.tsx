@@ -106,6 +106,7 @@ export default async function RelatorioMovimentacaoPage({
           title="Movimentação"
           icon={ArrowDownUp}
           description="Por operação, local e tipo — em R$ (importado do MOV_DRV) — BETA"
+          voltarHref="/relatorios"
           actions={
             <>
               <FiltrosGaveta
@@ -377,6 +378,7 @@ export default async function RelatorioMovimentacaoPage({
         title="Movimentação"
         icon={ArrowDownUp}
         description="Consumo e baixas — em quantidade por produto ou em R$ por operação (BETA)"
+        voltarHref="/relatorios"
         actions={
           <>
             <FiltrosGaveta

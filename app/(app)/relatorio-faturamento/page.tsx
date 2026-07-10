@@ -134,7 +134,25 @@ export default async function RelatorioFaturamentoPage({
     totalGeral += v
     porRotulo.set(r.rotulo, ent)
   }
-  const linhas = [...porRotulo.entries()].sort((a, b) => b[1].total - a[1].total).map(([rotulo, ent]) => ({ rotulo, meses: ent.meses, total: ent.total }))
+  // Pedido reuniao 09/07: na dimensao "tipo", produto acabado primeiro (o que o
+  // Ramon quer ver de cara), depois revenda/materia-prima, "nao classificado"/
+  // "outras" por ultimo (rotulo cru do Excel do Omie -- ver comentario na RPC,
+  // nao e classificacao nossa). Demais dimensoes continuam so por valor.
+  const ORDEM_TIPO_FAT: Record<string, number> = {
+    'Produto acabado': 0,
+    'Mercadoria p/ revenda': 1,
+    'Matéria-prima': 2,
+    'Tipo KT': 3,
+    'Outras': 4,
+    'Não classificado': 5,
+  }
+  const linhas = [...porRotulo.entries()]
+    .sort((a, b) =>
+      dim === 'tipo'
+        ? (ORDEM_TIPO_FAT[a[0]] ?? 9) - (ORDEM_TIPO_FAT[b[0]] ?? 9) || b[1].total - a[1].total
+        : b[1].total - a[1].total
+    )
+    .map(([rotulo, ent]) => ({ rotulo, meses: ent.meses, total: ent.total }))
   const totalPorMes: Record<string, number> = {}
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
 
@@ -166,6 +184,7 @@ export default async function RelatorioFaturamentoPage({
           title="Faturamento"
           icon={DollarSign}
           description="Vendas do PDV (NFC-e), puxadas direto da API do Omie (BETA)"
+          voltarHref="/relatorios"
           actions={
             <>
               {temImportacao && (

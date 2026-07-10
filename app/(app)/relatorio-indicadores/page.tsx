@@ -61,7 +61,7 @@ export default async function RelatorioIndicadoresPage({
     return (
       <div className="space-y-4">
         <ListaHeader>
-          <PageHeader title="Fat × Compras" icon={Scale} description="Quanto você comprou para cada real vendido (BETA)" />
+          <PageHeader title="Fat × Compras" icon={Scale} description="Quanto você comprou para cada real vendido (BETA)" voltarHref="/relatorios" />
         </ListaHeader>
         <EmptyState
           icon={Scale}
@@ -151,6 +151,7 @@ export default async function RelatorioIndicadoresPage({
           title="Fat × Compras"
           icon={Scale}
           description="Quanto você comprou para cada real vendido (BETA)"
+          voltarHref="/relatorios"
           actions={
             <>
               <FiltrosGaveta

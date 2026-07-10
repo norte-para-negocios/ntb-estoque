@@ -56,7 +56,7 @@ export default async function RelatorioMargemPage({
     return (
       <div className="space-y-4">
         <ListaHeader>
-          <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} />
+          <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} voltarHref="/relatorios" />
         </ListaHeader>
         <EmptyState
           icon={Percent}
@@ -105,6 +105,7 @@ export default async function RelatorioMargemPage({
           title="Margem"
           icon={Percent}
           description="Margem por produto (preço de venda × custo) — BETA"
+          voltarHref="/relatorios"
           actions={
             <>
               <FiltrosGaveta

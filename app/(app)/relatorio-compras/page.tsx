@@ -165,6 +165,7 @@ export default async function RelatorioComprasPage({
           title="Compras"
           icon={ShoppingCart}
           description="Relatório de compras por NF de entrada (BETA)"
+          voltarHref="/relatorios"
           actions={
             <>
               <FiltrosGaveta

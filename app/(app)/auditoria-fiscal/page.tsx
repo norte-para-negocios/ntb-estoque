@@ -92,6 +92,7 @@ export default async function AuditoriaFiscalPage({
           title="Auditoria fiscal"
           icon={ShieldCheck}
           description="Como cada compra foi classificada (CFOP), o que credita ICMS e o que entra no estoque — BETA"
+          voltarHref="/relatorios"
           actions={
             <>
               <FiltrosGaveta
