@@ -1,6 +1,8 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 interface OmieOPIdentificacao {
   nCodOP: number
   cCodIntOP: string
@@ -176,6 +178,64 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
       { onConflict: 'loja_id,identificacao_n_cod_op' }
     )
   }
+}
+
+// Detecta a resposta do Omie quando o nCodOP nao existe mais la (ordem excluida/
+// nunca criada de verdade). So esse erro especifico autoriza apagar o registro local
+// -- qualquer outro erro (rede instavel, rate limit, timeout) e tratado como
+// inconclusivo e a OP fica intocada, pra nao apagar produção real por falso positivo.
+function pareceOPNaoExiste(msg: string): boolean {
+  return /nao cadastrada|não cadastrada/i.test(msg)
+}
+
+/**
+ * Reconcilia OPs ABERTAS e ATRASADAS (previsao no passado, nunca concluidas) que
+ * podem ter sido excluidas direto no Omie sem isso refletir aqui -- achado real
+ * em 2026-07-10: um lote de 44 OPs (loja 6, mesmo created_at) ficou "fantasma"
+ * apos alguem recriar as mesmas OPs manualmente no Omie; o sync normal
+ * (syncOrdensProducao/ListarOrdemProducao, filtrado por data de CONCLUSAO) nunca
+ * pega esse caso porque uma OP aberta nao tem dConclusao. Verifica cada uma via
+ * ConsultarOrdemProducao (a UNICA forma confiavel de saber se ainda existe) e
+ * apaga localmente as que o Omie confirma nao existirem mais. `limite` limita
+ * quantas verificar nesta chamada (respeita rate limit do Omie, roda aos poucos
+ * via cron em vez de vasculhar tudo de uma vez).
+ */
+export async function reconciliarOPsFantasmas(
+  loja: LojaOmie,
+  diasAtraso = 3,
+  limite = 40
+): Promise<{ verificadas: number; excluidas: number; erros: number }> {
+  const supabase = createServiceClient()
+  const limiteData = new Date(Date.now() - diasAtraso * 86400000).toISOString().slice(0, 10)
+
+  const { data: candidatas } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao')
+    .eq('loja_id', loja.id)
+    .eq('concluida', false)
+    .lt('identificacao_d_dt_previsao', limiteData)
+    .not('identificacao_n_cod_op', 'is', null)
+    .order('identificacao_d_dt_previsao', { ascending: true })
+    .limit(limite)
+
+  let excluidas = 0
+  let erros = 0
+  for (const op of (candidatas ?? []) as { id: number; identificacao_n_cod_op: number }[]) {
+    try {
+      await fetchOrdemProducao(loja, op.identificacao_n_cod_op)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (pareceOPNaoExiste(msg)) {
+        await supabase.from('ordens_producao').delete().eq('id', op.id).eq('loja_id', loja.id)
+        excluidas++
+      } else {
+        erros++
+      }
+    }
+    await sleep(400)
+  }
+
+  return { verificadas: candidatas?.length ?? 0, excluidas, erros }
 }
 
 /**
