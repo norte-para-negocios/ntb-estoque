@@ -96,8 +96,10 @@ function buildStyles(opts: {
   const padOX = (3 * escala + offsetX) * MM
   const padOY = (2 * escala + offsetY) * MM
   const fs = (n: number) => n * escala * fontScale
-  const qrSize = 36 * escala
-  const rightW = 40 * escala
+  // Pedido reuniao 09/07: "pessoal da loja pediu pra ver se consegue aumentar" o QR
+  // code -- aumentado ~17% (36->42) e a coluna que o contem ganhou espaco junto.
+  const qrSize = 42 * escala
+  const rightW = 46 * escala
 
   return StyleSheet.create({
     page: {
