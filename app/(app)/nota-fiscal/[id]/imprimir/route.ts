@@ -7,6 +7,21 @@ import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig } from '@/components/etiqueta/EtiquetaPDF'
 import { carregarEtiquetaConfig } from '@/lib/etiqueta-config'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { PdfErro } from '@/components/relatorio/PdfChrome'
+
+// Achado real (reuniao 09/07): o erro de "nenhum item com quantidade definida"
+// aparecia como JSON cru na aba (sem estilo, sem explicacao) -- confuso mesmo
+// quando o motivo era so a quantidade ainda nao ter sido preenchida naquele
+// item especifico. Agora usa o mesmo PdfErro (PDF estilizado) que o resto do
+// sistema ja usa pra erro de relatorio, com mensagem acionavel.
+async function pdfErroResponse(titulo: string, mensagem: string) {
+  const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
+  const buf = await renderToBuffer(el)
+  return new NextResponse(new Uint8Array(buf), {
+    status: 200,
+    headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="erro.pdf"' },
+  })
+}
 
 // Quantidade EXATA do Omie na etiqueta: ate 12 casas, sem arredondar.
 // (o parametro dec e mantido por compatibilidade de chamada; nao trunca mais
@@ -31,7 +46,7 @@ function parseTamanho(url: string): EtiquetaConfig {
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return pdfErroResponse('Acesso negado', 'Você não tem permissão para acessar notas fiscais.')
   }
 
   const { id } = await params
@@ -49,7 +64,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
-  if (!nf) return NextResponse.json({ error: 'Nota fiscal não encontrada' }, { status: 404 })
+  if (!nf) return pdfErroResponse('Nota fiscal não encontrada', 'Verifique se a nota ainda existe e tente novamente.')
 
   const { data: loja } = await supabase.from('lojas').select('cnpj, nome, nome_fantasia').eq('id', lojaId).single()
 
@@ -68,9 +83,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: itens } = await itensQuery
 
   if (!itens?.length) {
-    return NextResponse.json(
-      { error: 'Nenhum item com quantidade definida para etiqueta' },
-      { status: 404 }
+    return pdfErroResponse(
+      'Quantidade não definida',
+      'Nenhum item selecionado tem a quantidade de etiqueta preenchida. Volte para a nota fiscal, defina a quantidade no item (mesmo fracionária, ex.: 0,25) e aguarde a mensagem "Quantidade salva" antes de imprimir de novo.'
     )
   }
 

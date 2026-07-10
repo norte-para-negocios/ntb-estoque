@@ -164,7 +164,11 @@ export default async function AuditoriaFiscalPage({
                   return (
                     <tr key={`${l.cfop_doc}|${l.cfop_entrada}`} className={`border-t border-border/60 ${sel ? 'bg-surface-2/60' : 'hover:bg-surface-2/40'}`}>
                       <td className="whitespace-nowrap px-3 py-2">
-                        <Link href={qs({ cfop: `${l.cfop_doc}|${l.cfop_entrada}` })} className="num font-medium text-text hover:text-brand">
+                        {/* Achado real (reuniao 09/07, "eu clico mas nao faz nada"): o clique
+                            SEMPRE abriu a secao de detalhe abaixo da tabela, mas sem scroll
+                            automatico ela ficava fora da tela numa tabela longa -- ancora
+                            #detalhe-cfop resolve isso sem precisar de client component. */}
+                        <Link href={`${qs({ cfop: `${l.cfop_doc}|${l.cfop_entrada}` })}#detalhe-cfop`} className="num font-medium text-text hover:text-brand">
                           {l.cfop_doc} → {l.cfop_entrada}
                         </Link>
                       </td>
@@ -186,7 +190,7 @@ export default async function AuditoriaFiscalPage({
 
           {/* Drill por item */}
           {cfopDocSel && cfopEntSel && (
-            <div className="space-y-1.5 rounded-lg border border-border bg-surface p-3">
+            <div id="detalhe-cfop" className="space-y-1.5 rounded-lg border-2 border-brand bg-surface p-3 scroll-mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-text">
                   Itens de <span className="num">{cfopDocSel} → {cfopEntSel}</span>

@@ -20,6 +20,9 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
 const POR_PAGINA = 50
 
+const COLUNAS_SORT = ['data', 'codigo_local_estoque', 'status'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 export default async function InventarioPage({
   searchParams,
 }: {
@@ -30,6 +33,8 @@ export default async function InventarioPage({
     tipo?: string
     status?: string
     page?: string
+    ord?: string
+    dir?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -42,6 +47,9 @@ export default async function InventarioPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
+  const ordRaw = sp.ord ?? 'data'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'data'
+  const dir = sp.dir === 'asc' ? 'asc' : 'desc'
 
   // Familias distintas para o select (melhor esforco)
   const { data: produtosFamilia } = await supabase
@@ -89,7 +97,7 @@ export default async function InventarioPage({
       'id, data, codigo_local_estoque, status, finalizado, user_id, items:inventario_items(count), itensStatus:inventario_items(status)'
     )
     .eq('loja_id', lojaId)
-    .order('data', { ascending: false })
+    .order(ord, { ascending: dir === 'asc' })
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
@@ -123,6 +131,19 @@ export default async function InventarioPage({
   function fmtData(d: string | null): string {
     if (!d) return ''
     return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+  }
+
+  // Mantem todos os searchParams existentes ao trocar a ordenacao (mesmo padrao de nota-fiscal/page.tsx).
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const params = new URLSearchParams()
+    if (sp.data_inicio) params.set('data_inicio', sp.data_inicio)
+    if (sp.data_final) params.set('data_final', sp.data_final)
+    if (sp.familia) params.set('familia', sp.familia)
+    if (sp.tipo) params.set('tipo', sp.tipo)
+    if (sp.status) params.set('status', sp.status)
+    params.set('ord', key)
+    params.set('dir', newDir)
+    return `/inventario?${params.toString()}`
   }
 
   const campos: CampoFiltro[] = [
@@ -198,10 +219,14 @@ export default async function InventarioPage({
       <Lista
         linhas={inventarios ?? []}
         chaveLinha={(inv) => inv.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Local',
             primaria: true,
+            sort: 'codigo_local_estoque',
             render: (inv) => {
               const local = localMap.get(inv.codigo_local_estoque) || inv.codigo_local_estoque
               return (
@@ -211,7 +236,7 @@ export default async function InventarioPage({
               )
             },
           },
-          { label: 'Data', larguraDesktop: 'w-28', render: (inv) => <span className="num text-text-muted">{fmtData(inv.data)}</span> },
+          { label: 'Data', larguraDesktop: 'w-28', sort: 'data', render: (inv) => <span className="num text-text-muted">{fmtData(inv.data)}</span> },
           {
             label: 'Responsável',
             larguraDesktop: 'w-40',
@@ -234,7 +259,7 @@ export default async function InventarioPage({
               )
             },
           },
-          { label: 'Status', larguraDesktop: 'w-32', render: (inv) => <StatusPill status={inv.status} /> },
+          { label: 'Status', larguraDesktop: 'w-32', sort: 'status', render: (inv) => <StatusPill status={inv.status} /> },
         ]}
         acao={(inv) => {
           const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
