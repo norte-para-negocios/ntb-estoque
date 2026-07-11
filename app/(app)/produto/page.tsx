@@ -47,9 +47,24 @@ type ProdutoLinha = {
   inativo: boolean | null
 }
 
+type EvolucaoPrecoRow = {
+  cod_produto: number
+  preco_atual: number
+  data_atual: string
+  fornecedor_atual: string | null
+  preco_anterior: number | null
+  data_anterior: string | null
+}
+
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
   return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
+}
+
+function fmtDataCurta(d: string | null): string {
+  if (!d) return '-'
+  const [y, m, dia] = d.slice(0, 10).split('-')
+  return `${dia}/${m}/${y}`
 }
 
 // Margem real = (venda - custo) / venda
@@ -251,13 +266,17 @@ export default async function ProdutoPage({
     }
   }
 
-  // Posicoes e previsao de venda so dependem de `codigos` e sao independentes
-  // entre si: carregam em paralelo para cortar latencia.
-  const [, previsaoRes] = await Promise.all([
+  // Posicoes, previsao de venda e evolucao de preco so dependem de `codigos` e
+  // sao independentes entre si: carregam em paralelo para cortar latencia.
+  // Evolucao de preco so na vista Compras (unica que usa) -- poupa a RPC nas demais.
+  const [, previsaoRes, evolucaoRes] = await Promise.all([
     carregarPosicoes(),
     codigos.length
       ? supabase.from('previsao_venda').select('n_cod_prod, qtde').eq('loja_id', lojaId).in('n_cod_prod', codigos)
       : Promise.resolve({ data: [] as { n_cod_prod: number; qtde: number | null }[] }),
+    codigos.length && vista === 'compras'
+      ? supabase.rpc('evolucao_preco_produtos', { p_loja_id: lojaId, p_codigos: codigos })
+      : Promise.resolve({ data: [] as EvolucaoPrecoRow[] }),
   ])
   // Custo = CMC nao-zero da foto MAIS RECENTE que tiver (hoje pode vir sem custo,
   // entao cai pra ontem). Guarda {cmc, data} e mantem o de data maior.
@@ -321,6 +340,15 @@ export default async function ProdutoPage({
   for (const pv of previsoes ?? []) prevMap.set(pv.n_cod_prod, Number(pv.qtde ?? 0))
   const prevVendaDe = (codProd: number | null): number | null =>
     codProd != null && prevMap.has(codProd) ? prevMap.get(codProd)! : null
+
+  // Evolucao de preco: ultima compra (NF de entrada) vs a compra anterior, por
+  // produto. So calculado na vista Compras (pedido reuniao 09/07, #32).
+  const evolucaoMap = new Map<number, EvolucaoPrecoRow>()
+  for (const e of (evolucaoRes.data ?? []) as EvolucaoPrecoRow[]) {
+    evolucaoMap.set(Number(e.cod_produto), e)
+  }
+  const evolucaoDe = (codProd: number | null): EvolucaoPrecoRow | null =>
+    codProd != null ? evolucaoMap.get(codProd) ?? null : null
 
   const exportParams = new URLSearchParams()
   if (params.q) exportParams.set('q', params.q)
@@ -574,6 +602,36 @@ export default async function ProdutoPage({
                     const comprar = Math.max(0, min + prev - saldo)
                     if (comprar <= 0) return <span className="text-ok">ok</span>
                     return <span className="num font-semibold text-brand">{formatQtdExata(comprar)}</span>
+                  },
+                },
+                {
+                  label: 'Preço (últ. compra)',
+                  alinhar: 'right' as const,
+                  larguraDesktop: 'w-40',
+                  ocultarMobile: true,
+                  render: (p: ProdutoLinha) => {
+                    const ev = evolucaoDe(p.codigo_produto)
+                    if (!ev) return <span className="text-text-muted">-</span>
+                    const variacao =
+                      ev.preco_anterior != null && ev.preco_anterior > 0
+                        ? (ev.preco_atual - ev.preco_anterior) / ev.preco_anterior
+                        : null
+                    const titulo = [
+                      `Última compra: ${fmtDataCurta(ev.data_atual)}${ev.fornecedor_atual ? ` · ${ev.fornecedor_atual}` : ''}`,
+                      ev.preco_anterior != null
+                        ? `Compra anterior: ${Number(ev.preco_anterior).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em ${fmtDataCurta(ev.data_anterior)}`
+                        : null,
+                    ].filter(Boolean).join('\n')
+                    return (
+                      <span title={titulo} className="inline-flex items-center justify-end gap-1">
+                        <Money value={ev.preco_atual} />
+                        {variacao != null && Math.abs(variacao) >= 0.01 && (
+                          <span className={`num text-[11px] font-semibold ${variacao > 0 ? 'text-err' : 'text-ok'}`}>
+                            {variacao > 0 ? '▲' : '▼'}{Math.abs(variacao * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                          </span>
+                        )}
+                      </span>
+                    )
                   },
                 },
               ]),
