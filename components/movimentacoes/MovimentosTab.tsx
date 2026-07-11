@@ -92,6 +92,11 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   const locaisMap = new Map<number, string>()
   let saldoInicial: number | null = null
   let saldoFinal: number | null = null
+  // Total OFICIAL: vem direto do sync do Omie (movimentos_historico, mesma fonte
+  // da aba Historico) -- e o numero que vale. A tabela de detalhe abaixo mistura
+  // ajustes reais (sync Omie) com OP/NF/inventario RECONSTRUIDOS localmente (pra
+  // explicar o "por que"), que podem nao bater 1:1 com o que o Omie registrou.
+  let totalOmie: { entradas: number; saidas: number } | null = null
 
   if (termo) {
     const { data: prodsMatch } = await supabase
@@ -109,6 +114,20 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
     if (idsProdDetalhes.length) {
       const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
+
+      const { data: histRows } = await supabase
+        .from('movimentos_historico')
+        .select('entradas, saidas')
+        .eq('loja_id', lojaId)
+        .in('cod_prod', idsProdDetalhes)
+        .gte('data', ini)
+        .lte('data', fim)
+      if (histRows) {
+        totalOmie = histRows.reduce(
+          (acc, r) => ({ entradas: acc.entradas + (Number(r.entradas) || 0), saidas: acc.saidas + (Number(r.saidas) || 0) }),
+          { entradas: 0, saidas: 0 }
+        )
+      }
 
       const [{ data: movs }, { data: ops }, { data: nfItems }, { data: invItems }] = await Promise.all([
         supabase
@@ -293,6 +312,22 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
             Saldo final (até {fmtDataDetalhe(fim)}) <span className="num font-semibold text-text">{fmtQtd(saldoFinal ?? 0)}</span>
           </span>
+        </div>
+      )}
+
+      {totalOmie && (
+        <div className="rounded-lg border border-brand/30 bg-brand-soft/30 px-3.5 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">Total oficial (Omie)</p>
+          <p className="mt-0.5 text-sm text-text">
+            Entradas <span className="num font-semibold text-ok">{fmtQtd(totalOmie.entradas)}</span>
+            {' · '}
+            Saídas <span className="num font-semibold text-err">{fmtQtd(totalOmie.saidas)}</span>
+          </p>
+          <p className="mt-1 text-[12px] text-text-muted">
+            Vem direto do sync do Omie (mesma fonte da aba Histórico) — é o número que vale. A tabela abaixo é uma
+            reconstrução local (ajustes + OP + NF + inventário) pra explicar <em>o que</em> causou a movimentação;
+            pode não bater 1:1 com o total acima.
+          </p>
         </div>
       )}
 
