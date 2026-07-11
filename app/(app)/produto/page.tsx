@@ -43,6 +43,7 @@ type ProdutoLinha = {
   ncm: string | null
   valor_unitario: number | null
   estoque_minimo: number | null
+  pdv: boolean | null
   inativo: boolean | null
 }
 
@@ -66,7 +67,7 @@ function precoSugerido(custo: number | null, alvo: number): number | null {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string; pdv?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -124,7 +125,7 @@ export default async function ProdutoPage({
   const ord = params.ord ?? ''
   let query = supabase
     .from('produtos')
-    .select('id, codigo_produto, codigo, descricao, ean, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, inativo')
+    .select('id, codigo_produto, codigo, descricao, ean, codigo_familia, descricao_familia, tipo_item, unidade, ncm, valor_unitario, estoque_minimo, pdv, inativo')
     .eq('loja_id', lojaId)
   if (ord === 'descricao_za') query = query.order('descricao', { ascending: false })
   else if (ord === 'venda_asc') query = query.order('valor_unitario', { ascending: true, nullsFirst: false }).order('descricao')
@@ -138,6 +139,8 @@ export default async function ProdutoPage({
   }
   if (params.familia) query = query.eq('descricao_familia', params.familia)
   if (params.tipo) query = query.eq('tipo_item', params.tipo)
+  if (params.pdv === 'sim') query = query.eq('pdv', true)
+  else if (params.pdv === 'nao') query = query.eq('pdv', false)
   // situacao pela coluna `inativo` (migration 012). default: so ativos
   if (!params.situacao || params.situacao === 'ativos') query = query.eq('inativo', false)
   else if (params.situacao === 'inativos') query = query.eq('inativo', true)
@@ -325,6 +328,7 @@ export default async function ProdutoPage({
   if (params.tipo) exportParams.set('tipo', params.tipo)
   if (params.fornecedor) exportParams.set('fornecedor', params.fornecedor)
   if (params.situacao) exportParams.set('situacao', params.situacao)
+  if (params.pdv) exportParams.set('pdv', params.pdv)
   // ord viaja junto para que trocar vista/margem/repor preserve a ordenacao.
   // O export (CSV) ignora o param; sem efeito colateral.
   if (params.ord) exportParams.set('ord', params.ord)
@@ -336,6 +340,15 @@ export default async function ProdutoPage({
     { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
     { tipo: 'select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'select', nome: 'fornecedor', label: 'Fornecedor (já comprado)', opcoes: fornecedoresList.map((f) => ({ value: f.fornecedor, label: f.fornecedor })) },
+    {
+      tipo: 'select',
+      nome: 'pdv',
+      label: 'PDV (frente de loja)',
+      opcoes: [
+        { value: 'sim', label: 'Só PDV' },
+        { value: 'nao', label: 'Só não-PDV' },
+      ],
+    },
     {
       tipo: 'select',
       nome: 'situacao',
@@ -459,6 +472,9 @@ export default async function ProdutoPage({
               <span>
                 {formatarNomeProduto(p.descricao)}
                 {p.ean && <span className="ml-1.5 num text-[11px] text-text-muted">{p.ean}</span>}
+                {p.pdv && (
+                  <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">PDV</span>
+                )}
               </span>
             ),
           },
@@ -577,6 +593,7 @@ export default async function ProdutoPage({
                     ncm: p.ncm,
                     valorUnitario: p.valor_unitario,
                     estoqueMinimo: p.estoque_minimo,
+                    pdv: !!p.pdv,
                     inativo: !!p.inativo,
                   }}
                   familias={familiasComCodigo}

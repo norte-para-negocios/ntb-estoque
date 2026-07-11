@@ -68,6 +68,7 @@ export async function criarProduto(dados: {
   ncm: string
   valorUnitario: number
   estoqueMinimo?: number | null
+  pdv?: boolean
   tipoItem?: string
   codigoFamilia?: number | null
   descricaoFamilia?: string | null
@@ -137,6 +138,7 @@ export async function criarProduto(dados: {
           ncm,
           valor_unitario: Number(dados.valorUnitario) || 0,
           estoque_minimo: dados.estoqueMinimo ?? null,
+          pdv: dados.pdv ?? false,
           tipo_item: dados.tipoItem?.trim() || null,
           codigo_familia: dados.codigoFamilia || null,
           descricao_familia: dados.descricaoFamilia || null,
@@ -172,6 +174,7 @@ export async function editarProduto(
     ncm: string | null
     valorUnitario: number | null
     estoqueMinimo: number | null
+    pdv: boolean
     inativo: boolean
   }
 ) {
@@ -213,6 +216,7 @@ export async function editarProduto(
     ncm: ncm || null,
     valor_unitario: dados.valorUnitario,
     estoque_minimo: dados.estoqueMinimo,
+    pdv: dados.pdv,
     inativo: dados.inativo,
   }
 

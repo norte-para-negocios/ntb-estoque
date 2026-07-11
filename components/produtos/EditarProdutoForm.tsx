@@ -25,6 +25,7 @@ export type ProdutoEditavel = {
   ncm: string | null
   valorUnitario: number | null
   estoqueMinimo: number | null
+  pdv: boolean
   inativo: boolean
 }
 
@@ -45,6 +46,7 @@ export function EditarProdutoForm({
   const [ncm, setNcm] = useState(produto.ncm ?? '')
   const [valor, setValor] = useState(produto.valorUnitario != null ? String(produto.valorUnitario) : '')
   const [minimo, setMinimo] = useState(produto.estoqueMinimo != null ? String(produto.estoqueMinimo) : '')
+  const [pdv, setPdv] = useState(produto.pdv)
   const [inativo, setInativo] = useState(produto.inativo)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -88,6 +90,7 @@ export function EditarProdutoForm({
         ncm: ncmLimpo || null,
         valorUnitario: valNum,
         estoqueMinimo: minNum,
+        pdv,
         inativo,
       })
       if (res?.error) {
@@ -192,6 +195,15 @@ export function EditarProdutoForm({
               placeholder="0"
             />
           </div>
+          <label className="col-span-2 flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={pdv}
+              onChange={(e) => setPdv(e.target.checked)}
+              className="accent-[var(--brand)]"
+            />
+            Produto de PDV (frente de loja) — só esses vão pro cardápio do NTB Vendas
+          </label>
           <label className="col-span-2 flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"

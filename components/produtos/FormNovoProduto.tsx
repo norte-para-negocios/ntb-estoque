@@ -55,6 +55,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
   const [ncm, setNcm] = useState('')
   const [valor, setValor] = useState('')
   const [minimo, setMinimo] = useState('')
+  const [pdv, setPdv] = useState(false)
   const [tipo, setTipo] = useState('')
   const [familia, setFamilia] = useState('')
   const [origem, setOrigem] = useState('0')
@@ -128,6 +129,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         ncm,
         valorUnitario: valNum ?? 0,
         estoqueMinimo: minNum ?? null,
+        pdv,
         tipoItem: tipo || undefined,
         codigoFamilia: codigoFamiliaOmie,
         descricaoFamilia: fam ? fam.descricao : null,
@@ -243,6 +245,13 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
               <p className="text-[11px] text-text-muted">Salvo localmente, não enviado ao Omie.</p>
             </Campo>
           </div>
+          <label className="mt-3 flex items-center gap-2 text-sm text-text">
+            <input type="checkbox" checked={pdv} onChange={(e) => setPdv(e.target.checked)} className="accent-[var(--brand)]" />
+            Produto de PDV (frente de loja)
+          </label>
+          <p className="text-[11px] text-text-muted">
+            Só produtos marcados vão pro cardápio do NTB Vendas. Salvo localmente, não enviado ao Omie.
+          </p>
         </Secao>
 
         {/* Fiscal */}
