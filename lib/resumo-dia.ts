@@ -2,6 +2,13 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
 import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import {
+  complementarNotasFiscais,
+  complementarOrdensProducao,
+  complementarMovimentos,
+  complementarMovimentosHistorico,
+  limiteJanelaQuente,
+} from '@/lib/historico-contabo'
 
 // "Resumo do dia" — painel gerencial. Consulta ao vivo, escopado por loja, para um
 // dia (fuso America/Bahia, UTC-3). Organizado por CATEGORIA: cada uma tem a sua
@@ -160,7 +167,7 @@ export async function carregarResumoDia(
 
   // --- CONTAGENS (todas, baratas) ---
   const [
-    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRows, etiqRows, errosCount, auditCount,
+    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRowsRaw, etiqRows, errosCount, auditCount,
   ] = await Promise.all([
     supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
       .gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60'),
@@ -168,14 +175,20 @@ export async function carregarResumoDia(
     supabase.from('inventarios').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('identificacao_d_dt_previsao', dataIni).lte('identificacao_d_dt_previsao', dataFim),
     supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim),
-    supabase.from('movimentos_historico').select('entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim),
+    supabase.from('movimentos_historico').select('cod_prod, data, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim),
     supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('integration_attempts').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
     supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
   ])
 
+  let movRowsCompletas = (movRowsRaw.data ?? []) as { cod_prod: number; data: string; entradas: number | null; saidas: number | null }[]
+  if (dataIni < limiteJanelaQuente()) {
+    for (const lojaId of lojaIds) {
+      movRowsCompletas = await complementarMovimentosHistorico(movRowsCompletas, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+    }
+  }
   let movEntradas = 0, movSaidas = 0
-  for (const m of (movRows.data ?? []) as { entradas: number | null; saidas: number | null }[]) {
+  for (const m of movRowsCompletas) {
     movEntradas += Number(m.entradas ?? 0); movSaidas += Number(m.saidas ?? 0)
   }
   const contagem: Contagem = {
@@ -212,13 +225,19 @@ async function listarCategoria(
   let lista: CategoriaLista = vazia
 
   if (cat === 'notas') {
-    const { data } = await supabase.from('notas_fiscais')
+    const { data: notasQuentes } = await supabase.from('notas_fiscais')
       .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
       .eq('c_etapa', '60')
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
+    let data = notasQuentes ?? []
+    if (dataIni < limiteJanelaQuente()) {
+      for (const lojaId of lojaIds) {
+        data = await complementarNotasFiscais(data, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+      }
+    }
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
-    const rows = (data ?? []) as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
+    const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
     lista = {
       colunas: [{ label: 'Emissão' }, { label: 'NFe' }, { label: 'Fornecedor' }, ...(lojaTag ? [lojaTag] : []), { label: 'Valor', alinharDir: true }],
       total: contagem.notas,
@@ -249,12 +268,17 @@ async function listarCategoria(
       nomesLocais(supabase, lojaIds, rows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino])),
       multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
       transfIds.length
-        ? supabase.from('movimentos').select('transferencia_id, id_prod').in('transferencia_id', transfIds).limit(5000)
-        : Promise.resolve({ data: [] as { transferencia_id: number; id_prod: number }[] }),
+        ? supabase.from('movimentos').select('id, transferencia_id, id_prod').in('transferencia_id', transfIds).limit(5000)
+        : Promise.resolve({ data: [] as { id: number; transferencia_id: number; id_prod: number }[] }),
     ])
 
     // Resolve product names
-    const movItens = (movRes.data ?? []) as { transferencia_id: number; id_prod: number }[]
+    let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number }[]
+    if (transfIds.length && dataIni < limiteJanelaQuente()) {
+      for (const lojaId of lojaIds) {
+        movItens = await complementarMovimentos(movItens, { lojaId })
+      }
+    }
     const prodCods = [...new Set(movItens.map((m) => m.id_prod).filter(Boolean))]
     const nomeProd = new Map<number, string>()
     if (prodCods.length) {
@@ -332,10 +356,16 @@ async function listarCategoria(
   } else if (cat === 'producao') {
     // Só o que foi PRODUZIDO no dia (OPs concluídas), agrupado por produto. As
     // "previstas" NÃO entram: previsão é plano, não atividade do dia.
-    const { data } = await supabase.from('ordens_producao')
-      .select('identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
+    const { data: opsQuentes } = await supabase.from('ordens_producao')
+      .select('id, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
       .in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim).limit(5000)
-    const rows = (data ?? []) as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
+    let opsProducaoData = opsQuentes ?? []
+    if (dataIni < limiteJanelaQuente()) {
+      for (const lojaId of lojaIds) {
+        opsProducaoData = await complementarOrdensProducao(opsProducaoData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+      }
+    }
+    const rows = opsProducaoData as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
     // Nome E TIPO do produto: OPs do Omie vêm sem descrição/tipo -> resolve pelo código.
     // Ramon quer ver a produção de EM PROCESSO/intermediário separada do ACABADO
     // (em processo = trabalho da cozinha; acabado = frente de loja).
@@ -386,10 +416,16 @@ async function listarCategoria(
     }
     lista.grafico = { titulo: 'Mais produzidos', unidade: 'num', itens: grupos.slice(0, 8).map((g) => ({ label: g.produto.slice(0, 28), valor: g.qtd })) }
   } else if (cat === 'movimentacoes') {
-    const { data } = await supabase.from('movimentos_historico')
-      .select('loja_id, codigo, descricao, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim)
+    const { data: histQuentes } = await supabase.from('movimentos_historico')
+      .select('loja_id, cod_prod, codigo, descricao, data, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim)
       .order('saidas', { ascending: false }).limit(LIMITE_LISTA)
-    const rows = (data ?? []) as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
+    let movHistData = histQuentes ?? []
+    if (dataIni < limiteJanelaQuente()) {
+      for (const lojaId of lojaIds) {
+        movHistData = await complementarMovimentosHistorico(movHistData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+      }
+    }
+    const rows = movHistData as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
     lista = {
       colunas: [{ label: 'Produto' }, ...(lojaTag ? [lojaTag] : []), { label: 'Entradas', alinharDir: true }, { label: 'Saídas', alinharDir: true }],
