@@ -36,7 +36,7 @@ mkdir -p /opt/ntb-backfill && cd /opt/ntb-backfill && npm init -y && npm install
 
 ```bash
 cat > /opt/ntb-backfill/.env << 'EOF'
-SUPABASE_URL=postgresql://postgres.waubqgkftwrufepwhctc:rscarneiro3484*@aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_URL=postgresql://postgres.waubqgkftwrufepwhctc:rscarneiro3484*@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
 CONTABO_PG_URL=postgresql://ntb_frio_app:pnQMFTbn7KfYe496CJyLvknByYuHepADXGGFBAXd@localhost:5432/ntb_frio
 EOF
 chmod 600 /opt/ntb-backfill/.env
@@ -49,7 +49,7 @@ cd /opt/ntb-backfill && node -e "
 require('dotenv').config();
 const { Client } = require('pg');
 (async () => {
-  const s = new Client({ connectionString: process.env.SUPABASE_URL });
+  const s = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } });
   const c = new Client({ connectionString: process.env.CONTABO_PG_URL });
   await s.connect(); await c.connect();
   console.log('Supabase:', (await s.query('select 1 as ok')).rows[0]);
@@ -85,7 +85,7 @@ if (!TABELAS.length) {
   process.exit(1)
 }
 
-const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL })
+const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
 const contabo = new pg.Client({ connectionString: process.env.CONTABO_PG_URL })
 await supabase.connect()
 await contabo.connect()
@@ -231,7 +231,7 @@ sudo -u postgres psql -d ntb_frio -c "alter table webhooks add constraint uq_web
 import 'dotenv/config'
 import pg from 'pg'
 
-const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL })
+const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
 const contabo = new pg.Client({ connectionString: process.env.CONTABO_PG_URL })
 await supabase.connect()
 await contabo.connect()
@@ -308,7 +308,7 @@ sudo -u postgres psql -d ntb_frio -c "alter table ordens_producao add constraint
 import 'dotenv/config'
 import pg from 'pg'
 
-const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL })
+const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
 const contabo = new pg.Client({ connectionString: process.env.CONTABO_PG_URL })
 await supabase.connect()
 await contabo.connect()
@@ -495,7 +495,7 @@ cd /opt/ntb-backfill && node -e "
 require('dotenv').config();
 const { Client } = require('pg');
 (async () => {
-  const s = new Client({ connectionString: process.env.SUPABASE_URL });
+  const s = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } });
   const c = new Client({ connectionString: process.env.CONTABO_PG_URL });
   await s.connect(); await c.connect();
   for (const t of ['movimentos','movimentos_historico','notas_fiscais','nota_fiscal_items','ordens_producao','webhooks']) {
@@ -553,7 +553,7 @@ import 'dotenv/config'
 import pg from 'pg'
 
 const COMMIT = process.argv.includes('--commit')
-const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL })
+const supabase = new pg.Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
 const contabo = new pg.Client({ connectionString: process.env.CONTABO_PG_URL })
 await supabase.connect()
 await contabo.connect()
