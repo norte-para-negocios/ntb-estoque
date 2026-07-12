@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { complementarMovimentos } from '@/lib/historico-contabo'
 
 const POR_PAGINA = 50
 
@@ -70,12 +71,13 @@ export default async function TransferenciaPage({
     const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
 
     if (codigos.length) {
-      const { data: movs } = await supabase
+      const { data: movsData } = await supabase
         .from('movimentos')
-        .select('transferencia_id')
+        .select('id, transferencia_id')
         .eq('loja_id', lojaId)
         .in('id_prod', codigos)
         .not('transferencia_id', 'is', null)
+      const movs = await complementarMovimentos(movsData ?? [], { lojaId })
       idsFiltrados = [
         ...new Set((movs ?? []).map((m) => m.transferencia_id).filter((v): v is number => v != null)),
       ]
