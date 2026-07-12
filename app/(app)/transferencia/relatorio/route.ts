@@ -11,6 +11,7 @@ import {
 import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
+import { complementarMovimentos } from '@/lib/historico-contabo'
 
 // Mapa de motivo (TRF/TPQ) para texto legivel no PDF.
 const LABEL_MOTIVO: Record<string, string> = {
@@ -68,12 +69,13 @@ export async function GET(request: Request) {
     const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
 
     if (codigos.length) {
-      const { data: movs } = await supabase
+      const { data: movsData } = await supabase
         .from('movimentos')
-        .select('transferencia_id')
+        .select('id, transferencia_id')
         .eq('loja_id', lojaId)
         .in('id_prod', codigos)
         .not('transferencia_id', 'is', null)
+      const movs = await complementarMovimentos(movsData ?? [], { lojaId })
       idsFiltrados = [
         ...new Set(
           (movs ?? []).map((m) => m.transferencia_id).filter((v): v is number => v != null),
