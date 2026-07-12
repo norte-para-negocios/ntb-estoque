@@ -19,7 +19,7 @@ import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuente, complementarOrdensProducao } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -97,25 +97,13 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
-  // Card "Ordens de producao" nao tem filtro de data (conta todas) -- soma a
-  // parte antiga do Contabo pra nao cair silenciosamente depois da poda.
-  const cutoff = limiteJanelaQuente()
-  let opsAntigasCount = 0
-  if (process.env.NTB_FRIO_API_URL) {
-    try {
-      const resp = await fetch(
-        `${process.env.NTB_FRIO_API_URL}/ordens_producao?loja_id=${lojaId}&data_final=${cutoff}`,
-        { headers: { 'X-Api-Key': process.env.NTB_FRIO_API_KEY! }, signal: AbortSignal.timeout(5000) }
-      )
-      if (resp.ok) {
-        const json = (await resp.json()) as { rows?: unknown[] }
-        opsAntigasCount = json.rows?.length ?? 0
-      }
-    } catch (e) {
-      console.error('home/page: falha ao completar contagem de OPs com o Contabo', e)
-    }
-  }
-  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
+  // Card "Ordens de producao" nao tem filtro de data (conta todas). Antes da poda
+  // rodar, o Contabo tem copia de TUDO (inclusive o que o Supabase ainda tem) --
+  // por isso busca os ids dos dois lados e mescla por id (dedup) em vez de somar
+  // as duas contagens direto, senao conta em dobro ate a poda rodar de verdade.
+  const { data: opsIdsQuentes } = await supabase.from('ordens_producao').select('id').eq('loja_id', lojaId)
+  const opsCompletas = await complementarOrdensProducao(opsIdsQuentes ?? [], { lojaId, dataFinal: limiteJanelaQuente() })
+  const opsTotalCount = opsCompletas.length
 
   // Phase 2: produtos a repor + saldo/mínimo para a lista
   const [prodsReporRes, posReporRes] = await Promise.all([
