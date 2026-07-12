@@ -5,6 +5,7 @@ import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { ItensNotaFiscal, type ItemNF } from '@/components/nota-fiscal/ItensNotaFiscal'
 import { btnClass } from '@/components/ui-kit/Button'
 import { FileText, Download } from 'lucide-react'
+import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -17,16 +18,18 @@ export default async function NotaFiscalItensPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: nf } = await supabase
+  const { data: nfSupabase } = await supabase
     .from('notas_fiscais')
     .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb')
     .eq('id', id)
     .eq('loja_id', lojaId)
-    .single()
+    .maybeSingle()
+
+  const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
 
   if (!nf) notFound()
 
-  const [{ data: itens }, { data: categorias }] = await Promise.all([
+  const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
     supabase
       .from('nota_fiscal_items')
       .select('id, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id')
@@ -40,6 +43,10 @@ export default async function NotaFiscalItensPage({
       .eq('ativa', true)
       .order('nome'),
   ])
+
+  const itens = nfSupabase
+    ? itensRaw
+    : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
 
   function fmtData(d: string | null) {
     if (!d) return null
