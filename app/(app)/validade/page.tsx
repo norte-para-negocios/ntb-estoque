@@ -16,6 +16,7 @@ import { escapeIlikeOr } from '@/lib/utils-busca'
 import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { CalendarClock } from 'lucide-react'
+import { complementarOrdensProducao } from '@/lib/historico-contabo'
 
 const LIMITE = 200
 // 0 = "vence hoje" (so a data de hoje). Os demais sao horizontes acumulados:
@@ -92,9 +93,17 @@ export default async function ValidadePage({
     ordensQuery = ordensQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
   }
 
-  const { data: ordensRaw } = await ordensQuery
+  const { data: ordensRawQuentes } = await ordensQuery
+  // "Vencidos" nao tem limite inferior de data -- a poda pode ter tirado do
+  // Supabase OPs com validade vencida ha muito tempo, entao sempre completa
+  // com o Contabo nesse modo (validadeInicio bem antigo forca o complemento).
+  const ordensRaw = vencidos
+    ? await complementarOrdensProducao(ordensRawQuentes ?? [], {
+        lojaId, validadeInicio: '0001-01-01', validadeFinal: hojeMais(-1),
+      })
+    : ordensRawQuentes ?? []
   // Esconde OPs sem saldo (quantidade 0): sem unidade nao ha o que vencer.
-  const ordens = (ordensRaw ?? []).filter(
+  const ordens = ordensRaw.filter(
     (o) => Number(o.quantidade ?? o.identificacao_n_qtde ?? 0) > 0
   )
 
@@ -131,9 +140,8 @@ export default async function ValidadePage({
     return q
   }
   const hoje0 = hojeMais(0)
-  const [cVencidos, c0, c7, c15, c30, c60] = await Promise.all(
+  const [c0, c7, c15, c30, c60] = await Promise.all(
     [
-      queryContagem().lt('validade', hoje0),
       queryContagem().gte('validade', hoje0).lte('validade', hoje0),
       queryContagem().gte('validade', hoje0).lte('validade', hojeMais(7)),
       queryContagem().gte('validade', hoje0).lte('validade', hojeMais(15)),
@@ -141,6 +149,30 @@ export default async function ValidadePage({
       queryContagem().gte('validade', hoje0).lte('validade', hojeMais(60)),
     ].map((p) => p.then((r) => r.count ?? 0)),
   )
+  // "Vencidos" nao tem limite inferior de data -- diferente das outras contagens
+  // (head:true), aqui busca as LINHAS (com id) dos dois lados e mescla por id
+  // (dedup automatico) antes de contar, porque o Contabo tem copia de TUDO
+  // (inclusive o que o Supabase ainda tem antes da poda rodar) -- somar as duas
+  // contagens direto contaria em dobro o que ainda esta nos dois lugares.
+  let vencidasQuery = supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+    .eq('loja_id', lojaId)
+    .not('validade', 'is', null)
+    .or(SALDO_OR)
+    .lt('validade', hoje0)
+  if (codigosTipo !== null) {
+    vencidasQuery = vencidasQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
+  }
+  const { data: vencidasQuentesRaw } = await vencidasQuery
+  const vencidasCompletas = await complementarOrdensProducao(vencidasQuentesRaw ?? [], {
+    lojaId, validadeInicio: '0001-01-01', validadeFinal: hojeMais(-1),
+  })
+  const cVencidos = vencidasCompletas.filter((o) => {
+    const temSaldo = Number(o.quantidade ?? 0) > 0 || (o.quantidade == null && Number(o.identificacao_n_qtde ?? 0) > 0)
+    const passaTipo = codigosTipo === null || codigosTipo.includes(o.identificacao_n_cod_produto as number)
+    return temSaldo && passaTipo
+  }).length
   const contagemPeriodo: Record<number, number> = { 0: c0, 7: c7, 15: c15, 30: c30, 60: c60 }
 
   const campos: CampoFiltro[] = [
