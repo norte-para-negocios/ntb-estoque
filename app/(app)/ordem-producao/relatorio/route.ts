@@ -9,6 +9,7 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { isOpConcluida } from '@/lib/op-status'
 import { numBRPdf } from '@/lib/pdf-utils'
+import { complementarOrdensProducao } from '@/lib/historico-contabo'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida',
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
@@ -84,10 +85,12 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
+  const ordensCompletas = await complementarOrdensProducao(ordensList, { lojaId })
+
   // Resolve descricoes dos produtos quando produto_descricao estiver vazio.
   const codigos = [
     ...new Set(
-      ordensList
+      ordensCompletas
         .filter((o) => !o.produto_descricao)
         .map((o) => o.identificacao_n_cod_produto)
         .filter(Boolean),
@@ -102,7 +105,7 @@ export async function GET(request: Request) {
     : { data: [] }
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.descricao]))
 
-  let itens: RelatorioOPItem[] = ordensList.map((o) => {
+  let itens: RelatorioOPItem[] = ordensCompletas.map((o) => {
     const concluida = isOpConcluida(o)
     return {
       numOP: o.identificacao_c_num_op || o.num_ordem || '-',
