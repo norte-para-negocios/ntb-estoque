@@ -19,6 +19,7 @@ import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { limiteJanelaQuente } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -96,6 +97,26 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
+  // Card "Ordens de producao" nao tem filtro de data (conta todas) -- soma a
+  // parte antiga do Contabo pra nao cair silenciosamente depois da poda.
+  const cutoff = limiteJanelaQuente()
+  let opsAntigasCount = 0
+  if (process.env.NTB_FRIO_API_URL) {
+    try {
+      const resp = await fetch(
+        `${process.env.NTB_FRIO_API_URL}/ordens_producao?loja_id=${lojaId}&data_final=${cutoff}`,
+        { headers: { 'X-Api-Key': process.env.NTB_FRIO_API_KEY! }, signal: AbortSignal.timeout(5000) }
+      )
+      if (resp.ok) {
+        const json = (await resp.json()) as { rows?: unknown[] }
+        opsAntigasCount = json.rows?.length ?? 0
+      }
+    } catch (e) {
+      console.error('home/page: falha ao completar contagem de OPs com o Contabo', e)
+    }
+  }
+  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
+
   // Phase 2: produtos a repor + saldo/mínimo para a lista
   const [prodsReporRes, posReporRes] = await Promise.all([
     qtdRepor
@@ -144,7 +165,7 @@ export default async function HomePage() {
 
   const secundarios = [
     { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal', perm: 'Notas Fiscais' },
-    { label: 'Ordens de produção', value: ops.count ?? 0, hint: 'total', href: '/ordem-producao', perm: 'Ordens de Producao' },
+    { label: 'Ordens de produção', value: opsTotalCount, hint: 'total', href: '/ordem-producao', perm: 'Ordens de Producao' },
     { label: 'Inventários', value: invAbertos.count ?? 0, hint: 'abertos', href: '/inventario', perm: 'Inventarios - Ver' },
   ].filter((k) => pode(k.perm))
 
