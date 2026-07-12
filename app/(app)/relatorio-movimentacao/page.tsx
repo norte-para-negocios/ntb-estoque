@@ -15,6 +15,12 @@ import { escapeIlike } from '@/lib/utils-busca'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { ArrowDownUp, Download, AlertTriangle } from 'lucide-react'
+import {
+  buscarMovimentosHistoricoBrutos,
+  agregarMovimentacaoJS,
+  limiteJanelaQuente,
+  type LinhaMovHistoricoBruta,
+} from '@/lib/historico-contabo'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => { const [a, m] = ym.split('-'); return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}` }
@@ -421,10 +427,43 @@ export default async function RelatorioMovimentacaoPage({
     return todos
   }
 
-  const matriz = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
-    p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
+  const cutoff = limiteJanelaQuente()
+  const iniRpc = ini < cutoff ? cutoff : ini
+  const matrizRecente = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
+    p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
     p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
   })
+
+  let matriz = matrizRecente
+  if (ini < cutoff) {
+    const brutas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
+      lojaId, dataInicio: ini, dataFinal: cutoff,
+    })
+    const { data: metaRows } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+    const metaPorCodigo = new Map((metaRows ?? []).map((m) => [m.codigo_produto, m]))
+    const { data: precoRows } = await supabase
+      .from('nota_fiscal_items')
+      .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
+      .eq('loja_id', lojaId)
+      .gt('n_preco_unit', 0)
+    const precoPorProduto = new Map<number, number>()
+    for (const r of (precoRows ?? []) as { n_id_produto: number; n_preco_unit: number }[]) {
+      if (r.n_id_produto && !precoPorProduto.has(r.n_id_produto)) precoPorProduto.set(r.n_id_produto, r.n_preco_unit)
+    }
+    const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
+    const combinados = new Map<string, LinhaMatriz>()
+    for (const linha of [...antiga, ...matrizRecente]) {
+      const chave = `${linha.rotulo}|${linha.mes}`
+      const acc = combinados.get(chave) ?? { rotulo: linha.rotulo, mes: linha.mes, qtde: 0, valor: 0 }
+      acc.qtde += linha.qtde
+      acc.valor += linha.valor
+      combinados.set(chave, acc)
+    }
+    matriz = [...combinados.values()]
+  }
 
   const meses = [...new Set(matriz.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()

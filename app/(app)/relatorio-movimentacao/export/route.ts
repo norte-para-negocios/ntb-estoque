@@ -4,6 +4,12 @@ import { gerarPlanilhaMulti, planilhaResponse, abaMatrizMensal, type AbaPlanilha
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { escapeIlike } from '@/lib/utils-busca'
+import {
+  buscarMovimentosHistoricoBrutos,
+  agregarMovimentacaoJS,
+  limiteJanelaQuente,
+  type LinhaMovHistoricoBruta,
+} from '@/lib/historico-contabo'
 
 export const dynamic = 'force-dynamic'
 
@@ -142,15 +148,52 @@ export async function GET(request: Request) {
     return todos
   }
 
+  const cutoff = limiteJanelaQuente()
+  const iniRpc = ini < cutoff ? cutoff : ini
+
+  let metaPorCodigo: Map<number, { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }> | null = null
+  let precoPorProduto: Map<number, number> | null = null
+  if (ini < cutoff) {
+    const { data: metaRows } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+    metaPorCodigo = new Map((metaRows ?? []).map((m) => [m.codigo_produto, m]))
+    const { data: precoRows } = await supabase
+      .from('nota_fiscal_items')
+      .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
+      .eq('loja_id', lojaId)
+      .gt('n_preco_unit', 0)
+    precoPorProduto = new Map<number, number>()
+    for (const r of (precoRows ?? []) as { n_id_produto: number; n_preco_unit: number }[]) {
+      if (r.n_id_produto && !precoPorProduto.has(r.n_id_produto)) precoPorProduto.set(r.n_id_produto, r.n_preco_unit)
+    }
+  }
+
   const abas: AbaPlanilha[] = []
   for (const [sentido, nome, label] of [
     ['saidas', 'Saídas por produto', 'Saídas (consumo/venda)'],
     ['entradas', 'Entradas por produto', 'Entradas'],
   ] as const) {
-    const q = await rpcTodos<Qtd>('relatorio_movimentacao_matriz', {
-      p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
+    const qRecente = await rpcTodos<Qtd>('relatorio_movimentacao_matriz', {
+      p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
       p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
     })
+    let q: Qtd[] = qRecente
+    if (ini < cutoff && metaPorCodigo && precoPorProduto) {
+      const brutas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
+        lojaId, dataInicio: ini, dataFinal: cutoff,
+      })
+      const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
+      const combinados = new Map<string, Qtd>()
+      for (const linha of [...antiga, ...qRecente]) {
+        const chave = `${linha.rotulo}|${linha.mes}`
+        const acc = combinados.get(chave) ?? { rotulo: linha.rotulo, mes: linha.mes, qtde: 0 }
+        acc.qtde += linha.qtde
+        combinados.set(chave, acc)
+      }
+      q = [...combinados.values()]
+    }
     const linhas = q.map((r) => ({ rotulo: formatarNomeProduto(r.rotulo) || r.rotulo, mes: r.mes, valor: Number(r.qtde) || 0 }))
     if (linhas.length) abas.push(abaMatrizMensal({ titulo: `Movimentação — ${label} (quantidade)`, dimLabel: 'Produto', linhas, nome, moeda: false }))
   }
