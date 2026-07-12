@@ -54,6 +54,16 @@ export async function POST(request: Request) {
     message: body,
   })
 
+  // Dual-write pro Contabo (historico completo, sem prune) -- fire-and-forget,
+  // nunca bloqueia nem quebra a resposta do webhook se falhar.
+  if (process.env.NTB_FRIO_API_URL) {
+    fetch(`${process.env.NTB_FRIO_API_URL}/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': process.env.NTB_FRIO_API_KEY! },
+      body: JSON.stringify({ loja_id: loja.id, message_id: body.messageId, message: body }),
+    }).catch((e) => console.error('Dual-write pro Contabo falhou:', e))
+  }
+
   // Processa por topico. Erros nao quebram a resposta 200 (Omie reenvia se 5xx).
   try {
     if (topic.startsWith('RecebimentoProduto.') && body.event?.nIdReceb) {
