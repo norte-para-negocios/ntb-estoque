@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { complementarNotasFiscais, complementarOrdensProducao } from '@/lib/historico-contabo'
 
 export type BuscaItem = {
   tipo: 'Produto' | 'Nota' | 'OP'
@@ -62,8 +63,9 @@ export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
         .is('deleted_at', null)
         .or(`c_numero_nfe.ilike.${p},c_razao_social.ilike.${p},c_nome.ilike.${p}`)
         .limit(5)
-      if (error || !data) return []
-      return data.map((row) => ({
+      if (error) return []
+      const completas = await complementarNotasFiscais(data ?? [], { lojaId, busca: t })
+      return completas.slice(0, 5).map((row) => ({
         tipo: 'Nota' as const,
         label: row.c_razao_social || row.c_nome || 'Fornecedor',
         sub: `NFe ${row.c_numero_nfe ?? '-'}`,
@@ -82,8 +84,9 @@ export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
         .eq('loja_id', lojaId)
         .or(`num_ordem.ilike.${p},identificacao_c_num_op.ilike.${p}`)
         .limit(5)
-      if (error || !data) return []
-      return data.map((row) => ({
+      if (error) return []
+      const completas = await complementarOrdensProducao(data ?? [], { lojaId, busca: t })
+      return completas.slice(0, 5).map((row) => ({
         tipo: 'OP' as const,
         label: row.num_ordem || row.identificacao_c_num_op || 'Ordem',
         sub: 'OP',
