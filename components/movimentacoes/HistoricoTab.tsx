@@ -11,6 +11,7 @@ import { AlertTriangle, ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 import { FiltroDataInline } from '@/components/movimentacoes/FiltroDataInline'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { complementarMovimentosHistorico, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 const POR_PAGINA = 100
 const TETO_LINHAS = 100_000
@@ -108,6 +109,9 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
       todas.push(...lote)
       if (lote.length < LOTE) break
     }
+    if (ini < limiteJanelaQuente()) {
+      return complementarMovimentosHistorico(todas, { lojaId, dataInicio: ini, dataFinal: fim })
+    }
     return todas
   }
 
@@ -159,6 +163,44 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
     })
     temProxima = arr.length > page * POR_PAGINA
     linhas = arr.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
+  } else if (ini < limiteJanelaQuente()) {
+    // Periodo cruza a janela quente: paginacao nativa do Supabase sozinha nao e
+    // confiavel (o Contabo pode ter linhas no meio do intervalo) -- reusa lerTudo()
+    // (ja completa com o Contabo) e pagina/filtra em memoria.
+    let todas = await lerTudo()
+    if (filtroMov === 'entrada') todas = todas.filter((m) => Number(m.entradas) > 0)
+    else if (filtroMov === 'saida') todas = todas.filter((m) => Number(m.saidas) > 0)
+    todas.sort((a, b) => {
+      if (a.data !== b.data) return a.data < b.data ? 1 : -1
+      if (a.saidas !== b.saidas) return b.saidas - a.saidas
+      return a.cod_prod < b.cod_prod ? -1 : a.cod_prod > b.cod_prod ? 1 : 0
+    })
+    const inicio = (page - 1) * POR_PAGINA
+    const fatia = todas.slice(inicio, inicio + POR_PAGINA + 1)
+    temProxima = fatia.length > POR_PAGINA
+    const movs = temProxima ? fatia.slice(0, POR_PAGINA) : fatia
+    linhas = movs.map((m) => {
+      const cmc = cmcDe(m.cod_prod)
+      return {
+        chave: `${m.cod_prod}-${m.data}`,
+        quando: String(m.data).slice(0, 10),
+        cod_prod: m.cod_prod, codigo: m.codigo, descricao: m.descricao,
+        entradas: Number(m.entradas) || 0,
+        saidas: Number(m.saidas) || 0,
+        valEntradas: (Number(m.entradas) || 0) * cmc,
+        valSaidas: (Number(m.saidas) || 0) * cmc,
+        temCmc: cmcMap.has(Number(m.cod_prod)),
+      }
+    })
+    for (const r of todas) {
+      const e = Number(r.entradas) || 0
+      const s = Number(r.saidas) || 0
+      const cmc = cmcDe(r.cod_prod)
+      totalEntradas += e
+      totalSaidas += s
+      totalValEntradas += e * cmc
+      totalValSaidas += s * cmc
+    }
   } else {
     let query = supabase
       .from('movimentos_historico')
