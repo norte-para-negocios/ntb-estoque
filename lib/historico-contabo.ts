@@ -130,6 +130,21 @@ export async function complementarMovimentosHistorico<T extends { cod_prod: numb
   return [...quentes, ...frias.filter((r) => !vistos.has(`${r.cod_prod}|${r.data}`))]
 }
 
+// Busca crua de nota_fiscal_items por periodo (sem mesclar) -- usada quando o
+// caller precisa dos campos nf_d_emissao_nfe/nf_c_numero_nfe/nf_c_natureza_operacao
+// do join que o endpoint /nota_fiscal_items ja faz internamente (ex: MovimentosTab).
+export async function buscarFrioNotaFiscalItems<T>(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+}): Promise<T[]> {
+  return buscarFrio<T>('/nota_fiscal_items', {
+    loja_id: opts.lojaId,
+    data_inicio: opts.dataInicio,
+    data_final: opts.dataFinal,
+  })
+}
+
 // Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
 // sem mesclar com nada, pra agregacao acontecer em JS.
 export async function buscarMovimentosHistoricoBrutos<T>(opts: {
