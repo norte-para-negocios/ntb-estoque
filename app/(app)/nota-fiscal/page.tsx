@@ -18,6 +18,7 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { FileText, Download } from 'lucide-react'
+import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 const POR_PAGINA = 50
 
@@ -174,7 +175,7 @@ export default async function NotaFiscalPage({
   // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
   let totaisQuery = supabase
     .from('notas_fiscais')
-    .select('n_valor_nfe', { count: 'exact' })
+    .select('id, n_valor_nfe', { count: 'exact' })
     .eq('loja_id', lojaId)
     .gte('d_emissao_nfe', dataInicio)
     .lte('d_emissao_nfe', dataFinal)
@@ -190,11 +191,57 @@ export default async function NotaFiscalPage({
   if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
 
   const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
-  const temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
-  const notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
 
-  const qtdNotas = totalNotas ?? (totaisRaw?.length ?? 0)
-  const totalValor = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+  let notas = notasRaw
+  let temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
+  let qtdNotas = totalNotas ?? (totaisRaw?.length ?? 0)
+  let totalValor = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+
+  if (dataInicio < limiteJanelaQuente()) {
+    // Periodo cruza a janela quente: nao da pra confiar na paginacao nativa do
+    // Supabase sozinha (o Contabo pode ter linhas no meio do intervalo pedido) --
+    // busca tudo dos dois lados (com os MESMOS filtros da query principal), ordena
+    // e pagina em memoria.
+    const totaisCompletos = await complementarNotasFiscais(totaisRaw ?? [], {
+      lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
+    })
+    qtdNotas = totaisCompletos.length
+    totalValor = totaisCompletos.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+
+    let todasQuery = supabase
+      .from('notas_fiscais')
+      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
+      .eq('loja_id', lojaId)
+      .gte('d_emissao_nfe', dataInicio)
+      .lte('d_emissao_nfe', dataFinal)
+      .is('deleted_at', null)
+      .limit(2000)
+    if (params.num_nfe) todasQuery = todasQuery.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+    if (params.fornecedor) todasQuery = todasQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+    if (params.status === 'C') todasQuery = todasQuery.eq('c_etapa', '60')
+    else if (params.status === 'P') todasQuery = todasQuery.neq('c_etapa', '60')
+    else if (params.status) todasQuery = todasQuery.eq('c_etapa', params.status)
+    if (params.natureza) todasQuery = todasQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+    if (categoriaOrClause) todasQuery = todasQuery.or(categoriaOrClause)
+    if (idsIn) todasQuery = todasQuery.in('id', idsIn)
+
+    const { data: paginaCompletaRaw } = await todasQuery
+    const todas = await complementarNotasFiscais(paginaCompletaRaw ?? [], {
+      lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
+    })
+    todas.sort((a, b) => {
+      const av = a[ord] ?? ''
+      const bv = b[ord] ?? ''
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0
+      return dir === 'asc' ? cmp : -cmp
+    })
+    const inicio = (page - 1) * POR_PAGINA
+    const fatia = todas.slice(inicio, inicio + POR_PAGINA + 1)
+    temProxima = fatia.length > POR_PAGINA
+    notas = temProxima ? fatia.slice(0, POR_PAGINA) : fatia
+  } else {
+    notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
+  }
 
   // Helper para construir URL de sort (mantém todos os searchParams existentes)
   function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
