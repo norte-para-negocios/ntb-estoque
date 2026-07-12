@@ -4,6 +4,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
   // Paginação interna (PostgREST limita a 1000 linhas) para não truncar a exportação.
   const PAGE_SIZE = 1000
   type Nota = {
+    id: number
     d_emissao_nfe: string | null
     c_numero_nfe: string | null
     c_razao_social: string | null
@@ -107,7 +109,7 @@ export async function GET(request: Request) {
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
+      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
@@ -134,7 +136,11 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  const rows = notas.map((n) => ({
+  const notasCompletas = dataInicio < limiteJanelaQuente()
+    ? await complementarNotasFiscais(notas, { lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor })
+    : notas
+
+  const rows = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
     nfe: n.c_numero_nfe ?? '-',
     fornecedor: n.c_razao_social || n.c_nome || '-',
