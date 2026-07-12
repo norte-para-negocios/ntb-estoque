@@ -5,6 +5,7 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
   // Paginação interna para não truncar a exportação (PostgREST limita 1000 linhas).
   const PAGE_SIZE = 1000
   type Ordem = {
+    id: number
     num_ordem: string | null
     identificacao_c_num_op: string | null
     identificacao_n_cod_produto: number | null
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, concluida',
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
@@ -97,7 +99,9 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  const ordens = ordensRaw
+  const ordens = (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente())
+    ? await complementarOrdensProducao(ordensRaw, { lojaId, dataInicio: sp.data_inicio, dataFinal: sp.data_final })
+    : ordensRaw
 
   // Mesmo join da page: resolve descrição do produto.
   const codigos = [...new Set(ordens.map((o) => o.identificacao_n_cod_produto).filter(Boolean))]
