@@ -22,6 +22,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 const POR_PAGINA = 50
 
@@ -132,8 +133,9 @@ export default async function OrdemProducaoPage({
   const ord = sp.ord ?? ''
   const ordEmMemoria = ord === 'produto_az' || ord === 'produto_za'
   // So precisa buscar tudo em memoria para ordenar por NOME do produto (vem do
-  // join, nao da query). A conclusao agora filtra no banco (coluna concluida).
-  const precisaBuscarTudo = ordEmMemoria
+  // join, nao da query), ou quando o periodo cruza a janela quente (o Contabo
+  // pode ter linhas no meio do intervalo, paginacao nativa nao e confiavel nesse caso).
+  const precisaBuscarTudo = ordEmMemoria || dataInicio < limiteJanelaQuente()
 
   function baseQuery() {
     let q = supabase
@@ -206,7 +208,10 @@ export default async function OrdemProducaoPage({
       if (lote.length < LOTE) break
       if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
-    let filtradas = todas
+    const completouComContabo = dataInicio < limiteJanelaQuente()
+    let filtradas = completouComContabo
+      ? await complementarOrdensProducao(todas, { lojaId, dataInicio, dataFinal })
+      : todas
     prodMap = await resolverProdutos(filtradas)
     if (ordEmMemoria) {
       const dir = ord === 'produto_za' ? -1 : 1
@@ -214,6 +219,30 @@ export default async function OrdemProducaoPage({
         const na = (prodMap.get(a.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
         const nb = (prodMap.get(b.identificacao_n_cod_produto as number)?.descricao ?? '').toLowerCase()
         return na.localeCompare(nb, 'pt-BR') * dir
+      })
+    } else if (completouComContabo) {
+      // As linhas do Contabo entram no final do array (fora da ordenacao do banco
+      // que so cobriu "todas") -- reordena em memoria seguindo o mesmo criterio de `ord`.
+      filtradas = [...filtradas].sort((a, b) => {
+        if (ord === 'codigo') {
+          const va = a.identificacao_n_cod_produto, vb = b.identificacao_n_cod_produto
+          if (va == null) return 1
+          if (vb == null) return -1
+          return va - vb
+        }
+        if (ord === 'qtd_desc' || ord === 'qtd_asc') {
+          const va = a.identificacao_n_qtde, vb = b.identificacao_n_qtde
+          if (va == null) return 1
+          if (vb == null) return -1
+          return ord === 'qtd_desc' ? vb - va : va - vb
+        }
+        if (ord === 'validade_asc' || ord === 'validade_desc') {
+          const va = a.validade, vb = b.validade
+          if (va == null) return 1
+          if (vb == null) return -1
+          return ord === 'validade_desc' ? (va < vb ? 1 : -1) : va < vb ? -1 : 1
+        }
+        return 0
       })
     }
     temProxima = filtradas.length > page * POR_PAGINA
@@ -302,6 +331,20 @@ export default async function OrdemProducaoPage({
     totaisBase().eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO),
     totaisBase().eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO),
   ])
+  let totConcluidasFinal = totConcluidas ?? 0
+  if (dataInicio < limiteJanelaQuente()) {
+    const { data: concluidasQuentesIds } = await supabase
+      .from('ordens_producao')
+      .select('id, concluida')
+      .eq('loja_id', lojaId)
+      .eq('concluida', true)
+      .gte('identificacao_d_dt_previsao', dataInicio)
+      .lte('identificacao_d_dt_previsao', dataFinal)
+    const concluidasCompletas = await complementarOrdensProducao(concluidasQuentesIds ?? [], {
+      lojaId, dataInicio, dataFinal,
+    })
+    totConcluidasFinal = concluidasCompletas.filter((o) => o.concluida).length
+  }
 
   const exportParams = new URLSearchParams()
   // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.
@@ -410,7 +453,7 @@ export default async function OrdemProducaoPage({
             { value: 'prevista', label: 'Previstas', count: totPrevistas ?? 0 },
             { value: 'pendente', label: 'Pendentes', count: totPendentes ?? 0 },
             { value: 'atrasada', label: 'Atrasadas', count: totAtrasadas ?? 0 },
-            { value: 'concluida', label: 'Concluídas', count: totConcluidas ?? 0 },
+            { value: 'concluida', label: 'Concluídas', count: totConcluidasFinal },
           ]}
         />
         <ChipsFiltrosAtivos
