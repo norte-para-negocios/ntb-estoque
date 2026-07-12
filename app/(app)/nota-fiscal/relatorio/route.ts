@@ -9,6 +9,7 @@ import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/Rel
 import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
+import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 function labelEtapa(etapa: string | null): string {
   return etapa === '60' ? 'Concluída' : 'Pendente'
@@ -103,6 +104,7 @@ export async function GET(request: Request) {
 
   const PAGE_SIZE = 1000
   type Nota = {
+    id: number
     d_emissao_nfe: string | null
     c_numero_nfe: string | null
     c_razao_social: string | null
@@ -138,7 +140,11 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  const itens: RelatorioNFItem[] = notas.map((n) => ({
+  const notasCompletas = dataInicio < limiteJanelaQuente()
+    ? await complementarNotasFiscais(notas, { lojaId, dataInicio, dataFinal, busca: numNfe || fornecedor })
+    : notas
+
+  const itens: RelatorioNFItem[] = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
     numero: String(n.c_numero_nfe ?? '-'),
     fornecedor: n.c_razao_social || n.c_nome || '-',
