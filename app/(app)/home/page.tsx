@@ -19,7 +19,7 @@ import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
-import { limiteJanelaQuente, complementarOrdensProducao } from '@/lib/historico-contabo'
+import { limiteJanelaQuente, contarOrdensProducaoAntigas } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -97,13 +97,12 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
-  // Card "Ordens de producao" nao tem filtro de data (conta todas). Antes da poda
-  // rodar, o Contabo tem copia de TUDO (inclusive o que o Supabase ainda tem) --
-  // por isso busca os ids dos dois lados e mescla por id (dedup) em vez de somar
-  // as duas contagens direto, senao conta em dobro ate a poda rodar de verdade.
-  const { data: opsIdsQuentes } = await supabase.from('ordens_producao').select('id').eq('loja_id', lojaId)
-  const opsCompletas = await complementarOrdensProducao(opsIdsQuentes ?? [], { lojaId, dataFinal: limiteJanelaQuente() })
-  const opsTotalCount = opsCompletas.length
+  // Card "Ordens de producao" (ops.count, ja calculado no Promise.all acima) nao
+  // tem filtro de data (conta todas as recentes, pos-poda). Completa com a parte
+  // antiga do Contabo via contagem real (count=true, sem LIMIT) pra nao truncar
+  // o numero -- disjunta do que o Supabase ja tem, sem duplicar.
+  const opsAntigasCount = await contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() })
+  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
 
   // Phase 2: produtos a repor + saldo/mínimo para a lista
   const [prodsReporRes, posReporRes] = await Promise.all([

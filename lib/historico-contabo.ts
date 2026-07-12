@@ -39,6 +39,33 @@ async function buscarFrio<T>(
   }
 }
 
+// Contagem real (sem LIMIT) para cards/badges -- usa o parametro count=true do
+// endpoint, que faz um select count(*) no Contabo em vez de trazer as linhas
+// (evita truncar em falso o numero quando ha mais registros que o teto do modo normal).
+export async function contarOrdensProducaoAntigas(opts: {
+  lojaId: number
+  dataFinal: string
+}): Promise<number> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url) return 0
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const resp = await fetch(
+      `${url}/ordens_producao?loja_id=${opts.lojaId}&data_final=${opts.dataFinal}&count=true`,
+      { headers: { 'X-Api-Key': key ?? '' }, signal: controller.signal }
+    )
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    const json = (await resp.json()) as { count?: number }
+    return json.count ?? 0
+  } catch (e) {
+    console.error('historico-contabo: falha ao contar ordens_producao antigas', e)
+    return 0
+  }
+}
+
 function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
   const vistos = new Set(quentes.map((r) => r.id))
   return [...quentes, ...frias.filter((r) => !vistos.has(r.id))]
