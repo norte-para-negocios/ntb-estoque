@@ -9,12 +9,13 @@ import {
   fetchOrdemProducao,
   excluirOrdemProducao,
   reverterOrdemProducao,
-  alterarDataOrdemProducao,
+  alterarOrdemProducao,
 } from '@/lib/omie/ordem-producao'
 import { consultarEstrutura, incluirEstrutura, excluirEstrutura } from '@/lib/omie/malha'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -395,7 +396,7 @@ export async function setDataOP(opId: number, dataISO: string) {
   if (!op.identificacao_n_cod_produto) return { error: 'OP sem produto vinculado. Aguarde o próximo sync.' }
 
   try {
-    await alterarDataOrdemProducao(op.loja, {
+    await alterarOrdemProducao(op.loja, {
       nCodOP: op.identificacao_n_cod_op,
       nCodProduto: op.identificacao_n_cod_produto,
       dData,
@@ -410,6 +411,59 @@ export async function setDataOP(opId: number, dataISO: string) {
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao alterar a data no Omie' }
+  }
+}
+
+/**
+ * Troca a QUANTIDADE PLANEJADA (identificacao_n_qtde, sincronizada do Omie) de uma OP
+ * ABERTA — escreve de verdade no Omie via AlterarOrdemProducao, espelhando `setDataOP`
+ * (reenvia a DATA atual sem mudar, so troca a quantidade). Nome deliberadamente
+ * diferente de `setQuantidadeOP` (que e o campo local de etiqueta/impressao, sem
+ * relacao com o Omie) pra nao confundir os dois na hora de mexer no arquivo. Bloqueia
+ * OP concluida, igual a `setDataOP`.
+ */
+export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
+  if (!novaQtd || !Number.isFinite(novaQtd) || novaQtd <= 0) return { error: 'Quantidade inválida' }
+
+  const supabase = createServiceClient()
+  const { data: op } = await supabase
+    .from('ordens_producao')
+    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_d_dt_previsao, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .single<{
+      identificacao_n_cod_op: number | null
+      identificacao_n_cod_produto: number | null
+      identificacao_d_dt_previsao: string | null
+      identificacao_codigo_local_estoque: number | null
+      concluida: boolean | null
+      loja: LojaOmie
+    }>()
+
+  if (!op?.identificacao_n_cod_op || !op.loja) return { error: 'Ordem de produção não encontrada' }
+  if (op.concluida) return { error: 'Não dá para mudar a quantidade de uma OP concluída. Reverta a conclusão primeiro.' }
+  if (!op.identificacao_n_cod_produto) return { error: 'OP sem produto vinculado. Aguarde o próximo sync.' }
+
+  const dData = dataParaBR(op.identificacao_d_dt_previsao ?? '')
+  if (!dData) return { error: 'Data da OP ainda não sincronizada. Aguarde o próximo sync.' }
+
+  try {
+    await alterarOrdemProducao(op.loja, {
+      nCodOP: op.identificacao_n_cod_op,
+      nCodProduto: op.identificacao_n_cod_produto,
+      dData,
+      nQtde: novaQtd,
+      codigoLocalEstoque: op.identificacao_codigo_local_estoque,
+    })
+
+    await fetchOrdemProducao(op.loja, op.identificacao_n_cod_op)
+    await registrarAuditoria('editar', 'ordem de produção', op.identificacao_n_cod_op, `qtde planejada → ${novaQtd}`)
+    revalidatePath('/ordem-producao')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao alterar a quantidade no Omie' }
   }
 }
 
@@ -445,39 +499,50 @@ export async function finishOP(
   }
 
   // Quantidade a concluir: a escolhida (parcial OU maior que o previsto) se vier;
-  // senao a cheia da OP. Pedido do fundador (10/07): produziu mais que o
-  // planejado (ex.: OP de 10kg, produziu 20kg) tem que poder concluir assim
-  // mesmo, sem editar a OP antes. O Omie nao exige nQtdeProduzida bater com o
-  // planejado -- essa trava era so do nosso app, removida.
-  const qtdMaxima = op.quantidade ?? op.identificacao_n_qtde ?? 1
+  // senao a quantidade PLANEJADA da OP (nao mais a etiqueta -- etiqueta e so
+  // contagem de impressao, sem relacao com producao). Pedido do fundador (10/07):
+  // produziu mais que o planejado (ex.: OP de 10kg, produziu 20kg) tem que poder
+  // concluir assim mesmo, sem editar a OP antes. O Omie nao exige nQtdeProduzida
+  // bater com o planejado -- essa trava era so do nosso app, removida.
+  const qtdMaxima = op.identificacao_n_qtde ?? 1
   const qtdConcluir =
     qtdeProduzida != null && Number.isFinite(qtdeProduzida) && qtdeProduzida > 0
       ? qtdeProduzida
       : qtdMaxima
 
   // Data de conclusao: 1) a que o usuario ESCOLHEU (se veio); 2) a previsao do banco;
-  // 3) hoje como ultimo fallback.
-  let dataConclusao = ''
-  if (dataEscolhidaISO) {
-    const me = dataEscolhidaISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    if (me) dataConclusao = `${me[3]}/${me[2]}/${me[1]}`
+  // 3) hoje como ultimo fallback. NUNCA no futuro -- o Omie rejeita
+  // ConcluirOrdemProducao com dDtConclusao > hoje ("A data de Conclusão da Produção
+  // não pode ser maior que a data de hoje"), entao qualquer data escolhida/planejada
+  // que caia no futuro (ex.: OP agendada pra amanha, concluida adiantada hoje) e
+  // "clampada" pra hoje em vez de estourar erro (achado em teste real 2026-07-14).
+  const hojeISO = hojeBahiaISO()
+  let dataConclusaoISO = ''
+  if (dataEscolhidaISO && /^\d{4}-\d{2}-\d{2}$/.test(dataEscolhidaISO)) {
+    dataConclusaoISO = dataEscolhidaISO
+  } else if (op.identificacao_d_dt_previsao) {
+    dataConclusaoISO = op.identificacao_d_dt_previsao.slice(0, 10)
+  } else {
+    dataConclusaoISO = hojeISO
   }
-  if (!dataConclusao) {
-    const m = op.identificacao_d_dt_previsao?.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    dataConclusao = m ? `${m[3]}/${m[2]}/${m[1]}` : new Date().toLocaleDateString('pt-BR')
-  }
+  if (dataConclusaoISO > hojeISO) dataConclusaoISO = hojeISO
+  const mc0 = dataConclusaoISO.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const dataConclusao = mc0 ? `${mc0[3]}/${mc0[2]}/${mc0[1]}` : new Date().toLocaleDateString('pt-BR')
   const obs = await carimboUsuario()
 
   // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer como
   // pendente ate o proximo sync trazer cConcluida='S' do Omie. Reusado pelos dois
   // caminhos (conclusao direta e fallback sem insumo sem CMC).
+  // NAO mexe em `quantidade` (etiqueta) -- e so contagem de impressao, sem relacao
+  // com a produção; sobrescrever aqui corrompia a contagem de etiqueta a cada
+  // conclusao (achado em teste real 2026-07-14). A quantidade PRODUZIDA de verdade
+  // ja fica em identificacao_n_qtde (sincronizada do Omie).
   async function marcarConcluidaLocal() {
     const mc = dataConclusao.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
     await supabase
       .from('ordens_producao')
       .update({
         concluida: true,
-        quantidade: qtdConcluir,
         dt_conclusao_real: mc ? `${mc[3]}-${mc[2]}-${mc[1]}` : null,
         updated_at: new Date().toISOString(),
       })

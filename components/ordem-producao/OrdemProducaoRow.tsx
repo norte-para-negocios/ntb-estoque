@@ -1,19 +1,20 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, CalendarDays, Pencil, ChevronDown } from 'lucide-react'
+import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   setValidadeOP,
   setQuantidadeOP,
   setDataOP as setDataOPAction,
+  setQtdPlanejadaOP,
   finishOP,
   reverterOP,
   excluirOP,
 } from '@/lib/actions/ordem-producao'
 import type { OpStatus } from '@/lib/op-status'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
-import { parseNumBR } from '@/lib/num-br'
+import { parseNumBR, formatNumBR } from '@/lib/num-br'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
@@ -87,8 +88,10 @@ function QtdOP({ value }: { value: number | null | undefined }) {
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
 function useOP(op: OPData) {
   const [validade, setValidade] = useState(op.validade ? op.validade.split('T')[0] : '')
-  // Quantidade sempre comeca em 1 (nunca 0/vazio): no dia a dia a OP costuma ser de 1.
-  const [quantidade, setQuantidade] = useState(op.quantidade != null ? String(op.quantidade) : '1')
+  // Quantidade = SO a contagem de etiquetas a imprimir (1, 2, 3...) -- NAO tem
+  // nenhuma relacao com a producao da OP nem com o Omie. Campo 100% local, sempre
+  // comeca em 1 (nunca 0/vazio): no dia a dia a OP costuma imprimir 1 etiqueta.
+  const [quantidade, setQuantidade] = useState(op.quantidade != null ? formatNumBR(op.quantidade) : '1')
   const [pending, startTransition] = useTransition()
 
   function salvarValidade() {
@@ -138,16 +141,22 @@ function useOP(op: OPData) {
     })
   }
 
+  // Hoje (ISO, local do navegador) -- usado pra travar a data de conclusao no
+  // maximo hoje (o Omie rejeita ConcluirOrdemProducao com data futura).
+  const hojeISO = (() => {
+    const hoje = new Date()
+    const mm = String(hoje.getMonth() + 1).padStart(2, '0')
+    const dd = String(hoje.getDate()).padStart(2, '0')
+    return `${hoje.getFullYear()}-${mm}-${dd}`
+  })()
+
   // Conclusao guiada em dialog. op.data vem em dd/mm/aaaa -> ISO para o input.
   // Usa parsing local para evitar off-by-one de fuso UTC.
   const dataPrevistaISO = (() => {
     if (op.data && /^\d{2}\/\d{2}\/\d{4}$/.test(op.data)) {
       return op.data.split('/').reverse().join('-')
     }
-    const hoje = new Date()
-    const mm = String(hoje.getMonth() + 1).padStart(2, '0')
-    const dd = String(hoje.getDate()).padStart(2, '0')
-    return `${hoje.getFullYear()}-${mm}-${dd}`
+    return hojeISO
   })()
   // Data da OP (previsao). AO CONTRARIO da validade (so no nosso banco), esta data e
   // a mesma do Omie: editar aqui reescreve a OP la (AlterarOrdemProducao). Otimista,
@@ -182,24 +191,69 @@ function useOP(op: OPData) {
     salvarDataOP(novo)
   }
 
+  // Quantidade PLANEJADA da OP (identificacao_n_qtde). AO CONTRARIO da quantidade de
+  // etiqueta (so no nosso banco), esta e a mesma do Omie: editar aqui reescreve a OP
+  // la (AlterarOrdemProducao), igual a data. Otimista, com revert se o Omie recusar.
+  // Bloqueada quando a OP esta concluida.
+  const [qtdPlanejada, setQtdPlanejada] = useState(formatNumBR(op.qtdOP) || '1')
+  const qtdPlanejadaSalva = useRef(qtdPlanejada)
+
+  function salvarQtdPlanejada(novo: string) {
+    if (!novo || novo === qtdPlanejadaSalva.current) return
+    const num = parseNumBR(novo)
+    if (num == null || Number.isNaN(num) || num <= 0) {
+      toast.error('Quantidade planejada inválida')
+      setQtdPlanejada(qtdPlanejadaSalva.current) // desfaz
+      return
+    }
+    const anterior = qtdPlanejadaSalva.current
+    startTransition(async () => {
+      const res = await setQtdPlanejadaOP(op.id, num)
+      if (res?.error) {
+        toast.error('Erro ao alterar a quantidade planejada', { description: res.error })
+        setQtdPlanejada(anterior) // desfaz o otimismo
+      } else {
+        qtdPlanejadaSalva.current = novo
+        toast.success('Quantidade planejada alterada no Omie')
+      }
+    })
+  }
+
+  function ajustarQtdPlanejada(delta: number) {
+    let num = parseNumBR(qtdPlanejada) ?? 0
+    if (Number.isNaN(num)) num = 0
+    num += delta
+    if (num <= 0) return // nao deixa a quantidade planejada zerar/negativar no Omie
+    const novo = formatNumBR(num)
+    setQtdPlanejada(novo)
+    salvarQtdPlanejada(novo)
+  }
+
   const [dialogConclusao, setDialogConclusao] = useState(false)
   // Editar (mobile): abre os steppers de validade/quantidade num dialog enxuto,
   // pra a linha da OP ficar compacta como as outras telas.
   const [dialogEditar, setDialogEditar] = useState(false)
-  const [dataConclusao, setDataConclusao] = useState(dataPrevistaISO)
-  // Conclusao PARCIAL: quanto concluir (default = quantidade da OP). Ex.: OP de
-  // 10 kg, concluir so 4 kg.
-  const qtdConcluirDefault = op.quantidade ?? op.qtdOP ?? 1
+  const [dataConclusao, setDataConclusao] = useState(
+    dataPrevistaISO > hojeISO ? hojeISO : dataPrevistaISO
+  )
+  // Conclusao PARCIAL: quanto concluir (default = quantidade PLANEJADA da OP, nao a
+  // etiqueta -- etiqueta e so contagem de impressao, sem relacao com producao). Ex.:
+  // OP de 10 kg, concluir so 4 kg.
+  const qtdConcluirDefault = op.qtdOP ?? 1
   const [qtdeConcluir, setQtdeConcluir] = useState(String(qtdConcluirDefault))
 
-  function concluir() {
-    const q = parseNumBR(qtdeConcluir)
+  // Recebe data/quantidade como parametros explicitos (em vez de ler estado de dialog)
+  // pra servir dois pontos de chamada sem duplicar logica: o clique direto no desktop
+  // (usa os campos inline dataOP/qtdPlanejada) e o dialog do mobile (usa
+  // dataConclusao/qtdeConcluir).
+  function concluir(dataISO: string | null, qtdStr: string) {
+    const q = parseNumBR(qtdStr)
     if (q == null || Number.isNaN(q) || q <= 0) {
       toast.error('Quantidade a concluir inválida')
       return
     }
     startTransition(async () => {
-      const res = await finishOP(op.id, dataConclusao || null, q)
+      const res = await finishOP(op.id, dataISO || null, q)
       if ('error' in res) {
         // O Omie recusa concluir a OP se algum insumo da ficha técnica está com
         // CMC (custo médio) zerado. O sistema já tenta automaticamente remover
@@ -277,6 +331,10 @@ function useOP(op: OPData) {
     setDataOP,
     salvarDataOP,
     ajustarDataOP,
+    qtdPlanejada,
+    setQtdPlanejada,
+    salvarQtdPlanejada,
+    ajustarQtdPlanejada,
     pending,
     salvarValidade,
     salvarQuantidade,
@@ -292,6 +350,7 @@ function useOP(op: OPData) {
     dataConclusao,
     setDataConclusao,
     dataPrevistaISO,
+    hojeISO,
     qtdeConcluir,
     setQtdeConcluir,
     qtdConcluirDefault,
@@ -339,7 +398,10 @@ function StepperValidade({ op, ctrl }: StepperProps) {
   )
 }
 
-// Stepper de quantidade (numero). Sem permissao de Editar, fica somente-leitura.
+// Stepper de quantidade de ETIQUETAS a imprimir (1, 2, 3...) -- sem relacao com a
+// producao/Omie, so controla quantas etiquetas saem na impressao. Sem permissao de
+// Editar, fica somente-leitura. Continua editavel mesmo com a OP concluida (faz
+// sentido imprimir etiqueta depois de concluir).
 function StepperQuantidade({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar
   return (
@@ -416,6 +478,47 @@ function StepperData({ op, ctrl }: StepperProps) {
   )
 }
 
+// Stepper da QUANTIDADE PLANEJADA da OP (identificacao_n_qtde, vem do Omie). Escreve
+// no Omie (AlterarOrdemProducao), igual ao StepperData. Bloqueado sem permissao de
+// Editar OU quando a OP ja esta concluida (Omie nao aceita alterar OP concluida).
+function StepperQtdOP({ op, ctrl }: StepperProps) {
+  const bloqueado = !op.podeEditar || op.concluida
+  return (
+    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+      <button
+        type="button"
+        onClick={() => ctrl.ajustarQtdPlanejada(-1)}
+        disabled={ctrl.pending || bloqueado}
+        aria-label="Diminuir quantidade planejada"
+        className={stepBtnClass}
+      >
+        <Minus className="size-3.5 lg:size-3" />
+      </button>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={ctrl.qtdPlanejada}
+        onChange={(e) => ctrl.setQtdPlanejada(e.target.value)}
+        onBlur={() => ctrl.salvarQtdPlanejada(ctrl.qtdPlanejada)}
+        onWheel={(e) => e.currentTarget.blur()}
+        disabled={ctrl.pending || bloqueado}
+        readOnly={bloqueado}
+        placeholder="0"
+        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+      />
+      <button
+        type="button"
+        onClick={() => ctrl.ajustarQtdPlanejada(1)}
+        disabled={ctrl.pending || bloqueado}
+        aria-label="Aumentar quantidade planejada"
+        className={stepBtnClass}
+      >
+        <Plus className="size-3.5 lg:size-3" />
+      </button>
+    </div>
+  )
+}
+
 // Dialog de conclusao guiada: escolher data (default = data prevista) + confirmar.
 // Desacopla o seletor de data dos botoes Imprimir/Excluir, evitando o espremimento
 // reportado no video.
@@ -460,12 +563,14 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
             <input
               type="date"
               value={ctrl.dataConclusao}
+              max={ctrl.hojeISO}
               onChange={(e) => ctrl.setDataConclusao(e.target.value)}
               disabled={ctrl.pending}
               className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
             />
             <p className="mt-1 text-[11px] text-text-muted">
-              Padrão: data prevista da OP. Altere se a produção foi em outro dia.
+              Padrão: data prevista da OP (o Omie não aceita concluir com data
+              futura). Altere se a produção foi em outro dia.
             </p>
           </div>
           <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
@@ -485,7 +590,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
           </button>
           <button
             type="button"
-            onClick={ctrl.concluir}
+            onClick={() => ctrl.concluir(ctrl.dataConclusao, ctrl.qtdeConcluir)}
             disabled={ctrl.pending}
             className={btnClass('primary')}
           >
@@ -523,16 +628,28 @@ function DialogEditar({ op, ctrl }: StepperProps) {
             )}
           </div>
           <div>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Qtd OP (planejada)</label>
+            <StepperQtdOP op={op} ctrl={ctrl} />
+            {op.concluida && (
+              <p className="mt-1 text-[11px] text-text-muted">
+                OP concluída — reverta a conclusão para poder mudar a quantidade planejada.
+              </p>
+            )}
+          </div>
+          <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Validade</label>
             <StepperValidade op={op} ctrl={ctrl} />
           </div>
           <div>
-            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Quantidade</label>
+            <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
+              Quantidade de etiquetas a imprimir
+            </label>
             <StepperQuantidade op={op} ctrl={ctrl} />
           </div>
           <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-text-muted">
-            A <strong>data da OP</strong> é gravada no Omie. Já a validade e a quantidade
-            ficam só no nosso sistema.
+            A <strong>data</strong> e a <strong>quantidade planejada</strong> da OP são gravadas
+            no Omie. Já a validade e a quantidade de etiquetas ficam só no nosso sistema — a
+            etiqueta é só quantas etiquetas imprimir, sem relação com a produção da OP.
           </p>
         </div>
         <DialogFooter>
@@ -545,23 +662,27 @@ function DialogEditar({ op, ctrl }: StepperProps) {
   )
 }
 
+// Desktop: nada de dialog/pop-up. Data, quantidade planejada e etiqueta ja estao
+// sempre visiveis/editaveis na propria linha (steppers), entao "Concluir" so usa o que
+// ja esta preenchido ali -- um window.confirm com os valores atuais e a unica
+// checagem antes de gravar de verdade no Omie.
 function Acoes({ op, ctrl }: StepperProps) {
+  function concluirDesktop() {
+    // O Omie rejeita concluir com data no futuro -- se a data da linha estiver
+    // agendada pra frente (OP concluida adiantada), usa hoje na conclusao em vez de
+    // estourar erro. O backend (finishOP) faz o mesmo clamp por garantia; aqui e so
+    // pra mensagem de confirmacao já mostrar a data real que vai pro Omie.
+    const dataEfetivaISO = ctrl.dataOP && ctrl.dataOP > ctrl.hojeISO ? ctrl.hojeISO : ctrl.dataOP
+    const dataBR = dataEfetivaISO ? dataEfetivaISO.split('-').reverse().join('/') : '-'
+    const ok = window.confirm(
+      `Concluir a OP ${op.numOP}? Será gravado no Omie: ${ctrl.qtdPlanejada} ${op.unidade}, data ${dataBR}. O estoque produzido será incrementado.`
+    )
+    if (!ok) return
+    ctrl.concluir(dataEfetivaISO, ctrl.qtdPlanejada)
+  }
+
   return (
     <>
-      {op.podeEditar && (
-        <>
-          <button
-            type="button"
-            onClick={() => ctrl.setDialogEditar(true)}
-            disabled={ctrl.pending}
-            className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
-            title="Editar data / validade / quantidade"
-          >
-            <CalendarDays className="size-3.5" />
-          </button>
-          <DialogEditar op={op} ctrl={ctrl} />
-        </>
-      )}
       <DialogImprimirEtiqueta
         href={`/ordem-producao/${op.id}/imprimir`}
         trigger={
@@ -571,18 +692,15 @@ function Acoes({ op, ctrl }: StepperProps) {
         }
       />
       {!op.concluida && op.podeConcluir && (
-        <>
-          <button
-            type="button"
-            onClick={() => ctrl.setDialogConclusao(true)}
-            disabled={ctrl.pending}
-            className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
-            title="Concluir OP"
-          >
-            <Check className="size-3.5" />
-          </button>
-          <DialogConclusao op={op} ctrl={ctrl} />
-        </>
+        <button
+          type="button"
+          onClick={concluirDesktop}
+          disabled={ctrl.pending}
+          className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
+          title="Concluir OP"
+        >
+          <Check className="size-3.5" />
+        </button>
       )}
       {/* Reverter: so na concluida (estorna sem excluir). Excluir: qualquer estado. */}
       {op.concluida && op.podeReverter && (
@@ -623,8 +741,8 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
         <td className="num font-medium text-text align-middle">
           {op.numOP}
         </td>
-        <td className="num text-text-muted align-middle" title={op.data ? `Data prevista: ${op.data}` : undefined}>
-          {op.data ?? '-'}
+        <td className="align-middle !px-0 overflow-hidden">
+          <StepperData op={op} ctrl={ctrl} />
         </td>
         <td className="align-middle">
           <StatusBadge status={op.status} />
@@ -635,8 +753,8 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
             <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
           </div>
         </td>
-        <td className="text-right align-middle">
-          <QtdOP value={op.qtdOP} /> <span className="text-text-muted">{op.unidade}</span>
+        <td className="align-middle !px-0 overflow-hidden">
+          <StepperQtdOP op={op} ctrl={ctrl} />
         </td>
         <td className="align-middle !px-0 overflow-hidden">
           <StepperValidade op={op} ctrl={ctrl} />

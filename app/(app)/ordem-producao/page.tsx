@@ -128,6 +128,7 @@ export default async function OrdemProducaoPage({
     validade: string | null
     quantidade: number | null
     concluida: boolean | null
+    dt_conclusao_real: string | null
   }
 
   const ord = sp.ord ?? ''
@@ -141,7 +142,7 @@ export default async function OrdemProducaoPage({
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida'
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
       )
       .eq('loja_id', lojaId)
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
@@ -486,9 +487,11 @@ export default async function OrdemProducaoPage({
               qtdOP: op.identificacao_n_qtde,
               validade: op.validade,
               quantidade: op.quantidade,
-              // data real/agendada da OP (identificacao_d_dt_previsao), nao a de
-              // inclusao, que na recorrencia vem como hoje (bug que o cliente viu).
-              data: fmtDataBR(op.identificacao_d_dt_previsao),
+              // Concluida: mostra a data REAL de conclusao (dt_conclusao_real), nao a
+              // planejada -- senao uma OP concluida em dia diferente do previsto mostra
+              // a data errada. Nao concluida: data agendada (identificacao_d_dt_previsao),
+              // nao a de inclusao, que na recorrencia vem como hoje (bug que o cliente viu).
+              data: fmtDataBR(op.dt_conclusao_real || op.identificacao_d_dt_previsao),
               concluida: isOpConcluida(op),
               status: opStatus(op, hojeISO),
               // Cada acao da OP atras da sua permissao (calculada no servidor acima).
@@ -507,15 +510,15 @@ export default async function OrdemProducaoPage({
                   <thead>
                     <tr>
                       <th className="w-32">OP</th>
-                      <th className="w-24">Data</th>
+                      <th className="w-36 !text-center">Data</th>
                       <th className="w-28">Status</th>
                       <th>
                         <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
                           Produto {setaIcone('produto_az', 'produto_za')}
                         </Link>
                       </th>
-                      <th className="w-24 !text-right">
-                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-end gap-1 hover:text-text">
+                      <th className="w-28 !text-center">
+                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
                           Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
                         </Link>
                       </th>

@@ -281,12 +281,15 @@ export async function incluirOrdemProducao(
 }
 
 /**
- * Altera a DATA de uma OP ABERTA no Omie (AlterarOrdemProducao). Reescreve as tres
- * datas (previsao/inicio/conclusao) com o MESMO dia — igual ao incluir, onde o Omie
- * exige as tres iguais. Reenvia produto/quantidade/local existentes porque o Alterar
- * espera a identificacao completa. NAO mexe em OP concluida (a action bloqueia antes).
+ * Altera a DATA e/ou a QUANTIDADE PLANEJADA de uma OP ABERTA no Omie
+ * (AlterarOrdemProducao). Serve dois chamadores diferentes: `setDataOP` (muda a data,
+ * reenvia a quantidade antiga) e `setQtdPlanejadaOP` (muda a quantidade, reenvia a data
+ * antiga) — o Omie exige sempre o bloco `identificacao` completo, entao quem chama
+ * reenvia o campo que NAO mudou como passthrough. Reescreve as tres datas
+ * (previsao/inicio/conclusao) com o MESMO dia — igual ao incluir, onde o Omie exige as
+ * tres iguais. NAO mexe em OP concluida (a action bloqueia antes).
  */
-export async function alterarDataOrdemProducao(
+export async function alterarOrdemProducao(
   loja: LojaOmie,
   params: {
     nCodOP: number
