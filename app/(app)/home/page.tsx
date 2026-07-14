@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { SyncButton } from '@/components/SyncButton'
 import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -78,7 +79,7 @@ export default async function HomePage() {
   const head = { count: 'exact' as const, head: true }
 
   // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
-  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas, maxPosRes] =
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
       supabase.from('notas_fiscais').select('id', head).eq('loja_id', lojaId).gte('d_emissao_nfe', trintaDias).is('deleted_at', null),
@@ -91,6 +92,9 @@ export default async function HomePage() {
       supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
       supabase.from('transferencias').select('id', head).eq('loja_id', lojaId).neq('status', 'Concluido'),
       supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
+      // Pendentes de reenvio: falhou ao concluir (erro generico ou Sem CMC) e ainda
+      // nao concluiu. Usa o indice parcial idx_op_retry_pendente.
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).eq('concluida', false).not('conclusao_status', 'is', null),
     ])
 
   const codigosRepor = (reporRes.data ?? []) as number[]
@@ -135,8 +139,22 @@ export default async function HomePage() {
 
   const lojaNome = profile.loja?.nome_fantasia || profile.loja?.nome || ''
 
-  type Alerta = { icon: LucideIcon; token: CorToken; texto: string; href: string }
+  type Alerta = {
+    icon: LucideIcon
+    token: CorToken
+    texto: string
+    href: string
+    action?: { endpoint: string; label: string }
+  }
   const alertas: Alerta[] = []
+  if ((opsPendentesRetry.count ?? 0) > 0 && pode('Ordens de Producao - Concluir'))
+    alertas.push({
+      icon: AlertTriangle,
+      token: 'err',
+      texto: `${opsPendentesRetry.count} ordem(ns) de produção com falha ao concluir no Omie`,
+      href: '/ordem-producao',
+      action: { endpoint: '/api/sync/retry-op-conclusao', label: 'Reenviar pendentes' },
+    })
   if (qtdRepor > 0 && pode('Produtos'))
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`, href: '/produto?vista=compras&repor=1' })
   if ((errosSync.count ?? 0) > 0 && isAdmin)
@@ -212,17 +230,21 @@ export default async function HomePage() {
         {alertas.length ? (
           <div className="space-y-2">
             {alertas.map((a, i) => (
-              <Link
+              <div
                 key={i}
-                href={a.href}
-                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 u-motion u-press hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
+                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 u-motion hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
               >
-                <span className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}>
-                  <a.icon className="size-4" strokeWidth={2} />
-                </span>
-                <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
-                <ArrowRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
-              </Link>
+                <Link href={a.href} className="flex min-w-0 flex-1 items-center gap-3.5 u-press">
+                  <span className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}>
+                    <a.icon className="size-4" strokeWidth={2} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
+                  {!a.action && (
+                    <ArrowRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
+                  )}
+                </Link>
+                {a.action && <SyncButton endpoint={a.action.endpoint} label={a.action.label} />}
+              </div>
             ))}
           </div>
         ) : (

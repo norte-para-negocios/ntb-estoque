@@ -37,7 +37,7 @@ function fmtValidade(v: string | null | undefined): string | null {
   return m ? `${m[3]}/${m[2]}` : null
 }
 
-interface OPData {
+export interface OPData {
   id: number
   numOP: string
   produto: string
@@ -179,6 +179,12 @@ function useOP(op: OPData) {
     })
   }
 
+  // Debounce dos cliques de +/-: atualiza a tela na hora (sem travar nada), e so
+  // manda pro Omie 600ms depois do ultimo clique -- clicar 5x seguido pra avancar
+  // 5 dias vira UMA chamada com o valor final, em vez de 5 chamadas em fila (cada
+  // uma travando o botao por 2-4s ate o Omie responder).
+  const dataOPDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   function ajustarDataOP(delta: number) {
     // Parsing local (sem UTC) para evitar off-by-one em fuso UTC-3 (Bahia).
     const partes = dataOP ? dataOP.split('-').map(Number) : null
@@ -188,7 +194,8 @@ function useOP(op: OPData) {
     const dd = String(base.getDate()).padStart(2, '0')
     const novo = `${base.getFullYear()}-${mm}-${dd}`
     setDataOP(novo)
-    salvarDataOP(novo)
+    if (dataOPDebounce.current) clearTimeout(dataOPDebounce.current)
+    dataOPDebounce.current = setTimeout(() => salvarDataOP(novo), 600)
   }
 
   // Quantidade PLANEJADA da OP (identificacao_n_qtde). AO CONTRARIO da quantidade de
@@ -219,6 +226,9 @@ function useOP(op: OPData) {
     })
   }
 
+  // Mesmo debounce da data (ver ajustarDataOP) pra quantidade planejada.
+  const qtdPlanejadaDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   function ajustarQtdPlanejada(delta: number) {
     let num = parseNumBR(qtdPlanejada) ?? 0
     if (Number.isNaN(num)) num = 0
@@ -226,7 +236,8 @@ function useOP(op: OPData) {
     if (num <= 0) return // nao deixa a quantidade planejada zerar/negativar no Omie
     const novo = formatNumBR(num)
     setQtdPlanejada(novo)
-    salvarQtdPlanejada(novo)
+    if (qtdPlanejadaDebounce.current) clearTimeout(qtdPlanejadaDebounce.current)
+    qtdPlanejadaDebounce.current = setTimeout(() => salvarQtdPlanejada(novo), 600)
   }
 
   const [dialogConclusao, setDialogConclusao] = useState(false)
@@ -729,15 +740,39 @@ function Acoes({ op, ctrl }: StepperProps) {
   )
 }
 
+type SelecaoProps = {
+  /** Selecao multipla (bulk actions): so passado por OrdemProducaoLista. */
+  selecionavel?: boolean
+  selecionado?: boolean
+  onToggleSelecionar?: () => void
+}
+
 // Linha da tabela (desktop).
-export function OrdemProducaoRow({ op }: { op: OPData }) {
+export function OrdemProducaoRow({
+  op,
+  selecionavel,
+  selecionado,
+  onToggleSelecionar,
+}: { op: OPData } & SelecaoProps) {
   const ctrl = useOP(op)
   const [expandido, setExpandido] = useState(false)
   const temIng = (op.ingredientes?.length ?? 0) > 0
+  const colSpanIngredientes = selecionavel ? 9 : 8
 
   return (
     <>
       <tr>
+        {selecionavel && (
+          <td className="align-middle">
+            <input
+              type="checkbox"
+              checked={!!selecionado}
+              onChange={onToggleSelecionar}
+              aria-label={`Selecionar OP ${op.numOP}`}
+              className="size-4 accent-[var(--brand)]"
+            />
+          </td>
+        )}
         <td className="num font-medium text-text align-middle">
           {op.numOP}
         </td>
@@ -780,7 +815,7 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
       </tr>
       {expandido && temIng && (
         <tr className="bg-surface-2/30">
-          <td colSpan={8} className="px-4 py-2.5">
+          <td colSpan={colSpanIngredientes} className="px-4 py-2.5">
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1">
               {op.ingredientes!.map((i) => (
@@ -803,7 +838,12 @@ export function OrdemProducaoRow({ op }: { op: OPData }) {
 // Linha compacta (mobile), estilo extrato: produto + OP/data/validade/status à
 // esquerda, Qtd OP à direita, ações em ícone. A edição de validade/quantidade vai
 // pro dialog "Editar" (pencil), pra a lista não virar um formulário gigante.
-export function OrdemProducaoCard({ op }: { op: OPData }) {
+export function OrdemProducaoCard({
+  op,
+  selecionavel,
+  selecionado,
+  onToggleSelecionar,
+}: { op: OPData } & SelecaoProps) {
   const ctrl = useOP(op)
   const val = fmtValidade(op.validade)
   const [expandido, setExpandido] = useState(false)
@@ -812,6 +852,15 @@ export function OrdemProducaoCard({ op }: { op: OPData }) {
   return (
     <div className="first:rounded-t-lg last:rounded-b-lg">
       <div className="flex items-center gap-2 px-3 py-2.5">
+        {selecionavel && (
+          <input
+            type="checkbox"
+            checked={!!selecionado}
+            onChange={onToggleSelecionar}
+            aria-label={`Selecionar OP ${op.numOP}`}
+            className="size-4 shrink-0 accent-[var(--brand)]"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium leading-snug text-text">{op.produto}</div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">

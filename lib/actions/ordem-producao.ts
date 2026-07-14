@@ -467,36 +467,33 @@ export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
   }
 }
 
-// qtdeProduzida (opcional): conclusao PARCIAL — concluir so parte da OP. Ex.: OP de
-// 10 kg, concluir 4 kg. Vai como nQtdeProduzida pro Omie. Se nao vier (ou <=0), usa
-// a quantidade cheia da OP (op.quantidade ?? identificacao_n_qtde ?? 1).
-export async function finishOP(
-  opId: number,
+type OPParaConcluir = {
+  id: number
+  loja_id: number
+  identificacao_n_cod_op: number
+  identificacao_d_dt_previsao: string | null
+  identificacao_n_qtde: number | null
+  identificacao_n_cod_produto: number | null
+  identificacao_codigo_local_estoque: number | null
+  conclusao_tentativas: number | null
+  loja: LojaOmie
+}
+
+/**
+ * Nucleo da conclusao de OP, SEM sessao (nao chama getCurrentLojaId/requirePermissao)
+ * -- reusado por `finishOP` (clique unico, com sessao), `finishOPsEmLote` (lote, com
+ * sessao) e `retryOPsPendentes` (cron/reenvio, sem sessao, varias lojas). Em falha,
+ * grava `conclusao_status` pra a OP entrar no pool de reenvio (ver retryOPsPendentes);
+ * em sucesso, limpa esse status. qtdeProduzida/dataEscolhidaISO: mesmo contrato de
+ * antes (conclusao PARCIAL — concluir so parte da OP; sem vir, usa a quantidade
+ * planejada da OP).
+ */
+async function executarConclusaoOP(
+  op: OPParaConcluir,
   dataEscolhidaISO?: string | null,
   qtdeProduzida?: number | null,
 ): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
-  const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
   const supabase = createServiceClient()
-
-  const { data: op } = await supabase
-    .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, quantidade, loja:lojas(id, omie_app_key, omie_app_secret)')
-    .eq('id', opId)
-    .eq('loja_id', lojaId)
-    .single<{
-      identificacao_n_cod_op: number | null
-      identificacao_d_dt_previsao: string | null
-      identificacao_n_qtde: number | null
-      identificacao_n_cod_produto: number | null
-      identificacao_codigo_local_estoque: number | null
-      quantidade: number | null
-      loja: LojaOmie
-    }>()
-
-  if (!op?.identificacao_n_cod_op || !op.loja) {
-    return { error: 'Ordem de produção não encontrada' }
-  }
 
   // Quantidade a concluir: a escolhida (parcial OU maior que o previsto) se vier;
   // senao a quantidade PLANEJADA da OP (nao mais a etiqueta -- etiqueta e so
@@ -532,7 +529,8 @@ export async function finishOP(
 
   // Marca conclusao localmente (coluna `concluida`) para a OP nao reaparecer como
   // pendente ate o proximo sync trazer cConcluida='S' do Omie. Reusado pelos dois
-  // caminhos (conclusao direta e fallback sem insumo sem CMC).
+  // caminhos (conclusao direta e fallback sem insumo sem CMC). Tambem limpa o
+  // `conclusao_status` -- essa OP sai do pool de reenvio.
   // NAO mexe em `quantidade` (etiqueta) -- e so contagem de impressao, sem relacao
   // com a produção; sobrescrever aqui corrompia a contagem de etiqueta a cada
   // conclusao (achado em teste real 2026-07-14). A quantidade PRODUZIDA de verdade
@@ -544,10 +542,36 @@ export async function finishOP(
       .update({
         concluida: true,
         dt_conclusao_real: mc ? `${mc[3]}-${mc[2]}-${mc[1]}` : null,
+        conclusao_status: null,
+        conclusao_erro_msg: null,
+        conclusao_tentativas: 0,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', opId)
-      .eq('loja_id', lojaId)
+      .eq('id', op.id)
+      .eq('loja_id', op.loja_id)
+    revalidatePath('/ordem-producao')
+  }
+
+  // Marca falha de conclusao -- entra no pool de reenvio (retryOPsPendentes). Guarda
+  // os argumentos BRUTOS recebidos (nao os resolvidos/clampados), pra um reenvio
+  // futuro recalcular "hoje"/quantidade planejada do zero em vez de reusar um valor
+  // velho. 'Sem CMC' quando o erro bate com pareceErroCmc (ficha tecnica com insumo
+  // sem custo medio, mesmo depois do fallback tentar); qualquer outro erro vira
+  // 'Erro' generico (conexao, Omie fora do ar, etc.).
+  async function marcarFalhaConclusao(msg: string) {
+    await supabase
+      .from('ordens_producao')
+      .update({
+        conclusao_status: pareceErroCmc(msg) ? 'Sem CMC' : 'Erro',
+        conclusao_erro_msg: msg,
+        conclusao_qtde_desejada: qtdeProduzida ?? null,
+        conclusao_data_desejada: dataEscolhidaISO ?? null,
+        conclusao_tentativas: (op.conclusao_tentativas ?? 0) + 1,
+        conclusao_ultima_tentativa_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', op.id)
+      .eq('loja_id', op.loja_id)
     revalidatePath('/ordem-producao')
   }
 
@@ -559,9 +583,9 @@ export async function finishOP(
       const { count } = await supabase
         .from('impressao_etiquetas')
         .select('id', { count: 'exact', head: true })
-        .eq('loja_id', lojaId)
+        .eq('loja_id', op.loja_id)
         .eq('origem', 'OP')
-        .eq('referencia_id', opId)
+        .eq('referencia_id', op.id)
       return !count
     } catch {
       return false
@@ -575,6 +599,7 @@ export async function finishOP(
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Falha ao concluir no Omie'
     if (!pareceErroCmc(msg) || !op.identificacao_n_cod_produto) {
+      await marcarFalhaConclusao(msg)
       return { error: msg }
     }
     const fallback = await tentarConcluirSemInsumosSemCmc(
@@ -587,10 +612,57 @@ export async function finishOP(
       obs,
       msg
     )
-    if ('error' in fallback) return fallback
+    if ('error' in fallback) {
+      await marcarFalhaConclusao(fallback.error)
+      return fallback
+    }
     await marcarConcluidaLocal()
     return { ...fallback, semEtiqueta: await semEtiquetaImpressa() }
   }
+}
+
+/**
+ * Conclui uma OP (clique unico do usuario, com sessao). qtdeProduzida (opcional):
+ * conclusao PARCIAL -- concluir so parte da OP. Ex.: OP de 10 kg, concluir 4 kg. Vai
+ * como nQtdeProduzida pro Omie. Se nao vier (ou <=0), usa a quantidade planejada da
+ * OP (identificacao_n_qtde).
+ */
+export async function finishOP(
+  opId: number,
+  dataEscolhidaISO?: string | null,
+  qtdeProduzida?: number | null,
+): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
+  const supabase = createServiceClient()
+
+  const { data: op } = await supabase
+    .from('ordens_producao')
+    .select(
+      'id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)'
+    )
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .single<{
+      id: number
+      identificacao_n_cod_op: number | null
+      identificacao_d_dt_previsao: string | null
+      identificacao_n_qtde: number | null
+      identificacao_n_cod_produto: number | null
+      identificacao_codigo_local_estoque: number | null
+      conclusao_tentativas: number | null
+      loja: LojaOmie
+    }>()
+
+  if (!op?.identificacao_n_cod_op || !op.loja) {
+    return { error: 'Ordem de produção não encontrada' }
+  }
+
+  return executarConclusaoOP(
+    { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
+    dataEscolhidaISO,
+    qtdeProduzida
+  )
 }
 
 // Busca a OP + a loja (chaves Omie) garantindo o escopo da loja atual. Comum a
@@ -680,4 +752,187 @@ export async function reverterOP(opId: number) {
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao reverter no Omie' }
   }
+}
+
+type OPRetryRow = {
+  id: number
+  identificacao_n_cod_op: number | null
+  identificacao_d_dt_previsao: string | null
+  identificacao_n_qtde: number | null
+  identificacao_n_cod_produto: number | null
+  identificacao_codigo_local_estoque: number | null
+  conclusao_tentativas: number | null
+  conclusao_qtde_desejada: number | null
+  conclusao_data_desejada: string | null
+}
+
+const COLUNAS_OP_RETRY =
+  'id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, conclusao_qtde_desejada, conclusao_data_desejada'
+
+// 'Sem CMC' ja mexeu na ficha tecnica (malha) do produto uma vez (fallback restrito,
+// "so com o Ramon") -- nao martela de 10 em 10 min pra sempre: so reconsidera 1x por
+// hora e desiste apos um teto de tentativas, mas continua aparecendo pro reenvio
+// MANUAL pra sempre (o botao da tela inicial nao aplica esse throttle).
+const SEM_CMC_STALE_HORAS = 1
+const SEM_CMC_MAX_TENTATIVAS = 20
+
+/**
+ * Varre OPs pendentes de conclusao (concluida=false AND conclusao_status IS NOT NULL)
+ * das lojas informadas e tenta concluir de novo, reusando o nucleo `executarConclusaoOP`
+ * (sem sessao -- serve tanto o cron de 10 em 10 min quanto o botao manual "reenviar
+ * pendentes"). `incluirSemCmc`: se false, so reenvia erro generico (conexao/Omie);
+ * se true, tambem tenta 'Sem CMC', respeitando o throttle acima -- `semCmcStaleHoras`
+ * permite o clique manual pular esse throttle (usuario decidiu agora, presumivelmente
+ * ja corrigiu o CMC no Omie), passando 0.
+ */
+export async function retryOPsPendentes(
+  lojas: LojaOmie[],
+  opts: { incluirSemCmc?: boolean; limitePorLoja?: number; semCmcStaleHoras?: number } = {}
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number }[]> {
+  const { incluirSemCmc = false, limitePorLoja = 30, semCmcStaleHoras = SEM_CMC_STALE_HORAS } = opts
+  const supabase = createServiceClient()
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
+
+  for (const loja of lojas) {
+    const { data: errosGenericos } = await supabase
+      .from('ordens_producao')
+      .select(COLUNAS_OP_RETRY)
+      .eq('loja_id', loja.id)
+      .eq('concluida', false)
+      .eq('conclusao_status', 'Erro')
+      .order('conclusao_ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
+    let pendentes = (errosGenericos ?? []) as OPRetryRow[]
+
+    if (incluirSemCmc) {
+      const limiteStale = new Date(Date.now() - semCmcStaleHoras * 3600_000).toISOString()
+      const { data: semCmc } = await supabase
+        .from('ordens_producao')
+        .select(COLUNAS_OP_RETRY)
+        .eq('loja_id', loja.id)
+        .eq('concluida', false)
+        .eq('conclusao_status', 'Sem CMC')
+        .lt('conclusao_tentativas', SEM_CMC_MAX_TENTATIVAS)
+        .or(`conclusao_ultima_tentativa_em.is.null,conclusao_ultima_tentativa_em.lt.${limiteStale}`)
+        .order('conclusao_ultima_tentativa_em', { ascending: true, nullsFirst: true })
+        .limit(limitePorLoja)
+      pendentes = [...pendentes, ...((semCmc ?? []) as OPRetryRow[])].slice(0, limitePorLoja)
+    }
+
+    let sucesso = 0
+    let falhas = 0
+    for (const row of pendentes) {
+      if (!row.identificacao_n_cod_op) continue
+      const res = await executarConclusaoOP(
+        {
+          ...row,
+          identificacao_n_cod_op: row.identificacao_n_cod_op,
+          loja_id: loja.id,
+          loja,
+        },
+        row.conclusao_data_desejada,
+        row.conclusao_qtde_desejada
+      )
+      if ('error' in res) falhas++
+      else sucesso++
+    }
+    resultados.push({ loja_id: loja.id, tentadas: pendentes.length, sucesso, falhas })
+  }
+
+  return resultados
+}
+
+/**
+ * Conclui varias OPs de uma vez (selecao multipla na lista). Reconfere no servidor
+ * quem ainda esta com `concluida=false` antes de tentar (ignora selecao desatualizada
+ * -- ex.: outra aba ja concluiu essa OP nesse meio tempo). Cada falha ja cai
+ * automaticamente no pool de reenvio via `executarConclusaoOP`.
+ */
+export async function finishOPsEmLote(
+  opIds: number[]
+): Promise<{ sucesso: number; falhas: { id: number; error: string }[] }> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) {
+    return { sucesso: 0, falhas: opIds.map((id) => ({ id, error: 'Sem permissão' })) }
+  }
+  if (!opIds.length) return { sucesso: 0, falhas: [] }
+  const supabase = createServiceClient()
+
+  const { data: linhas } = await supabase
+    .from('ordens_producao')
+    .select(
+      `id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)`
+    )
+    .eq('loja_id', lojaId)
+    .eq('concluida', false)
+    .in('id', opIds)
+
+  let sucesso = 0
+  const falhas: { id: number; error: string }[] = []
+  for (const op of (linhas ?? []) as unknown as (Omit<OPRetryRow, 'conclusao_qtde_desejada' | 'conclusao_data_desejada'> & {
+    loja: LojaOmie
+  })[]) {
+    if (!op.identificacao_n_cod_op || !op.loja) {
+      falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida (aguarde o próximo sync)' })
+      continue
+    }
+    const res = await executarConclusaoOP(
+      { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
+      null,
+      null
+    )
+    if ('error' in res) falhas.push({ id: op.id, error: res.error })
+    else sucesso++
+  }
+
+  if (sucesso > 0) await registrarAuditoria('concluir', 'ordem de produção', null, `${sucesso} OP(s) em lote`)
+  revalidatePath('/ordem-producao')
+  return { sucesso, falhas }
+}
+
+/**
+ * Reverte varias OPs concluidas de uma vez (selecao multipla). Reconfere no servidor
+ * quem ainda esta com `concluida=true` antes de tentar.
+ */
+export async function reverterOPsEmLote(
+  opIds: number[]
+): Promise<{ sucesso: number; falhas: { id: number; error: string }[] }> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Ordens de Producao - Reverter'))) {
+    return { sucesso: 0, falhas: opIds.map((id) => ({ id, error: 'Sem permissão' })) }
+  }
+  if (!opIds.length) return { sucesso: 0, falhas: [] }
+  const supabase = createServiceClient()
+
+  const { data: linhas } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_op, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .eq('loja_id', lojaId)
+    .eq('concluida', true)
+    .in('id', opIds)
+
+  let sucesso = 0
+  const falhas: { id: number; error: string }[] = []
+  for (const op of (linhas ?? []) as unknown as { id: number; identificacao_n_cod_op: number | null; loja: LojaOmie }[]) {
+    if (!op.identificacao_n_cod_op || !op.loja) {
+      falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida' })
+      continue
+    }
+    try {
+      await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op)
+      await supabase
+        .from('ordens_producao')
+        .update({ concluida: false, dt_conclusao_real: null, updated_at: new Date().toISOString() })
+        .eq('id', op.id)
+        .eq('loja_id', lojaId)
+      sucesso++
+    } catch (e) {
+      falhas.push({ id: op.id, error: e instanceof Error ? e.message : 'Falha ao reverter no Omie' })
+    }
+  }
+
+  if (sucesso > 0) await registrarAuditoria('reverter', 'ordem de produção', null, `${sucesso} OP(s) em lote`)
+  revalidatePath('/ordem-producao')
+  return { sucesso, falhas }
 }

@@ -3,7 +3,7 @@ import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
-import { OrdemProducaoRow, OrdemProducaoCard } from '@/components/ordem-producao/OrdemProducaoRow'
+import { OrdemProducaoLista } from '@/components/ordem-producao/OrdemProducaoLista'
 import { CriarOrdemProducao } from '@/components/ordem-producao/CriarOrdemProducao'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -13,7 +13,6 @@ import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
-import { DataTable } from '@/components/ui-kit/DataTable'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
@@ -502,49 +501,37 @@ export default async function OrdemProducaoPage({
               ingredientes: ingredientesMap.get(op.id) ?? [],
             }
           })
-          return (
+          const cabecalhoDesktop = (
             <>
-              {/* Desktop: tabela com steppers na linha */}
-              <div className="hidden lg:block">
-                <DataTable>
-                  <thead>
-                    <tr>
-                      <th className="w-32">OP</th>
-                      <th className="w-36 !text-center">Data</th>
-                      <th className="w-28">Status</th>
-                      <th>
-                        <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
-                          Produto {setaIcone('produto_az', 'produto_za')}
-                        </Link>
-                      </th>
-                      <th className="w-28 !text-center">
-                        <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
-                          Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
-                        </Link>
-                      </th>
-                      <th className="w-36 !text-center">
-                        <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
-                          Validade {setaIcone('validade_asc', 'validade_desc')}
-                        </Link>
-                      </th>
-                      <th className="w-28 !text-center">Quantidade</th>
-                      <th className="w-36"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linhas.map((op) => (
-                      <OrdemProducaoRow key={op.id} op={op} />
-                    ))}
-                  </tbody>
-                </DataTable>
-              </div>
-              {/* Mobile: lista compacta (extrato); edição no dialog "Editar" */}
-              <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface lg:hidden">
-                {linhas.map((op) => (
-                  <OrdemProducaoCard key={op.id} op={op} />
-                ))}
-              </div>
+              <th className="w-32">OP</th>
+              <th className="w-36 !text-center">Data</th>
+              <th className="w-28">Status</th>
+              <th>
+                <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
+                  Produto {setaIcone('produto_az', 'produto_za')}
+                </Link>
+              </th>
+              <th className="w-28 !text-center">
+                <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
+                  Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
+                </Link>
+              </th>
+              <th className="w-36 !text-center">
+                <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
+                  Validade {setaIcone('validade_asc', 'validade_desc')}
+                </Link>
+              </th>
+              <th className="w-28 !text-center">Quantidade</th>
+              <th className="w-36"></th>
             </>
+          )
+          return (
+            <OrdemProducaoLista
+              linhas={linhas}
+              podeConcluir={podeConcluir}
+              podeReverter={podeReverter}
+              cabecalhoDesktop={cabecalhoDesktop}
+            />
           )
         })()
       ) : (

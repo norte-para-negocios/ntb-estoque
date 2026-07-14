@@ -32,6 +32,9 @@ jobs:
           # Sempre: notas fiscais e ordens de producao (mudam ao longo do dia)
           hit /api/cron/sync-nfs
           hit /api/cron/sync-ops
+          # Reenvia OPs que falharam ao concluir (erro generico + Sem CMC com throttle
+          # proprio de 1h dentro da propria rota)
+          hit /api/cron/retry-op-conclusao
           # Posicao de estoque (CMC): toda execucao processa 1 loja (a mais atrasada),
           # cobrindo todas as lojas em rodizio a cada ~1h sem estourar o tempo.
           hit /api/cron/sync-posicao

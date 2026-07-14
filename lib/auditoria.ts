@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser } from '@/lib/auth'
 
-export type AcaoAuditoria = 'criar' | 'editar' | 'excluir'
+export type AcaoAuditoria = 'criar' | 'editar' | 'excluir' | 'concluir' | 'reverter'
 
 /**
  * Registra uma acao na trilha de auditoria (quem fez o que, quando, em qual loja).
