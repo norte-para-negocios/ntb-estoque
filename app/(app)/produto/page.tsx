@@ -589,7 +589,7 @@ export default async function ProdutoPage({
                   },
                 },
                 {
-                  label: 'Comprar',
+                  label: 'Repor',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-20',
                   render: (p: ProdutoLinha) => {
