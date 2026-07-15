@@ -653,7 +653,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
           </div>
           <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
-              Quantidade de etiquetas a imprimir
+              QTD Etiqueta
             </label>
             <StepperQuantidade op={op} ctrl={ctrl} />
           </div>
