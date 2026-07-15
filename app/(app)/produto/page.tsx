@@ -82,7 +82,7 @@ function precoSugerido(custo: number | null, alvo: number): number | null {
 export default async function ProdutoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string; pdv?: string }>
+  searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string; pdv?: string; janela?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
@@ -91,6 +91,8 @@ export default async function ProdutoPage({
   const page = Math.max(1, Number(params.page) || 1)
   // Dois modos para a tabela nao estourar a largura: precos x compras.
   const vista = params.vista === 'compras' ? 'compras' : 'precos'
+  // Janela da previsao de venda: 7 (1 semana, default), 15 ou 30 (1 mes) dias.
+  const janelaAtual = params.janela === '15' || params.janela === '30' ? Number(params.janela) : 7
   // "So repor": no modo Compras, mostra so os produtos abaixo do minimo (RPC).
   const repor = vista === 'compras' && params.repor === '1'
   const alvoPctRaw = Number(params.margem)
@@ -272,7 +274,12 @@ export default async function ProdutoPage({
   const [, previsaoRes, evolucaoRes] = await Promise.all([
     carregarPosicoes(),
     codigos.length
-      ? supabase.from('previsao_venda').select('n_cod_prod, qtde').eq('loja_id', lojaId).in('n_cod_prod', codigos)
+      ? supabase
+          .from('previsao_venda')
+          .select('n_cod_prod, qtde')
+          .eq('loja_id', lojaId)
+          .eq('janela_dias', janelaAtual)
+          .in('n_cod_prod', codigos)
       : Promise.resolve({ data: [] as { n_cod_prod: number; qtde: number | null }[] }),
     codigos.length && vista === 'compras'
       ? supabase.rpc('evolucao_preco_produtos', { p_loja_id: lojaId, p_codigos: codigos })
@@ -480,6 +487,26 @@ export default async function ProdutoPage({
                 </Link>
               )
             })()}
+          {vista === 'compras' && (
+            <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-[13px]">
+              {([7, 15, 30] as const).map((dias) => {
+                const spJanela = new URLSearchParams(exportParams.toString())
+                if (params.margem) spJanela.set('margem', params.margem)
+                spJanela.set('vista', 'compras')
+                spJanela.set('janela', String(dias))
+                const ativo = janelaAtual === dias
+                return (
+                  <Link
+                    key={dias}
+                    href={`/produto?${spJanela.toString()}`}
+                    className={`rounded px-3 py-1 font-medium transition-colors ${ativo ? 'bg-brand text-white' : 'text-text-muted hover:text-text'}`}
+                  >
+                    {dias === 7 ? '1 semana' : dias === 15 ? '15 dias' : '1 mês'}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
