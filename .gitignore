@@ -52,3 +52,5 @@ scripts/.ajustes-checkpoint-*.json
 
 .vercel
 .env*
+
+.worktrees/
