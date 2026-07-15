@@ -70,6 +70,23 @@ no cliente falha silenciosamente (string `"123"` ≠ number `123`) e datas quebr
 na formatação. Se algum endpoint novo for adicionado à API, checar se ele também
 precisa dessa normalização.
 
+## Reunião com o Ramon de 2026-07-14 (transcrita via `/etl-audio`) e priorização pós-reunião
+
+Reunião de ~55min testando ao vivo o app com o Ramon (opera o sistema nas
+lojas reais Donana Rio Vermelho e Vinhas & Vinhetos). Lista completa de
+achados, priorização combinada com o usuário (relatórios financeiros —
+Margem/Faturamento/Auditoria Fiscal/Compras — viram fase própria, deixada
+pro final) e o spec da primeira fase (renomeações, previsão editável,
+triangulação de produto substituto, clareza visual de Transferências,
+link produto→Movimentos): ver
+`docs/superpowers/specs/2026-07-15-fase-a-melhorias-pos-reuniao-design.md`.
+
+Achado relevante da pesquisa pré-spec: os 4 relatórios financeiros acima
+**nunca foram migrados** pro padrão híbrido Supabase+Contabo já descrito
+no topo deste arquivo (só leem Supabase, perdem dado silenciosamente além
+dos 90 dias) — isso é o essencial da fase final, não um backfill novo do
+zero.
+
 ### Limitações conhecidas
 
 - `webhooks` anteriores a 2026-07-05 foram perdidos pelo prune de 7 dias que já
