@@ -221,7 +221,11 @@ export default async function AuditoriaFiscalPage({
                         <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">{it.data ? fmtData(it.data) : '-'}</td>
                         <td className="num whitespace-nowrap px-3 py-1.5 text-text-muted">{it.nota}</td>
                         <td className="max-w-[200px] truncate px-3 py-1.5 text-text" title={it.fornecedor}>{it.fornecedor}</td>
-                        <td className="max-w-[220px] truncate px-3 py-1.5 text-text" title={it.produto}>{formatarNomeProduto(it.produto) || it.produto}</td>
+                        <td className="max-w-[220px] truncate px-3 py-1.5 text-text" title={it.produto}>
+                          <Link href={`/movimentacoes?produto=${encodeURIComponent(it.produto)}`} className="hover:underline">
+                            {formatarNomeProduto(it.produto) || it.produto}
+                          </Link>
+                        </td>
                         <td className="num px-3 py-1.5 text-center text-text-muted">{it.cst_icms ?? '-'}</td>
                         <td className={`px-3 py-1.5 text-center ${it.credita_icms ? 'text-info' : 'text-text-muted'}`}>{it.credita_icms ? 'sim' : '—'}</td>
                         <td className={`px-3 py-1.5 text-center ${it.move_estoque ? 'text-text-muted' : 'text-warn'}`}>{it.move_estoque ? 'sim' : 'não'}</td>
