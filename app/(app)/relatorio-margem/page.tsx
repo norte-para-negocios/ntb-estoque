@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -169,7 +170,11 @@ export default async function RelatorioMargemPage({
               {validos.map((p) => (
                 <tr key={p.codigo} className="border-t border-border/60 hover:bg-surface-2/40">
                   <td className="max-w-[160px] truncate px-3 py-2 text-text-muted" title={p.familia ?? ''}>{p.familia ?? '-'}</td>
-                  <td className="max-w-[280px] truncate px-3 py-2 text-text" title={p.descricao ?? ''}>{p.descricao ?? p.codigo}</td>
+                  <td className="max-w-[280px] truncate px-3 py-2 text-text" title={p.descricao ?? ''}>
+                    <Link href={`/movimentacoes?produto=${encodeURIComponent(p.descricao ?? String(p.codigo))}`} className="hover:underline">
+                      {p.descricao ?? p.codigo}
+                    </Link>
+                  </td>
                   <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtMoeda(p.pdv)}</td>
                   <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtMoeda(p.cmc)}</td>
                   <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${corMargem(Number(p.margem))}`}>{fmtPct(Number(p.margem))}</td>
