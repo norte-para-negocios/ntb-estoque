@@ -628,7 +628,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="truncate text-[13px] text-text-muted">{op.produto}</div>
+          <div className="truncate text-[13px] text-text-muted" title={op.produto}>{op.produto}</div>
           <div>
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Data da OP</label>
             <StepperData op={op} ctrl={ctrl} />
@@ -783,7 +783,7 @@ export function OrdemProducaoRow({
           <StatusBadge status={op.status} />
         </td>
         <td className="max-w-xs align-middle">
-          <div className="truncate font-medium text-text">
+          <div className="truncate font-medium text-text" title={op.produto}>
             {op.produto}
             <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
           </div>
@@ -862,7 +862,7 @@ export function OrdemProducaoCard({
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium leading-snug text-text">{op.produto}</div>
+          <div className="truncate text-[13px] font-medium leading-snug text-text" title={op.produto}>{op.produto}</div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
             <StatusBadge status={op.status} />
             <span className="num">{op.numOP}</span>
