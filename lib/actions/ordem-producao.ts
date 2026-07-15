@@ -776,6 +776,50 @@ const COLUNAS_OP_RETRY =
 const SEM_CMC_STALE_HORAS = 1
 const SEM_CMC_MAX_TENTATIVAS = 20
 
+// Quantas OPs concluir/reverter em paralelo nas rotinas em lote. Sequencial (1 por
+// vez) era o motivo do "demora muito" reportado -- cada OP e uma chamada real ao
+// Omie (1-4s), 20 sequenciais passa de 1 minuto fácil. Paralelismo MODERADO (nao
+// ilimitado): o "consumo redundante" do Omie ja disparou em teste real quando varias
+// chamadas bateram na MESMA OP rapido demais -- aqui sao OPs diferentes, risco bem
+// menor, mas ainda assim nao dispara tudo de uma vez.
+const CONCORRENCIA_OMIE = 4
+
+// Roda `fn` sobre `items` com no maximo `limite` execucoes em paralelo (pool de
+// workers simples, sem dependencia externa).
+async function comLimiteDeConcorrencia<T>(items: T[], limite: number, fn: (item: T) => Promise<void>) {
+  let proximo = 0
+  async function worker() {
+    while (proximo < items.length) {
+      const i = proximo++
+      await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, items.length) }, worker))
+}
+
+// Como `comLimiteDeConcorrencia`, mas agrupando por chave: itens da MESMA chave rodam
+// em SEQUENCIA entre si (o Omie recusa concluir 2 OPs do MESMO produto na MESMA data
+// em paralelo -- "o seguinte produto da estrutura possui movimentos de estoque
+// pendentes de calculo", achado em teste real 2026-07-14), mas GRUPOS diferentes
+// (produtos/datas diferentes) rodam em paralelo entre si, ate o limite normal.
+async function comLimiteDeConcorrenciaAgrupado<T>(
+  items: T[],
+  chaveDe: (item: T) => string,
+  limite: number,
+  fn: (item: T) => Promise<void>
+) {
+  const grupos = new Map<string, T[]>()
+  for (const item of items) {
+    const chave = chaveDe(item)
+    const lista = grupos.get(chave)
+    if (lista) lista.push(item)
+    else grupos.set(chave, [item])
+  }
+  await comLimiteDeConcorrencia([...grupos.values()], limite, async (grupo) => {
+    for (const item of grupo) await fn(item)
+  })
+}
+
 /**
  * Varre OPs pendentes de conclusao (concluida=false AND conclusao_status IS NOT NULL)
  * das lojas informadas e tenta concluir de novo, reusando o nucleo `executarConclusaoOP`
@@ -822,8 +866,12 @@ export async function retryOPsPendentes(
 
     let sucesso = 0
     let falhas = 0
-    for (const row of pendentes) {
-      if (!row.identificacao_n_cod_op) continue
+    await comLimiteDeConcorrenciaAgrupado(
+      pendentes,
+      (row) => `${row.identificacao_n_cod_produto}|${row.identificacao_d_dt_previsao}`,
+      CONCORRENCIA_OMIE,
+      async (row) => {
+      if (!row.identificacao_n_cod_op) return
       const res = await executarConclusaoOP(
         {
           ...row,
@@ -836,7 +884,8 @@ export async function retryOPsPendentes(
       )
       if ('error' in res) falhas++
       else sucesso++
-    }
+      }
+    )
     resultados.push({ loja_id: loja.id, tentadas: pendentes.length, sucesso, falhas })
   }
 
@@ -870,21 +919,26 @@ export async function finishOPsEmLote(
 
   let sucesso = 0
   const falhas: { id: number; error: string }[] = []
-  for (const op of (linhas ?? []) as unknown as (Omit<OPRetryRow, 'conclusao_qtde_desejada' | 'conclusao_data_desejada'> & {
-    loja: LojaOmie
-  })[]) {
-    if (!op.identificacao_n_cod_op || !op.loja) {
-      falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida (aguarde o próximo sync)' })
-      continue
+  await comLimiteDeConcorrenciaAgrupado(
+    (linhas ?? []) as unknown as (Omit<OPRetryRow, 'conclusao_qtde_desejada' | 'conclusao_data_desejada'> & {
+      loja: LojaOmie
+    })[],
+    (op) => `${op.identificacao_n_cod_produto}|${op.identificacao_d_dt_previsao}`,
+    CONCORRENCIA_OMIE,
+    async (op) => {
+      if (!op.identificacao_n_cod_op || !op.loja) {
+        falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida (aguarde o próximo sync)' })
+        return
+      }
+      const res = await executarConclusaoOP(
+        { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
+        null,
+        null
+      )
+      if ('error' in res) falhas.push({ id: op.id, error: res.error })
+      else sucesso++
     }
-    const res = await executarConclusaoOP(
-      { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
-      null,
-      null
-    )
-    if ('error' in res) falhas.push({ id: op.id, error: res.error })
-    else sucesso++
-  }
+  )
 
   if (sucesso > 0) await registrarAuditoria('concluir', 'ordem de produção', null, `${sucesso} OP(s) em lote`)
   revalidatePath('/ordem-producao')
@@ -914,23 +968,27 @@ export async function reverterOPsEmLote(
 
   let sucesso = 0
   const falhas: { id: number; error: string }[] = []
-  for (const op of (linhas ?? []) as unknown as { id: number; identificacao_n_cod_op: number | null; loja: LojaOmie }[]) {
-    if (!op.identificacao_n_cod_op || !op.loja) {
-      falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida' })
-      continue
+  await comLimiteDeConcorrencia(
+    (linhas ?? []) as unknown as { id: number; identificacao_n_cod_op: number | null; loja: LojaOmie }[],
+    CONCORRENCIA_OMIE,
+    async (op) => {
+      if (!op.identificacao_n_cod_op || !op.loja) {
+        falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida' })
+        return
+      }
+      try {
+        await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op)
+        await supabase
+          .from('ordens_producao')
+          .update({ concluida: false, dt_conclusao_real: null, updated_at: new Date().toISOString() })
+          .eq('id', op.id)
+          .eq('loja_id', lojaId)
+        sucesso++
+      } catch (e) {
+        falhas.push({ id: op.id, error: e instanceof Error ? e.message : 'Falha ao reverter no Omie' })
+      }
     }
-    try {
-      await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op)
-      await supabase
-        .from('ordens_producao')
-        .update({ concluida: false, dt_conclusao_real: null, updated_at: new Date().toISOString() })
-        .eq('id', op.id)
-        .eq('loja_id', lojaId)
-      sucesso++
-    } catch (e) {
-      falhas.push({ id: op.id, error: e instanceof Error ? e.message : 'Falha ao reverter no Omie' })
-    }
-  }
+  )
 
   if (sucesso > 0) await registrarAuditoria('reverter', 'ordem de produção', null, `${sucesso} OP(s) em lote`)
   revalidatePath('/ordem-producao')
