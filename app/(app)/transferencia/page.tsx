@@ -267,8 +267,11 @@ export default async function TransferenciaPage({
               const origem = localMap.get(t.codigo_local_origem) || t.codigo_local_origem
               const destino = localMap.get(t.codigo_local_destino) || t.codigo_local_destino
               return (
-                <span>
-                  <span className="num text-text-muted">#{t.id}</span> {origem} {' → '} {destino}
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span className="num text-text-muted">#{t.id}</span>
+                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[12px] text-text-muted">{origem}</span>
+                  <span className="text-text-muted">→</span>
+                  <span className="rounded bg-ok/15 px-1.5 py-0.5 text-[12px] font-medium text-ok">{destino}</span>
                 </span>
               )
             },
