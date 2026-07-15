@@ -47,6 +47,22 @@ export async function syncPrevisaoVenda(loja: LojaOmie) {
 
       const saidas = await buscarSaidasPeriodo(loja, fmtBR(iniAnt), fmtBR(fimAnt))
 
+      // Triangulacao: produto que trocou de marca/fornecedor (ex.: Heineken ->
+      // Spaten) nao tem venda propria no periodo comparado -- usa o historico
+      // do produto substituto cadastrado em produto_substituicoes, se houver.
+      const { data: substituicoes } = await supabase
+        .from('produto_substituicoes')
+        .select('n_cod_prod, substitui_n_cod_prod')
+        .eq('loja_id', loja.id)
+
+      for (const sub of substituicoes ?? []) {
+        const proprio = saidas.get(sub.n_cod_prod)
+        if (proprio == null || proprio === 0) {
+          const doSubstituto = saidas.get(sub.substitui_n_cod_prod)
+          if (doSubstituto != null) saidas.set(sub.n_cod_prod, doSubstituto)
+        }
+      }
+
       const periodoIni = isoDate(iniAnt)
       const periodoFim = isoDate(fimAnt)
       for (const [nCodProd, qtde] of saidas.entries()) {
