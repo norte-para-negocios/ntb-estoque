@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -253,7 +254,15 @@ export default async function RelatorioComprasPage({
                 {linhas.map((l) => (
                   <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
                     <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}>
-                      <div className="max-w-[140px] truncate">{l.rotulo}</div>
+                      <div className="max-w-[140px] truncate">
+                        {dim === 'produto' ? (
+                          <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotulo)}`} className="hover:underline">
+                            {l.rotulo}
+                          </Link>
+                        ) : (
+                          l.rotulo
+                        )}
+                      </div>
                     </td>
                     {meses.map((m) => (
                       <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>
