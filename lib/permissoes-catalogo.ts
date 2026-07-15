@@ -124,6 +124,15 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Produtos Substitutos',
+    grupo: 'Cadastros',
+    permissoes: [
+      { nome: 'Produto Substituicoes', label: 'Acessar' },
+      { nome: 'Produto Substituicoes - Criar', label: 'Criar' },
+      { nome: 'Produto Substituicoes - Excluir', label: 'Excluir' },
+    ],
+  },
+  {
     modulo: 'Fornecedores',
     grupo: 'Cadastros',
     permissoes: [
@@ -156,6 +165,7 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/local-estoque': 'Locais de Estoque',
   '/familia': 'Familias',
   '/categoria-contabil': 'Categorias Contabeis',
+  '/produto-substituicao': 'Produto Substituicoes',
   '/fornecedor': 'Fornecedores',
   // /sintegra puxa fornecedor/cliente: exige uma das duas
   '/sintegra': 'Fornecedores',
