@@ -207,7 +207,7 @@ export default async function RelatorioFaturamentoPage({
               <SyncButton
                 endpoint="/api/sync/faturamento"
                 label="Atualizar"
-                title="Puxa tipo e família direto dos cupons fiscais do Omie. Ainda não roda sozinho: clique aqui sempre que quiser atualizar."
+                title="Puxa tipo e família direto dos cupons fiscais do Omie. Já roda sozinho todo dia de madrugada; clique aqui pra atualizar na hora."
               />
               <ImportarFaturamento />
             </>
