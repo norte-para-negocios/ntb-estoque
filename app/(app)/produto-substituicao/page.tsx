@@ -28,7 +28,7 @@ export default async function ProdutoSubstituicaoPage() {
 
   const { data: todosProdutos } = await supabase
     .from('produtos')
-    .select('n_cod_prod, descricao')
+    .select('n_cod_prod:codigo_produto, descricao')
     .eq('loja_id', lojaId)
     .order('descricao')
 
