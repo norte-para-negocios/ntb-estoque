@@ -87,6 +87,30 @@ no topo deste arquivo (só leem Supabase, perdem dado silenciosamente além
 dos 90 dias) — isso é o essencial da fase final, não um backfill novo do
 zero.
 
+## Leitura híbrida dos relatórios de NF (Compras, Auditoria Fiscal, Indicadores) — 2026-07-17
+
+Esses 3 relatórios liam só o Supabase (janela de 90 dias) e perdiam
+silenciosamente jan–abril. Agora usam leitura híbrida via
+`lib/relatorio-frio-nf.ts`: quando o período pedido começa antes do corte
+de 90 dias, a fatia antiga vem do Contabo (endpoints `/nota_fiscal_items`
++ `/notas_fiscais`) e é reagregada em JS, espelhando fielmente o
+WHERE/GROUP BY das RPCs `relatorio_compras_*` (migration 075) e
+`relatorio_auditoria_fiscal_*` (076). Mesmo padrão do precedente
+`agregarMovimentacaoJS`. **Se essas RPCs mudarem, replicar a mudança em
+`relatorio-frio-nf.ts` também.** Validado: a agregação JS bateu exato com
+o SQL equivalente (R$173.463,56 / 135 notas, loja 2, jan–abr).
+
+**Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
+Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
+linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
+`codigo_local_estoque`). Backfill retroativo puxou tudo de novo do Omie
+(`ListarRecebimentos`, `cExibirDetalhes=S`, desde 01/07/2025) e fez
+`update` só nas linhas existentes (nunca insert/delete). O
+`prune` cron **não apaga NF** (só webhooks + integration_attempts), então
+não há risco de o buraco voltar por poda. Se `full_object` voltar a faltar
+no Contabo no futuro (ex.: nova cópia de histórico que não traga o JSONB),
+rodar de novo um backfill no mesmo molde (script foi ad-hoc, fora do repo).
+
 ### Limitações conhecidas
 
 - `webhooks` anteriores a 2026-07-05 foram perdidos pelo prune de 7 dias que já
