@@ -17,6 +17,7 @@ import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 
@@ -59,6 +60,8 @@ export default async function NotaFiscalPage({
     page?: string
     ord?: string
     dir?: string
+    familia?: string
+    local?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -108,43 +111,38 @@ export default async function NotaFiscalPage({
   // Resolvido ANTES da query para que lista e totais reusem o mesmo conjunto de ids.
   // tipo vem como lista separada por virgula (multi-select) na URL.
   const tiposArr = valoresMulti(params.tipo)
+  const familiasArr = valoresMulti(params.familia)
+  const localCod = params.local && !Number.isNaN(Number(params.local)) ? Number(params.local) : null
   let notaIds: number[] | null = null
-  if (tiposArr.length || params.produto) {
-    if (tiposArr.length) {
-      const { data: prodCodigos } = await supabase
-        .from('produtos')
-        .select('codigo_produto')
-        .eq('loja_id', lojaId)
-        .in('tipo_item', tiposArr)
-
-      const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
-
+  if (tiposArr.length || familiasArr.length || params.produto || localCod !== null) {
+    let codigos: string[] | null = null
+    if (tiposArr.length || familiasArr.length) {
+      let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
+      if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
+      if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
+      const { data: prodCodigos } = await prodQuery
+      codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
       if (codigos.length === 0) {
         notaIds = []
-      } else {
-        let itemQuery = supabase
-          .from('nota_fiscal_items')
-          .select('nota_fiscal_id')
-          .eq('loja_id', lojaId)
-          .in('produto_codigo', codigos)
-        if (params.produto) {
-          const p = escapeIlikeOr(params.produto)
-          itemQuery = itemQuery.or(
-            `c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`,
-          )
-        }
-        const { data: itemRows } = await itemQuery
-        notaIds = Array.from(
-          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
-        )
       }
-    } else if (params.produto) {
-      const p = escapeIlikeOr(params.produto)
-      const { data: itemRows } = await supabase
+    }
+
+    if (notaIds === null) {
+      let itemQuery = supabase
         .from('nota_fiscal_items')
         .select('nota_fiscal_id')
         .eq('loja_id', lojaId)
-        .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+      if (codigos) itemQuery = itemQuery.in('produto_codigo', codigos)
+      if (params.produto) {
+        const p = escapeIlikeOr(params.produto)
+        itemQuery = itemQuery.or(
+          `c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`,
+        )
+      }
+      if (localCod !== null) {
+        itemQuery = itemQuery.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
+      }
+      const { data: itemRows } = await itemQuery
       notaIds = Array.from(
         new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
       )
@@ -271,6 +269,15 @@ export default async function NotaFiscalPage({
   if (params.produto) relatorioParams.set('produto', params.produto)
   if (params.categoria) relatorioParams.set('categoria', params.categoria)
 
+  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
+
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
     { tipo: 'data', nome: 'data_final', label: 'Data Final' },
@@ -286,6 +293,18 @@ export default async function NotaFiscalPage({
       ],
     },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'multi-select',
+      nome: 'familia',
+      label: 'Família',
+      opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })),
+    },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
     { tipo: 'texto', nome: 'natureza', label: 'Natureza da operacao' },
     { tipo: 'texto', nome: 'produto', label: 'Produto' },
     {
@@ -318,6 +337,8 @@ export default async function NotaFiscalPage({
                   natureza: params.natureza ?? '',
                   produto: params.produto ?? '',
                   categoria: params.categoria ?? '',
+                  familia: params.familia ?? '',
+                  local: params.local ?? '',
                 }}
                 persistirEm="/nota-fiscal"
               />
