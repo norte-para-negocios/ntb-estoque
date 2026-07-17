@@ -9,6 +9,8 @@ import { ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 import { FiltroDataMovimentos } from '@/components/movimentacoes/FiltroDataMovimentos'
 import { FiltroLocalMovimentos } from '@/components/movimentacoes/FiltroLocalMovimentos'
+import { FiltroFamiliaMovimentos } from '@/components/movimentacoes/FiltroFamiliaMovimentos'
+import { FiltroTipoMovimentos } from '@/components/movimentacoes/FiltroTipoMovimentos'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import {
@@ -34,7 +36,7 @@ function fmtQtd(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
 }
 
-type SP = { data_inicio?: string; data_final?: string; produto?: string; local?: string }
+type SP = { data_inicio?: string; data_final?: string; produto?: string; local?: string; familia?: string; tipo?: string }
 
 type LinhaDetalhe = {
   chave: string
@@ -81,16 +83,23 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   const fim = sp.data_final || sp.data_inicio || hojeISO
   const localFiltro = sp.local ? Number(sp.local) : null
 
-  const [{ data: locaisRaw }, podeCriar] = await Promise.all([
+  const [{ data: locaisRaw }, { data: familiasRaw }, podeCriar] = await Promise.all([
     supabase
       .from('local_estoques')
       .select('codigo_local_estoque, descricao')
       .eq('loja_id', lojaId)
       .neq('inativo', 'S')
       .order('descricao'),
+    supabase
+      .from('familias')
+      .select('nome')
+      .eq('loja_id', lojaId)
+      .eq('inativo', false)
+      .order('nome'),
     requirePermissao(lojaId, 'Movimentacoes - Criar'),
   ])
   const locais = (locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null }[]
+  const familias = ((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome)
 
   const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
   let movDetalhes: LinhaDetalhe[] = []
@@ -114,8 +123,21 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       .limit(100)
 
     idsProdDetalhes = [...new Set((prodsMatch ?? []).map((p) => Number(p.codigo_produto)).filter(Boolean))]
+
+    // Filtro adicional de familia/tipo: restringe os produtos ja achados pela busca.
+    if ((sp.familia || sp.tipo) && idsProdDetalhes.length) {
+      let fq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).in('codigo_produto', idsProdDetalhes)
+      if (sp.familia) fq = fq.eq('descricao_familia', sp.familia)
+      if (sp.tipo) fq = fq.eq('tipo_item', sp.tipo)
+      const { data: prodsFiltro } = await fq
+      const codigosFiltro = new Set((prodsFiltro ?? []).map((p) => Number(p.codigo_produto)))
+      idsProdDetalhes = idsProdDetalhes.filter((id) => codigosFiltro.has(id))
+    }
+
     if (idsProdDetalhes.length === 1) {
-      const p = (prodsMatch ?? [])[0] as { codigo_produto: number; codigo: string; descricao: string } | undefined
+      const p = (prodsMatch ?? []).find((x) => Number(x.codigo_produto) === idsProdDetalhes[0]) as
+        | { codigo_produto: number; codigo: string; descricao: string }
+        | undefined
       if (p) produtoUnico = { id_prod: Number(p.codigo_produto), codigo: p.codigo, descricao: p.descricao }
     }
 
@@ -329,6 +351,8 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
         <FiltroDataMovimentos ini={ini} fim={fim} />
         <FiltroLocalMovimentos locais={locais} valorAtual={sp.local ?? ''} />
+        <FiltroFamiliaMovimentos familias={familias} valorAtual={sp.familia ?? ''} />
+        <FiltroTipoMovimentos valorAtual={sp.tipo ?? ''} />
         {podeCriar && produtoUnico && (
           <NovoAjusteManual locais={locais} produto={produtoUnico} />
         )}
