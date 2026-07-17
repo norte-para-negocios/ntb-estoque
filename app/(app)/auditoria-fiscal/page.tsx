@@ -30,7 +30,7 @@ const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -66,6 +66,7 @@ export default async function AuditoriaFiscalPage({
     const { data } = await supabase
       .rpc('relatorio_auditoria_fiscal_itens', {
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel,
+        p_fornecedor: sp.fornecedor || null,
       })
       .range(0, 299)
     itensSel = (data ?? []) as LinhaItem[]
@@ -74,6 +75,7 @@ export default async function AuditoriaFiscalPage({
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor (só no detalhe do CFOP)' },
   ]
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -98,7 +100,7 @@ export default async function AuditoriaFiscalPage({
               <FiltrosGaveta
                 basePath="/auditoria-fiscal"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', fornecedor: sp.fornecedor ?? '' }}
                 persistirEm="/auditoria-fiscal"
               />
               {linhas.length > 0 && (
