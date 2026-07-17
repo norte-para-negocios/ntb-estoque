@@ -19,6 +19,7 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { complementarMovimentos } from '@/lib/historico-contabo'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 
 const POR_PAGINA = 50
 
@@ -34,6 +35,7 @@ export default async function TransferenciaPage({
     motivo?: string
     local?: string
     page?: string
+    produto?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -63,10 +65,14 @@ export default async function TransferenciaPage({
   const familiasArr = valoresMulti(sp.familia)
   const tiposArr = valoresMulti(sp.tipo)
   let idsFiltrados: number[] | null = null
-  if (familiasArr.length || tiposArr.length) {
+  if (familiasArr.length || tiposArr.length || sp.produto) {
     let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
     if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
     if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
+    if (sp.produto) {
+      const termo = escapeIlikeOr(sp.produto)
+      prodQuery = prodQuery.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+    }
     const { data: prods } = await prodQuery
     const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
 
@@ -163,6 +169,7 @@ export default async function TransferenciaPage({
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     {
       tipo: 'multi-select',
       nome: 'familia',
@@ -216,6 +223,7 @@ export default async function TransferenciaPage({
                 defaults={{
                   data_inicio: sp.data_inicio ?? '',
                   data_final: sp.data_final ?? '',
+                  produto: sp.produto ?? '',
                   familia: sp.familia ?? '',
                   tipo: sp.tipo ?? '',
                   status: sp.status ?? '',
