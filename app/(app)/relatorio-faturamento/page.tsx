@@ -20,6 +20,7 @@ const DIMS = [
   { value: 'tipo', label: 'Tipo' },
   { value: 'familia', label: 'Família' },
   { value: 'forma_pgto', label: 'Forma de pgto' },
+  { value: 'produto', label: 'Produto' },
 ] as const
 
 const CHIPS_PERIODO = [
@@ -97,7 +98,8 @@ export default async function RelatorioFaturamentoPage({
   const tipoFiltro = valoresMulti(sp.tipo)
   const familiaFiltro = valoresMulti(sp.familia)
   const formaPgtoFiltro = valoresMulti(sp.forma_pgto)
-  const rotulosFiltro = dim === 'tipo' ? tipoFiltro : dim === 'familia' ? familiaFiltro : formaPgtoFiltro
+  const rotulosFiltro =
+    dim === 'tipo' ? tipoFiltro : dim === 'familia' ? familiaFiltro : dim === 'forma_pgto' ? formaPgtoFiltro : []
 
   const supabase = createServiceClient()
   const [matriz, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
