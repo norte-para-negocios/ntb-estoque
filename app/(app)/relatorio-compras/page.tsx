@@ -62,6 +62,8 @@ export default async function RelatorioComprasPage({
     tipo?: string
     fornecedor?: string
     cfop?: string
+    produto?: string
+    local?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -80,11 +82,15 @@ export default async function RelatorioComprasPage({
   const tiposSel = valoresMulti(sp.tipo)
   const cfopsSel = valoresMulti(sp.cfop)
   const fornecedor = sp.fornecedor || null
+  const produto = sp.produto || null
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
   const filtros = {
     p_familias: arrOrNull(familiasSel),
     p_tipos: arrOrNull(tiposSel),
     p_fornecedor: fornecedor,
     p_cfops: arrOrNull(cfopsSel),
+    p_produto: produto,
+    p_local: localCod,
   }
 
   const supabase = await createClient()
@@ -134,7 +140,14 @@ export default async function RelatorioComprasPage({
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
   const dimLabel = DIMS.find((d) => d.value === dim)?.label ?? 'Item'
 
-  const familias = await buscarFamilias()
+  const [familias, { data: locaisRaw }] = await Promise.all([
+    buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
   // Opções de CFOP: só os que apareceram no período (bonificação/comodato já não
   // aparecem aqui, pois a RPC os exclui sempre; não contam como compra).
   const opcoesCfop = ((cfopDimRaw ?? []) as { rotulo: string }[]).map((r) => ({
@@ -144,10 +157,17 @@ export default async function RelatorioComprasPage({
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de mercadoria', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
     { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor (nome)' },
     { tipo: 'multi-select', nome: 'cfop', label: 'CFOP', opcoes: opcoesCfop },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   const exportParams = new URLSearchParams({ data_inicio: ini, data_final: fim, dim })
@@ -175,6 +195,8 @@ export default async function RelatorioComprasPage({
                 defaults={{
                   data_inicio: sp.data_inicio ?? '',
                   data_final: sp.data_final ?? '',
+                  produto: sp.produto ?? '',
+                  local: sp.local ?? '',
                   tipo: sp.tipo ?? '',
                   familia: sp.familia ?? '',
                   fornecedor: sp.fornecedor ?? '',

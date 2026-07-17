@@ -27,7 +27,7 @@ const corMargem = (m: number) => (m >= 60 ? 'text-ok' : m >= 40 ? 'text-text' : 
 export default async function RelatorioMargemPage({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; familia?: string; tipo?: string }>
+  searchParams: Promise<{ busca?: string; familia?: string; tipo?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -38,17 +38,38 @@ export default async function RelatorioMargemPage({
   const tiposArr = valoresMulti(sp.tipo)
 
   const supabase = createServiceClient()
-  const [{ data: rowsRaw }, { data: metaRow }, { data: produtosRaw }] = await Promise.all([
+  const [{ data: rowsRaw }, { data: metaRow }, { data: produtosRaw }, { data: locaisRaw }] = await Promise.all([
     supabase.from('margem_importada').select('codigo, descricao, familia, mes, pdv, cmc, margem').eq('loja_id', lojaId),
     supabase.from('margem_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     // margem_importada não tem "tipo" (só vem no export do Omie): cruza por código
-    // com produtos pra poder filtrar por tipo de item.
-    supabase.from('produtos').select('codigo, tipo_item').eq('loja_id', lojaId),
+    // com produtos pra poder filtrar por tipo de item (e por local, via posicao_estoques).
+    supabase.from('produtos').select('codigo, tipo_item, codigo_produto').eq('loja_id', lojaId),
+    supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
   const rows = (rowsRaw ?? []) as Row[]
   const tipoPorCodigo = new Map<string, string | null>()
   for (const p of (produtosRaw ?? []) as { codigo: string | null; tipo_item: string | null }[]) {
     if (p.codigo) tipoPorCodigo.set(p.codigo, p.tipo_item)
+  }
+
+  // Local de estoque: margem_importada nao tem local (o export do Omie e por
+  // produto/mes, loja inteira) — proxy: restringe aos produtos que tem posicao
+  // de estoque no local escolhido (mesmo padrao de relatorio-movimentacao).
+  const localSel = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
+  let codigosNoLocal: Set<string> | null = null
+  if (localSel.length) {
+    const { data: pos } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', localSel)
+    const codProds = new Set((pos ?? []).map((p) => Number(p.n_cod_prod)))
+    codigosNoLocal = new Set(
+      ((produtosRaw ?? []) as { codigo: string | null; codigo_produto: number | null }[])
+        .filter((p) => p.codigo_produto != null && codProds.has(Number(p.codigo_produto)))
+        .map((p) => p.codigo as string)
+        .filter(Boolean)
+    )
   }
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -86,6 +107,7 @@ export default async function RelatorioMargemPage({
     if (busca && !(p.descricao ?? '').toLowerCase().includes(busca) && !p.codigo.toLowerCase().includes(busca)) return false
     if (familiasArr.length && !familiasArr.includes(p.familia ?? '')) return false
     if (tiposArr.length && !tiposArr.includes(tipoPorCodigo.get(p.codigo) ?? '')) return false
+    if (codigosNoLocal !== null && !codigosNoLocal.has(p.codigo)) return false
     return true
   })
   const validos = produtos.filter((p) => margemValida(p.margem)).sort((a, b) => Number(a.margem) - Number(b.margem))
@@ -97,6 +119,12 @@ export default async function RelatorioMargemPage({
     { tipo: 'texto', nome: 'busca', label: 'Produto (nome ou código)' },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiaOpcoes },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
+    {
+      tipo: 'multi-select',
+      nome: 'local',
+      label: 'Local de estoque (produtos com estoque no local)',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   return (
@@ -112,7 +140,7 @@ export default async function RelatorioMargemPage({
               <FiltrosGaveta
                 basePath="/relatorio-margem"
                 campos={campos}
-                defaults={{ busca: sp.busca ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '' }}
+                defaults={{ busca: sp.busca ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '', local: sp.local ?? '' }}
                 persistirEm="/relatorio-margem"
               />
               <a href="/relatorio-margem/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: margem por produto (com filtros)">

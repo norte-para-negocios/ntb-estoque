@@ -44,13 +44,14 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   // Mapa produto: codigo_produto -> { tipo, familia }.
   const { data: prods } = await supabase
     .from('produtos')
-    .select('codigo_produto, tipo_item, descricao_familia')
+    .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
     .eq('loja_id', loja.id)
-  const mapProd = new Map<number, { tipo: string | null; familia: string | null }>()
+  const mapProd = new Map<number, { tipo: string | null; familia: string | null; nome: string }>()
   for (const p of prods ?? []) {
     mapProd.set(Number(p.codigo_produto), {
       tipo: p.tipo_item as string | null,
       familia: p.descricao_familia as string | null,
+      nome: (p.descricao as string | null) || (p.codigo as string | null) || String(p.codigo_produto),
     })
   }
 
@@ -93,6 +94,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
           const info = it.idProduto != null ? mapProd.get(Number(it.idProduto)) : undefined
           add('tipo', info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado', mesISO, v)
           add('familia', info?.familia || 'Sem família', mesISO, v)
+          add('produto', info?.nome || 'Produto não identificado', mesISO, v)
         }
       }
       pagina++
@@ -106,7 +108,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     .from('faturamento_importado')
     .delete()
     .eq('loja_id', loja.id)
-    .in('dimensao', ['tipo', 'familia'])
+    .in('dimensao', ['tipo', 'familia', 'produto'])
   if (delErro) throw new Error(delErro.message)
 
   const rows = [...acc.entries()].map(([k, valor]) => {

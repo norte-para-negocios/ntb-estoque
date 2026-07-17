@@ -96,14 +96,26 @@ export default async function RelatorioMovimentacaoPage({
     const opsSel = valoresMulti(sp.op)
     const locsSel = valoresMulti(sp.loc)
     const sentSel = valoresMulti(sp.sent).filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
+    const familiasSel = valoresMulti(sp.familia)
+    const tiposSel = valoresMulti(sp.tipo)
+    // Periodo: movimentacao_operacao guarda so 'YYYY-MM' (sem dia) — o filtro tem
+    // granularidade de MES; o dia escolhido no seletor e ignorado de proposito.
+    const mesIniOp = sp.data_inicio ? sp.data_inicio.slice(0, 7) : null
+    const mesFimOp = sp.data_final ? sp.data_final.slice(0, 7) : null
     const dim = sp.dim === 'local' ? 'local' : sp.dim === 'tipo_sped' ? 'tipo_sped' : 'familia'
     const origens = [...new Set(rows.map((r) => r.origem))].sort()
     const locais = [...new Set(rows.map((r) => r.local))].sort()
+    const familiasOper = [...new Set(rows.map((r) => r.familia))].filter(Boolean).sort()
+    const tiposSped = [...new Set(rows.map((r) => r.tipo_sped))].filter(Boolean).sort()
 
     const campos: CampoFiltro[] = [
       { tipo: 'multi-select', nome: 'op', label: 'Operação', opcoes: origens.map((o) => ({ value: o, label: o })) },
       { tipo: 'multi-select', nome: 'loc', label: 'Local de estoque', opcoes: locais.map((l) => ({ value: l, label: l })) },
       { tipo: 'multi-select', nome: 'sent', label: 'Sentido', opcoes: [{ value: 'E', label: 'Entrada' }, { value: 'S', label: 'Saída' }] },
+      { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOper.map((f) => ({ value: f, label: f })) },
+      { tipo: 'multi-select', nome: 'tipo', label: 'Tipo (SPED)', opcoes: tiposSped.map((t) => ({ value: t, label: t })) },
+      { tipo: 'data', nome: 'data_inicio', label: 'Mês inicial (dia é ignorado)' },
+      { tipo: 'data', nome: 'data_final', label: 'Mês final (dia é ignorado)' },
     ]
 
     const header = (
@@ -118,7 +130,7 @@ export default async function RelatorioMovimentacaoPage({
               <FiltrosGaveta
                 basePath="/relatorio-movimentacao"
                 campos={campos}
-                defaults={{ op: sp.op ?? '', loc: sp.loc ?? '', sent: sp.sent ?? '' }}
+                defaults={{ op: sp.op ?? '', loc: sp.loc ?? '', sent: sp.sent ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '', data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
@@ -172,7 +184,11 @@ export default async function RelatorioMovimentacaoPage({
     const filtradas = rows.filter((r) =>
       (!opsSel.length || opsSel.includes(r.origem)) &&
       (!locsSel.length || locsSel.includes(r.local)) &&
-      (!sentSel.length || sentSel.includes(r.sentido))
+      (!sentSel.length || sentSel.includes(r.sentido)) &&
+      (!familiasSel.length || familiasSel.includes(r.familia)) &&
+      (!tiposSel.length || tiposSel.includes(r.tipo_sped)) &&
+      (!mesIniOp || r.mes >= mesIniOp) &&
+      (!mesFimOp || r.mes <= mesFimOp)
     )
     // Se o recorte ficou só com PDV-saída (valor lixo), a matriz mostra QUANTIDADE.
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido))
