@@ -10,6 +10,7 @@ import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
 import { btnClass } from '@/components/ui-kit/Button'
 import { ShieldCheck, X, Download } from 'lucide-react'
@@ -30,7 +31,7 @@ const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string; produto?: string; familia?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -41,7 +42,12 @@ export default async function AuditoriaFiscalPage({
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
 
   const supabase = createServiceClient()
-  const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', { p_loja_id: lojaId, p_ini: ini, p_fim: fim })
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
+    p_loja_id: lojaId, p_ini: ini, p_fim: fim,
+    p_produto: sp.produto || null, p_familia: sp.familia || null,
+    p_fornecedor: sp.fornecedor || null, p_local: localCod,
+  })
   const linhas = (cfopRaw ?? []) as LinhaCFOP[]
 
   const totItens = linhas.reduce((s, l) => s + Number(l.itens), 0)
@@ -67,15 +73,33 @@ export default async function AuditoriaFiscalPage({
       .rpc('relatorio_auditoria_fiscal_itens', {
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel,
         p_fornecedor: sp.fornecedor || null,
+        p_produto: sp.produto || null, p_familia: sp.familia || null, p_local: localCod,
       })
       .range(0, 299)
     itensSel = (data ?? []) as LinhaItem[]
   }
 
+  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
+
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
-    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor (só no detalhe do CFOP)' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -100,7 +124,7 @@ export default async function AuditoriaFiscalPage({
               <FiltrosGaveta
                 basePath="/auditoria-fiscal"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', fornecedor: sp.fornecedor ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', fornecedor: sp.fornecedor ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '', local: sp.local ?? '' }}
                 persistirEm="/auditoria-fiscal"
               />
               {linhas.length > 0 && (
