@@ -11,7 +11,7 @@ function foraDaJanelaQuente(dataInicio?: string | null): boolean {
   return dataInicio < limiteJanelaQuente()
 }
 
-async function buscarFrio<T>(
+export async function buscarFrio<T>(
   caminho: string,
   params: Record<string, string | number | undefined>
 ): Promise<T[]> {

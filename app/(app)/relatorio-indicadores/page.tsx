@@ -9,6 +9,8 @@ import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { type CampoFiltro, valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { buscarFamilias } from '@/lib/actions/produto'
+import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { buscarItensNFFrio, filtrarItensCompras, agregarComprasMatriz } from '@/lib/relatorio-frio-nf'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -115,8 +117,13 @@ export default async function RelatorioIndicadoresPage({
   const compFim = filtroFim ?? `${anoFim}-12-31`
   // dim=cfop (em vez de tipo) pra poder excluir Ativo imobilizado da conta: é
   // investimento, não gasto operacional (pedido do Ramon, reunião 06/07).
+  // Janela quente cobre ~90 dias; RPC clampa o início, e o pedaço antigo vem
+  // do Contabo reagregado em JS (lib/relatorio-frio-nf.ts) — sem isso o lado
+  // Compras da razão ficava truncado, distorcendo o indicador principal.
+  const corte = limiteJanelaQuente()
+  const compIniRpc = compIni < corte ? corte : compIni
   const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
-    p_loja_id: lojaId, p_ini: compIni, p_fim: compFim, p_dim: 'cfop',
+    p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',
     p_familias: familiasSel.length ? familiasSel : null,
     p_produto: produtoTermo,
   })
@@ -124,6 +131,25 @@ export default async function RelatorioIndicadoresPage({
   for (const r of comp) {
     if (descreverCFOP(r.rotulo).cat === 'Ativo imobilizado') continue
     comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+  }
+
+  // Complemento frio (Contabo) do lado Compras, para [compIni, corte).
+  if (compIni < corte) {
+    const { data: prodMetaRaw } = await supabase
+      .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
+    const meta = new Map<number, { tipo: string | null; familia: string | null }>()
+    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl })
+    const filtrados = filtrarItensCompras(itensFrios, {
+      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: null,
+    }, meta)
+    for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
+      if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue
+      comprasPorMes[l.mes] = (comprasPorMes[l.mes] ?? 0) + l.valor
+    }
   }
 
   const { data: metaRow } = await supabase

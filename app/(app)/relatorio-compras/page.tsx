@@ -16,6 +16,13 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { descreverCFOP } from '@/lib/cfop'
 import { buscarFamilias } from '@/lib/actions/produto'
+import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import {
+  buscarItensNFFrio,
+  filtrarItensCompras,
+  agregarComprasTotal,
+  agregarComprasMatriz,
+} from '@/lib/relatorio-frio-nf'
 import { ShoppingCart, Download } from 'lucide-react'
 
 // Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
@@ -107,14 +114,42 @@ export default async function RelatorioComprasPage({
     return todos
   }
 
+  // A janela quente (Supabase) só cobre ~90 dias; a RPC nunca deve pedir algo
+  // mais antigo (linhas já podadas), então clampa o início. A fatia antiga
+  // (ini < corte) vem do Contabo, reagregada em JS abaixo.
+  const corte = limiteJanelaQuente()
+  const iniRpc = ini < corte ? corte : ini
+
   const [{ data: totalRows }, matrizRaw, { data: cfopDimRaw }] = await Promise.all([
-    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
-    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
+    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros }),
+    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dim, ...filtros }),
     // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
-    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: 'cfop' }),
+    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop' }),
   ])
-  const total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
-  const nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
+  let total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
+  let nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
+
+  // Complemento frio (Contabo) para o pedaço [ini, corte). Reaproveita a
+  // reagregação em JS que espelha a RPC (lib/relatorio-frio-nf.ts).
+  if (ini < corte) {
+    const { data: prodMetaRaw } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+    const meta = new Map<number, { tipo: string | null; familia: string | null }>()
+    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    const filtrados = filtrarItensCompras(itensFrios, {
+      familias: familiasSel, tipos: tiposSel, fornecedor, cfops: cfopsSel, produto, local: localCod,
+    }, meta)
+    const totFrio = agregarComprasTotal(filtrados)
+    total += totFrio.valor
+    nNotas += totFrio.nNotas
+    for (const l of agregarComprasMatriz(filtrados, dim, meta)) matrizRaw.push(l)
+  }
 
   // Rótulo amigável conforme a dimensão (tipo -> nome do SPED; produto -> título limpo).
   const rotuloDe = (raw: string): string => {
