@@ -17,6 +17,8 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass, btnLinhaClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { escapeIlikeOr } from '@/lib/utils-busca'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 
 const POR_PAGINA = 50
 
@@ -35,6 +37,8 @@ export default async function InventarioPage({
     page?: string
     ord?: string
     dir?: string
+    produto?: string
+    local?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -62,9 +66,9 @@ export default async function InventarioPage({
     ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
   ].sort() as string[]
 
-  // Filtro de familia/tipo via inventario_items -> inventario_id
+  // Filtro de familia/tipo/produto via inventario_items -> inventario_id
   let idsFiltrados: number[] | null = null
-  if (sp.familia || sp.tipo) {
+  if (sp.familia || sp.tipo || sp.produto) {
     let codigosTipo: number[] | null = null
     if (sp.tipo) {
       const { data: prods } = await supabase
@@ -84,6 +88,10 @@ export default async function InventarioPage({
         .eq('loja_id', lojaId)
       if (sp.familia) itemQuery = itemQuery.eq('produto_familia', sp.familia)
       if (codigosTipo !== null) itemQuery = itemQuery.in('produto_codigo_produto', codigosTipo)
+      if (sp.produto) {
+        const termo = escapeIlikeOr(sp.produto)
+        itemQuery = itemQuery.or(`produto_descricao.ilike.%${termo}%,produto_codigo.ilike.%${termo}%`)
+      }
       const { data: items } = await itemQuery
       idsFiltrados = [
         ...new Set((items ?? []).map((i) => i.inventario_id).filter((v): v is number => v != null)),
@@ -105,6 +113,11 @@ export default async function InventarioPage({
   if (sp.status === 'F') query = query.eq('status', 'Finalizado')
   else if (sp.status === 'A') query = query.neq('status', 'Finalizado')
   if (idsFiltrados !== null) query = query.in('id', idsFiltrados.length ? idsFiltrados : [-1])
+  // Local de estoque: coluna direta em inventarios (multi-select).
+  const locaisArr = valoresMulti(sp.local)
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n))
+  if (locaisArr.length) query = query.in('codigo_local_estoque', locaisArr)
   query = query.range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
 
   const { data: inventariosRaw } = await query
@@ -118,7 +131,14 @@ export default async function InventarioPage({
     .neq('inativo', 'S')
     .order('descricao')
 
-  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+  // TODOS os locais (incl. inativos) pro filtro e pra exibir nome de inventário
+  // antigo feito num local hoje inativo (mesmo padrão de transferencia).
+  const { data: todosLocais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+
+  const localMap = new Map((todosLocais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
   // Responsavel de cada inventario: user_id -> nome (tabela profiles). Operacao
   // multi-usuario precisa saber quem fez a contagem.
@@ -149,6 +169,16 @@ export default async function InventarioPage({
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    {
+      tipo: 'multi-select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (todosLocais ?? [])
+        .slice()
+        .sort((a, b) => (a.descricao ?? '').localeCompare(b.descricao ?? '', 'pt-BR'))
+        .map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
     {
       tipo: 'select',
       nome: 'familia',
@@ -185,6 +215,8 @@ export default async function InventarioPage({
                   status: sp.status ?? '',
                   familia: sp.familia ?? '',
                   tipo: sp.tipo ?? '',
+                  produto: sp.produto ?? '',
+                  local: sp.local ?? '',
                 }}
                 persistirEm="/inventario"
               />
