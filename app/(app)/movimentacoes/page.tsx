@@ -1,4 +1,5 @@
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
@@ -37,13 +38,27 @@ export default async function MovimentacoesPage({
   // FiltrosGaveta só aparece no Histórico
   let campos: CampoFiltro[] = []
   if (aba === 'historico') {
-    const familias = await buscarFamilias()
+    const supabase = await createClient()
+    const [familias, { data: locaisRaw }] = await Promise.all([
+      buscarFamilias(),
+      supabase
+        .from('local_estoques')
+        .select('codigo_local_estoque, descricao')
+        .eq('loja_id', lojaId)
+        .order('descricao'),
+    ])
     campos = [
       { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
       { tipo: 'data', nome: 'data_final', label: 'Data final' },
       { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
       { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
       { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+      {
+        tipo: 'multi-select',
+        nome: 'local',
+        label: 'Local de estoque (produtos com estoque no local)',
+        opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+      },
     ]
   }
 
@@ -59,7 +74,7 @@ export default async function MovimentacoesPage({
               <FiltrosGaveta
                 basePath="/movimentacoes"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '', local: sp.local ?? '' }}
                 naoContar={['data_inicio', 'data_final']}
                 persistirEm="/movimentacoes"
               />

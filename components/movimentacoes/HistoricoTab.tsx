@@ -40,6 +40,7 @@ type SP = {
   modo?: string
   mov?: string
   page?: string
+  local?: string
 }
 
 type LinhaRaw = { cod_prod: number; codigo: string; descricao: string; data: string; entradas: number; saidas: number }
@@ -84,6 +85,20 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
     if (familiasArr.length) pq = pq.in('descricao_familia', familiasArr)
     const { data } = await pq
     codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+  }
+  // Local de estoque: movimentos_historico nao guarda local por movimento (o
+  // ListarMovimentos do Omie nao traz essa informacao) — restringe aos produtos
+  // que tem posicao de estoque no(s) local(is) escolhido(s), mesmo padrao proxy
+  // ja usado em relatorio-movimentacao (modo quantidade).
+  const locaisSel = valoresMulti(sp.local)
+  if (locaisSel.length) {
+    const { data } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', locaisSel.map(Number))
+    const codigosLocal = new Set((data ?? []).map((p) => p.n_cod_prod as number))
+    codigosFiltro = codigosFiltro === null ? [...codigosLocal] : codigosFiltro.filter((c) => codigosLocal.has(c))
   }
   const codigosIn = codigosFiltro ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
   const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
