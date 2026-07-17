@@ -1361,6 +1361,171 @@ git commit -m "feat(auditoria-fiscal): liga filtros de produto, familia e local 
 
 ---
 
+### Task 13: Movimentações (aba Histórico) — filtro de local de estoque via proxy
+
+**Files:**
+- Modify: `components/movimentacoes/HistoricoTab.tsx`
+- Modify: `app/(app)/movimentacoes/page.tsx`
+
+**Interfaces:** nenhuma nova. Usa o MESMO padrão proxy já existente em `relatorio-movimentacao/page.tsx` (linhas ~349-357): `movimentos_historico` não tem local por movimento, então o filtro restringe aos **produtos que têm posição de estoque no(s) local(is) escolhido(s)** via `posicao_estoques`.
+
+- [ ] **Step 1: Em `HistoricoTab.tsx`, intersectar `codigosFiltro` com os produtos do local**
+
+Ler o arquivo real primeiro pra achar onde `codigosFiltro`/`codigosIn` é resolvido (padrão tipo/família). Logo após essa resolução, adicionar (mesmo código do proxy já usado no relatório):
+```ts
+  const locaisSel = valoresMulti(sp.local)
+  if (locaisSel.length) {
+    const { data } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', locaisSel.map(Number))
+    const codigosLocal = new Set((data ?? []).map((p) => p.n_cod_prod as number))
+    codigosFiltro = codigosFiltro === null ? [...codigosLocal] : codigosFiltro.filter((c) => codigosLocal.has(c))
+  }
+```
+(ajustar nome da variável ao que o arquivo usa; o `sp.local` já existe no tipo de searchParams da página).
+
+- [ ] **Step 2: Adicionar o campo `local` ao `campos` do Histórico em `movimentacoes/page.tsx`**
+
+No bloco `if (aba === 'historico')` (linhas 39-48), buscar locais e adicionar o campo:
+```ts
+  if (aba === 'historico') {
+    const [familias, { data: locaisRaw }] = await Promise.all([
+      buscarFamilias(),
+      (await import('@/lib/supabase/server')).createClient().then((s) =>
+        s.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao')
+      ),
+    ])
+```
+> Na prática: usar o client Supabase da forma que a página já usa (se ela não instancia um, criar `const supabase = await createClient()` no topo, import de `@/lib/supabase/server`) — o snippet acima é ilustrativo do fetch; o ponto é buscar `local_estoques` e adicionar:
+```ts
+      {
+        tipo: 'multi-select',
+        nome: 'local',
+        label: 'Local de estoque (produtos com estoque no local)',
+        opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+      },
+```
+E em `defaults`: `local: sp.local ?? ''`.
+
+> O rótulo explicita a semântica proxy ("produtos com estoque no local"), igual ao comportamento já aceito no relatório de movimentação.
+
+- [ ] **Step 3: Verificação manual** — `/movimentacoes?local=<código>` filtra o histórico pros produtos daquele local.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add components/movimentacoes/HistoricoTab.tsx "app/(app)/movimentacoes/page.tsx"
+git commit -m "feat(movimentacoes): filtro de local de estoque no Historico (proxy por posicao)"
+```
+
+---
+
+### Task 14: Relatório de Margem — filtro de local de estoque via proxy
+
+**Files:**
+- Modify: `app/(app)/relatorio-margem/page.tsx`
+
+**Interfaces:** nenhuma. Mesmo proxy da Task 13.
+
+- [ ] **Step 1: Adicionar `local` ao searchParams, estender o select de produtos e filtrar**
+
+No tipo (linha 30): adicionar `local?: string`.
+
+O fetch de `produtos` (linha 46) hoje é `select('codigo, tipo_item')` — estender pra `select('codigo, tipo_item, codigo_produto')`.
+
+Após os fetches, resolver o set de produtos do local:
+```ts
+  const localSel = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
+  let codigosNoLocal: Set<string> | null = null
+  if (localSel.length) {
+    const { data: pos } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod')
+      .eq('loja_id', lojaId)
+      .in('codigo_local_estoque', localSel)
+    const codProds = new Set((pos ?? []).map((p) => p.n_cod_prod as number))
+    codigosNoLocal = new Set(
+      ((produtosRaw ?? []) as { codigo: string | null; codigo_produto: number | null }[])
+        .filter((p) => p.codigo_produto != null && codProds.has(Number(p.codigo_produto)))
+        .map((p) => p.codigo as string)
+        .filter(Boolean)
+    )
+  }
+```
+E no filtro client-side existente (linha 85-90), adicionar:
+```ts
+    if (codigosNoLocal !== null && !codigosNoLocal.has(p.codigo)) return false
+```
+
+- [ ] **Step 2: Campo em `campos` + `defaults`** — multi-select `local` com opções de `local_estoques` (buscar igual às outras telas), rótulo "Local de estoque (produtos com estoque no local)". `defaults`: `local: sp.local ?? ''`.
+
+- [ ] **Step 3: Verificação manual** — `/relatorio-margem?local=<código>` restringe a lista.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add "app/(app)/relatorio-margem/page.tsx"
+git commit -m "feat(relatorio-margem): filtro de local de estoque (proxy por posicao)"
+```
+
+---
+
+### Task 15: Relatório de Indicadores — filtros de família e produto (os dois lados da razão)
+
+**Files:**
+- Modify: `app/(app)/relatorio-indicadores/page.tsx`
+
+**Interfaces:**
+- Consumes: dimensão `'produto'` do faturamento (Task 8) e `p_produto` de `relatorio_compras_matriz` (Task 9). **Executar só depois das Tasks 8 e 9.**
+
+- [ ] **Step 1: Adicionar `familia`/`produto` ao searchParams e aos dois lados do cálculo**
+
+Tipo (linha 37): `searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string }>`.
+
+Lado Faturamento (linha 56): quando houver filtro, trocar a chamada:
+```ts
+  const familiasSel = valoresMulti(sp.familia)
+  const produtoTermo = sp.produto?.trim().toLowerCase() || null
+  let fat: LinhaMatriz[]
+  if (produtoTermo) {
+    // dimensao 'produto' existe desde a Task 8; filtra rotulos por texto client-side
+    const todos = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'produto' })
+    fat = todos.filter((r) => r.rotulo.toLowerCase().includes(produtoTermo))
+  } else if (familiasSel.length) {
+    fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'familia', p_rotulos: familiasSel })
+  } else {
+    fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
+  }
+```
+Lado Compras (linhas 99-101): adicionar os params equivalentes:
+```ts
+  const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
+    p_loja_id: lojaId, p_ini: compIni, p_fim: compFim, p_dim: 'cfop',
+    p_familias: familiasSel.length ? familiasSel : null,
+    p_produto: sp.produto?.trim() || null,
+  })
+```
+
+- [ ] **Step 2: Campos em `campos`** — `{ tipo: 'texto', nome: 'produto', label: 'Produto (nome)' }` e multi-select `familia` (opções via `buscarFamilias()`); `defaults` correspondentes. Adicionar uma nota visível na tela (texto pequeno) quando filtro ativo: "Indicadores filtrados — Compras e Faturamento restritos ao mesmo recorte".
+
+- [ ] **Step 3: Verificação manual** — `/relatorio-indicadores?familia=<real>`: os 4 KPIs mudam e continuam coerentes entre si (razão calculada sobre o mesmo recorte nos dois lados).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add "app/(app)/relatorio-indicadores/page.tsx"
+git commit -m "feat(relatorio-indicadores): filtros de familia e produto nos dois lados da razao"
+```
+
+---
+
+## Inviáveis confirmados com prova (não voltar a tentar sem dado novo)
+
+- **Faturamento × local de estoque**: chamada REAL à API `cupomfiscalconsultar` do Omie (2026-07-16, loja 5) — nenhuma chave contendo "local" em lugar nenhum do payload (cabeçalho, info, itens). O dado não existe na origem.
+- **Relatório de Movimentação (modo operação) × produto**: `movimentacao_operacao` foi importada já agregada (sem coluna de produto) — o dado foi perdido na importação do BD de 160MB; precisaria reimportar com granularidade de produto.
+
 ## Ordem sugerida de execução
 
-Tasks 1-6 e 8 são independentes entre si (podem ir em qualquer ordem, inclusive em paralelo — cada uma mexe num arquivo diferente). Task 7 precisa vir **antes** da Task 12 (as duas mexem em `auditoria-fiscal/page.tsx` em sequência — Task 12 assume o `searchParams`/`campos` já com `fornecedor` da Task 7). Task 9 precisa vir antes da Task 10 (migration antes da tela). Task 11 precisa vir antes da Task 12 (migration antes da tela) — ou seja, a ordem real da Auditoria Fiscal é **7 → 11 → 12**. Task 9/10 (Compras) são independentes do trio 7/11/12 (Auditoria Fiscal), mesmo mexendo em RPCs parecidas.
+Tasks 1-6, 8, 13 e 14 são independentes entre si (podem ir em qualquer ordem — cada uma mexe em arquivos diferentes; Task 4 e 13 mexem ambas em arquivos de movimentações mas em componentes distintos, executar em sequência pra evitar conflito em `movimentacoes/page.tsx`). Task 7 antes da Task 12 (mesmo arquivo em sequência). Task 9 antes da 10; Task 11 antes da 12 — ordem real da Auditoria Fiscal: **7 → 11 → 12**. Task 15 (Indicadores) só depois das Tasks 8 e 9 (depende da dimensão produto do faturamento e do p_produto de compras).
