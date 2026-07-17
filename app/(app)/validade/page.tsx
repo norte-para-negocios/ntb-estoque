@@ -46,7 +46,7 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
@@ -60,6 +60,14 @@ export default async function ValidadePage({
     : 7
 
   const supabase = await createClient()
+
+  // Local de estoque: coluna direta em ordens_producao.
+  const { data: locaisRaw } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+    .order('descricao')
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
 
   // Filtro por tipo + familia + busca de produto: resolve os codigos que batem em
   // TODOS os filtros e restringe as OPs a esses produtos. null = sem filtro.
@@ -81,6 +89,7 @@ export default async function ValidadePage({
     .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
+  if (localCod !== null) ordensQuery = ordensQuery.eq('identificacao_codigo_local_estoque', localCod)
   ordensQuery = vencidos
     ? ordensQuery.lt('validade', hojeMais(0)).order('validade', { ascending: false })
     : ordensQuery
@@ -102,9 +111,18 @@ export default async function ValidadePage({
         lojaId, validadeInicio: '0001-01-01', validadeFinal: hojeMais(-1),
       })
     : ordensRawQuentes ?? []
+  // Filtro de local aplicado tambem em JS: as linhas vindas do Contabo (modo
+  // vencidos) nao passaram pelo .eq() da query do Supabase. Linha quente (sem o
+  // campo no select) ja foi filtrada em SQL — passa direto.
+  const passaLocal = (o: object): boolean => {
+    if (localCod === null) return true
+    const v = (o as { identificacao_codigo_local_estoque?: number | null }).identificacao_codigo_local_estoque
+    return v === undefined || Number(v) === localCod
+  }
+
   // Esconde OPs sem saldo (quantidade 0): sem unidade nao ha o que vencer.
   const ordens = ordensRaw.filter(
-    (o) => Number(o.quantidade ?? o.identificacao_n_qtde ?? 0) > 0
+    (o) => Number(o.quantidade ?? o.identificacao_n_qtde ?? 0) > 0 && passaLocal(o)
   )
 
   // Resolver descrição/código/unidade dos produtos relacionados.
@@ -137,6 +155,7 @@ export default async function ValidadePage({
     if (codigosTipo !== null) {
       q = q.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
     }
+    if (localCod !== null) q = q.eq('identificacao_codigo_local_estoque', localCod)
     return q
   }
   const hoje0 = hojeMais(0)
@@ -164,6 +183,7 @@ export default async function ValidadePage({
   if (codigosTipo !== null) {
     vencidasQuery = vencidasQuery.in('identificacao_n_cod_produto', codigosTipo.length ? codigosTipo : [-1])
   }
+  if (localCod !== null) vencidasQuery = vencidasQuery.eq('identificacao_codigo_local_estoque', localCod)
   const { data: vencidasQuentesRaw } = await vencidasQuery
   const vencidasCompletas = await complementarOrdensProducao(vencidasQuentesRaw ?? [], {
     lojaId, validadeInicio: '0001-01-01', validadeFinal: hojeMais(-1),
@@ -171,7 +191,7 @@ export default async function ValidadePage({
   const cVencidos = vencidasCompletas.filter((o) => {
     const temSaldo = Number(o.quantidade ?? 0) > 0 || (o.quantidade == null && Number(o.identificacao_n_qtde ?? 0) > 0)
     const passaTipo = codigosTipo === null || codigosTipo.includes(o.identificacao_n_cod_produto as number)
-    return temSaldo && passaTipo
+    return temSaldo && passaTipo && passaLocal(o)
   }).length
   const contagemPeriodo: Record<number, number> = { 0: c0, 7: c7, 15: c15, 30: c30, 60: c60 }
 
@@ -179,6 +199,12 @@ export default async function ValidadePage({
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
     { tipo: 'select', nome: 'tipo', label: 'Tipo de produto', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   // Preserva tipo/familia/produto ao trocar o periodo (chips).
@@ -186,6 +212,7 @@ export default async function ValidadePage({
     sp.tipo && `tipo=${encodeURIComponent(sp.tipo)}`,
     sp.familia && `familia=${encodeURIComponent(sp.familia)}`,
     sp.produto && `produto=${encodeURIComponent(sp.produto)}`,
+    sp.local && `local=${encodeURIComponent(sp.local)}`,
   ]
     .filter(Boolean)
     .join('&')
@@ -201,7 +228,7 @@ export default async function ValidadePage({
           <FiltrosGaveta
             basePath="/validade"
             campos={campos}
-            defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '' }}
+            defaults={{ produto: sp.produto ?? '', tipo: sp.tipo ?? '', familia: sp.familia ?? '', local: sp.local ?? '' }}
           />
         }
       />
