@@ -7,7 +7,8 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
-import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { type CampoFiltro, valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -34,7 +35,7 @@ const corMeta = (pct: number) => (!Number.isFinite(pct) ? 'text-text-muted' : pc
 export default async function RelatorioIndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -42,22 +43,39 @@ export default async function RelatorioIndicadoresPage({
   const sp = await searchParams
   const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
   const filtroFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : null
+  const familiasSel = valoresMulti(sp.familia)
+  const produtoTermo = sp.produto?.trim() || null
+  const filtroAtivo = !!(familiasSel.length || produtoTermo)
 
+  const familiasOpcoes = await buscarFamilias()
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome)' },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
   ]
 
   const supabase = createServiceClient()
 
-  // Faturamento importado (vendas) por mês. (dim=tipo é pequeno, mas paginamos por
-  // robustez/consistência com o resto.) A RPC não aceita período (removido na
+  // Faturamento importado (vendas) por mês. A RPC não aceita período (removido na
   // migration 057); o filtro de data_inicio/data_final é aplicado aqui no app.
-  const fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
+  // Com filtro de produto/família ativo, muda a dimensão consultada pra restringir
+  // os DOIS lados da razão ao mesmo recorte (Compras recebe o equivalente abaixo).
+  let fat: LinhaMatriz[]
+  if (produtoTermo) {
+    // dimensao 'produto' e populada pelo sync do faturamento; filtra rotulos por texto.
+    const termoLower = produtoTermo.toLowerCase()
+    const todos = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'produto' })
+    fat = todos.filter((r) => r.rotulo.toLowerCase().includes(termoLower))
+  } else if (familiasSel.length) {
+    fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'familia', p_rotulos: familiasSel })
+  } else {
+    fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
+  }
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 
-  if (!fat.length) {
+  if (!fat.length && !filtroAtivo) {
     return (
       <div className="space-y-4">
         <ListaHeader>
@@ -90,14 +108,17 @@ export default async function RelatorioIndicadoresPage({
 
   // Compras (NF de entrada): mesmo período do filtro quando informado; senão, o
   // intervalo de anos do faturamento (comportamento padrão de sempre).
-  const anoIni = todosMeses[0].slice(0, 4)
-  const anoFim = todosMeses[todosMeses.length - 1].slice(0, 4)
+  const anoAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+  const anoIni = todosMeses.length ? todosMeses[0].slice(0, 4) : anoAtual
+  const anoFim = todosMeses.length ? todosMeses[todosMeses.length - 1].slice(0, 4) : anoAtual
   const compIni = filtroIni ?? `${anoIni}-01-01`
   const compFim = filtroFim ?? `${anoFim}-12-31`
   // dim=cfop (em vez de tipo) pra poder excluir Ativo imobilizado da conta: é
   // investimento, não gasto operacional (pedido do Ramon, reunião 06/07).
   const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: compIni, p_fim: compFim, p_dim: 'cfop',
+    p_familias: familiasSel.length ? familiasSel : null,
+    p_produto: produtoTermo,
   })
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) {
@@ -157,7 +178,7 @@ export default async function RelatorioIndicadoresPage({
               <FiltrosGaveta
                 basePath="/relatorio-indicadores"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '' }}
                 persistirEm="/relatorio-indicadores"
               />
               <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">
@@ -189,6 +210,11 @@ export default async function RelatorioIndicadoresPage({
         </span>
         {metaRow?.importado_em && (
           <span className="text-[13px] text-text-muted">Faturamento importado em {fmtQuando(metaRow.importado_em as string)}</span>
+        )}
+        {filtroAtivo && (
+          <span className="text-[13px] font-medium text-brand">
+            Indicadores filtrados — Compras e Faturamento restritos ao mesmo recorte
+          </span>
         )}
       </div>
 
