@@ -29,6 +29,11 @@ await p.fill('#password', 'claudeqa123456')
 await p.click('button[type=submit]')
 await p.waitForURL(/\/(home|resumo)/, { timeout: 20000 }).catch(() => {})
 
+async function esperarDrill(timeoutMs = 25000) {
+  await p.waitForURL((u) => u.toString().includes('drill='), { timeout: timeoutMs })
+  await p.waitForTimeout(1200)
+}
+
 async function ir(rota) {
   await p.goto(`${BASE}${rota}`, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await p.waitForTimeout(1500)
@@ -58,7 +63,7 @@ if (alvo) {
   await p.click(`tbody tr td a:text-is("${alvo.rotulo}")`).catch(async () => {
     await p.click(`tbody a:has-text("${alvo.rotulo.slice(0, 20)}")`)
   })
-  await p.waitForTimeout(1800)
+  await esperarDrill()
   ok('compras: drill família abre (URL tem drill=)', p.url().includes('drill='))
   linhas = await lerLinhas(true)
   const somaProdutos = linhas.reduce((s, l) => s + brl(l.total), 0)
@@ -72,7 +77,8 @@ if (alvo) {
   if (prod) {
     const valorProd = brl(prod.total)
     await p.click('tbody tr td a >> nth=0')
-    await p.waitForTimeout(1800)
+    await p.waitForURL((u) => /drill=.*(produto|%7C)/i.test(u.toString()), { timeout: 25000 })
+    await p.waitForTimeout(1500)
     const headers = await p.$$eval('thead th', (ths) => ths.map((t) => t.innerText.trim()))
     ok('compras: nível de itens abre (coluna NF)', headers.includes('NF'), headers.join(','))
     const totalItens = await p
@@ -86,7 +92,8 @@ if (alvo) {
     )
     // breadcrumb volta ao topo
     await p.click('nav[aria-label="Trilha do detalhamento"] a >> nth=0')
-    await p.waitForTimeout(1200)
+    await p.waitForURL((u) => !u.toString().includes('drill='), { timeout: 25000 })
+    await p.waitForTimeout(1000)
     ok('compras: breadcrumb volta ao topo', !p.url().includes('drill='))
   }
 }
@@ -98,7 +105,7 @@ const alvoFrio = linhas.find((l) => l.rotulo && !/Sem cadastro/.test(l.rotulo))
 if (alvoFrio) {
   const valorPai = brl(alvoFrio.total)
   await p.click(`tbody a:has-text("${alvoFrio.rotulo.slice(0, 20)}")`)
-  await p.waitForTimeout(2500)
+  await esperarDrill()
   const linhasFrio = await lerLinhas(true)
   const soma = linhasFrio.reduce((s, l) => s + brl(l.total), 0)
   ok(
@@ -113,7 +120,7 @@ await ir('/relatorio-compras?data_inicio=2026-01-01')
 const temSemCadastro = await p.$('tbody a:has-text("Sem cadastro de produto")')
 if (temSemCadastro) {
   await temSemCadastro.click()
-  await p.waitForTimeout(2000)
+  await esperarDrill()
   const linhasSem = await lerLinhas(true)
   ok('compras: drill "Sem cadastro" não-vazio', linhasSem.length > 0, `${linhasSem.length} produtos`)
 } else {
@@ -127,7 +134,7 @@ const tipoAlvo = linhas.find((l) => brl(l.total) > 0)
 if (tipoAlvo) {
   const valorPai = brl(tipoAlvo.total)
   await p.click(`tbody a:has-text("${tipoAlvo.rotulo.slice(0, 18)}")`)
-  await p.waitForTimeout(1800)
+  await esperarDrill()
   ok('faturamento: drill tipo abre', p.url().includes('drill='))
   const fams = await lerLinhas(true)
   const somaFam = fams.reduce((s, l) => s + brl(l.total), 0)
@@ -140,7 +147,8 @@ if (tipoAlvo) {
   if (famAlvo) {
     const valorFam = brl(famAlvo.total)
     await p.click(`tbody a >> nth=0`)
-    await p.waitForTimeout(1800)
+    await p.waitForURL((u) => /drill=.*%7C|drill=.*familia/i.test(u.toString()), { timeout: 25000 })
+    await p.waitForTimeout(1200)
     const prods = await lerLinhas(true)
     const somaProd = prods.reduce((s, l) => s + brl(l.total), 0)
     ok(
@@ -157,7 +165,8 @@ await ir('/auditoria-fiscal?data_inicio=2026-01-01')
 const parNulo = await p.$('tbody a:has-text("sem entrada")')
 if (parNulo) {
   await parNulo.click()
-  await p.waitForTimeout(2000)
+  await esperarDrill()
+  await p.waitForSelector('#detalhe-cfop tbody tr', { timeout: 20000 }).catch(() => {})
   const detalhe = await p.$('#detalhe-cfop')
   const nItens = detalhe ? (await detalhe.$$('tbody tr')).length : 0
   ok('auditoria: par sem entrada abre itens', nItens > 0, `${nItens} itens`)
@@ -188,7 +197,7 @@ if (famOp) {
     const a = t && [...t.querySelectorAll('tbody td a')].find((el) => el.textContent?.trim().startsWith(rot))
     if (a) a.click()
   }, famOp.rotulo.slice(0, 18))
-  await p.waitForTimeout(1800)
+  await esperarDrill()
   ok('mov. operação: drill família abre', p.url().includes('drill='))
   const locais = await lerUltimaTabela()
   const soma = locais.reduce((s, l) => s + brl(l.total), 0)
