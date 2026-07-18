@@ -62,6 +62,18 @@ Endpoints: `POST /webhooks` (dual-write) e `GET /movimentos`,
 `GET /movimentos_historico`, `GET /notas_fiscais`, `GET /nota_fiscal_items`,
 `GET /ordens_producao` (leitura, aceitam `count=true` para contagem sem LIMIT).
 
+**Proxy do domínio (incidente 2026-07-18):** o rebuild automático do Hestia
+regenerou o vhost do `frio-api.*` com o template padrão (php-fpm) e a API
+pública passou a responder 404 em tudo — os relatórios híbridos degradaram
+SILENCIOSAMENTE (o `buscarFrio` engole erro e devolve `[]`; nenhuma página
+quebra, só falta a fatia antiga). Corrigido criando o template de proxy
+`node-3001` (`/usr/local/hestia/data/templates/web/nginx/node-3001.{tpl,stpl}`,
+`proxy_pass http://127.0.0.1:3001`) e aplicando com
+`v-change-web-domain-proxy-tpl ntb frio-api.norteparanegocios.com.br node-3001`
+— isso sobrevive a rebuilds futuros. Se a fatia fria "sumir" de novo, teste
+primeiro `curl` na URL pública: 404 = proxy; depois `curl 127.0.0.1:3001`
+dentro do servidor.
+
 **Detalhe de driver importante:** o `pg` do Node retorna `bigint` como string e
 `date` como objeto `Date` completo por padrão — o `server.js` configura
 `types.setTypeParser` pros OIDs 20 (bigint) e 1082 (date) pra normalizar isso
