@@ -17,6 +17,26 @@ const fmtMoeda = (n: number | null) => (n == null ? '-' : n.toLocaleString('pt-B
 const fmtPct = (n: number | null) => (n == null ? '-' : `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`)
 const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
 
+// PostgREST corta em 1000 linhas por padrao, sem erro. `produtos` (ate 2869
+// linhas/loja) e `posicao_estoques` (ate 4545 linhas/loja na foto mais recente)
+// passam disso em praticamente todas as lojas -- sem paginar, a margem "ao vivo"
+// perdia CMC de boa parte do catalogo e sumia com a maioria dos produtos
+// silenciosamente (achado real: loja com 819 produtos validos mostrava so 324).
+// Mesma classe de bug ja achada e corrigida no Faturamento/Estoque Valorizado.
+async function buscarTodasLinhas<T>(
+  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+): Promise<T[]> {
+  const PAGE = 1000
+  const todas: T[] = []
+  for (let p = 0; ; p++) {
+    const { data } = await montar(p * PAGE, p * PAGE + PAGE - 1)
+    if (!data?.length) break
+    todas.push(...data)
+    if (data.length < PAGE) break
+  }
+  return todas
+}
+
 type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null }
 
 // CMC podre faz a margem explodir (ex.: Casquinha de siri CMC R$100bi). Margem
@@ -38,15 +58,30 @@ export default async function RelatorioMargemPage({
   const tiposArr = valoresMulti(sp.tipo)
 
   const supabase = createServiceClient()
-  const [{ data: rowsRaw }, { data: metaRow }, { data: produtosRaw }, { data: locaisRaw }] = await Promise.all([
-    supabase.from('margem_importada').select('codigo, descricao, familia, mes, pdv, cmc, margem').eq('loja_id', lojaId),
+  const [rowsAll, { data: metaRow }, produtosRaw, { data: locaisRaw }] = await Promise.all([
+    buscarTodasLinhas<Row>((from, to) =>
+      supabase
+        .from('margem_importada')
+        .select('codigo, descricao, familia, mes, pdv, cmc, margem')
+        .eq('loja_id', lojaId)
+        .order('codigo', { ascending: true })
+        .order('mes', { ascending: true })
+        .range(from, to)
+    ),
     supabase.from('margem_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     // margem_importada não tem "tipo" (só vem no export do Omie): cruza por código
     // com produtos pra poder filtrar por tipo de item (e por local, via posicao_estoques).
-    supabase.from('produtos').select('codigo, tipo_item, codigo_produto').eq('loja_id', lojaId),
+    buscarTodasLinhas<{ codigo: string | null; tipo_item: string | null; codigo_produto: number | null }>((from, to) =>
+      supabase
+        .from('produtos')
+        .select('codigo, tipo_item, codigo_produto')
+        .eq('loja_id', lojaId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
-  let rows = (rowsRaw ?? []) as Row[]
+  let rows = rowsAll
   let calculadaAoVivo = false
 
   // Sem import manual (todas as lojas exceto a que faz upload do FAT_DRV):
@@ -54,11 +89,21 @@ export default async function RelatorioMargemPage({
   // (migration 063), validada contra o Excel do Ramon (diff 0,00-0,37 p.p.).
   if (!rows.length) {
     const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-    const { data: produtosCalc } = await supabase
-      .from('produtos')
-      .select('codigo, codigo_produto, descricao, descricao_familia, tipo_item, valor_unitario')
-      .eq('loja_id', lojaId)
-      .in('tipo_item', ['04', '00'])
+    const produtosCalc = await buscarTodasLinhas<{
+      codigo: string | null
+      codigo_produto: number
+      descricao: string | null
+      descricao_familia: string | null
+      valor_unitario: number | null
+    }>((from, to) =>
+      supabase
+        .from('produtos')
+        .select('codigo, codigo_produto, descricao, descricao_familia, tipo_item, valor_unitario')
+        .eq('loja_id', lojaId)
+        .in('tipo_item', ['04', '00'])
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
     const { data: fotoRow } = await supabase
       .from('posicao_estoques')
       .select('data_posicao')
@@ -66,19 +111,23 @@ export default async function RelatorioMargemPage({
       .order('data_posicao', { ascending: false })
       .limit(1)
       .maybeSingle()
-    if (fotoRow?.data_posicao && produtosCalc?.length) {
-      const { data: posRows } = await supabase
-        .from('posicao_estoques')
-        .select('n_cod_prod, n_cmc')
-        .eq('loja_id', lojaId)
-        .eq('data_posicao', fotoRow.data_posicao)
-        .gt('n_cmc', 0)
+    if (fotoRow?.data_posicao && produtosCalc.length) {
+      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number }>((from, to) =>
+        supabase
+          .from('posicao_estoques')
+          .select('n_cod_prod, n_cmc')
+          .eq('loja_id', lojaId)
+          .eq('data_posicao', fotoRow.data_posicao)
+          .gt('n_cmc', 0)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
       const cmcPorCod = new Map<number, number>()
-      for (const p of posRows ?? []) {
+      for (const p of posRows) {
         const atual = cmcPorCod.get(Number(p.n_cod_prod))
         if (atual == null || Number(p.n_cmc) > atual) cmcPorCod.set(Number(p.n_cod_prod), Number(p.n_cmc))
       }
-      rows = (produtosCalc as { codigo: string | null; codigo_produto: number; descricao: string | null; descricao_familia: string | null; valor_unitario: number | null }[])
+      rows = produtosCalc
         .map((p) => {
           const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
           const pdv = Number(p.valor_unitario) || null
@@ -90,7 +139,7 @@ export default async function RelatorioMargemPage({
     }
   }
   const tipoPorCodigo = new Map<string, string | null>()
-  for (const p of (produtosRaw ?? []) as { codigo: string | null; tipo_item: string | null }[]) {
+  for (const p of produtosRaw) {
     if (p.codigo) tipoPorCodigo.set(p.codigo, p.tipo_item)
   }
 
@@ -100,14 +149,18 @@ export default async function RelatorioMargemPage({
   const localSel = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
   let codigosNoLocal: Set<string> | null = null
   if (localSel.length) {
-    const { data: pos } = await supabase
-      .from('posicao_estoques')
-      .select('n_cod_prod')
-      .eq('loja_id', lojaId)
-      .in('codigo_local_estoque', localSel)
-    const codProds = new Set((pos ?? []).map((p) => Number(p.n_cod_prod)))
+    const pos = await buscarTodasLinhas<{ n_cod_prod: number }>((from, to) =>
+      supabase
+        .from('posicao_estoques')
+        .select('n_cod_prod')
+        .eq('loja_id', lojaId)
+        .in('codigo_local_estoque', localSel)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+    const codProds = new Set(pos.map((p) => Number(p.n_cod_prod)))
     codigosNoLocal = new Set(
-      ((produtosRaw ?? []) as { codigo: string | null; codigo_produto: number | null }[])
+      produtosRaw
         .filter((p) => p.codigo_produto != null && codProds.has(Number(p.codigo_produto)))
         .map((p) => p.codigo as string)
         .filter(Boolean)
@@ -169,6 +222,16 @@ export default async function RelatorioMargemPage({
     },
   ]
 
+  // O botão "Baixar" prometia exportar "com filtros" mas o link era sempre
+  // /relatorio-margem/export sem query string (e a rota nem lia searchParams) —
+  // a exportação sempre trazia tudo, sem refletir o filtro ativo na tela.
+  const exportParams = new URLSearchParams()
+  if (sp.busca) exportParams.set('busca', sp.busca)
+  if (sp.familia) exportParams.set('familia', sp.familia)
+  if (sp.tipo) exportParams.set('tipo', sp.tipo)
+  if (sp.local) exportParams.set('local', sp.local)
+  const exportHref = exportParams.toString() ? `/relatorio-margem/export?${exportParams.toString()}` : '/relatorio-margem/export'
+
   return (
     <div className="space-y-4">
       <ListaHeader>
@@ -185,7 +248,7 @@ export default async function RelatorioMargemPage({
                 defaults={{ busca: sp.busca ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '', local: sp.local ?? '' }}
                 persistirEm="/relatorio-margem"
               />
-              <a href="/relatorio-margem/export" target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: margem por produto (com filtros)">
+              <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: margem por produto (com filtros)">
                 <Download className="size-4" /> Baixar
               </a>
               <ImportarMargem />
