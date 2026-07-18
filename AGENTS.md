@@ -129,6 +129,30 @@ delas; (3) rótulos opacos são traduzidos na exibição por
 `/pendencias-classificacao` lista o que gera "Sem cadastro/família/tipo".
 QA reproduzível: `scripts/qa-drilldown.mjs` (dev na porta 3008, conta QA).
 
+**Fato de faturamento por cupom (2026-07-18):** além do pré-agregado
+(`faturamento_importado`, tipo/família/forma_pgto sem grão de cupom),
+`lib/omie/faturamento.ts` agora também grava o fato item-a-item no Contabo
+— 3 tabelas novas, só lá, sem cópia no Supabase (Faturamento nunca teve
+janela quente): `fat_cupons`, `fat_cupom_itens`, `fat_cupom_pagamentos`
+(schema e endpoints em
+`docs/superpowers/specs/2026-07-18-faturamento-fato-cupom-design.md`).
+Endpoints novos na `ntb-frio-api`: `GET /fat_cupons`, `GET
+/fat_cupom_itens`, `GET /fat_cupom_pagamentos` (aceitam `n_id_cupom` como
+atalho pra 1 cupom) e `GET /fat_agregado?group=dia|forma|produto[&group2=mes]`
+(agregação server-side; **sem** `group=tipo/familia` — `produtos` não pode
+ser duplicado no Contabo, então tipo/família continuam vindo só do
+pré-agregado). Escrita em `POST /fat_cupons_bulk` (transação, upsert),
+chamada em lotes de 200 cupons pela ingestão (um mês cheio inteiro de uma
+vez estoura o limite de body de 2mb do Express — 413 silencioso, descoberto
+rodando a sync real). Leitura pelo app via `lib/faturamento-frio.ts` (mesmo
+padrão de `buscarFrio`). A tela `relatorio-faturamento/page.tsx` só troca
+pro fato em 3 gatilhos: aba "Forma de pgto" ativa, mais de 1 dimensão de
+filtro ativa ao mesmo tempo, ou toggle "Ver cupons" — fora isso continua no
+pré-agregado, sem mudança de comportamento. Backfill histórico (desde
+01/07/2025, todas as lojas) roda sequencial no servidor Contabo, com
+checkpoint pra retomar (script ad-hoc, fora do repo, mesmo molde do
+backfill de NF).
+
 **Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
 Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
 linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
