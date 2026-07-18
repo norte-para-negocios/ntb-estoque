@@ -15,6 +15,9 @@ import { SyncButton } from '@/components/SyncButton'
 import { btnClass } from '@/components/ui-kit/Button'
 import Link from 'next/link'
 import { DollarSign, Download } from 'lucide-react'
+import { parseDrill, hrefComDrill } from '@/lib/drill'
+import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
+import { explicarRotulo } from '@/lib/rotulos-opacos'
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -62,6 +65,7 @@ export default async function RelatorioFaturamentoPage({
     tipo?: string
     familia?: string
     forma_pgto?: string
+    drill?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -70,6 +74,16 @@ export default async function RelatorioFaturamentoPage({
   const sp = await searchParams
   const dim = DIMS.some((d) => d.value === sp.dim) ? sp.dim! : 'tipo'
   const periodo = CHIPS_PERIODO.some((c) => c.value === (sp.periodo ?? '')) ? (sp.periodo ?? '') : ''
+
+  // Drill tipo -> família -> produto, via dimensões compostas gravadas pela
+  // ingestão (tipo>familia / familia>produto, rotulo "<pai>>><filho>").
+  const pares = parseDrill(sp.drill)
+  const ultimo = pares[pares.length - 1]
+  const consultaDim = !ultimo ? dim : ultimo.dim === 'tipo' ? 'tipo>familia' : 'familia>produto'
+  const prefixo = ultimo ? `${ultimo.rotulo}>>` : null
+  // Dimensão DAS LINHAS exibidas (não a de consulta): drill em tipo mostra
+  // famílias; drill em família mostra produtos.
+  const dimDoNivel = ultimo ? (ultimo.dim === 'tipo' ? 'familia' : 'produto') : dim
 
   // Período customizado (filtro livre, na gaveta) tem prioridade sobre os chips fixos.
   const dataIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : ''
@@ -102,13 +116,13 @@ export default async function RelatorioFaturamentoPage({
     dim === 'tipo' ? tipoFiltro : dim === 'familia' ? familiaFiltro : dim === 'forma_pgto' ? formaPgtoFiltro : []
 
   const supabase = createServiceClient()
-  const [matriz, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
+  const [matrizCrua, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
     rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', {
       p_loja_id: lojaId,
-      p_dim: dim,
+      p_dim: consultaDim,
       p_mes_ini: mesIni,
       p_mes_fim: mesFim,
-      p_rotulos: rotulosFiltro.length ? rotulosFiltro : null,
+      p_rotulos: prefixo ? null : rotulosFiltro.length ? rotulosFiltro : null,
     }),
     supabase
       .from('faturamento_import_meta')
@@ -121,6 +135,10 @@ export default async function RelatorioFaturamentoPage({
   // (senão um filtro sem resultado cairia no empty state errado, de "nunca
   // sincronizou"). `linhas` vem do último import/sync, sem filtro nenhum.
   const temImportacao = (metaRow?.linhas ?? 0) > 0
+  // Nível do drill: filtra pelo prefixo do pai e exibe só a parte do filho.
+  const matriz = prefixo
+    ? matrizCrua.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
+    : matrizCrua
   const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
   const opcoesDe = (d: string) =>
     opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))
@@ -243,12 +261,22 @@ export default async function RelatorioFaturamentoPage({
             )}
           </div>
 
-          <SegmentLinks
-            basePath="/relatorio-faturamento"
-            param="dim"
-            aria-label="Abrir faturamento por"
-            opcoes={DIMS.map((d) => ({ value: d.value === 'tipo' ? '' : d.value, label: d.label }))}
-          />
+          {pares.length === 0 ? (
+            <SegmentLinks
+              basePath="/relatorio-faturamento"
+              param="dim"
+              aria-label="Abrir faturamento por"
+              opcoes={DIMS.map((d) => ({ value: d.value === 'tipo' ? '' : d.value, label: d.label }))}
+            />
+          ) : (
+            <DrillBreadcrumb
+              basePath="/relatorio-faturamento"
+              sp={sp}
+              pares={pares}
+              raiz={`Faturamento por ${(DIMS.find((d) => d.value === dim)?.label ?? dim).toLowerCase()}`}
+              rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
+            />
+          )}
 
           {!matriz.length ? (
             <EmptyState
@@ -261,21 +289,37 @@ export default async function RelatorioFaturamentoPage({
               <table className="w-full min-w-[600px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{DIMS.find((d) => d.value === dim)?.label}</th>
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{DIMS.find((d) => d.value === dimDoNivel)?.label ?? dimDoNivel}</th>
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                     <th className={`text-right ${th}`}>Total</th>
                     <th className={`text-right ${th}`}>%</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {linhas.map((l) => (
+                  {linhas.map((l) => {
+                    const desce = dimDoNivel === 'tipo' || dimDoNivel === 'familia'
+                    const opaco = explicarRotulo(l.rotulo)
+                    return (
                     <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                      <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={l.rotulo}>{l.rotulo}</td>
+                      <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? l.rotulo}>
+                        {desce ? (
+                          <Link href={hrefComDrill('/relatorio-faturamento', sp, [...pares, { dim: dimDoNivel, rotulo: l.rotulo }])} className="hover:underline">
+                            {opaco?.label ?? l.rotulo}
+                            {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
+                          </Link>
+                        ) : (
+                          <>
+                            {opaco?.label ?? l.rotulo}
+                            {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
+                          </>
+                        )}
+                      </td>
                       {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>))}
                       <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(l.total)}</td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{totalGeral > 0 ? `${((l.total / totalGeral) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
