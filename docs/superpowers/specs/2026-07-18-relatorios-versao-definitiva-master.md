@@ -26,8 +26,14 @@ partida: `docs/superpowers/specs/2026-07-18-auditoria-api-telas-lojas.md`
    podre. Dá pra ter margem automática em todas as lojas hoje, sem Excel.
 4. **"Produto não identificado" no Faturamento é 68–86% do faturamento em
    TODAS as lojas** (R$1,9M a R$4,2M) — não é um detalhe, é a pendência
-   dominante do sistema e é provavelmente a origem visual da sua queixa de
-   "número gigante sem classificação".
+   dominante do sistema. **Causa raiz confirmada em 2026-07-18 (era um bug,
+   não dado stale)**: `lib/omie/faturamento.ts` buscava o catálogo de
+   `produtos` sem paginar — o Supabase corta `.select()` em 1000 linhas por
+   padrão, sem erro. Toda loja tem 2300-2900 produtos, então ~60-65% do
+   catálogo nunca entrava no mapa de match, e qualquer produto fora da
+   primeira página virava "não identificado" pra sempre (resincronizar não
+   ajudava, porque o bug estava na query, não no dado). Corrigido paginando
+   com `.range()` (mesmo bug replicado em 3 arquivos, todos corrigidos).
 5. **O financeiro do Omie (150k títulos / 396k lançamentos) está 100%
    não-consumido** — fluxo de caixa projetado e DRE mensal já vêm prontos
    do Omie (`ObterResumoFinancas`, `ListarOrcamentos`), sem precisar somar

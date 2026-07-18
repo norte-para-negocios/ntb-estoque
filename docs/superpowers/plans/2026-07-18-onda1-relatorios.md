@@ -13,7 +13,7 @@
 - Sem suite automatizada — verificação manual (`npm run dev` + `node scripts/db.mjs` pra conferir números reais).
 - Migrations via `node scripts/aplicar-migration.mjs <arquivo>.sql`; próximo número livre: **079**.
 - A constraint `movimentos_origem_check` já aceita `'AJU'`/`'PDV'` (confirmado) — task 1 não precisa de migration.
-- **Achado que muda o escopo do item 4 do spec mestre**: reproduzi a lógica de ingestão do faturamento contra o catálogo de produtos ATUAL (lojas 3 e 5, ~22 mil itens de cupom testados) e o match foi **100%** — zero itens sem produto identificado. O que está gravado como "Produto não identificado" no banco é **dado stale** de quando o sync rodou antes do catálogo estar completo, não um bug de código. A correção real é rodar o sync de novo (Task 4 abaixo), não mexer em `lib/omie/faturamento.ts`.
+- **Achado corrigido durante a execução (2026-07-18)**: a investigação inicial (reproduzir a ingestão contra lojas 3/5 via SQL puro, ~22 mil itens) deu 100% de match e sugeriu "dado stale, não bug". Isso era um FALSO NEGATIVO: o SQL puro não tem o limite que o bug explora. Resincronizar as lojas 2/4/6 em produção não mudou os números — e aí a causa real apareceu: `lib/omie/faturamento.ts` buscava `produtos` via Supabase JS **sem paginar**, e o Supabase corta `.select()` em 1000 linhas por padrão (sem erro nenhum). Toda loja tem 2300-2900 produtos — ~60-65% do catálogo nunca entrava no mapa de match. Corrigido com `.range()` em loop (Task 4 abaixo), replicado nos 3 arquivos que tinham o mesmo padrão (Tasks 2 e 3 também tinham essa cópia do bug).
 
 ---
 
