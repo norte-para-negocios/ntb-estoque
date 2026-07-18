@@ -5,6 +5,15 @@ import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/ex
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import {
+  buscarItensNFFrio,
+  filtrarItensCompras,
+  agregarComprasMatriz,
+  mapearComprasDetalhe,
+  type ItemNFFrio,
+  type MetaProdutoNF,
+} from '@/lib/relatorio-frio-nf'
 
 // Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
 // com `= any()` não bateria com nada).
@@ -73,11 +82,15 @@ export async function GET(request: Request) {
   const tipos = valoresMulti(searchParams.get('tipo') ?? undefined)
   const cfops = valoresMulti(searchParams.get('cfop') ?? undefined)
   const fornecedor = searchParams.get('fornecedor') || null
+  const produto = searchParams.get('produto') || null
+  const localCod = searchParams.get('local') && !Number.isNaN(Number(searchParams.get('local'))) ? Number(searchParams.get('local')) : null
   const filtros = {
     p_familias: arrOrNull(familias),
     p_tipos: arrOrNull(tipos),
     p_fornecedor: fornecedor,
     p_cfops: arrOrNull(cfops),
+    p_produto: produto,
+    p_local: localCod,
   }
 
   const supabase = await createClient()
@@ -97,10 +110,34 @@ export async function GET(request: Request) {
     return todos
   }
 
+  // A janela quente (Supabase) so cobre ~90 dias; a RPC nunca deve pedir algo
+  // mais antigo (linhas ja podadas), entao clampa o inicio. A fatia antiga
+  // (ini < corte) vem do Contabo, reagregada em JS (mesmo padrao da page.tsx).
+  const corte = limiteJanelaQuente()
+  const iniRpc = ini < corte ? corte : ini
+
   const [detalheRaw, matrizRaw] = await Promise.all([
-    rpcTodos<LinhaDetalhe>('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, ...filtros }),
-    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_dim: dim, ...filtros }),
+    rpcTodos<LinhaDetalhe>('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros }),
+    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dim, ...filtros }),
   ])
+
+  if (ini < corte) {
+    const { data: prodMetaRaw } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+    const meta: MetaProdutoNF = new Map()
+    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    const itensFrios: ItemNFFrio[] = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    const filtrados = filtrarItensCompras(itensFrios, {
+      familias, tipos, fornecedor, cfops, produto, local: localCod,
+    }, meta)
+    detalheRaw.push(...mapearComprasDetalhe(filtrados, meta))
+    matrizRaw.push(...agregarComprasMatriz(filtrados, dim, meta))
+  }
 
   // Rótulo amigável conforme a dimensão (tipo -> nome do SPED; produto -> título limpo).
   const rotuloDe = (raw: string): string => {
@@ -169,7 +206,7 @@ export async function GET(request: Request) {
     { key: 'total', label: 'Total', tipo: 'moeda', largura: 14, somar: true },
   ]
 
-  const sub = `${ini} a ${fim}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}`
+  const sub = `${ini} a ${fim}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
 
   const buffer = await gerarPlanilhaMulti([
     {
