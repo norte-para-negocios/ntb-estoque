@@ -110,6 +110,23 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     } while (pagina <= totPag)
   }
 
+  // Observabilidade: se uma fatia grande do valor do mes caiu em "nao
+  // identificado", provavelmente o catalogo de produtos esta desatualizado
+  // (produto novo no PDV ainda nao sincronizado) -- alerta cedo em vez de deixar
+  // o numero crescer silenciosamente por meses (ver docs/superpowers/specs/2026-07-18-*).
+  const mesCorrenteISO = `${ano}-${String(mesAtual).padStart(2, '0')}`
+  const totalMesCorrente = [...acc.entries()]
+    .filter(([k]) => k.startsWith('produto|') && k.endsWith(`|${mesCorrenteISO}`))
+    .reduce((s, [, v]) => s + v, 0)
+  const naoIdentMesCorrente = acc.get(`produto|Produto não identificado|${mesCorrenteISO}`) ?? 0
+  if (totalMesCorrente > 0 && naoIdentMesCorrente / totalMesCorrente > 0.1) {
+    console.warn(
+      `[faturamento] loja ${loja.id}: ${((naoIdentMesCorrente / totalMesCorrente) * 100).toFixed(1)}% ` +
+      `do faturamento de ${mesCorrenteISO} caiu em "Produto não identificado" (R$ ${naoIdentMesCorrente.toFixed(2)} ` +
+      `de R$ ${totalMesCorrente.toFixed(2)}). Provavel produto novo no PDV sem sync do cadastro ainda.`
+    )
+  }
+
   // Substitui só tipo/familia (forma_pgto, quando existe, vem do import manual e fica intacto).
   const { error: delErro } = await supabase
     .from('faturamento_importado')
