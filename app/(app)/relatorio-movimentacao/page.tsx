@@ -592,17 +592,12 @@ export default async function RelatorioMovimentacaoPage({
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                  <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total (qtde)</div></td>
-                  {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text">{fmtQtd(totalPorMes[m] ?? 0)}</td>))}
-                  <td className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text">{fmtQtd(Object.values(totalPorMes).reduce((s, v) => s + v, 0))}</td>
-                </tr>
-              </tfoot>
             </table>
           </div>
           <p className="px-1 text-[11px] text-text-muted">
-            Em quantidade (a soma por mês mistura unidades; vale como volume total). Para R$, use o modo &quot;Por operação&quot;.
+            {/* Sem linha de total geral de propósito: somar kg + un + cx de produtos
+                diferentes dava um numero gigante sem significado (feedback 18/07). */}
+            Quantidades na unidade de cada produto (kg, un, cx...) — por isso não há total geral. Para R$, use o modo &quot;Por operação&quot;.
             {ocultadas > 0 && ` Mostrando os ${LIMITE_LINHAS} maiores de ${ordenadas.length}.`}
           </p>
         </div>
