@@ -41,6 +41,20 @@ export async function GET(req: Request) {
       ...todos.filter((p) => !p.tipo_item).map((p) => [String(p.codigo ?? p.codigo_produto), p.descricao ?? '', p.descricao_familia ?? '']),
     ])
   }
+  if (bloco === 'cupom-nao-identificado') {
+    const { data } = await supabase
+      .from('faturamento_importado')
+      .select('mes, valor')
+      .eq('loja_id', lojaId)
+      .eq('dimensao', 'produto')
+      .eq('rotulo', 'Produto não identificado')
+      .order('mes', { ascending: false })
+      .limit(12)
+    return csv([
+      ['mes', 'valor'],
+      ...(data ?? []).map((r) => [r.mes as string, Number(r.valor).toFixed(2).replace('.', ',')]),
+    ])
+  }
 
   // sem-cadastro: itens de NF (12 meses, quente+frio) sem produto no cadastro.
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })

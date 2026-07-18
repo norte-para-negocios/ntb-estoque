@@ -81,6 +81,17 @@ export default async function PendenciasClassificacaoPage() {
   const semCadastroLinhas = [...semCadastro.values()].sort((a, b) => b.valor - a.valor)
   const valorSemCadastro = semCadastroLinhas.reduce((s, l) => s + l.valor, 0)
 
+  // Bloco 4: cupons do Faturamento (PDV) sem produto identificado, por mes (ultimos 12).
+  const { data: naoIdentRows } = await supabase
+    .from('faturamento_importado')
+    .select('mes, valor')
+    .eq('loja_id', lojaId)
+    .eq('dimensao', 'produto')
+    .eq('rotulo', 'Produto não identificado')
+    .order('mes', { ascending: false })
+    .limit(12)
+  const valorNaoIdent = (naoIdentRows ?? []).reduce((s, r) => s + Number(r.valor), 0)
+
   const Bloco = ({ titulo, valor, exportBloco, children }: { titulo: string; valor: number; exportBloco: string; children: ReactNode }) => (
     <section className="space-y-2">
       <h2 className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-text">
@@ -180,6 +191,29 @@ export default async function PendenciasClassificacaoPage() {
         )}
         <p className="px-1 text-[12px] text-text-muted">
           É esta lista que vira <Link href="/relatorio-compras" className="underline">&quot;Sem cadastro de produto&quot;</Link> no relatório de Compras. Corrija os cadastros no Omie.
+        </p>
+      </Bloco>
+
+      <Bloco titulo="Cupons com produto não identificado (por mês)" valor={valorNaoIdent} exportBloco="cupom-nao-identificado">
+        {!naoIdentRows?.length ? (
+          <EmptyState icon={ClipboardX} title="Nenhum" hint="Todo cupom tem produto identificado nos últimos 12 meses." />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <table className="w-full min-w-[320px] text-sm">
+              <thead><tr className="bg-surface-2"><th className={th}>Mês</th><th className={`${th} text-right`}>Valor</th></tr></thead>
+              <tbody>{(naoIdentRows ?? []).map((r) => (
+                <tr key={r.mes} className="border-t border-border/60">
+                  <td className="px-3 py-2 text-text">{r.mes}</td>
+                  <td className="num px-3 py-2 text-right font-medium text-text"><Money value={Number(r.valor)} /></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <p className="px-1 text-[12px] text-text-muted">
+          Cada linha é um mês em que o sync do Faturamento rodou antes do catálogo de produtos estar
+          completo (produto novo no PDV ainda não sincronizado). Rodar o sync de novo (botão &quot;Atualizar&quot;
+          em <Link href="/relatorio-faturamento" className="underline">Faturamento</Link>) resolve os meses recentes.
         </p>
       </Bloco>
     </div>
