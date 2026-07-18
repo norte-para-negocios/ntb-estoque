@@ -18,6 +18,7 @@ import { DollarSign, Download } from 'lucide-react'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
+import { buscarFatAgregado, buscarFatCupons, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -66,6 +67,7 @@ export default async function RelatorioFaturamentoPage({
     familia?: string
     forma_pgto?: string
     drill?: string
+    ver?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -115,6 +117,44 @@ export default async function RelatorioFaturamentoPage({
   const rotulosFiltro =
     dim === 'tipo' ? tipoFiltro : dim === 'familia' ? familiaFiltro : dim === 'forma_pgto' ? formaPgtoFiltro : []
 
+  // O pré-agregado (faturamento_importado) vem em 3 pivots separados, sem uma
+  // linha de fato por cupom -- não sustenta forma de pagamento cruzada com
+  // outra dimensão, nem grão de cupom individual. Troca pro fato (Contabo)
+  // nesses 3 casos; no caso comum (1 dimensão, sem forma_pgto) continua no
+  // pré-agregado, sem mudança de comportamento.
+  const dimensoesAtivas = [tipoFiltro.length > 0, familiaFiltro.length > 0, formaPgtoFiltro.length > 0].filter(Boolean).length
+  const verCupons = sp.ver === 'cupons'
+  // Gatilho 1 é a ABA ativa (dim === 'forma_pgto'), não só o filtro estar
+  // guardado na URL -- um filtro de forma_pgto pode estar setado enquanto o
+  // usuário ainda olha a aba Tipo (padrão já existente: filtros de outra
+  // dimensão só entram em ação quando o usuário troca de aba, ver comentário
+  // acima em rotulosFiltro). Se disparasse só pelo filtro, a tabela mostraria
+  // linhas de forma de pagamento (PIX/CRD/...) sob o cabeçalho "Tipo".
+  const usarFato = dim === 'forma_pgto' || dimensoesAtivas > 1 || verCupons
+
+  // 'YYYY-MM' -> 'YYYY-MM-DD' do ultimo dia do mes.
+  function fimDoMes(mesISO: string): string {
+    const [a, m] = mesISO.split('-').map(Number)
+    return `${mesISO}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`
+  }
+  const mesIniEfetivo = mesIni ?? mesAtual
+  const mesFimEfetivo = mesFim ?? mesAtual
+
+  const [matrizFato, cuponsFato]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
+    usarFato && !verCupons
+      ? buscarFatAgregado({
+          lojaId,
+          dataInicio: `${mesIniEfetivo}-01`,
+          dataFinal: fimDoMes(mesFimEfetivo),
+          group: dim === 'forma_pgto' ? 'forma' : 'produto',
+          group2: 'mes',
+        })
+      : Promise.resolve([]),
+    usarFato && verCupons
+      ? buscarFatCupons({ lojaId, dataInicio: `${mesIniEfetivo}-01`, dataFinal: fimDoMes(mesFimEfetivo) })
+      : Promise.resolve([]),
+  ])
+
   const supabase = createServiceClient()
   const [matrizCrua, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
     rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', {
@@ -136,17 +176,21 @@ export default async function RelatorioFaturamentoPage({
   // sincronizou"). `linhas` vem do último import/sync, sem filtro nenhum.
   const temImportacao = (metaRow?.linhas ?? 0) > 0
   // Nível do drill: filtra pelo prefixo do pai e exibe só a parte do filho.
+  // (Drill não compõe com a troca pro fato -- os 3 gatilhos de usarFato são
+  // ortogonais ao drill tipo->família->produto do pré-agregado.)
   const matriz = prefixo
     ? matrizCrua.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
     : matrizCrua
+  const matrizFinal: LinhaMatriz[] =
+    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : matriz
   const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
   const opcoesDe = (d: string) =>
     opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))
 
-  const meses = [...new Set(matriz.map((m) => m.mes))].sort()
+  const meses = [...new Set(matrizFinal.map((m) => m.mes))].sort()
   const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()
   let totalGeral = 0
-  for (const r of matriz) {
+  for (const r of matrizFinal) {
     const ent = porRotulo.get(r.rotulo) ?? { total: 0, meses: {} }
     const v = Number(r.valor) || 0
     ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + v
@@ -261,24 +305,62 @@ export default async function RelatorioFaturamentoPage({
             )}
           </div>
 
-          {pares.length === 0 ? (
-            <SegmentLinks
-              basePath="/relatorio-faturamento"
-              param="dim"
-              aria-label="Abrir faturamento por"
-              opcoes={DIMS.map((d) => ({ value: d.value === 'tipo' ? '' : d.value, label: d.label }))}
-            />
-          ) : (
-            <DrillBreadcrumb
-              basePath="/relatorio-faturamento"
-              sp={sp}
-              pares={pares}
-              raiz={`Faturamento por ${(DIMS.find((d) => d.value === dim)?.label ?? dim).toLowerCase()}`}
-              rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
-            />
-          )}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {pares.length === 0 ? (
+              <SegmentLinks
+                basePath="/relatorio-faturamento"
+                param="dim"
+                aria-label="Abrir faturamento por"
+                opcoes={DIMS.map((d) => ({ value: d.value === 'tipo' ? '' : d.value, label: d.label }))}
+              />
+            ) : (
+              <DrillBreadcrumb
+                basePath="/relatorio-faturamento"
+                sp={sp}
+                pares={pares}
+                raiz={`Faturamento por ${(DIMS.find((d) => d.value === dim)?.label ?? dim).toLowerCase()}`}
+                rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
+              />
+            )}
+            <Link href={verCupons ? '/relatorio-faturamento' : '?ver=cupons'} className={verCupons ? chipAtivo : chipInativo}>
+              {verCupons ? 'Ver resumo' : 'Ver cupons'}
+            </Link>
+          </div>
 
-          {!matriz.length ? (
+          {verCupons ? (
+            !cuponsFato.length ? (
+              <EmptyState
+                icon={DollarSign}
+                title="Sem cupons no período"
+                hint="Tente ampliar o período no filtro."
+              />
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                <table className="w-full min-w-[600px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-surface-2">
+                      <th className={`text-left ${th}`}>Data</th>
+                      <th className={`text-left ${th}`}>Hora</th>
+                      <th className={`text-left ${th}`}>Número</th>
+                      <th className={`text-right ${th}`}>Valor</th>
+                      <th className={`text-left ${th}`}>Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cuponsFato.map((c) => (
+                      <tr key={c.n_id_cupom} className="border-t border-border/60 hover:bg-surface-2/40">
+                        <td className="px-3 py-2 text-text">{fmtQuando(c.data)}</td>
+                        <td className="px-3 py-2 text-text-muted">{c.hora ?? '-'}</td>
+                        <td className="px-3 py-2 text-text-muted">{c.num ?? '-'}</td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(c.valor)}</td>
+                        <td className="px-3 py-2 text-text-muted">{c.cancelado ? 'Cancelado' : c.devolvido ? 'Devolvido' : 'Normal'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : !matrizFinal.length ? (
             <EmptyState
               icon={DollarSign}
               title="Sem dados no período"
@@ -297,7 +379,7 @@ export default async function RelatorioFaturamentoPage({
                 </thead>
                 <tbody>
                   {linhas.map((l) => {
-                    const desce = dimDoNivel === 'tipo' || dimDoNivel === 'familia'
+                    const desce = !usarFato && (dimDoNivel === 'tipo' || dimDoNivel === 'familia')
                     const opaco = explicarRotulo(l.rotulo)
                     return (
                     <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
