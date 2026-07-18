@@ -3,7 +3,7 @@ import { getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import {
-  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes,
+  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX,
 } from 'lucide-react'
 
 type Rel = {
@@ -41,6 +41,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
     grupo: 'Fiscal',
     itens: [
       { href: '/auditoria-fiscal', titulo: 'Auditoria fiscal', icon: ShieldCheck, descricao: 'Confere as notas fiscais contra o estoque e aponta divergencias.', pergunta: 'As notas batem com o estoque?' },
+      { href: '/pendencias-classificacao', titulo: 'Pendencias de classificacao', icon: ClipboardX, descricao: 'Produtos sem familia/tipo e itens de NF sem cadastro, com o R$ que representam.', pergunta: 'O que falta classificar?' },
     ],
   },
 ]
