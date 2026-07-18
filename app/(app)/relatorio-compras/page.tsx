@@ -22,7 +22,14 @@ import {
   filtrarItensCompras,
   agregarComprasTotal,
   agregarComprasMatriz,
+  mapearComprasDetalhe,
+  type ItemNFFrio,
+  type MetaProdutoNF,
+  type LinhaDetalheCompra,
 } from '@/lib/relatorio-frio-nf'
+import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
+import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
+import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { ShoppingCart, Download } from 'lucide-react'
 
 // Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
@@ -71,6 +78,7 @@ export default async function RelatorioComprasPage({
     cfop?: string
     produto?: string
     local?: string
+    drill?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -80,6 +88,12 @@ export default async function RelatorioComprasPage({
 
   const sp = await searchParams
   const dim = DIMS.some((d) => d.value === sp.dim) ? sp.dim! : 'familia'
+
+  // Drill: qualquer dimensão -> produto -> itens. Cada par da trilha vira
+  // filtro; a dimensão exibida desce a cadeia.
+  const pares = parseDrill(sp.drill)
+  const nivelItens = pares.some((p) => p.dim === 'produto') || (dim === 'produto' && pares.length > 0)
+  const dimExibida = nivelItens ? null : pares.length > 0 ? 'produto' : dim
 
   // Padrão: ano corrente (1º de janeiro até hoje), em America/Bahia.
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
@@ -99,6 +113,16 @@ export default async function RelatorioComprasPage({
     p_produto: produto,
     p_local: localCod,
   }
+  // Pares da trilha sobrescrevem o filtro correspondente (drill restringe).
+  const drillFiltros: Record<string, unknown> = {}
+  for (const p of pares) {
+    if (p.dim === 'familia') drillFiltros.p_familias = [p.rotulo === 'Sem classificação' ? SEM : p.rotulo]
+    if (p.dim === 'tipo') drillFiltros.p_tipos = [p.rotulo === 'Sem classificação' ? SEM : p.rotulo]
+    if (p.dim === 'fornecedor') drillFiltros.p_fornecedor = p.rotulo === 'Sem classificação' ? SEM : p.rotulo
+    if (p.dim === 'cfop') drillFiltros.p_cfops = [p.rotulo === 'Sem classificação' ? SEM : p.rotulo]
+    if (p.dim === 'produto' && p.rotulo !== SEM && p.rotulo !== 'Sem classificação') drillFiltros.p_produto = p.rotulo
+  }
+  const filtrosComDrill = { ...filtros, ...drillFiltros }
 
   const supabase = await createClient()
   // A matriz pode passar de 1000 linhas (PostgREST corta) em dim=produto: pagina.
@@ -121,8 +145,8 @@ export default async function RelatorioComprasPage({
   const iniRpc = ini < corte ? corte : ini
 
   const [{ data: totalRows }, matrizRaw, { data: cfopDimRaw }] = await Promise.all([
-    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros }),
-    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dim, ...filtros }),
+    supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill }),
+    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dimExibida ?? 'produto', ...filtrosComDrill }),
     // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
     supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop' }),
   ])
@@ -131,30 +155,54 @@ export default async function RelatorioComprasPage({
 
   // Complemento frio (Contabo) para o pedaço [ini, corte). Reaproveita a
   // reagregação em JS que espelha a RPC (lib/relatorio-frio-nf.ts).
+  // filtrados/meta ficam acessíveis fora do if pro nível de itens reusar.
+  let filtrados: ItemNFFrio[] = []
+  let meta: MetaProdutoNF = new Map()
   if (ini < corte) {
     const { data: prodMetaRaw } = await supabase
       .from('produtos')
       .select('codigo_produto, tipo_item, descricao_familia')
       .eq('loja_id', lojaId)
-    const meta = new Map<number, { tipo: string | null; familia: string | null }>()
+    meta = new Map()
     for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-    const filtrados = filtrarItensCompras(itensFrios, {
-      familias: familiasSel, tipos: tiposSel, fornecedor, cfops: cfopsSel, produto, local: localCod,
-    }, meta)
+    const fDrill = { familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
+    for (const p of pares) {
+      const rot = p.rotulo === 'Sem classificação' ? SEM : p.rotulo
+      if (p.dim === 'familia') fDrill.familias = [rot]
+      if (p.dim === 'tipo') fDrill.tipos = [rot]
+      if (p.dim === 'fornecedor') fDrill.fornecedor = rot
+      if (p.dim === 'cfop') fDrill.cfops = [rot]
+      if (p.dim === 'produto' && rot !== SEM) fDrill.produto = rot
+    }
+    filtrados = filtrarItensCompras(itensFrios, fDrill, meta)
     const totFrio = agregarComprasTotal(filtrados)
     total += totFrio.valor
     nNotas += totFrio.nNotas
-    for (const l of agregarComprasMatriz(filtrados, dim, meta)) matrizRaw.push(l)
+    for (const l of agregarComprasMatriz(filtrados, dimExibida ?? 'produto', meta)) matrizRaw.push(l)
   }
 
-  // Rótulo amigável conforme a dimensão (tipo -> nome do SPED; produto -> título limpo).
+  // Nível final: itens individuais (RPC de detalhe + pedaço frio mapeado).
+  let itensDetalhe: LinhaDetalheCompra[] = []
+  if (nivelItens) {
+    const { data: det } = await supabase
+      .rpc('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill })
+      .range(0, 499)
+    itensDetalhe = (det ?? []) as LinhaDetalheCompra[]
+    if (ini < corte) {
+      itensDetalhe = [...mapearComprasDetalhe(filtrados, meta), ...itensDetalhe]
+        .sort((a, b) => String(b.data).localeCompare(String(a.data)) || Number(b.total) - Number(a.total))
+        .slice(0, 500)
+    }
+  }
+
+  // Rótulo amigável conforme a dimensão EXIBIDA (tipo -> nome; produto -> título limpo).
   const rotuloDe = (raw: string): string => {
-    if (dim === 'tipo') return TIPO_LABEL.get(raw) ?? raw
-    if (dim === 'produto') return formatarNomeProduto(raw) || raw
+    if (dimExibida === 'tipo') return TIPO_LABEL.get(raw) ?? raw
+    if (dimExibida === 'produto') return formatarNomeProduto(raw) || raw
     return raw
   }
 
@@ -169,11 +217,11 @@ export default async function RelatorioComprasPage({
     porRotulo.set(r.rotulo, ent)
   }
   const ordenadas = [...porRotulo.entries()].sort((a, b) => b[1].total - a[1].total)
-  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotulo: rotuloDe(rotulo), meses: ent.meses, total: ent.total }))
+  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotuloRaw: rotulo, rotulo: rotuloDe(rotulo), meses: ent.meses, total: ent.total }))
   const ocultadas = ordenadas.length - linhas.length
   const totalPorMes: Record<string, number> = {}
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
-  const dimLabel = DIMS.find((d) => d.value === dim)?.label ?? 'Item'
+  const dimLabel = DIMS.find((d) => d.value === (dimExibida ?? dim))?.label ?? 'Item'
 
   const [familias, { data: locaisRaw }] = await Promise.all([
     buscarFamilias(),
@@ -279,14 +327,82 @@ export default async function RelatorioComprasPage({
         Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra/gasto e não entram nestes números.
       </p>
 
-      <SegmentLinks
-        basePath="/relatorio-compras"
-        param="dim"
-        aria-label="Abrir compras por"
-        opcoes={DIMS.map((d) => ({ value: d.value === 'familia' ? '' : d.value, label: d.label }))}
-      />
+      {pares.length === 0 ? (
+        <SegmentLinks
+          basePath="/relatorio-compras"
+          param="dim"
+          aria-label="Abrir compras por"
+          opcoes={DIMS.map((d) => ({ value: d.value === 'familia' ? '' : d.value, label: d.label }))}
+        />
+      ) : (
+        <DrillBreadcrumb
+          basePath="/relatorio-compras"
+          sp={sp}
+          pares={pares}
+          raiz={`Compras por ${(DIMS.find((d) => d.value === dim)?.label ?? dim).toLowerCase()}`}
+          rotuloDe={(p) =>
+            p.rotulo === SEM || p.rotulo === 'Sem classificação'
+              ? explicarRotulo('Sem classificação')!.label
+              : p.dim === 'tipo'
+                ? TIPO_LABEL.get(p.rotulo) ?? p.rotulo
+                : p.dim === 'produto'
+                  ? formatarNomeProduto(p.rotulo) || p.rotulo
+                  : p.rotulo
+          }
+        />
+      )}
 
-      {linhas.length === 0 ? (
+      {nivelItens ? (
+        itensDetalhe.length === 0 ? (
+          <EmptyState icon={ShoppingCart} title="Sem itens neste recorte" hint="Ajuste o período ou volte um nível na trilha." />
+        ) : (
+          <div className="space-y-1.5">
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full min-w-[760px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className={`text-left ${th}`}>Data</th>
+                    <th className={`text-left ${th}`}>NF</th>
+                    <th className={`text-left ${th}`}>Fornecedor</th>
+                    <th className={`text-left ${th}`}>Produto</th>
+                    <th className={`text-left ${th}`}>CFOP</th>
+                    <th className={`text-right ${th}`}>Qtde</th>
+                    <th className={`text-right ${th}`}>Unit.</th>
+                    <th className={`text-right ${th}`}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itensDetalhe.map((it, i) => (
+                    <tr key={`${it.nota}-${i}`} className="border-t border-border/60 hover:bg-surface-2/40">
+                      <td className="num whitespace-nowrap px-3 py-2 text-text-muted">{fmtData(String(it.data).slice(0, 10))}</td>
+                      <td className="num px-3 py-2 text-text-muted">{it.nota}</td>
+                      <td className="max-w-[180px] truncate px-3 py-2 text-text-muted" title={it.fornecedor ?? ''}>{it.fornecedor}</td>
+                      <td className="max-w-[220px] truncate px-3 py-2 text-text" title={it.produto ?? ''}>
+                        <Link href={`/movimentacoes?produto=${encodeURIComponent(it.produto ?? '')}`} className="hover:underline">
+                          {formatarNomeProduto(it.produto ?? '') || it.produto}
+                        </Link>
+                      </td>
+                      <td className="num px-3 py-2 text-text-muted">{it.cfop || '-'}</td>
+                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{Number(it.qtde).toLocaleString('pt-BR')}</td>
+                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtCel(Number(it.preco_unit))}</td>
+                      <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(Number(it.total))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                    <td className="px-3 py-2 text-text" colSpan={7}>Total dos itens listados</td>
+                    <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(itensDetalhe.reduce((s, it) => s + Number(it.total), 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {itensDetalhe.length >= 500 && (
+              <p className="px-1 text-[11px] text-text-muted">Mostrando os 500 itens mais recentes — use o Excel pra lista completa.</p>
+            )}
+          </div>
+        )
+      ) : linhas.length === 0 ? (
         <EmptyState
           icon={ShoppingCart}
           title="Sem compras no período"
@@ -308,17 +424,17 @@ export default async function RelatorioComprasPage({
                 </tr>
               </thead>
               <tbody>
-                {linhas.map((l) => (
+                {linhas.map((l) => {
+                  const opaco = explicarRotulo(l.rotuloRaw)
+                  const parNovo = { dim: dimExibida ?? dim, rotulo: l.rotuloRaw === 'Sem classificação' ? SEM : l.rotuloRaw }
+                  return (
                   <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}>
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? l.rotulo}>
                       <div className="max-w-[140px] truncate">
-                        {dim === 'produto' ? (
-                          <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotulo)}`} className="hover:underline">
-                            {l.rotulo}
-                          </Link>
-                        ) : (
-                          l.rotulo
-                        )}
+                        <Link href={hrefComDrill('/relatorio-compras', sp, [...pares, parNovo])} className="hover:underline">
+                          {opaco?.label ?? l.rotulo}
+                          {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
+                        </Link>
                       </div>
                     </td>
                     {meses.map((m) => (
@@ -329,7 +445,8 @@ export default async function RelatorioComprasPage({
                       {total > 0 ? `${((l.total / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
