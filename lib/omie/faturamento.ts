@@ -73,27 +73,41 @@ type PagamentoBulkRow = {
   categoria: string | null; id_conta_corrente: number | null
 }
 
-// Envia o fato (cupom+itens+pagamentos) pro Contabo. Nao lanca erro se o
-// Contabo falhar -- mesma filosofia de buscarFrio (historico-contabo.ts):
-// o pre-agregado do Supabase, que sustenta a tela hoje, nunca pode quebrar
-// por causa do fato novo.
+// Tamanho de lote pro POST em /fat_cupons_bulk. Um mes cheio (2000+ cupons,
+// ~10 itens/cupom) gera payload JSON de vários MB e estoura o limite de
+// body do Express (2mb) -- descoberto rodando a sync real via UI (413
+// Payload Too Large, engolido silenciosamente pelo catch abaixo). Envia em
+// pedacos de cupons (com os itens/pagamentos correspondentes) em vez de um
+// POST único por mês.
+const LOTE_CUPONS = 200
+
+// Envia o fato (cupom+itens+pagamentos) pro Contabo, em lotes. Nao lanca
+// erro se o Contabo falhar -- mesma filosofia de buscarFrio
+// (historico-contabo.ts): o pre-agregado do Supabase, que sustenta a tela
+// hoje, nunca pode quebrar por causa do fato novo.
 async function gravarFatoNoFrio(lojaId: number, cupons: CupomBulkRow[], itens: ItemBulkRow[], pagamentos: PagamentoBulkRow[]): Promise<void> {
   const url = process.env.NTB_FRIO_API_URL
   const key = process.env.NTB_FRIO_API_KEY
   if (!url || !cupons.length) return
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
-    const resp = await fetch(`${url}/fat_cupons_bulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
-      body: JSON.stringify({ loja_id: lojaId, cupons, itens, pagamentos }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
-  } catch (e) {
-    console.error('faturamento: falha ao gravar fato no Contabo', e)
+  for (let i = 0; i < cupons.length; i += LOTE_CUPONS) {
+    const loteCupons = cupons.slice(i, i + LOTE_CUPONS)
+    const idsLote = new Set(loteCupons.map((c) => c.n_id_cupom))
+    const loteItens = itens.filter((it) => idsLote.has(it.n_id_cupom))
+    const lotePagamentos = pagamentos.filter((p) => idsLote.has(p.n_id_cupom))
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const resp = await fetch(`${url}/fat_cupons_bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+        body: JSON.stringify({ loja_id: lojaId, cupons: loteCupons, itens: loteItens, pagamentos: lotePagamentos }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    } catch (e) {
+      console.error('faturamento: falha ao gravar fato no Contabo', e)
+    }
   }
 }
 
