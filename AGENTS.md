@@ -153,6 +153,34 @@ pré-agregado, sem mudança de comportamento. Backfill histórico (desde
 checkpoint pra retomar (script ad-hoc, fora do repo, mesmo molde do
 backfill de NF).
 
+**Dual-write de `movimentos` (2026-07-18):** o espelho de `movimentos` no
+Contabo era uma cópia única de 07-12, congelada — o webhook em tempo real
+ignora de propósito os tópicos `Produto.AjusteEstoque`/
+`Produto.MovimentacaoEstoque` ("evita loop de ajuste"), então nenhum
+evento de movimento nunca passou por ali. `lib/omie/sync-ajustes.ts` agora
+chama `POST /movimentos_bulk` (endpoint novo na `ntb-frio-api`, mesmo
+molde do `fat_cupons_bulk`) fire-and-forget depois de cada upsert no
+Supabase, em lotes de 200. Chave natural: `(loja_id, id_ajuste)` — o
+Contabo ganhou o mesmo índice único parcial que o Supabase já tinha
+(migration 059). Backfill histórico desde 01/07/2025 (todas as 6 lojas,
+incluindo a loja 4 apesar de excluída do cron de sync — a exclusão dela é
+especificamente sobre "nunca testar escrita ao vivo", não sobre nunca
+gravar dado real via API oficial) roda no servidor, grava nas duas bases.
+**Achado incidental corrigido na mesma data:** o `.upsert()` do
+supabase-js não consegue expressar `ON CONFLICT` contra um índice único
+**parcial** (`WHERE id_ajuste IS NOT NULL`) — o Postgres exige o predicado
+repetido no `ON CONFLICT` pra usar um índice parcial como árbitro, e o
+PostgREST não gera isso. Resultado: o cron diário de `sync-ajustes` vinha
+falhando silenciosamente (erro `there is no unique or exclusion
+constraint...`) pra qualquer loja com ajuste novo, desde 29/06 (dia em que
+o índice parcial e o cron foram introduzidos juntos) — a tabela só
+parecia atualizada por causa de reprocessamentos manuais ad-hoc. Corrigido
+com uma RPC (`upsert_movimentos_ajuste`, migration 079) que faz o
+`INSERT ... ON CONFLICT (...) WHERE ... DO UPDATE` certo direto em SQL.
+**Se qualquer outra tabela ganhar um índice único parcial no futuro, o
+mesmo problema vai se repetir com `.upsert()` — sempre checar se o índice
+é parcial antes de usar `onConflict` do supabase-js.**
+
 **Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
 Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
 linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
