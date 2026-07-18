@@ -100,6 +100,19 @@ WHERE/GROUP BY das RPCs `relatorio_compras_*` (migration 075) e
 `relatorio-frio-nf.ts` também.** Validado: a agregação JS bateu exato com
 o SQL equivalente (R$173.463,56 / 135 notas, loja 2, jan–abr).
 
+**Drill-down (2026-07-18):** os relatórios de Compras, Auditoria, Faturamento
+e Movimentação têm drill nível-a-nível via `?drill=dim:rotulo|...`
+(`lib/drill.ts` + `components/ui-kit/DrillBreadcrumb.tsx`). Convenções que
+NÃO podem quebrar: (1) sentinela `__sem__` = "valor nulo" nas RPCs
+`relatorio_compras_*` (migration 077) e `relatorio_auditoria_fiscal_*`
+(078) e no espelho frio; (2) dimensões compostas `tipo>familia` e
+`familia>produto` em `faturamento_importado` (rotulo `"<pai>>><filho>"`,
+gravadas por `lib/omie/faturamento.ts`) — o drill do Faturamento depende
+delas; (3) rótulos opacos são traduzidos na exibição por
+`lib/rotulos-opacos.ts` (o dado continua com os rotulos crus). A tela
+`/pendencias-classificacao` lista o que gera "Sem cadastro/família/tipo".
+QA reproduzível: `scripts/qa-drilldown.mjs` (dev na porta 3008, conta QA).
+
 **Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
 Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
 linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
