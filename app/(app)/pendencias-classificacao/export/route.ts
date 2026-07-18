@@ -22,12 +22,21 @@ export async function GET(req: Request) {
     })
   }
 
-  const { data: prods } = await supabase
-    .from('produtos')
-    .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
-    .eq('loja_id', lojaId)
   type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null }
-  const todos = (prods ?? []) as Prod[]
+  // PostgREST corta em 1000 linhas por padrão, sem erro -- pagina até trazer
+  // tudo (mesmo fix da página; ver comentário lá).
+  const todos: Prod[] = []
+  for (let p = 0; ; p++) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+      .order('codigo_produto')
+      .range(p * 1000, p * 1000 + 999)
+    if (!data?.length) break
+    todos.push(...(data as Prod[]))
+    if (data.length < 1000) break
+  }
 
   if (bloco === 'sem-familia') {
     return csv([
@@ -85,7 +94,7 @@ export async function GET(req: Request) {
   for (const it of [...quentes, ...frios]) {
     const cod = it.n_id_produto != null ? Number(it.n_id_produto) : null
     if (cod !== null && codigosCadastro.has(cod)) continue
-    const k = `${it.c_descricao_produto ?? ''}|${it.c_codigo_produto ?? ''}`
+    const k = JSON.stringify([it.c_descricao_produto ?? '', it.c_codigo_produto ?? ''])
     const e = grupos.get(k) ?? { descricao: it.c_descricao_produto ?? '', codigo: it.c_codigo_produto ?? '', fornecedor: it.fornecedor ?? '', ocorrencias: 0, valor: 0 }
     e.ocorrencias += 1
     e.valor += (Number(it.n_qtde_nfe) || 0) * (Number(it.n_preco_unit) || 0)
