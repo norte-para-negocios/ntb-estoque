@@ -41,7 +41,7 @@ export default async function MinhaLojaPage() {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('nome, nome_fantasia, cnpj, cep, uf, cidade, bairro, logradouro, numero')
+    .select('nome, nome_fantasia, cnpj, cep, uf, cidade, bairro, logradouro, numero, meta_compras_pct')
     .eq('id', lojaId)
     .single<LojaInfo>()
   const { data: cfgRow } = await supabase.from('etiqueta_config').select('*').eq('loja_id', lojaId).maybeSingle()

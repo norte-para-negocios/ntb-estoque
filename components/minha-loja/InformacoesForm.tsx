@@ -26,6 +26,7 @@ export type LojaInfo = {
   bairro: string | null
   logradouro: string | null
   numero: string | null
+  meta_compras_pct: number | null
 }
 
 export function InformacoesForm({ loja }: { loja: LojaInfo }) {
@@ -37,6 +38,7 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
     bairro: loja.bairro ?? '',
     logradouro: loja.logradouro ?? '',
     numero: loja.numero ?? '',
+    meta_compras_pct: loja.meta_compras_pct != null ? String(loja.meta_compras_pct) : '',
   })
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -101,6 +103,16 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
         <div>
           <label className={labelClass}>Número</label>
           <input className={inputClass} value={form.numero} onChange={(e) => set('numero', e.target.value)} />
+        </div>
+        <div>
+          <label className={labelClass}>Meta compras ÷ faturamento (%)</label>
+          <input
+            className={`${inputClass} num`}
+            value={form.meta_compras_pct}
+            placeholder="40"
+            inputMode="decimal"
+            onChange={(e) => set('meta_compras_pct', e.target.value.replace(/[^0-9.,]/g, ''))}
+          />
         </div>
       </div>
 

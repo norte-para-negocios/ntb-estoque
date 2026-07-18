@@ -25,7 +25,11 @@ export type LojaNegocioInput = {
   bairro: string
   logradouro: string
   numero: string
+  meta_compras_pct: string
 }
+
+const clamp = (n: number, min: number, max: number, fallback: number) =>
+  Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback
 
 // Edita SÓ os dados de negócio/endereço da loja atual. CNPJ, razão, chaves Omie e
 // ativo continuam só com o admin global (pela tela Lojas).
@@ -33,6 +37,7 @@ export async function editarLojaNegocio(dados: LojaNegocioInput) {
   const lojaId = await lojaGerivel()
   if (!lojaId) return { error: 'Sem permissão para editar esta loja' }
 
+  const metaPct = dados.meta_compras_pct.trim()
   const supabase = createServiceClient()
   const { error } = await supabase
     .from('lojas')
@@ -44,6 +49,7 @@ export async function editarLojaNegocio(dados: LojaNegocioInput) {
       bairro: dados.bairro.trim() || null,
       logradouro: dados.logradouro.trim() || null,
       numero: dados.numero.trim() || null,
+      meta_compras_pct: metaPct ? clamp(Number(metaPct), 0, 100, 40) : null,
     })
     .eq('id', lojaId)
   if (error) return { error: error.message }
@@ -52,9 +58,6 @@ export async function editarLojaNegocio(dados: LojaNegocioInput) {
   revalidatePath('/minha-loja')
   return { ok: true }
 }
-
-const clamp = (n: number, min: number, max: number, fallback: number) =>
-  Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback
 
 // Salva o padrão da etiqueta da loja atual (upsert em etiqueta_config).
 export async function salvarEtiquetaConfig(form: EtiquetaFormValores) {
