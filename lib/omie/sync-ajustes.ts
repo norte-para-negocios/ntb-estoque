@@ -12,6 +12,7 @@ interface OmieAjuste {
   data: string
   motivo: string
   obs: string
+  origem: string
 }
 
 interface OmieAjusteResponse {
@@ -63,7 +64,7 @@ function ajusteParaMovimento(lojaId: number, a: OmieAjuste): MovimentoRow | null
     data,
     motivo: a.motivo || null,
     obs: a.obs || null,
-    origem: 'AJU',
+    origem: a.origem === 'PDV' ? 'PDV' : 'AJU',
     status: 'Concluido',
   }
 }
