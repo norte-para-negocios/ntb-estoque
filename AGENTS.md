@@ -181,6 +181,29 @@ com uma RPC (`upsert_movimentos_ajuste`, migration 079) que faz o
 mesmo problema vai se repetir com `.upsert()` — sempre checar se o índice
 é parcial antes de usar `onConflict` do supabase-js.**
 
+**Chave do acumulador de faturamento (2026-07-18):** `lib/omie/faturamento.ts`
+monta `faturamento_importado` agregando num `Map` cuja chave era uma string
+tipo `"${dimensao}|${rotulo}|${mes}"`. Achado real: um produto com `|` no
+próprio nome (loja com bebidas tipo "JOHNNIE WALKER | BLACK") quebrava o
+`split('|')` na volta, corrompendo `rotulo`/`mes` e colidindo com outro mês
+do mesmo produto (`duplicate key` em produção). Corrigido trocando a chave
+pra `JSON.stringify([dimensao, rotulo, mes])` — à prova de qualquer
+caractere no rótulo. **Qualquer novo código que monte uma chave composta
+concatenando strings com um separador precisa considerar que rótulos vêm
+de descrição de produto sem sanitização — prefira `JSON.stringify`/array
+a um separador de texto.**
+
+**Card financeiro "hoje" (2026-07-18):** `relatorio-indicadores/page.tsx`
+(rota, tela ainda chamada "Fat × Compras") ganhou um card com saldo em
+conta, a pagar/receber em aberto e fluxo de caixa projetado (5 dias), via
+`lib/omie/financeiro-resumo.ts` → `ObterResumoFinancas` (1 chamada ao
+Omie, sem sync nem tabela nova — chamada ao vivo a cada carregamento da
+página). `contaCorrente.vTotal` é um saldo agregado (não por conta
+bancária) e pode vir negativo/desconciliado no Omie — exibido com aviso
+visual, não escondido. A meta de Compras÷Faturamento (antes fixa em 40%
+no código) agora é `lojas.meta_compras_pct` (nula = 40%, editável em
+"Minha loja").
+
 **Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
 Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
 linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
