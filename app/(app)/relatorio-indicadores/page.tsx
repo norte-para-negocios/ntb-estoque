@@ -15,6 +15,8 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { descreverCFOP } from '@/lib/cfop'
+import { buscarResumoFinanceiroHoje } from '@/lib/omie/financeiro-resumo'
+import type { LojaOmie } from '@/lib/omie/client'
 import { Scale, Download } from 'lucide-react'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -31,8 +33,7 @@ type LinhaMatriz = { rotulo: string; mes: string; valor: number }
 
 // Meta do Ramon: Compras ÷ Faturamento ideal abaixo de 40% (na indústria), alguns
 // miram 35%. Quanto menos, melhor. Cor por faixa: <=40% no alvo, <=50% atenção, acima vermelho.
-const META_PCT = 40
-const corMeta = (pct: number) => (!Number.isFinite(pct) ? 'text-text-muted' : pct <= META_PCT ? 'text-ok' : pct <= 50 ? 'text-warn' : 'text-err')
+const corMeta = (pct: number, meta: number) => (!Number.isFinite(pct) ? 'text-text-muted' : pct <= meta ? 'text-ok' : pct <= 50 ? 'text-warn' : 'text-err')
 
 export default async function RelatorioIndicadoresPage({
   searchParams,
@@ -41,6 +42,15 @@ export default async function RelatorioIndicadoresPage({
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
+
+  const supabaseLoja = createServiceClient()
+  const { data: lojaRow } = await supabaseLoja
+    .from('lojas')
+    .select('id, omie_app_key, omie_app_secret, meta_compras_pct')
+    .eq('id', lojaId)
+    .single<LojaOmie & { meta_compras_pct: number | null }>()
+  const metaPct = lojaRow?.meta_compras_pct ?? 40
+  const resumoHoje = lojaRow?.omie_app_key ? await buscarResumoFinanceiroHoje(lojaRow) : null
 
   const sp = await searchParams
   const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
@@ -224,13 +234,13 @@ export default async function RelatorioIndicadoresPage({
           Comprado <span className="num font-semibold text-text"><Money value={totComp} /></span>
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Compras ÷ Fat <span className={`num font-semibold ${corMeta(pctTotal)}`}>{fmtPct(pctTotal)}</span>
+          Compras ÷ Fat <span className={`num font-semibold ${corMeta(pctTotal, metaPct)}`}>{fmtPct(pctTotal)}</span>
         </span>
         <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Meta <span className="num font-semibold text-text">≤ {META_PCT}%</span>
+          Meta <span className="num font-semibold text-text">≤ {metaPct}%</span>
           {Number.isFinite(pctTotal) && (
-            <span className={`ml-1 font-semibold ${corMeta(pctTotal)}`}>
-              {pctTotal <= META_PCT ? '· no alvo' : `· ${(pctTotal - META_PCT).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p. acima`}
+            <span className={`ml-1 font-semibold ${corMeta(pctTotal, metaPct)}`}>
+              {pctTotal <= metaPct ? '· no alvo' : `· ${(pctTotal - metaPct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p. acima`}
             </span>
           )}
         </span>
@@ -243,6 +253,52 @@ export default async function RelatorioIndicadoresPage({
           </span>
         )}
       </div>
+
+      {resumoHoje && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Saldo em conta (hoje)</div>
+            <div className={`num mt-1 text-lg font-semibold ${resumoHoje.contaCorrente.vTotal < 0 ? 'text-err' : 'text-text'}`}>
+              {fmtMoeda(resumoHoje.contaCorrente.vTotal)}
+            </div>
+            {resumoHoje.contaCorrente.vTotal < 0 && (
+              <div className="mt-1 text-[11px] text-warn" title="Saldo negativo pode indicar conta não conciliada no Omie">
+                ⚠ pode estar desconciliado no Omie
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Em aberto (todos os títulos)</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="text-[13px] text-text-muted">A pagar</span>
+              <span className="num text-sm font-semibold text-err">{fmtMoeda(resumoHoje.contaPagar.vTotal)}</span>
+            </div>
+            {resumoHoje.contaPagar.vAtraso > 0 && (
+              <div className="text-right text-[11px] text-err">{fmtMoeda(resumoHoje.contaPagar.vAtraso)} em atraso</div>
+            )}
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-[13px] text-text-muted">A receber</span>
+              <span className="num text-sm font-semibold text-ok">{fmtMoeda(resumoHoje.contaReceber.vTotal)}</span>
+            </div>
+            {resumoHoje.contaReceber.vAtraso > 0 && (
+              <div className="text-right text-[11px] text-err">{fmtMoeda(resumoHoje.contaReceber.vAtraso)} em atraso</div>
+            )}
+          </div>
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Fluxo de caixa projetado</div>
+            <table className="mt-1 w-full text-[12px]">
+              <tbody>
+                {resumoHoje.fluxoCaixa.slice(0, 5).map((d) => (
+                  <tr key={d.dDia}>
+                    <td className="py-0.5 text-text-muted">{d.dDia.slice(0, 5)}</td>
+                    <td className={`num py-0.5 text-right font-medium ${d.vSaldo >= 0 ? 'text-ok' : 'text-err'}`}>{fmtMoeda(d.vSaldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full min-w-[600px] border-collapse text-sm">
@@ -262,14 +318,14 @@ export default async function RelatorioIndicadoresPage({
                 <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={ind.nome}>{ind.nome}</td>
                 {meses.map((m) => {
                   const v = ind.porMes(m)
-                  const cls = ind.tipo === 'res' ? corRes(v) : ind.tipo === 'pct' ? corMeta(v) : ind.destaque ? 'text-text' : 'text-text-muted'
+                  const cls = ind.tipo === 'res' ? corRes(v) : ind.tipo === 'pct' ? corMeta(v, metaPct) : ind.destaque ? 'text-text' : 'text-text-muted'
                   return (
                     <td key={m} className={`num whitespace-nowrap px-3 py-2 text-right ${cls}`}>
                       {ind.tipo === 'pct' ? fmtPct(v) : fmtCelOrPct(v, 'money')}
                     </td>
                   )
                 })}
-                <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${ind.tipo === 'res' ? corRes(ind.total) : ind.tipo === 'pct' ? corMeta(ind.total) : 'text-text'}`}>
+                <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${ind.tipo === 'res' ? corRes(ind.total) : ind.tipo === 'pct' ? corMeta(ind.total, metaPct) : 'text-text'}`}>
                   {ind.tipo === 'pct' ? fmtPct(ind.total) : fmtMoeda(ind.total)}
                 </td>
               </tr>
@@ -281,7 +337,7 @@ export default async function RelatorioIndicadoresPage({
       <p className="px-1 text-[11px] text-text-muted">
         Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
         e sem ativo imobilizado (compra de bem para a empresa é investimento, não gasto). &quot;Compras ÷ Faturamento&quot; é
-        quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {META_PCT}%</span> no alvo,
+        quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {metaPct}%</span> no alvo,
         <span className="font-medium text-warn"> até 50% atenção</span>, <span className="font-medium text-err">acima de 50% alto</span> (na indústria, alguns miram 35%).
         &quot;Faturamento − Compras&quot; não é lucro: Compras é a entrada de mercadoria do mês, não o custo do que foi consumido (margem real vem do Módulo de Margem).
       </p>
