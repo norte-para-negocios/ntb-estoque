@@ -41,11 +41,24 @@ type CuponsResposta = { nTotPaginas?: number; cupons?: Cupom[] }
 export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: string }): Promise<number> {
   const supabase = createServiceClient()
 
-  // Mapa produto: codigo_produto -> { tipo, familia }.
-  const { data: prods } = await supabase
-    .from('produtos')
-    .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
-    .eq('loja_id', loja.id)
+  // Mapa produto: codigo_produto -> { tipo, familia }. O PostgREST/Supabase
+  // corta silenciosamente em 1000 linhas por padrão (sem erro) -- lojas com
+  // mais de 1000 produtos cadastrados perdiam parte do catalogo aqui e todo
+  // produto fora da primeira pagina virava "Produto nao identificado"
+  // (achado real: loja com 2693 produtos so via os 1000 primeiros). Pagina
+  // com .range ate esgotar.
+  const prods: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[] = []
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * 1000
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
+      .eq('loja_id', loja.id)
+      .range(from, from + 999)
+    if (!data?.length) break
+    prods.push(...data)
+    if (data.length < 1000) break
+  }
   const mapProd = new Map<number, { tipo: string | null; familia: string | null; nome: string }>()
   for (const p of prods ?? []) {
     mapProd.set(Number(p.codigo_produto), {

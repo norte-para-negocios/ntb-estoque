@@ -113,12 +113,22 @@ export async function GET(request: Request) {
   let filtrados: ItemNFFrio[] = []
   let meta: MetaProdutoNF = new Map()
   if (ini < corte) {
-    const { data: prodMetaRaw } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
+    // O Supabase corta em 1000 linhas por padrao (sem erro) -- pagina ate esgotar
+    // (achado real: lojas com >1000 produtos perdiam o resto do catalogo aqui).
+    const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
+    for (let pg = 0; ; pg++) {
+      const from = pg * 1000
+      const { data } = await supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .range(from, from + 999)
+      if (!data?.length) break
+      prodMetaRaw.push(...data)
+      if (data.length < 1000) break
+    }
     meta = new Map()
-    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+    for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
