@@ -19,8 +19,10 @@ import {
   mapearAuditoriaItens,
 } from '@/lib/relatorio-frio-nf'
 import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
+import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
+import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { btnClass } from '@/components/ui-kit/Button'
-import { ShieldCheck, X, Download } from 'lucide-react'
+import { ShieldCheck, Download } from 'lucide-react'
 
 const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
 const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -38,7 +40,7 @@ const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string; produto?: string; familia?: string; local?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string; produto?: string; familia?: string; local?: string; drill?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -109,13 +111,19 @@ export default async function AuditoriaFiscalPage({
   }
   const cats = ORDEM_CAT.filter((c) => porCat.has(c)).map((c) => ({ cat: c, ...porCat.get(c)! }))
 
-  // Drill: detalhe dos itens de um par CFOP (?cfop=doc|entrada).
-  const [cfopDocSel, cfopEntSel] = (sp.cfop ?? '').split('|')
+  // Drill: detalhe dos itens de um par CFOP. Fonte nova: ?drill=cfop:doc→ent
+  // (padrão trilha, '__sem__' = entrada nula). ?cfop=doc|entrada continua como
+  // alias legado pra links salvos.
+  const pares = parseDrill(sp.drill)
+  const parCfop = pares.find((p) => p.dim === 'cfop')
+  const [aliasDoc, aliasEnt] = (sp.cfop ?? '').split('|')
+  const cfopDocSel = parCfop ? parCfop.rotulo.split('→')[0] : aliasDoc || ''
+  const cfopEntSel = parCfop ? (parCfop.rotulo.split('→')[1] || SEM) : aliasEnt || ''
   let itensSel: LinhaItem[] = []
-  if (cfopDocSel && cfopEntSel) {
+  if (cfopDocSel) {
     const { data } = await supabase
       .rpc('relatorio_auditoria_fiscal_itens', {
-        p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel,
+        p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel || SEM,
         p_fornecedor: sp.fornecedor || null,
         p_produto: sp.produto || null, p_familia: sp.familia || null, p_local: localCod,
       })
@@ -135,7 +143,7 @@ export default async function AuditoriaFiscalPage({
       const filtrados = filtrarItensAuditoria(itensFrios, {
         produto: sp.produto || null, familia: sp.familia || null, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)
-      const friosDrill = mapearAuditoriaItens(filtrados, { cfopDoc: cfopDocSel, cfopEntrada: cfopEntSel }) as LinhaItem[]
+      const friosDrill = mapearAuditoriaItens(filtrados, { cfopDoc: cfopDocSel, cfopEntrada: cfopEntSel || SEM }) as LinhaItem[]
       itensSel = [...itensSel, ...friosDrill]
         .sort((a, b) => (b.data ?? '').localeCompare(a.data ?? ''))
         .slice(0, 300)
@@ -166,13 +174,6 @@ export default async function AuditoriaFiscalPage({
   ]
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
-  const qs = (extra: Record<string, string>) => {
-    const p = new URLSearchParams()
-    if (sp.data_inicio) p.set('data_inicio', sp.data_inicio)
-    if (sp.data_final) p.set('data_final', sp.data_final)
-    for (const [k, v] of Object.entries(extra)) v ? p.set(k, v) : null
-    return `/auditoria-fiscal${p.toString() ? `?${p}` : ''}`
-  }
 
   return (
     <div className="space-y-4">
@@ -250,7 +251,8 @@ export default async function AuditoriaFiscalPage({
                 {linhas.map((l) => {
                   const d = descreverCFOP(l.cfop_entrada)
                   const naoEstoca = Number(l.itens) - Number(l.move_estoque)
-                  const sel = sp.cfop === `${l.cfop_doc}|${l.cfop_entrada}`
+                  const entPar = l.cfop_entrada ?? SEM
+                  const sel = cfopDocSel === l.cfop_doc && (cfopEntSel || SEM) === entPar
                   return (
                     <tr key={`${l.cfop_doc}|${l.cfop_entrada}`} className={`border-t border-border/60 ${sel ? 'bg-surface-2/60' : 'hover:bg-surface-2/40'}`}>
                       <td className="whitespace-nowrap px-3 py-2">
@@ -258,8 +260,12 @@ export default async function AuditoriaFiscalPage({
                             SEMPRE abriu a secao de detalhe abaixo da tabela, mas sem scroll
                             automatico ela ficava fora da tela numa tabela longa -- ancora
                             #detalhe-cfop resolve isso sem precisar de client component. */}
-                        <Link href={`${qs({ cfop: `${l.cfop_doc}|${l.cfop_entrada}` })}#detalhe-cfop`} className="num font-medium text-text hover:text-brand">
-                          {l.cfop_doc} → {l.cfop_entrada}
+                        <Link
+                          href={`${hrefComDrill('/auditoria-fiscal', sp, [{ dim: 'cfop', rotulo: `${l.cfop_doc}→${entPar}` }])}#detalhe-cfop`}
+                          title={`${descreverCFOP(l.cfop_doc).desc}${l.cfop_entrada ? ` → ${descreverCFOP(l.cfop_entrada).desc}` : ' → sem CFOP de entrada'}`}
+                          className="num font-medium text-text hover:text-brand"
+                        >
+                          {l.cfop_doc} → {l.cfop_entrada ?? 'sem entrada'}
                         </Link>
                       </td>
                       <td className="px-3 py-2">
@@ -279,16 +285,19 @@ export default async function AuditoriaFiscalPage({
           </div>
 
           {/* Drill por item */}
-          {cfopDocSel && cfopEntSel && (
+          {cfopDocSel && (
             <div id="detalhe-cfop" className="space-y-1.5 rounded-lg border-2 border-brand bg-surface p-3 scroll-mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-text">
-                  Itens de <span className="num">{cfopDocSel} → {cfopEntSel}</span>
-                  <span className="ml-1.5 text-[13px] text-text-muted">{descreverCFOP(cfopEntSel).desc}</span>
+                <DrillBreadcrumb
+                  basePath="/auditoria-fiscal"
+                  sp={sp}
+                  pares={[{ dim: 'cfop', rotulo: `${cfopDocSel}→${cfopEntSel || SEM}` }]}
+                  raiz="Auditoria por CFOP"
+                  rotuloDe={(p) => p.rotulo.replace(SEM, 'sem entrada')}
+                />
+                <p className="text-[13px] text-text-muted">
+                  {cfopEntSel && cfopEntSel !== SEM ? descreverCFOP(cfopEntSel).desc : 'itens sem CFOP de entrada definido'}
                 </p>
-                <Link href={qs({})} className="inline-flex items-center gap-1 text-[13px] text-text-muted hover:text-text">
-                  <X className="size-3.5" /> fechar
-                </Link>
               </div>
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full min-w-[680px] border-collapse text-sm">
