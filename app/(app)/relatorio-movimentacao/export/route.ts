@@ -187,9 +187,11 @@ export async function GET(request: Request) {
       const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
       const combinados = new Map<string, Qtd>()
       for (const linha of [...antiga, ...qRecente]) {
-        const chave = `${linha.rotulo}|${linha.mes}`
+        // JSON.stringify + Number(): mesmo fix de app/(app)/relatorio-movimentacao/page.tsx
+        // (rotulo pode conter "|", e qtde vem de RPC como string via PostgREST).
+        const chave = JSON.stringify([linha.rotulo, linha.mes])
         const acc = combinados.get(chave) ?? { rotulo: linha.rotulo, mes: linha.mes, qtde: 0 }
-        acc.qtde += linha.qtde
+        acc.qtde += Number(linha.qtde) || 0
         combinados.set(chave, acc)
       }
       q = [...combinados.values()]

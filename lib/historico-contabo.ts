@@ -216,10 +216,18 @@ export function agregarMovimentacaoJS(
       (dim === 'tipo' ? meta?.tipo_item : dim === 'familia' ? meta?.descricao_familia : l.descricao) ||
       'Sem classificação'
     const mes = l.data.slice(0, 7)
-    const qtde = sentido === 'entradas' ? l.entradas ?? 0 : l.saidas ?? 0
+    // Number() e essencial: entradas/saidas sao `numeric` no Postgres, e o
+    // driver `pg` do lado do servidor Contabo so normaliza bigint/date (ver
+    // AGENTS.md) -- numeric chega como STRING. Sem isso, "+=" concatena
+    // string em vez de somar (achado real: coluna de mes virando um numero
+    // com 50+ digitos na tela de Movimentacao).
+    const qtde = Number(sentido === 'entradas' ? l.entradas : l.saidas) || 0
     if (!qtde) continue
     const preco = precoPorProduto.get(l.cod_prod) ?? 0
-    const chave = `${rotulo}|${mes}`
+    // JSON.stringify em vez de "|": rotulo vem de descricao de produto sem
+    // sanitizacao, um "|" no nome colidiria 2 chaves diferentes (mesmo
+    // achado ja corrigido em lib/omie/faturamento.ts).
+    const chave = JSON.stringify([rotulo, mes])
     const acc = grupos.get(chave) ?? { rotulo, mes, qtde: 0, valor: 0 }
     acc.qtde += qtde
     acc.valor += qtde * preco

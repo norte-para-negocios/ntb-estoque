@@ -518,10 +518,18 @@ export default async function RelatorioMovimentacaoPage({
     const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
     const combinados = new Map<string, LinhaMatriz>()
     for (const linha of [...antiga, ...matrizRecente]) {
-      const chave = `${linha.rotulo}|${linha.mes}`
+      // JSON.stringify em vez de "|" concatenado: rotulo vem de descricao de
+      // produto sem sanitizacao, e um "|" no nome colidiria 2 chaves
+      // diferentes (mesmo achado real ja corrigido em lib/omie/faturamento.ts).
+      const chave = JSON.stringify([linha.rotulo, linha.mes])
       const acc = combinados.get(chave) ?? { rotulo: linha.rotulo, mes: linha.mes, qtde: 0, valor: 0 }
-      acc.qtde += linha.qtde
-      acc.valor += linha.valor
+      // Number() e essencial aqui: matrizRecente vem de uma RPC (numeric via
+      // PostgREST serializa como STRING no JSON, apesar do tipo TS dizer
+      // number) -- sem isso, "+=" concatena string em vez de somar, e o
+      // valor final vira um numero gigante sem sentido (achado real: tela
+      // de Movimentacao mostrando "650.130.950...000" com 50+ digitos).
+      acc.qtde += Number(linha.qtde) || 0
+      acc.valor += Number(linha.valor) || 0
       combinados.set(chave, acc)
     }
     matriz = [...combinados.values()]
