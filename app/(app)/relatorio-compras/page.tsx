@@ -159,16 +159,32 @@ export default async function RelatorioComprasPage({
   let filtrados: ItemNFFrio[] = []
   let meta: MetaProdutoNF = new Map()
   if (ini < corte) {
-    const { data: prodMetaRaw } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
+    // O Supabase corta em 1000 linhas por padrão (sem erro) -- pagina até esgotar
+    // (achado real: lojas com >1000 produtos perdiam o resto do catálogo aqui,
+    // igual ao que já era feito no export/route.ts e export-completo/route.ts).
+    const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
+    for (let pg = 0; ; pg++) {
+      const from = pg * 1000
+      const { data } = await supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .range(from, from + 999)
+      if (!data?.length) break
+      prodMetaRaw.push(...data)
+      if (data.length < 1000) break
+    }
     meta = new Map()
-    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+    for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    // Achado real: se o período pedido termina antes do corte (fim < corteExcl —
+    // ex.: um recorte todo dentro do histórico frio), usar corteExcl fixo aqui
+    // buscava dado a mais no Contabo (até o corte, não até `fim`), inflando o
+    // total. Trava no menor dos dois.
+    const dataFinalFria = fim < corteExcl ? fim : corteExcl
+    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria })
     const fDrill = { familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
     for (const p of pares) {
       const rot = p.rotulo === 'Sem classificação' ? SEM : p.rotulo

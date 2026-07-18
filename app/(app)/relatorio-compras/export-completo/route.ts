@@ -132,7 +132,12 @@ export async function GET(request: Request) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios: ItemNFFrio[] = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    // Achado real: se o período pedido termina antes do corte (fim < corteExcl —
+    // ex.: um recorte todo dentro do histórico frio), usar corteExcl fixo aqui
+    // buscava dado a mais no Contabo (até o corte, não até `fim`), inflando o
+    // total. Trava no menor dos dois.
+    const dataFinalFria = fim < corteExcl ? fim : corteExcl
+    const itensFrios: ItemNFFrio[] = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria })
     filtrados = filtrarItensCompras(itensFrios, {
       familias, tipos, fornecedor, cfops, produto, local: localCod,
     }, meta)
