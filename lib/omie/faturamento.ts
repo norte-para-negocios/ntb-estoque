@@ -149,11 +149,16 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   const ano = new Date().getFullYear()
   const mesAtual = new Date().getMonth() + 1
 
-  // acc["dimensao|rotulo|mes"] = valor
+  // acc[JSON.stringify([dimensao, rotulo, mes])] = valor -- JSON em vez de um
+  // separador tipo "|" porque rotulo vem de descricao de produto sem
+  // sanitizacao (achado real: loja com "JOHNNIE WALKER | BLACK" no catalogo
+  // colidia com outro mes pelo split quebrado, gerando duplicate key em
+  // faturamento_importado). JSON.stringify escapa qualquer caractere que
+  // apareca no rotulo, sem essa classe de bug.
   const acc = new Map<string, number>()
   const add = (dimensao: string, rotulo: string, mes: string, valor: number) => {
     if (!valor) return
-    const k = `${dimensao}|${rotulo || 'Sem classificação'}|${mes}`
+    const k = JSON.stringify([dimensao, rotulo || 'Sem classificação', mes])
     acc.set(k, (acc.get(k) ?? 0) + valor)
   }
 
@@ -248,9 +253,12 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   // o numero crescer silenciosamente por meses (ver docs/superpowers/specs/2026-07-18-*).
   const mesCorrenteISO = `${ano}-${String(mesAtual).padStart(2, '0')}`
   const totalMesCorrente = [...acc.entries()]
-    .filter(([k]) => k.startsWith('produto|') && k.endsWith(`|${mesCorrenteISO}`))
+    .filter(([k]) => {
+      const [dimensao, , mes] = JSON.parse(k) as [string, string, string]
+      return dimensao === 'produto' && mes === mesCorrenteISO
+    })
     .reduce((s, [, v]) => s + v, 0)
-  const naoIdentMesCorrente = acc.get(`produto|Produto não identificado|${mesCorrenteISO}`) ?? 0
+  const naoIdentMesCorrente = acc.get(JSON.stringify(['produto', 'Produto não identificado', mesCorrenteISO])) ?? 0
   if (totalMesCorrente > 0 && naoIdentMesCorrente / totalMesCorrente > 0.1) {
     console.warn(
       `[faturamento] loja ${loja.id}: ${((naoIdentMesCorrente / totalMesCorrente) * 100).toFixed(1)}% ` +
@@ -268,7 +276,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   if (delErro) throw new Error(delErro.message)
 
   const rows = [...acc.entries()].map(([k, valor]) => {
-    const [dimensao, rotulo, mes] = k.split('|')
+    const [dimensao, rotulo, mes] = JSON.parse(k) as [string, string, string]
     return { loja_id: loja.id, dimensao, rotulo, mes, valor: Number(valor.toFixed(2)) }
   })
   for (let i = 0; i < rows.length; i += 1000) {
