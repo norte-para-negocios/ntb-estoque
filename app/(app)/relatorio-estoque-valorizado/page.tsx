@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { Boxes } from 'lucide-react'
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
@@ -64,16 +65,18 @@ export default async function RelatorioEstoqueValorizadoPage({
 
   const supabase = await createClient()
 
-  const [linhasRaw, familiasOpcoes, locaisOpcoes] = await Promise.all([
-    supabase
-      .rpc('relatorio_estoque_valorizado', {
-        p_loja_id: lojaId,
-        p_familia: familias.length ? familias : null,
-        p_tipo: tipos.length ? tipos : null,
-        p_local: locais.length ? locais : null,
-        p_busca: busca,
-      })
-      .range(0, LIMITE - 1),
+  const [linhasTodas, familiasOpcoes, locaisOpcoes] = await Promise.all([
+    // rpcTodos ao inves de .rpc() direto: o PostgREST corta em 1000 linhas por
+    // padrao, sem erro -- lojas com catalogo grande tinham o "Total valorizado"
+    // subcontado (so somava as linhas que vinham na 1a pagina), mesma classe de
+    // bug ja achada e corrigida no Faturamento nesta sessao.
+    rpcTodos<Linha>(supabase, 'relatorio_estoque_valorizado', {
+      p_loja_id: lojaId,
+      p_familia: familias.length ? familias : null,
+      p_tipo: tipos.length ? tipos : null,
+      p_local: locais.length ? locais : null,
+      p_busca: busca,
+    }),
     buscarFamilias(),
     supabase
       .from('local_estoques')
@@ -83,11 +86,12 @@ export default async function RelatorioEstoqueValorizadoPage({
       .order('descricao'),
   ])
 
-  const linhas = (linhasRaw.data ?? []) as Linha[]
-
-  const dataFoto = linhas[0]?.data_foto ?? null
-  const totalValor = linhas.reduce((s, l) => s + Number(l.valor_total), 0)
-  const totalProdutos = linhas.length
+  const dataFoto = linhasTodas[0]?.data_foto ?? null
+  const totalValor = linhasTodas.reduce((s, l) => s + Number(l.valor_total), 0)
+  const totalProdutos = linhasTodas.length
+  // Tabela continua mostrando só os 500 de maior valor (RPC já ordena por
+  // valor_total desc) -- só o total/contagem dos cards precisava ser exato.
+  const linhas = linhasTodas.slice(0, LIMITE)
 
   const campos: CampoFiltro[] = [
     {
@@ -255,9 +259,9 @@ export default async function RelatorioEstoqueValorizadoPage({
         </div>
       )}
 
-      {linhas.length === LIMITE && (
+      {totalProdutos > LIMITE && (
         <p className="px-1 text-[11px] text-text-muted">
-          Mostrando os {LIMITE} produtos de maior valor. Use os filtros para refinar.
+          Mostrando os {LIMITE} produtos de maior valor (de {totalProdutos} no total). Use os filtros para refinar.
         </p>
       )}
     </div>
