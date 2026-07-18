@@ -92,9 +92,16 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
             Number(it.vUnit ?? 0) * Number(it.nQuant ?? 0) - Number(it.vDesc ?? 0) + Number(it.vAcresc ?? 0)
           if (!v) continue
           const info = it.idProduto != null ? mapProd.get(Number(it.idProduto)) : undefined
-          add('tipo', info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado', mesISO, v)
-          add('familia', info?.familia || 'Sem família', mesISO, v)
-          add('produto', info?.nome || 'Produto não identificado', mesISO, v)
+          const tipoLabel = info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado'
+          const familiaLabel = info?.familia || 'Sem família'
+          const produtoLabel = info?.nome || 'Produto não identificado'
+          add('tipo', tipoLabel, mesISO, v)
+          add('familia', familiaLabel, mesISO, v)
+          add('produto', produtoLabel, mesISO, v)
+          // Dimensões compostas pro drill (tipo -> família -> produto). Separador
+          // literal '>>' não aparece em nomes do Omie.
+          add('tipo>familia', `${tipoLabel}>>${familiaLabel}`, mesISO, v)
+          add('familia>produto', `${familiaLabel}>>${produtoLabel}`, mesISO, v)
         }
       }
       pagina++
@@ -108,7 +115,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     .from('faturamento_importado')
     .delete()
     .eq('loja_id', loja.id)
-    .in('dimensao', ['tipo', 'familia', 'produto'])
+    .in('dimensao', ['tipo', 'familia', 'produto', 'tipo>familia', 'familia>produto'])
   if (delErro) throw new Error(delErro.message)
 
   const rows = [...acc.entries()].map(([k, valor]) => {
