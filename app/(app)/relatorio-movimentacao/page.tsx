@@ -537,7 +537,7 @@ export default async function RelatorioMovimentacaoPage({
     porRotulo.set(r.rotulo, ent)
   }
   const ordenadas = [...porRotulo.entries()].sort((a, b) => b[1].total - a[1].total)
-  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotulo: formatarNomeProduto(rotulo) || rotulo, meses: ent.meses, total: ent.total }))
+  const linhas = ordenadas.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotuloRaw: rotulo, rotulo: formatarNomeProduto(rotulo) || rotulo, meses: ent.meses, total: ent.total }))
   const ocultadas = ordenadas.length - linhas.length
   const totalPorMes: Record<string, number> = {}
   for (const [, ent] of porRotulo) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (ent.meses[m] ?? 0)
@@ -580,7 +580,13 @@ export default async function RelatorioMovimentacaoPage({
               <tbody>
                 {linhas.map((l) => (
                   <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}><div className="max-w-[140px] truncate">{l.rotulo}</div></td>
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}>
+                      <div className="max-w-[140px] truncate">
+                        {/* Nível máximo do dado aqui é o produto: o "item" é o extrato
+                            da aba Movimentos, que já existe — leva pra lá. */}
+                        <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotuloRaw)}`} className="hover:underline">{l.rotulo}</Link>
+                      </div>
+                    </td>
                     {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text-muted">{fmtQtd(l.meses[m] ?? 0)}</td>))}
                     <td className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-medium text-text">{fmtQtd(l.total)}</td>
                   </tr>
