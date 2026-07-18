@@ -26,12 +26,76 @@ type CupomItem = {
   vAcresc?: number
   cItemCancelado?: string
   cCupomCancelado?: string
+  idItem?: number
+  nSequencia?: number
+  cCFOP?: string
+  cNCM?: string
+  xProd?: string
+}
+type CupomPagamento = {
+  nSequencia?: number
+  cTipoDoc?: string
+  nValorDocumento?: number
+  cCategoria?: string
+  idContaCorrente?: number
 }
 type Cupom = {
-  cabecalhoCupom?: { info?: { cCupomCancelado?: string } }
+  cabecalhoCupom?: {
+    info?: { cCupomCancelado?: string; cCupomDevolvido?: string }
+    nIdCupom?: number
+    cChaveCupom?: string
+    dDtEmissaoCupom?: string
+    cHrEmissaoCupom?: string
+    nNumCupom?: number
+    nSerieCupom?: number
+    seqCaixa?: number
+    idCliente?: number
+    idVendedor?: number
+    nValorCupom?: number
+  }
   itensCupom?: CupomItem[]
+  pagamentosCupom?: CupomPagamento[]
 }
 type CuponsResposta = { nTotPaginas?: number; cupons?: Cupom[] }
+
+type CupomBulkRow = {
+  n_id_cupom: number; chave: string | null; data: string; hora: string | null
+  num: string | null; serie: string | null; seq_caixa: number | null
+  id_cliente: number | null; id_vendedor: number | null; valor: number
+  cancelado: boolean; devolvido: boolean
+}
+type ItemBulkRow = {
+  id_item: number; n_id_cupom: number; id_produto: number | null; cfop: string | null
+  ncm: string | null; quant: number; v_unit: number; v_desc: number; v_item: number; x_prod: string | null
+}
+type PagamentoBulkRow = {
+  n_id_cupom: number; sequencia: number; tipo_doc: string | null; valor: number
+  categoria: string | null; id_conta_corrente: number | null
+}
+
+// Envia o fato (cupom+itens+pagamentos) pro Contabo. Nao lanca erro se o
+// Contabo falhar -- mesma filosofia de buscarFrio (historico-contabo.ts):
+// o pre-agregado do Supabase, que sustenta a tela hoje, nunca pode quebrar
+// por causa do fato novo.
+async function gravarFatoNoFrio(lojaId: number, cupons: CupomBulkRow[], itens: ItemBulkRow[], pagamentos: PagamentoBulkRow[]): Promise<void> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url || !cupons.length) return
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    const resp = await fetch(`${url}/fat_cupons_bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+      body: JSON.stringify({ loja_id: lojaId, cupons, itens, pagamentos }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+  } catch (e) {
+    console.error('faturamento: falha ao gravar fato no Contabo', e)
+  }
+}
 
 /**
  * Repuxa o faturamento (dimensões tipo/família) do ano corrente até o mês atual,
@@ -84,6 +148,9 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     const mesISO = `${ano}-${mm}`
     const de = `01/${mm}/${ano}`
     const ate = `${ultimoDia(ano, mes)}/${mm}/${ano}`
+    const cuponsBulk: CupomBulkRow[] = []
+    const itensBulk: ItemBulkRow[] = []
+    const pagamentosBulk: PagamentoBulkRow[] = []
     let pagina = 1
     let totPag = 1
     do {
@@ -98,8 +165,45 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       totPag = r.nTotPaginas ?? 1
       for (const c of r.cupons ?? []) {
         if (c.cabecalhoCupom?.info?.cCupomCancelado === 'S') continue
+        const cab = c.cabecalhoCupom
+        cuponsBulk.push({
+          n_id_cupom: Number(cab?.nIdCupom),
+          chave: cab?.cChaveCupom ?? null,
+          data: cab?.dDtEmissaoCupom ? cab.dDtEmissaoCupom.split('/').reverse().join('-') : mesISO + '-01',
+          hora: cab?.cHrEmissaoCupom ?? null,
+          num: cab?.nNumCupom != null ? String(cab.nNumCupom) : null,
+          serie: cab?.nSerieCupom != null ? String(cab.nSerieCupom) : null,
+          seq_caixa: cab?.seqCaixa != null ? Number(cab.seqCaixa) : null,
+          id_cliente: cab?.idCliente != null ? Number(cab.idCliente) : null,
+          id_vendedor: cab?.idVendedor != null ? Number(cab.idVendedor) : null,
+          valor: Number(cab?.nValorCupom) || 0,
+          cancelado: cab?.info?.cCupomCancelado === 'S',
+          devolvido: cab?.info?.cCupomDevolvido === 'S',
+        })
+        for (const p of c.pagamentosCupom ?? []) {
+          pagamentosBulk.push({
+            n_id_cupom: Number(cab?.nIdCupom),
+            sequencia: Number(p.nSequencia ?? pagamentosBulk.length + 1),
+            tipo_doc: p.cTipoDoc ?? null,
+            valor: Number(p.nValorDocumento) || 0,
+            categoria: p.cCategoria ?? null,
+            id_conta_corrente: p.idContaCorrente != null ? Number(p.idContaCorrente) : null,
+          })
+        }
         for (const it of c.itensCupom ?? []) {
           if (it.cItemCancelado === 'S' || it.cCupomCancelado === 'S') continue
+          itensBulk.push({
+            id_item: Number(it.idItem ?? `${cab?.nIdCupom}${it.nSequencia}`),
+            n_id_cupom: Number(cab?.nIdCupom),
+            id_produto: it.idProduto != null ? Number(it.idProduto) : null,
+            cfop: it.cCFOP ?? null,
+            ncm: it.cNCM ?? null,
+            quant: Number(it.nQuant) || 0,
+            v_unit: Number(it.vUnit) || 0,
+            v_desc: Number(it.vDesc) || 0,
+            v_item: Number(it.vItem) || 0,
+            x_prod: it.xProd ?? null,
+          })
           const v =
             Number(it.vItem ?? 0) ||
             Number(it.vUnit ?? 0) * Number(it.nQuant ?? 0) - Number(it.vDesc ?? 0) + Number(it.vAcresc ?? 0)
@@ -121,6 +225,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       // Rate limit do Omie: respeita ~300ms entre leituras.
       if (pagina <= totPag) await sleep(340)
     } while (pagina <= totPag)
+    await gravarFatoNoFrio(loja.id, cuponsBulk, itensBulk, pagamentosBulk)
   }
 
   // Observabilidade: se uma fatia grande do valor do mes caiu em "nao
