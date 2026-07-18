@@ -41,11 +41,24 @@ type CuponsResposta = { nTotPaginas?: number; cupons?: Cupom[] }
 export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: string }): Promise<number> {
   const supabase = createServiceClient()
 
-  // Mapa produto: codigo_produto -> { tipo, familia }.
-  const { data: prods } = await supabase
-    .from('produtos')
-    .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
-    .eq('loja_id', loja.id)
+  // Mapa produto: codigo_produto -> { tipo, familia }. O PostgREST/Supabase
+  // corta silenciosamente em 1000 linhas por padrão (sem erro) -- lojas com
+  // mais de 1000 produtos cadastrados perdiam parte do catalogo aqui e todo
+  // produto fora da primeira pagina virava "Produto nao identificado"
+  // (achado real: loja com 2693 produtos so via os 1000 primeiros). Pagina
+  // com .range ate esgotar.
+  const prods: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[] = []
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * 1000
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
+      .eq('loja_id', loja.id)
+      .range(from, from + 999)
+    if (!data?.length) break
+    prods.push(...data)
+    if (data.length < 1000) break
+  }
   const mapProd = new Map<number, { tipo: string | null; familia: string | null; nome: string }>()
   for (const p of prods ?? []) {
     mapProd.set(Number(p.codigo_produto), {
@@ -108,6 +121,23 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       // Rate limit do Omie: respeita ~300ms entre leituras.
       if (pagina <= totPag) await sleep(340)
     } while (pagina <= totPag)
+  }
+
+  // Observabilidade: se uma fatia grande do valor do mes caiu em "nao
+  // identificado", provavelmente o catalogo de produtos esta desatualizado
+  // (produto novo no PDV ainda nao sincronizado) -- alerta cedo em vez de deixar
+  // o numero crescer silenciosamente por meses (ver docs/superpowers/specs/2026-07-18-*).
+  const mesCorrenteISO = `${ano}-${String(mesAtual).padStart(2, '0')}`
+  const totalMesCorrente = [...acc.entries()]
+    .filter(([k]) => k.startsWith('produto|') && k.endsWith(`|${mesCorrenteISO}`))
+    .reduce((s, [, v]) => s + v, 0)
+  const naoIdentMesCorrente = acc.get(`produto|Produto não identificado|${mesCorrenteISO}`) ?? 0
+  if (totalMesCorrente > 0 && naoIdentMesCorrente / totalMesCorrente > 0.1) {
+    console.warn(
+      `[faturamento] loja ${loja.id}: ${((naoIdentMesCorrente / totalMesCorrente) * 100).toFixed(1)}% ` +
+      `do faturamento de ${mesCorrenteISO} caiu em "Produto não identificado" (R$ ${naoIdentMesCorrente.toFixed(2)} ` +
+      `de R$ ${totalMesCorrente.toFixed(2)}). Provavel produto novo no PDV sem sync do cadastro ainda.`
+    )
   }
 
   // Substitui só tipo/familia (forma_pgto, quando existe, vem do import manual e fica intacto).

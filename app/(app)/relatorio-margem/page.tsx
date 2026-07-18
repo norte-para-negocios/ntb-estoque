@@ -46,7 +46,49 @@ export default async function RelatorioMargemPage({
     supabase.from('produtos').select('codigo, tipo_item, codigo_produto').eq('loja_id', lojaId),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
-  const rows = (rowsRaw ?? []) as Row[]
+  let rows = (rowsRaw ?? []) as Row[]
+  let calculadaAoVivo = false
+
+  // Sem import manual (todas as lojas exceto a que faz upload do FAT_DRV):
+  // calcula a margem ao vivo com a MESMA fórmula da RPC relatorio_estoque_valorizado
+  // (migration 063), validada contra o Excel do Ramon (diff 0,00-0,37 p.p.).
+  if (!rows.length) {
+    const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
+    const { data: produtosCalc } = await supabase
+      .from('produtos')
+      .select('codigo, codigo_produto, descricao, descricao_familia, tipo_item, valor_unitario')
+      .eq('loja_id', lojaId)
+      .in('tipo_item', ['04', '00'])
+    const { data: fotoRow } = await supabase
+      .from('posicao_estoques')
+      .select('data_posicao')
+      .eq('loja_id', lojaId)
+      .order('data_posicao', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (fotoRow?.data_posicao && produtosCalc?.length) {
+      const { data: posRows } = await supabase
+        .from('posicao_estoques')
+        .select('n_cod_prod, n_cmc')
+        .eq('loja_id', lojaId)
+        .eq('data_posicao', fotoRow.data_posicao)
+        .gt('n_cmc', 0)
+      const cmcPorCod = new Map<number, number>()
+      for (const p of posRows ?? []) {
+        const atual = cmcPorCod.get(Number(p.n_cod_prod))
+        if (atual == null || Number(p.n_cmc) > atual) cmcPorCod.set(Number(p.n_cod_prod), Number(p.n_cmc))
+      }
+      rows = (produtosCalc as { codigo: string | null; codigo_produto: number; descricao: string | null; descricao_familia: string | null; valor_unitario: number | null }[])
+        .map((p) => {
+          const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
+          const pdv = Number(p.valor_unitario) || null
+          const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
+          return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
+        })
+        .filter((r) => r.cmc != null && r.pdv != null)
+      calculadaAoVivo = true
+    }
+  }
   const tipoPorCodigo = new Map<string, string | null>()
   for (const p of (produtosRaw ?? []) as { codigo: string | null; tipo_item: string | null }[]) {
     if (p.codigo) tipoPorCodigo.set(p.codigo, p.tipo_item)
@@ -232,7 +274,9 @@ export default async function RelatorioMargemPage({
       )}
 
       <p className="px-1 text-[11px] text-text-muted">
-        Margem mais recente por produto, importada da aba MARGEM do FAT_DRV (produto acabado / venda PDV). A % é a que o Omie calcula.
+        {calculadaAoVivo
+          ? 'Margem calculada automaticamente (preço de venda × custo médio da última posição de estoque) para produtos acabados e de revenda — sem import manual.'
+          : 'Margem mais recente por produto, importada da aba MARGEM do FAT_DRV (produto acabado / venda PDV). A % é a que o Omie calcula.'}
       </p>
     </div>
   )
