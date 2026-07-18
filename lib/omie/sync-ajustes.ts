@@ -160,10 +160,13 @@ export async function syncAjustes(loja: LojaOmie): Promise<number> {
       .filter((r): r is MovimentoRow => r !== null)
 
     if (novos.length) {
-      const { error } = await supabase.from('movimentos').upsert(novos, {
-        onConflict: 'loja_id,id_ajuste',
-        ignoreDuplicates: false,
-      })
+      // supabase-js/PostgREST nao consegue expressar ON CONFLICT contra o
+      // indice UNICO PARCIAL de (loja_id, id_ajuste) (migration 059, WHERE
+      // id_ajuste IS NOT NULL) via .upsert() -- Postgres exige o predicado
+      // repetido no ON CONFLICT pra usar um indice parcial como arbitro, e
+      // o PostgREST nao gera isso. RPC faz o INSERT ... ON CONFLICT certo
+      // direto em SQL (migration 079).
+      const { error } = await supabase.rpc('upsert_movimentos_ajuste', { p_rows: novos })
       if (error) throw new Error(`Supabase upsert loja ${loja.id}: ${error.message}`)
       totalSalvos += novos.length
       await gravarMovimentosNoFrio(loja.id, novos)
