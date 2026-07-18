@@ -38,6 +38,36 @@ interface MovimentoRow {
   status: string
 }
 
+const LOTE_MOVIMENTOS = 200
+
+// Envia o lote de movimentos pro Contabo, em pedacos de 200. Nao lanca erro
+// se o Contabo falhar -- mesma filosofia de gravarFatoNoFrio
+// (lib/omie/faturamento.ts) e buscarFrio (lib/historico-contabo.ts): o
+// upsert no Supabase, que sustenta o sync hoje, nunca pode quebrar por
+// causa do dual-write.
+async function gravarMovimentosNoFrio(lojaId: number, linhas: MovimentoRow[]): Promise<void> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url || !linhas.length) return
+  for (let i = 0; i < linhas.length; i += LOTE_MOVIMENTOS) {
+    const lote = linhas.slice(i, i + LOTE_MOVIMENTOS)
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const resp = await fetch(`${url}/movimentos_bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+        body: JSON.stringify({ loja_id: lojaId, movimentos: lote }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    } catch (e) {
+      console.error('sync-ajustes: falha ao gravar movimentos no Contabo', e)
+    }
+  }
+}
+
 const TIPOS_VALIDOS = new Set(['ENT', 'SAI', 'SLD', 'TRF', 'TPQ'])
 
 function omieDataParaISO(d: string): string | null {
@@ -136,6 +166,7 @@ export async function syncAjustes(loja: LojaOmie): Promise<number> {
       })
       if (error) throw new Error(`Supabase upsert loja ${loja.id}: ${error.message}`)
       totalSalvos += novos.length
+      await gravarMovimentosNoFrio(loja.id, novos)
     }
 
     await sleep(80)
