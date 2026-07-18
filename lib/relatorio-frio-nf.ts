@@ -106,7 +106,10 @@ export type FiltrosComprasFrio = {
   local: number | null
 }
 
-/** Espelha o WHERE das relatorio_compras_* (incl. exclusão de CFOP 910/908). */
+const SEM = '__sem__'
+
+/** Espelha o WHERE das relatorio_compras_* (incl. exclusão de CFOP 910/908 e o
+ * sentinela '__sem__' = valor nulo, migration 077). */
 export function filtrarItensCompras(
   itens: ItemNFFrio[],
   f: FiltrosComprasFrio,
@@ -114,11 +117,25 @@ export function filtrarItensCompras(
 ): ItemNFFrio[] {
   return itens.filter((it) => {
     const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
-    if (f.familias.length && !f.familias.includes(m?.familia ?? '')) return false
-    if (f.tipos.length && !f.tipos.includes(m?.tipo ?? '')) return false
-    if (f.fornecedor && !ilike(it.nf_fornecedor, f.fornecedor)) return false
+    if (f.familias.length) {
+      const fam = m?.familia ?? null
+      const casa = (fam !== null && f.familias.includes(fam)) || (f.familias.includes(SEM) && fam === null)
+      if (!casa) return false
+    }
+    if (f.tipos.length) {
+      const tipo = m?.tipo ?? null
+      const casa = (tipo !== null && f.tipos.includes(tipo)) || (f.tipos.includes(SEM) && tipo === null)
+      if (!casa) return false
+    }
+    if (f.fornecedor) {
+      if (f.fornecedor === SEM) { if (it.nf_fornecedor != null) return false }
+      else if (!ilike(it.nf_fornecedor, f.fornecedor)) return false
+    }
     const cfopEnt = cfopEntradaDe(it)
-    if (f.cfops.length && !f.cfops.includes(cfopEnt ?? '')) return false
+    if (f.cfops.length) {
+      const casa = (cfopEnt !== null && f.cfops.includes(cfopEnt)) || (f.cfops.includes(SEM) && cfopEnt === null)
+      if (!casa) return false
+    }
     if (f.produto && !ilike(it.c_descricao_produto, f.produto) && !ilike(it.c_codigo_produto, f.produto)) return false
     if (f.local !== null && localDe(it) !== f.local) return false
     if (['910', '908'].includes(right3(cfopEnt))) return false
@@ -160,6 +177,36 @@ export function agregarComprasMatriz(
   return [...grupos.values()]
 }
 
+export type LinhaDetalheCompra = {
+  data: string; mes: string; nota: string; fornecedor: string
+  tipo: string | null; familia: string | null; produto: string; codigo: string
+  ncm: string; cfop: string; unidade: string; qtde: number; preco_unit: number; total: number
+}
+
+/** Espelha o SELECT de relatorio_compras_detalhe pro pedaço frio (migration 077). */
+export function mapearComprasDetalhe(itens: ItemNFFrio[], meta: MetaProdutoNF): LinhaDetalheCompra[] {
+  return itens.map((it) => {
+    const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
+    const fo = it.full_object as { itensCabec?: { cNCM?: string } } | null
+    return {
+      data: it.nf_d_emissao_nfe,
+      mes: it.nf_d_emissao_nfe.slice(0, 7),
+      nota: it.nf_c_numero_nfe ?? '',
+      fornecedor: it.nf_fornecedor ?? '',
+      tipo: m?.tipo ?? null,
+      familia: m?.familia ?? null,
+      produto: it.c_descricao_produto ?? '',
+      codigo: it.c_codigo_produto ?? '',
+      ncm: fo?.itensCabec?.cNCM ?? '',
+      cfop: cfopEntradaDe(it) ?? '',
+      unidade: (it as { c_unidade_nfe?: string | null }).c_unidade_nfe ?? '',
+      qtde: Number(it.n_qtde_nfe) || 0,
+      preco_unit: Number(it.n_preco_unit) || 0,
+      total: valorDe(it),
+    }
+  })
+}
+
 export type FiltrosAuditoriaFrio = {
   produto: string | null
   familia: string | null
@@ -179,9 +226,14 @@ export function filtrarItensAuditoria(
     if (f.produto && !ilike(it.c_descricao_produto, f.produto) && !ilike(it.c_codigo_produto, f.produto)) return false
     if (f.familia) {
       const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
-      if ((m?.familia ?? '') !== f.familia) return false
+      const fam = m?.familia ?? null
+      if (f.familia === SEM) { if (fam !== null) return false }
+      else if (fam !== f.familia) return false
     }
-    if (f.fornecedor && !ilike(it.nf_fornecedor, f.fornecedor)) return false
+    if (f.fornecedor) {
+      if (f.fornecedor === SEM) { if (it.nf_fornecedor != null) return false }
+      else if (!ilike(it.nf_fornecedor, f.fornecedor)) return false
+    }
     if (f.local !== null && localDe(it) !== f.local) return false
     return true
   })
@@ -239,7 +291,12 @@ export function mapearAuditoriaItens(
   item_id: number
 }[] {
   return itens
-    .filter((it) => (cfopDocDe(it) ?? '') === sel.cfopDoc && (cfopEntradaDe(it) ?? '') === sel.cfopEntrada)
+    .filter((it) => {
+      if ((cfopDocDe(it) ?? '') !== sel.cfopDoc) return false
+      const ent = cfopEntradaDe(it)
+      if (sel.cfopEntrada === SEM) return ent === null
+      return (ent ?? '') === sel.cfopEntrada
+    })
     .map((it) => {
       const icms = (it.full_object as { itensICMS?: { cSitTrib?: string; cOrigem?: string } } | null)?.itensICMS
       return {
