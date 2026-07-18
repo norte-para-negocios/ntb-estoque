@@ -62,17 +62,21 @@ Endpoints: `POST /webhooks` (dual-write) e `GET /movimentos`,
 `GET /movimentos_historico`, `GET /notas_fiscais`, `GET /nota_fiscal_items`,
 `GET /ordens_producao` (leitura, aceitam `count=true` para contagem sem LIMIT).
 
-**Proxy do domínio (incidente 2026-07-18):** o rebuild automático do Hestia
-regenerou o vhost do `frio-api.*` com o template padrão (php-fpm) e a API
-pública passou a responder 404 em tudo — os relatórios híbridos degradaram
-SILENCIOSAMENTE (o `buscarFrio` engole erro e devolve `[]`; nenhuma página
-quebra, só falta a fatia antiga). Corrigido criando o template de proxy
-`node-3001` (`/usr/local/hestia/data/templates/web/nginx/node-3001.{tpl,stpl}`,
-`proxy_pass http://127.0.0.1:3001`) e aplicando com
-`v-change-web-domain-proxy-tpl ntb frio-api.norteparanegocios.com.br node-3001`
-— isso sobrevive a rebuilds futuros. Se a fatia fria "sumir" de novo, teste
-primeiro `curl` na URL pública: 404 = proxy; depois `curl 127.0.0.1:3001`
-dentro do servidor.
+**Proxy dos domínios (incidente 2026-07-18):** o rebuild automático do Hestia
+regenerou os vhosts com o template padrão (php-fpm) e derrubou os dois
+domínios que tinham `proxy_pass` editado NA MÃO: `frio-api.*` (API do
+histórico — passou a responder 404 em tudo, e os relatórios híbridos
+degradaram SILENCIOSAMENTE, porque o `buscarFrio` engole erro e devolve
+`[]`) e `app-estoque.*` (cópia paralela do app, caiu no "Coming Soon").
+Corrigido criando templates de proxy de verdade — `node-3001` (frio-api) e
+`node-3002` (app-estoque) em
+`/usr/local/hestia/data/templates/web/nginx/node-300{1,2}.{tpl,stpl}` — e
+aplicando com `v-change-web-domain-proxy-tpl ntb <dominio> node-300X`.
+Template aplicado pelo painel SOBREVIVE a rebuilds (o `estoque.*`, que já
+usava template, não caiu); edição manual no conf gerado NÃO sobrevive —
+nunca mais editar `/etc/nginx/conf.d/domains/*.conf` na mão. Se a fatia
+fria "sumir" de novo: `curl` na URL pública (404 = proxy) e depois
+`curl 127.0.0.1:3001` dentro do servidor.
 
 **Detalhe de driver importante:** o `pg` do Node retorna `bigint` como string e
 `date` como objeto `Date` completo por padrão — o `server.js` configura
