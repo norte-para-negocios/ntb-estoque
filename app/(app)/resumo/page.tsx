@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
-import { carregarResumoDia, hojeBahia, type CategoriaKey, type Contagem, type Tom } from '@/lib/resumo-dia'
+import { carregarResumoDia, carregarPainelAcao, hojeBahia, type CategoriaKey, type Contagem, type Tom } from '@/lib/resumo-dia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -75,6 +75,7 @@ export default async function ResumoPage({
   const labelPeriodoResumo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
 
   const { contagem, lista } = await carregarResumoDia(lojaIdsEfetivos, data, cat, periodo)
+  const painelAcao = await carregarPainelAcao(lojaIdsEfetivos)
   const catLabel = CATS.find((c) => c.key === cat)!.label
 
   const lojaParam = lojaSel != null ? String(lojaSel) : 'todas'
@@ -186,6 +187,26 @@ export default async function ResumoPage({
         />
         <ResumoFiltros data={data} lojaSel={lojaSel} lojas={lojas} hoje={hoje} cat={cat} />
       </ListaHeader>
+
+      {painelAcao.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-[15px] font-semibold text-text">Precisa de ação</h2>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {painelAcao.map((it) => (
+              <Link
+                key={it.titulo}
+                href={it.href}
+                className={`flex items-center justify-between rounded-lg border p-3 text-sm hover:opacity-80 ${
+                  it.tom === 'err' ? 'border-err/30 bg-err/10 text-err' : it.tom === 'warn' ? 'border-warn/30 bg-warn/10 text-warn' : 'border-info/30 bg-info/10 text-info'
+                }`}
+              >
+                <span>{it.titulo}</span>
+                <span className="num text-lg font-bold">{it.contagem}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Período GERAL: afeta todos os cards e a lista abaixo, não só a auditoria
           (pedido reuniao 09/07 -- Augusto, gerente regional, quer ver semanal/mensal). */}
