@@ -145,10 +145,22 @@ export default async function RelatorioIndicadoresPage({
 
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte).
   if (compIni < corte) {
-    const { data: prodMetaRaw } = await supabase
-      .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
+    // Paginado: lojas com catálogo grande (ex.: 2, 3, 5, 6 têm >1000 produtos)
+    // estourariam o corte padrão de 1000 linhas do PostgREST numa chamada única,
+    // deixando produtos fora do mapa de tipo/família (mesma classe de bug do rpcTodos).
+    type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
+    const prodMetaRaw: ProdMeta[] = []
+    const PAGE = 1000
+    for (let p = 0; ; p++) {
+      const { data, error } = await supabase
+        .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
+        .order('id').range(p * PAGE, p * PAGE + PAGE - 1)
+      if (error || !data?.length) break
+      prodMetaRaw.push(...(data as ProdMeta[]))
+      if (data.length < PAGE) break
+    }
     const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+    for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)

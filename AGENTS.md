@@ -204,6 +204,22 @@ visual, não escondido. A meta de Compras÷Faturamento (antes fixa em 40%
 no código) agora é `lojas.meta_compras_pct` (nula = 40%, editável em
 "Minha loja").
 
+**Auditoria pós-incidente do card financeiro + meta (2026-07-18):** ao
+reverificar as 6 lojas ativas, achado o mesmo padrão de bug do 1000-linhas
+do PostgREST (já visto em `estoque-valorizado`), mas fora de uma RPC: o
+complemento frio de Compras em `relatorio-indicadores/page.tsx` lia
+`produtos` inteiro com um `.from().select()` sem paginação, pra montar o
+mapa `codigo_produto -> {tipo, familia}` usado no filtro por família. 5 das
+6 lojas ativas têm >1000 produtos (2693/2313/2512/2510/2869; só a loja 7
+com 693 escapava). Sem paginação, produtos além da linha 1000 (ordem não
+garantida) ficavam de fora do mapa — silenciosamente excluídos do total de
+Compras sempre que um filtro de família estivesse ativo E o período
+cruzasse os 90 dias (o caso comum, já que o padrão é ano inteiro). Não
+afetava a visão sem filtro (a agregação usa dim='cfop', que não depende do
+mapa). Corrigido paginando com `.range()` + `.order('id')`, mesmo padrão de
+`rpcTodos`. Faturamento e Compras (RPC quente + complemento frio) foram
+cross-validados via SQL direto para as lojas 2 e 3 e bateram exato.
+
 **Pré-requisito de dado resolvido nesta data:** os itens de NF antigos no
 Contabo tinham `full_object` **vazio** (a cópia inicial de 07-12 trouxe as
 linhas sem o JSONB, e é dele que saem CFOP de entrada, crédito de ICMS e
