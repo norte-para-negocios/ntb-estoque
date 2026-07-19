@@ -16,7 +16,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
-import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
+import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -117,38 +117,48 @@ export default async function NotaFiscalPage({
   if (tiposArr.length || familiasArr.length || params.produto || localCod !== null) {
     let codigos: string[] | null = null
     if (tiposArr.length || familiasArr.length) {
-      let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-      if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
-      if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
-      const { data: prodCodigos } = await prodQuery
-      codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
+      // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
+      // (ex: loja 6, tipo "99" tem 1143) -- sem .range() o PostgREST trunca em
+      // silencio e o filtro de tipo/familia some com notas validas.
+      const prodCodigos = await buscarTudoPaginado<{ codigo_produto: string | number }>((from, to) => {
+        let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).order('id', { ascending: true }).range(from, to)
+        if (tiposArr.length) q = q.in('tipo_item', tiposArr)
+        if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
+        return q
+      })
+      codigos = prodCodigos.map((p) => String(p.codigo_produto))
       if (codigos.length === 0) {
         notaIds = []
       }
     }
 
     if (notaIds === null) {
-      let itemQuery = supabase
-        .from('nota_fiscal_items')
-        .select('nota_fiscal_id')
-        .eq('loja_id', lojaId)
-      if (codigos) itemQuery = itemQuery.in('produto_codigo', codigos)
-      if (params.produto) {
-        const p = escapeIlikeOr(params.produto)
-        itemQuery = itemQuery.or(
-          `c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`,
-        )
-      }
-      if (localCod !== null) {
-        itemQuery = itemQuery.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
-      }
-      const { data: itemRows } = await itemQuery
+      // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
+      // (toda loja ativa ja passa disso) -- mesma razao acima.
+      const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
+        let q = supabase
+          .from('nota_fiscal_items')
+          .select('nota_fiscal_id')
+          .eq('loja_id', lojaId)
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (codigos) q = q.in('produto_codigo', codigos)
+        if (params.produto) {
+          const p = escapeIlikeOr(params.produto)
+          q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+        }
+        if (localCod !== null) {
+          q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
+        }
+        return q
+      })
       notaIds = Array.from(
-        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
+        new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
       )
     }
   }
   const idsIn = notaIds !== null ? (notaIds.length ? notaIds : [-1]) : null
+  const idsInSet = idsIn ? new Set(idsIn) : null
 
   // Query da listagem (paginada).
   let query = supabase
@@ -170,63 +180,103 @@ export default async function NotaFiscalPage({
   if (categoriaOrClause) query = query.or(categoriaOrClause)
   if (idsIn) query = query.in('id', idsIn)
 
-  // Query dos totais (mesmos filtros, sem paginacao): soma R$ + count exato.
-  let totaisQuery = supabase
-    .from('notas_fiscais')
-    .select('id, n_valor_nfe', { count: 'exact' })
-    .eq('loja_id', lojaId)
-    .gte('d_emissao_nfe', dataInicio)
-    .lte('d_emissao_nfe', dataFinal)
-    .is('deleted_at', null)
-    .limit(100000)
-  if (params.num_nfe) totaisQuery = totaisQuery.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-  if (params.fornecedor) totaisQuery = totaisQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-  if (params.status === 'C') totaisQuery = totaisQuery.eq('c_etapa', '60')
-  else if (params.status === 'P') totaisQuery = totaisQuery.neq('c_etapa', '60')
-  else if (params.status) totaisQuery = totaisQuery.eq('c_etapa', params.status)
-  if (params.natureza) totaisQuery = totaisQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-  if (categoriaOrClause) totaisQuery = totaisQuery.or(categoriaOrClause)
-  if (idsIn) totaisQuery = totaisQuery.in('id', idsIn)
+  // Query dos totais (mesmos filtros, sem paginacao visivel ao usuario): soma R$ + count.
+  // Paginada por baixo dos panos -- confirmado empiricamente que o PostgREST trunca
+  // em 1000 linhas mesmo com `.limit(100000)` explicito (nao ha erro, so silencio),
+  // e nenhuma loja hoje passa disso em notas_fiscais mas o numero cresce todo dia.
+  function buildTotaisQuery(from: number, to: number) {
+    let q = supabase
+      .from('notas_fiscais')
+      .select('id, n_valor_nfe')
+      .eq('loja_id', lojaId)
+      .gte('d_emissao_nfe', dataInicio)
+      .lte('d_emissao_nfe', dataFinal)
+      .is('deleted_at', null)
+      .order('id', { ascending: true })
+      .range(from, to)
+    if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+    if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+    if (params.status === 'C') q = q.eq('c_etapa', '60')
+    else if (params.status === 'P') q = q.neq('c_etapa', '60')
+    else if (params.status) q = q.eq('c_etapa', params.status)
+    if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+    if (categoriaOrClause) q = q.or(categoriaOrClause)
+    if (idsIn) q = q.in('id', idsIn)
+    return q
+  }
 
-  const [{ data: notasRaw }, { data: totaisRaw, count: totalNotas }] = await Promise.all([query, totaisQuery])
+  const [{ data: notasRaw }, totaisRaw] = await Promise.all([
+    query,
+    buscarTudoPaginado<{ id: number; n_valor_nfe: number | string | null }>(buildTotaisQuery),
+  ])
 
   let notas = notasRaw
   let temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
-  let qtdNotas = totalNotas ?? (totaisRaw?.length ?? 0)
-  let totalValor = (totaisRaw ?? []).reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+  let qtdNotas = totaisRaw.length
+  let totalValor = totaisRaw.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
 
   if (dataInicio < limiteJanelaQuente()) {
     // Periodo cruza a janela quente: nao da pra confiar na paginacao nativa do
     // Supabase sozinha (o Contabo pode ter linhas no meio do intervalo pedido) --
     // busca tudo dos dois lados (com os MESMOS filtros da query principal), ordena
     // e pagina em memoria.
-    const totaisCompletos = await complementarNotasFiscais(totaisRaw ?? [], {
+    const totaisCompletosBrutos = await complementarNotasFiscais(totaisRaw, {
       lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
     })
+    // complementarNotasFiscais busca a fatia fria so por loja/data/busca -- nao
+    // conhece o filtro de tipo/familia/produto/local (limitacao ja documentada
+    // no AGENTS.md: "o cruzamento com o Contabo nao foi implementado para esse
+    // caso especifico"). Sem filtrar aqui, TODA nota fria do periodo entra no
+    // merge, inflando o total quando esse filtro esta ativo e o periodo cruza
+    // os 90 dias (achado real: loja 6, tipo=99, badge mostrando 1907 em vez de
+    // 2). idsInSet ja veio das notas que casam no lado quente; aplicar o mesmo
+    // filtro na fatia fria evita a inflacao (ainda pode faltar nota cuja unica
+    // referencia de item exista so no Contabo -- limitacao que continua aberta).
+    const totaisCompletos = idsInSet ? totaisCompletosBrutos.filter((r) => idsInSet.has(r.id)) : totaisCompletosBrutos
     qtdNotas = totaisCompletos.length
     totalValor = totaisCompletos.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
 
-    let todasQuery = supabase
-      .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
-      .eq('loja_id', lojaId)
-      .gte('d_emissao_nfe', dataInicio)
-      .lte('d_emissao_nfe', dataFinal)
-      .is('deleted_at', null)
-      .limit(2000)
-    if (params.num_nfe) todasQuery = todasQuery.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-    if (params.fornecedor) todasQuery = todasQuery.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-    if (params.status === 'C') todasQuery = todasQuery.eq('c_etapa', '60')
-    else if (params.status === 'P') todasQuery = todasQuery.neq('c_etapa', '60')
-    else if (params.status) todasQuery = todasQuery.eq('c_etapa', params.status)
-    if (params.natureza) todasQuery = todasQuery.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-    if (categoriaOrClause) todasQuery = todasQuery.or(categoriaOrClause)
-    if (idsIn) todasQuery = todasQuery.in('id', idsIn)
-
-    const { data: paginaCompletaRaw } = await todasQuery
-    const todas = await complementarNotasFiscais(paginaCompletaRaw ?? [], {
+    // Paginado (nao mais `.limit(2000)`): a fatia quente tambem pode passar de
+    // 1000 linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
+    // truncaria a pagina em memoria (nao so o total exibido).
+    type NotaCompleta = {
+      id: number
+      d_emissao_nfe: string | null
+      c_numero_nfe: string | null
+      c_razao_social: string | null
+      c_nome: string | null
+      n_valor_nfe: number | string | null
+      c_etapa: string | null
+      c_natureza_operacao: string | null
+      c_modelo_nfe: string | null
+      c_serie_nfe: string | null
+    }
+    const paginaCompletaRaw = await buscarTudoPaginado<NotaCompleta>((from, to) => {
+      let q = supabase
+        .from('notas_fiscais')
+        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
+        .eq('loja_id', lojaId)
+        .gte('d_emissao_nfe', dataInicio)
+        .lte('d_emissao_nfe', dataFinal)
+        .is('deleted_at', null)
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+      if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+      if (params.status === 'C') q = q.eq('c_etapa', '60')
+      else if (params.status === 'P') q = q.neq('c_etapa', '60')
+      else if (params.status) q = q.eq('c_etapa', params.status)
+      if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+      if (categoriaOrClause) q = q.or(categoriaOrClause)
+      if (idsIn) q = q.in('id', idsIn)
+      return q
+    })
+    const todasBrutas = await complementarNotasFiscais(paginaCompletaRaw, {
       lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
     })
+    // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
+    // de tipo/familia/produto/local sozinha.
+    const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
     todas.sort((a, b) => {
       const av = a[ord] ?? ''
       const bv = b[ord] ?? ''
@@ -412,7 +462,7 @@ export default async function NotaFiscalPage({
       />
 
       {(page > 1 || temProxima) && (
-        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} total={totalNotas ?? undefined} porPagina={POR_PAGINA} />
+        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} total={qtdNotas} porPagina={POR_PAGINA} />
       )}
     </div>
   )

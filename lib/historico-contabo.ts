@@ -77,18 +77,39 @@ function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
   return [...quentes, ...frias.filter((r) => !vistos.has(r.id))]
 }
 
+// A API do Contabo tem LIMIT fixo no servidor pros endpoints de historico longo
+// (nao aceita LIMIT arbitrario do cliente, so `offset`) -- acha real (audit Notas
+// Fiscais 2026-07-19): nenhum client deste repo de fato fazia o loop de paginas,
+// entao /notas_fiscais (LIMIT 2000 no servidor) e /nota_fiscal_items (LIMIT 5000)
+// truncavam em silencio pra loja com mais historico que isso (achado real: loja 3
+// tinha 2248 notas fiscais no Contabo, loja 5 tinha 2561 -- o badge de "Notas
+// Fiscais" pra periodo desde o inicio mostrava 2050 em vez das 2650 reais).
+async function buscarFrioTudo<T>(
+  caminho: string,
+  params: Record<string, string | number | undefined>,
+  tamanhoPagina: number,
+): Promise<T[]> {
+  const tudo: T[] = []
+  for (let offset = 0; ; offset += tamanhoPagina) {
+    const pagina = await buscarFrio<T>(caminho, { ...params, offset })
+    tudo.push(...pagina)
+    if (pagina.length < tamanhoPagina) break
+  }
+  return tudo
+}
+
 export async function complementarNotasFiscais<T extends { id: number }>(
   quentes: T[],
   opts: { lojaId: number; dataInicio?: string; dataFinal?: string; busca?: string; id?: number }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio) && !opts.id) return quentes
-  const frias = await buscarFrio<T>('/notas_fiscais', {
+  const frias = await buscarFrioTudo<T>('/notas_fiscais', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
     busca: opts.busca,
     id: opts.id,
-  })
+  }, 2000)
   return mesclarPorId(quentes, frias)
 }
 
@@ -97,12 +118,12 @@ export async function complementarNotaFiscalItems<T extends { id: number }>(
   opts: { lojaId: number; notaFiscalId?: number | number[]; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
   if (!opts.notaFiscalId && !foraDaJanelaQuente(opts.dataInicio)) return quentes
-  const frias = await buscarFrio<T>('/nota_fiscal_items', {
+  const frias = await buscarFrioTudo<T>('/nota_fiscal_items', {
     loja_id: opts.lojaId,
     nota_fiscal_id: Array.isArray(opts.notaFiscalId) ? opts.notaFiscalId.join(',') : opts.notaFiscalId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
-  })
+  }, 5000)
   return mesclarPorId(quentes, frias)
 }
 
@@ -171,11 +192,11 @@ export async function buscarFrioNotaFiscalItems<T>(opts: {
   dataInicio: string
   dataFinal: string
 }): Promise<T[]> {
-  return buscarFrio<T>('/nota_fiscal_items', {
+  return buscarFrioTudo<T>('/nota_fiscal_items', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
-  })
+  }, 5000)
 }
 
 // O endpoint /movimentos_historico do ntb-frio-api (server.js, fora deste repo --
