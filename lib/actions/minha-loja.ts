@@ -37,7 +37,10 @@ export async function editarLojaNegocio(dados: LojaNegocioInput) {
   const lojaId = await lojaGerivel()
   if (!lojaId) return { error: 'Sem permissão para editar esta loja' }
 
-  const metaPct = dados.meta_compras_pct.trim()
+  // Aceita "," como separador decimal (o input permite digitar vírgula, comum
+  // no Brasil): Number("35,5") é NaN, então sem essa troca o valor digitado
+  // cai silenciosamente no fallback de 40% em vez do que a pessoa quis salvar.
+  const metaPct = dados.meta_compras_pct.trim().replace(',', '.')
   const supabase = createServiceClient()
   const { error } = await supabase
     .from('lojas')
