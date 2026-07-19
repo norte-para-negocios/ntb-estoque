@@ -64,7 +64,7 @@ export async function buscarComPaginacaoPorData<T>(
   dataFinal: string,
   teto: number
 ): Promise<T[]> {
-  const rows = await buscarFrio<T>(caminho, { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal })
+  const rows = (await buscarFrio<T>(caminho, { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal })) ?? []
   if (rows.length < teto || dataInicio >= dataFinal) return rows
   const meio = new Date((Date.parse(dataInicio) + Date.parse(dataFinal)) / 2).toISOString().slice(0, 10)
   const inicioSegunda = addDia(meio)

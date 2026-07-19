@@ -14,10 +14,10 @@ export async function buscarFatAgregado(opts: {
   group: 'dia' | 'forma' | 'produto'
   group2?: 'mes'
 }): Promise<LinhaFatAgregado[]> {
-  const rows = await buscarFrio<{ rotulo: string; mes?: string; valor: string | number; qtde_itens: string | number }>(
+  const rows = (await buscarFrio<{ rotulo: string; mes?: string; valor: string | number; qtde_itens: string | number }>(
     '/fat_agregado',
     { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal, group: opts.group, group2: opts.group2 },
-  )
+  )) ?? []
   return rows.map((r) => ({ rotulo: String(r.rotulo), mes: r.mes, valor: Number(r.valor) || 0, qtde_itens: Number(r.qtde_itens) || 0 }))
 }
 
@@ -59,13 +59,16 @@ export async function buscarFatCupomDetalhe(
   lojaId: number,
   nIdCupom: number,
 ): Promise<{ cupom: CupomFat | null; itens: ItemFat[]; pagamentos: PagamentoFat[] }> {
-  const [cupons, itens, pagamentos] = await Promise.all([
+  const [cuponsRaw, itensRaw, pagamentosRaw] = await Promise.all([
     buscarFrio<CupomFat & { valor: string | number }>('/fat_cupons', { loja_id: lojaId, n_id_cupom: nIdCupom }),
     buscarFrio<ItemFat & { quant: string | number; v_unit: string | number; v_desc: string | number; v_item: string | number }>(
       '/fat_cupom_itens', { loja_id: lojaId, n_id_cupom: nIdCupom },
     ),
     buscarFrio<PagamentoFat & { valor: string | number }>('/fat_cupom_pagamentos', { loja_id: lojaId, n_id_cupom: nIdCupom }),
   ])
+  const cupons = cuponsRaw ?? []
+  const itens = itensRaw ?? []
+  const pagamentos = pagamentosRaw ?? []
   const cupom = cupons[0] ? { ...cupons[0], valor: Number(cupons[0].valor) || 0 } : null
   return {
     cupom,

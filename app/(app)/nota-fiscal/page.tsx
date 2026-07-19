@@ -19,7 +19,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
-import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
+import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
 
 const POR_PAGINA = 50
 
@@ -27,6 +27,19 @@ function fmtData(d: string | null): string {
   if (!d) return '-'
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
+}
+
+type NotaCompleta = {
+  id: number
+  d_emissao_nfe: string | null
+  c_numero_nfe: string | null
+  c_razao_social: string | null
+  c_nome: string | null
+  n_valor_nfe: number | string | null
+  c_etapa: string | null
+  c_natureza_operacao: string | null
+  c_modelo_nfe: string | null
+  c_serie_nfe: string | null
 }
 
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
@@ -214,19 +227,39 @@ export default async function NotaFiscalPage({
   let temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
   let qtdNotas = totaisRaw.length
   let totalValor = totaisRaw.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
+  let totaisParciais = false
 
   if (dataInicio < limiteJanelaQuente()) {
     // Periodo cruza a janela quente: nao da pra confiar na paginacao nativa do
     // Supabase sozinha (o Contabo pode ter linhas no meio do intervalo pedido) --
     // busca tudo dos dois lados (com os MESMOS filtros da query principal), ordena
     // e pagina em memoria.
-    const totaisCompletosBrutos = await complementarNotasFiscais(totaisRaw, {
-      lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
-    })
-    // complementarNotasFiscais busca a fatia fria so por loja/data/busca -- nao
-    // conhece o filtro de tipo/familia/produto/local (limitacao ja documentada
-    // no AGENTS.md: "o cruzamento com o Contabo nao foi implementado para esse
-    // caso especifico"). Sem filtrar aqui, TODA nota fria do periodo entra no
+    //
+    // Busca a fatia fria UMA vez so (mesmos filtros loja/data/busca servem tanto
+    // pro badge quanto pra lista paginada -- antes eram 2 chamadas identicas ao
+    // Contabo, uma por complementarNotasFiscais em cada uso) e cruza com uma
+    // contagem real de referencia (count=true, sem LIMIT) pra saber se a
+    // paginacao trouxe tudo. Achado real (auditoria Notas Fiscais 2026-07-19):
+    // o badge variava a CADA carregamento (loja 5, "desde o inicio": 1423,
+    // depois 1932, valor real 2629) por causa de timeout intermitente numa
+    // pagina do meio da paginacao fria (raiz corrigida em lib/historico-
+    // contabo.ts: timeout curto demais + falha tratada igual a "acabaram as
+    // paginas") -- esse aviso fica como cinto-de-seguranca, mesmo padrao ja
+    // usado em ordem-producao/page.tsx.
+    const busca = params.num_nfe || params.fornecedor
+    const [friasRaw, friasTotalReal] = await Promise.all([
+      buscarFrioTudo<NotaCompleta>('/notas_fiscais', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal, busca }, 2000),
+      contarNotasFiscaisAntigas({ lojaId, dataInicio, dataFinal, busca }),
+    ])
+    if (friasRaw.length < friasTotalReal) totaisParciais = true
+
+    const vistosQuentes = new Set(totaisRaw.map((r) => r.id))
+    const totaisCompletosBrutos = [...totaisRaw, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    // complementarNotasFiscais (e o buscarFrioTudo acima, que a substitui aqui)
+    // busca a fatia fria so por loja/data/busca -- nao conhece o filtro de
+    // tipo/familia/produto/local (limitacao ja documentada no AGENTS.md: "o
+    // cruzamento com o Contabo nao foi implementado para esse caso
+    // especifico"). Sem filtrar aqui, TODA nota fria do periodo entra no
     // merge, inflando o total quando esse filtro esta ativo e o periodo cruza
     // os 90 dias (achado real: loja 6, tipo=99, badge mostrando 1907 em vez de
     // 2). idsInSet ja veio das notas que casam no lado quente; aplicar o mesmo
@@ -239,18 +272,6 @@ export default async function NotaFiscalPage({
     // Paginado (nao mais `.limit(2000)`): a fatia quente tambem pode passar de
     // 1000 linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
     // truncaria a pagina em memoria (nao so o total exibido).
-    type NotaCompleta = {
-      id: number
-      d_emissao_nfe: string | null
-      c_numero_nfe: string | null
-      c_razao_social: string | null
-      c_nome: string | null
-      n_valor_nfe: number | string | null
-      c_etapa: string | null
-      c_natureza_operacao: string | null
-      c_modelo_nfe: string | null
-      c_serie_nfe: string | null
-    }
     const paginaCompletaRaw = await buscarTudoPaginado<NotaCompleta>((from, to) => {
       let q = supabase
         .from('notas_fiscais')
@@ -271,9 +292,10 @@ export default async function NotaFiscalPage({
       if (idsIn) q = q.in('id', idsIn)
       return q
     })
-    const todasBrutas = await complementarNotasFiscais(paginaCompletaRaw, {
-      lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor,
-    })
+    // Reusa a mesma fatia fria (friasRaw) buscada acima -- mesmos filtros
+    // loja/data/busca, evita uma segunda ida identica ao Contabo.
+    const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.id))
+    const todasBrutas = [...paginaCompletaRaw, ...friasRaw.filter((r) => !vistosQuentesLista.has(r.id))]
     // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
     // de tipo/familia/produto/local sozinha.
     const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
@@ -421,6 +443,13 @@ export default async function NotaFiscalPage({
           Total <Money value={totalValor} className="font-semibold text-text" />
         </span>
       </div>
+
+      {totaisParciais && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Período muito longo: a contagem e o total acima podem estar abaixo do real (falha temporária ao
+          buscar o histórico completo). Tente recarregar a página ou use um período mais curto.
+        </p>
+      )}
 
       <Lista
         linhas={notas ?? []}
