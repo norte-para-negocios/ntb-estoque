@@ -189,11 +189,20 @@ export default async function TransferenciaPage({
     return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
   }
 
+  // Ambos os exports (PDF e Excel) precisam levar TODOS os filtros ativos na
+  // tela — achado real (auditoria 2026-07-18): os hrefs só repassavam um
+  // subconjunto, então o arquivo baixado voltava sem o filtro que o usuário
+  // via aplicado na lista (falso negativo de auditoria: dado "some" do export
+  // mas está certo na tela, ou vice-versa).
   const relatorioParams = new URLSearchParams()
   if (sp.data_inicio) relatorioParams.set('data_inicio', sp.data_inicio)
   if (sp.data_final) relatorioParams.set('data_final', sp.data_final)
   if (sp.familia) relatorioParams.set('familia', sp.familia)
   if (sp.tipo) relatorioParams.set('tipo', sp.tipo)
+  if (sp.produto) relatorioParams.set('produto', sp.produto)
+  if (sp.local) relatorioParams.set('local', sp.local)
+  if (sp.status) relatorioParams.set('status', sp.status)
+  if (sp.motivo) relatorioParams.set('motivo', sp.motivo)
   const relatorioHref = `/transferencia/relatorio?${relatorioParams.toString()}`
 
   const exportParams = new URLSearchParams()
@@ -201,6 +210,10 @@ export default async function TransferenciaPage({
   if (sp.data_final) exportParams.set('data_final', sp.data_final)
   if (sp.status) exportParams.set('status', sp.status)
   if (sp.motivo) exportParams.set('motivo', sp.motivo)
+  if (sp.familia) exportParams.set('familia', sp.familia)
+  if (sp.tipo) exportParams.set('tipo', sp.tipo)
+  if (sp.produto) exportParams.set('produto', sp.produto)
+  if (sp.local) exportParams.set('local', sp.local)
   const exportHref = `/transferencia/export?${exportParams.toString()}`
 
   const campos: CampoFiltro[] = [

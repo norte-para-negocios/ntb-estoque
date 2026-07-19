@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { complementarMovimentos } from '@/lib/historico-contabo'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -20,6 +23,67 @@ export async function GET(request: Request) {
   const dataFinal = searchParams.get('data_final') || undefined
   const status = searchParams.get('status') || undefined
   const motivo = searchParams.get('motivo') || undefined
+  // familia/tipo vem como lista separada por virgula (multi-select) na URL.
+  const familiasArr = valoresMulti(searchParams.get('familia') || '')
+  const tiposArr = valoresMulti(searchParams.get('tipo') || '')
+  const produto = searchParams.get('produto') || ''
+  const locaisArr = valoresMulti(searchParams.get('local') || '')
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n))
+
+  // BUG corrigido (auditoria 2026-07-19): este export ignorava TOTALMENTE
+  // família/tipo/produto/local — nem os parâmetros eram lidos. O arquivo
+  // Excel baixado sempre saía com todas as transferências da loja no
+  // período, mesmo com esses filtros ativos na tela. Mesma lógica de
+  // produtos -> movimentos -> transferencia_id já usada na tela e no PDF.
+  let idsFiltrados: number[] | null = null
+  if (familiasArr.length || tiposArr.length || produto) {
+    function buildProdQuery(from: number, to: number) {
+      let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).range(from, to)
+      if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
+      if (tiposArr.length) q = q.in('tipo_item', tiposArr)
+      if (produto) {
+        const termo = escapeIlikeOr(produto)
+        q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+      }
+      return q
+    }
+    const codigos: number[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data: bloco } = await buildProdQuery(from, from + 999)
+      if (!bloco?.length) break
+      codigos.push(...bloco.map((p) => p.codigo_produto).filter((v): v is number => v != null))
+      if (bloco.length < 1000) break
+    }
+    const codigosUnicos = [...new Set(codigos)]
+
+    if (codigosUnicos.length) {
+      const movsData: { id: number; id_prod: number; transferencia_id: number | null }[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data: bloco } = await supabase
+          .from('movimentos')
+          .select('id, id_prod, transferencia_id')
+          .eq('loja_id', lojaId)
+          .in('id_prod', codigosUnicos)
+          .not('transferencia_id', 'is', null)
+          .range(from, from + 999)
+        if (!bloco?.length) break
+        movsData.push(...bloco)
+        if (bloco.length < 1000) break
+      }
+      // complementarMovimentos so filtra 1 produto por vez na API do Contabo —
+      // busca tudo da loja e refiltra aqui (ver mesmo comentario na tela/PDF).
+      const codigosSet = new Set(codigosUnicos)
+      const movs = (await complementarMovimentos(movsData, { lojaId })).filter((m) =>
+        codigosSet.has(m.id_prod)
+      )
+      idsFiltrados = [
+        ...new Set((movs ?? []).map((m) => m.transferencia_id).filter((v): v is number => v != null)),
+      ]
+    } else {
+      idsFiltrados = []
+    }
+  }
 
   // Paginacao interna (PostgREST limita 1000) para nao truncar a exportacao.
   const PAGE_SIZE = 1000
@@ -48,6 +112,11 @@ export async function GET(request: Request) {
     if (status === 'C') q = q.eq('status', 'Concluido')
     else if (status === 'A') q = q.neq('status', 'Concluido')
     if (motivo === 'TRF' || motivo === 'TPQ') q = q.eq('motivo', motivo)
+    if (idsFiltrados !== null) q = q.in('id', idsFiltrados.length ? idsFiltrados : [-1])
+    if (locaisArr.length) {
+      const lista = locaisArr.join(',')
+      q = q.or(`codigo_local_origem.in.(${lista}),codigo_local_destino.in.(${lista})`)
+    }
     return q
   }
 
