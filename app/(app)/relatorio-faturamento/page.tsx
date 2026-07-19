@@ -14,7 +14,7 @@ import { ImportarFaturamento } from '@/components/faturamento/ImportarFaturament
 import { SyncButton } from '@/components/SyncButton'
 import { btnClass } from '@/components/ui-kit/Button'
 import Link from 'next/link'
-import { DollarSign, Download } from 'lucide-react'
+import { AlertTriangle, DollarSign, Download } from 'lucide-react'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
@@ -34,6 +34,15 @@ const CHIPS_PERIODO = [
   { value: '6', label: '6 meses' },
 ] as const
 
+// A ntb-frio-api limita /fat_cupons a 5000 linhas (LIMIT fixo no servidor,
+// fora deste repo -- ver AGENTS.md) sem devolver erro nem suportar paginação
+// (parâmetro `offset` é ignorado, confirmado testando direto na API).
+// Achado real: período "Todos" numa loja de movimento alto (loja 5, ~14 mil
+// cupons num intervalo de 6 meses) cortava silenciosamente os cupons mais
+// antigos da lista em "Ver cupons", sem qualquer aviso. Não dá pra corrigir
+// aqui (o corte é no servidor da API fria); o mínimo é avisar em vez de
+// deixar parecer lista completa.
+const LIMITE_FAT_CUPONS = 5000
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => {
   const [a, m] = ym.split('-')
@@ -137,26 +146,37 @@ export default async function RelatorioFaturamentoPage({
     const [a, m] = mesISO.split('-').map(Number)
     return `${mesISO}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`
   }
-  const mesIniEfetivo = mesIni ?? mesAtual
-  const mesFimEfetivo = mesFim ?? mesAtual
+  // "Todos" (chip padrão) precisa continuar significando "sem piso de data" pro
+  // fato tambem, do jeito que ja significa pro pre-agregado (RPC com p_mes_ini
+  // null = sem limite inferior). Achado real: caindo num "?? mesAtual" aqui,
+  // a aba "Forma de pgto" (que SEMPRE usa o fato) abria por padrao mostrando
+  // só o mês corrente em vez de todo o histórico -- silencioso, sem aviso, com
+  // o chip "Todos" continuando aceso como se estivesse tudo (loja 5: R$
+  // 510.901,18 do mês vs R$ 9.782.342,80 real all-time, confirmado via SQL
+  // direto no Contabo). dataInicio vazia = buscarFrio omite o parâmetro da
+  // query, e a API do Contabo trata ausência de data_inicio como "sem piso"
+  // (confirmado direto no /fat_agregado). O teto (dataFinal) não tem esse
+  // problema -- "hoje" é sempre um teto correto, não existe dado futuro.
+  const dataInicioFato = mesIni ? `${mesIni}-01` : ''
+  const dataFinalFato = fimDoMes(mesFim ?? mesAtual)
 
   const [matrizFato, cuponsFato]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
     usarFato && !verCupons
       ? buscarFatAgregado({
           lojaId,
-          dataInicio: `${mesIniEfetivo}-01`,
-          dataFinal: fimDoMes(mesFimEfetivo),
+          dataInicio: dataInicioFato,
+          dataFinal: dataFinalFato,
           group: dim === 'forma_pgto' ? 'forma' : 'produto',
           group2: 'mes',
         })
       : Promise.resolve([]),
     usarFato && verCupons
-      ? buscarFatCupons({ lojaId, dataInicio: `${mesIniEfetivo}-01`, dataFinal: fimDoMes(mesFimEfetivo) })
+      ? buscarFatCupons({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato })
       : Promise.resolve([]),
   ])
 
   const supabase = createServiceClient()
-  const [matrizCrua, { data: metaRow }, { data: opcoesRaw }] = await Promise.all([
+  const [matrizCrua, { data: metaRow }, opcoesRaw] = await Promise.all([
     rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', {
       p_loja_id: lojaId,
       p_dim: consultaDim,
@@ -169,7 +189,14 @@ export default async function RelatorioFaturamentoPage({
       .select('importado_em, arquivo, linhas')
       .eq('loja_id', lojaId)
       .maybeSingle(),
-    supabase.rpc('relatorio_faturamento_opcoes', { p_loja_id: lojaId }),
+    // rpcTodos, não .rpc() cru: relatorio_faturamento_opcoes traz distinct
+    // (dimensao, rotulo) de TODAS as dimensões (inclusive produto/tipo>familia/
+    // familia>produto, que crescem com o catálogo), então facilmente passa de
+    // 1000 linhas -- achado real: lojas 2/3/4/5 (1135/1261/1174/1403 linhas)
+    // vinham com a dimensão "tipo" inteira cortada pelo corte silencioso de
+    // 1000 do PostgREST (ordem alfabética "tipo" > "produto"), zerando as
+    // opções do filtro "Tipo" na gaveta pra essas lojas.
+    rpcTodos<OpcaoDim>(supabase, 'relatorio_faturamento_opcoes', { p_loja_id: lojaId }),
   ])
   // "Tem faturamento importado" não pode depender do resultado já filtrado
   // (senão um filtro sem resultado cairia no empty state errado, de "nunca
@@ -335,6 +362,17 @@ export default async function RelatorioFaturamentoPage({
                 hint="Tente ampliar o período no filtro."
               />
             ) : (
+              <>
+              {cuponsFato.length >= LIMITE_FAT_CUPONS && (
+                <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
+                  <span>
+                    <strong className="text-warn">Lista incompleta</strong> — o período tem mais de{' '}
+                    {LIMITE_FAT_CUPONS.toLocaleString('pt-BR')} cupons, o limite por consulta. Estão faltando os
+                    cupons mais antigos do período. Reduza o intervalo de datas pra ver todos.
+                  </span>
+                </div>
+              )}
               <div className="overflow-x-auto rounded-lg border border-border bg-surface">
                 <table className="w-full min-w-[600px] border-collapse text-sm">
                   <thead>
@@ -359,6 +397,7 @@ export default async function RelatorioFaturamentoPage({
                   </tbody>
                 </table>
               </div>
+              </>
             )
           ) : !matrizFinal.length ? (
             <EmptyState
