@@ -49,6 +49,10 @@ export async function contarOrdensProducaoAntigas(opts: {
   lojaId: number
   dataInicio?: string
   dataFinal: string
+  // Ver o mesmo parametro em complementarOrdensProducao -- precisa bater com o
+  // `campo` usado pra buscar as linhas, senao a contagem (usada pra detectar
+  // corte silencioso em totaisParciais) compara periodos diferentes.
+  campo?: 'conclusao' | 'previsao'
 }): Promise<number> {
   const url = process.env.NTB_FRIO_API_URL
   const key = process.env.NTB_FRIO_API_KEY
@@ -56,8 +60,10 @@ export async function contarOrdensProducaoAntigas(opts: {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), data_final: opts.dataFinal, count: 'true' })
-    if (opts.dataInicio) qs.set('data_inicio', opts.dataInicio)
+    const prefixoData = opts.campo === 'previsao' ? 'previsao' : 'data'
+    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), count: 'true' })
+    qs.set(`${prefixoData}_final`, opts.dataFinal)
+    if (opts.dataInicio) qs.set(`${prefixoData}_inicio`, opts.dataInicio)
     const resp = await fetch(`${url}/ordens_producao?${qs.toString()}`, {
       headers: { 'X-Api-Key': key ?? '' },
       signal: controller.signal,
@@ -137,6 +143,19 @@ export async function complementarOrdensProducao<T extends { id: number }>(
     validadeFinal?: string
     busca?: string
     id?: number
+    // 'conclusao' (default, mantido por compatibilidade): data_inicio/data_final
+    // filtram dt_conclusao_real no servidor -- e o que lib/resumo-dia.ts espera
+    // (quer OPs concluidas dentro do periodo). 'previsao': filtra
+    // identificacao_d_dt_previsao (data planejada) em vez disso -- usar quando o
+    // lado quente (Supabase) tambem filtra por identificacao_d_dt_previsao, senao
+    // quente e frio ficam comparando periodos diferentes. Achado real
+    // (2026-07-19): ordem-producao/page.tsx filtra o quente por
+    // identificacao_d_dt_previsao mas chamava isto sem `campo`, entao o
+    // complemento frio filtrava por dt_conclusao_real -- OPs nao concluidas
+    // (sem dt_conclusao_real) do Contabo nunca entravam quando um periodo era
+    // aplicado, e OPs concluidas apareciam/sumiam no periodo errado (data de
+    // conclusao, nao a planejada).
+    campo?: 'conclusao' | 'previsao'
   }
 ): Promise<T[]> {
   const precisa =
@@ -147,12 +166,13 @@ export async function complementarOrdensProducao<T extends { id: number }>(
   // sem offset, uma chamada sem filtro de data (dataInicio vazio = "quer
   // tudo") vinha cortada em silencio. Lojas tem 40mil a 88mil OPs no Contabo
   // (loja 5: 88491) -- so ~2-5% chegava. Servidor ganhou suporte a `offset`.
+  const prefixoData = opts.campo === 'previsao' ? 'previsao' : 'data'
   const frias = opts.id
     ? await buscarFrio<T>('/ordens_producao', { loja_id: opts.lojaId, id: opts.id })
     : await buscarFrioTudo<T>('/ordens_producao', {
         loja_id: opts.lojaId,
-        data_inicio: opts.dataInicio,
-        data_final: opts.dataFinal,
+        [`${prefixoData}_inicio`]: opts.dataInicio,
+        [`${prefixoData}_final`]: opts.dataFinal,
         validade_inicio: opts.validadeInicio,
         validade_final: opts.validadeFinal,
         busca: opts.busca,

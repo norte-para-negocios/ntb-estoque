@@ -214,8 +214,13 @@ export default async function OrdemProducaoPage({
       if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
     const completouComContabo = dataInicio < limiteJanelaQuente()
+    // campo: 'previsao' -- o filtro de periodo desta tela e sobre
+    // identificacao_d_dt_previsao (data planejada), nao dt_conclusao_real (default
+    // do helper). Achado real 2026-07-19: sem isso, o complemento frio filtrava
+    // pela data de conclusao, entao OPs nao concluidas do Contabo nunca entravam
+    // com periodo aplicado e OPs concluidas apareciam no periodo errado.
     let filtradas = completouComContabo
-      ? await complementarOrdensProducao(todas, { lojaId, dataInicio, dataFinal })
+      ? await complementarOrdensProducao(todas, { lojaId, dataInicio, dataFinal, campo: 'previsao' })
       : todas
     prodMap = await resolverProdutos(filtradas)
     if (ordEmMemoria) {
@@ -381,9 +386,18 @@ export default async function OrdemProducaoPage({
     // agora aceita `offset` (achado 2026-07-19: sem paginar, lojas com muito
     // volume vinham cortadas em silencio) -- buscarFrioTudo pagina ate trazer
     // tudo. totaisParciais fica so como cinto-de-seguranca.
+    // previsao_inicio/previsao_final (nao data_inicio/data_final): achado real
+    // 2026-07-19 -- o servidor do Contabo filtra data_inicio/data_final contra
+    // dt_conclusao_real (usado por outro consumidor, lib/resumo-dia.ts). Os
+    // contadores desta tela sao sobre identificacao_d_dt_previsao (mesmo campo
+    // usado no filtro do lado quente, linhas acima) -- usando o campo errado,
+    // toda OP nao concluida do Contabo (sem dt_conclusao_real) sumia sempre que
+    // um periodo era aplicado, e OPs concluidas contavam no periodo de conclusao
+    // em vez do periodo planejado (ex: Concluidas da loja 2 mostrava 53140 em vez
+    // de ~60230 no teste desde-o-inicio).
     const [friasRaw, friasTotalReal] = await Promise.all([
-      buscarFrioTudo<TotalRow>('/ordens_producao', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal }, 2000),
-      contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal }),
+      buscarFrioTudo<TotalRow>('/ordens_producao', { loja_id: lojaId, previsao_inicio: dataInicio, previsao_final: dataFinal }, 2000),
+      contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal, campo: 'previsao' }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
     const vistosQuentes = new Set(totaisQuentes.map((r) => r.id))

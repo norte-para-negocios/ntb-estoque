@@ -99,8 +99,12 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
+  // campo: 'previsao' -- mesmo achado real de ordem-producao/page.tsx (2026-07-19):
+  // o filtro de periodo aqui e sobre identificacao_d_dt_previsao (linhas acima),
+  // nao dt_conclusao_real (default do helper, usado por lib/resumo-dia.ts). O CSV
+  // precisa bater com o que a tela mostra.
   const ordens = (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente())
-    ? await complementarOrdensProducao(ordensRaw, { lojaId, dataInicio: sp.data_inicio, dataFinal: sp.data_final })
+    ? await complementarOrdensProducao(ordensRaw, { lojaId, dataInicio: sp.data_inicio, dataFinal: sp.data_final, campo: 'previsao' })
     : ordensRaw
 
   // Mesmo join da page: resolve descrição do produto.
