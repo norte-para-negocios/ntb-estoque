@@ -172,6 +172,25 @@ export async function buscarFrioNotaFiscalItems<T>(opts: {
   })
 }
 
+// O endpoint /movimentos_historico do ntb-frio-api (server.js, fora deste repo --
+// ver AGENTS.md) roda "order by data desc limit 5000" SEM paginacao (sem offset/
+// cursor). Achado real (auditoria 2026-07-18): pra lojas/periodos com mais de 5000
+// linhas no recorte frio, o endpoint devolvia silenciosamente so os dias mais
+// recentes (os 5000 primeiros da ordenacao DESC) -- meses inteiros do inicio do
+// periodo pedido desapareciam da tela de Movimentacao sem erro nem aviso (ex:
+// pedido jan-jul/2026 devolvia so linhas de mar/abr, sumindo com jan/fev/mai/jun/jul
+// do lado frio). addDias/bisecta o intervalo de data recursivamente sempre que um
+// lote vier "no teto" (>= 5000), ate cada pedaco vir abaixo do teto -- mesmo
+// principio de paginacao do rpcTodos/selTodos (RPC/PostgREST), so que aqui a
+// "pagina" e um recorte de datas, ja que o endpoint não aceita offset.
+const LIMITE_CONTABO_SEM_PAGINACAO = 5000
+
+function addDias(dataISO: string, dias: number): string {
+  const d = new Date(`${dataISO}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
 // Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
 // sem mesclar com nada, pra agregacao acontecer em JS.
 export async function buscarMovimentosHistoricoBrutos<T>(opts: {
@@ -179,11 +198,22 @@ export async function buscarMovimentosHistoricoBrutos<T>(opts: {
   dataInicio: string
   dataFinal: string
 }): Promise<T[]> {
-  return buscarFrio<T>('/movimentos_historico', {
+  const lote = await buscarFrio<T>('/movimentos_historico', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
   })
+  if (lote.length < LIMITE_CONTABO_SEM_PAGINACAO || opts.dataInicio >= opts.dataFinal) return lote
+  const diasTotais = Math.round(
+    (new Date(`${opts.dataFinal}T00:00:00Z`).getTime() - new Date(`${opts.dataInicio}T00:00:00Z`).getTime()) / 86400000
+  )
+  const meio = addDias(opts.dataInicio, Math.floor(diasTotais / 2))
+  if (meio <= opts.dataInicio) return lote // 1 dia so e ja bateu o teto -- nao da pra bisectar mais
+  const [a, b] = await Promise.all([
+    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataFinal: meio }),
+    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataInicio: addDias(meio, 1) }),
+  ])
+  return [...a, ...b]
 }
 
 export type LinhaMovHistoricoBruta = {
@@ -234,6 +264,31 @@ export function agregarMovimentacaoJS(
     grupos.set(chave, acc)
   }
   return [...grupos.values()].sort((a, b) => a.rotulo.localeCompare(b.rotulo) || a.mes.localeCompare(b.mes))
+}
+
+// Aplica o mesmo filtro de cod_prod / produto que a RPC relatorio_movimentacao_matriz
+// aplica no lado quente (p_cod_prods / p_produto, ver migration 066) --
+// buscarMovimentosHistoricoBrutos traz TODAS as linhas da loja sem filtro (Contabo
+// nao cruza com `produtos`), entao o caller precisa filtrar em JS antes de agregar.
+// Achado real (auditoria 2026-07-18): sem isso, um filtro de tipo/familia/local/
+// produto ficava sem efeito na fatia >90 dias -- a matriz e o Excel exibiam
+// centenas de produtos não relacionados ao filtro sempre que o período pedido
+// cruzava a janela quente.
+export function filtrarLinhasMovHistorico<
+  T extends { cod_prod: number; codigo: string | null; descricao: string | null },
+>(linhas: T[], codigosPermitidos: number[] | null, produtoBusca: string | null): T[] {
+  let out = linhas
+  if (codigosPermitidos !== null) {
+    const permitidos = new Set(codigosPermitidos)
+    out = out.filter((l) => permitidos.has(l.cod_prod))
+  }
+  if (produtoBusca) {
+    const termo = produtoBusca.toLowerCase()
+    out = out.filter(
+      (l) => (l.descricao ?? '').toLowerCase().includes(termo) || (l.codigo ?? '').toLowerCase().includes(termo)
+    )
+  }
+  return out
 }
 
 export { limiteJanelaQuente, foraDaJanelaQuente }

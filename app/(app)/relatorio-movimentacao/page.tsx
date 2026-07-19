@@ -18,6 +18,7 @@ import { ArrowDownUp, Download, AlertTriangle } from 'lucide-react'
 import {
   buscarMovimentosHistoricoBrutos,
   agregarMovimentacaoJS,
+  filtrarLinhasMovHistorico,
   limiteJanelaQuente,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
@@ -397,25 +398,47 @@ export default async function RelatorioMovimentacaoPage({
 
   // Produtos que casam com tipo/família — mesmo padrão de codigosFiltro usado em
   // /movimentacoes e /ordem-producao (cruza via a tabela produtos).
+  // Paginado com .range()+.order('id') -- achado real (auditoria 2026-07-18, mesmo
+  // padrao do bug ja corrigido em relatorio-indicadores/page.tsx): 5 das 6 lojas
+  // ativas tem mais de 1000 produtos, e um .select() sem paginacao cortava
+  // silenciosamente no limite do PostgREST, excluindo produtos do filtro de
+  // tipo/familia sem erro nem aviso.
   let codigosFiltro: number[] | null = null
   if (tiposSel.length || familiasSel.length) {
-    let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-    if (tiposSel.length) pq = pq.in('tipo_item', tiposSel)
-    if (familiasSel.length) pq = pq.in('descricao_familia', familiasSel)
-    const { data } = await pq
-    codigosFiltro = [...new Set((data ?? []).map((p) => p.codigo_produto).filter((v): v is number => v != null))]
+    const PAGE = 1000
+    const produtosFiltrados: { codigo_produto: number | null }[] = []
+    for (let p = 0; ; p++) {
+      let pq = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).order('id').range(p * PAGE, p * PAGE + PAGE - 1)
+      if (tiposSel.length) pq = pq.in('tipo_item', tiposSel)
+      if (familiasSel.length) pq = pq.in('descricao_familia', familiasSel)
+      const { data, error } = await pq
+      if (error || !data?.length) break
+      produtosFiltrados.push(...data)
+      if (data.length < PAGE) break
+    }
+    codigosFiltro = [...new Set(produtosFiltrados.map((p) => p.codigo_produto).filter((v): v is number => v != null))]
   }
   // Local de estoque: movimentos_historico não guarda local por movimento (o
   // ListarMovimentos do Omie não traz essa informação) — restringe aos produtos
   // que têm posição de estoque no(s) local(is) escolhido(s) (mesmo padrão de
-  // relatorio_estoque_valorizado).
+  // relatorio_estoque_valorizado). Paginado pelo mesmo motivo acima: locais
+  // "principais" (depósito) rotineiramente passam de 1000 posições por loja.
   if (locaisSel.length) {
-    const { data } = await supabase
-      .from('posicao_estoques')
-      .select('n_cod_prod')
-      .eq('loja_id', lojaId)
-      .in('codigo_local_estoque', locaisSel.map(Number))
-    const codigosLocal = new Set((data ?? []).map((p) => p.n_cod_prod as number))
+    const PAGE = 1000
+    const posicoes: { n_cod_prod: number | null }[] = []
+    for (let p = 0; ; p++) {
+      const { data, error } = await supabase
+        .from('posicao_estoques')
+        .select('n_cod_prod')
+        .eq('loja_id', lojaId)
+        .in('codigo_local_estoque', locaisSel.map(Number))
+        .order('id')
+        .range(p * PAGE, p * PAGE + PAGE - 1)
+      if (error || !data?.length) break
+      posicoes.push(...data)
+      if (data.length < PAGE) break
+    }
+    const codigosLocal = new Set(posicoes.map((p) => p.n_cod_prod as number))
     codigosFiltro = codigosFiltro === null ? [...codigosLocal] : codigosFiltro.filter((c) => codigosLocal.has(c))
   }
   const codigosIn = codigosFiltro !== null ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
@@ -498,9 +521,10 @@ export default async function RelatorioMovimentacaoPage({
 
   let matriz = matrizRecente
   if (ini < cutoff) {
-    const brutas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
+    const brutasTodas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
       lojaId, dataInicio: ini, dataFinal: cutoff,
     })
+    const brutas = filtrarLinhasMovHistorico(brutasTodas, codigosIn, produtoBusca)
     const { data: metaRows } = await supabase
       .from('produtos')
       .select('codigo_produto, tipo_item, descricao_familia')
