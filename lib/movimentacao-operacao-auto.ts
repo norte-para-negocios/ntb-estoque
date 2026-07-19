@@ -33,7 +33,6 @@ export type LinhaOperAuto = {
   valor: number
 }
 
-const DESDE = '2025-07-01'
 
 async function paginarTodos<T>(
   montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
@@ -73,6 +72,10 @@ function cfopEntradaDeNF(it: { full_object: Record<string, unknown> | null }): s
 export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promise<LinhaOperAuto[]> {
   const supabase = createServiceClient()
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  // Escopo pedido pelo usuário 2026-07-19: só ano corrente, não precisa de
+  // histórico do ano passado — reduz volume buscado (mais rápido) e mantém
+  // a matriz focada no que importa pra operação do dia a dia.
+  const DESDE = `${hoje.slice(0, 4)}-01-01`
 
   const [metaRows, locaisRes] = await Promise.all([
     paginarTodos<{ codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }>((from, to) =>
@@ -133,23 +136,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
     })
   }
 
-  // ---------- 2) PDV: Movimento Gerado pelo PDV ----------
-  const cuponsFato = await buscarFatCupons({ lojaId, dataInicio: DESDE, dataFinal: hoje })
-  const cuponsValidos = new Map(cuponsFato.filter((c) => !c.cancelado).map((c) => [c.n_id_cupom, c]))
-  const itensFato = await buscarFatCupomItens({ lojaId, dataInicio: DESDE, dataFinal: hoje })
-  for (const it of itensFato) {
-    const cupom = cuponsValidos.get(it.n_id_cupom)
-    if (!cupom) continue
-    const meta = it.id_produto != null ? metaPorCodigo.get(Number(it.id_produto)) : undefined
-    add({
-      origem: 'Movimento Gerado pelo PDV', sentido: 'S', local: 'N/D',
-      tipo_sped: tipoSpedLabel(meta?.tipo ?? null), familia: meta?.familia || 'N/D',
-      mes: cupom.data.slice(0, 7), inventario: false,
-      qtde: Number(it.quant) || 0, valor: Number(it.v_item) || 0,
-    })
-  }
-
-  // ---------- 3) Ajustes manuais / inventário ----------
+  // ---------- Ajustes manuais / inventário (+ mapa de local por produto p/ PDV) ----------
   const ajustesHot = await paginarTodos<{
     id: number; id_prod: number | null; tipo: string; quan: number | string | null
     valor: number | string | null; codigo_local_estoque: number | null; origem: string
@@ -164,12 +151,51 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
       .range(from, to)
   )
   const ajustes = await complementarMovimentos(ajustesHot, { lojaId, dataInicio: DESDE })
+
+  // O fato de cupom (fat_cupom_itens) não guarda local de estoque -- mas toda
+  // venda de PDV também gera uma baixa em `movimentos` (origem='AJU',
+  // motivo='PDV') com `codigo_local_estoque` preenchido pelo Omie. Usa isso
+  // só pra saber DE ONDE cada produto costuma sair no PDV (não pro valor,
+  // que continua vindo do fato de cupom -- ver comentário abaixo). Achado
+  // real: o local de baixa por PDV varia por produto dentro da mesma loja
+  // (ex: loja 2 tem 3 locais distintos usados), não é 1 valor fixo por loja.
+  const localPdvPorProduto = new Map<number, Map<number, number>>()
+  for (const a of ajustes) {
+    if (a.motivo !== 'PDV' || a.id_prod == null || a.codigo_local_estoque == null) continue
+    const contagem = localPdvPorProduto.get(a.id_prod) ?? new Map<number, number>()
+    contagem.set(a.codigo_local_estoque, (contagem.get(a.codigo_local_estoque) ?? 0) + 1)
+    localPdvPorProduto.set(a.id_prod, contagem)
+  }
+  const localMaisComumPdv = (idProd: number | null): number | null => {
+    if (idProd == null) return null
+    const contagem = localPdvPorProduto.get(idProd)
+    if (!contagem) return null
+    return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  }
+
+  // ---------- PDV: Movimento Gerado pelo PDV ----------
+  const cuponsFato = await buscarFatCupons({ lojaId, dataInicio: DESDE, dataFinal: hoje })
+  const cuponsValidos = new Map(cuponsFato.filter((c) => !c.cancelado).map((c) => [c.n_id_cupom, c]))
+  const itensFato = await buscarFatCupomItens({ lojaId, dataInicio: DESDE, dataFinal: hoje })
+  for (const it of itensFato) {
+    const cupom = cuponsValidos.get(it.n_id_cupom)
+    if (!cupom) continue
+    const meta = it.id_produto != null ? metaPorCodigo.get(Number(it.id_produto)) : undefined
+    add({
+      origem: 'Movimento Gerado pelo PDV', sentido: 'S', local: nomeLocal(localMaisComumPdv(it.id_produto)),
+      tipo_sped: tipoSpedLabel(meta?.tipo ?? null), familia: meta?.familia || 'N/D',
+      mes: cupom.data.slice(0, 7), inventario: false,
+      qtde: Number(it.quant) || 0, valor: Number(it.v_item) || 0,
+    })
+  }
+
+  // ---------- Ajustes manuais / inventário (linhas de fato) ----------
   for (const a of ajustes) {
     // Achado real (loja 5: 50739 linhas / R$2.309.414,19): a baixa de estoque
     // gerada por venda no PDV chega aqui como origem='AJU'/motivo='PDV' (não
     // origem='PDV' -- esse é outro caso, bem mais raro, 381 linhas). Sem
     // checar motivo, essas linhas duplicavam o valor já coberto com precisão
-    // pelo fato de cupom (item 2).
+    // pelo fato de cupom (acima) -- só usamos essas linhas pro mapa de local.
     if (a.origem === 'PDV' || a.motivo === 'PDV') continue
     if (a.tipo === 'TRF' || a.tipo === 'TPQ') continue // transferência, fora do escopo desta matriz
     const data = String(a.data).slice(0, 10)

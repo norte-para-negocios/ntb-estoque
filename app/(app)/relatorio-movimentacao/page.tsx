@@ -24,17 +24,7 @@ import {
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
 import Link from 'next/link'
-import { parseDrill, hrefComDrill } from '@/lib/drill'
-import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
-
-// Cadeia do drill no modo operação: a próxima dimensão é a primeira que ainda
-// não foi usada (nem como partida, nem na trilha).
-function proximaDimOperacao(dimInicial: string, trilha: { dim: string }[]): string {
-  const todas = ['familia', 'local', 'tipo_sped']
-  const usadas = new Set([dimInicial, ...trilha.map((p) => p.dim)])
-  return todas.find((d) => !usadas.has(d)) ?? dimInicial
-}
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => { const [a, m] = ym.split('-'); return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}` }
@@ -118,7 +108,7 @@ export default async function RelatorioMovimentacaoPage({
     const usarAutomatico = rowsImportadas.length === 0
     const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId) : rowsImportadas
 
-    // Filtros (multi-select): operação, local, sentido. Dimensão da matriz: família/local/tipo.
+    // Filtros (multi-select): operação, local, sentido, família, tipo.
     const opsSel = valoresMulti(sp.op)
     const locsSel = valoresMulti(sp.loc)
     const sentSel = valoresMulti(sp.sent).filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
@@ -126,13 +116,11 @@ export default async function RelatorioMovimentacaoPage({
     const tiposSel = valoresMulti(sp.tipo)
     // Periodo: movimentacao_operacao guarda so 'YYYY-MM' (sem dia) — o filtro tem
     // granularidade de MES; o dia escolhido no seletor e ignorado de proposito.
-    const mesIniOp = sp.data_inicio ? sp.data_inicio.slice(0, 7) : null
+    // Sem filtro explicito, escopo pedido pelo usuario 2026-07-19: só ano
+    // corrente (não precisa de nada do ano passado por padrão).
+    const anoCorrenteOp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+    const mesIniOp = sp.data_inicio ? sp.data_inicio.slice(0, 7) : `${anoCorrenteOp}-01`
     const mesFimOp = sp.data_final ? sp.data_final.slice(0, 7) : null
-    const dim = sp.dim === 'local' ? 'local' : sp.dim === 'tipo_sped' ? 'tipo_sped' : 'familia'
-    // Drill em memória: cada par da trilha filtra as linhas; a dimensão exibida
-    // desce a cadeia familia/local/tipo_sped (pulando as já usadas).
-    const pares = parseDrill(sp.drill)
-    const dimExibida = pares.length ? proximaDimOperacao(dim, pares) : dim
     const origens = [...new Set(rows.map((r) => r.origem))].sort()
     const locais = [...new Set(rows.map((r) => r.local))].sort()
     const familiasOper = [...new Set(rows.map((r) => r.familia))].filter(Boolean).sort()
@@ -168,7 +156,7 @@ export default async function RelatorioMovimentacaoPage({
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
-                href={`/relatorio-movimentacao/export?modo=operacao${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}&dim=${dim}`}
+                href={`/relatorio-movimentacao/export?modo=operacao${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Excel: operações + perdas + matriz (com filtros)"
               >
@@ -214,7 +202,9 @@ export default async function RelatorioMovimentacaoPage({
     const opers = [...porOper.values()].sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
     const totalOperValor = opers.filter((o) => o.conf).reduce((s, o) => s + o.valor, 0)
 
-    // --- Matriz mês a mês pela dimensão escolhida, com filtros op/loc/sent ---
+    // --- Matriz mês a mês, sempre com família + local + tipo juntos (sem
+    // precisar clicar numa linha pra "entrar" na próxima dimensão) --- filtros
+    // op/loc/sent/familia/tipo já estreitam o recorte pela gaveta de filtros.
     const filtradas = rows.filter((r) =>
       (!opsSel.length || opsSel.includes(r.origem)) &&
       (!locsSel.length || locsSel.includes(r.local)) &&
@@ -222,34 +212,35 @@ export default async function RelatorioMovimentacaoPage({
       (!familiasSel.length || familiasSel.includes(r.familia)) &&
       (!tiposSel.length || tiposSel.includes(r.tipo_sped)) &&
       (!mesIniOp || r.mes >= mesIniOp) &&
-      (!mesFimOp || r.mes <= mesFimOp) &&
-      pares.every((p) => {
-        const v = p.dim === 'familia' ? r.familia : p.dim === 'local' ? r.local : r.tipo_sped
-        return p.rotulo === 'N/D' ? !v : v === p.rotulo
-      })
+      (!mesFimOp || r.mes <= mesFimOp)
     )
     // Se o recorte ficou só com PDV-saída (valor lixo), a matriz mostra QUANTIDADE.
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const usarQtde = soPdvSaida
     const meses = [...new Set(filtradas.map((r) => r.mes))].sort()
-    const porDim = new Map<string, { total: number; meses: Record<string, number> }>()
+    // Chave combinada (família, local, tipo) -- JSON.stringify em vez de
+    // concatenar com separador: rótulo de família/local vem de cadastro sem
+    // sanitização e pode conter qualquer caractere (achado real desta sessão
+    // em lib/omie/faturamento.ts, mesma classe de bug).
+    const porDim = new Map<string, { familia: string; local: string; tipo: string; total: number; meses: Record<string, number> }>()
     for (const r of filtradas) {
-      const rot = (dimExibida === 'local' ? r.local : dimExibida === 'tipo_sped' ? r.tipo_sped : r.familia) || 'N/D'
+      const familia = r.familia || 'N/D'
+      const local = r.local || 'N/D'
+      const tipo = r.tipo_sped || 'N/D'
+      const chave = JSON.stringify([familia, local, tipo])
       const v = usarQtde ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0)
-      const ent = porDim.get(rot) ?? { total: 0, meses: {} }
+      const ent = porDim.get(chave) ?? { familia, local, tipo, total: 0, meses: {} }
       ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + v
       ent.total += v
-      porDim.set(rot, ent)
+      porDim.set(chave, ent)
     }
-    const linhasDim = [...porDim.entries()].filter(([, e]) => e.total !== 0).sort((a, b) => b[1].total - a[1].total)
+    const linhasDim = [...porDim.values()].filter((e) => e.total !== 0).sort((a, b) => b.total - a.total)
     const totalPorMes: Record<string, number> = {}
-    for (const [, e] of linhasDim) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (e.meses[m] ?? 0)
+    for (const e of linhasDim) for (const m of meses) totalPorMes[m] = (totalPorMes[m] ?? 0) + (e.meses[m] ?? 0)
     const totalGeral = Object.values(totalPorMes).reduce((s, v) => s + v, 0)
     const fmtCel = usarQtde ? fmtQtd : (n: number) => (n ? fmtMoeda(n) : '-')
 
     const cardCls = 'rounded-lg border border-border bg-surface px-3.5 py-3'
-    const dimLabel = dimExibida === 'local' ? 'Local' : dimExibida === 'tipo_sped' ? 'Tipo (SPED)' : 'Família'
-    const dimLabelInicial = dim === 'local' ? 'local' : dim === 'tipo_sped' ? 'tipo (SPED)' : 'família'
 
     return (
       <div className="space-y-4">
@@ -318,58 +309,37 @@ export default async function RelatorioMovimentacaoPage({
           {metaRow?.importado_em && <> · Importado em {fmtQuando(metaRow.importado_em as string)}.</>}
         </p>
 
-        {/* Matriz mês a mês pela dimensão */}
-        {pares.length === 0 ? (
-          <SegmentLinks
-            basePath="/relatorio-movimentacao"
-            param="dim"
-            aria-label="Dimensão"
-            opcoes={[
-              { value: '', label: 'Por família' },
-              { value: 'local', label: 'Por local' },
-              { value: 'tipo_sped', label: 'Por tipo (SPED)' },
-            ]}
-          />
-        ) : (
-          <DrillBreadcrumb
-            basePath="/relatorio-movimentacao"
-            sp={sp}
-            pares={pares}
-            raiz={`Movimentação por ${dimLabelInicial}`}
-            rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
-          />
-        )}
-
+        {/* Matriz mês a mês: família + local + tipo sempre juntos, sem precisar
+            clicar numa linha pra ver o resto -- estreita pelos filtros da gaveta. */}
         {linhasDim.length === 0 ? (
-          <EmptyState icon={ArrowDownUp} title="Sem dados no recorte" hint="Ajuste os filtros de operação, local e sentido." />
+          <EmptyState icon={ArrowDownUp} title="Sem dados no recorte" hint="Ajuste os filtros de operação, local, família e tipo." />
         ) : (
           <div className="space-y-1.5">
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-              <table className="w-full min-w-[600px] border-collapse text-sm">
+              <table className="w-full min-w-[820px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimLabel}</th>
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Família</th>
+                    <th className={`text-left ${th}`}>Local</th>
+                    <th className={`text-left ${th}`}>Tipo (SPED)</th>
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                     <th className={`text-right ${th}`}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {linhasDim.slice(0, LIMITE_LINHAS).map(([rot, e]) => {
-                    const opaco = explicarRotulo(rot)
+                  {linhasDim.slice(0, LIMITE_LINHAS).map((e) => {
+                    const opaco = explicarRotulo(e.familia)
+                    const chave = `${e.familia}|${e.local}|${e.tipo}`
                     return (
-                    <tr key={rot} className="border-t border-border/60 hover:bg-surface-2/40">
-                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? rot}>
-                        <div className="max-w-[140px] truncate">
-                          {pares.length < 2 ? (
-                            <Link href={hrefComDrill('/relatorio-movimentacao', sp, [...pares, { dim: dimExibida, rotulo: rot }])} className="hover:underline">
-                              {opaco?.label ?? (formatarNomeProduto(rot) || rot)}
-                              {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
-                            </Link>
-                          ) : (
-                            <>{opaco?.label ?? (formatarNomeProduto(rot) || rot)}{opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}</>
-                          )}
+                    <tr key={chave} className="border-t border-border/60 hover:bg-surface-2/40">
+                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? e.familia}>
+                        <div className="max-w-[160px] truncate">
+                          {opaco?.label ?? (formatarNomeProduto(e.familia) || e.familia)}
+                          {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
                         </div>
                       </td>
+                      <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.local}</div></td>
+                      <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.tipo}</div></td>
                       {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(e.meses[m] ?? 0)}</td>))}
                       <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCel(e.total)}</td>
                     </tr>
@@ -378,7 +348,7 @@ export default async function RelatorioMovimentacaoPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total</div></td>
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text" colSpan={3}>Total</td>
                     {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
                     <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalGeral)}</td>
                   </tr>

@@ -37,7 +37,10 @@ export async function GET(request: Request) {
     const opsSel = valoresMulti(searchParams.get('op') ?? '')
     const locsSel = valoresMulti(searchParams.get('loc') ?? '')
     const sentSel = valoresMulti(searchParams.get('sent') ?? '').filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
-    const dim = searchParams.get('dim') === 'local' ? 'local' : searchParams.get('dim') === 'tipo_sped' ? 'tipo_sped' : 'familia'
+    const familiasSel = valoresMulti(searchParams.get('familia') ?? '')
+    const tiposSel = valoresMulti(searchParams.get('tipo') ?? '')
+    const mesIni = searchParams.get('data_inicio')?.slice(0, 7) || null
+    const mesFim = searchParams.get('data_final')?.slice(0, 7) || null
 
     const rowsImportadas: LinhaOper[] = []
     for (let p = 0; ; p++) {
@@ -82,19 +85,23 @@ export async function GET(request: Request) {
       .map((r) => ({ rotulo: r.familia || 'N/D', mes: r.mes, valor: Number(r.valor) }))
     if (perdas.length) abas.push(abaMatrizMensal({ titulo: 'Perdas reais (baixa manual) por família', dimLabel: 'Família', linhas: perdas, nome: 'Perdas (R$)' }))
 
-    // Aba 3: matriz da dimensão escolhida, com os filtros aplicados (PDV-saída = 0).
+    // Aba 3: matriz com família + local + tipo sempre juntos (mesmo padrão da
+    // tela — sem exigir escolher 1 dimensão e clicar pra ver o resto).
     const filtradas = rows.filter((r) =>
       (!opsSel.length || opsSel.includes(r.origem)) &&
       (!locsSel.length || locsSel.includes(r.local)) &&
-      (!sentSel.length || sentSel.includes(r.sentido))
+      (!sentSel.length || sentSel.includes(r.sentido)) &&
+      (!familiasSel.length || familiasSel.includes(r.familia)) &&
+      (!tiposSel.length || tiposSel.includes(r.tipo_sped)) &&
+      (!mesIni || r.mes >= mesIni) &&
+      (!mesFim || r.mes <= mesFim)
     )
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const linhasDim = filtradas.map((r) => ({
-      rotulo: (dim === 'local' ? r.local : dim === 'tipo_sped' ? r.tipo_sped : r.familia) || 'N/D',
+      rotulo: `${r.familia || 'N/D'} / ${r.local || 'N/D'} / ${r.tipo_sped || 'N/D'}`,
       mes: r.mes,
       valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0),
     }))
-    const dimLabel = dim === 'local' ? 'Local' : dim === 'tipo_sped' ? 'Tipo (SPED)' : 'Família'
     const recorte = [
       opsSel.length ? opsSel.join(', ') : 'Todas as operações',
       locsSel.length ? locsSel.join(', ') : 'Todos os locais',
@@ -102,8 +109,8 @@ export async function GET(request: Request) {
     ].join(' · ')
     if (linhasDim.length) {
       abas.push(abaMatrizMensal({
-        titulo: `Matriz por ${dimLabel.toLowerCase()} (${soPdvSaida ? 'quantidade' : 'R$'})`,
-        dimLabel, linhas: linhasDim, subtitulo: recorte, nome: `Por ${dimLabel.toLowerCase()}`, moeda: !soPdvSaida,
+        titulo: `Matriz por família / local / tipo (${soPdvSaida ? 'quantidade' : 'R$'})`,
+        dimLabel: 'Família / Local / Tipo', linhas: linhasDim, subtitulo: recorte, nome: 'Família·Local·Tipo', moeda: !soPdvSaida,
       }))
     }
 
