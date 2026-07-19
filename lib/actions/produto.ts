@@ -40,12 +40,23 @@ export async function sugerirProximoCodigo(tipo: string): Promise<string | null>
   const supabase = createServiceClient()
   // So a coluna codigo (leve). Filtra/calcula o maximo numerico na faixa em memoria
   // (codigo e text e pode ter nao-numericos como PRD00011, que sao ignorados).
-  const { data } = await supabase
-    .from('produtos')
-    .select('codigo')
-    .eq('loja_id', lojaId)
+  // Paginado: catalogos tem 2300-2900 produtos por loja, acima do teto de 1000
+  // linhas do PostgREST -- sem paginar, produtos com codigo alto (fim da faixa)
+  // ficavam de fora e o "proximo codigo" sugerido colidia com um ja existente.
+  const LOTE = 1000
+  const codigos: { codigo: string | null }[] = []
+  for (let off = 0; ; off += LOTE) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo')
+      .eq('loja_id', lojaId)
+      .range(off, off + LOTE - 1)
+    if (!data?.length) break
+    codigos.push(...data)
+    if (data.length < LOTE) break
+  }
   let maxNaFaixa = faixa.ini - 1
-  for (const row of data ?? []) {
+  for (const row of codigos) {
     const c = String(row.codigo ?? '').trim()
     if (!/^\d+$/.test(c)) continue
     const n = Number(c)
