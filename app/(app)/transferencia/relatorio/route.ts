@@ -12,6 +12,7 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { complementarMovimentos } from '@/lib/historico-contabo'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 
 // Mapa de motivo (TRF/TPQ) para texto legivel no PDF.
 const LABEL_MOTIVO: Record<string, string> = {
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
   const familiasArr = valoresMulti(familia)
   const tiposArr = valoresMulti(tipo)
   const status = searchParams.get('status') || ''
+  const motivo = searchParams.get('motivo') || ''
+  const produto = searchParams.get('produto') || ''
+  const local = searchParams.get('local') || ''
 
   const supabase = await createClient()
 
@@ -59,13 +63,28 @@ export async function GET(request: Request) {
 
   const nomeLoja = loja?.nome_fantasia || loja?.nome || 'Loja'
 
-  // Filtro de familia/tipo via produtos -> movimentos -> transferencia_id.
+  // Nomes dos locais — usado tanto para exibir origem/destino quanto para o
+  // subtitulo "Local: X, Y" quando o filtro de local estiver ativo.
+  const { data: locais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+
+  // Filtro de familia/tipo/produto via produtos -> movimentos -> transferencia_id.
+  // BUG corrigido (auditoria 2026-07-19): produto e local eram aceitos na tela
+  // mas nunca chegavam a esta rota — o PDF sempre saía sem esses 2 filtros
+  // mesmo com eles ativos na lista.
   let idsFiltrados: number[] | null = null
-  if (familiasArr.length || tiposArr.length) {
+  if (familiasArr.length || tiposArr.length || produto) {
     function buildProdQuery(from: number, to: number) {
       let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).range(from, to)
       if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
       if (tiposArr.length) q = q.in('tipo_item', tiposArr)
+      if (produto) {
+        const termo = escapeIlikeOr(produto)
+        q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+      }
       return q
     }
     // Paginado: um tipo/familia isolado pode ter mais de 1000 produtos (ex: loja 6,
@@ -126,6 +145,10 @@ export async function GET(request: Request) {
   }
   const transferencias: Linha[] = []
 
+  const locaisArr = valoresMulti(local)
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n))
+
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('transferencias')
@@ -136,7 +159,18 @@ export async function GET(request: Request) {
       .order('data', { ascending: false })
       .range(from, to)
     if (idsFiltrados !== null) q = q.in('id', idsFiltrados.length ? idsFiltrados : [-1])
-    if (status) q = q.eq('status', status)
+    // BUG corrigido (auditoria 2026-07-19): status aqui vem como código 'A'/'C'
+    // (igual à tela e ao export Excel), não como o texto cru do Omie —
+    // um `.eq('status', status)` literal nunca batia com nada real
+    // ("Concluido"/"Em contagem"...) e devolvia o PDF sempre vazio quando o
+    // filtro de status estivesse ativo.
+    if (status === 'C') q = q.eq('status', 'Concluido')
+    else if (status === 'A') q = q.neq('status', 'Concluido')
+    if (motivo === 'TRF' || motivo === 'TPQ') q = q.eq('motivo', motivo)
+    if (locaisArr.length) {
+      const lista = locaisArr.join(',')
+      q = q.or(`codigo_local_origem.in.(${lista}),codigo_local_destino.in.(${lista})`)
+    }
     return q
   }
 
@@ -147,12 +181,6 @@ export async function GET(request: Request) {
     transferencias.push(...(bloco as Linha[]))
     if (bloco.length < PAGE_SIZE) break
   }
-
-  const { data: locais } = await supabase
-    .from('local_estoques')
-    .select('codigo_local_estoque, descricao')
-    .eq('loja_id', lojaId)
-  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
   const itens: RelatorioTransferenciaItem[] = transferencias.map((t) => ({
     data: fmtData(t.data),
@@ -167,7 +195,15 @@ export async function GET(request: Request) {
   const filtrosAtivos: string[] = []
   if (familiasArr.length) filtrosAtivos.push(`Família: ${familiasArr.join(', ')}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
-  if (status) filtrosAtivos.push(`Status: ${status}`)
+  if (produto) filtrosAtivos.push(`Produto: ${produto}`)
+  if (locaisArr.length) {
+    const nomes = locaisArr.map((c) => localMap.get(c) || String(c))
+    filtrosAtivos.push(`Local: ${nomes.join(', ')}`)
+  }
+  if (status === 'C') filtrosAtivos.push('Status: Concluída')
+  else if (status === 'A') filtrosAtivos.push('Status: Em aberto')
+  if (motivo === 'TRF') filtrosAtivos.push('Motivo: Transferência')
+  else if (motivo === 'TPQ') filtrosAtivos.push('Motivo: Perda / quebra')
 
   const periodo = `${fmtDataParam(dataInicio)} a ${fmtDataParam(dataFinal)}`
   const filtros = filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined
