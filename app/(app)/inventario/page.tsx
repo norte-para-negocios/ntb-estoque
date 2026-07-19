@@ -55,56 +55,101 @@ export default async function InventarioPage({
   const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'data'
   const dir = sp.dir === 'asc' ? 'asc' : 'desc'
 
-  // Familias distintas para o select (melhor esforco)
-  const { data: produtosFamilia } = await supabase
-    .from('produtos')
-    .select('descricao_familia')
-    .eq('loja_id', lojaId)
-    .not('descricao_familia', 'is', null)
+  // Familias distintas para o select. Loja pode ter ~2000 produtos ativos, acima
+  // do corte padrao de 1000 linhas do PostgREST - pagina com .range() ate esgotar
+  // pra nao perder familias silenciosamente do filtro (mesmo achado das outras
+  // buscas desta pagina).
+  const produtosFamilia: { descricao_familia: string | null }[] = []
+  {
+    const PAGE_SIZE = 1000
+    for (let pagina = 0; ; pagina++) {
+      const from = pagina * PAGE_SIZE
+      const { data: bloco } = await supabase
+        .from('produtos')
+        .select('descricao_familia')
+        .eq('loja_id', lojaId)
+        .not('descricao_familia', 'is', null)
+        .order('codigo_produto')
+        .range(from, from + PAGE_SIZE - 1)
+      if (!bloco?.length) break
+      produtosFamilia.push(...bloco)
+      if (bloco.length < PAGE_SIZE) break
+    }
+  }
 
   const familias = [
-    ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
+    ...new Set(produtosFamilia.map((p) => p.descricao_familia).filter(Boolean)),
   ].sort() as string[]
 
   // Filtro de familia/tipo/produto via inventario_items -> inventario_id
+  // PostgREST corta em 1000 linhas por padrao sem erro: uma loja chega a ~2000
+  // produtos ativos, entao ambas as buscas abaixo paginam com .range() ate
+  // esgotar - senao o filtro fica incompleto (perde inventarios silenciosamente).
   let idsFiltrados: number[] | null = null
   if (sp.familia || sp.tipo || sp.produto) {
     let codigosTipo: number[] | null = null
     if (sp.tipo) {
-      const { data: prods } = await supabase
-        .from('produtos')
-        .select('codigo_produto')
-        .eq('loja_id', lojaId)
-        .eq('tipo_item', sp.tipo)
-      codigosTipo = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+      const PAGE_SIZE = 1000
+      const prods: { codigo_produto: number | null }[] = []
+      for (let pagina = 0; ; pagina++) {
+        const from = pagina * PAGE_SIZE
+        const { data: bloco } = await supabase
+          .from('produtos')
+          .select('codigo_produto')
+          .eq('loja_id', lojaId)
+          .eq('tipo_item', sp.tipo)
+          .order('codigo_produto')
+          .range(from, from + PAGE_SIZE - 1)
+        if (!bloco?.length) break
+        prods.push(...bloco)
+        if (bloco.length < PAGE_SIZE) break
+      }
+      codigosTipo = [
+        ...new Set(prods.map((p) => p.codigo_produto).filter((v): v is number => v != null)),
+      ]
     }
 
     if (codigosTipo !== null && codigosTipo.length === 0) {
       idsFiltrados = []
     } else {
-      let itemQuery = supabase
-        .from('inventario_items')
-        .select('inventario_id')
-        .eq('loja_id', lojaId)
-      if (sp.familia) itemQuery = itemQuery.eq('produto_familia', sp.familia)
-      if (codigosTipo !== null) itemQuery = itemQuery.in('produto_codigo_produto', codigosTipo)
-      if (sp.produto) {
-        const termo = escapeIlikeOr(sp.produto)
-        itemQuery = itemQuery.or(`produto_descricao.ilike.%${termo}%,produto_codigo.ilike.%${termo}%`)
+      const PAGE_SIZE = 1000
+      const items: { inventario_id: number | null }[] = []
+      for (let pagina = 0; ; pagina++) {
+        const from = pagina * PAGE_SIZE
+        let itemQuery = supabase
+          .from('inventario_items')
+          .select('inventario_id')
+          .eq('loja_id', lojaId)
+        if (sp.familia) itemQuery = itemQuery.eq('produto_familia', sp.familia)
+        if (codigosTipo !== null) itemQuery = itemQuery.in('produto_codigo_produto', codigosTipo)
+        if (sp.produto) {
+          const termo = escapeIlikeOr(sp.produto)
+          itemQuery = itemQuery.or(`produto_descricao.ilike.%${termo}%,produto_codigo.ilike.%${termo}%`)
+        }
+        const { data: bloco } = await itemQuery.order('id').range(from, from + PAGE_SIZE - 1)
+        if (!bloco?.length) break
+        items.push(...bloco)
+        if (bloco.length < PAGE_SIZE) break
       }
-      const { data: items } = await itemQuery
       idsFiltrados = [
-        ...new Set((items ?? []).map((i) => i.inventario_id).filter((v): v is number => v != null)),
+        ...new Set(items.map((i) => i.inventario_id).filter((v): v is number => v != null)),
       ]
     }
   }
 
+  // 'itensStatus' era um embed trazendo o status de CADA item (array), que o
+  // PostgREST corta em 1000 linhas por inventario sem erro - inventarios com
+  // mais itens que isso ficavam com "concluidos/temErro" incorretos, contando
+  // so os 1000 primeiros. Trocado por embeds de count() (agregado no Postgres,
+  // nao sofre o corte) filtrados por status via alias, igual 'items' já fazia.
   let query = supabase
     .from('inventarios')
     .select(
-      'id, data, codigo_local_estoque, status, finalizado, user_id, items:inventario_items(count), itensStatus:inventario_items(status)'
+      'id, data, codigo_local_estoque, status, finalizado, user_id, items:inventario_items(count), concluidos:inventario_items(count), comErro:inventario_items(count)'
     )
     .eq('loja_id', lojaId)
+    .filter('concluidos.status', 'eq', 'Concluido')
+    .filter('comErro.status', 'in', '(Erro,Sem CMC)')
     .order(ord, { ascending: dir === 'asc' })
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
@@ -280,9 +325,9 @@ export default async function InventarioPage({
             larguraDesktop: 'w-32',
             render: (inv) => {
               const total = Array.isArray(inv.items) ? inv.items[0]?.count ?? 0 : 0
-              const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
-              const concluidos = itensStatus.filter((i: { status: string | null }) => i.status === 'Concluido').length
-              const temErro = itensStatus.some((i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC')
+              const concluidos = Array.isArray(inv.concluidos) ? inv.concluidos[0]?.count ?? 0 : 0
+              const comErro = Array.isArray(inv.comErro) ? inv.comErro[0]?.count ?? 0 : 0
+              const temErro = comErro > 0
               if (inv.status !== 'Finalizado') return <span className="num text-text-muted">{total}</span>
               return (
                 <span className={`num font-medium ${temErro ? 'text-err' : 'text-ok'}`}>
@@ -294,10 +339,8 @@ export default async function InventarioPage({
           { label: 'Status', larguraDesktop: 'w-32', sort: 'status', render: (inv) => <StatusPill status={inv.status} /> },
         ]}
         acao={(inv) => {
-          const itensStatus = Array.isArray(inv.itensStatus) ? inv.itensStatus : []
-          const temErro = itensStatus.some(
-            (i: { status: string | null }) => i.status === 'Erro' || i.status === 'Sem CMC'
-          )
+          const comErro = Array.isArray(inv.comErro) ? inv.comErro[0]?.count ?? 0 : 0
+          const temErro = comErro > 0
           const finalizado = inv.status === 'Finalizado'
           const labelAcao = finalizado || !podeEditar ? 'Ver' : 'Contar'
           return (

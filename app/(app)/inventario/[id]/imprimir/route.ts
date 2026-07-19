@@ -69,12 +69,31 @@ export async function GET(
   // So o nome do local (descricao), sem exibir o codigo numerico.
   const nomeLocal = local?.descricao || inventario.codigo_local_estoque || '-'
 
-  const { data: itensRaw } = await supabase
-    .from('inventario_items')
-    .select('produto_codigo, produto_codigo_produto, produto_descricao, quan, status')
-    .eq('inventario_id', id)
-    .gte('quan', 0)
-    .order('id')
+  // PostgREST corta em 1000 linhas por padrao e sem erro: inventarios podem ter
+  // mais itens que isso (uma loja chega a ~2000 produtos ativos), entao pagina
+  // com .range() ate esgotar - senao o PDF impresso sai com itens faltando e o
+  // total de quantidade some silenciosamente (achado do audit de 2026-07-18).
+  const itensRaw: {
+    produto_codigo: string | null
+    produto_codigo_produto: number
+    produto_descricao: string
+    quan: number | null
+    status: string | null
+  }[] = []
+  const PAGE_SIZE = 1000
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * PAGE_SIZE
+    const { data: bloco } = await supabase
+      .from('inventario_items')
+      .select('produto_codigo, produto_codigo_produto, produto_descricao, quan, status')
+      .eq('inventario_id', id)
+      .gte('quan', 0)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (!bloco?.length) break
+    itensRaw.push(...bloco)
+    if (bloco.length < PAGE_SIZE) break
+  }
 
   const codigos = [
     ...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean)),
