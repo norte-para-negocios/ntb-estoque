@@ -79,6 +79,13 @@ export async function GET(request: Request) {
   const codigos = produtos.map((p) => p.codigo_produto).filter((c): c is number => c != null)
   const cmcMap = new Map<number, number>()
   const saldoMap = new Map<number, number>()
+  // Mínimo do Omie (sparse, igual à tela: só a foto mais recente que REALMENTE
+  // tem minimo>0, dentro de uma janela de 90 dias) e previsão de venda (janela
+  // padrão de 7 dias, igual ao default da tela). Sem isso, "Mínimo" e "Sugestão
+  // Compra" na planilha ficavam quase sempre 0 -- o minimo do Omie é o que
+  // alimenta a esmagadora maioria dos produtos (override manual é raríssimo).
+  const minOmieMap = new Map<number, number>()
+  const prevMap = new Map<number, number>()
 
   if (codigos.length > 0) {
     const { data: ultima } = await supabase
@@ -136,14 +143,65 @@ export async function GET(request: Request) {
         const ant = saldoMap.get(pos.n_cod_prod) ?? 0
         saldoMap.set(pos.n_cod_prod, ant + Number(pos.n_saldo ?? 0))
       }
+
+      // Mínimo do Omie: busca DEDICADA (estoque_minimo>0, janela de ~90 dias),
+      // pois é esparso e pode não estar na foto mais recente nem na janela do
+      // saldo/CMC acima -- mesma lógica de app/(app)/produto/page.tsx.
+      const cutoffMin = new Date(new Date(dataPos).getTime() - 90 * 86400000)
+        .toISOString()
+        .slice(0, 10)
+      const minimoRows: { n_cod_prod: number; estoque_minimo: number | null; data_posicao: string }[] = []
+      for (let off = 0; ; off += LOTE) {
+        const { data } = await supabase
+          .from('posicao_estoques')
+          .select('n_cod_prod, estoque_minimo, data_posicao')
+          .eq('loja_id', lojaId)
+          .gt('estoque_minimo', 0)
+          .gte('data_posicao', cutoffMin)
+          .in('n_cod_prod', codigos)
+          .order('data_posicao', { ascending: false })
+          .order('id', { ascending: true })
+          .range(off, off + LOTE - 1)
+        if (!data?.length) break
+        minimoRows.push(...(data as typeof minimoRows))
+        if (data.length < LOTE) break
+      }
+      const dataMinPorProduto = new Map<number, string>()
+      for (const pos of minimoRows) {
+        const atual = dataMinPorProduto.get(pos.n_cod_prod)
+        if (!atual || pos.data_posicao > atual) dataMinPorProduto.set(pos.n_cod_prod, pos.data_posicao)
+      }
+      for (const pos of minimoRows) {
+        if (pos.data_posicao !== dataMinPorProduto.get(pos.n_cod_prod)) continue
+        minOmieMap.set(pos.n_cod_prod, (minOmieMap.get(pos.n_cod_prod) ?? 0) + Number(pos.estoque_minimo ?? 0))
+      }
+
+      // Previsão de venda (janela padrão de 7 dias, igual ao default da tela).
+      const previsoes: { n_cod_prod: number; qtde: number | null }[] = []
+      for (let off = 0; ; off += LOTE) {
+        const { data } = await supabase
+          .from('previsao_venda')
+          .select('n_cod_prod, qtde')
+          .eq('loja_id', lojaId)
+          .eq('janela_dias', 7)
+          .in('n_cod_prod', codigos)
+          .range(off, off + LOTE - 1)
+        if (!data?.length) break
+        previsoes.push(...(data as typeof previsoes))
+        if (data.length < LOTE) break
+      }
+      for (const pv of previsoes) prevMap.set(pv.n_cod_prod, Number(pv.qtde ?? 0))
     }
   }
 
   const rows = produtos.map((p) => {
     const cmc = p.codigo_produto != null ? (cmcMap.get(p.codigo_produto) ?? 0) : 0
     const saldo = p.codigo_produto != null ? (saldoMap.get(p.codigo_produto) ?? 0) : 0
-    const minimo = p.estoque_minimo ?? 0
-    const sugestao = Math.max(0, minimo - saldo)
+    // Mínimo efetivo: override manual (produtos.estoque_minimo) tem prioridade;
+    // senão o do Omie -- mesma regra de app/(app)/produto/page.tsx (minEfetivo).
+    const minimo = p.estoque_minimo != null ? Number(p.estoque_minimo) : (p.codigo_produto != null ? (minOmieMap.get(p.codigo_produto) ?? 0) : 0)
+    const prevVenda = p.codigo_produto != null ? (prevMap.get(p.codigo_produto) ?? 0) : 0
+    const sugestao = minimo > 0 ? Math.max(0, minimo + prevVenda - saldo) : 0
     const margem =
       cmc > 0 && (p.valor_unitario ?? 0) > 0
         ? parseFloat((((p.valor_unitario! - cmc) / p.valor_unitario!) * 100).toFixed(1))
