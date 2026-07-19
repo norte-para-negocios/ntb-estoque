@@ -42,8 +42,12 @@ export async function buscarFrio<T>(
 // Contagem real (sem LIMIT) para cards/badges -- usa o parametro count=true do
 // endpoint, que faz um select count(*) no Contabo em vez de trazer as linhas
 // (evita truncar em falso o numero quando ha mais registros que o teto do modo normal).
+// dataInicio e opcional (mantido pra nao quebrar o chamador original, o card "total
+// de OPs" da home, que so quer "tudo ate dataFinal") -- passar quando o chamador
+// precisar contar so dentro de um periodo (ver uso em ordem-producao/page.tsx).
 export async function contarOrdensProducaoAntigas(opts: {
   lojaId: number
+  dataInicio?: string
   dataFinal: string
 }): Promise<number> {
   const url = process.env.NTB_FRIO_API_URL
@@ -52,10 +56,12 @@ export async function contarOrdensProducaoAntigas(opts: {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const resp = await fetch(
-      `${url}/ordens_producao?loja_id=${opts.lojaId}&data_final=${opts.dataFinal}&count=true`,
-      { headers: { 'X-Api-Key': key ?? '' }, signal: controller.signal }
-    )
+    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), data_final: opts.dataFinal, count: 'true' })
+    if (opts.dataInicio) qs.set('data_inicio', opts.dataInicio)
+    const resp = await fetch(`${url}/ordens_producao?${qs.toString()}`, {
+      headers: { 'X-Api-Key': key ?? '' },
+      signal: controller.signal,
+    })
     clearTimeout(timeoutId)
     if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
     const json = (await resp.json()) as { count?: number }

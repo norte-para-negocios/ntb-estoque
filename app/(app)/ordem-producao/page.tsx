@@ -21,7 +21,12 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
+import {
+  complementarOrdensProducao,
+  limiteJanelaQuente,
+  buscarFrio,
+  contarOrdensProducaoAntigas,
+} from '@/lib/historico-contabo'
 
 const POR_PAGINA = 50
 
@@ -306,7 +311,12 @@ export default async function OrdemProducaoPage({
     .order('descricao')
 
   // Totais por status granular: ignora filtro de status/conclusao para mostrar todos os contadores.
-  // head:true = so o count, sem trazer linhas (barato).
+  // head:true = so o count, sem trazer linhas (barato) -- so vale dentro da janela
+  // quente. Quando o periodo cruza pra fora dela, o Supabase sozinho SUBESTIMA os
+  // contadores (achado real: "Atrasadas" da loja 3 mostrava 465 quando o total
+  // combinado Supabase+Contabo era 602 -- 137 OPs antigas ficavam de fora
+  // silenciosamente). Nesse caso busca as linhas (paginado, sem confiar no default
+  // de 1000 linhas do PostgREST) e completa com o Contabo antes de contar em JS.
   const totaisBase = () => {
     let q = supabase
       .from('ordens_producao')
@@ -320,30 +330,93 @@ export default async function OrdemProducaoPage({
     }
     return q
   }
-  const [
-    { count: totConcluidas },
-    { count: totPrevistas },
-    { count: totPendentes },
-    { count: totAtrasadas },
-  ] = await Promise.all([
-    totaisBase().eq('concluida', true),
-    totaisBase().eq('concluida', false).gt('identificacao_d_dt_previsao', hojeISO),
-    totaisBase().eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO),
-    totaisBase().eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO),
-  ])
-  let totConcluidasFinal = totConcluidas ?? 0
+
+  type TotalRow = { id: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
+  let totConcluidasFinal: number
+  let totPrevistasFinal: number
+  let totPendentesFinal: number
+  let totAtrasadasFinal: number
+  // true quando o endpoint do Contabo devolveu MENOS linhas do que o count(*) real
+  // do periodo -- o endpoint de linhas (diferente do count=true) tem um teto de
+  // paginacao proprio (~2000 linhas, sem parametro de offset/page pra continuar).
+  // Nesse caso os contadores abaixo sao um PISO (podem faltar OPs antigas demais
+  // pra caber no lote), nao o valor exato -- avisamos em vez de mostrar errado.
+  let totaisParciais = false
+
   if (dataInicio < limiteJanelaQuente()) {
-    const { data: concluidasQuentesIds } = await supabase
-      .from('ordens_producao')
-      .select('id, concluida')
-      .eq('loja_id', lojaId)
-      .eq('concluida', true)
-      .gte('identificacao_d_dt_previsao', dataInicio)
-      .lte('identificacao_d_dt_previsao', dataFinal)
-    const concluidasCompletas = await complementarOrdensProducao(concluidasQuentesIds ?? [], {
-      lojaId, dataInicio, dataFinal,
-    })
-    totConcluidasFinal = concluidasCompletas.filter((o) => o.concluida).length
+    function totaisRowsQuery() {
+      let q = supabase
+        .from('ordens_producao')
+        .select('id, concluida, identificacao_d_dt_previsao')
+        .eq('loja_id', lojaId)
+      if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
+      if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
+      if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
+      if (codigosFiltro !== null) {
+        q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+      }
+      // .order('id') e OBRIGATORIO pra paginar com .range() de forma estavel --
+      // sem ordem explicita, o Postgres pode devolver a mesma linha em 2 paginas
+      // e pular outra (achado real: testado direto, sem order() a mesma consulta
+      // trouxe 15620 linhas com so 14276 ids UNICOS -- 1344 duplicadas e outras
+      // tantas nunca lidas. Com order('id') bateu 15620 linhas = 15620 ids unicos).
+      return q.order('id', { ascending: true })
+    }
+    // Busca em lotes de .range() -- um .select() sem .range() cai no teto padrao
+    // de 1000 linhas do PostgREST (confirmado: count exato via head:true bate
+    // 14977, mas .data vem com so 1000 linhas sem paginar).
+    const totaisQuentes: TotalRow[] = []
+    const LOTE = 1000
+    const MAX_LOTES = 200 // teto de seguranca (~200k OPs) pra nao travar o SSR
+    for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
+      const { data } = await totaisRowsQuery().range(off, off + LOTE - 1)
+      const lote = (data ?? []) as TotalRow[]
+      if (!lote.length) break
+      totaisQuentes.push(...lote)
+      if (lote.length < LOTE) break
+    }
+    // Busca o lado frio direto (nao via complementarOrdensProducao) pra poder
+    // comparar o tamanho bruto devolvido contra o count(*) real do periodo --
+    // achado real: o endpoint de linhas do Contabo tambem tem teto proprio
+    // (~2000 linhas) sem paginacao, entao pra uma loja com muito volume no
+    // periodo (ex: "Concluidas" numa janela larga) a fatia fria vem cortada
+    // mesmo tendo mais registros no banco.
+    const [friasRaw, friasTotalReal] = await Promise.all([
+      buscarFrio<TotalRow>('/ordens_producao', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal }),
+      contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal }),
+    ])
+    if (friasRaw.length < friasTotalReal) totaisParciais = true
+    const vistosQuentes = new Set(totaisQuentes.map((r) => r.id))
+    const totaisCompletos = [...totaisQuentes, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    totConcluidasFinal = totaisCompletos.filter((o) => o.concluida).length
+    // nulls excluidos explicitamente (nao coalescer pra '' -- '' < qualquer data
+    // contaria erroneamente como atrasada): espelha o gte/lte do banco, que tambem
+    // nao casa NULL.
+    totPrevistasFinal = totaisCompletos.filter(
+      (o) => !o.concluida && o.identificacao_d_dt_previsao != null && o.identificacao_d_dt_previsao > hojeISO
+    ).length
+    totPendentesFinal = totaisCompletos.filter(
+      (o) => !o.concluida && o.identificacao_d_dt_previsao === hojeISO
+    ).length
+    totAtrasadasFinal = totaisCompletos.filter(
+      (o) => !o.concluida && o.identificacao_d_dt_previsao != null && o.identificacao_d_dt_previsao < hojeISO
+    ).length
+  } else {
+    const [
+      { count: totConcluidas },
+      { count: totPrevistas },
+      { count: totPendentes },
+      { count: totAtrasadas },
+    ] = await Promise.all([
+      totaisBase().eq('concluida', true),
+      totaisBase().eq('concluida', false).gt('identificacao_d_dt_previsao', hojeISO),
+      totaisBase().eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO),
+      totaisBase().eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO),
+    ])
+    totConcluidasFinal = totConcluidas ?? 0
+    totPrevistasFinal = totPrevistas ?? 0
+    totPendentesFinal = totPendentes ?? 0
+    totAtrasadasFinal = totAtrasadas ?? 0
   }
 
   const exportParams = new URLSearchParams()
@@ -450,9 +523,9 @@ export default async function OrdemProducaoPage({
           param="op_status"
           opcoes={[
             { value: '', label: 'Todas' },
-            { value: 'prevista', label: 'Previstas', count: totPrevistas ?? 0 },
-            { value: 'pendente', label: 'Pendentes', count: totPendentes ?? 0 },
-            { value: 'atrasada', label: 'Atrasadas', count: totAtrasadas ?? 0 },
+            { value: 'prevista', label: 'Previstas', count: totPrevistasFinal },
+            { value: 'pendente', label: 'Pendentes', count: totPendentesFinal },
+            { value: 'atrasada', label: 'Atrasadas', count: totAtrasadasFinal },
             { value: 'concluida', label: 'Concluídas', count: totConcluidasFinal },
           ]}
         />
@@ -471,6 +544,13 @@ export default async function OrdemProducaoPage({
       {truncado && (
         <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
           Há muitas ordens. Mostrando uma parte. Use o filtro de data para refinar e ver tudo.
+        </p>
+      )}
+
+      {totaisParciais && (
+        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Período muito longo: os contadores acima (Previstas/Pendentes/Atrasadas/Concluídas) podem estar
+          abaixo do real. Use um período mais curto para ver os números exatos.
         </p>
       )}
 
