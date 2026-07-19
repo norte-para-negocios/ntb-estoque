@@ -611,15 +611,22 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
     .eq('concluida', false)
   if (opAtrasada) itens.push({ titulo: 'Ordens de produção atrasadas', tom: 'warn', contagem: opAtrasada, href: '/ordem-producao?status=atrasada' })
 
-  // 4. Vencendo em 7 dias / vencido (mesma logica de /validade).
+  // 4. Vencendo em 7 dias / vencido (mesma logica de /validade). Achado real desta
+  // auditoria: so filtrava `quantidade > 0`, mas `quantidade` (o campo "etiqueta",
+  // setado manualmente via setQuantidadeOP) fica NULL na maioria das OPs -- a
+  // pagina /validade por isso usa SALDO_OR (quantidade>0 OU quantidade IS NULL com
+  // identificacao_n_qtde>0, a qtde planejada do Omie) pra nao perder OPs que nunca
+  // tiveram a etiqueta setada. Confirmado via SQL (loja 6): o filtro antigo contava
+  // 5, o correto (batendo com /validade) conta 15 -- subcontagem de 3x.
   const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
   const { count: vencendo } = await supabase
     .from('ordens_producao')
     .select('id', { count: 'exact', head: true })
     .in('loja_id', lojaIds)
     .not('validade', 'is', null)
     .lte('validade', em7dias)
-    .gt('quantidade', 0)
+    .or(SALDO_OR)
   if (vencendo) itens.push({ titulo: 'Produtos vencendo em até 7 dias (ou vencidos)', tom: 'warn', contagem: vencendo, href: '/validade?dias=7' })
 
   // 5. Contagem de inventario pendente (30 dias, mesma janela do painel de auditoria).
