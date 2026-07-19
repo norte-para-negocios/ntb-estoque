@@ -1,7 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
-import { buscarItensNFFrio } from '@/lib/relatorio-frio-nf'
+import { buscarItensNFFrio, cfopEntradaDe } from '@/lib/relatorio-frio-nf'
+import { descreverCFOP } from '@/lib/cfop'
 
 // CSV simples (;) de cada bloco da tela de pendências: ?bloco=sem-familia |
 // sem-tipo | sem-cadastro. Recalcula do zero (mesmas fontes da página).
@@ -39,9 +40,44 @@ export async function GET(req: Request) {
   }
 
   if (bloco === 'sem-familia') {
+    // Sugestão do cliente (Ramon): CFOP de entrada mais frequente ajuda a
+    // decidir a classificação sem família cadastrada — mesma lógica da página.
+    const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+    const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
+    const corte = limiteJanelaQuente()
+    const { data: quentesCfop } = await supabase
+      .from('nota_fiscal_items')
+      .select('n_id_produto, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe)')
+      .eq('loja_id', lojaId)
+      .is('notas_fiscais.deleted_at', null)
+      .gte('notas_fiscais.d_emissao_nfe', corte)
+      .limit(50000)
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
+    const cfopPorProduto = new Map<number, Map<string, number>>()
+    const somar = (codProd: number | null, cfop: string | null) => {
+      if (codProd == null || !cfop) return
+      const contagem = cfopPorProduto.get(codProd) ?? new Map<string, number>()
+      contagem.set(cfop, (contagem.get(cfop) ?? 0) + 1)
+      cfopPorProduto.set(codProd, contagem)
+    }
+    for (const r of (quentesCfop ?? []) as { n_id_produto: number | null; c_cfop: string | null; full_object: Record<string, unknown> | null }[]) {
+      const cfop = (r.full_object as { itensAjustes?: { cCFOPEntrada?: string } } | null)?.itensAjustes?.cCFOPEntrada ?? r.c_cfop
+      somar(r.n_id_produto, cfop)
+    }
+    for (const it of friosCfop) somar(it.n_id_produto, cfopEntradaDe(it) ?? it.c_cfop)
+    const cfopMaisComum = (codProd: number): string | null => {
+      const contagem = cfopPorProduto.get(codProd)
+      if (!contagem) return null
+      return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    }
     return csv([
-      ['codigo', 'descricao', 'tipo'],
-      ...todos.filter((p) => !p.descricao_familia).map((p) => [String(p.codigo ?? p.codigo_produto), p.descricao ?? '', p.tipo_item ?? '']),
+      ['codigo', 'descricao', 'tipo', 'cfop_entrada', 'cfop_categoria'],
+      ...todos.filter((p) => !p.descricao_familia).map((p) => {
+        const cfop = cfopMaisComum(Number(p.codigo_produto))
+        const info = cfop ? descreverCFOP(cfop) : null
+        return [String(p.codigo ?? p.codigo_produto), p.descricao ?? '', p.tipo_item ?? '', info?.codigo ?? '', info?.desc ?? '']
+      }),
     ])
   }
   if (bloco === 'sem-tipo') {

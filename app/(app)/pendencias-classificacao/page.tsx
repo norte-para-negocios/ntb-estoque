@@ -8,7 +8,8 @@ import { Money } from '@/components/ui-kit/Money'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
-import { buscarItensNFFrio } from '@/lib/relatorio-frio-nf'
+import { buscarItensNFFrio, cfopEntradaDe } from '@/lib/relatorio-frio-nf'
+import { descreverCFOP } from '@/lib/cfop'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ClipboardX, Download } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -49,26 +50,45 @@ export default async function PendenciasClassificacaoPage() {
 
   // Bloco 3 + R$: itens de NF dos últimos 12 meses (quente + frio) sem vínculo.
   const corte = limiteJanelaQuente()
-  type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor?: string | null }
+  type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor?: string | null; cfop?: string | null }
   const { data: quentesRaw } = await supabase
     .from('nota_fiscal_items')
-    .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
+    .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
     .eq('loja_id', lojaId)
     .is('notas_fiscais.deleted_at', null)
     .gte('notas_fiscais.d_emissao_nfe', corte)
     .limit(50000)
-  const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { notas_fiscais: { c_razao_social: string | null; c_nome: string | null } })[]).map((r) => ({
+  const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { c_cfop: string | null; full_object: Record<string, unknown> | null; notas_fiscais: { c_razao_social: string | null; c_nome: string | null } })[]).map((r) => ({
     n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
     n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
     fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
+    cfop: (r.full_object as { itensAjustes?: { cCFOPEntrada?: string } } | null)?.itensAjustes?.cCFOPEntrada ?? r.c_cfop,
   }))
   const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
   const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
   const frios: ItemNF[] = friosRaw.map((it) => ({
     n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
     n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
+    cfop: cfopEntradaDe(it) ?? it.c_cfop,
   }))
   const itens12m = [...quentes, ...frios]
+
+  // Sugestão do cliente (Ramon): o CFOP de entrada já classifica o produto
+  // fiscalmente (revenda/indústria vs uso-consumo vs ativo etc.) mesmo sem
+  // família cadastrada -- ajuda a decidir/priorizar a classificação manual
+  // sem inventar categoria a partir do texto da descrição.
+  const cfopPorProduto = new Map<number, Map<string, number>>()
+  for (const it of itens12m) {
+    if (it.n_id_produto == null || !it.cfop) continue
+    const contagem = cfopPorProduto.get(it.n_id_produto) ?? new Map<string, number>()
+    contagem.set(it.cfop, (contagem.get(it.cfop) ?? 0) + 1)
+    cfopPorProduto.set(it.n_id_produto, contagem)
+  }
+  const cfopMaisComum = (codProd: number): string | null => {
+    const contagem = cfopPorProduto.get(codProd)
+    if (!contagem) return null
+    return [...contagem.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  }
 
   const codigosCadastro = new Set(todos.map((p) => Number(p.codigo_produto)))
   const valorDe = (it: ItemNF) => (Number(it.n_qtde_nfe) || 0) * (Number(it.n_preco_unit) || 0)
@@ -141,20 +161,31 @@ export default async function PendenciasClassificacaoPage() {
           <EmptyState icon={ClipboardX} title="Nenhum" hint="Todos os produtos têm família." />
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-            <table className="w-full min-w-[480px] text-sm">
-              <thead><tr className="bg-surface-2"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th></tr></thead>
+            <table className="w-full min-w-[620px] text-sm">
+              <thead><tr className="bg-surface-2"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th><th className={th}>CFOP de entrada</th></tr></thead>
               <tbody>
-                {semFamilia.map((p) => (
+                {semFamilia.map((p) => {
+                  const cfop = cfopMaisComum(Number(p.codigo_produto))
+                  const info = cfop ? descreverCFOP(cfop) : null
+                  return (
                   <tr key={p.codigo_produto} className="border-t border-border/60">
                     <td className="num px-3 py-2 text-text-muted">{p.codigo ?? p.codigo_produto}</td>
                     <td className="px-3 py-2 text-text">{p.descricao ?? '-'}</td>
                     <td className="px-3 py-2 text-text-muted">{p.tipo_item ? TIPO_LABEL.get(p.tipo_item) ?? p.tipo_item : '—'}</td>
+                    <td className="px-3 py-2 text-text-muted">
+                      {info ? <>{info.codigo} · {info.desc}</> : <span title="Sem NF de entrada nos últimos 12 meses">—</span>}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
+        <p className="px-1 text-[12px] text-text-muted">
+          O CFOP de entrada mais frequente do produto (últimos 12 meses) — não substitui a família, mas indica se é
+          revenda/insumo, uso e consumo, ativo etc., pra ajudar a decidir a classificação certa no Omie.
+        </p>
       </Bloco>
 
       <Bloco titulo={`Produtos sem tipo (${semTipo.length})`} valor={valorSemTipo} exportBloco="sem-tipo">
