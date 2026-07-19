@@ -39,13 +39,30 @@ type HeaderNFFrio = {
 
 export type MetaProdutoNF = Map<number, { tipo: string | null; familia: string | null }>
 
+// Teto do endpoint: 5000 itens / 2000 headers por CHAMADA (não no total) —
+// achado real do audit de 2026-07-18: a suposição antiga de que isso bastava
+// pra "janela [início do ano, corte de 90 dias]" já não vale (confirmado via
+// SQL: loja 5 tinha 12225 itens nesse recorte, seria truncado em 5000 sem
+// paginação). server.js do Contabo ganhou suporte a `offset` (retrocompatível,
+// default 0); pagina aqui até a página vir menor que o teto.
+async function buscarFrioPaginado<T>(
+  caminho: string,
+  params: Record<string, string | number | undefined>,
+  tamanhoPagina: number
+): Promise<T[]> {
+  const todos: T[] = []
+  for (let offset = 0; ; offset += tamanhoPagina) {
+    const pagina = await buscarFrio<T>(caminho, { ...params, offset })
+    todos.push(...pagina)
+    if (pagina.length < tamanhoPagina) break
+  }
+  return todos
+}
+
 /**
  * Busca itens de NF do Contabo no período, já enriquecidos com os campos do
  * cabeçalho que as agregações precisam (etapa, fornecedor, cancelada).
  * O endpoint /nota_fiscal_items já exclui NF deletada (deleted_at is null).
- * Teto do endpoint: 5000 itens / 2000 headers por chamada — suficiente pra
- * janela [início do ano, corte de 90 dias]; se o volume crescer além disso,
- * o endpoint precisa ganhar paginação (mudança no server.js do Contabo).
  */
 export async function buscarItensNFFrio(opts: {
   lojaId: number
@@ -53,16 +70,16 @@ export async function buscarItensNFFrio(opts: {
   dataFinal: string
 }): Promise<ItemNFFrio[]> {
   const [itens, headers] = await Promise.all([
-    buscarFrio<ItemNFFrio>('/nota_fiscal_items', {
+    buscarFrioPaginado<ItemNFFrio>('/nota_fiscal_items', {
       loja_id: opts.lojaId,
       data_inicio: opts.dataInicio,
       data_final: opts.dataFinal,
-    }),
-    buscarFrio<HeaderNFFrio>('/notas_fiscais', {
+    }, 5000),
+    buscarFrioPaginado<HeaderNFFrio>('/notas_fiscais', {
       loja_id: opts.lojaId,
       data_inicio: opts.dataInicio,
       data_final: opts.dataFinal,
-    }),
+    }, 2000),
   ])
   const porId = new Map(headers.map((h) => [h.id, h]))
   for (const it of itens) {
@@ -246,6 +263,12 @@ const creditaIcmsDe = (it: ItemNFFrio): boolean =>
 const moveEstoqueDe = (it: ItemNFFrio): boolean =>
   (((ajustesDe(it) as { cNaoGerarMovEstoque?: string } | null)?.cNaoGerarMovEstoque ?? 'N') !== 'S')
 
+// nValor de itensICMS vem do full_object (JSONB) do Contabo -- pode ter sido
+// gravado como number ou string dependendo da ingestão original; Number()
+// cobre os dois casos (mesmo cuidado do valorDe()).
+const icmsValorDe = (it: ItemNFFrio): number =>
+  Number((it.full_object as { itensICMS?: { nValor?: number | string } } | null)?.itensICMS?.nValor) || 0
+
 export function agregarAuditoriaCfop(itens: ItemNFFrio[]): {
   cfop_doc: string
   cfop_entrada: string | null
@@ -253,19 +276,21 @@ export function agregarAuditoriaCfop(itens: ItemNFFrio[]): {
   valor: number
   credita_icms: number
   move_estoque: number
+  icms_creditado: number
 }[] {
   const grupos = new Map<
     string,
-    { cfop_doc: string; cfop_entrada: string | null; itens: number; valor: number; credita_icms: number; move_estoque: number }
+    { cfop_doc: string; cfop_entrada: string | null; itens: number; valor: number; credita_icms: number; move_estoque: number; icms_creditado: number }
   >()
   for (const it of itens) {
     const doc = cfopDocDe(it) ?? ''
     const ent = cfopEntradaDe(it)
     const k = `${doc}|${ent ?? ''}`
-    const e = grupos.get(k) ?? { cfop_doc: doc, cfop_entrada: ent, itens: 0, valor: 0, credita_icms: 0, move_estoque: 0 }
+    const e = grupos.get(k) ?? { cfop_doc: doc, cfop_entrada: ent, itens: 0, valor: 0, credita_icms: 0, move_estoque: 0, icms_creditado: 0 }
     e.itens += 1
     e.valor += valorDe(it)
-    if (creditaIcmsDe(it)) e.credita_icms += 1
+    const credita = creditaIcmsDe(it)
+    if (credita) { e.credita_icms += 1; e.icms_creditado += icmsValorDe(it) }
     if (moveEstoqueDe(it)) e.move_estoque += 1
     grupos.set(k, e)
   }
