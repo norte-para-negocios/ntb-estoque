@@ -37,7 +37,7 @@ const KEYS = CATS.map((c) => c.key)
 
 type PeriodoCob = 'dia' | 'semana' | 'mes'
 type RowCobertura = { periodo_inicio: string; qtd_inventarios: number; produtos_contados: number; total_produtos: number }
-type ProdutoSemContagem = { codigo: string; descricao: string; tipo_item: string | null; descricao_familia: string | null }
+type ProdutoSemContagem = { codigo: string; codigo_produto: number; descricao: string; tipo_item: string | null; descricao_familia: string | null }
 
 export default async function ResumoPage({
   searchParams,
@@ -154,13 +154,18 @@ export default async function ResumoPage({
       ? new Set(((posicaoRes.data ?? []) as { codigo_produto: number }[]).map((p) => p.codigo_produto))
       : null
 
-    const semContagem = ((produtosRaw ?? []) as (ProdutoSemContagem & { codigo_produto: number })[])
+    const semContagem = ((produtosRaw ?? []) as ProdutoSemContagem[])
       .filter((p) => !codigosRecentes.has(p.codigo_produto))
       .filter((p) => !codigosNoLocal || codigosNoLocal.has(p.codigo_produto))
 
     totalSemContagem = semContagem.length
-    produtosSemContagem = semContagem.slice(0, 100).map(({ codigo, descricao, tipo_item, descricao_familia }) => ({
-      codigo, descricao, tipo_item, descricao_familia,
+    // codigo_produto (nao codigo) na key do React abaixo: "codigo" (SKU) NAO e
+    // unico por loja -- achado real desta auditoria, produtos distintos (ex.:
+    // variantes/kits) podem compartilhar o mesmo codigo (ver AGENTS.md, mesmo tipo
+    // de achado ja visto em faturamento.ts com chave composta por string). Sem
+    // isso o React colidia key duplicada e podia renderizar a linha errada.
+    produtosSemContagem = semContagem.slice(0, 100).map(({ codigo, codigo_produto, descricao, tipo_item, descricao_familia }) => ({
+      codigo, codigo_produto, descricao, tipo_item, descricao_familia,
     }))
   }
 
@@ -340,7 +345,7 @@ export default async function ResumoPage({
               </div>
               <div className="divide-y divide-border">
                 {produtosSemContagem.map((p) => (
-                  <div key={p.codigo} className="flex items-center gap-3 px-4 py-2">
+                  <div key={p.codigo_produto} className="flex items-center gap-3 px-4 py-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] text-text">{formatarNomeProduto(p.descricao)}</p>
                       <div className="mt-0.5 flex gap-2">

@@ -52,8 +52,6 @@ export type Contagem = {
   inventarios: number
   opsPrevistas: number
   opsConcluidas: number
-  movEntradas: number
-  movSaidas: number
   etiquetas: number
   erros: number
   auditoria: number
@@ -148,6 +146,28 @@ async function nomesLojas(supabase: Supa, lojaIds: number[]): Promise<Map<number
 
 const vazia: CategoriaLista = { colunas: [], linhas: [], total: 0 }
 
+// Pagina uma query .from().select() ate trazer TODAS as linhas: o PostgREST corta
+// em 1000 por padrao, sem erro (mesmo achado ja documentado em lib/arquivo-morto.ts
+// e lib/supabase/rpc-todos.ts). Sem isso, somas feitas em JS sobre o resultado saem
+// subcontadas silenciosamente sempre que o periodo/loja passar de 1000 linhas --
+// confirmado aqui para movimentos_historico em janelas de semana/mes (achado real
+// desta auditoria, ver docs/superpowers -- lojas com bastante movimento passam de
+// 1000 linhas so em 7 dias). Requer ORDER BY deterministico pra paginacao ser segura.
+async function paginarSelect<T>(
+  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const LOTE = 1000
+  const linhas: T[] = []
+  for (let off = 0; ; off += LOTE) {
+    const { data, error } = await montar(off, off + LOTE - 1)
+    if (error) throw new Error(error.message)
+    if (!data || !data.length) break
+    linhas.push(...data)
+    if (data.length < LOTE) break
+  }
+  return linhas
+}
+
 export async function carregarResumoDia(
   lojaIds: number[],
   dataISO: string,
@@ -156,7 +176,7 @@ export async function carregarResumoDia(
 ): Promise<ResumoDia> {
   const contagemVazia: Contagem = {
     notas: 0, valorNotas: 0, transferencias: 0, inventarios: 0,
-    opsPrevistas: 0, opsConcluidas: 0, movEntradas: 0, movSaidas: 0, etiquetas: 0, erros: 0, auditoria: 0,
+    opsPrevistas: 0, opsConcluidas: 0, etiquetas: 0, erros: 0, auditoria: 0,
   }
   if (!lojaIds.length) return { contagem: contagemVazia, cat, lista: vazia, multiLoja: false }
 
@@ -166,40 +186,43 @@ export async function carregarResumoDia(
   const multiLoja = lojaIds.length > 1
 
   // --- CONTAGENS (todas, baratas) ---
+  // notas_fiscais e impressao_etiquetas usam paginarSelect (nao so .select() puro):
+  // sao lidas por completo pra somar em JS (contagem.notas/valorNotas/etiquetas, exibidos
+  // no card) e o PostgREST corta em 1000 linhas por padrao sem erro -- achado real desta
+  // auditoria (ver comentario acima de paginarSelect). O total de movimentos_historico
+  // (entradas/saidas) NAO e lido aqui: nada no /resumo consome esse numero (so o card
+  // "Movimentacoes" do PDF /resumo/imprimir o le, com a sua propria query capada pra
+  // exibicao) -- paginar essa tabela por completo custaria caro (lojas com bastante
+  // movimento passam de 1000 linhas so em 7 dias) sem nenhum ganho de exibicao.
   const [
-    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, movRowsRaw, etiqRows, errosCount, auditCount,
+    notasRows, transfCount, inventCount, opsPrevCount, opsConclCount, etiqRows, errosCount, auditCount,
   ] = await Promise.all([
-    supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
-      .gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60'),
+    paginarSelect<{ n_valor_nfe: number | null }>((from, to) =>
+      supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
+        .gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60')
+        .order('id', { ascending: true }).range(from, to)
+    ),
     supabase.from('transferencias').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('inventarios').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
     supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('identificacao_d_dt_previsao', dataIni).lte('identificacao_d_dt_previsao', dataFim),
     supabase.from('ordens_producao').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim),
-    supabase.from('movimentos_historico').select('cod_prod, data, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim),
-    supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
+    paginarSelect<{ qtd_etiquetas: number | null }>((from, to) =>
+      supabase.from('impressao_etiquetas').select('qtd_etiquetas').in('loja_id', lojaIds)
+        .gte('created_at', ini).lt('created_at', fim)
+        .order('id', { ascending: true }).range(from, to)
+    ),
     supabase.from('integration_attempts').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).eq('error', true).gte('created_at', ini).lt('created_at', fim),
     supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
   ])
 
-  let movRowsCompletas = (movRowsRaw.data ?? []) as { cod_prod: number; data: string; entradas: number | null; saidas: number | null }[]
-  if (dataIni < limiteJanelaQuente()) {
-    for (const lojaId of lojaIds) {
-      movRowsCompletas = await complementarMovimentosHistorico(movRowsCompletas, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-    }
-  }
-  let movEntradas = 0, movSaidas = 0
-  for (const m of movRowsCompletas) {
-    movEntradas += Number(m.entradas ?? 0); movSaidas += Number(m.saidas ?? 0)
-  }
   const contagem: Contagem = {
-    notas: (notasRows.data ?? []).length,
-    valorNotas: (notasRows.data ?? []).reduce((s, n) => s + Number((n as { n_valor_nfe: number }).n_valor_nfe ?? 0), 0),
+    notas: notasRows.length,
+    valorNotas: notasRows.reduce((s, n) => s + Number(n.n_valor_nfe ?? 0), 0),
     transferencias: transfCount.count ?? 0,
     inventarios: inventCount.count ?? 0,
     opsPrevistas: opsPrevCount.count ?? 0,
     opsConcluidas: opsConclCount.count ?? 0,
-    movEntradas, movSaidas,
-    etiquetas: (etiqRows.data ?? []).reduce((s, e) => s + Number((e as { qtd_etiquetas: number }).qtd_etiquetas ?? 0), 0),
+    etiquetas: etiqRows.reduce((s, e) => s + Number(e.qtd_etiquetas ?? 0), 0),
     erros: errosCount.count ?? 0,
     auditoria: auditCount.count ?? 0,
   }
