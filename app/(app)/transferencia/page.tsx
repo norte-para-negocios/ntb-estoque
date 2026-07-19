@@ -49,16 +49,25 @@ export default async function TransferenciaPage({
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
 
-  // Familias distintas para o select (melhor esforco)
-  const { data: produtosFamilia } = await supabase
-    .from('produtos')
-    .select('descricao_familia')
-    .eq('loja_id', lojaId)
-    .not('descricao_familia', 'is', null)
-
-  const familias = [
-    ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
-  ].sort() as string[]
+  // Familias distintas para o select. PostgREST limita a 1000 linhas por
+  // requisicao SEM avisar — lojas com mais de 1000 produtos com familia
+  // preenchida (a maioria das 6 lojas ativas tem) perdiam a maior parte das
+  // familias do dropdown silenciosamente (ex: loja com 52 familias reais
+  // mostrava so 4). Pagina ate esgotar para pegar todas.
+  const familiasSet = new Set<string>()
+  for (let from = 0; ; from += 1000) {
+    const { data: bloco } = await supabase
+      .from('produtos')
+      .select('descricao_familia')
+      .eq('loja_id', lojaId)
+      .not('descricao_familia', 'is', null)
+      .range(from, from + 999)
+    for (const p of bloco ?? []) {
+      if (p.descricao_familia) familiasSet.add(p.descricao_familia)
+    }
+    if (!bloco?.length || bloco.length < 1000) break
+  }
+  const familias = [...familiasSet].sort()
 
   // Filtro de familia/tipo via produtos -> movimentos -> transferencia_id
   // (multi-select: valor na URL e uma lista separada por virgula)
@@ -66,24 +75,52 @@ export default async function TransferenciaPage({
   const tiposArr = valoresMulti(sp.tipo)
   let idsFiltrados: number[] | null = null
   if (familiasArr.length || tiposArr.length || sp.produto) {
-    let prodQuery = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId)
-    if (familiasArr.length) prodQuery = prodQuery.in('descricao_familia', familiasArr)
-    if (tiposArr.length) prodQuery = prodQuery.in('tipo_item', tiposArr)
-    if (sp.produto) {
-      const termo = escapeIlikeOr(sp.produto)
-      prodQuery = prodQuery.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+    function buildProdQuery(from: number, to: number) {
+      let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).range(from, to)
+      if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
+      if (tiposArr.length) q = q.in('tipo_item', tiposArr)
+      if (sp.produto) {
+        const termo = escapeIlikeOr(sp.produto)
+        q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+      }
+      return q
     }
-    const { data: prods } = await prodQuery
-    const codigos = [...new Set((prods ?? []).map((p) => p.codigo_produto).filter(Boolean))]
+    // Paginado: um tipo/familia isolado pode ter mais de 1000 produtos (ex: loja 6,
+    // tipo "99", tem 1143) — sem paginar, o PostgREST corta em 1000 SEM avisar e o
+    // filtro passa a ignorar produtos de verdade (falso negativo: transferencia some
+    // da lista mesmo contendo produto do filtro escolhido).
+    const codigos: number[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data: bloco } = await buildProdQuery(from, from + 999)
+      if (!bloco?.length) break
+      codigos.push(...bloco.map((p) => p.codigo_produto).filter((v): v is number => v != null))
+      if (bloco.length < 1000) break
+    }
+    const codigosUnicos = [...new Set(codigos)]
 
-    if (codigos.length) {
-      const { data: movsData } = await supabase
-        .from('movimentos')
-        .select('id, transferencia_id')
-        .eq('loja_id', lojaId)
-        .in('id_prod', codigos)
-        .not('transferencia_id', 'is', null)
-      const movs = await complementarMovimentos(movsData ?? [], { lojaId })
+    if (codigosUnicos.length) {
+      const movsData: { id: number; id_prod: number; transferencia_id: number | null }[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data: bloco } = await supabase
+          .from('movimentos')
+          .select('id, id_prod, transferencia_id')
+          .eq('loja_id', lojaId)
+          .in('id_prod', codigosUnicos)
+          .not('transferencia_id', 'is', null)
+          .range(from, from + 999)
+        if (!bloco?.length) break
+        movsData.push(...bloco)
+        if (bloco.length < 1000) break
+      }
+      // complementarMovimentos nao aceita uma lista de id_prod (a API do Contabo so
+      // filtra por 1 produto por vez), entao ela busca TODOS os movimentos da loja
+      // sem filtro de produto — precisa refiltrar aqui, senao movimentos do Contabo
+      // de produtos fora da familia/tipo escolhido vazam pro resultado (idsFiltrados
+      // incluiria transferencias que nao tem nenhum produto do filtro).
+      const codigosSet = new Set(codigosUnicos)
+      const movs = (await complementarMovimentos(movsData, { lojaId })).filter((m) =>
+        codigosSet.has(m.id_prod)
+      )
       idsFiltrados = [
         ...new Set((movs ?? []).map((m) => m.transferencia_id).filter((v): v is number => v != null)),
       ]
