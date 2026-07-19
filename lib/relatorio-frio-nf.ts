@@ -39,13 +39,46 @@ type HeaderNFFrio = {
 
 export type MetaProdutoNF = Map<number, { tipo: string | null; familia: string | null }>
 
+const TETO_ITENS = 5000
+const TETO_HEADERS = 2000
+
+const addDia = (d: string): string => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10)
+
+/**
+ * Busca em `caminho` paginando por DATA (o endpoint não tem offset/limit):
+ * se a resposta vier no teto documentado do endpoint (5000 itens / 2000
+ * headers por chamada), o Contabo pode estar cortando dados sem avisar —
+ * divide o intervalo [dataInicio, dataFinal] ao meio e refaz recursivamente
+ * até cada pedaço vir abaixo do teto. Achado real (2026-07-18, auditoria de
+ * Pendências de Classificação): TODAS as lojas com volume médio+ (2,3,4,5,6)
+ * batiam exatamente 5000 numa janela de 9 meses -- a soma de sub-janelas
+ * menores mostrou até 8857 itens reais pra loja 3 (quase 44% descartado em
+ * silêncio). Mesma classe de bug do teto de 1000 linhas do PostgREST, só que
+ * no endpoint do Contabo.
+ */
+async function buscarComPaginacaoPorData<T>(
+  caminho: string,
+  lojaId: number,
+  dataInicio: string,
+  dataFinal: string,
+  teto: number
+): Promise<T[]> {
+  const rows = await buscarFrio<T>(caminho, { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal })
+  if (rows.length < teto || dataInicio >= dataFinal) return rows
+  const meio = new Date((Date.parse(dataInicio) + Date.parse(dataFinal)) / 2).toISOString().slice(0, 10)
+  const inicioSegunda = addDia(meio)
+  if (meio < dataInicio || inicioSegunda > dataFinal) return rows // intervalo de 1 dia, não dá pra dividir mais
+  const [a, b] = await Promise.all([
+    buscarComPaginacaoPorData<T>(caminho, lojaId, dataInicio, meio, teto),
+    buscarComPaginacaoPorData<T>(caminho, lojaId, inicioSegunda, dataFinal, teto),
+  ])
+  return [...a, ...b]
+}
+
 /**
  * Busca itens de NF do Contabo no período, já enriquecidos com os campos do
  * cabeçalho que as agregações precisam (etapa, fornecedor, cancelada).
  * O endpoint /nota_fiscal_items já exclui NF deletada (deleted_at is null).
- * Teto do endpoint: 5000 itens / 2000 headers por chamada — suficiente pra
- * janela [início do ano, corte de 90 dias]; se o volume crescer além disso,
- * o endpoint precisa ganhar paginação (mudança no server.js do Contabo).
  */
 export async function buscarItensNFFrio(opts: {
   lojaId: number
@@ -53,16 +86,8 @@ export async function buscarItensNFFrio(opts: {
   dataFinal: string
 }): Promise<ItemNFFrio[]> {
   const [itens, headers] = await Promise.all([
-    buscarFrio<ItemNFFrio>('/nota_fiscal_items', {
-      loja_id: opts.lojaId,
-      data_inicio: opts.dataInicio,
-      data_final: opts.dataFinal,
-    }),
-    buscarFrio<HeaderNFFrio>('/notas_fiscais', {
-      loja_id: opts.lojaId,
-      data_inicio: opts.dataInicio,
-      data_final: opts.dataFinal,
-    }),
+    buscarComPaginacaoPorData<ItemNFFrio>('/nota_fiscal_items', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_ITENS),
+    buscarComPaginacaoPorData<HeaderNFFrio>('/notas_fiscais', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_HEADERS),
   ])
   const porId = new Map(headers.map((h) => [h.id, h]))
   for (const it of itens) {

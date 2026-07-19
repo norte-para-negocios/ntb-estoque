@@ -25,12 +25,25 @@ export default async function PendenciasClassificacaoPage() {
   const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
 
   // Blocos 1 e 2: cadastro incompleto.
-  const { data: prods } = await supabase
-    .from('produtos')
-    .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
-    .eq('loja_id', lojaId)
   type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null }
-  const todos = (prods ?? []) as Prod[]
+  // PostgREST corta em 1000 linhas por padrão, sem erro -- lojas com catálogo
+  // grande (aqui, 2/3/4/5/6 passam de 1000 produtos) tinham "sem família"/"sem
+  // tipo" subcontados E o cruzamento de "sem cadastro" (bloco 3) com falsos
+  // positivos, pois codigosCadastro ficava incompleto. Pagina com .range() +
+  // ORDER BY determinístico até trazer tudo -- mesma classe de bug já achada e
+  // corrigida no Faturamento e no Estoque Valorizado nesta sessão.
+  const todos: Prod[] = []
+  for (let p = 0; ; p++) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+      .order('codigo_produto')
+      .range(p * 1000, p * 1000 + 999)
+    if (!data?.length) break
+    todos.push(...(data as Prod[]))
+    if (data.length < 1000) break
+  }
   const semFamilia = todos.filter((p) => !p.descricao_familia)
   const semTipo = todos.filter((p) => !p.tipo_item)
 
@@ -71,7 +84,12 @@ export default async function PendenciasClassificacaoPage() {
     if (cod !== null && codsSemFamilia.has(cod)) valorSemFamilia += v
     if (cod !== null && codsSemTipo.has(cod)) valorSemTipo += v
     if (cod === null || !codigosCadastro.has(cod)) {
-      const k = `${it.c_descricao_produto ?? ''}|${it.c_codigo_produto ?? ''}`
+      // JSON.stringify em vez de template "a|b": c_descricao_produto/c_codigo_produto
+      // vêm crus da NF do fornecedor sem sanitização -- mesma classe de bug já
+      // achada em produção no acumulador de Faturamento (produto com "|" no nome
+      // colidia/corrompia a chave). Hoje nenhuma NF das 6 lojas tem "|" nesses
+      // campos (checado via SQL), mas o texto do fornecedor não é controlado.
+      const k = JSON.stringify([it.c_descricao_produto ?? '', it.c_codigo_produto ?? ''])
       const e = semCadastro.get(k) ?? { descricao: it.c_descricao_produto ?? '(sem descrição)', codigo: it.c_codigo_produto ?? '-', fornecedor: it.fornecedor ?? '-', ocorrencias: 0, valor: 0 }
       e.ocorrencias += 1
       e.valor += v
