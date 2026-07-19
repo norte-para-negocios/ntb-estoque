@@ -28,11 +28,31 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
     ? await supabase.from('profiles').select('name').eq('id', inventario.user_id).maybeSingle()
     : { data: null }
 
-  const { data: itensRaw } = await supabase
-    .from('inventario_items')
-    .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
-    .eq('inventario_id', id)
-    .order('id')
+  // PostgREST corta em 1000 linhas por padrao e sem erro: inventarios podem ter
+  // mais itens que isso (uma loja chega a ~2000 produtos ativos), entao pagina
+  // com .range() ate esgotar - senao a contagem perde itens silenciosamente.
+  const itensRaw: {
+    id: number
+    produto_codigo: string
+    produto_descricao: string
+    produto_familia: string | null
+    produto_codigo_produto: number
+    quan: number | null
+    status: string | null
+  }[] = []
+  const PAGE_SIZE = 1000
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * PAGE_SIZE
+    const { data: bloco } = await supabase
+      .from('inventario_items')
+      .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
+      .eq('inventario_id', id)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (!bloco?.length) break
+    itensRaw.push(...bloco)
+    if (bloco.length < PAGE_SIZE) break
+  }
 
   const codigos = [...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean))]
   const { data: prods } = codigos.length
