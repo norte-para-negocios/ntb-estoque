@@ -11,10 +11,23 @@ function foraDaJanelaQuente(dataInicio?: string | null): boolean {
   return dataInicio < limiteJanelaQuente()
 }
 
+// Timeout por requisicao. Achado real (auditoria Notas Fiscais 2026-07-19): o
+// teto antigo de 5s era curto demais pra paginas de 2000+ linhas sobre a
+// internet publica -- medido ao vivo, /notas_fiscais?offset=0 (2000 linhas)
+// levou entre 4.6s e 9.1s por chamada. Com 5s, a requisicao abortava NO MEIO
+// da paginacao com frequencia dependente so da latencia do momento.
+const TIMEOUT_PADRAO_MS = 20000
+
+// Retorna `null` (em vez de []) quando a requisicao falha/expira, pra quem
+// pagina (buscarFrioTudo) conseguir distinguir "acabaram as paginas" (resposta
+// bem-sucedida com menos linhas que o pedido) de "a chamada falhou" -- as duas
+// situacoes antes produziam o mesmo `[]` e eram tratadas como equivalentes,
+// truncando a paginacao em silencio sempre que uma pagina do meio falhasse.
 export async function buscarFrio<T>(
   caminho: string,
-  params: Record<string, string | number | undefined>
-): Promise<T[]> {
+  params: Record<string, string | number | undefined>,
+  timeoutMs = TIMEOUT_PADRAO_MS,
+): Promise<T[] | null> {
   const url = process.env.NTB_FRIO_API_URL
   const key = process.env.NTB_FRIO_API_KEY
   if (!url) return []
@@ -24,10 +37,18 @@ export async function buscarFrio<T>(
   }
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
     const resp = await fetch(`${url}${caminho}?${qs.toString()}`, {
       headers: { 'X-Api-Key': key ?? '' },
       signal: controller.signal,
+      // Dado historico muda (novas notas chegam, cron de sync roda) e o cache
+      // de fetch do framework em Server Components (server-side, nao o cache
+      // do navegador) pode reter uma resposta antiga -- inclusive uma
+      // capturada durante uma falha ja corrigida, mascarando o efeito de
+      // qualquer fix nesta funcao ate o processo reiniciar (confundiu esta
+      // propria auditoria: o total continuava errado em dev mesmo depois do
+      // fix, ate reiniciar o `next dev`). Nunca cachear e o certo aqui.
+      cache: 'no-store',
     })
     clearTimeout(timeoutId)
     if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
@@ -35,7 +56,7 @@ export async function buscarFrio<T>(
     return json.rows ?? []
   } catch (e) {
     console.error(`historico-contabo: falha ao consultar ${caminho}`, e)
-    return []
+    return null
   }
 }
 
@@ -61,6 +82,7 @@ export async function contarOrdensProducaoAntigas(opts: {
     const resp = await fetch(`${url}/ordens_producao?${qs.toString()}`, {
       headers: { 'X-Api-Key': key ?? '' },
       signal: controller.signal,
+      cache: 'no-store', // ver comentario em buscarFrio sobre cache de fetch mascarar dado historico
     })
     clearTimeout(timeoutId)
     if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
@@ -68,6 +90,41 @@ export async function contarOrdensProducaoAntigas(opts: {
     return json.count ?? 0
   } catch (e) {
     console.error('historico-contabo: falha ao contar ordens_producao antigas', e)
+    return 0
+  }
+}
+
+// Mesmo padrao acima, para /notas_fiscais -- usado como cinto-de-seguranca em
+// nota-fiscal/page.tsx: compara contra o numero de linhas frias efetivamente
+// trazidas por buscarFrioTudo pra detectar paginacao incompleta (ex: Contabo
+// fora do ar bem no meio, ou as 3 tentativas de buscarFrioTudo esgotadas) e
+// avisar em vez de mostrar um total errado sem dizer nada.
+export async function contarNotasFiscaisAntigas(opts: {
+  lojaId: number
+  dataInicio?: string
+  dataFinal: string
+  busca?: string
+}): Promise<number> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url) return 0
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), data_final: opts.dataFinal, count: 'true' })
+    if (opts.dataInicio) qs.set('data_inicio', opts.dataInicio)
+    if (opts.busca) qs.set('busca', opts.busca)
+    const resp = await fetch(`${url}/notas_fiscais?${qs.toString()}`, {
+      headers: { 'X-Api-Key': key ?? '' },
+      signal: controller.signal,
+      cache: 'no-store', // ver comentario em buscarFrio sobre cache de fetch mascarar dado historico
+    })
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    const json = (await resp.json()) as { count?: number }
+    return json.count ?? 0
+  } catch (e) {
+    console.error('historico-contabo: falha ao contar notas_fiscais antigas', e)
     return 0
   }
 }
@@ -84,6 +141,17 @@ function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
 // truncavam em silencio pra loja com mais historico que isso (achado real: loja 3
 // tinha 2248 notas fiscais no Contabo, loja 5 tinha 2561 -- o badge de "Notas
 // Fiscais" pra periodo desde o inicio mostrava 2050 em vez das 2650 reais).
+//
+// Segundo achado real na MESMA auditoria, depois de corrigir o de cima: mesmo
+// paginando, o total continuava errado e MUDAVA a cada carregamento (1423,
+// depois 1932, valor real 2629) -- causa raiz era o timeout de 5s por chamada
+// (curto demais pra paginas de 2000 linhas, ver TIMEOUT_PADRAO_MS acima)
+// combinado com o fato de `buscarFrio` devolver `[]` tanto pra "acabou" quanto
+// pra "falhou" -- uma pagina do MEIO que abortasse por timeout era lida como
+// "fim dos dados" e a paginacao parava ali, perdendo tudo dali pra frente em
+// silencio, de forma nao-deterministica (dependia so da latencia daquele
+// carregamento). Agora falha distinta (`null`) tenta de novo com backoff antes
+// de desistir, e so para o loop numa resposta bem-sucedida curta o bastante.
 export async function buscarFrioTudo<T>(
   caminho: string,
   params: Record<string, string | number | undefined>,
@@ -91,7 +159,18 @@ export async function buscarFrioTudo<T>(
 ): Promise<T[]> {
   const tudo: T[] = []
   for (let offset = 0; ; offset += tamanhoPagina) {
-    const pagina = await buscarFrio<T>(caminho, { ...params, offset })
+    let pagina: T[] | null = null
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      pagina = await buscarFrio<T>(caminho, { ...params, offset })
+      if (pagina !== null) break
+      if (tentativa < 2) await new Promise((r) => setTimeout(r, 500 * (tentativa + 1)))
+    }
+    if (pagina === null) {
+      console.error(
+        `historico-contabo: desistindo de ${caminho} no offset ${offset} apos 3 tentativas -- dado pode estar incompleto`,
+      )
+      break
+    }
     tudo.push(...pagina)
     if (pagina.length < tamanhoPagina) break
   }
@@ -148,7 +227,7 @@ export async function complementarOrdensProducao<T extends { id: number }>(
   // tudo") vinha cortada em silencio. Lojas tem 40mil a 88mil OPs no Contabo
   // (loja 5: 88491) -- so ~2-5% chegava. Servidor ganhou suporte a `offset`.
   const frias = opts.id
-    ? await buscarFrio<T>('/ordens_producao', { loja_id: opts.lojaId, id: opts.id })
+    ? (await buscarFrio<T>('/ordens_producao', { loja_id: opts.lojaId, id: opts.id })) ?? []
     : await buscarFrioTudo<T>('/ordens_producao', {
         loja_id: opts.lojaId,
         data_inicio: opts.dataInicio,
@@ -241,11 +320,11 @@ export async function buscarMovimentosHistoricoBrutos<T>(opts: {
   dataInicio: string
   dataFinal: string
 }): Promise<T[]> {
-  const lote = await buscarFrio<T>('/movimentos_historico', {
+  const lote = (await buscarFrio<T>('/movimentos_historico', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
-  })
+  })) ?? []
   if (lote.length < LIMITE_CONTABO_SEM_PAGINACAO || opts.dataInicio >= opts.dataFinal) return lote
   const diasTotais = Math.round(
     (new Date(`${opts.dataFinal}T00:00:00Z`).getTime() - new Date(`${opts.dataInicio}T00:00:00Z`).getTime()) / 86400000
