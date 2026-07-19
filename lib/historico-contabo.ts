@@ -84,7 +84,7 @@ function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
 // truncavam em silencio pra loja com mais historico que isso (achado real: loja 3
 // tinha 2248 notas fiscais no Contabo, loja 5 tinha 2561 -- o badge de "Notas
 // Fiscais" pra periodo desde o inicio mostrava 2050 em vez das 2650 reais).
-async function buscarFrioTudo<T>(
+export async function buscarFrioTudo<T>(
   caminho: string,
   params: Record<string, string | number | undefined>,
   tamanhoPagina: number,
@@ -154,18 +154,24 @@ export async function complementarOrdensProducao<T extends { id: number }>(
   return mesclarPorId(quentes, frias)
 }
 
+// Achado real (auditoria movimentacao-operacao-auto, 2026-07-19): /movimentos
+// tem o MESMO limite fixo de 5000 no servidor que /notas_fiscais e
+// /nota_fiscal_items ja tinham (ver buscarFrioTudo acima) -- so que sem
+// offset, entao nunca foi paginado. Loja 5 sozinha tem 51937 ajustes desde
+// 01/07/2025 (so ~10% vinha antes do fix). Servidor ganhou suporte a
+// `offset` (mesmo padrao); client agora pagina igual aos outros.
 export async function complementarMovimentos<T extends { id: number }>(
   quentes: T[],
   opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
-  const frias = await buscarFrio<T>('/movimentos', {
+  const frias = await buscarFrioTudo<T>('/movimentos', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
     id_prod: opts.idProd,
     transferencia_id: opts.transferenciaId,
-  })
+  }, 5000)
   return mesclarPorId(quentes, frias)
 }
 

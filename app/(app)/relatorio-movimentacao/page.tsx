@@ -22,6 +22,7 @@ import {
   limiteJanelaQuente,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
+import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
 import Link from 'next/link'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
@@ -48,7 +49,12 @@ type LinhaOper = { origem: string; sentido: 'E' | 'S'; local: string; tipo_sped:
 
 // O valor do PDV na SAÍDA é lixo (CMC podre de produto acabado -> valores
 // astronômicos). Para tudo o mais, o valor do Omie é confiável.
-const valorConfiavel = (origem: string, sentido: 'E' | 'S') => !(/pdv/i.test(origem) && sentido === 'S')
+// No import manual (Excel MOV_DRV), "Movimento Gerado pelo PDV" vinha do CMC
+// aproximado de movimentos (reconhecidamente impreciso). No modo automático
+// (ver lib/movimentacao-operacao-auto.ts) esse valor vem do fato de cupom
+// (fat_cupom_itens.v_item) -- item a item, real, não uma aproximação -- então
+// não deve ser marcado como não-confiável.
+const valorConfiavel = (origem: string, sentido: 'E' | 'S', automatico: boolean) => automatico || !(/pdv/i.test(origem) && sentido === 'S')
 
 export default async function RelatorioMovimentacaoPage({
   searchParams,
@@ -101,10 +107,16 @@ export default async function RelatorioMovimentacaoPage({
       }
       return todos
     }
-    const [rows, { data: metaRow }] = await Promise.all([
+    const [rowsImportadas, { data: metaRow }] = await Promise.all([
       selTodos(),
       supabase.from('movimentacao_operacao_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     ])
+    // Import manual do Excel MOV_DRV só existia pra loja 3 -- pra qualquer
+    // outra loja sem import, reconstrói a mesma matriz automaticamente a
+    // partir de NF (compra), fato de cupom (PDV) e ajustes (manual/inventário),
+    // já sincronizados pra todas as lojas (ver lib/movimentacao-operacao-auto.ts).
+    const usarAutomatico = rowsImportadas.length === 0
+    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId) : rowsImportadas
 
     // Filtros (multi-select): operação, local, sentido. Dimensão da matriz: família/local/tipo.
     const opsSel = valoresMulti(sp.op)
@@ -141,7 +153,11 @@ export default async function RelatorioMovimentacaoPage({
         <PageHeader
           title="Movimentação"
           icon={ArrowDownUp}
-          description="Por operação, local e tipo — em R$ (importado do MOV_DRV) — BETA"
+          description={
+            usarAutomatico
+              ? 'Por operação, local e tipo — em R$ (automático: NF + PDV + ajustes) — BETA'
+              : 'Por operação, local e tipo — em R$ (importado do MOV_DRV) — BETA'
+          }
           voltarHref="/relatorios"
           actions={
             <>
@@ -191,7 +207,7 @@ export default async function RelatorioMovimentacaoPage({
     const porOper = new Map<string, { origem: string; sentido: 'E' | 'S'; qtde: number; valor: number; conf: boolean }>()
     for (const r of baseLocal) {
       const k = `${r.origem}|${r.sentido}`
-      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido, qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido) }
+      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido, qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido, usarAutomatico) }
       e.qtde += Number(r.qtde); e.valor += Number(r.valor)
       porOper.set(k, e)
     }
@@ -213,13 +229,13 @@ export default async function RelatorioMovimentacaoPage({
       })
     )
     // Se o recorte ficou só com PDV-saída (valor lixo), a matriz mostra QUANTIDADE.
-    const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido))
+    const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const usarQtde = soPdvSaida
     const meses = [...new Set(filtradas.map((r) => r.mes))].sort()
     const porDim = new Map<string, { total: number; meses: Record<string, number> }>()
     for (const r of filtradas) {
       const rot = (dimExibida === 'local' ? r.local : dimExibida === 'tipo_sped' ? r.tipo_sped : r.familia) || 'N/D'
-      const v = usarQtde ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido) ? Number(r.valor) : 0)
+      const v = usarQtde ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0)
       const ent = porDim.get(rot) ?? { total: 0, meses: {} }
       ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + v
       ent.total += v
@@ -296,7 +312,9 @@ export default async function RelatorioMovimentacaoPage({
           </table>
         </div>
         <p className="px-1 text-[11px] text-text-muted">
-          O valor do PDV na saída não é confiável (custo médio de produto acabado fica distorcido no Omie) — use o modo &quot;Em quantidade&quot; para volume de venda.
+          {usarAutomatico
+            ? 'Valor do PDV vem do fato de cupom (item a item, valor real de venda).'
+            : 'O valor do PDV na saída não é confiável (custo médio de produto acabado fica distorcido no Omie) — use o modo "Em quantidade" para volume de venda.'}
           {metaRow?.importado_em && <> · Importado em {fmtQuando(metaRow.importado_em as string)}.</>}
         </p>
 

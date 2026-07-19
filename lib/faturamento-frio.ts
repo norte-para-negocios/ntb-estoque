@@ -3,7 +3,7 @@
 // docs/superpowers/specs/2026-07-18-faturamento-fato-cupom-design.md).
 // Mesmo espirito de lib/relatorio-frio-nf.ts: um modulo por dominio de
 // leitura fria, sempre via buscarFrio.
-import { buscarFrio } from '@/lib/historico-contabo'
+import { buscarFrio, buscarFrioTudo } from '@/lib/historico-contabo'
 
 export type LinhaFatAgregado = { rotulo: string; mes?: string; valor: number; qtde_itens: number }
 
@@ -26,11 +26,24 @@ export type CupomFat = {
   num: string | null; serie: string | null; valor: number; cancelado: boolean; devolvido: boolean
 }
 
+// Achado real (auditoria movimentacao-operacao-auto, 2026-07-19): /fat_cupons
+// (limit 5000) e /fat_cupom_itens (limit 20000) no servidor cortavam em
+// silencio pra qualquer loja com historico de 1 ano -- loja 5 sozinha tem
+// 31038 cupons e 213669 itens desde 01/07/2025 (so ~16%/9% vinha antes do
+// fix). Servidor ganhou suporte a `offset` (mesmo padrao de /notas_fiscais);
+// client agora pagina igual aos outros dominios frios.
 export async function buscarFatCupons(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<CupomFat[]> {
-  const rows = await buscarFrio<CupomFat & { valor: string | number }>('/fat_cupons', {
+  const rows = await buscarFrioTudo<CupomFat & { valor: string | number }>('/fat_cupons', {
     loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal,
-  })
+  }, 5000)
   return rows.map((r) => ({ ...r, valor: Number(r.valor) || 0 }))
+}
+
+export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<ItemFat[]> {
+  const rows = await buscarFrioTudo<ItemFat & { quant: string | number; v_unit: string | number; v_desc: string | number; v_item: string | number }>(
+    '/fat_cupom_itens', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000,
+  )
+  return rows.map((i) => ({ ...i, quant: Number(i.quant) || 0, v_unit: Number(i.v_unit) || 0, v_desc: Number(i.v_desc) || 0, v_item: Number(i.v_item) || 0 }))
 }
 
 export type ItemFat = {

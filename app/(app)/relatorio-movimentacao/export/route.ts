@@ -11,13 +11,17 @@ import {
   limiteJanelaQuente,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
+import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
 
 export const dynamic = 'force-dynamic'
 
 type Qtd = { rotulo: string; mes: string; qtde: number }
 type LinhaOper = { origem: string; sentido: 'E' | 'S'; local: string; tipo_sped: string; familia: string; mes: string; inventario: boolean; qtde: number; valor: number }
 
-const valorConfiavel = (origem: string, sentido: 'E' | 'S') => !(/pdv/i.test(origem) && sentido === 'S')
+// Ver comentário equivalente em app/(app)/relatorio-movimentacao/page.tsx: no
+// modo automático o valor de PDV vem do fato de cupom (real), não da
+// aproximação do import manual antigo.
+const valorConfiavel = (origem: string, sentido: 'E' | 'S', automatico: boolean) => automatico || !(/pdv/i.test(origem) && sentido === 'S')
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -35,7 +39,7 @@ export async function GET(request: Request) {
     const sentSel = valoresMulti(searchParams.get('sent') ?? '').filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
     const dim = searchParams.get('dim') === 'local' ? 'local' : searchParams.get('dim') === 'tipo_sped' ? 'tipo_sped' : 'familia'
 
-    const rows: LinhaOper[] = []
+    const rowsImportadas: LinhaOper[] = []
     for (let p = 0; ; p++) {
       const { data, error } = await supabase
         .from('movimentacao_operacao')
@@ -44,10 +48,12 @@ export async function GET(request: Request) {
         .order('valor', { ascending: false })
         .range(p * 1000, p * 1000 + 999)
       if (error || !data?.length) break
-      rows.push(...(data as LinhaOper[]))
+      rowsImportadas.push(...(data as LinhaOper[]))
       if (data.length < 1000) break
     }
-    if (!rows.length) return new Response('Sem movimentação por operação importada', { status: 404 })
+    const usarAutomatico = rowsImportadas.length === 0
+    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId) : rowsImportadas
+    if (!rows.length) return new Response('Sem movimentação por operação', { status: 404 })
 
     const abas: AbaPlanilha[] = []
 
@@ -56,7 +62,7 @@ export async function GET(request: Request) {
     const porOper = new Map<string, { origem: string; sentido: string; qtde: number; valor: number; conf: boolean }>()
     for (const r of baseLocal) {
       const k = `${r.origem}|${r.sentido}`
-      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido === 'E' ? 'Entrada' : 'Saída', qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido) }
+      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido === 'E' ? 'Entrada' : 'Saída', qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido, usarAutomatico) }
       e.qtde += Number(r.qtde); e.valor += Number(r.valor)
       porOper.set(k, e)
     }
@@ -82,11 +88,11 @@ export async function GET(request: Request) {
       (!locsSel.length || locsSel.includes(r.local)) &&
       (!sentSel.length || sentSel.includes(r.sentido))
     )
-    const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido))
+    const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const linhasDim = filtradas.map((r) => ({
       rotulo: (dim === 'local' ? r.local : dim === 'tipo_sped' ? r.tipo_sped : r.familia) || 'N/D',
       mes: r.mes,
-      valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido) ? Number(r.valor) : 0),
+      valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0),
     }))
     const dimLabel = dim === 'local' ? 'Local' : dim === 'tipo_sped' ? 'Tipo (SPED)' : 'Família'
     const recorte = [

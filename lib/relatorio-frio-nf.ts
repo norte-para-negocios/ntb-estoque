@@ -39,8 +39,9 @@ type HeaderNFFrio = {
 
 export type MetaProdutoNF = Map<number, { tipo: string | null; familia: string | null }>
 
-const TETO_ITENS = 5000
-const TETO_HEADERS = 2000
+export const TETO_ITENS = 5000
+export const TETO_HEADERS = 2000
+export const TETO_FAT = 5000
 
 const addDia = (d: string): string => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10)
 
@@ -56,7 +57,7 @@ const addDia = (d: string): string => new Date(Date.parse(d) + 86400000).toISOSt
  * silêncio). Mesma classe de bug do teto de 1000 linhas do PostgREST, só que
  * no endpoint do Contabo.
  */
-async function buscarComPaginacaoPorData<T>(
+export async function buscarComPaginacaoPorData<T>(
   caminho: string,
   lojaId: number,
   dataInicio: string,
