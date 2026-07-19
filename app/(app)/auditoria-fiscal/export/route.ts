@@ -7,7 +7,7 @@ import { buscarItensNFFrio, filtrarItensAuditoria, agregarAuditoriaCfop } from '
 
 export const dynamic = 'force-dynamic'
 
-type LinhaCFOP = { cfop_doc: string; cfop_entrada: string; itens: number; valor: number; credita_icms: number; move_estoque: number }
+type LinhaCFOP = { cfop_doc: string; cfop_entrada: string; itens: number; valor: number; credita_icms: number; move_estoque: number; icms_creditado: number }
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -30,7 +30,6 @@ export async function GET(request: Request) {
   })
   const linhas = (data ?? []) as LinhaCFOP[]
 
-  let icmsPorCfop = new Map<string, number>()
   if (ini < corte) {
     // O Supabase corta em 1000 linhas por padrao (sem erro) -- pagina ate esgotar
     // (achado real: lojas com >1000 produtos perdiam o resto do catalogo aqui).
@@ -58,8 +57,15 @@ export async function GET(request: Request) {
       const k = `${f.cfop_doc}|${f.cfop_entrada ?? ''}`
       const existente = porChave.get(k)
       if (existente) {
-        existente.itens += f.itens; existente.valor += f.valor
-        existente.credita_icms += f.credita_icms; existente.move_estoque += f.move_estoque
+        // f.* já vem como number genuíno (agregarAuditoriaCfop soma com +=1/Number()),
+        // mas o RPC via PostgREST também retorna number puro pra bigint/numeric --
+        // Number(...) aqui é so defensivo (mesmo padrão do page.tsx), não corrige
+        // um bug real observado, so blinda contra o driver do Contabo mudar no futuro.
+        existente.itens = Number(existente.itens) + f.itens
+        existente.valor = Number(existente.valor) + f.valor
+        existente.credita_icms = Number(existente.credita_icms) + f.credita_icms
+        existente.move_estoque = Number(existente.move_estoque) + f.move_estoque
+        existente.icms_creditado = Number(existente.icms_creditado) + f.icms_creditado
       } else {
         linhas.push(f as LinhaCFOP)
         porChave.set(k, f as LinhaCFOP)
@@ -68,20 +74,13 @@ export async function GET(request: Request) {
   }
   if (!linhas.length) return new Response('Sem notas no período', { status: 404 })
 
-  const { data: itensIcms } = await supabase
-    .from('nota_fiscal_items')
-    .select('full_object, c_cfop, notas_fiscais!inner(d_emissao_nfe, c_etapa, deleted_at)')
-    .eq('loja_id', lojaId)
-    .gte('notas_fiscais.d_emissao_nfe', iniRpc)
-    .lte('notas_fiscais.d_emissao_nfe', fim)
-    .eq('notas_fiscais.c_etapa', '60')
-    .is('notas_fiscais.deleted_at', null)
-  for (const it of (itensIcms ?? []) as { full_object: { itensAjustes?: { cCFOPEntrada?: string }; itensICMS?: { nValor?: number } }; c_cfop: string | null }[]) {
-    const doc = it.c_cfop ?? ''
-    const ent = it.full_object?.itensAjustes?.cCFOPEntrada ?? ''
-    const k = `${doc}|${ent}`
-    icmsPorCfop.set(k, (icmsPorCfop.get(k) ?? 0) + (Number(it.full_object?.itensICMS?.nValor) || 0))
-  }
+  // "ICMS creditado (R$)" agora vem direto da RPC (coluna icms_creditado,
+  // migration 081) -- antes era uma query solta em nota_fiscal_items sem
+  // paginacao (corte silencioso de 1000 linhas do PostgREST -- as 6 lojas
+  // ativas TEM mais de 1000 itens na janela quente), sem filtro de NF
+  // cancelada, sem os filtros de produto/familia/fornecedor/local do resto
+  // do relatorio, e sem filtrar por credita_icms (somava ICMS de itens que
+  // NAO creditam junto). A RPC ja resolve os 4 problemas de uma vez.
 
   const totValor = linhas.reduce((s, l) => s + Number(l.valor), 0)
   const colunas: ColunaExcel[] = [
@@ -97,7 +96,6 @@ export async function GET(request: Request) {
   ]
   const rows = linhas.map((l) => {
     const d = descreverCFOP(l.cfop_entrada)
-    const kIcms = `${l.cfop_doc}|${l.cfop_entrada ?? ''}`
     return {
       cfop: `${l.cfop_doc} → ${l.cfop_entrada ?? 'sem entrada'}`,
       descricao: d.desc,
@@ -106,7 +104,7 @@ export async function GET(request: Request) {
       valor: Number(l.valor),
       pct: totValor > 0 ? `${((Number(l.valor) / totValor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-',
       credita: Number(l.credita_icms),
-      icms_valor: Number((icmsPorCfop.get(kIcms) ?? 0).toFixed(2)),
+      icms_valor: Number(Number(l.icms_creditado ?? 0).toFixed(2)),
       nao_estoca: Number(l.itens) - Number(l.move_estoque),
     }
   })
