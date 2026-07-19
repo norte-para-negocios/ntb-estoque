@@ -24,7 +24,7 @@ import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-re
 import {
   complementarOrdensProducao,
   limiteJanelaQuente,
-  buscarFrio,
+  buscarFrioTudo,
   contarOrdensProducaoAntigas,
 } from '@/lib/historico-contabo'
 
@@ -376,13 +376,13 @@ export default async function OrdemProducaoPage({
       if (lote.length < LOTE) break
     }
     // Busca o lado frio direto (nao via complementarOrdensProducao) pra poder
-    // comparar o tamanho bruto devolvido contra o count(*) real do periodo --
-    // achado real: o endpoint de linhas do Contabo tambem tem teto proprio
-    // (~2000 linhas) sem paginacao, entao pra uma loja com muito volume no
-    // periodo (ex: "Concluidas" numa janela larga) a fatia fria vem cortada
-    // mesmo tendo mais registros no banco.
+    // comparar o tamanho bruto devolvido contra o count(*) real do periodo.
+    // O endpoint de linhas do Contabo tem teto proprio (~2000 linhas) mas
+    // agora aceita `offset` (achado 2026-07-19: sem paginar, lojas com muito
+    // volume vinham cortadas em silencio) -- buscarFrioTudo pagina ate trazer
+    // tudo. totaisParciais fica so como cinto-de-seguranca.
     const [friasRaw, friasTotalReal] = await Promise.all([
-      buscarFrio<TotalRow>('/ordens_producao', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal }),
+      buscarFrioTudo<TotalRow>('/ordens_producao', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal }, 2000),
       contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true

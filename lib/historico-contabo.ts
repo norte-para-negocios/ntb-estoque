@@ -142,15 +142,21 @@ export async function complementarOrdensProducao<T extends { id: number }>(
   const precisa =
     opts.id || foraDaJanelaQuente(opts.dataInicio) || foraDaJanelaQuente(opts.validadeInicio)
   if (!precisa) return quentes
-  const frias = await buscarFrio<T>('/ordens_producao', {
-    loja_id: opts.lojaId,
-    data_inicio: opts.dataInicio,
-    data_final: opts.dataFinal,
-    validade_inicio: opts.validadeInicio,
-    validade_final: opts.validadeFinal,
-    busca: opts.busca,
-    id: opts.id,
-  })
+  // Achado real (auditoria 2026-07-19): /ordens_producao tem o MESMO limite
+  // fixo de 2000 no servidor que os outros endpoints de historico longo --
+  // sem offset, uma chamada sem filtro de data (dataInicio vazio = "quer
+  // tudo") vinha cortada em silencio. Lojas tem 40mil a 88mil OPs no Contabo
+  // (loja 5: 88491) -- so ~2-5% chegava. Servidor ganhou suporte a `offset`.
+  const frias = opts.id
+    ? await buscarFrio<T>('/ordens_producao', { loja_id: opts.lojaId, id: opts.id })
+    : await buscarFrioTudo<T>('/ordens_producao', {
+        loja_id: opts.lojaId,
+        data_inicio: opts.dataInicio,
+        data_final: opts.dataFinal,
+        validade_inicio: opts.validadeInicio,
+        validade_final: opts.validadeFinal,
+        busca: opts.busca,
+      }, 2000)
   return mesclarPorId(quentes, frias)
 }
 
@@ -175,17 +181,21 @@ export async function complementarMovimentos<T extends { id: number }>(
   return mesclarPorId(quentes, frias)
 }
 
+// Achado real (auditoria 2026-07-19): /movimentos_historico tem o MESMO
+// limite fixo de 5000 no servidor -- sem paginacao, lojas com 66mil a
+// 110mil linhas (loja 5: 109819) vinham cortadas em silencio. Servidor
+// ganhou suporte a `offset`.
 export async function complementarMovimentosHistorico<T extends { cod_prod: number; data: string }>(
   quentes: T[],
   opts: { lojaId: number; codProd?: number; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
-  const frias = await buscarFrio<T>('/movimentos_historico', {
+  const frias = await buscarFrioTudo<T>('/movimentos_historico', {
     loja_id: opts.lojaId,
     cod_prod: opts.codProd,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
-  })
+  }, 5000)
   const vistos = new Set(quentes.map((r) => `${r.cod_prod}|${r.data}`))
   return [...quentes, ...frias.filter((r) => !vistos.has(`${r.cod_prod}|${r.data}`))]
 }
