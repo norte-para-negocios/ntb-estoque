@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
+import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -51,43 +51,58 @@ export async function GET(request: Request) {
   let notaIdsFiltro: number[] | null = null
   if (tiposArr.length || params.produto) {
     if (tiposArr.length) {
-      const { data: prodCodigos } = await supabase
-        .from('produtos')
-        .select('codigo_produto')
-        .eq('loja_id', lojaId)
-        .in('tipo_item', tiposArr)
+      // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
+      // (ex: loja 6, tipo "99" tem 1143) -- sem .range() o PostgREST trunca em
+      // silencio e a exportacao some com notas validas.
+      const prodCodigos = await buscarTudoPaginado<{ codigo_produto: string | number }>((from, to) =>
+        supabase
+          .from('produtos')
+          .select('codigo_produto')
+          .eq('loja_id', lojaId)
+          .in('tipo_item', tiposArr)
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
-      const codigos = (prodCodigos ?? []).map((p) => String(p.codigo_produto))
+      const codigos = prodCodigos.map((p) => String(p.codigo_produto))
 
       if (codigos.length === 0) {
         notaIdsFiltro = [-1]
       } else {
-        let itemQuery = supabase
-          .from('nota_fiscal_items')
-          .select('nota_fiscal_id')
-          .eq('loja_id', lojaId)
-          .in('produto_codigo', codigos)
-        if (params.produto) {
-          const p = escapeIlikeOr(params.produto)
-          itemQuery = itemQuery.or(
-            `c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`,
-          )
-        }
-        const { data: itemRows } = await itemQuery
+        // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
+        // (toda loja ativa ja passa disso) -- mesma razao acima.
+        const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
+          let q = supabase
+            .from('nota_fiscal_items')
+            .select('nota_fiscal_id')
+            .eq('loja_id', lojaId)
+            .in('produto_codigo', codigos)
+            .order('id', { ascending: true })
+            .range(from, to)
+          if (params.produto) {
+            const p = escapeIlikeOr(params.produto)
+            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          }
+          return q
+        })
         const notaIds = Array.from(
-          new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+          new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v) => v != null)),
         )
         notaIdsFiltro = notaIds.length ? notaIds : [-1]
       }
     } else if (params.produto) {
       const p = escapeIlikeOr(params.produto)
-      const { data: itemRows } = await supabase
-        .from('nota_fiscal_items')
-        .select('nota_fiscal_id')
-        .eq('loja_id', lojaId)
-        .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+      const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) =>
+        supabase
+          .from('nota_fiscal_items')
+          .select('nota_fiscal_id')
+          .eq('loja_id', lojaId)
+          .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
       const notaIds = Array.from(
-        new Set((itemRows ?? []).map((r) => r.nota_fiscal_id).filter((v) => v != null)),
+        new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v) => v != null)),
       )
       notaIdsFiltro = notaIds.length ? notaIds : [-1]
     }
@@ -114,7 +129,11 @@ export async function GET(request: Request) {
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
       .is('deleted_at', null)
+      // d_emissao_nfe se repete (varias notas no mesmo dia) -- sem um desempate
+      // unico, paginar em blocos de 1000 pode duplicar ou pular linhas no
+      // limite entre blocos (mesmo risco do resto do fix desta auditoria).
       .order('d_emissao_nfe', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
 
     if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
@@ -136,9 +155,17 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  const notasCompletas = dataInicio < limiteJanelaQuente()
+  // complementarNotasFiscais busca a fatia fria so por loja/data/busca -- nao
+  // conhece o filtro de tipo/produto (limitacao documentada no AGENTS.md).
+  // Sem filtrar aqui, toda nota fria do periodo entraria na exportacao mesmo
+  // sem casar com o filtro, quando o periodo cruza os 90 dias.
+  const notasCompletasBrutas = dataInicio < limiteJanelaQuente()
     ? await complementarNotasFiscais(notas, { lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor })
     : notas
+  const notaIdsFiltroSet = notaIdsFiltro ? new Set(notaIdsFiltro) : null
+  const notasCompletas = notaIdsFiltroSet
+    ? notasCompletasBrutas.filter((n) => notaIdsFiltroSet.has(n.id))
+    : notasCompletasBrutas
 
   const rows = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
