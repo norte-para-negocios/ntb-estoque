@@ -15,7 +15,6 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { descreverCFOP } from '@/lib/cfop'
-import { buscarResumoFinanceiroHoje } from '@/lib/omie/financeiro-resumo'
 import type { LojaOmie } from '@/lib/omie/client'
 import { Scale, Download } from 'lucide-react'
 
@@ -50,7 +49,6 @@ export default async function RelatorioIndicadoresPage({
     .eq('id', lojaId)
     .single<LojaOmie & { meta_compras_pct: number | null }>()
   const metaPct = lojaRow?.meta_compras_pct ?? 40
-  const resumoHoje = lojaRow?.omie_app_key ? await buscarResumoFinanceiroHoje(lojaRow) : null
 
   const sp = await searchParams
   const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
@@ -265,52 +263,6 @@ export default async function RelatorioIndicadoresPage({
           </span>
         )}
       </div>
-
-      {resumoHoje && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Saldo em conta (hoje)</div>
-            <div className={`num mt-1 text-lg font-semibold ${resumoHoje.contaCorrente.vTotal < 0 ? 'text-err' : 'text-text'}`}>
-              {fmtMoeda(resumoHoje.contaCorrente.vTotal)}
-            </div>
-            {resumoHoje.contaCorrente.vTotal < 0 && (
-              <div className="mt-1 text-[11px] text-warn" title="Saldo negativo pode indicar conta não conciliada no Omie">
-                ⚠ pode estar desconciliado no Omie
-              </div>
-            )}
-          </div>
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Em aberto (todos os títulos)</div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="text-[13px] text-text-muted">A pagar</span>
-              <span className="num text-sm font-semibold text-err">{fmtMoeda(resumoHoje.contaPagar.vTotal)}</span>
-            </div>
-            {resumoHoje.contaPagar.vAtraso > 0 && (
-              <div className="text-right text-[11px] text-err">{fmtMoeda(resumoHoje.contaPagar.vAtraso)} em atraso</div>
-            )}
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-[13px] text-text-muted">A receber</span>
-              <span className="num text-sm font-semibold text-ok">{fmtMoeda(resumoHoje.contaReceber.vTotal)}</span>
-            </div>
-            {resumoHoje.contaReceber.vAtraso > 0 && (
-              <div className="text-right text-[11px] text-err">{fmtMoeda(resumoHoje.contaReceber.vAtraso)} em atraso</div>
-            )}
-          </div>
-          <div className="rounded-lg border border-border bg-surface p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Fluxo de caixa projetado</div>
-            <table className="mt-1 w-full text-[12px]">
-              <tbody>
-                {resumoHoje.fluxoCaixa.slice(0, 5).map((d) => (
-                  <tr key={d.dDia}>
-                    <td className="py-0.5 text-text-muted">{d.dDia.slice(0, 5)}</td>
-                    <td className={`num py-0.5 text-right font-medium ${d.vSaldo >= 0 ? 'text-ok' : 'text-err'}`}>{fmtMoeda(d.vSaldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full min-w-[600px] border-collapse text-sm">
