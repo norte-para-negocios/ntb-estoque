@@ -147,14 +147,19 @@ export default async function RelatorioMargemPage({
       for (const [cod, e] of acumPorCod) {
         if (e.saldo > 0) cmcPorCod.set(cod, e.valor / e.saldo)
       }
-      rows = produtosCalc
-        .map((p) => {
-          const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
-          const pdv = Number(p.valor_unitario) || null
-          const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
-          return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
-        })
-        .filter((r) => r.cmc != null && r.pdv != null)
+      // Achado real (usuário 2026-07-19): o .filter() anterior escondia da tela
+      // QUALQUER produto sem CMC ou sem preço de venda cadastrado (muitos
+      // produtos tem "venda R$ 0,00" no Omie) -- silenciosamente sumiam da
+      // lista, sem contar nem como "CMC inválido". Removido: agora todo
+      // produto do tipo certo aparece, e o que não tem cmc/pdv/margem válidos
+      // cai na seção "CMC inválido" já existente (mesma lógica do import
+      // manual), em vez de desaparecer sem aviso.
+      rows = produtosCalc.map((p) => {
+        const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
+        const pdv = Number(p.valor_unitario) || null
+        const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
+        return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
+      })
       calculadaAoVivo = true
     }
   }
