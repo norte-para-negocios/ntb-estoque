@@ -112,20 +112,40 @@ export default async function RelatorioMargemPage({
       .limit(1)
       .maybeSingle()
     if (fotoRow?.data_posicao && produtosCalc.length) {
-      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number }>((from, to) =>
+      // Pondera por local (soma de custo x saldo, dividido pelo saldo total) em vez
+      // de pegar o MAIOR n_cmc entre locais -- mesmo bug já achado e corrigido em
+      // relatorio_estoque_valorizado (migration 082, 2026-07-19): quando o mesmo
+      // produto tem CMC divergente entre locais, o maior valor sozinho superestima
+      // o custo e derruba a margem calculada artificialmente.
+      // n_saldo>0 tambem: achado real ao validar -- Omie grava linhas de
+      // posicao_estoques com saldo NEGATIVO em locais "fantasma" (ex: ajuste em
+      // transito) que, sem esse filtro, zeram o saldo total do produto (3 num
+      // local real + -3 num local fantasma = 0) e derrubam o produto inteiro do
+      // relatorio (loja 2: caiu de 715 pra 196 sem o filtro). So locais com
+      // estoque realmente positivo devem entrar na ponderacao.
+      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>((from, to) =>
         supabase
           .from('posicao_estoques')
-          .select('n_cod_prod, n_cmc')
+          .select('n_cod_prod, n_cmc, n_saldo')
           .eq('loja_id', lojaId)
           .eq('data_posicao', fotoRow.data_posicao)
           .gt('n_cmc', 0)
+          .gt('n_saldo', 0)
           .order('id', { ascending: true })
           .range(from, to)
       )
-      const cmcPorCod = new Map<number, number>()
+      const acumPorCod = new Map<number, { valor: number; saldo: number }>()
       for (const p of posRows) {
-        const atual = cmcPorCod.get(Number(p.n_cod_prod))
-        if (atual == null || Number(p.n_cmc) > atual) cmcPorCod.set(Number(p.n_cod_prod), Number(p.n_cmc))
+        const cod = Number(p.n_cod_prod)
+        const saldo = Number(p.n_saldo) || 0
+        const ent = acumPorCod.get(cod) ?? { valor: 0, saldo: 0 }
+        ent.valor += Number(p.n_cmc) * saldo
+        ent.saldo += saldo
+        acumPorCod.set(cod, ent)
+      }
+      const cmcPorCod = new Map<number, number>()
+      for (const [cod, e] of acumPorCod) {
+        if (e.saldo > 0) cmcPorCod.set(cod, e.valor / e.saldo)
       }
       rows = produtosCalc
         .map((p) => {
