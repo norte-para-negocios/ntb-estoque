@@ -69,7 +69,7 @@ function cfopEntradaDeNF(it: { full_object: Record<string, unknown> | null }): s
   return ajustes?.cCFOPEntrada ?? null
 }
 
-export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promise<LinhaOperAuto[]> {
+export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produtoBusca?: string): Promise<LinhaOperAuto[]> {
   const supabase = createServiceClient()
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   // Escopo pedido pelo usuário 2026-07-19: só ano corrente, não precisa de
@@ -78,12 +78,12 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
   const DESDE = `${hoje.slice(0, 4)}-01-01`
 
   const [metaRows, locaisRes] = await Promise.all([
-    paginarTodos<{ codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }>((from, to) =>
-      supabase.from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId).order('id').range(from, to)
+    paginarTodos<{ codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }>((from, to) =>
+      supabase.from('produtos').select('codigo_produto, tipo_item, descricao_familia, codigo, descricao').eq('loja_id', lojaId).order('id').range(from, to)
     ),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId),
   ])
-  const metaPorCodigo = new Map(metaRows.map((p) => [Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia }]))
+  const metaPorCodigo = new Map(metaRows.map((p) => [Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia, codigo: p.codigo, descricao: p.descricao }]))
   const locaisPorCodigo = new Map(
     (locaisRes.data ?? []).map((l: { codigo_local_estoque: number; descricao: string | null }) => [
       Number(l.codigo_local_estoque),
@@ -92,6 +92,19 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
   )
   const nomeLocal = (cod: number | null) => (cod == null ? 'N/D' : locaisPorCodigo.get(cod) ?? String(cod))
   const tipoSpedLabel = (tipo: string | null) => (tipo ? `${tipo}-${labelTipoItem(tipo)}` : 'N/D')
+
+  // Filtro de produto (busca por nome ou código) -- pedido do usuário
+  // 2026-07-19: faltava na aba "Por operação", só existia em "Em quantidade".
+  // Aplicado ANTES de agregar (a matriz final some com o grão de produto ao
+  // juntar por família/local/tipo), então precisa checar aqui, item a item.
+  const termoBusca = produtoBusca?.trim().toLowerCase() || null
+  const produtoCasa = (idProduto: number | null): boolean => {
+    if (!termoBusca) return true
+    if (idProduto == null) return false
+    const meta = metaPorCodigo.get(Number(idProduto))
+    if (!meta) return false
+    return (meta.descricao ?? '').toLowerCase().includes(termoBusca) || (meta.codigo ?? '').toLowerCase().includes(termoBusca)
+  }
 
   const linhas: LinhaOperAuto[] = []
   const add = (l: LinhaOperAuto) => {
@@ -123,6 +136,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
     if (!header) continue
     const data = header.d_emissao_nfe.slice(0, 10)
     if (data < DESDE || data > hoje) continue
+    if (!produtoCasa(it.n_id_produto)) continue
     const cfop = cfopEntradaDeNF(it) ?? it.c_cfop
     const cat = descreverCFOP(cfop).cat
     const meta = it.n_id_produto != null ? metaPorCodigo.get(Number(it.n_id_produto)) : undefined
@@ -180,6 +194,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
   for (const it of itensFato) {
     const cupom = cuponsValidos.get(it.n_id_cupom)
     if (!cupom) continue
+    if (!produtoCasa(it.id_produto)) continue
     const meta = it.id_produto != null ? metaPorCodigo.get(Number(it.id_produto)) : undefined
     add({
       origem: 'Movimento Gerado pelo PDV', sentido: 'S', local: nomeLocal(localMaisComumPdv(it.id_produto)),
@@ -200,6 +215,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number): Promi
     if (a.tipo === 'TRF' || a.tipo === 'TPQ') continue // transferência, fora do escopo desta matriz
     const data = String(a.data).slice(0, 10)
     if (data < DESDE || data > hoje) continue
+    if (!produtoCasa(a.id_prod)) continue
     const meta = a.id_prod != null ? metaPorCodigo.get(Number(a.id_prod)) : undefined
     const sentido: 'E' | 'S' = a.tipo === 'ENT' ? 'E' : 'S'
     add({

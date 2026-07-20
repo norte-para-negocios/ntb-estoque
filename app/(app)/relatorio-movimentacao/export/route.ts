@@ -55,7 +55,8 @@ export async function GET(request: Request) {
       if (data.length < 1000) break
     }
     const usarAutomatico = rowsImportadas.length === 0
-    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId) : rowsImportadas
+    const produtoBusca = searchParams.get('produto') ?? undefined
+    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, produtoBusca) : rowsImportadas
     if (!rows.length) return new Response('Sem movimentação por operação', { status: 404 })
 
     const abas: AbaPlanilha[] = []

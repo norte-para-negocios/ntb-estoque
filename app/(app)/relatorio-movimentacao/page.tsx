@@ -106,7 +106,7 @@ export default async function RelatorioMovimentacaoPage({
     // partir de NF (compra), fato de cupom (PDV) e ajustes (manual/inventário),
     // já sincronizados pra todas as lojas (ver lib/movimentacao-operacao-auto.ts).
     const usarAutomatico = rowsImportadas.length === 0
-    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId) : rowsImportadas
+    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, sp.produto) : rowsImportadas
 
     // Filtros (multi-select): operação, local, sentido, família, tipo.
     const opsSel = valoresMulti(sp.op)
@@ -127,6 +127,7 @@ export default async function RelatorioMovimentacaoPage({
     const tiposSped = [...new Set(rows.map((r) => r.tipo_sped))].filter(Boolean).sort()
 
     const campos: CampoFiltro[] = [
+      { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
       { tipo: 'multi-select', nome: 'op', label: 'Operação', opcoes: origens.map((o) => ({ value: o, label: o })) },
       { tipo: 'multi-select', nome: 'loc', label: 'Local de estoque', opcoes: locais.map((l) => ({ value: l, label: l })) },
       { tipo: 'multi-select', nome: 'sent', label: 'Sentido', opcoes: [{ value: 'E', label: 'Entrada' }, { value: 'S', label: 'Saída' }] },
@@ -152,11 +153,11 @@ export default async function RelatorioMovimentacaoPage({
               <FiltrosGaveta
                 basePath="/relatorio-movimentacao"
                 campos={campos}
-                defaults={{ op: sp.op ?? '', loc: sp.loc ?? '', sent: sp.sent ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '', data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+                defaults={{ produto: sp.produto ?? '', op: sp.op ?? '', loc: sp.loc ?? '', sent: sp.sent ?? '', familia: sp.familia ?? '', tipo: sp.tipo ?? '', data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
-                href={`/relatorio-movimentacao/export?modo=operacao${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
+                href={`/relatorio-movimentacao/export?modo=operacao${sp.produto ? `&produto=${encodeURIComponent(sp.produto)}` : ''}${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Excel: operações + perdas + matriz (com filtros)"
               >
