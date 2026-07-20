@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -196,14 +197,18 @@ export default async function RelatorioEstoqueValorizadoPage({
               {linhas.map((l) => (
                 <tr key={l.codigo_produto} className="border-t border-border/60 hover:bg-surface-2/40">
                   <td className="sticky left-0 z-10 bg-surface px-3 py-2">
-                    <div className="max-w-[220px]">
+                    <Link
+                      href={`/relatorio-movimentacao?produto=${encodeURIComponent(l.codigo ?? l.descricao ?? '')}`}
+                      className="block max-w-[220px] hover:underline"
+                      title="Ver movimentações deste produto"
+                    >
                       <div className="truncate text-text" title={l.descricao ?? ''}>
                         {formatarNomeProduto(l.descricao ?? '')}
                       </div>
                       {l.codigo && (
                         <div className="num text-[11px] text-text-muted">{l.codigo}</div>
                       )}
-                    </div>
+                    </Link>
                   </td>
                   <td className="hidden px-3 py-2 text-text-muted md:table-cell">
                     {l.descricao_familia ?? '-'}
