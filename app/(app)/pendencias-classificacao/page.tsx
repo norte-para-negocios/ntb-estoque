@@ -57,32 +57,55 @@ export default async function PendenciasClassificacaoPage() {
   // da mais lenta das tres, nao a soma.
   const corte = limiteJanelaQuente()
   type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor?: string | null; cfop?: string | null }
+  type QuenteRaw = { id: number; n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; c_cfop: string | null; full_object: Record<string, unknown> | null; notas_fiscais: { c_razao_social: string | null; c_nome: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null } }
   const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+  // .limit(50000) sozinho e cortado silenciosamente em 1000 linhas pelo teto
+  // padrao do PostgREST (mesma classe de bug do comentario acima, achado ao
+  // validar o filtro de concluidas: loja 2 tem 1360 linhas so na janela
+  // quente com etapa 60, so 1000 vinham). Pagina com .range() + ORDER BY
+  // deterministico (id) ate trazer tudo.
+  async function carregarQuentes(): Promise<QuenteRaw[]> {
+    const acc: QuenteRaw[] = []
+    for (let p = 0; ; p++) {
+      const { data } = await supabase
+        .from('nota_fiscal_items')
+        .select('id, n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome, c_etapa, full_object)')
+        .eq('loja_id', lojaId)
+        .is('notas_fiscais.deleted_at', null)
+        .eq('notas_fiscais.c_etapa', '60')
+        .gte('notas_fiscais.d_emissao_nfe', corte)
+        .order('id')
+        .range(p * 1000, p * 1000 + 999)
+      if (!data?.length) break
+      acc.push(...(data as unknown as QuenteRaw[]))
+      if (data.length < 1000) break
+    }
+    return acc
+  }
   const [todos, quentesRaw, friosRaw] = await Promise.all([
     carregarTodosProdutos(),
-    supabase
-      .from('nota_fiscal_items')
-      .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
-      .eq('loja_id', lojaId)
-      .is('notas_fiscais.deleted_at', null)
-      .gte('notas_fiscais.d_emissao_nfe', corte)
-      .limit(50000)
-      .then((r) => r.data),
+    carregarQuentes(),
     buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl }),
   ])
   const semFamilia = todos.filter((p) => !p.descricao_familia)
   const semTipo = todos.filter((p) => !p.tipo_item)
-  const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { c_cfop: string | null; full_object: Record<string, unknown> | null; notas_fiscais: { c_razao_social: string | null; c_nome: string | null } })[]).map((r) => ({
-    n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
-    n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
-    fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
-    cfop: (r.full_object as { itensAjustes?: { cCFOPEntrada?: string } } | null)?.itensAjustes?.cCFOPEntrada ?? r.c_cfop,
-  }))
-  const frios: ItemNF[] = friosRaw.map((it) => ({
-    n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
-    n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
-    cfop: cfopEntradaDe(it) ?? it.c_cfop,
-  }))
+  // Só NF concluída (etapa 60) e não cancelada -- mesmo filtro de Compras/Auditoria
+  // (migration 083); pendente/travada/cancelada não deve contar como "R$ associado".
+  const quentes: ItemNF[] = quentesRaw
+    .filter((r) => (r.notas_fiscais?.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
+    .map((r) => ({
+      n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
+      n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
+      fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
+      cfop: (r.full_object as { itensAjustes?: { cCFOPEntrada?: string } } | null)?.itensAjustes?.cCFOPEntrada ?? r.c_cfop,
+    }))
+  const frios: ItemNF[] = friosRaw
+    .filter((it) => it.nf_c_etapa === '60' && !it.nf_cancelada)
+    .map((it) => ({
+      n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
+      n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
+      cfop: cfopEntradaDe(it) ?? it.c_cfop,
+    }))
   const itens12m = [...quentes, ...frios]
 
   // Sugestão do cliente (Ramon): o CFOP de entrada já classifica o produto
