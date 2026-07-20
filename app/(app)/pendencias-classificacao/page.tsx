@@ -33,39 +33,51 @@ export default async function PendenciasClassificacaoPage() {
   // positivos, pois codigosCadastro ficava incompleto. Pagina com .range() +
   // ORDER BY determinístico até trazer tudo -- mesma classe de bug já achada e
   // corrigida no Faturamento e no Estoque Valorizado nesta sessão.
-  const todos: Prod[] = []
-  for (let p = 0; ; p++) {
-    const { data } = await supabase
-      .from('produtos')
-      .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-      .order('codigo_produto')
-      .range(p * 1000, p * 1000 + 999)
-    if (!data?.length) break
-    todos.push(...(data as Prod[]))
-    if (data.length < 1000) break
+  async function carregarTodosProdutos(): Promise<Prod[]> {
+    const acc: Prod[] = []
+    for (let p = 0; ; p++) {
+      const { data } = await supabase
+        .from('produtos')
+        .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .order('codigo_produto')
+        .range(p * 1000, p * 1000 + 999)
+      if (!data?.length) break
+      acc.push(...(data as Prod[]))
+      if (data.length < 1000) break
+    }
+    return acc
   }
-  const semFamilia = todos.filter((p) => !p.descricao_familia)
-  const semTipo = todos.filter((p) => !p.tipo_item)
 
   // Bloco 3 + R$: itens de NF dos últimos 12 meses (quente + frio) sem vínculo.
+  // As 3 buscas abaixo sao independentes entre si (produtos, janela quente,
+  // janela fria) -- rodavam em serie e somavam ~10s em producao (paginacao de
+  // catalogo + query de ate 50000 itens + chamada a API do Contabo, uma atras
+  // da outra). Promise.all roda concorrentemente; o tempo total passa a ser o
+  // da mais lenta das tres, nao a soma.
   const corte = limiteJanelaQuente()
   type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor?: string | null; cfop?: string | null }
-  const { data: quentesRaw } = await supabase
-    .from('nota_fiscal_items')
-    .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
-    .eq('loja_id', lojaId)
-    .is('notas_fiscais.deleted_at', null)
-    .gte('notas_fiscais.d_emissao_nfe', corte)
-    .limit(50000)
+  const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+  const [todos, quentesRaw, friosRaw] = await Promise.all([
+    carregarTodosProdutos(),
+    supabase
+      .from('nota_fiscal_items')
+      .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
+      .eq('loja_id', lojaId)
+      .is('notas_fiscais.deleted_at', null)
+      .gte('notas_fiscais.d_emissao_nfe', corte)
+      .limit(50000)
+      .then((r) => r.data),
+    buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl }),
+  ])
+  const semFamilia = todos.filter((p) => !p.descricao_familia)
+  const semTipo = todos.filter((p) => !p.tipo_item)
   const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { c_cfop: string | null; full_object: Record<string, unknown> | null; notas_fiscais: { c_razao_social: string | null; c_nome: string | null } })[]).map((r) => ({
     n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
     n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
     fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
     cfop: (r.full_object as { itensAjustes?: { cCFOPEntrada?: string } } | null)?.itensAjustes?.cCFOPEntrada ?? r.c_cfop,
   }))
-  const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-  const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
   const frios: ItemNF[] = friosRaw.map((it) => ({
     n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
     n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
