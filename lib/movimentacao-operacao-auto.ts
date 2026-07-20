@@ -69,6 +69,16 @@ function cfopEntradaDeNF(it: { full_object: Record<string, unknown> | null }): s
   return ajustes?.cCFOPEntrada ?? null
 }
 
+// Achado real (usuário 2026-07-19, "sistema no geral tá muito lento"): essa
+// função busca e reagrega NF + fato de cupom + ajustes do zero em TODO
+// carregamento da página (~40-50s pras lojas mais pesadas, medido nesta
+// sessão) -- sem cache nenhum, cada F5/troca de filtro refaz tudo.
+// TENTATIVA REVERTIDA: `unstable_cache` do Next.js tem teto de 2MB por
+// entrada -- o resultado agregado de uma loja pesada chega a 14,6MB, o que
+// quebrava a página inteira (erro "items over 2MB can not be cached") em vez
+// de acelerar. Cache real (ex: Redis, já rodando no mesmo servidor Contabo
+// pra outro fim, ou uma tabela de materialização) precisaria de mais desenho
+// antes de implementar -- não é troca de uma linha.
 export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produtoBusca?: string): Promise<LinhaOperAuto[]> {
   const supabase = createServiceClient()
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
