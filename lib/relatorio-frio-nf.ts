@@ -134,14 +134,17 @@ export type FiltrosComprasFrio = {
 
 const SEM = '__sem__'
 
-/** Espelha o WHERE das relatorio_compras_* (incl. exclusão de CFOP 910/908 e o
- * sentinela '__sem__' = valor nulo, migration 077). */
+/** Espelha o WHERE das relatorio_compras_* (incl. exclusão de CFOP 910/908, o
+ * sentinela '__sem__' = valor nulo (migration 077), e etapa 60 + não cancelada
+ * (migration 083)). */
 export function filtrarItensCompras(
   itens: ItemNFFrio[],
   f: FiltrosComprasFrio,
   meta: MetaProdutoNF
 ): ItemNFFrio[] {
   return itens.filter((it) => {
+    if (it.nf_c_etapa !== '60') return false
+    if (it.nf_cancelada) return false
     const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
     if (f.familias.length) {
       const fam = m?.familia ?? null
