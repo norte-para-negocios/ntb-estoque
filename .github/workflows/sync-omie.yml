@@ -2,11 +2,15 @@ name: Sync Omie
 
 # Mantem o sistema sincronizado com o Omie automaticamente, sem clicar.
 # Camada 1 (tempo real): webhook do Omie (configurado nas lojas).
-# Camada 2 (rede de seguranca): este cron frequente.
+# Camada 2 (rede de seguranca): antes era este cron do GH Actions a cada
+# 10min "no papel" -- mas o schedule do GitHub Actions e best-effort e na
+# pratica so disparava a cada ~60-240min (achado real, 2026-07-20, ao
+# validar Compras contra o Omie ao vivo: 51 NFs desatualizadas na loja 2).
+# Agora e um cron de verdade no Contabo (scripts/sync-cron.sh via crontab
+# do sistema, a cada 10min, batendo em localhost:3002). Schedule desativado
+# aqui; workflow_dispatch continua disponivel pra rodar manual se precisar.
 
 on:
-  schedule:
-    - cron: '*/10 * * * *' # a cada 10 min
   workflow_dispatch: {}
 
 concurrency:
