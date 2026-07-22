@@ -13,6 +13,7 @@ import { FiltroFamiliaMovimentos } from '@/components/movimentacoes/FiltroFamili
 import { FiltroTipoMovimentos } from '@/components/movimentacoes/FiltroTipoMovimentos'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { statusNF } from '@/lib/nf-status'
 import {
   complementarMovimentosHistorico,
   complementarMovimentos,
@@ -222,8 +223,8 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       const nfItemsQuentes: NFIItem[] = ((nfItemsData ?? []) as unknown as RawNFI[])
         .filter((nfi) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
-          if (!nf || nf.deleted_at || nf.c_etapa !== '60') return false
-          return (nf.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S'
+          if (!nf || nf.deleted_at) return false
+          return statusNF(nf.c_etapa, nf.full_object).label === 'Concluída'
         })
         .map((nfi) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
@@ -249,7 +250,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           const headers = await buscarFrioTudo<RawNFHeaderFrio>('/notas_fiscais', { loja_id: lojaId, data_inicio: ini, data_final: fim }, 2000)
           notasValidas = new Set(
             headers
-              .filter((h) => h.c_etapa === '60' && (h.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
+              .filter((h) => statusNF(h.c_etapa, h.full_object).label === 'Concluída')
               .map((h) => h.id)
           )
         }
