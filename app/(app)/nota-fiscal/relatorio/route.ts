@@ -10,10 +10,7 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
-
-function labelEtapa(etapa: string | null): string {
-  return etapa === '60' ? 'Concluída' : 'Pendente'
-}
+import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -121,13 +118,14 @@ export async function GET(request: Request) {
     c_nome: string | null
     n_valor_nfe: number | null
     c_etapa: string | null
+    full_object: unknown
   }
   const notas: Nota[] = []
 
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
+      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
@@ -140,8 +138,9 @@ export async function GET(request: Request) {
       .range(from, to)
     if (numNfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(numNfe)}%`)
     if (fornecedor) q = q.ilike('c_nome', `%${escapeIlike(fornecedor)}%`)
-    if (status === 'C') q = q.eq('c_etapa', '60')
-    else if (status === 'P') q = q.neq('c_etapa', '60')
+    if (status === 'C' || status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
     return q
   }
@@ -170,7 +169,7 @@ export async function GET(request: Request) {
     emissao: fmtData(n.d_emissao_nfe),
     numero: String(n.c_numero_nfe ?? '-'),
     fornecedor: n.c_razao_social || n.c_nome || '-',
-    etapa: labelEtapa(n.c_etapa),
+    etapa: statusNF(n.c_etapa, n.full_object).label,
     valor: n.n_valor_nfe ?? 0,
   }))
 
@@ -178,7 +177,7 @@ export async function GET(request: Request) {
   const filtrosAtivos: string[] = []
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
-  if (status) filtrosAtivos.push(`Status: ${status === 'C' ? 'Concluída' : 'Pendente'}`)
+  if (status) filtrosAtivos.push(`Status: ${status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : 'Pendente'}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
 

@@ -5,15 +5,12 @@ import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busc
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
+import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
-}
-
-function labelEtapa(etapa: string | null): string {
-  return etapa === '60' ? 'Concluída' : 'Pendente'
 }
 
 export async function GET(request: Request) {
@@ -118,13 +115,14 @@ export async function GET(request: Request) {
     c_nome: string | null
     n_valor_nfe: number | null
     c_etapa: string | null
+    full_object: unknown
   }
   const notas: Nota[] = []
 
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa')
+      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
@@ -139,8 +137,9 @@ export async function GET(request: Request) {
     if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
     if (params.fornecedor) q = q.ilike('c_nome', `%${escapeIlike(params.fornecedor)}%`)
 
-    if (params.status === 'C') q = q.eq('c_etapa', '60')
-    else if (params.status === 'P') q = q.neq('c_etapa', '60')
+    if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
 
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
 
@@ -171,7 +170,7 @@ export async function GET(request: Request) {
     emissao: fmtData(n.d_emissao_nfe),
     nfe: n.c_numero_nfe ?? '-',
     fornecedor: n.c_razao_social || n.c_nome || '-',
-    etapa: labelEtapa(n.c_etapa),
+    etapa: statusNF(n.c_etapa, n.full_object).label,
     valor: n.n_valor_nfe ?? 0,
   }))
 
