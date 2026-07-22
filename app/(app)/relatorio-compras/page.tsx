@@ -274,6 +274,12 @@ export default async function RelatorioComprasPage({
   if (sp.tipo) exportParams.set('tipo', sp.tipo)
   if (fornecedor) exportParams.set('fornecedor', fornecedor)
   if (sp.cfop) exportParams.set('cfop', sp.cfop)
+  // Achado real: produto e local ficavam de fora daqui -- os filtros
+  // funcionavam na tela (RPCs recebem tudo), mas o Excel/"Baixar tudo"
+  // silenciosamente ignorava esses dois filtros porque a URL de export
+  // nunca os carregava, mesmo as rotas de export já sabendo lê-los.
+  if (produto) exportParams.set('produto', produto)
+  if (sp.local) exportParams.set('local', sp.local)
 
   // Cabeçalho de coluna (th) padrão.
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
