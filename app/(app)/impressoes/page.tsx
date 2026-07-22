@@ -51,7 +51,7 @@ export default async function ImpressoesPage({
 
   if (sp.data_inicio) query = query.gte('created_at', sp.data_inicio)
   if (sp.data_final) query = query.lte('created_at', `${sp.data_final}T23:59:59`)
-  if (sp.origem === 'NF' || sp.origem === 'OP') query = query.eq('origem', sp.origem)
+  if (sp.origem === 'NF' || sp.origem === 'OP' || sp.origem === 'PRODUTO') query = query.eq('origem', sp.origem)
 
   const { data: impressoes } = await query.returns<Impressao[]>()
 
@@ -68,7 +68,7 @@ export default async function ImpressoesPage({
         <PageHeader
           title="Histórico de impressão de etiquetas"
           icon={Printer}
-          description="Etiquetas impressas a partir de notas fiscais e ordens de produção"
+          description="Etiquetas impressas a partir de notas fiscais, ordens de produção e produtos"
           actions={
             <FiltrosGaveta
               basePath="/impressoes"
@@ -82,6 +82,7 @@ export default async function ImpressoesPage({
                   opcoes: [
                     { value: 'NF', label: 'Nota Fiscal' },
                     { value: 'OP', label: 'Ordem de Produção' },
+                    { value: 'PRODUTO', label: 'Produto' },
                   ],
                 },
               ]}
@@ -104,6 +105,9 @@ export default async function ImpressoesPage({
             label: 'Referência',
             primaria: true,
             render: (imp) => {
+              if (imp.origem === 'PRODUTO') {
+                return <span className="font-medium text-text-muted">Etiqueta de produto</span>
+              }
               const isNF = imp.origem === 'NF'
               const refHref = isNF ? `/nota-fiscal/${imp.referencia_id}` : `/ordem-producao`
               return (
@@ -122,12 +126,11 @@ export default async function ImpressoesPage({
             label: 'Origem',
             larguraDesktop: 'w-44',
             render: (imp) => {
-              const isNF = imp.origem === 'NF'
+              const tom = imp.origem === 'NF' ? 'info' : imp.origem === 'PRODUTO' ? 'brand' : 'ok'
+              const label = imp.origem === 'NF' ? 'Nota Fiscal' : imp.origem === 'PRODUTO' ? 'Produto' : 'Ordem de Produção'
               return (
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[isNF ? 'info' : 'ok']}`}
-                >
-                  {isNF ? 'Nota Fiscal' : 'Ordem de Produção'}
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[tom]}`}>
+                  {label}
                 </span>
               )
             },
@@ -146,6 +149,7 @@ export default async function ImpressoesPage({
           },
         ]}
         acao={(imp) => {
+          if (imp.origem === 'PRODUTO') return null
           const isNF = imp.origem === 'NF'
           const imprimirHref = isNF
             ? `/nota-fiscal/${imp.referencia_id}/imprimir`

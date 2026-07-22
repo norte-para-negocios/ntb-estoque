@@ -25,7 +25,7 @@ import { Num } from '@/components/ui-kit/Num'
 import { formatQtdExata } from '@/lib/num-br'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
-import { Package, Download, Plus } from 'lucide-react'
+import { Package, Download, Plus, Printer } from 'lucide-react'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 
 const POR_PAGINA = 100
@@ -421,6 +421,9 @@ export default async function ProdutoPage({
                 defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', fornecedor: params.fornecedor ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
                 persistirEm="/produto"
               />
+              <button type="submit" form="form-etiquetas-produto" formTarget="_blank" className={btnClass('outline')}>
+                <Printer className="size-4" /> Imprimir etiquetas selecionadas
+              </button>
               {podeCriar && (
                 <Link href="/produto/novo" className={btnClass('primary')}>
                   <Plus className="size-4" /> Novo produto
@@ -510,10 +513,19 @@ export default async function ProdutoPage({
         </div>
       </div>
 
+      <form id="form-etiquetas-produto" action="/produto/imprimir-etiquetas" method="GET">
       <Lista
         linhas={produtos ?? []}
         chaveLinha={(p) => p.id}
         colunas={[
+          {
+            label: '',
+            larguraDesktop: 'w-10',
+            render: (p: ProdutoLinha) =>
+              p.codigo_produto != null ? (
+                <input type="checkbox" name="codigos" value={p.codigo_produto} className="size-4" />
+              ) : null,
+          },
           {
             label: 'Código',
             larguraDesktop: 'w-24',
@@ -702,6 +714,7 @@ export default async function ProdutoPage({
           />
         }
       />
+      </form>
 
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/produto" page={page} temProxima={temProxima} />
