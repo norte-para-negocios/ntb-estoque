@@ -48,8 +48,16 @@ export async function GET(request: Request) {
       .range(from, to)
   )
 
-  // Mesmo fallback "ao vivo" da tela (produtos sem import manual do FAT_DRV):
-  // preco de venda x CMC da ultima foto de posicao_estoques, tipos 04/00.
+  // Mesmo achado/fix da tela (app/(app)/relatorio-margem/page.tsx, 2026-07-22):
+  // import manual desatualizado (mes mais recente < mes atual) tambem cai pro
+  // calculo ao vivo, nao so quando nao ha import nenhum.
+  const mesAtualParaChecagemExport = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
+  const mesImportadoMaisRecenteExport = rows.reduce<string | null>((max, r) => (!max || r.mes > max ? r.mes : max), null)
+  if (mesImportadoMaisRecenteExport !== null && mesImportadoMaisRecenteExport < mesAtualParaChecagemExport) rows = []
+
+  // Mesmo fallback "ao vivo" da tela (produtos sem import manual do FAT_DRV, ou
+  // import desatualizado acima): preco de venda x CMC da ultima foto de
+  // posicao_estoques, tipos 04/00.
   if (!rows.length) {
     const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
     const produtosCalc = await buscarTodasLinhas<{

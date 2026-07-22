@@ -84,9 +84,23 @@ export default async function RelatorioMargemPage({
   let rows = rowsAll
   let calculadaAoVivo = false
 
-  // Sem import manual (todas as lojas exceto a que faz upload do FAT_DRV):
-  // calcula a margem ao vivo com a MESMA fórmula da RPC relatorio_estoque_valorizado
-  // (migration 063), validada contra o Excel do Ramon (diff 0,00-0,37 p.p.).
+  // Achado real (usuário 2026-07-22): loja 3 é a única que recebe upload manual
+  // do FAT_DRV, e ficou travada em jun/2026 (mes mais recente da importação)
+  // porque ninguém subiu o arquivo de julho -- a tela mostrava margem de mês
+  // passado sem avisar que estava desatualizada. Antes só caía pro cálculo ao
+  // vivo quando não havia NENHUM dado importado (`!rows.length`); agora também
+  // cai quando o dado importado mais recente é de um mês anterior ao atual --
+  // o cálculo ao vivo já é usado (e validado) pelas outras 4 lojas, então isso
+  // elimina a dependência de alguém lembrar de reimportar todo mês.
+  const mesAtualParaChecagem = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
+  const mesImportadoMaisRecente = rows.reduce<string | null>((max, r) => (!max || r.mes > max ? r.mes : max), null)
+  const importacaoDesatualizada = mesImportadoMaisRecente !== null && mesImportadoMaisRecente < mesAtualParaChecagem
+  if (importacaoDesatualizada) rows = []
+
+  // Sem import manual (todas as lojas exceto a que faz upload do FAT_DRV) OU
+  // import desatualizado (ver acima): calcula a margem ao vivo com a MESMA
+  // fórmula da RPC relatorio_estoque_valorizado (migration 063), validada
+  // contra o Excel do Ramon (diff 0,00-0,37 p.p.).
   if (!rows.length) {
     const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
     const produtosCalc = await buscarTodasLinhas<{
@@ -301,8 +315,13 @@ export default async function RelatorioMargemPage({
             CMC inválido <span className="num font-semibold text-err">{invalidos.length}</span>
           </span>
         )}
-        {metaRow?.importado_em && (
+        {!calculadaAoVivo && metaRow?.importado_em && (
           <span className="text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
+        )}
+        {calculadaAoVivo && mesImportadoMaisRecente && (
+          <span className="text-[13px] text-warn">
+            Import manual desatualizado (último mês: {mesImportadoMaisRecente}) — mostrando cálculo ao vivo
+          </span>
         )}
       </div>
 
