@@ -44,6 +44,18 @@ type NotaCompleta = {
   full_object: unknown
 }
 
+// Mesma logica do filtro de status aplicado nas queries do Supabase acima
+// (params.status === 'CONCLUIDA'/'PENDENTE'/'CANCELADA', com compat 'C'/'P' e
+// etapa crua), so que em memoria -- usada pra filtrar a fatia fria do Contabo
+// (buscarFrioTudo), que nao sabe filtrar por status no servidor.
+function bateStatus(nf: { c_etapa: string | null; full_object: unknown }, status: string): boolean {
+  const { label } = statusNF(nf.c_etapa, nf.full_object)
+  if (status === 'C' || status === 'CONCLUIDA') return label === 'Concluída'
+  if (status === 'P' || status === 'PENDENTE') return label !== 'Concluída' && label !== 'Cancelada'
+  if (status === 'CANCELADA') return label === 'Cancelada'
+  return nf.c_etapa === status
+}
+
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
 type ColSort = (typeof COLUNAS_SORT)[number]
 
@@ -258,8 +270,16 @@ export default async function NotaFiscalPage({
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
 
+    // buscarFrioTudo (Contabo) so filtra por loja/data/busca -- nao conhece o
+    // filtro de status (mesma limitacao ja documentada abaixo pra tipo/familia/
+    // produto/local). Sem isso, qualquer periodo que cruze a janela quente
+    // trazia notas de QUALQUER status na fatia fria, inflando o badge e
+    // misturando situacoes na lista quando um filtro de Situacao estava ativo.
+    const statusAtivo = params.status
+    const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => bateStatus(nf, statusAtivo)) : friasRaw
+
     const vistosQuentes = new Set(totaisRaw.map((r) => r.id))
-    const totaisCompletosBrutos = [...totaisRaw, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.id))]
     // complementarNotasFiscais (e o buscarFrioTudo acima, que a substitui aqui)
     // busca a fatia fria so por loja/data/busca -- nao conhece o filtro de
     // tipo/familia/produto/local (limitacao ja documentada no AGENTS.md: "o
@@ -301,7 +321,7 @@ export default async function NotaFiscalPage({
     // Reusa a mesma fatia fria (friasRaw) buscada acima -- mesmos filtros
     // loja/data/busca, evita uma segunda ida identica ao Contabo.
     const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.id))
-    const todasBrutas = [...paginaCompletaRaw, ...friasRaw.filter((r) => !vistosQuentesLista.has(r.id))]
+    const todasBrutas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.id))]
     // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
     // de tipo/familia/produto/local sozinha.
     const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
