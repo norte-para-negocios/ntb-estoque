@@ -20,6 +20,7 @@ import { complementarMovimentos, complementarNotasFiscais, complementarNotaFisca
 import { buscarFatCupons, buscarFatCupomItens } from '@/lib/faturamento-frio'
 import { descreverCFOP } from '@/lib/cfop'
 import { labelTipoItem } from '@/lib/constants-omie'
+import { statusNF } from '@/lib/nf-status'
 
 export type LinhaOperAuto = {
   origem: string
@@ -57,7 +58,7 @@ type NFItemRow = {
   n_preco_unit: number | string | null
   full_object: Record<string, unknown> | null
 }
-type NFHeaderRow = { id: number; d_emissao_nfe: string; deleted_at: string | null }
+type NFHeaderRow = { id: number; d_emissao_nfe: string; deleted_at: string | null; c_etapa: string | null; full_object: Record<string, unknown> | null }
 
 function localDeNF(it: { full_object: Record<string, unknown> | null }): number | null {
   const ajustes = (it.full_object as { itensAjustes?: { codigo_local_estoque?: number | string } } | null)?.itensAjustes
@@ -133,14 +134,22 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
         .range(from, to)
     ),
     paginarTodos<NFHeaderRow>((from, to) =>
-      supabase.from('notas_fiscais').select('id, d_emissao_nfe, deleted_at').eq('loja_id', lojaId).order('id').range(from, to)
+      supabase.from('notas_fiscais').select('id, d_emissao_nfe, deleted_at, c_etapa, full_object').eq('loja_id', lojaId).order('id').range(from, to)
     ),
   ])
   const [nfItens, nfHeaders] = await Promise.all([
     complementarNotaFiscalItems(nfItensHot, { lojaId, dataInicio: DESDE, dataFinal: hoje }),
     complementarNotasFiscais(nfHeadersHot, { lojaId, dataInicio: DESDE, dataFinal: hoje }),
   ])
-  const headerPorId = new Map(nfHeaders.filter((h) => !h.deleted_at).map((h) => [h.id, h]))
+  // Achado real (pattern 1, mesma classe do fix em migrations/083 e
+  // lib/relatorio-frio-nf.ts): filtrar só por `deleted_at` não basta -- NF
+  // pendente (c_etapa != '60') ou cancelada (cCancelada = 'S', flag
+  // independente da etapa) continuavam entrando na matriz de "Compra de
+  // Produto"/"Devolução ao Fornecedor". Usa statusNF (fonte única de
+  // verdade) pra só contar NF de fato concluída e não cancelada.
+  const headerPorId = new Map(
+    nfHeaders.filter((h) => !h.deleted_at && statusNF(h.c_etapa, h.full_object).label === 'Concluída').map((h) => [h.id, h])
+  )
   for (const it of nfItens) {
     const header = headerPorId.get(it.nota_fiscal_id)
     if (!header) continue
