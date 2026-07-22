@@ -26,7 +26,7 @@ export default async function PendenciasClassificacaoPage() {
   const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
 
   // Blocos 1 e 2: cadastro incompleto.
-  type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null }
+  type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null; inativo: boolean | null }
   // PostgREST corta em 1000 linhas por padrão, sem erro -- lojas com catálogo
   // grande (aqui, 2/3/4/5/6 passam de 1000 produtos) tinham "sem família"/"sem
   // tipo" subcontados E o cruzamento de "sem cadastro" (bloco 3) com falsos
@@ -38,7 +38,7 @@ export default async function PendenciasClassificacaoPage() {
     for (let p = 0; ; p++) {
       const { data } = await supabase
         .from('produtos')
-        .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
+        .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia, inativo')
         .eq('loja_id', lojaId)
         .order('codigo_produto')
         .range(p * 1000, p * 1000 + 999)
@@ -87,8 +87,14 @@ export default async function PendenciasClassificacaoPage() {
     carregarQuentes(),
     buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl }),
   ])
-  const semFamilia = todos.filter((p) => !p.descricao_familia)
-  const semTipo = todos.filter((p) => !p.tipo_item)
+  // Achado real (usuário 2026-07-22): produto inativo não precisa de
+  // classificação (não vai mais ser comprado/vendido) -- estava aparecendo
+  // como "precisa de atenção" só por não ter família/tipo, mesmo desativado.
+  // `todos`/`codigosCadastro` continuam com TODOS (ativos + inativos): o bloco
+  // "sem cadastro" (cruza item de NF com o catálogo) precisa reconhecer um
+  // produto inativo como cadastrado, senão vira falso positivo ali.
+  const semFamilia = todos.filter((p) => !p.descricao_familia && !p.inativo)
+  const semTipo = todos.filter((p) => !p.tipo_item && !p.inativo)
   // Só NF concluída (etapa 60) e não cancelada -- mesmo filtro de Compras/Auditoria
   // (migration 083); pendente/travada/cancelada não deve contar como "R$ associado".
   const quentes: ItemNF[] = quentesRaw

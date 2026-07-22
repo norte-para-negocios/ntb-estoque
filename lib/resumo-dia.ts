@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
+import { NAO_CANCELADA_OR } from '@/lib/nf-status'
 import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import {
@@ -200,6 +201,7 @@ export async function carregarResumoDia(
     paginarSelect<{ n_valor_nfe: number | null }>((from, to) =>
       supabase.from('notas_fiscais').select('n_valor_nfe').in('loja_id', lojaIds)
         .gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null).eq('c_etapa', '60')
+        .or(NAO_CANCELADA_OR)
         .order('id', { ascending: true }).range(from, to)
     ),
     supabase.from('transferencias').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
@@ -251,7 +253,7 @@ async function listarCategoria(
     const { data: notasQuentes } = await supabase.from('notas_fiscais')
       .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
-      .eq('c_etapa', '60')
+      .eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
     let data = notasQuentes ?? []
     if (dataIni < limiteJanelaQuente()) {
@@ -641,8 +643,10 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   const semContagem = (locaisRows ?? []).filter((l) => !locaisComContagem.has(l.codigo_local_estoque)).length
   if (semContagem) itens.push({ titulo: 'Locais sem contagem de inventário há 30 dias', tom: 'info', contagem: semContagem, href: '/resumo?cat=auditoria' })
 
-  // 6. Pendencias de classificacao (produtos sem familia).
-  const { count: semFamilia } = await supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).in('loja_id', lojaIds).or('descricao_familia.is.null,descricao_familia.eq.')
+  // 6. Pendencias de classificacao (produtos sem familia). Produto inativo
+  // nao precisa de classificacao (nao vai mais ser comprado/vendido) -- achado
+  // real 2026-07-22, mesmo fix em app/(app)/pendencias-classificacao/page.tsx.
+  const { count: semFamilia } = await supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).in('loja_id', lojaIds).or('descricao_familia.is.null,descricao_familia.eq.').eq('inativo', false)
   if (semFamilia) itens.push({ titulo: 'Produtos sem família cadastrada', tom: 'info', contagem: semFamilia, href: '/pendencias-classificacao' })
 
   const ORDEM_TOM: Record<ItemAcao['tom'], number> = { err: 0, warn: 1, info: 2 }
