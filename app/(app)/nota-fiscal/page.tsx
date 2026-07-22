@@ -13,13 +13,14 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
-import { StatusPill } from '@/components/ui-kit/StatusPill'
+import { SELO_CLASSE } from '@/lib/status-cor'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
+import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 
 const POR_PAGINA = 50
 
@@ -40,6 +41,7 @@ type NotaCompleta = {
   c_natureza_operacao: string | null
   c_modelo_nfe: string | null
   c_serie_nfe: string | null
+  full_object: unknown
 }
 
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
@@ -176,7 +178,7 @@ export default async function NotaFiscalPage({
   // Query da listagem (paginada).
   let query = supabase
     .from('notas_fiscais')
-    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
+    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
     .eq('loja_id', lojaId)
     .gte('d_emissao_nfe', dataInicio)
     .lte('d_emissao_nfe', dataFinal)
@@ -185,9 +187,11 @@ export default async function NotaFiscalPage({
     .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
   if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
   if (params.fornecedor) query = query.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-  // Status: 'C'/'P' (compat com links antigos) ou a etapa real direta (ex.: '60', '40').
-  if (params.status === 'C') query = query.eq('c_etapa', '60')
-  else if (params.status === 'P') query = query.neq('c_etapa', '60')
+  // Status: 'CONCLUIDA'/'PENDENTE'/'CANCELADA' (novos), 'C'/'P' (compat com
+  // links antigos) ou a etapa real direta (ex.: '60', '40') -- ver lib/nf-status.ts.
+  if (params.status === 'C' || params.status === 'CONCLUIDA') query = query.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+  else if (params.status === 'P' || params.status === 'PENDENTE') query = query.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+  else if (params.status === 'CANCELADA') query = query.eq('full_object->infoCadastro->>cCancelada', 'S')
   else if (params.status) query = query.eq('c_etapa', params.status)
   if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (categoriaOrClause) query = query.or(categoriaOrClause)
@@ -209,8 +213,9 @@ export default async function NotaFiscalPage({
       .range(from, to)
     if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
     if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-    if (params.status === 'C') q = q.eq('c_etapa', '60')
-    else if (params.status === 'P') q = q.neq('c_etapa', '60')
+    if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+    else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     else if (params.status) q = q.eq('c_etapa', params.status)
     if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
     if (categoriaOrClause) q = q.or(categoriaOrClause)
@@ -253,8 +258,16 @@ export default async function NotaFiscalPage({
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
 
+    // buscarFrioTudo (Contabo) so filtra por loja/data/busca -- nao conhece o
+    // filtro de status (mesma limitacao ja documentada abaixo pra tipo/familia/
+    // produto/local). Sem isso, qualquer periodo que cruze a janela quente
+    // trazia notas de QUALQUER status na fatia fria, inflando o badge e
+    // misturando situacoes na lista quando um filtro de Situacao estava ativo.
+    const statusAtivo = params.status
+    const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => statusBateFiltro(nf, statusAtivo)) : friasRaw
+
     const vistosQuentes = new Set(totaisRaw.map((r) => r.id))
-    const totaisCompletosBrutos = [...totaisRaw, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.id))]
     // complementarNotasFiscais (e o buscarFrioTudo acima, que a substitui aqui)
     // busca a fatia fria so por loja/data/busca -- nao conhece o filtro de
     // tipo/familia/produto/local (limitacao ja documentada no AGENTS.md: "o
@@ -275,7 +288,7 @@ export default async function NotaFiscalPage({
     const paginaCompletaRaw = await buscarTudoPaginado<NotaCompleta>((from, to) => {
       let q = supabase
         .from('notas_fiscais')
-        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe')
+        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
         .eq('loja_id', lojaId)
         .gte('d_emissao_nfe', dataInicio)
         .lte('d_emissao_nfe', dataFinal)
@@ -284,8 +297,9 @@ export default async function NotaFiscalPage({
         .range(from, to)
       if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
       if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-      if (params.status === 'C') q = q.eq('c_etapa', '60')
-      else if (params.status === 'P') q = q.neq('c_etapa', '60')
+      if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+      else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+      else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
       else if (params.status) q = q.eq('c_etapa', params.status)
       if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
       if (categoriaOrClause) q = q.or(categoriaOrClause)
@@ -295,7 +309,7 @@ export default async function NotaFiscalPage({
     // Reusa a mesma fatia fria (friasRaw) buscada acima -- mesmos filtros
     // loja/data/busca, evita uma segunda ida identica ao Contabo.
     const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.id))
-    const todasBrutas = [...paginaCompletaRaw, ...friasRaw.filter((r) => !vistosQuentesLista.has(r.id))]
+    const todasBrutas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.id))]
     // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
     // de tipo/familia/produto/local sozinha.
     const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
@@ -358,10 +372,11 @@ export default async function NotaFiscalPage({
     {
       tipo: 'select',
       nome: 'status',
-      label: 'Etapa',
+      label: 'Situação',
       opcoes: [
-        { value: '60', label: 'Concluída (autorizada)' },
-        { value: '40', label: 'Em recebimento' },
+        { value: 'CONCLUIDA', label: 'Concluída' },
+        { value: 'PENDENTE', label: 'Pendente' },
+        { value: 'CANCELADA', label: 'Cancelada' },
       ],
     },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
@@ -473,7 +488,19 @@ export default async function NotaFiscalPage({
           },
           { label: 'Emissão', sort: 'd_emissao_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
           { label: 'NFe', sort: 'c_numero_nfe', larguraDesktop: 'w-28', render: (nf) => (<span className="num">{nf.c_numero_nfe ?? '-'}{nf.c_serie_nfe ? <span className="text-text-muted">/{nf.c_serie_nfe}</span> : null}</span>) },
-          { label: 'Etapa', sort: 'c_etapa', larguraDesktop: 'w-32', render: (nf) => <StatusPill status={nf.c_etapa === '60' ? 'Concluida' : 'Pendente'} /> },
+          {
+            label: 'Situação',
+            sort: 'c_etapa',
+            larguraDesktop: 'w-36',
+            render: (nf) => {
+              const { label, tom } = statusNF(nf.c_etapa, nf.full_object)
+              return (
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[tom]}`}>
+                  {label}
+                </span>
+              )
+            },
+          },
           { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
         ]}
         acao={(nf) => (

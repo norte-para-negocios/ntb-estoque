@@ -185,16 +185,27 @@ export async function buscarFrioTudo<T>(
 
 export async function complementarNotasFiscais<T extends { id: number }>(
   quentes: T[],
-  opts: { lojaId: number; dataInicio?: string; dataFinal?: string; busca?: string; id?: number }
+  opts: {
+    lojaId: number
+    dataInicio?: string
+    dataFinal?: string
+    busca?: string
+    id?: number
+    // Filtro adicional aplicado SO na fatia fria antes do merge -- o endpoint
+    // do Contabo nao sabe filtrar por status no servidor. Opcional: chamadores
+    // que nao precisam (a maioria) continuam exatamente como antes.
+    filtrarFrias?: (row: T) => boolean
+  }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio) && !opts.id) return quentes
-  const frias = await buscarFrioTudo<T>('/notas_fiscais', {
+  const friasRaw = await buscarFrioTudo<T>('/notas_fiscais', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
     busca: opts.busca,
     id: opts.id,
   }, 2000)
+  const frias = opts.filtrarFrias ? friasRaw.filter(opts.filtrarFrias) : friasRaw
   return mesclarPorId(quentes, frias)
 }
 
