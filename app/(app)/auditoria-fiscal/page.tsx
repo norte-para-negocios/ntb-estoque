@@ -173,6 +173,17 @@ export default async function AuditoriaFiscalPage({
     },
   ]
 
+  const exportParams = new URLSearchParams({ data_inicio: ini, data_final: fim })
+  // Achado real (mesma classe de bug do relatorio-compras): produto, familia,
+  // fornecedor e local ficavam de fora do link de export -- os filtros
+  // funcionavam na tela (RPCs recebem tudo), mas o Excel ignorava esses 4
+  // filtros porque a URL de export nunca os carregava, mesmo a rota de
+  // export já sabendo lê-los (app/(app)/auditoria-fiscal/export/route.ts).
+  if (sp.produto) exportParams.set('produto', sp.produto)
+  if (sp.familia) exportParams.set('familia', sp.familia)
+  if (sp.fornecedor) exportParams.set('fornecedor', sp.fornecedor)
+  if (sp.local) exportParams.set('local', sp.local)
+
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 
   return (
@@ -192,7 +203,7 @@ export default async function AuditoriaFiscalPage({
                 persistirEm="/auditoria-fiscal"
               />
               {linhas.length > 0 && (
-                <a href={`/auditoria-fiscal/export?data_inicio=${ini}&data_final=${fim}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: classificação por CFOP (com filtros)">
+                <a href={`/auditoria-fiscal/export?${exportParams.toString()}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: classificação por CFOP (com filtros)">
                   <Download className="size-4" /> Baixar
                 </a>
               )}
