@@ -41,8 +41,12 @@ export default async function LojaPage({
     .select('id, nome')
     .order('id')
 
+  // O app de verdade (o que o usuário usa no dia a dia) roda no Contabo, não
+  // na Vercel -- NEXT_PUBLIC_APP_URL nunca foi configurado lá, então esse
+  // fallback (usado quando a env var não está definida) tem que apontar pro
+  // domínio real, senão essa tela ensina a cadastrar o webhook no lugar errado.
   const webhookUrl =
-    (process.env.NEXT_PUBLIC_APP_URL || 'https://ntb-estoque.vercel.app') + '/api/webhook'
+    (process.env.NEXT_PUBLIC_APP_URL || 'https://app-estoque.norteparanegocios.com.br') + '/api/webhook'
 
   return (
     <div className="space-y-4">
