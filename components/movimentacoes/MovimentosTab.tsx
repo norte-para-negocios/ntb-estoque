@@ -18,6 +18,7 @@ import {
   complementarMovimentos,
   complementarOrdensProducao,
   buscarFrioNotaFiscalItems,
+  buscarFrioTudo,
   limiteJanelaQuente,
 } from '@/lib/historico-contabo'
 
@@ -178,9 +179,19 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .lte('identificacao_d_dt_previsao', fim)
           .order('identificacao_d_dt_previsao', { ascending: false })
           .limit(300),
+        // Achado real (pattern 1, mesma classe do fix em lib/movimentacao-operacao-auto.ts
+        // e migration 083): sem filtrar etapa/cancelamento, NF pendente (c_etapa != '60')
+        // ou cancelada (cCancelada = 'S') virava uma linha "Saída" na reconstrução --
+        // uma NF cancelada não tira produto do estoque de verdade. Filtro fica em JS
+        // (abaixo), NAO como `.is`/`.eq` nas colunas do embed `notas_fiscais!inner`:
+        // medido nesta auditoria que qualquer condicao dot-path no embed (mesmo só uma)
+        // deixa o plano do Postgres instavel sob o role autenticado/anon -- às vezes
+        // ~300ms, às vezes >10s ou timeout (57014), mesmo repetindo a MESMA query sem
+        // mudar nada. Trazer as colunas cruas e filtrar depois de receber os dados
+        // evita esse plano ruim (validado: 6/6 execucoes rapidas sem filtro no embed).
         supabase
           .from('nota_fiscal_items')
-          .select('id, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao)')
+          .select('id, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
           .eq('loja_id', lojaId)
           .in('n_id_produto', idsProdDetalhes)
           .limit(500),
@@ -194,30 +205,60 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
       type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
-      type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null }[] }
+      type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
       // de join -- aninhado vs colunas nf_* -- normalizados pra este shape comum).
       type NFIItem = { id: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
-      type RawNFIFrio = { id: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
+      // /nota_fiscal_items do Contabo so junta d_emissao_nfe/c_numero_nfe/c_natureza_operacao
+      // (colunas nf_*) -- nao devolve etapa/cancelamento do cabecalho, por isso
+      // `nota_fiscal_id` e usado abaixo pra cruzar com um fetch a parte de /notas_fiscais.
+      type RawNFIFrio = { id: number; nota_fiscal_id: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
+      type RawNFHeaderFrio = { id: number; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }
       type RawInv = { produto_codigo_produto: number; quan: number | null; inventarios: { id: number; data: string }[] }
 
       const movs = await complementarMovimentos(movsData ?? [], { lojaId, dataInicio: ini, dataFinal: fimExcl })
       const ops = await complementarOrdensProducao(opsData ?? [], { lojaId, dataInicio: ini, dataFinal: fim })
 
-      const nfItemsQuentes: NFIItem[] = ((nfItemsData ?? []) as unknown as RawNFI[]).map((nfi) => {
-        const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
-        return {
-          id: nfi.id, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
-          d_emissao_nfe: nf?.d_emissao_nfe ?? null, c_numero_nfe: nf?.c_numero_nfe ?? null, c_natureza_operacao: nf?.c_natureza_operacao ?? null,
-        }
-      })
+      const nfItemsQuentes: NFIItem[] = ((nfItemsData ?? []) as unknown as RawNFI[])
+        .filter((nfi) => {
+          const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
+          if (!nf || nf.deleted_at || nf.c_etapa !== '60') return false
+          return (nf.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S'
+        })
+        .map((nfi) => {
+          const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
+          return {
+            id: nfi.id, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
+            d_emissao_nfe: nf?.d_emissao_nfe ?? null, c_numero_nfe: nf?.c_numero_nfe ?? null, c_natureza_operacao: nf?.c_natureza_operacao ?? null,
+          }
+        })
       let nfItems: NFIItem[] = nfItemsQuentes
       if (ini < limiteJanelaQuente()) {
         const frios = await buscarFrioNotaFiscalItems<RawNFIFrio>({ lojaId, dataInicio: ini, dataFinal: fim })
-        const friosNormalizados: NFIItem[] = frios.map((f) => ({
-          id: f.id, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
-          d_emissao_nfe: f.nf_d_emissao_nfe, c_numero_nfe: f.nf_c_numero_nfe, c_natureza_operacao: f.nf_c_natureza_operacao,
-        }))
+        // Achado real (pattern adjacente ao 1, encontrado ao investigar entLines):
+        // o endpoint /nota_fiscal_items so aceita loja_id + periodo, sem filtro de
+        // produto -- sem este filtro, a fatia fria trazia SAI de QUALQUER produto
+        // da loja no periodo, nao so do produto buscado nesta tela.
+        const friosDoProduto = frios.filter((f) => idsProdDetalhes.includes(Number(f.n_id_produto)))
+        // Mesmo achado de cancelamento acima, mas pro lado frio: /nota_fiscal_items
+        // nao devolve etapa/cCancelada do cabecalho, entao busca /notas_fiscais do
+        // mesmo periodo (endpoint ja filtra deleted_at is null no servidor) pra
+        // cruzar por nota_fiscal_id e descartar NF pendente/cancelada.
+        let notasValidas = new Set<number>()
+        if (friosDoProduto.length) {
+          const headers = await buscarFrioTudo<RawNFHeaderFrio>('/notas_fiscais', { loja_id: lojaId, data_inicio: ini, data_final: fim }, 2000)
+          notasValidas = new Set(
+            headers
+              .filter((h) => h.c_etapa === '60' && (h.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
+              .map((h) => h.id)
+          )
+        }
+        const friosNormalizados: NFIItem[] = friosDoProduto
+          .filter((f) => notasValidas.has(f.nota_fiscal_id))
+          .map((f) => ({
+            id: f.id, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
+            d_emissao_nfe: f.nf_d_emissao_nfe, c_numero_nfe: f.nf_c_numero_nfe, c_natureza_operacao: f.nf_c_natureza_operacao,
+          }))
         const vistos = new Set(nfItemsQuentes.map((n) => n.id))
         nfItems = [...nfItemsQuentes, ...friosNormalizados.filter((n) => !vistos.has(n.id))]
       }
