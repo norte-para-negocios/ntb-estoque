@@ -5,7 +5,7 @@ import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busc
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
+import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -159,7 +159,13 @@ export async function GET(request: Request) {
   // Sem filtrar aqui, toda nota fria do periodo entraria na exportacao mesmo
   // sem casar com o filtro, quando o periodo cruza os 90 dias.
   const notasCompletasBrutas = dataInicio < limiteJanelaQuente()
-    ? await complementarNotasFiscais(notas, { lojaId, dataInicio, dataFinal, busca: params.num_nfe || params.fornecedor })
+    ? await complementarNotasFiscais(notas, {
+        lojaId,
+        dataInicio,
+        dataFinal,
+        busca: params.num_nfe || params.fornecedor,
+        filtrarFrias: params.status ? (n) => statusBateFiltro(n, params.status!) : undefined,
+      })
     : notas
   const notaIdsFiltroSet = notaIdsFiltro ? new Set(notaIdsFiltro) : null
   const notasCompletas = notaIdsFiltroSet

@@ -10,7 +10,7 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
+import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -158,7 +158,13 @@ export async function GET(request: Request) {
   // Sem filtrar aqui, toda nota fria do periodo entraria no relatorio mesmo
   // sem casar com o filtro, quando o periodo cruza os 90 dias.
   const notasCompletasBrutas = dataInicio < limiteJanelaQuente()
-    ? await complementarNotasFiscais(notas, { lojaId, dataInicio, dataFinal, busca: numNfe || fornecedor })
+    ? await complementarNotasFiscais(notas, {
+        lojaId,
+        dataInicio,
+        dataFinal,
+        busca: numNfe || fornecedor,
+        filtrarFrias: status ? (n) => statusBateFiltro(n, status) : undefined,
+      })
     : notas
   const notaIdsFiltroSet = notaIdsFiltro ? new Set(notaIdsFiltro) : null
   const notasCompletas = notaIdsFiltroSet

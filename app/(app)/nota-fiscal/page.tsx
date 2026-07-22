@@ -20,7 +20,7 @@ import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busc
 import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
+import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 
 const POR_PAGINA = 50
 
@@ -42,18 +42,6 @@ type NotaCompleta = {
   c_modelo_nfe: string | null
   c_serie_nfe: string | null
   full_object: unknown
-}
-
-// Mesma logica do filtro de status aplicado nas queries do Supabase acima
-// (params.status === 'CONCLUIDA'/'PENDENTE'/'CANCELADA', com compat 'C'/'P' e
-// etapa crua), so que em memoria -- usada pra filtrar a fatia fria do Contabo
-// (buscarFrioTudo), que nao sabe filtrar por status no servidor.
-function bateStatus(nf: { c_etapa: string | null; full_object: unknown }, status: string): boolean {
-  const { label } = statusNF(nf.c_etapa, nf.full_object)
-  if (status === 'C' || status === 'CONCLUIDA') return label === 'Concluída'
-  if (status === 'P' || status === 'PENDENTE') return label !== 'Concluída' && label !== 'Cancelada'
-  if (status === 'CANCELADA') return label === 'Cancelada'
-  return nf.c_etapa === status
 }
 
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
@@ -276,7 +264,7 @@ export default async function NotaFiscalPage({
     // trazia notas de QUALQUER status na fatia fria, inflando o badge e
     // misturando situacoes na lista quando um filtro de Situacao estava ativo.
     const statusAtivo = params.status
-    const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => bateStatus(nf, statusAtivo)) : friasRaw
+    const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => statusBateFiltro(nf, statusAtivo)) : friasRaw
 
     const vistosQuentes = new Set(totaisRaw.map((r) => r.id))
     const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.id))]

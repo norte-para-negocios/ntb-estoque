@@ -27,3 +27,17 @@ export function statusNF(cEtapa: string | null, fullObject: unknown): StatusNF {
 // usar via .or(NAO_CANCELADA_OR), nunca um .neq(...) isolado nesse campo.
 export const NAO_CANCELADA_OR =
   "full_object->infoCadastro->>cCancelada.is.null,full_object->infoCadastro->>cCancelada.neq.S"
+
+// Mesma logica do filtro de status usado nas queries do Supabase (CONCLUIDA/
+// PENDENTE/CANCELADA, com compat C/P e etapa crua), so que em memoria -- usada
+// pra filtrar dado que vem do Contabo (frio), que nao sabe filtrar por status
+// no servidor. Fonte unica pra esse filtro em memoria: nota-fiscal/page.tsx e
+// os dois exports (export/route.ts, relatorio/route.ts) usam esta mesma
+// funcao, em vez de cada um reimplementar a logica.
+export function statusBateFiltro(nf: { c_etapa: string | null; full_object: unknown }, status: string): boolean {
+  const { label } = statusNF(nf.c_etapa, nf.full_object)
+  if (status === 'C' || status === 'CONCLUIDA') return label === 'Concluída'
+  if (status === 'P' || status === 'PENDENTE') return label !== 'Concluída' && label !== 'Cancelada'
+  if (status === 'CANCELADA') return label === 'Cancelada'
+  return nf.c_etapa === status
+}
