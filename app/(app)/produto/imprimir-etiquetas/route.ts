@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { EtiquetaPDF, type Etiqueta, type EtiquetaConfig } from '@/components/etiqueta/EtiquetaPDF'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { resolverCodigosPorFiltro, buscarProdutosPorCodigos } from '@/lib/produtos-selecionados'
 
 // Config fixa: só nome do produto + QR + logo (logo já é obrigatória no
 // EtiquetaPDF, independente de config). Nada de campos de NF/OP (validade,
@@ -28,19 +29,26 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url)
-  const codigos = [...new Set(url.searchParams.getAll('codigos').map(Number).filter((n) => Number.isFinite(n) && n > 0))]
+  let codigos: number[]
+  if (url.searchParams.get('todos_filtro') === '1') {
+    codigos = await resolverCodigosPorFiltro(lojaId, {
+      q: url.searchParams.get('q') ?? undefined,
+      familia: url.searchParams.get('familia') ?? undefined,
+      tipo: url.searchParams.get('tipo') ?? undefined,
+      situacao: url.searchParams.get('situacao') ?? undefined,
+      fornecedor: url.searchParams.get('fornecedor') ?? undefined,
+      pdv: url.searchParams.get('pdv') ?? undefined,
+    })
+  } else {
+    codigos = [...new Set(url.searchParams.getAll('codigos').map(Number).filter((n) => Number.isFinite(n) && n > 0))]
+  }
   if (!codigos.length) {
     return NextResponse.json({ error: 'Nenhum produto selecionado' }, { status: 400 })
   }
 
   const supabase = await createClient()
   const { data: loja } = await supabase.from('lojas').select('nome, nome_fantasia').eq('id', lojaId).single()
-  const { data: produtosRaw } = await supabase
-    .from('produtos')
-    .select('codigo_produto, codigo, descricao')
-    .eq('loja_id', lojaId)
-    .in('codigo_produto', codigos)
-  const produtos = produtosRaw ?? []
+  const produtos = await buscarProdutosPorCodigos(lojaId, codigos)
   if (!produtos.length) {
     return NextResponse.json({ error: 'Produtos não encontrados' }, { status: 404 })
   }
