@@ -6,6 +6,7 @@ import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -29,9 +30,17 @@ export async function GET(request: Request) {
     tipo_produto: searchParams.get('tipo_produto') || undefined,
     familia: searchParams.get('familia') || undefined,
     op_concluido: searchParams.get('op_concluido') || undefined,
+    op_status: searchParams.get('op_status') || undefined,
   }
 
   const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
+  // Achado real (auditoria 2026-07-22): esta rota nunca lia op_status -- a tela
+  // manda o parametro (mesmo exportParams de page.tsx), mas o export ignorava
+  // silenciosamente o filtro granular de status (Previstas/Pendentes/Atrasadas/
+  // Concluidas), sempre exportando TODAS as OPs do periodo independente do chip
+  // selecionado na tela. Mesma logica de baseQuery() em page.tsx.
+  const filtroStatus = sp.op_status ?? ''
+  const hojeISO = hojeBahiaISO()
 
   // Mesma lógica da page: cruza via produtos para obter os codigo_produto.
   // tipo_produto/familia vem da URL como lista separada por vírgula (multi-select).
@@ -63,6 +72,7 @@ export async function GET(request: Request) {
     identificacao_c_num_op: string | null
     identificacao_n_cod_produto: number | null
     identificacao_n_qtde: number | null
+    identificacao_d_dt_previsao: string | null
     validade: string | null
     concluida: boolean | null
   }
@@ -72,7 +82,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, validade, concluida',
+        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
@@ -80,6 +90,17 @@ export async function GET(request: Request) {
       .range(from, to)
 
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
+    // Status granular (prevista/pendente/atrasada/concluida) -- mesma logica de
+    // baseQuery() em page.tsx, comparando identificacao_d_dt_previsao com hoje.
+    if (filtroStatus === 'concluida') {
+      q = q.eq('concluida', true)
+    } else if (filtroStatus === 'prevista') {
+      q = q.eq('concluida', false).gt('identificacao_d_dt_previsao', hojeISO)
+    } else if (filtroStatus === 'pendente') {
+      q = q.eq('concluida', false).eq('identificacao_d_dt_previsao', hojeISO)
+    } else if (filtroStatus === 'atrasada') {
+      q = q.eq('concluida', false).lt('identificacao_d_dt_previsao', hojeISO)
+    }
     if (sp.data_inicio) q = q.gte('identificacao_d_dt_previsao', sp.data_inicio)
     if (sp.data_final) q = q.lte('identificacao_d_dt_previsao', sp.data_final)
     if (sp.ordem_producao) {
