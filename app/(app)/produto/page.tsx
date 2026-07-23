@@ -21,6 +21,7 @@ import { EditarProdutoForm } from '@/components/produtos/EditarProdutoForm'
 import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { buscarFamilias } from '@/lib/actions/produto'
+import { resolverCodigosPorFiltro } from '@/lib/produtos-selecionados'
 import { Num } from '@/components/ui-kit/Num'
 import { formatQtdExata } from '@/lib/num-br'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -110,7 +111,21 @@ export default async function ProdutoPage({
   // Compras) nao dependem da query principal de produtos.
   // Familias via RPC com DISTINCT no banco: evita o teto de 1000 do PostgREST
   // (que cortava familias do dropdown) e a varredura da tabela inteira a cada render.
-  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos, familiasComCodigo, fornecedoresList, fornecedorCodigos] = await Promise.all([
+
+  // Contagem de "todos que batem o filtro atual" -- mesmos campos que a query
+  // principal já filtra abaixo, usados pro checkbox "selecionar todos" do form
+  // de impressao (etiqueta avulsa e catalogo A4).
+  const filtroSelecaoAtual = {
+    q: params.q,
+    familia: params.familia,
+    tipo: params.tipo,
+    situacao: params.situacao,
+    fornecedor: params.fornecedor,
+    pdv: params.pdv,
+  }
+  const qtdTodosFiltroPromise = resolverCodigosPorFiltro(lojaId, filtroSelecaoAtual).then((c) => c.length)
+
+  const [{ data: lojaSync }, { data: familiasRows }, reporCodigos, familiasComCodigo, fornecedoresList, fornecedorCodigos, qtdTodosFiltro] = await Promise.all([
     supabase
       .from('lojas')
       .select('produto_ultima_atualizacao, produto_status')
@@ -130,6 +145,7 @@ export default async function ProdutoPage({
           .rpc('compras_produtos_do_fornecedor', { p_loja_id: lojaId, p_fornecedor: params.fornecedor })
           .then(({ data }) => ((data ?? []) as { cod: number }[]).map((r) => Number(r.cod)))
       : Promise.resolve<number[] | null>(null),
+    qtdTodosFiltroPromise,
   ])
   const familiasOpcoes = ((familiasRows ?? []) as { descricao_familia: string }[]).map((r) => ({
     value: r.descricao_familia,
@@ -424,6 +440,15 @@ export default async function ProdutoPage({
               <button type="submit" form="form-etiquetas-produto" formTarget="_blank" className={btnClass('outline')}>
                 <Printer className="size-4" /> Imprimir etiquetas selecionadas
               </button>
+              <button
+                type="submit"
+                form="form-etiquetas-produto"
+                formAction="/produto/imprimir-catalogo"
+                formTarget="_blank"
+                className={btnClass('outline')}
+              >
+                <Printer className="size-4" /> Imprimir catálogo A4
+              </button>
               {podeCriar && (
                 <Link href="/produto/novo" className={btnClass('primary')}>
                   <Plus className="size-4" /> Novo produto
@@ -514,6 +539,24 @@ export default async function ProdutoPage({
       </div>
 
       <form id="form-etiquetas-produto" action="/produto/imprimir-etiquetas" method="GET">
+        <div className="mb-2 flex items-center gap-2 text-[13px] text-text-muted">
+          <input type="hidden" name="q" value={params.q ?? ''} />
+          <input type="hidden" name="familia" value={params.familia ?? ''} />
+          <input type="hidden" name="tipo" value={params.tipo ?? ''} />
+          <input type="hidden" name="situacao" value={params.situacao ?? ''} />
+          <input type="hidden" name="fornecedor" value={params.fornecedor ?? ''} />
+          <input type="hidden" name="pdv" value={params.pdv ?? ''} />
+          <input
+            type="checkbox"
+            id="todos-filtro-produto"
+            name="todos_filtro"
+            value="1"
+            className="size-4 accent-[var(--brand)]"
+          />
+          <label htmlFor="todos-filtro-produto">
+            Selecionar todos os {qtdTodosFiltro} produtos deste filtro (ignora as marcações individuais abaixo)
+          </label>
+        </div>
       <Lista
         linhas={produtos ?? []}
         chaveLinha={(p) => p.id}
