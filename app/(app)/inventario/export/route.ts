@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { escapeIlikeOr } from '@/lib/utils-busca'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -19,6 +21,71 @@ export async function GET(request: Request) {
   const dataInicio = searchParams.get('data_inicio') || undefined
   const dataFinal = searchParams.get('data_final') || undefined
   const status = searchParams.get('status') || undefined
+  const familia = searchParams.get('familia') || undefined
+  const tipo = searchParams.get('tipo') || undefined
+  const produto = searchParams.get('produto') || undefined
+  const locaisArr = valoresMulti(searchParams.get('local') || undefined)
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n))
+
+  // BUG corrigido (auditoria 2026-07-22): este export ignorava TOTALMENTE
+  // família/tipo/produto (nem os parâmetros eram lidos) - o href da tela
+  // tambem so repassava data/status. O arquivo Excel baixado sempre saia com
+  // todos os inventarios do periodo, mesmo com esses filtros ativos na tela
+  // (confirmado ao vivo: export com e sem familia devolvia bytes identicos).
+  // Mesma logica de produtos -> inventario_items -> inventario_id ja usada em
+  // page.tsx.
+  let idsFiltrados: number[] | null = null
+  if (familia || tipo || produto) {
+    let codigosTipo: number[] | null = null
+    if (tipo) {
+      const PAGE_SIZE_PROD = 1000
+      const prods: { codigo_produto: number | null }[] = []
+      for (let pagina = 0; ; pagina++) {
+        const from = pagina * PAGE_SIZE_PROD
+        const { data: bloco } = await supabase
+          .from('produtos')
+          .select('codigo_produto')
+          .eq('loja_id', lojaId)
+          .eq('tipo_item', tipo)
+          .order('codigo_produto')
+          .range(from, from + PAGE_SIZE_PROD - 1)
+        if (!bloco?.length) break
+        prods.push(...bloco)
+        if (bloco.length < PAGE_SIZE_PROD) break
+      }
+      codigosTipo = [
+        ...new Set(prods.map((p) => p.codigo_produto).filter((v): v is number => v != null)),
+      ]
+    }
+
+    if (codigosTipo !== null && codigosTipo.length === 0) {
+      idsFiltrados = []
+    } else {
+      const PAGE_SIZE_ITEMS = 1000
+      const items: { inventario_id: number | null }[] = []
+      for (let pagina = 0; ; pagina++) {
+        const from = pagina * PAGE_SIZE_ITEMS
+        let itemQuery = supabase
+          .from('inventario_items')
+          .select('inventario_id')
+          .eq('loja_id', lojaId)
+        if (familia) itemQuery = itemQuery.eq('produto_familia', familia)
+        if (codigosTipo !== null) itemQuery = itemQuery.in('produto_codigo_produto', codigosTipo)
+        if (produto) {
+          const termo = escapeIlikeOr(produto)
+          itemQuery = itemQuery.or(`produto_descricao.ilike.%${termo}%,produto_codigo.ilike.%${termo}%`)
+        }
+        const { data: bloco } = await itemQuery.order('id').range(from, from + PAGE_SIZE_ITEMS - 1)
+        if (!bloco?.length) break
+        items.push(...bloco)
+        if (bloco.length < PAGE_SIZE_ITEMS) break
+      }
+      idsFiltrados = [
+        ...new Set(items.map((i) => i.inventario_id).filter((v): v is number => v != null)),
+      ]
+    }
+  }
 
   const PAGE_SIZE = 1000
   type Linha = {
@@ -44,6 +111,8 @@ export async function GET(request: Request) {
     if (dataFinal) q = q.lte('data', `${dataFinal}T23:59:59`)
     if (status === 'F') q = q.eq('status', 'Finalizado')
     else if (status === 'A') q = q.neq('status', 'Finalizado')
+    if (idsFiltrados !== null) q = q.in('id', idsFiltrados.length ? idsFiltrados : [-1])
+    if (locaisArr.length) q = q.in('codigo_local_estoque', locaisArr)
     return q
   }
 

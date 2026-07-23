@@ -267,9 +267,15 @@ export default async function InventarioPage({
               />
               <a
                 href={`/inventario/export?${new URLSearchParams(
-                  Object.entries({ data_inicio: sp.data_inicio, data_final: sp.data_final, status: sp.status }).filter(
-                    (e): e is [string, string] => Boolean(e[1]),
-                  ),
+                  Object.entries({
+                    data_inicio: sp.data_inicio,
+                    data_final: sp.data_final,
+                    status: sp.status,
+                    familia: sp.familia,
+                    tipo: sp.tipo,
+                    produto: sp.produto,
+                    local: sp.local,
+                  }).filter((e): e is [string, string] => Boolean(e[1])),
                 ).toString()}`}
                 target="_blank"
                 rel="noopener noreferrer"
