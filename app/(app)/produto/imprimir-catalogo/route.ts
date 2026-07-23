@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { CatalogoPDF, type ItemCatalogo } from '@/components/etiqueta/CatalogoPDF'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { resolverCodigosPorFiltro } from '@/lib/produtos-selecionados'
+import { resolverCodigosPorFiltro, buscarProdutosPorCodigos } from '@/lib/produtos-selecionados'
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -34,12 +34,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient()
   const { data: loja } = await supabase.from('lojas').select('nome, nome_fantasia').eq('id', lojaId).single()
-  const { data: produtosRaw } = await supabase
-    .from('produtos')
-    .select('codigo_produto, codigo, descricao')
-    .eq('loja_id', lojaId)
-    .in('codigo_produto', codigos)
-  const produtos = produtosRaw ?? []
+  const produtos = await buscarProdutosPorCodigos(lojaId, codigos)
   if (!produtos.length) {
     return NextResponse.json({ error: 'Produtos não encontrados' }, { status: 404 })
   }

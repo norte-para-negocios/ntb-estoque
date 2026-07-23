@@ -56,3 +56,36 @@ export async function resolverCodigosPorFiltro(
 
   return [...new Set(linhas.map((l) => l.codigo_produto).filter((c): c is number => c != null))]
 }
+
+const TAMANHO_LOTE_IN = 200
+
+export interface ProdutoBasico {
+  codigo_produto: number
+  codigo: string | null
+  descricao: string | null
+}
+
+/**
+ * Busca produtos por uma lista de codigo_produto, em lotes -- uma unica
+ * query .in() com milhares de valores estoura o limite de tamanho de URL
+ * do PostgREST (falha silenciosa, a rota trata como "nao encontrado").
+ * Usar sempre que a lista de codigos puder vir de resolverCodigosPorFiltro
+ * (potencialmente milhares de itens), nao so de uma selecao manual pequena.
+ */
+export async function buscarProdutosPorCodigos(
+  lojaId: number,
+  codigos: number[],
+): Promise<ProdutoBasico[]> {
+  const supabase = await createClient()
+  const resultado: ProdutoBasico[] = []
+  for (let i = 0; i < codigos.length; i += TAMANHO_LOTE_IN) {
+    const lote = codigos.slice(i, i + TAMANHO_LOTE_IN)
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, codigo, descricao')
+      .eq('loja_id', lojaId)
+      .in('codigo_produto', lote)
+    resultado.push(...((data ?? []) as ProdutoBasico[]))
+  }
+  return resultado
+}
