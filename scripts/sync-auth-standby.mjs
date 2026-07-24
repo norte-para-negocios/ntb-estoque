@@ -98,7 +98,11 @@ async function main() {
              email_confirmed_at, invited_at, last_sign_in_at,
              raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
              is_sso_user, is_anonymous, banned_until, deleted_at,
-             phone, phone_confirmed_at
+             phone, phone_confirmed_at,
+             coalesce(confirmation_token, '') as confirmation_token,
+             coalesce(recovery_token, '') as recovery_token,
+             coalesce(email_change, '') as email_change,
+             coalesce(email_change_token_new, '') as email_change_token_new
       from auth.users
       order by created_at
     `)
@@ -110,9 +114,10 @@ async function main() {
            email_confirmed_at, invited_at, last_sign_in_at,
            raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
            is_sso_user, is_anonymous, banned_until, deleted_at,
-           phone, phone_confirmed_at
+           phone, phone_confirmed_at,
+           confirmation_token, recovery_token, email_change, email_change_token_new
          )
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
          on conflict (id) do update set
            email = excluded.email,
            encrypted_password = excluded.encrypted_password,
@@ -127,7 +132,11 @@ async function main() {
            banned_until = excluded.banned_until,
            deleted_at = excluded.deleted_at,
            phone = excluded.phone,
-           phone_confirmed_at = excluded.phone_confirmed_at`,
+           phone_confirmed_at = excluded.phone_confirmed_at,
+           confirmation_token = excluded.confirmation_token,
+           recovery_token = excluded.recovery_token,
+           email_change = excluded.email_change,
+           email_change_token_new = excluded.email_change_token_new`,
         [
           u.instance_id, u.id, u.aud, u.role, u.email, u.encrypted_password,
           u.email_confirmed_at, u.invited_at, u.last_sign_in_at,
@@ -135,6 +144,14 @@ async function main() {
           u.raw_user_meta_data != null ? JSON.stringify(u.raw_user_meta_data) : null,
           u.created_at, u.updated_at, u.is_sso_user, u.is_anonymous,
           u.banned_until, u.deleted_at, u.phone, u.phone_confirmed_at,
+          // GoTrue tem um bug conhecido: essas 4 colunas texto precisam ser
+          // '' (string vazia), nunca NULL -- senao "Database error querying
+          // schema" (500) ao fazer scan da linha no login. A query ja
+          // aplica coalesce na origem; o `?? ''` aqui e so uma segunda
+          // camada de protecao caso o valor chegue nulo por outro caminho
+          // (ex.: se um dia a query for reescrita sem o coalesce).
+          u.confirmation_token ?? '', u.recovery_token ?? '',
+          u.email_change ?? '', u.email_change_token_new ?? '',
         ]
       )
       usuariosSincronizados++
