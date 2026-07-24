@@ -8,6 +8,16 @@
 
 **Tech Stack:** Postgres logical replication (`pg_publication`/`pg_subscription`), Docker + Docker Compose, stack oficial `github.com/supabase/supabase/docker`, `psql`/`node-postgres` (já usado no projeto).
 
+> **Resultado real da execução (2026-07-24):** as tarefas abaixo mencionam
+> "43 tabelas" como meta original — o resultado final ficou em **40 de 43**.
+> 3 tabelas de configuração estática (`cargos`, `permissoes`,
+> `cargo_permissao`) foram excluídas da replicação ao vivo após um
+> travamento determinístico e reproduzível do motor de replicação lógica
+> especificamente nessas 3 tabelas pequenas (causa exata não identificada,
+> mas descartada a hipótese de limite de recurso transitório — ver
+> `.superpowers/sdd/failover-task-5-report.md`). Aceitável: são dados
+> estáticos, já corretos no Contabo via seed das migrations.
+
 ## Global Constraints
 
 - **Réplica lógica exige conexão DIRETA ao Postgres do Supabase (não o pooler)** — confirmado na documentação oficial. O hostname direto (`db.<ref>.supabase.co`) só resolve em IPv6; já confirmado que o Contabo tem IPv6 configurado e consegue resolver/alcançar esse host (`getent ahosts db.waubqgkftwrufepwhctc.supabase.co` retornou um IPv6 válido). Não usar o pooler (`aws-1-sa-east-1.pooler.supabase.com`) pra nenhum comando deste plano que envolva `CREATE PUBLICATION`/`CREATE SUBSCRIPTION`.
@@ -61,7 +71,7 @@ Usar o host direto (`db.waubqgkftwrufepwhctc.supabase.co`, porta 5432, mesmo usu
 
 ```bash
 cd "/Users/joaquimsalles/Projects/norte para negocios/ntb estoque/.claude/worktrees/auditoria-relatorios"
-PGPASSWORD="rscarneiro3484*" psql "host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres sslmode=require" -c "
+PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres sslmode=require" -c "
 CREATE PUBLICATION ntb_estoque_pub FOR ALL TABLES;
 SELECT pg_create_logical_replication_slot('ntb_estoque_slot', 'pgoutput');
 "
@@ -71,7 +81,7 @@ Expected: `CREATE PUBLICATION` seguido de uma linha com `slot_name | lsn` mostra
 - [ ] **Step 2: Confirmar que a publicação cobre as 43 tabelas do schema `public`**
 
 ```bash
-PGPASSWORD="rscarneiro3484*" psql "host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres sslmode=require" -c "
+PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres sslmode=require" -c "
 SELECT count(*) FROM pg_publication_tables WHERE pubname='ntb_estoque_pub';
 "
 ```
@@ -202,7 +212,7 @@ Expected: `43`.
 ssh -i ~/.ssh/notebook_contabo_key root@185.193.66.240 '
 PGPASSWORD="$(grep POSTGRES_PASSWORD /opt/ntb-estoque-standby/.env | cut -d= -f2)" psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "
 CREATE SUBSCRIPTION ntb_estoque_sub
-CONNECTION '"'"'host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres password=rscarneiro3484* sslmode=require'"'"'
+CONNECTION '"'"'host=db.waubqgkftwrufepwhctc.supabase.co port=5432 dbname=postgres user=postgres password=$SUPABASE_DB_PASSWORD sslmode=require'"'"'
 PUBLICATION ntb_estoque_pub
 WITH (copy_data = true, create_slot = false, slot_name = ntb_estoque_slot);
 "

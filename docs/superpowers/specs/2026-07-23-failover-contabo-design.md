@@ -56,12 +56,23 @@ registros novos criados durante a janela de queda.
 
 ### Fase 1 — Réplica contínua completa + Contabo self-hosted funcional (sem troca automática ainda)
 
-- Estender o dual-write fire-and-forget já existente pra TODAS as 43
-  tabelas do schema `public` (hoje só cobre um subconjunto). Cada
-  escrita real no Supabase (via Server Actions/rotas que hoje usam
-  `createServiceClient()`) passa a também escrever no Contabo,
-  exatamente no mesmo padrão do webhook (nunca bloqueia, nunca quebra a
-  resposta se o Contabo falhar).
+- **Atualizado após a implementação real (2026-07-24): não usa dual-write
+  manual.** A ideia original era estender o dual-write fire-and-forget já
+  existente pra todas as tabelas do schema `public`, mas isso significaria
+  tocar em toda rota/Server Action que escreve (dezenas de lugares) — a
+  implementação usa **replicação lógica nativa do Postgres**
+  (`CREATE PUBLICATION`/`CREATE SUBSCRIPTION`) em vez disso: o Postgres
+  cuida da consistência e da ordem sozinho, sem precisar tocar em nenhum
+  código de escrita já existente. Cobre 40 das 43 tabelas do schema
+  `public` — 3 tabelas de configuração estática (`cargos`, `permissoes`,
+  `cargo_permissao`, papéis/permissões definidos no código) foram excluídas
+  após uma investigação real de causa-raiz (travamento determinístico e
+  reproduzível do motor de replicação lógica especificamente nessas 3
+  tabelas pequenas, causa exata não identificada) — aceitável porque são
+  dados estáticos, já corretos no Contabo via seed das migrations, e só
+  mudam por uma nova migration aplicada nos dois bancos igualmente. Ver
+  `docs/superpowers/plans/2026-07-23-failover-contabo-fase1.md` e
+  `.superpowers/sdd/failover-task-5-report.md` pro detalhe completo.
 - Rodar o stack self-hosted oficial do Supabase (Postgres + GoTrue + 
   PostgREST, via Docker Compose — é o mesmo software open-source que a
   Supabase Cloud roda, não uma reimplementação) no servidor Contabo,
