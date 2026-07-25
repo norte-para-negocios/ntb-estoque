@@ -1,8 +1,20 @@
 // lib/failover/health-monitor.ts
 // Monitor de saude do Supabase real, rodando em processo (setInterval),
-// iniciado uma vez pelo instrumentation.ts quando o servidor sobe. Estado
-// fica em variavel de modulo -- sem arquivo, sem processo separado, porque
-// next start no Contabo e um processo Node persistente (nao serverless).
+// iniciado uma vez pelo instrumentation.ts quando o servidor sobe.
+//
+// Estado fica em globalThis (nao em variavel de modulo solta) -- achado
+// real em producao (2026-07-25, Task 4 da Fase 2 do failover): o Next.js
+// compila Server Actions/rotas em chunks separados do chunk usado por
+// instrumentation.ts, e cada chunk pode acabar com sua PROPRIA copia deste
+// modulo (variavel de modulo `let status` isolada por copia). Resultado:
+// instrumentation.ts atualizava o status pra 'down' corretamente (log
+// aparecia), mas Server Actions como `login` (via lib/supabase/server.ts)
+// liam uma copia diferente do modulo, sempre travada em 'up' -- o app
+// continuava tentando o Supabase real (bloqueado) e o login quebrava de
+// verdade durante a "queda", em vez de trocar pro standby. globalThis e
+// compartilhado entre TODAS as copias do modulo no mesmo processo Node,
+// entao resolve isso (mesmo padrao usado pra evitar multiplas instancias
+// de client do Prisma em apps Next.js).
 //
 // Cobre DOIS aspectos (o incidente de 2026-07-23 mostrou que um pode estar
 // de pe enquanto o outro nao): uma query real via service role (prova que
@@ -16,10 +28,26 @@ const TIMEOUT_MS = 5000
 
 type Status = 'up' | 'down'
 
-let status: Status = 'up'
-let falhasConsecutivas = 0
-let sucessosConsecutivos = 0
-let intervalId: ReturnType<typeof setInterval> | null = null
+interface FailoverState {
+  status: Status
+  falhasConsecutivas: number
+  sucessosConsecutivos: number
+  intervalId: ReturnType<typeof setInterval> | null
+}
+
+const globalForFailover = globalThis as unknown as { __ntbFailoverState?: FailoverState }
+
+function getState(): FailoverState {
+  if (!globalForFailover.__ntbFailoverState) {
+    globalForFailover.__ntbFailoverState = {
+      status: 'up',
+      falhasConsecutivas: 0,
+      sucessosConsecutivos: 0,
+      intervalId: null,
+    }
+  }
+  return globalForFailover.__ntbFailoverState
+}
 
 async function checarComTimeout(url: string, init?: RequestInit): Promise<boolean> {
   const controller = new AbortController()
@@ -52,31 +80,33 @@ async function checarSupabaseReal(): Promise<boolean> {
 }
 
 async function tick() {
+  const s = getState()
   const saudavel = await checarSupabaseReal()
 
   if (saudavel) {
-    falhasConsecutivas = 0
-    sucessosConsecutivos++
-    if (status === 'down' && sucessosConsecutivos >= SUCESSOS_PARA_VOLTAR) {
-      status = 'up'
+    s.falhasConsecutivas = 0
+    s.sucessosConsecutivos++
+    if (s.status === 'down' && s.sucessosConsecutivos >= SUCESSOS_PARA_VOLTAR) {
+      s.status = 'up'
       console.log('[failover] Supabase real recuperado -- voltando a usar como principal')
     }
   } else {
-    sucessosConsecutivos = 0
-    falhasConsecutivas++
-    if (status === 'up' && falhasConsecutivas >= FALHAS_PARA_CAIR) {
-      status = 'down'
+    s.sucessosConsecutivos = 0
+    s.falhasConsecutivas++
+    if (s.status === 'up' && s.falhasConsecutivas >= FALHAS_PARA_CAIR) {
+      s.status = 'down'
       console.log('[failover] Supabase real inacessivel -- trocando para o stack self-hosted do Contabo')
     }
   }
 }
 
 export function iniciarMonitorDeSaude() {
-  if (intervalId) return // ja iniciado (evita duplicar em hot-reload/re-import)
-  intervalId = setInterval(tick, INTERVALO_MS)
+  const s = getState()
+  if (s.intervalId) return // ja iniciado (evita duplicar em hot-reload/re-import)
+  s.intervalId = setInterval(tick, INTERVALO_MS)
   void tick() // primeira checagem imediata, nao espera o primeiro intervalo
 }
 
 export function getFailoverStatus(): Status {
-  return status
+  return getState().status
 }
