@@ -284,7 +284,15 @@ export async function complementarOrdensProducao<T extends { id: number }>(
 // A chave natural real e `(loja_id, id_ajuste)` -- ja usada corretamente no
 // UPSERT dos dois lados (migration 059, ver AGENTS.md) -- entao dedupe por
 // ela aqui tambem, com fallback pro `id` só pros poucos registros antigos
-// sem `id_ajuste` (existiam antes da chave natural existir).
+// sem `id_ajuste` (existiam antes da chave natural existir). NAO inclui
+// `loja_id` na chave por design -- esta funcao so e segura quando quentes/
+// frias ja sao de 1 loja so (todo caller de complementarMovimentos hoje
+// filtra por loja antes de chamar). Achado na revisao deste fix
+// (2026-07-25): o fallback por `.id` continua exposto ao MESMO bug original
+// em escala reduzida -- dois registros sem `id_ajuste`, um de cada banco,
+// podem coincidir de `id` por acaso (ja provamos que os bigserial das duas
+// bases sao independentes). Aceito como risco residual (poucas dezenas de
+// registros por loja, de antes da chave natural existir).
 function mesclarMovimentosPorChaveNatural<T extends { id: number; id_ajuste: number | null }>(
   quentes: T[],
   frias: T[]

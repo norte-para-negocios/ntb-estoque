@@ -300,9 +300,26 @@ async function listarCategoria(
     // Resolve product names
     let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number; id_ajuste: number | null }[]
     if (transfIds.length && dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        movItens = await complementarMovimentos(movItens, { lojaId })
+      // Achado real (revisao do fix de dedupe 2026-07-25): o loop anterior
+      // acumulava movItens de TODAS as lojas no mesmo array antes de mesclar
+      // com o Contabo -- como mesclarMovimentosPorChaveNatural dedupe so por
+      // `id_ajuste` (sem loja_id, seguro apenas quando quentes+frias ja sao
+      // de 1 loja so), um `id_ajuste` de outra loja podia coincidir e
+      // descartar silenciosamente um registro real (mesma classe de bug do
+      // fix original, só que entre lojas em vez de entre bancos). Agrupa por
+      // loja ANTES de mesclar (via o mapa transferencia_id->loja_id, ja
+      // disponivel em `rows`) e mescla cada loja isoladamente.
+      const lojaPorTransferencia = new Map(rows.map((r) => [r.id, r.loja_id]))
+      const porLoja = new Map<number, typeof movItens>()
+      for (const m of movItens) {
+        const lojaId = lojaPorTransferencia.get(m.transferencia_id)
+        if (lojaId == null) continue
+        porLoja.set(lojaId, [...(porLoja.get(lojaId) ?? []), m])
       }
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) => complementarMovimentos(itens, { lojaId }))
+      )
+      movItens = completos.flat()
     }
     const prodCods = [...new Set(movItens.map((m) => m.id_prod).filter(Boolean))]
     const nomeProd = new Map<number, string>()
