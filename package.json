@@ -41,6 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "pdf-to-img": "^6.2.0",
+    "pg": "^8.22.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
