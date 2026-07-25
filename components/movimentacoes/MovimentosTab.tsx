@@ -164,7 +164,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       const [{ data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
         supabase
           .from('movimentos')
-          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status')
+          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status, id_ajuste')
           .eq('loja_id', lojaId)
           .in('id_prod', idsProdDetalhes)
           .gte('data', ini)
@@ -204,7 +204,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(200),
       ])
 
-      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
+      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null }
       type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
       type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
@@ -359,14 +359,14 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
               if (fim < hojeISO) {
                 const { data: posterioresRaw } = await supabase
                   .from('movimentos')
-                  .select('id, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino')
+                  .select('id, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, id_ajuste')
                   .eq('loja_id', lojaId)
                   .eq('id_prod', produtoUnico.id_prod)
                   .eq('status', 'Concluido')
                   .gte('data', fimExcl)
                   .limit(1000)
                 const posteriores = await complementarMovimentos(posterioresRaw ?? [], { lojaId, dataInicio: fimExcl })
-                for (const p of posteriores as { tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null }[]) {
+                for (const p of posteriores as { tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; id_ajuste: number | null }[]) {
                   saldoAtual -= sinalEm(
                     { tipo: p.tipo, quan: Number(p.quan) || 0, local: p.codigo_local_estoque, destino: p.codigo_local_estoque_destino },
                     localFiltro

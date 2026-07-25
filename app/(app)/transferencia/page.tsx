@@ -99,11 +99,11 @@ export default async function TransferenciaPage({
     const codigosUnicos = [...new Set(codigos)]
 
     if (codigosUnicos.length) {
-      const movsData: { id: number; id_prod: number; transferencia_id: number | null }[] = []
+      const movsData: { id: number; id_prod: number; transferencia_id: number | null; id_ajuste: number | null }[] = []
       for (let from = 0; ; from += 1000) {
         const { data: bloco } = await supabase
           .from('movimentos')
-          .select('id, id_prod, transferencia_id')
+          .select('id, id_prod, transferencia_id, id_ajuste')
           .eq('loja_id', lojaId)
           .in('id_prod', codigosUnicos)
           .not('transferencia_id', 'is', null)

@@ -293,12 +293,12 @@ async function listarCategoria(
       nomesLocais(supabase, lojaIds, rows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino])),
       multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
       transfIds.length
-        ? supabase.from('movimentos').select('id, transferencia_id, id_prod').in('transferencia_id', transfIds).limit(5000)
-        : Promise.resolve({ data: [] as { id: number; transferencia_id: number; id_prod: number }[] }),
+        ? supabase.from('movimentos').select('id, transferencia_id, id_prod, id_ajuste').in('transferencia_id', transfIds).limit(5000)
+        : Promise.resolve({ data: [] as { id: number; transferencia_id: number; id_prod: number; id_ajuste: number | null }[] }),
     ])
 
     // Resolve product names
-    let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number }[]
+    let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number; id_ajuste: number | null }[]
     if (transfIds.length && dataIni < limiteJanelaQuente()) {
       for (const lojaId of lojaIds) {
         movItens = await complementarMovimentos(movItens, { lojaId })

@@ -173,11 +173,11 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
   const ajustesHot = await paginarTodos<{
     id: number; id_prod: number | null; tipo: string; quan: number | string | null
     valor: number | string | null; codigo_local_estoque: number | null; origem: string
-    motivo: string | null; data: string
+    motivo: string | null; data: string; id_ajuste: number | null
   }>((from, to) =>
     supabase
       .from('movimentos')
-      .select('id, id_prod, tipo, quan, valor, codigo_local_estoque, origem, motivo, data')
+      .select('id, id_prod, tipo, quan, valor, codigo_local_estoque, origem, motivo, data, id_ajuste')
       .eq('loja_id', lojaId)
       .gte('data', DESDE)
       .order('id')

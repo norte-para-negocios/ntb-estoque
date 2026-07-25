@@ -270,13 +270,37 @@ export async function complementarOrdensProducao<T extends { id: number }>(
   return mesclarPorId(quentes, frias)
 }
 
+// Achado real (auditoria do bug de duplicacao, 2026-07-25): diferente de
+// notas_fiscais/nota_fiscal_items/ordens_producao (copia unica e congelada
+// desde 07-12, id preservado 1:1), `movimentos` ganhou escrita continua pro
+// Contabo em 07-18 (lib/omie/sync-ajustes.ts -> POST /movimentos_bulk) que
+// NUNCA envia o `id` -- cada base gera o seu bigserial de forma independente
+// pro mesmo registro logico. Confirmado ao vivo: mesmo id_ajuste (9568796382)
+// tem id=1036091 no Supabase e id=1035472 no Contabo. mesclarPorId (por
+// `.id`) nao reconhece que e o mesmo registro -- o Supabase hoje NAO poda
+// `movimentos` (guarda historico completo desde 01/07/2025), entao toda vez
+// que um relatorio pede um periodo que cruza a janela quente, a fatia
+// recente aparece duplicada (uma vez vinda do Supabase, outra do Contabo).
+// A chave natural real e `(loja_id, id_ajuste)` -- ja usada corretamente no
+// UPSERT dos dois lados (migration 059, ver AGENTS.md) -- entao dedupe por
+// ela aqui tambem, com fallback pro `id` só pros poucos registros antigos
+// sem `id_ajuste` (existiam antes da chave natural existir).
+function mesclarMovimentosPorChaveNatural<T extends { id: number; id_ajuste: number | null }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const chave = (r: T) => (r.id_ajuste != null ? `aj:${r.id_ajuste}` : `id:${r.id}`)
+  const vistos = new Set(quentes.map(chave))
+  return [...quentes, ...frias.filter((r) => !vistos.has(chave(r)))]
+}
+
 // Achado real (auditoria movimentacao-operacao-auto, 2026-07-19): /movimentos
 // tem o MESMO limite fixo de 5000 no servidor que /notas_fiscais e
 // /nota_fiscal_items ja tinham (ver buscarFrioTudo acima) -- so que sem
 // offset, entao nunca foi paginado. Loja 5 sozinha tem 51937 ajustes desde
 // 01/07/2025 (so ~10% vinha antes do fix). Servidor ganhou suporte a
 // `offset` (mesmo padrao); client agora pagina igual aos outros.
-export async function complementarMovimentos<T extends { id: number }>(
+export async function complementarMovimentos<T extends { id: number; id_ajuste: number | null }>(
   quentes: T[],
   opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number }
 ): Promise<T[]> {
@@ -288,7 +312,7 @@ export async function complementarMovimentos<T extends { id: number }>(
     id_prod: opts.idProd,
     transferencia_id: opts.transferenciaId,
   }, 5000)
-  return mesclarPorId(quentes, frias)
+  return mesclarMovimentosPorChaveNatural(quentes, frias)
 }
 
 // Achado real (auditoria 2026-07-19): /movimentos_historico tem o MESMO
