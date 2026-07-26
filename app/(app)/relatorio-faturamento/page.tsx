@@ -18,7 +18,7 @@ import { AlertTriangle, DollarSign, Download } from 'lucide-react'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
-import { buscarFatAgregado, buscarFatCupons, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
+import { buscarFatAgregado, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -208,8 +208,50 @@ export default async function RelatorioFaturamentoPage({
   const matriz = prefixo
     ? matrizCrua.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
     : matrizCrua
+
+  // Achado real (auditoria 2026-07-26): `faturamento_importado` (a fonte por
+  // trás da RPC acima) só guarda o ano corrente pras dimensões tipo/família/
+  // produto (ver comentário em lib/omie/faturamento.ts) -- sem completar com
+  // o fato do Contabo (histórico completo desde jul/2025), qualquer período
+  // cruzando pra ano anterior perdia esse dado em silêncio (medido: loja 5,
+  // aba Tipo, período "Todos" -- R$4,99M mostrado vs R$9,78M real). Só se
+  // aplica ao nível "de cima" (sem drill, sem usarFato) -- o drill usa
+  // dimensões compostas (tipo>familia/familia>produto) que o fato não tem
+  // como reagregar sem uma reescrita maior; fica como limitação conhecida,
+  // igual já existe pro filtro de tipo/família/produto em Notas Fiscais.
+  const anoAtualStr = mesAtual.slice(0, 4)
+  const cruzaAnoAnterior = !prefixo && !usarFato && !verCupons && (!mesIni || mesIni < `${anoAtualStr}-01`)
+  let historico: LinhaMatriz[] = []
+  if (cruzaAnoAnterior) {
+    const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null }>()
+    if (dim === 'tipo' || dim === 'familia') {
+      // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
+      for (let pagina = 0; ; pagina++) {
+        const from = pagina * 1000
+        const { data } = await supabase
+          .from('produtos')
+          .select('codigo_produto, tipo_item, descricao_familia')
+          .eq('loja_id', lojaId)
+          .range(from, from + 999)
+        if (!data?.length) break
+        for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
+          metaPorCodigo.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+        }
+        if (data.length < 1000) break
+      }
+    }
+    const anoAnteriorFim = `${Number(anoAtualStr) - 1}-12-31`
+    const dataFinalHistorico = mesFim && mesFim < `${anoAtualStr}-01` ? fimDoMes(mesFim) : anoAnteriorFim
+    // cruzaAnoAnterior já exige !usarFato, e usarFato é sempre true quando
+    // dim === 'forma_pgto' -- nunca chega aqui com essa dimensão.
+    const rows = await buscarFaturamentoFrioHistorico({
+      lojaId, dataInicio: dataIni || '', dataFinal: dataFinalHistorico, dim: dim as 'tipo' | 'familia' | 'produto', metaPorCodigo,
+    })
+    historico = rotulosFiltro.length ? rows.filter((r) => rotulosFiltro.includes(r.rotulo)) : rows
+  }
+
   const matrizFinal: LinhaMatriz[] =
-    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : matriz
+    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : [...matriz, ...historico]
   const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
   const opcoesDe = (d: string) =>
     opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))

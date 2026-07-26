@@ -8,7 +8,7 @@ import type { LojaOmie } from './client'
 // (/api/cron/sync-faturamento). Só tipo/família: forma_pgto continua vindo só
 // do import manual do FAT_DRV (não existe pela API do Omie).
 
-const TIPO_NOME: Record<string, string> = {
+export const TIPO_NOME: Record<string, string> = {
   '00': 'Mercadoria p/ revenda', '01': 'Matéria-prima', '02': 'Embalagem', '03': 'Produto em processo',
   '04': 'Produto acabado', '05': 'Subproduto', '06': 'Produto intermediário', '07': 'Uso e consumo',
   '08': 'Ativo imobilizado', '09': 'Serviços', '10': 'Outros insumos', '99': 'Outras',
@@ -267,12 +267,23 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     )
   }
 
-  // Substitui só tipo/familia (forma_pgto, quando existe, vem do import manual e fica intacto).
+  // Achado real (auditoria 2026-07-26): o delete apagava TODOS os meses (de
+  // qualquer ano) dessas 5 dimensões antes de reinserir só o ano corrente --
+  // destruindo permanentemente qualquer mes de ano anterior a cada sync
+  // (nao era so uma janela de 90 dias, era "sempre so o ano atual, pra
+  // sempre"). O loop acima (`for mes = 1..mesAtual`) so recalcula meses do
+  // ANO CORRENTE -- o delete precisa ficar restrito ao mesmo intervalo,
+  // senao meses de anos anteriores que um dia venham a ser gravados aqui
+  // (backfill futuro) seriam apagados de novo no proximo sync.
+  const mesIniAno = `${ano}-01`
+  const mesFimAno = `${ano}-${String(mesAtual).padStart(2, '0')}`
   const { error: delErro } = await supabase
     .from('faturamento_importado')
     .delete()
     .eq('loja_id', loja.id)
     .in('dimensao', ['tipo', 'familia', 'produto', 'tipo>familia', 'familia>produto'])
+    .gte('mes', mesIniAno)
+    .lte('mes', mesFimAno)
   if (delErro) throw new Error(delErro.message)
 
   const rows = [...acc.entries()].map(([k, valor]) => {
