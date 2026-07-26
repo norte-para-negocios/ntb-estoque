@@ -217,6 +217,18 @@ export async function carregarResumoDia(
     supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
   ])
 
+  // Achado real (auditoria de relatórios, 2026-07-26): essas 6 contagens
+  // nunca checavam `.error` -- uma falha transitória do Supabase vira "0"
+  // silencioso (`.count ?? 0`), indistinguível de "não teve nenhum" de
+  // verdade. Loga pra ficar visível nos logs do servidor, sem mudar o
+  // contrato de `Contagem` (que já é só números, sem estado de erro).
+  for (const [nome, res] of [
+    ['transferencias', transfCount], ['inventarios', inventCount], ['opsPrevistas', opsPrevCount],
+    ['opsConcluidas', opsConclCount], ['erros', errosCount], ['auditoria', auditCount],
+  ] as const) {
+    if (res.error) console.error(`resumo-dia: falha ao contar ${nome}`, res.error)
+  }
+
   const contagem: Contagem = {
     notas: notasRows.length,
     valorNotas: notasRows.reduce((s, n) => s + Number(n.n_valor_nfe ?? 0), 0),
@@ -486,11 +498,26 @@ async function listarCategoria(
     const { data: histQuentes } = await supabase.from('movimentos_historico')
       .select('loja_id, cod_prod, codigo, descricao, data, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim)
       .order('saidas', { ascending: false }).limit(LIMITE_LISTA)
-    let movHistData = histQuentes ?? []
+    const histQuentesArr = histQuentes ?? []
+    let movHistData: typeof histQuentesArr = histQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        movHistData = await complementarMovimentosHistorico(movHistData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Mesmo achado/fix de 'notas'/'producao'/'transferencias' acima (commit
+      // 5e06cff e revisão da Task 5 de dedupe NF/OP): agrupa por loja antes de
+      // mesclar -- complementarMovimentosHistorico dedupe por `cod_prod|data`
+      // sem `loja_id`, então acumular linhas de todas as lojas no mesmo array
+      // antes de mesclar arriscaria descartar um registro real de outra loja
+      // por coincidência de chave (codigo_produto é global no Omie, então essa
+      // colisão nunca se manifestou até hoje, mas o padrão fica inconsistente
+      // com o resto do arquivo e mais frágil do que precisa ser).
+      const porLoja = new Map<number, typeof histQuentesArr>()
+      for (const h of histQuentesArr) porLoja.set(h.loja_id, [...(porLoja.get(h.loja_id) ?? []), h])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarMovimentosHistorico(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+        )
+      )
+      movHistData = completos.flat()
     }
     const rows = movHistData as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null

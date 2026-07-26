@@ -207,7 +207,12 @@ export default async function OrdemProducaoPage({
     const LOTE = 1000
     const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
     for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
-      const { data } = await baseQuery().range(off, off + LOTE - 1)
+      const { data, error } = await baseQuery().range(off, off + LOTE - 1)
+      // Achado real (auditoria de relatórios, 2026-07-26): um erro transitório
+      // no meio da paginação (ex.: statement-timeout) era tratado igual a
+      // "acabaram os dados" -- marca truncado (mesmo aviso já exibido pro
+      // teto de MAX_LOTES) em vez de deixar o conjunto parecer completo.
+      if (error) { console.error('ordem-producao: falha ao paginar OPs', error); truncado = true; break }
       const lote = (data ?? []) as OPRow[]
       if (!lote.length) break
       todas.push(...lote)
@@ -375,7 +380,10 @@ export default async function OrdemProducaoPage({
     const LOTE = 1000
     const MAX_LOTES = 200 // teto de seguranca (~200k OPs) pra nao travar o SSR
     for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
-      const { data } = await totaisRowsQuery().range(off, off + LOTE - 1)
+      const { data, error } = await totaisRowsQuery().range(off, off + LOTE - 1)
+      // Mesmo achado do loop de `todas` acima: erro transitório no meio da
+      // paginação virava "acabaram os dados" em silêncio.
+      if (error) { console.error('ordem-producao: falha ao paginar contadores', error); totaisParciais = true; break }
       const lote = (data ?? []) as TotalRow[]
       if (!lote.length) break
       totaisQuentes.push(...lote)
