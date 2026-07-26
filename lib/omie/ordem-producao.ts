@@ -162,9 +162,14 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           }
         }
 
-        await supabase
+        const { error: upsertError } = await supabase
           .from('ordens_producao')
           .upsert(rows, { onConflict: 'loja_id,identificacao_n_cod_op' })
+        if (upsertError) {
+          throw new Error(
+            `syncOrdensProducao: falha ao upsertar ordens_producao (loja ${loja.id}): ${upsertError.message}`
+          )
+        }
         await gravarOrdensNoFrio(loja.id, rows.map((r) => ({
           num_ordem: r.num_ordem,
           identificacao_n_cod_op: r.identificacao_n_cod_op,
@@ -217,7 +222,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
   })
   if (res?.identificacao) {
     const itens = (res as Record<string, unknown>).itensDetalhes as unknown[] | undefined
-    await supabase.from('ordens_producao').upsert(
+    const { error: upsertError } = await supabase.from('ordens_producao').upsert(
       {
         loja_id: loja.id,
         num_ordem: res.identificacao.cNumOP,
@@ -234,6 +239,11 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
       },
       { onConflict: 'loja_id,identificacao_n_cod_op' }
     )
+    if (upsertError) {
+      throw new Error(
+        `fetchOrdemProducao: falha ao upsertar ordens_producao (loja ${loja.id}): ${upsertError.message}`
+      )
+    }
     await gravarOrdensNoFrio(loja.id, [{
       num_ordem: res.identificacao.cNumOP,
       identificacao_n_cod_op: res.identificacao.nCodOP,
