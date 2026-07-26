@@ -135,11 +135,6 @@ export async function contarNotasFiscaisAntigas(opts: {
   }
 }
 
-function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
-  const vistos = new Set(quentes.map((r) => r.id))
-  return [...quentes, ...frias.filter((r) => !vistos.has(r.id))]
-}
-
 // A API do Contabo tem LIMIT fixo no servidor pros endpoints de historico longo
 // (nao aceita LIMIT arbitrario do cliente, so `offset`) -- acha real (audit Notas
 // Fiscais 2026-07-19): nenhum client deste repo de fato fazia o loop de paginas,
