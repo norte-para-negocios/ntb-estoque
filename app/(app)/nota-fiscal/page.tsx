@@ -21,6 +21,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
 
 const POR_PAGINA = 50
 
@@ -130,8 +131,8 @@ export default async function NotaFiscalPage({
   const familiasArr = valoresMulti(params.familia)
   const localCod = params.local && !Number.isNaN(Number(params.local)) ? Number(params.local) : null
   let notaIds: number[] | null = null
+  let codigos: string[] | null = null
   if (tiposArr.length || familiasArr.length || params.produto || localCod !== null) {
-    let codigos: string[] | null = null
     if (tiposArr.length || familiasArr.length) {
       // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
       // (ex: loja 6, tipo "99" tem 1143) -- sem .range() o PostgREST trunca em
@@ -175,6 +176,14 @@ export default async function NotaFiscalPage({
   }
   const idsIn = notaIds !== null ? (notaIds.length ? notaIds : [-1]) : null
   const idsInSet = idsIn ? new Set(idsIn) : null
+  // notaIdsFrioSet: mesma resolucao de filtro, mas no espaco de ID do
+  // Contabo -- ver Task 1 e a spec docs/superpowers/specs/2026-07-26-nf-filtro-cross-90-dias-design.md.
+  // So calculado quando o periodo de fato cruza os 90 dias (senao a fatia
+  // fria nem e buscada) E algum filtro que dependa de produto/local esta ativo.
+  const temFiltroProdLocal = tiposArr.length > 0 || familiasArr.length > 0 || !!params.produto || localCod !== null
+  const notaIdsFrioSet = temFiltroProdLocal && dataInicio < limiteJanelaQuente()
+    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: params.produto || null, localCod })
+    : null
 
   // Query da listagem (paginada).
   let query = supabase
@@ -265,21 +274,12 @@ export default async function NotaFiscalPage({
     // trazia notas de QUALQUER status na fatia fria, inflando o badge e
     // misturando situacoes na lista quando um filtro de Situacao estava ativo.
     const statusAtivo = params.status
-    const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => statusBateFiltro(nf, statusAtivo)) : friasRaw
+    const friasFiltradas = friasRaw
+      .filter((nf) => !statusAtivo || statusBateFiltro(nf, statusAtivo))
+      .filter((nf) => !notaIdsFrioSet || notaIdsFrioSet.has(nf.id))
 
     const vistosQuentes = new Set(totaisRaw.map((r) => r.n_id_receb))
-    const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.n_id_receb))]
-    // complementarNotasFiscais (e o buscarFrioTudo acima, que a substitui aqui)
-    // busca a fatia fria so por loja/data/busca -- nao conhece o filtro de
-    // tipo/familia/produto/local (limitacao ja documentada no AGENTS.md: "o
-    // cruzamento com o Contabo nao foi implementado para esse caso
-    // especifico"). Sem filtrar aqui, TODA nota fria do periodo entra no
-    // merge, inflando o total quando esse filtro esta ativo e o periodo cruza
-    // os 90 dias (achado real: loja 6, tipo=99, badge mostrando 1907 em vez de
-    // 2). idsInSet ja veio das notas que casam no lado quente; aplicar o mesmo
-    // filtro na fatia fria evita a inflacao (ainda pode faltar nota cuja unica
-    // referencia de item exista so no Contabo -- limitacao que continua aberta).
-    const totaisCompletos = idsInSet ? totaisCompletosBrutos.filter((r) => idsInSet.has(r.id)) : totaisCompletosBrutos
+    const totaisCompletos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.n_id_receb))]
     qtdNotas = totaisCompletos.length
     totalValor = totaisCompletos.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
 
@@ -307,13 +307,10 @@ export default async function NotaFiscalPage({
       if (idsIn) q = q.in('id', idsIn)
       return q
     })
-    // Reusa a mesma fatia fria (friasRaw) buscada acima -- mesmos filtros
-    // loja/data/busca, evita uma segunda ida identica ao Contabo.
+    // Reusa a mesma fatia fria (friasFiltradas), ja filtrada por status e por
+    // notaIdsFrioSet acima -- evita uma segunda ida identica ao Contabo.
     const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.n_id_receb))
-    const todasBrutas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.n_id_receb))]
-    // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
-    // de tipo/familia/produto/local sozinha.
-    const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
+    const todas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.n_id_receb))]
     todas.sort((a, b) => {
       const av = a[ord] ?? ''
       const bv = b[ord] ?? ''
