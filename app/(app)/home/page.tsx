@@ -85,7 +85,13 @@ export default async function HomePage() {
       supabase.from('notas_fiscais').select('id', head).eq('loja_id', lojaId).gte('d_emissao_nfe', trintaDias).is('deleted_at', null),
       supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId),
       supabase.from('inventarios').select('id', head).eq('loja_id', lojaId).neq('status', 'Finalizado'),
-      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).gt('quantidade', 0),
+      // SALDO_OR (não só `quantidade.gt.0`): `quantidade` é a etiqueta setada
+      // manualmente e fica NULL na maioria das OPs -- o saldo real cai em
+      // `identificacao_n_qtde` (planejado no Omie) quando não há etiqueta.
+      // Achado real (auditoria de relatórios, 2026-07-26): mesmo bug já
+      // corrigido em /validade e lib/resumo-dia.ts, deixado pra trás aqui --
+      // loja 4 mostrava 0 produtos vencendo quando o real era 6.
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).or('quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'),
       supabase.from('integration_attempts').select('id', head).eq('loja_id', lojaId).eq('error', true).gte('created_at', desde24h),
       supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
       supabase.from('notas_fiscais').select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe').eq('loja_id', lojaId).is('deleted_at', null).order('d_emissao_nfe', { ascending: false }).limit(5),
