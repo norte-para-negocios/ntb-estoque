@@ -124,6 +124,7 @@ export default async function OrdemProducaoPage({
 
   type OPRow = {
     id: number
+    identificacao_n_cod_op: number
     num_ordem: string | null
     identificacao_c_num_op: string | null
     identificacao_n_cod_produto: number | null
@@ -146,7 +147,7 @@ export default async function OrdemProducaoPage({
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
+        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
       )
       .eq('loja_id', lojaId)
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')

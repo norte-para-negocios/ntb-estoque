@@ -86,7 +86,7 @@ export default async function ValidadePage({
 
   let ordensQuery = supabase
     .from('ordens_producao')
-    .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
+    .select('id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, validade')
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
   if (localCod !== null) ordensQuery = ordensQuery.eq('identificacao_codigo_local_estoque', localCod)
@@ -175,7 +175,7 @@ export default async function ValidadePage({
   // contagens direto contaria em dobro o que ainda esta nos dois lugares.
   let vencidasQuery = supabase
     .from('ordens_producao')
-    .select('id, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+    .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
     .or(SALDO_OR)

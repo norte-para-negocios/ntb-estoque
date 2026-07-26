@@ -173,7 +173,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(500),
         supabase
           .from('ordens_producao')
-          .select('id, identificacao_d_dt_previsao, dt_conclusao_real, concluida, identificacao_n_qtde, quantidade, identificacao_c_num_op, num_ordem')
+          .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao, dt_conclusao_real, concluida, identificacao_n_qtde, quantidade, identificacao_c_num_op, num_ordem')
           .eq('loja_id', lojaId)
           .in('identificacao_n_cod_produto', idsProdDetalhes)
           .gte('identificacao_d_dt_previsao', ini)
@@ -205,7 +205,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       ])
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null }
-      type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
+      type RawOP = { id: number; identificacao_n_cod_op: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
       type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
       // de join -- aninhado vs colunas nf_* -- normalizados pra este shape comum).

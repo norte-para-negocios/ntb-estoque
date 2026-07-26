@@ -112,6 +112,7 @@ export async function GET(request: Request) {
   const PAGE_SIZE = 1000
   type Nota = {
     id: number
+    n_id_receb: string
     d_emissao_nfe: string | null
     c_numero_nfe: string | null
     c_razao_social: string | null
@@ -125,7 +126,7 @@ export async function GET(request: Request) {
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
+      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)

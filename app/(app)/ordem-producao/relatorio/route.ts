@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida',
+        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao, produto_unidade, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })

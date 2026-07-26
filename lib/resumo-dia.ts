@@ -251,15 +251,28 @@ async function listarCategoria(
 
   if (cat === 'notas') {
     const { data: notasQuentes } = await supabase.from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
+      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
       .eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
-    let data = notasQuentes ?? []
+    const notasQuentesArr = notasQuentes ?? []
+    let data: typeof notasQuentesArr = notasQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        data = await complementarNotasFiscais(data, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Achado real (mesma classe do fix de 'transferencias' no commit 5e06cff):
+      // acumular notas de TODAS as lojas no mesmo array antes de mesclar com o
+      // Contabo arrisca um n_id_receb de outra loja coincidir por acaso (o
+      // Contabo de cada loja e uma empresa Omie separada -- os ids nao sao
+      // globalmente unicos) e descartar silenciosamente um registro real.
+      // Agrupa por loja ANTES de mesclar, mescla cada loja isoladamente.
+      const porLoja = new Map<number, typeof notasQuentesArr>()
+      for (const n of notasQuentesArr) porLoja.set(n.loja_id, [...(porLoja.get(n.loja_id) ?? []), n])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarNotasFiscais(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+        )
+      )
+      data = completos.flat()
     }
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
     const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
@@ -399,13 +412,25 @@ async function listarCategoria(
     // Só o que foi PRODUZIDO no dia (OPs concluídas), agrupado por produto. As
     // "previstas" NÃO entram: previsão é plano, não atividade do dia.
     const { data: opsQuentes } = await supabase.from('ordens_producao')
-      .select('id, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
+      .select('id, loja_id, identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
       .in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim).limit(5000)
-    let opsProducaoData = opsQuentes ?? []
+    const opsQuentesArr = opsQuentes ?? []
+    let opsProducaoData: typeof opsQuentesArr = opsQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        opsProducaoData = await complementarOrdensProducao(opsProducaoData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Mesmo achado/fix de 'notas' acima e do commit 5e06cff (transferencias):
+      // agrupa por loja antes de mesclar -- complementarOrdensProducao dedupe
+      // por identificacao_n_cod_op sem loja_id, entao acumular OPs de todas as
+      // lojas no mesmo array antes de mesclar arriscaria descartar um registro
+      // real de outra loja por coincidencia de codigo de OP.
+      const porLoja = new Map<number, typeof opsQuentesArr>()
+      for (const o of opsQuentesArr) porLoja.set(o.loja_id, [...(porLoja.get(o.loja_id) ?? []), o])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarOrdensProducao(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+        )
+      )
+      opsProducaoData = completos.flat()
     }
     const rows = opsProducaoData as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
     // Nome E TIPO do produto: OPs do Omie vêm sem descrição/tipo -> resolve pelo código.

@@ -183,7 +183,43 @@ export async function buscarFrioTudo<T>(
   return tudo
 }
 
-export async function complementarNotasFiscais<T extends { id: number }>(
+// Achado real (auditoria do bug de duplicacao de movimentos, 2026-07-25,
+// estendido pra NF/OP em 2026-07-26): assim que ganharem dual-write continuo
+// pro Contabo (lib/omie/nota-fiscal.ts, lib/omie/ordem-producao.ts), essas 3
+// tabelas passam a ter o MESMO problema que `movimentos` teve -- o Contabo
+// gera seu proprio `id` (bigserial) pra cada linha nova, independente do
+// Supabase. mesclarPorId (por `.id`) nao reconhece como o mesmo registro.
+// Dedupe pela chave natural em vez disso, mesmo padrao ja usado em
+// complementarMovimentos/complementarMovimentosHistorico. Como
+// n_id_receb/n_sequencia/identificacao_n_cod_op sao sempre preenchidos pra
+// todo registro real vindo do Omie (ao contrario de id_ajuste em
+// `movimentos`, que podia ser nulo), nao precisa de fallback pro `.id`.
+function mesclarNotasFiscaisPorChaveNatural<T extends { id: number; n_id_receb: string }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const vistos = new Set(quentes.map((r) => r.n_id_receb))
+  return [...quentes, ...frias.filter((r) => !vistos.has(r.n_id_receb))]
+}
+
+function mesclarNotaFiscalItemsPorChaveNatural<T extends { id: number; n_id_receb: string; n_sequencia: number }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const chave = (r: T) => `${r.n_id_receb}|${r.n_sequencia}`
+  const vistos = new Set(quentes.map(chave))
+  return [...quentes, ...frias.filter((r) => !vistos.has(chave(r)))]
+}
+
+function mesclarOrdensProducaoPorChaveNatural<T extends { id: number; identificacao_n_cod_op: number }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const vistos = new Set(quentes.map((r) => r.identificacao_n_cod_op))
+  return [...quentes, ...frias.filter((r) => !vistos.has(r.identificacao_n_cod_op))]
+}
+
+export async function complementarNotasFiscais<T extends { id: number; n_id_receb: string }>(
   quentes: T[],
   opts: {
     lojaId: number
@@ -206,10 +242,10 @@ export async function complementarNotasFiscais<T extends { id: number }>(
     id: opts.id,
   }, 2000)
   const frias = opts.filtrarFrias ? friasRaw.filter(opts.filtrarFrias) : friasRaw
-  return mesclarPorId(quentes, frias)
+  return mesclarNotasFiscaisPorChaveNatural(quentes, frias)
 }
 
-export async function complementarNotaFiscalItems<T extends { id: number }>(
+export async function complementarNotaFiscalItems<T extends { id: number; n_id_receb: string; n_sequencia: number }>(
   quentes: T[],
   opts: { lojaId: number; notaFiscalId?: number | number[]; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
@@ -220,10 +256,10 @@ export async function complementarNotaFiscalItems<T extends { id: number }>(
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
   }, 5000)
-  return mesclarPorId(quentes, frias)
+  return mesclarNotaFiscalItemsPorChaveNatural(quentes, frias)
 }
 
-export async function complementarOrdensProducao<T extends { id: number }>(
+export async function complementarOrdensProducao<T extends { id: number; identificacao_n_cod_op: number }>(
   quentes: T[],
   opts: {
     lojaId: number
@@ -267,7 +303,7 @@ export async function complementarOrdensProducao<T extends { id: number }>(
         validade_final: opts.validadeFinal,
         busca: opts.busca,
       }, 2000)
-  return mesclarPorId(quentes, frias)
+  return mesclarOrdensProducaoPorChaveNatural(quentes, frias)
 }
 
 // Achado real (auditoria do bug de duplicacao, 2026-07-25): diferente de

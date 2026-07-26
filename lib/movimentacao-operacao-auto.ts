@@ -51,6 +51,8 @@ async function paginarTodos<T>(
 
 type NFItemRow = {
   id: number
+  n_id_receb: string
+  n_sequencia: number
   nota_fiscal_id: number
   n_id_produto: number | null
   c_cfop: string | null
@@ -58,7 +60,7 @@ type NFItemRow = {
   n_preco_unit: number | string | null
   full_object: Record<string, unknown> | null
 }
-type NFHeaderRow = { id: number; d_emissao_nfe: string; deleted_at: string | null; c_etapa: string | null; full_object: Record<string, unknown> | null }
+type NFHeaderRow = { id: number; n_id_receb: string; d_emissao_nfe: string; deleted_at: string | null; c_etapa: string | null; full_object: Record<string, unknown> | null }
 
 function localDeNF(it: { full_object: Record<string, unknown> | null }): number | null {
   const ajustes = (it.full_object as { itensAjustes?: { codigo_local_estoque?: number | string } } | null)?.itensAjustes
@@ -128,13 +130,13 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     paginarTodos<NFItemRow>((from, to) =>
       supabase
         .from('nota_fiscal_items')
-        .select('id, nota_fiscal_id, n_id_produto, c_cfop, n_qtde_nfe, n_preco_unit, full_object')
+        .select('id, n_id_receb, n_sequencia, nota_fiscal_id, n_id_produto, c_cfop, n_qtde_nfe, n_preco_unit, full_object')
         .eq('loja_id', lojaId)
         .order('id')
         .range(from, to)
     ),
     paginarTodos<NFHeaderRow>((from, to) =>
-      supabase.from('notas_fiscais').select('id, d_emissao_nfe, deleted_at, c_etapa, full_object').eq('loja_id', lojaId).order('id').range(from, to)
+      supabase.from('notas_fiscais').select('id, n_id_receb, d_emissao_nfe, deleted_at, c_etapa, full_object').eq('loja_id', lojaId).order('id').range(from, to)
     ),
   ])
   const [nfItens, nfHeaders] = await Promise.all([

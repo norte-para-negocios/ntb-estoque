@@ -68,6 +68,7 @@ export async function GET(request: Request) {
   const PAGE_SIZE = 1000
   type Ordem = {
     id: number
+    identificacao_n_cod_op: number
     num_ordem: string | null
     identificacao_c_num_op: string | null
     identificacao_n_cod_produto: number | null
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, concluida',
+        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, concluida',
       )
       .eq('loja_id', lojaId)
       .order('updated_at', { ascending: false })
