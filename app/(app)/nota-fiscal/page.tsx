@@ -175,7 +175,6 @@ export default async function NotaFiscalPage({
     }
   }
   const idsIn = notaIds !== null ? (notaIds.length ? notaIds : [-1]) : null
-  const idsInSet = idsIn ? new Set(idsIn) : null
   // notaIdsFrioSet: mesma resolucao de filtro, mas no espaco de ID do
   // Contabo -- ver Task 1 e a spec docs/superpowers/specs/2026-07-26-nf-filtro-cross-90-dias-design.md.
   // So calculado quando o periodo de fato cruza os 90 dias (senao a fatia
