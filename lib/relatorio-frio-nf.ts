@@ -101,13 +101,44 @@ export async function buscarItensNFFrio(opts: {
   return itens
 }
 
+// Resolve o conjunto de `nota_fiscal_id` (espaço de ID do CONTABO, nao do
+// Supabase) que casam com o filtro de tipo/familia/produto/local -- usado
+// pra completar esse filtro na fatia fria de notas_fiscais/nota_fiscal_items
+// (nota-fiscal/page.tsx e os 2 arquivos irmaos). `codigosProduto` ja vem
+// resolvido localmente (join com `produtos`, que nunca e duplicado no
+// Contabo) -- aqui so cruza com os itens crus do Contabo. Achado real
+// (2026-07-26): reaproveitar um Set de ids derivado do Supabase pra filtrar
+// linhas do Contabo e o MESMO bug de espaco de ID ja corrigido pra
+// movimentos/NF/OP (commits 3f02341/46b6279/2ea39ce) -- o Contabo gera seu
+// proprio id (dual-write ja em producao), entao o filtro precisa devolver
+// ids no espaco CERTO pra fatia que vai usa-lo.
+export async function buscarNotaIdsFrio(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+  codigosProduto: string[] | null
+  produtoBusca: string | null
+  localCod: number | null
+}): Promise<Set<number>> {
+  const itens = await buscarItensNFFrio({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  const termo = opts.produtoBusca?.toLowerCase() || null
+  const ids = new Set<number>()
+  for (const it of itens) {
+    if (opts.codigosProduto && !opts.codigosProduto.includes(String(it.n_id_produto))) continue
+    if (termo && !ilike(it.c_descricao_produto, termo) && !ilike(it.c_codigo_produto, termo)) continue
+    if (opts.localCod !== null && localDe(it) !== opts.localCod) continue
+    ids.add(it.nota_fiscal_id)
+  }
+  return ids
+}
+
 const ajustesDe = (it: ItemNFFrio) =>
   (it.full_object as { itensAjustes?: Json } | null)?.itensAjustes ?? null
 
 export const cfopEntradaDe = (it: ItemNFFrio): string | null =>
   ((ajustesDe(it) as { cCFOPEntrada?: string } | null)?.cCFOPEntrada ?? null)
 
-const localDe = (it: ItemNFFrio): number | null => {
+export const localDe = (it: ItemNFFrio): number | null => {
   const v = (ajustesDe(it) as { codigo_local_estoque?: number | string } | null)?.codigo_local_estoque
   return v == null ? null : Number(v)
 }
