@@ -354,6 +354,27 @@ export async function complementarMovimentos<T extends { id: number; id_ajuste: 
   return mesclarMovimentosPorChaveNatural(quentes, frias)
 }
 
+// Achado real (auditoria de relatorios, 2026-07-26): o Postgres do Contabo
+// tem linhas literalmente duplicadas em `movimentos_historico` (mesmo
+// cod_prod+data+valores) -- sobra de reprocessamento de backfill antigo,
+// fora do controle deste app. A chave natural real da tabela e
+// `(loja_id, cod_prod, data)` (migration 015) -- linhas com a mesma chave sao
+// o MESMO registro logico e nao devem ser somadas 2x. Medido: 213 linhas
+// extras em 5 datas so na loja 2, inflando entradas/saidas em ~2%/~0.3%
+// sempre que o periodo cruza os 90 dias. Usado tanto aqui (merge quente+frio)
+// quanto em buscarMovimentosHistoricoBrutos (que nao mescla, so busca cru).
+function dedupeMovimentosHistoricoPorChaveNatural<T extends { cod_prod: number; data: string }>(linhas: T[]): T[] {
+  const vistos = new Set<string>()
+  const unicas: T[] = []
+  for (const l of linhas) {
+    const chave = `${l.cod_prod}|${l.data}`
+    if (vistos.has(chave)) continue
+    vistos.add(chave)
+    unicas.push(l)
+  }
+  return unicas
+}
+
 // Achado real (auditoria 2026-07-19): /movimentos_historico tem o MESMO
 // limite fixo de 5000 no servidor -- sem paginacao, lojas com 66mil a
 // 110mil linhas (loja 5: 109819) vinham cortadas em silencio. Servidor
@@ -363,12 +384,13 @@ export async function complementarMovimentosHistorico<T extends { cod_prod: numb
   opts: { lojaId: number; codProd?: number; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
-  const frias = await buscarFrioTudo<T>('/movimentos_historico', {
+  const friasRaw = await buscarFrioTudo<T>('/movimentos_historico', {
     loja_id: opts.lojaId,
     cod_prod: opts.codProd,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
   }, 5000)
+  const frias = dedupeMovimentosHistoricoPorChaveNatural(friasRaw)
   const vistos = new Set(quentes.map((r) => `${r.cod_prod}|${r.data}`))
   return [...quentes, ...frias.filter((r) => !vistos.has(`${r.cod_prod}|${r.data}`))]
 }
@@ -407,9 +429,7 @@ function addDias(dataISO: string, dias: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-// Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
-// sem mesclar com nada, pra agregacao acontecer em JS.
-export async function buscarMovimentosHistoricoBrutos<T>(opts: {
+async function buscarMovimentosHistoricoBrutosSemDedupe<T>(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
@@ -426,10 +446,25 @@ export async function buscarMovimentosHistoricoBrutos<T>(opts: {
   const meio = addDias(opts.dataInicio, Math.floor(diasTotais / 2))
   if (meio <= opts.dataInicio) return lote // 1 dia so e ja bateu o teto -- nao da pra bisectar mais
   const [a, b] = await Promise.all([
-    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataFinal: meio }),
-    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataInicio: addDias(meio, 1) }),
+    buscarMovimentosHistoricoBrutosSemDedupe<T>({ ...opts, dataFinal: meio }),
+    buscarMovimentosHistoricoBrutosSemDedupe<T>({ ...opts, dataInicio: addDias(meio, 1) }),
   ])
   return [...a, ...b]
+}
+
+// Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
+// sem mesclar com nada, pra agregacao acontecer em JS. Dedupe por chave
+// natural (ver dedupeMovimentosHistoricoPorChaveNatural acima) aplicado uma
+// unica vez aqui, depois de toda a bisecao terminar -- os pedacos bisectados
+// nao se sobrepoem em data, entao duplicatas so existem DENTRO de cada
+// pedaco, nunca entre eles, mas dedupar so no final evita qualquer duvida.
+export async function buscarMovimentosHistoricoBrutos<T extends { cod_prod: number; data: string }>(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+}): Promise<T[]> {
+  const bruto = await buscarMovimentosHistoricoBrutosSemDedupe<T>(opts)
+  return dedupeMovimentosHistoricoPorChaveNatural(bruto)
 }
 
 export type LinhaMovHistoricoBruta = {

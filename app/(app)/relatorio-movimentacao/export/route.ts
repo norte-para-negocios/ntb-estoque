@@ -188,6 +188,10 @@ export async function GET(request: Request) {
 
   const cutoff = limiteJanelaQuente()
   const iniRpc = ini < cutoff ? cutoff : ini
+  // Mesmo fix de app/(app)/relatorio-movimentacao/page.tsx (achado real,
+  // auditoria de relatorios 2026-07-26): sem corteExcl, o dia exato do corte
+  // entrava 2x (RPC + JS), inflando entradas/saidas.
+  const corteExcl = new Date(Date.parse(cutoff) - 86400000).toISOString().slice(0, 10)
 
   let metaPorCodigo: Map<number, { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }> | null = null
   let precoPorProduto: Map<number, number> | null = null
@@ -219,8 +223,9 @@ export async function GET(request: Request) {
     })
     let q: Qtd[] = qRecente
     if (ini < cutoff && metaPorCodigo && precoPorProduto) {
+      const dataFinalFria = fim < corteExcl ? fim : corteExcl
       const brutasTodas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
-        lojaId, dataInicio: ini, dataFinal: cutoff,
+        lojaId, dataInicio: ini, dataFinal: dataFinalFria,
       })
       const brutas = filtrarLinhasMovHistorico(brutasTodas, codigosIn, produtoBusca)
       const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)

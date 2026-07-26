@@ -503,6 +503,12 @@ export default async function RelatorioMovimentacaoPage({
 
   const cutoff = limiteJanelaQuente()
   const iniRpc = ini < cutoff ? cutoff : ini
+  // Achado real (auditoria de relatorios, 2026-07-26): iniRpc inclui `cutoff`
+  // (piso do lado quente) e o fetch frio abaixo tambem incluia `cutoff`
+  // (teto do lado frio) -- o dia exato do corte entrava 2x (RPC + JS),
+  // inflando entradas/saidas. corteExcl (1 dia antes) mesmo padrao ja usado
+  // em relatorio-compras/page.tsx (corteExcl/dataFinalFria).
+  const corteExcl = new Date(Date.parse(cutoff) - 86400000).toISOString().slice(0, 10)
   const matrizRecente = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
     p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
@@ -510,8 +516,12 @@ export default async function RelatorioMovimentacaoPage({
 
   let matriz = matrizRecente
   if (ini < cutoff) {
+    // Se o periodo pedido termina antes do corte (fim < corteExcl -- recorte
+    // todo dentro do historico frio), usa fim; senao usa corteExcl fixo (o
+    // resto, de cutoff em diante, ja vem do RPC acima).
+    const dataFinalFria = fim < corteExcl ? fim : corteExcl
     const brutasTodas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
-      lojaId, dataInicio: ini, dataFinal: cutoff,
+      lojaId, dataInicio: ini, dataFinal: dataFinalFria,
     })
     const brutas = filtrarLinhasMovHistorico(brutasTodas, codigosIn, produtoBusca)
     const { data: metaRows } = await supabase
