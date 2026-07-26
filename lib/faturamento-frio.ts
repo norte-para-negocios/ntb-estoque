@@ -70,8 +70,8 @@ export type LinhaMatrizFrio = { rotulo: string; mes: string; valor: number }
 function agregarFaturamentoPorTipoFamilia(
   itens: ItemFat[],
   mesPorCupom: Map<number, string>,
-  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null }>,
-  dim: 'tipo' | 'familia'
+  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null; nome?: string }>,
+  dim: 'tipo' | 'familia' | 'tipo>familia' | 'familia>produto'
 ): LinhaMatrizFrio[] {
   const acc = new Map<string, LinhaMatrizFrio>()
   for (const it of itens) {
@@ -83,12 +83,17 @@ function agregarFaturamentoPorTipoFamilia(
     const v = it.v_item || (it.v_unit * it.quant - it.v_desc)
     if (!v) continue
     const info = it.id_produto != null ? metaPorCodigo.get(Number(it.id_produto)) : undefined
+    const tipoLabel = info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado'
+    const familiaLabel = info?.familia || 'Sem família'
+    const produtoLabel = info?.nome || 'Produto não identificado'
+    // Separador literal '>>' -- mesmo usado pela ingestao (lib/omie/faturamento.ts,
+    // add('tipo>familia', ...)/add('familia>produto', ...)) pro drill do
+    // pre-agregado casar com o mesmo formato aqui.
     const rotulo =
-      dim === 'tipo'
-        ? info?.tipo
-          ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`)
-          : 'Não classificado'
-        : info?.familia || 'Sem família'
+      dim === 'tipo' ? tipoLabel :
+      dim === 'familia' ? familiaLabel :
+      dim === 'tipo>familia' ? `${tipoLabel}>>${familiaLabel}` :
+      `${familiaLabel}>>${produtoLabel}`
     const chave = `${rotulo}|${mes}`
     const ent = acc.get(chave) ?? { rotulo, mes, valor: 0 }
     ent.valor += v
@@ -110,7 +115,7 @@ export async function buscarFaturamentoFrioHistorico(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
-  dim: 'tipo' | 'familia' | 'produto'
+  dim: 'tipo' | 'familia' | 'produto' | 'tipo>familia' | 'familia>produto'
   metaPorCodigo: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
 }): Promise<LinhaMatrizFrio[]> {
   if (opts.dim === 'produto') {
