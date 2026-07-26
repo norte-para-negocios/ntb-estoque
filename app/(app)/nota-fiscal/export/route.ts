@@ -6,6 +6,7 @@ import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
   // tipo vem como lista separada por virgula (multi-select) na URL.
   const tiposArr = valoresMulti(params.tipo)
   let notaIdsFiltro: number[] | null = null
+  let codigos: string[] | null = null
   if (tiposArr.length || params.produto) {
     if (tiposArr.length) {
       // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
@@ -61,11 +63,14 @@ export async function GET(request: Request) {
           .range(from, to),
       )
 
-      const codigos = prodCodigos.map((p) => String(p.codigo_produto))
+      codigos = prodCodigos.map((p) => String(p.codigo_produto))
 
       if (codigos.length === 0) {
         notaIdsFiltro = [-1]
       } else {
+        // codigos e' `let` (reatribuido acima) -- alias `const` pra manter o
+        // narrowing de nao-nulo dentro do closure abaixo.
+        const codigosNaoNulos = codigos
         // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
         // (toda loja ativa ja passa disso) -- mesma razao acima.
         const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
@@ -73,7 +78,7 @@ export async function GET(request: Request) {
             .from('nota_fiscal_items')
             .select('nota_fiscal_id')
             .eq('loja_id', lojaId)
-            .in('produto_codigo', codigos)
+            .in('produto_codigo', codigosNaoNulos)
             .order('id', { ascending: true })
             .range(from, to)
           if (params.produto) {
@@ -155,23 +160,26 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  // complementarNotasFiscais busca a fatia fria so por loja/data/busca -- nao
-  // conhece o filtro de tipo/produto (limitacao documentada no AGENTS.md).
-  // Sem filtrar aqui, toda nota fria do periodo entraria na exportacao mesmo
-  // sem casar com o filtro, quando o periodo cruza os 90 dias.
-  const notasCompletasBrutas = dataInicio < limiteJanelaQuente()
+  // Achado real (2026-07-26): antes disso, o filtro de tipo/produto na fatia
+  // fria reusava notaIdsFiltro (ids do SUPABASE) pra filtrar linhas do
+  // CONTABO -- espaco de ID errado desde que o dual-write de NF entrou em
+  // producao (o Contabo gera seu proprio id). notaIdsFrioSet resolve o
+  // mesmo filtro no espaco certo (ver lib/relatorio-frio-nf.ts).
+  const temFiltro = tiposArr.length > 0 || !!params.produto
+  const notaIdsFrioSet = temFiltro && dataInicio < limiteJanelaQuente()
+    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: params.produto || null, localCod: null })
+    : null
+  const notasCompletas = dataInicio < limiteJanelaQuente()
     ? await complementarNotasFiscais(notas, {
         lojaId,
         dataInicio,
         dataFinal,
         busca: params.num_nfe || params.fornecedor,
-        filtrarFrias: params.status ? (n) => statusBateFiltro(n, params.status!) : undefined,
+        filtrarFrias: (n) =>
+          (!params.status || statusBateFiltro(n, params.status!)) &&
+          (!notaIdsFrioSet || notaIdsFrioSet.has(n.id)),
       })
     : notas
-  const notaIdsFiltroSet = notaIdsFiltro ? new Set(notaIdsFiltro) : null
-  const notasCompletas = notaIdsFiltroSet
-    ? notasCompletasBrutas.filter((n) => notaIdsFiltroSet.has(n.id))
-    : notasCompletasBrutas
 
   const rows = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
