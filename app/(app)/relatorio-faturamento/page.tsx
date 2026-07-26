@@ -214,13 +214,11 @@ export default async function RelatorioFaturamentoPage({
   // produto (ver comentário em lib/omie/faturamento.ts) -- sem completar com
   // o fato do Contabo (histórico completo desde jul/2025), qualquer período
   // cruzando pra ano anterior perdia esse dado em silêncio (medido: loja 5,
-  // aba Tipo, período "Todos" -- R$4,99M mostrado vs R$9,78M real). Só se
-  // aplica ao nível "de cima" (sem drill, sem usarFato) -- o drill usa
-  // dimensões compostas (tipo>familia/familia>produto) que o fato não tem
-  // como reagregar sem uma reescrita maior; fica como limitação conhecida,
-  // igual já existe pro filtro de tipo/família/produto em Notas Fiscais.
+  // aba Tipo, período "Todos" -- R$4,99M mostrado vs R$9,78M real). Cobre
+  // tanto o nível de cima quanto o drill (dimensões compostas tipo>familia/
+  // familia>produto, ver lib/faturamento-frio.ts).
   const anoAtualStr = mesAtual.slice(0, 4)
-  const cruzaAnoAnterior = !prefixo && !usarFato && !verCupons && (!mesIni || mesIni < `${anoAtualStr}-01`)
+  const cruzaAnoAnterior = !usarFato && !verCupons && (!mesIni || mesIni < `${anoAtualStr}-01`)
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
     // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
@@ -247,10 +245,20 @@ export default async function RelatorioFaturamentoPage({
     const anoAnteriorFim = `${Number(anoAtualStr) - 1}-12-31`
     const dataFinalHistorico = mesFim && mesFim < `${anoAtualStr}-01` ? fimDoMes(mesFim) : anoAnteriorFim
     // cruzaAnoAnterior já exige !usarFato, e usarFato é sempre true quando
-    // dim === 'forma_pgto' -- nunca chega aqui com essa dimensão.
-    const rows = await buscarFaturamentoFrioHistorico({
-      lojaId, dataInicio: dataIni || '', dataFinal: dataFinalHistorico, dim: dim as 'tipo' | 'familia' | 'produto', metaPorCodigo,
+    // dim === 'forma_pgto' -- nunca chega aqui com essa dimensão. Com drill
+    // ativo, usa consultaDim (tipo>familia/familia>produto, já calculado no
+    // topo da função) em vez de dim -- mesmo raciocínio de matrizCrua/matriz.
+    const dimHistorico = (prefixo ? consultaDim : dim) as 'tipo' | 'familia' | 'produto' | 'tipo>familia' | 'familia>produto'
+    const rowsBrutas = await buscarFaturamentoFrioHistorico({
+      lojaId, dataInicio: dataIni || '', dataFinal: dataFinalHistorico, dim: dimHistorico, metaPorCodigo,
     })
+    // Mesmo corte de prefixo que matrizCrua recebe pra virar matriz (linha
+    // ~208) -- sem isso, o histórico com drill ativo devolveria o rótulo
+    // composto inteiro ("Tipo>>Familia") em vez de só a parte do filho
+    // ("Familia"), e nunca bateria com as linhas do lado quente (já cortadas).
+    const rows = prefixo
+      ? rowsBrutas.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
+      : rowsBrutas
     // Guarda defensiva: o concat com `matriz` (linha ~254) assume que o
     // pré-agregado (RPC) só tem o ano corrente e o histórico só tem antes
     // dele -- verdade hoje porque syncFaturamento sempre reinsere só o ano
