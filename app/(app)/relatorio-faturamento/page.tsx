@@ -259,7 +259,7 @@ export default async function RelatorioFaturamentoPage({
     const rows = prefixo
       ? rowsBrutas.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
       : rowsBrutas
-    // Guarda defensiva: o concat com `matriz` (linha ~254) assume que o
+    // Guarda defensiva: o concat com `matriz` (em `matrizFinal`, abaixo) assume que o
     // pré-agregado (RPC) só tem o ano corrente e o histórico só tem antes
     // dele -- verdade hoje porque syncFaturamento sempre reinsere só o ano
     // corrente (ver comentário lá), mas se um backfill futuro popular
@@ -267,7 +267,15 @@ export default async function RelatorioFaturamentoPage({
     // passariam a se sobrepor. Filtra aqui pra nunca somar mês >= ano
     // corrente vindo do histórico, mesmo que isso mude.
     const semSobreposicao = rows.filter((r) => r.mes < `${anoAtualStr}-01`)
-    historico = rotulosFiltro.length ? semSobreposicao.filter((r) => rotulosFiltro.includes(r.rotulo)) : semSobreposicao
+    // Achado real (revisão final, 2026-07-26): `rotulosFiltro` é o filtro da
+    // dimensão-PAI (a aba, ex. tipo) -- com drill ativo, `r.rotulo` aqui já é
+    // o rótulo-FILHO (família/produto, prefixo já cortado acima), então
+    // `rotulosFiltro.includes(r.rotulo)` nunca bate e zerava o histórico do
+    // drill sempre que um filtro de rótulo estivesse ativo (mesmo espelho do
+    // lado quente, que só aplica `p_rotulos` quando `!prefixo`, linha 185).
+    historico = (!prefixo && rotulosFiltro.length)
+      ? semSobreposicao.filter((r) => rotulosFiltro.includes(r.rotulo))
+      : semSobreposicao
   }
 
   const matrizFinal: LinhaMatriz[] =
