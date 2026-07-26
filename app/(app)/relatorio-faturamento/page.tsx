@@ -211,14 +211,20 @@ export default async function RelatorioFaturamentoPage({
 
   // Achado real (auditoria 2026-07-26): `faturamento_importado` (a fonte por
   // trás da RPC acima) só guarda o ano corrente pras dimensões tipo/família/
-  // produto (ver comentário em lib/omie/faturamento.ts) -- sem completar com
-  // o fato do Contabo (histórico completo desde jul/2025), qualquer período
-  // cruzando pra ano anterior perdia esse dado em silêncio (medido: loja 5,
-  // aba Tipo, período "Todos" -- R$4,99M mostrado vs R$9,78M real). Cobre
-  // tanto o nível de cima quanto o drill (dimensões compostas tipo>familia/
-  // familia>produto, ver lib/faturamento-frio.ts).
+  // produto -- sem completar com o fato do Contabo, um período CUSTOM que
+  // cruzasse pra ano anterior perdia esse dado em silêncio. Corrigido no
+  // mesmo dia, mas com um efeito colateral sério descoberto ao vivo pelo
+  // usuário: o período padrão "Todos" (sem filtro nenhum) sempre significou
+  // "sem piso de data" (desde o início), então TODA carga da tela sem filtro
+  // passou a disparar a busca cara no Contabo (produtos + cupons + itens
+  // brutos, potencialmente 1+ ano de histórico, reagregado em JS) -- medido
+  // 2,2s só pra meio ano de 1 loja, sem cache. Revertido: "Todos" volta a
+  // significar ano corrente pra efeito desta busca (rápido, só pré-agregado)
+  // -- a busca histórica só dispara quando o usuário escolhe explicitamente
+  // um período (chip fixo ou customizado) cujo início é anterior ao ano
+  // corrente, uma ação deliberada, não o estado padrão da tela.
   const anoAtualStr = mesAtual.slice(0, 4)
-  const cruzaAnoAnterior = !usarFato && !verCupons && (!mesIni || mesIni < `${anoAtualStr}-01`)
+  const cruzaAnoAnterior = !usarFato && !verCupons && !!mesIni && mesIni < `${anoAtualStr}-01`
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
     // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
