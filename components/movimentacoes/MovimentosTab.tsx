@@ -192,7 +192,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         // evita esse plano ruim (validado: 6/6 execucoes rapidas sem filtro no embed).
         supabase
           .from('nota_fiscal_items')
-          .select('id, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
+          .select('id, n_id_receb, n_sequencia, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
           .eq('loja_id', lojaId)
           .in('n_id_produto', idsProdDetalhes)
           .limit(500),
@@ -206,14 +206,20 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null }
       type RawOP = { id: number; identificacao_n_cod_op: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
-      type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
+      type RawNFI = { id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
       // de join -- aninhado vs colunas nf_* -- normalizados pra este shape comum).
-      type NFIItem = { id: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
+      // n_id_receb/n_sequencia (chave natural do item, mesma usada em
+      // complementarNotaFiscalItems): o `id` sozinho nao serve mais pra dedupe
+      // quente+frio (Contabo gera seu proprio bigserial `id`, independente do
+      // Supabase, desde o dual-write de NF -- ver historico-contabo.ts).
+      type NFIItem = { id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
       // /nota_fiscal_items do Contabo so junta d_emissao_nfe/c_numero_nfe/c_natureza_operacao
       // (colunas nf_*) -- nao devolve etapa/cancelamento do cabecalho, por isso
       // `nota_fiscal_id` e usado abaixo pra cruzar com um fetch a parte de /notas_fiscais.
-      type RawNFIFrio = { id: number; nota_fiscal_id: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
+      // n_id_receb/n_sequencia sao colunas proprias de nota_fiscal_items (nao
+      // prefixadas nf_*, que sao so do join com o cabecalho) -- o endpoint ja devolve.
+      type RawNFIFrio = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
       type RawNFHeaderFrio = { id: number; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }
       type RawInv = { produto_codigo_produto: number; quan: number | null; inventarios: { id: number; data: string }[] }
 
@@ -229,7 +235,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         .map((nfi) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
           return {
-            id: nfi.id, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
+            id: nfi.id, n_id_receb: nfi.n_id_receb, n_sequencia: nfi.n_sequencia, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
             d_emissao_nfe: nf?.d_emissao_nfe ?? null, c_numero_nfe: nf?.c_numero_nfe ?? null, c_natureza_operacao: nf?.c_natureza_operacao ?? null,
           }
         })
@@ -257,11 +263,15 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         const friosNormalizados: NFIItem[] = friosDoProduto
           .filter((f) => notasValidas.has(f.nota_fiscal_id))
           .map((f) => ({
-            id: f.id, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
+            id: f.id, n_id_receb: f.n_id_receb, n_sequencia: f.n_sequencia, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
             d_emissao_nfe: f.nf_d_emissao_nfe, c_numero_nfe: f.nf_c_numero_nfe, c_natureza_operacao: f.nf_c_natureza_operacao,
           }))
-        const vistos = new Set(nfItemsQuentes.map((n) => n.id))
-        nfItems = [...nfItemsQuentes, ...friosNormalizados.filter((n) => !vistos.has(n.id))]
+        // Chave natural n_id_receb+n_sequencia (id do ITEM, nao da nota) -- mesma
+        // razao do fix em historico-contabo.ts: o Contabo gera seu proprio `id`
+        // bigserial por linha, independente do Supabase, desde o dual-write de NF.
+        const chave = (n: NFIItem) => `${n.n_id_receb}|${n.n_sequencia}`
+        const vistos = new Set(nfItemsQuentes.map(chave))
+        nfItems = [...nfItemsQuentes, ...friosNormalizados.filter((n) => !vistos.has(chave(n)))]
       }
 
       const movsRaw = movs as RawMov[]

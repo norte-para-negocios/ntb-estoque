@@ -337,7 +337,7 @@ export default async function OrdemProducaoPage({
     return q
   }
 
-  type TotalRow = { id: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
+  type TotalRow = { id: number; identificacao_n_cod_op: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
   let totConcluidasFinal: number
   let totPrevistasFinal: number
   let totPendentesFinal: number
@@ -353,7 +353,7 @@ export default async function OrdemProducaoPage({
     function totaisRowsQuery() {
       let q = supabase
         .from('ordens_producao')
-        .select('id, concluida, identificacao_d_dt_previsao')
+        .select('id, identificacao_n_cod_op, concluida, identificacao_d_dt_previsao')
         .eq('loja_id', lojaId)
       if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
       if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
@@ -401,8 +401,8 @@ export default async function OrdemProducaoPage({
       contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal, campo: 'previsao' }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
-    const vistosQuentes = new Set(totaisQuentes.map((r) => r.id))
-    const totaisCompletos = [...totaisQuentes, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    const vistosQuentes = new Set(totaisQuentes.map((r) => r.identificacao_n_cod_op))
+    const totaisCompletos = [...totaisQuentes, ...friasRaw.filter((r) => !vistosQuentes.has(r.identificacao_n_cod_op))]
     totConcluidasFinal = totaisCompletos.filter((o) => o.concluida).length
     // nulls excluidos explicitamente (nao coalescer pra '' -- '' < qualquer data
     // contaria erroneamente como atrasada): espelha o gte/lte do banco, que tambem

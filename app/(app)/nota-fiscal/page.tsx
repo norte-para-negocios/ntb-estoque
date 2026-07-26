@@ -32,6 +32,7 @@ function fmtData(d: string | null): string {
 
 type NotaCompleta = {
   id: number
+  n_id_receb: string
   d_emissao_nfe: string | null
   c_numero_nfe: string | null
   c_razao_social: string | null
@@ -204,7 +205,7 @@ export default async function NotaFiscalPage({
   function buildTotaisQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('id, n_valor_nfe')
+      .select('id, n_id_receb, n_valor_nfe')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
@@ -225,7 +226,7 @@ export default async function NotaFiscalPage({
 
   const [{ data: notasRaw }, totaisRaw] = await Promise.all([
     query,
-    buscarTudoPaginado<{ id: number; n_valor_nfe: number | string | null }>(buildTotaisQuery),
+    buscarTudoPaginado<{ id: number; n_id_receb: string; n_valor_nfe: number | string | null }>(buildTotaisQuery),
   ])
 
   let notas = notasRaw
@@ -266,8 +267,8 @@ export default async function NotaFiscalPage({
     const statusAtivo = params.status
     const friasFiltradas = statusAtivo ? friasRaw.filter((nf) => statusBateFiltro(nf, statusAtivo)) : friasRaw
 
-    const vistosQuentes = new Set(totaisRaw.map((r) => r.id))
-    const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.id))]
+    const vistosQuentes = new Set(totaisRaw.map((r) => r.n_id_receb))
+    const totaisCompletosBrutos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.n_id_receb))]
     // complementarNotasFiscais (e o buscarFrioTudo acima, que a substitui aqui)
     // busca a fatia fria so por loja/data/busca -- nao conhece o filtro de
     // tipo/familia/produto/local (limitacao ja documentada no AGENTS.md: "o
@@ -288,7 +289,7 @@ export default async function NotaFiscalPage({
     const paginaCompletaRaw = await buscarTudoPaginado<NotaCompleta>((from, to) => {
       let q = supabase
         .from('notas_fiscais')
-        .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
+        .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
         .eq('loja_id', lojaId)
         .gte('d_emissao_nfe', dataInicio)
         .lte('d_emissao_nfe', dataFinal)
@@ -308,8 +309,8 @@ export default async function NotaFiscalPage({
     })
     // Reusa a mesma fatia fria (friasRaw) buscada acima -- mesmos filtros
     // loja/data/busca, evita uma segunda ida identica ao Contabo.
-    const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.id))
-    const todasBrutas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.id))]
+    const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.n_id_receb))
+    const todasBrutas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.n_id_receb))]
     // Mesma razao do totaisCompletos acima: a fatia fria nao respeita o filtro
     // de tipo/familia/produto/local sozinha.
     const todas = idsInSet ? todasBrutas.filter((r) => idsInSet.has(r.id)) : todasBrutas
