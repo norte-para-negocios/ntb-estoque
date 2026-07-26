@@ -223,22 +223,26 @@ export default async function RelatorioFaturamentoPage({
   const cruzaAnoAnterior = !prefixo && !usarFato && !verCupons && (!mesIni || mesIni < `${anoAtualStr}-01`)
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
-    const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null }>()
-    if (dim === 'tipo' || dim === 'familia') {
-      // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
-      for (let pagina = 0; ; pagina++) {
-        const from = pagina * 1000
-        const { data } = await supabase
-          .from('produtos')
-          .select('codigo_produto, tipo_item, descricao_familia')
-          .eq('loja_id', lojaId)
-          .range(from, from + 999)
-        if (!data?.length) break
-        for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
-          metaPorCodigo.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-        }
-        if (data.length < 1000) break
+    // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
+    // `nome` é usado pela dim 'produto' (resolve o id numérico cru do fato pro
+    // nome exibido); tipo/familia são usados pelas outras 2 dims.
+    const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null; nome?: string }>()
+    for (let pagina = 0; ; pagina++) {
+      const from = pagina * 1000
+      const { data } = await supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
+        .eq('loja_id', lojaId)
+        .range(from, from + 999)
+      if (!data?.length) break
+      for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[]) {
+        metaPorCodigo.set(Number(p.codigo_produto), {
+          tipo: p.tipo_item,
+          familia: p.descricao_familia,
+          nome: p.descricao || p.codigo || String(p.codigo_produto),
+        })
       }
+      if (data.length < 1000) break
     }
     const anoAnteriorFim = `${Number(anoAtualStr) - 1}-12-31`
     const dataFinalHistorico = mesFim && mesFim < `${anoAtualStr}-01` ? fimDoMes(mesFim) : anoAnteriorFim
@@ -247,7 +251,15 @@ export default async function RelatorioFaturamentoPage({
     const rows = await buscarFaturamentoFrioHistorico({
       lojaId, dataInicio: dataIni || '', dataFinal: dataFinalHistorico, dim: dim as 'tipo' | 'familia' | 'produto', metaPorCodigo,
     })
-    historico = rotulosFiltro.length ? rows.filter((r) => rotulosFiltro.includes(r.rotulo)) : rows
+    // Guarda defensiva: o concat com `matriz` (linha ~254) assume que o
+    // pré-agregado (RPC) só tem o ano corrente e o histórico só tem antes
+    // dele -- verdade hoje porque syncFaturamento sempre reinsere só o ano
+    // corrente (ver comentário lá), mas se um backfill futuro popular
+    // `faturamento_importado` com anos anteriores, essas duas fontes
+    // passariam a se sobrepor. Filtra aqui pra nunca somar mês >= ano
+    // corrente vindo do histórico, mesmo que isso mude.
+    const semSobreposicao = rows.filter((r) => r.mes < `${anoAtualStr}-01`)
+    historico = rotulosFiltro.length ? semSobreposicao.filter((r) => rotulosFiltro.includes(r.rotulo)) : semSobreposicao
   }
 
   const matrizFinal: LinhaMatriz[] =

@@ -100,20 +100,34 @@ function agregarFaturamentoPorTipoFamilia(
 // Ponto de entrada pro complemento historico das abas Tipo/Familia/Produto do
 // relatorio de Faturamento -- chamado so quando o periodo pedido cruza pra
 // antes do ano corrente (ver app/(app)/relatorio-faturamento/page.tsx).
-// Produto delega direto pro agregado do servidor (nao precisa de metadado
-// local); Tipo/Familia precisam do cruzamento com `produtos`, feito aqui.
+// Produto delega pro agregado do servidor (nao precisa cruzar tipo/familia),
+// mas AINDA precisa de `produtos` local pra resolver `id_produto` (rotulo cru
+// que o /fat_agregado devolve, ver docs/superpowers/specs/2026-07-18-*) pro
+// nome exibido -- achado real (revisao 2026-07-26): sem isso, a aba Produto
+// mostrava o id numerico cru pro periodo historico (ilegivel, e sem somar
+// com a linha do mesmo produto no ano corrente, que usa nome como rotulo).
 export async function buscarFaturamentoFrioHistorico(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
   dim: 'tipo' | 'familia' | 'produto'
-  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null }>
+  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
 }): Promise<LinhaMatrizFrio[]> {
   if (opts.dim === 'produto') {
     const rows = await buscarFatAgregado({
       lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, group: 'produto', group2: 'mes',
     })
-    return rows.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes).map((r) => ({ rotulo: r.rotulo, mes: r.mes, valor: r.valor }))
+    const acc = new Map<string, LinhaMatrizFrio>()
+    for (const r of rows) {
+      if (!r.mes) continue
+      const idProduto = Number(r.rotulo)
+      const nome = (Number.isFinite(idProduto) ? opts.metaPorCodigo.get(idProduto)?.nome : undefined) || 'Produto não identificado'
+      const chave = `${nome}|${r.mes}`
+      const ent = acc.get(chave) ?? { rotulo: nome, mes: r.mes, valor: 0 }
+      ent.valor += r.valor
+      acc.set(chave, ent)
+    }
+    return [...acc.values()]
   }
   const [cupons, itens] = await Promise.all([
     buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal }),
