@@ -496,16 +496,34 @@ export default async function RelatorioMovimentacaoPage({
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISOQtd.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISOQtd
 
-  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
+  // Achado real (2026-07-27): a RPC relatorio_movimentacao_matriz tem plano
+  // instável no Postgres (a CTE `preco` varre nota_fiscal_items inteiro sem
+  // filtro de período) e ocasionalmente estoura statement_timeout (57014) --
+  // o código antigo engolia esse erro em silêncio (`if (error...) break`),
+  // fazendo a matriz cair só na fatia fria (Contabo) e a tela parecer
+  // "travada" em meses antigos mesmo com dado novo no banco. Confirmado que a
+  // MESMA chamada funciona na maioria das vezes (2,8-6s) -- retry resolve o
+  // caso comum; quando falha as 3 vezes, `falhou=true` avisa a UI em vez de
+  // mostrar dado incompleto calado.
+  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<{ rows: T[]; falhou: boolean }> {
     const PAGE = 1000
     const todos: T[] = []
     for (let p = 0; ; p++) {
-      const { data, error } = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
-      if (error || !data?.length) break
-      todos.push(...(data as T[]))
+      let data: T[] | null = null
+      let error: unknown = null
+      for (let tentativa = 0; tentativa < 3; tentativa++) {
+        const resp = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
+        data = resp.data as T[] | null
+        error = resp.error
+        if (!error) break
+        console.error(`relatorio-movimentacao: falha na RPC ${fn} (tentativa ${tentativa + 1}/3)`, error)
+      }
+      if (error) return { rows: todos, falhou: true }
+      if (!data?.length) break
+      todos.push(...data)
       if (data.length < PAGE) break
     }
-    return todos
+    return { rows: todos, falhou: false }
   }
 
   const cutoff = limiteJanelaQuente()
@@ -516,7 +534,7 @@ export default async function RelatorioMovimentacaoPage({
   // inflando entradas/saidas. corteExcl (1 dia antes) mesmo padrao ja usado
   // em relatorio-compras/page.tsx (corteExcl/dataFinalFria).
   const corteExcl = new Date(Date.parse(cutoff) - 86400000).toISOString().slice(0, 10)
-  const matrizRecente = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
+  const { rows: matrizRecente, falhou: falhouMatrizRecente } = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
     p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
   })
@@ -591,6 +609,13 @@ export default async function RelatorioMovimentacaoPage({
           Produtos <span className="num font-semibold text-text">{ordenadas.length}</span>
         </span>
       </div>
+
+      {falhouMatrizRecente && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Não foi possível carregar os dados mais recentes agora (instabilidade momentânea do banco). Os meses mais
+          recentes podem estar faltando ou incompletos abaixo — recarregue a página em alguns segundos.
+        </p>
+      )}
 
       <SegmentLinks
         basePath="/relatorio-movimentacao"
