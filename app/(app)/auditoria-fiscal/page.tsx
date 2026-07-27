@@ -40,6 +40,33 @@ type LinhaItem = {
 
 const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo', 'Ativo imobilizado', 'Bonificação/Comodato', 'Devolução', 'Outros']
 
+// O Supabase corta em 1000 linhas por padrao (sem erro) -- pagina ate esgotar
+// (achado real: lojas com >1000 produtos perdiam o resto do catalogo aqui,
+// mesmo bug ja corrigido no export/route.ts irmao). Usado tanto no resumo por
+// CFOP quanto no drill-down por item, que fazem a mesma query de metadados.
+async function buscarMetaProdutos(
+  supabase: ReturnType<typeof createServiceClient>,
+  lojaId: number
+): Promise<Map<number, { tipo: string | null; familia: string | null }>> {
+  const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
+  for (let pg = 0; ; pg++) {
+    const from = pg * 1000
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia')
+      .eq('loja_id', lojaId)
+      .range(from, from + 999)
+    if (!data?.length) break
+    prodMetaRaw.push(...data)
+    if (data.length < 1000) break
+  }
+  const meta = new Map<number, { tipo: string | null; familia: string | null }>()
+  for (const p of prodMetaRaw) {
+    meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+  }
+  return meta
+}
+
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
@@ -70,14 +97,7 @@ export default async function AuditoriaFiscalPage({
 
   // Complemento frio: mescla o resumo por par CFOP com o pedaço antigo.
   if (ini < corte) {
-    const { data: prodMetaRaw } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-    const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
-      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-    }
+    const meta = await buscarMetaProdutos(supabase, lojaId)
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
     const filtrados = filtrarItensAuditoria(itensFrios, {
@@ -139,12 +159,7 @@ export default async function AuditoriaFiscalPage({
     if (ini < corte) {
       const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
       const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-      const { data: prodMetaRaw } = await supabase
-        .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
-      const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-      for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
-        meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-      }
+      const meta = await buscarMetaProdutos(supabase, lojaId)
       const filtrados = filtrarItensAuditoria(itensFrios, {
         produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)
