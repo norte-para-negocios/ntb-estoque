@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { DetalheOP as DetalheOPView } from '@/components/movimentacoes/DetalheOP'
 import { DetalheTransferencia as DetalheTransferenciaView } from '@/components/movimentacoes/DetalheTransferencia'
 import { DetalheNotaFiscal as DetalheNotaFiscalView } from '@/components/movimentacoes/DetalheNotaFiscal'
+import { DetalheInventario as DetalheInventarioView } from '@/components/movimentacoes/DetalheInventario'
 import {
   buscarDetalheOP,
   buscarDetalheTransferencia,
@@ -85,7 +86,7 @@ export function DetalheMovimentoSheet({
           )}
           {estado.status === 'transferencia' && <DetalheTransferenciaView dados={estado.dados} />}
           {estado.status === 'nota_fiscal' && <DetalheNotaFiscalView dados={estado.dados} />}
-          {/* Task 5 preenche estado.status === 'inventario' */}
+          {estado.status === 'inventario' && <DetalheInventarioView dados={estado.dados} />}
         </div>
       </SheetContent>
     </Sheet>

@@ -217,5 +217,67 @@ export type DetalheInventario = {
 }
 
 export async function buscarDetalheInventario(id: number): Promise<{ error: string } | DetalheInventario> {
-  return { error: 'not implemented' } // substituído na Task 5
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
+
+  const { data: inventario } = await supabase
+    .from('inventarios')
+    .select('id, data, codigo_local_estoque, status, user_id')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+  if (!inventario) return { error: 'Inventário não encontrado.' }
+
+  const { data: responsavel } = inventario.user_id
+    ? await supabase.from('profiles').select('name').eq('id', inventario.user_id).maybeSingle()
+    : { data: null }
+
+  // PostgREST corta em 1000 linhas por padrao e sem erro: inventarios podem ter
+  // mais itens que isso, entao pagina com .range() ate esgotar. Mesmo padrao de
+  // app/(app)/inventario/[id]/contagem/page.tsx.
+  const itensRaw: { id: number; produto_codigo: string; produto_descricao: string; produto_familia: string | null; produto_codigo_produto: number; quan: number | null; status: string | null }[] = []
+  const PAGE_SIZE = 1000
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * PAGE_SIZE
+    const { data: bloco } = await supabase
+      .from('inventario_items')
+      .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
+      .eq('inventario_id', id)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (!bloco?.length) break
+    itensRaw.push(...bloco)
+    if (bloco.length < PAGE_SIZE) break
+  }
+
+  const codigos = [...new Set(itensRaw.map((i) => i.produto_codigo_produto).filter(Boolean))]
+  const prods: { codigo_produto: number; unidade: string | null }[] = []
+  for (let from = 0; codigos.length && from < codigos.length; from += 1000) {
+    const { data } = await supabase.from('produtos').select('codigo_produto, unidade').eq('loja_id', lojaId).in('codigo_produto', codigos.slice(from, from + 1000))
+    if (data?.length) prods.push(...data)
+  }
+  const unidadeMap = new Map(prods.map((p) => [p.codigo_produto, p.unidade]))
+
+  const { data: local } = await supabase
+    .from('local_estoques')
+    .select('descricao')
+    .eq('loja_id', lojaId)
+    .eq('codigo_local_estoque', inventario.codigo_local_estoque)
+    .maybeSingle()
+
+  return {
+    id: inventario.id,
+    local: local?.descricao || String(inventario.codigo_local_estoque),
+    data: inventario.data,
+    responsavel: responsavel?.name ?? null,
+    status: inventario.status,
+    finalizado: inventario.status === 'Finalizado',
+    podeEditar,
+    itens: itensRaw.map((i) => ({
+      ...i,
+      produto_descricao: formatarNomeProduto(i.produto_descricao),
+      unidade: unidadeMap.get(i.produto_codigo_produto) ?? null,
+    })),
+  }
 }
