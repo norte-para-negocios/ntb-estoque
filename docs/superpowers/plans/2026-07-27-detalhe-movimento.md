@@ -548,19 +548,24 @@ git commit -m "feat: detalhe de Transferência na gaveta"
 
 ### Passo 1: Implementar `buscarDetalheNotaFiscal`
 
-Espelha `app/(app)/nota-fiscal/[id]/page.tsx` (linhas 19-42):
+Espelha `app/(app)/nota-fiscal/[id]/page.tsx` (linhas 19-42) — **inclusive o fallback pro Contabo**: `notas_fiscais`/`nota_fiscal_items` são tabelas podadas a 90 dias no Supabase (ver AGENTS.md, seção "Arquitetura de histórico"), e uma NF referenciada por uma linha de `MovimentosTab` pode ser mais antiga que isso (o relatório de Movimentos olha até 1 ano pra trás). Sem o fallback, clicar numa linha "Saída (NF)" antiga devolveria "Nota fiscal não encontrada" mesmo ela existindo de verdade no Contabo — a MESMA classe de bug que a revisão da Task 2 já achou e corrigiu pra Ordens de Produção (ver ledger de progresso). Use os helpers já existentes (`complementarNotasFiscais`, `complementarNotaFiscalItems`, ambos de `lib/historico-contabo.ts`), no MESMO padrão que a própria página `/nota-fiscal/[id]` já usa:
 
 ```ts
+import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
+// ... (junto aos demais imports do topo do arquivo)
+
 export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: string } | DetalheNotaFiscal> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
 
-  const { data: nf } = await supabase
+  const { data: nfSupabase } = await supabase
     .from('notas_fiscais')
     .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, full_object')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .maybeSingle()
+
+  const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
   if (!nf) return { error: 'Nota fiscal não encontrada.' }
 
   const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
@@ -572,6 +577,10 @@ export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: stri
       .order('n_sequencia'),
     supabase.from('categorias_contabeis').select('id, nome').eq('loja_id', lojaId).eq('ativa', true).order('nome'),
   ])
+
+  const itens = nfSupabase
+    ? (itensRaw ?? [])
+    : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
 
   const { statusNF } = await import('@/lib/nf-status')
   const st = statusNF(nf.c_etapa, nf.full_object)
@@ -585,7 +594,7 @@ export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: stri
     statusLabel: st.label,
     statusTom: st.tom,
     chaveNfe: nf.c_chave_nfe,
-    itens: itensRaw ?? [],
+    itens,
     categorias: categorias ?? [],
   }
 }
