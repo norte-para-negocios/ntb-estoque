@@ -3,7 +3,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { complementarOrdensProducao } from '@/lib/historico-contabo'
+import { complementarOrdensProducao, complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
+import { statusNF } from '@/lib/nf-status'
 
 export type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
 
@@ -161,7 +162,47 @@ export type DetalheNotaFiscal = {
 }
 
 export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: string } | DetalheNotaFiscal> {
-  return { error: 'not implemented' } // substituído na Task 4
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+
+  const { data: nfSupabase } = await supabase
+    .from('notas_fiscais')
+    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, full_object')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+
+  const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
+  if (!nf) return { error: 'Nota fiscal não encontrada.' }
+
+  const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
+    supabase
+      .from('nota_fiscal_items')
+      .select('id, n_id_receb, n_sequencia, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id')
+      .eq('nota_fiscal_id', id)
+      .eq('loja_id', lojaId)
+      .order('n_sequencia'),
+    supabase.from('categorias_contabeis').select('id, nome').eq('loja_id', lojaId).eq('ativa', true).order('nome'),
+  ])
+
+  const itens = nfSupabase
+    ? (itensRaw ?? [])
+    : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
+
+  const st = statusNF(nf.c_etapa, nf.full_object)
+
+  return {
+    id: String(nf.id),
+    numero: nf.c_numero_nfe,
+    razaoSocial: nf.c_razao_social || nf.c_nome,
+    dataEmissao: nf.d_emissao_nfe,
+    valor: nf.n_valor_nfe,
+    statusLabel: st.label,
+    statusTom: st.tom,
+    chaveNfe: nf.c_chave_nfe,
+    itens,
+    categorias: categorias ?? [],
+  }
 }
 
 export type DetalheInventario = {
