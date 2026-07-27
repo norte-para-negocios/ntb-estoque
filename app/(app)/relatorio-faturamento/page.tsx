@@ -107,7 +107,7 @@ export default async function RelatorioFaturamentoPage({
   // "Ano passado" é o único chip que fixa um TETO explícito (os outros 3 vão
   // implicitamente até o mês atual) -- por isso mesFimChip existe só pra este caso.
   const mesIniChip =
-    periodo === 'ano_passado' ? `${anoAtualNum - 1}-01`
+    periodo === 'ano_passado' && !temPeriodoCustom ? `${anoAtualNum - 1}-01`
     : periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1))
     : null
   const mesFimChip = periodo === 'ano_passado' && !temPeriodoCustom ? `${anoAtualNum - 1}-12` : null
