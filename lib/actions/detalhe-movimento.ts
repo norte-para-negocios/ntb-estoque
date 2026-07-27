@@ -3,6 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { complementarOrdensProducao } from '@/lib/historico-contabo'
 
 export type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
 
@@ -23,12 +24,18 @@ export type DetalheOP = {
 export async function buscarDetalheOP(opId: number): Promise<{ error: string } | DetalheOP> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
-  const { data: op } = await supabase
+  const { data: opSupabase } = await supabase
     .from('ordens_producao')
-    .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, identificacao_d_dt_previsao, dt_conclusao_real, concluida, full_object')
+    .select('id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, identificacao_d_dt_previsao, dt_conclusao_real, concluida, full_object')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .maybeSingle()
+
+  // OPs mais antigas que 90 dias ja foram podadas do Supabase (so ordens_producao
+  // recentes ficam la, historico completo mora no Contabo) -- sem este fallback,
+  // clicar numa OP fora da janela quente sempre devolvia "nao encontrada", mesmo
+  // ela existindo de verdade. Mesmo padrao de app/(app)/nota-fiscal/[id]/page.tsx.
+  const op = opSupabase ?? (await complementarOrdensProducao([], { lojaId, id: opId }))[0] ?? null
   if (!op) return { error: 'Ordem de produção não encontrada.' }
 
   const { data: prod } = op.identificacao_n_cod_produto
