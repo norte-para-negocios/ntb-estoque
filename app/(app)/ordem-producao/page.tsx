@@ -11,6 +11,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -81,6 +83,7 @@ export default async function OrdemProducaoPage({
   const ultimoDiaMes = `${hojeISO.slice(0, 7)}-${String(new Date(anoAtual, mesAtual, 0).getDate()).padStart(2, '0')}`
   const dataInicio = sp.data_inicio ?? primeiroDiaMes
   const dataFinal = sp.data_final ?? ultimoDiaMes
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Este mês', dataIni: primeiroDiaMes, dataFim: ultimoDiaMes })
 
   // Filtro de status: concluida (S/N) ou status granular (prevista/pendente/atrasada).
   // op_concluido S/N mantido por compatibilidade; op_status e o novo filtro de 4 estados.
@@ -552,6 +555,7 @@ export default async function OrdemProducaoPage({
             { value: 'concluida', label: 'Concluídas', count: totConcluidasFinal },
           ]}
         />
+        <ChipsPeriodo basePath="/ordem-producao" opcoes={chipsPeriodo} />
         <ChipsFiltrosAtivos
           basePath="/ordem-producao"
           campos={campos}

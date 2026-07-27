@@ -10,6 +10,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -48,6 +50,7 @@ export default async function TransferenciaPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
   // Familias distintas para o select. PostgREST limita a 1000 linhas por
   // requisicao SEM avisar — lojas com mais de 1000 produtos com familia
@@ -311,6 +314,7 @@ export default async function TransferenciaPage({
             { value: 'C', label: 'Concluídas' },
           ]}
         />
+        <ChipsPeriodo basePath="/transferencia" opcoes={chipsPeriodo} />
         <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} persistirEm="/transferencia" />
       </ListaHeader>
 
