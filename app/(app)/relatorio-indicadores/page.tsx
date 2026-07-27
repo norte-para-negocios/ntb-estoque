@@ -39,7 +39,7 @@ const corMeta = (pct: number, meta: number) => (!Number.isFinite(pct) ? 'text-te
 export default async function RelatorioIndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -57,15 +57,29 @@ export default async function RelatorioIndicadoresPage({
   const filtroFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : null
   const familiasSel = valoresMulti(sp.familia)
   const produtoTermo = sp.produto?.trim() || null
-  const filtroAtivo = !!(familiasSel.length || produtoTermo)
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
-  const familiasOpcoes = await buscarFamilias()
+  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    buscarFamilias(),
+    supabaseLoja
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome)' },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   const supabase = createServiceClient()
@@ -137,6 +151,7 @@ export default async function RelatorioIndicadoresPage({
     p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',
     p_familias: familiasSel.length ? familiasSel : null,
     p_produto: produtoTermo,
+    p_local: localCod,
   })
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) {
@@ -167,7 +182,7 @@ export default async function RelatorioIndicadoresPage({
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl })
     const filtrados = filtrarItensCompras(itensFrios, {
-      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: null,
+      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: localCod,
     }, meta)
     for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
       if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue
@@ -212,6 +227,7 @@ export default async function RelatorioIndicadoresPage({
   const exportParams = new URLSearchParams()
   if (filtroIni) exportParams.set('data_inicio', filtroIni)
   if (filtroFim) exportParams.set('data_final', filtroFim)
+  if (localCod !== null) exportParams.set('local', String(localCod))
   const exportHref = `/relatorio-indicadores/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   return (
@@ -227,7 +243,7 @@ export default async function RelatorioIndicadoresPage({
               <FiltrosGaveta
                 basePath="/relatorio-indicadores"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '', local: sp.local ?? '' }}
                 persistirEm="/relatorio-indicadores"
               />
               <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">

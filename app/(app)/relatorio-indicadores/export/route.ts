@@ -45,8 +45,11 @@ export async function GET(request: Request) {
 
   // dim=cfop (em vez de tipo) pra excluir Ativo imobilizado: é investimento, não
   // gasto operacional (pedido do Ramon, reunião 06/07); mesma regra da tela.
+  const localParam = searchParams.get('local')
+  const localCod = localParam && !Number.isNaN(Number(localParam)) ? Number(localParam) : null
   const compRows = await rpcTodos<Linha>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: compIni, p_fim: compFim, p_dim: 'cfop',
+    p_local: localCod,
   })
   const comprasPorMes: Record<string, number> = {}
   for (const r of compRows) {
