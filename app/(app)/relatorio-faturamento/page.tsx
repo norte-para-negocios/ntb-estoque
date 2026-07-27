@@ -32,6 +32,7 @@ const CHIPS_PERIODO = [
   { value: '1', label: 'Este mês' },
   { value: '3', label: '3 meses' },
   { value: '6', label: '6 meses' },
+  { value: 'ano_passado', label: 'Ano passado' },
 ] as const
 
 // A ntb-frio-api limita /fat_cupons a 5000 linhas (LIMIT fixo no servidor,
@@ -102,9 +103,16 @@ export default async function RelatorioFaturamentoPage({
   const temPeriodoCustom = !!(dataIni || dataFim)
 
   const mesAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-  const mesIniChip = periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1)) : null
+  const anoAtualNum = Number(mesAtual.slice(0, 4))
+  // "Ano passado" é o único chip que fixa um TETO explícito (os outros 3 vão
+  // implicitamente até o mês atual) -- por isso mesFimChip existe só pra este caso.
+  const mesIniChip =
+    periodo === 'ano_passado' ? `${anoAtualNum - 1}-01`
+    : periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1))
+    : null
+  const mesFimChip = periodo === 'ano_passado' && !temPeriodoCustom ? `${anoAtualNum - 1}-12` : null
   const mesIni = dataIni ? dataIni.slice(0, 7) : mesIniChip
-  const mesFim = dataFim ? dataFim.slice(0, 7) : null
+  const mesFim = dataFim ? dataFim.slice(0, 7) : mesFimChip
 
   const dimParam = dim === 'tipo' ? '' : dim
   const chipHref = (p: string) => {
