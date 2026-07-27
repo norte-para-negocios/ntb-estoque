@@ -25,6 +25,8 @@ import {
 import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
 import Link from 'next/link'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => { const [a, m] = ym.split('-'); return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}` }
@@ -137,6 +139,8 @@ export default async function RelatorioMovimentacaoPage({
       { tipo: 'data', nome: 'data_final', label: 'Mês final (dia é ignorado)' },
     ]
 
+    const anoCorrenteChip = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+    const chipsPeriodoOp = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${anoCorrenteChip}-01-01`, dataFim: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }) })
     const header = (
       <ListaHeader>
         <PageHeader
@@ -167,6 +171,7 @@ export default async function RelatorioMovimentacaoPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-movimentacao" campos={campos} persistirEm="/relatorio-movimentacao-op" />
+        <ChipsPeriodo basePath="/relatorio-movimentacao" opcoes={chipsPeriodoOp} />
       </ListaHeader>
     )
 
@@ -452,6 +457,8 @@ export default async function RelatorioMovimentacaoPage({
       opcoes: locaisOpcoes.map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
     },
   ]
+  const hojeISOQtd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodoQtd = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISOQtd.slice(0, 4)}-01-01`, dataFim: hojeISOQtd })
   const header = (
     <ListaHeader>
       <PageHeader
@@ -481,13 +488,13 @@ export default async function RelatorioMovimentacaoPage({
         }
       />
       <ChipsFiltrosAtivos basePath="/relatorio-movimentacao" campos={campos} persistirEm="/relatorio-movimentacao" />
+      <ChipsPeriodo basePath="/relatorio-movimentacao" opcoes={chipsPeriodoQtd} />
     </ListaHeader>
   )
 
   const sentido = sp.sentido === 'entradas' ? 'entradas' : 'saidas'
-  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-  const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
-  const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
+  const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISOQtd.slice(0, 4)}-01-01`
+  const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISOQtd
 
   async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
     const PAGE = 1000

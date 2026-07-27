@@ -29,6 +29,8 @@ import {
 } from '@/lib/relatorio-frio-nf'
 import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { ShoppingCart, Download } from 'lucide-react'
 
@@ -97,6 +99,7 @@ export default async function RelatorioComprasPage({
 
   // Padrão: ano corrente (1º de janeiro até hoje), em America/Bahia.
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISO.slice(0, 4)}-01-01`, dataFim: hojeISO })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
   const familiasSel = valoresMulti(sp.familia)
@@ -331,6 +334,7 @@ export default async function RelatorioComprasPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-compras" campos={campos} persistirEm="/relatorio-compras" />
+        <ChipsPeriodo basePath="/relatorio-compras" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       {/* Total do período + abertura */}
