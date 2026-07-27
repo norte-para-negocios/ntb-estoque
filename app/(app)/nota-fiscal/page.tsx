@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
@@ -444,7 +445,17 @@ export default async function NotaFiscalPage({
             </>
           }
         />
-        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final']} persistirEm="/nota-fiscal" />
+        <ChipsStatus
+          basePath="/nota-fiscal"
+          param="status"
+          opcoes={[
+            { value: '', label: 'Todas' },
+            { value: 'CONCLUIDA', label: 'Concluídas' },
+            { value: 'PENDENTE', label: 'Pendentes' },
+            { value: 'CANCELADA', label: 'Canceladas' },
+          ]}
+        />
+        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final', 'status']} persistirEm="/nota-fiscal" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
