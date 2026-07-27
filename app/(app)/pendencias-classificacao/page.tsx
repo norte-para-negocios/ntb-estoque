@@ -13,17 +13,25 @@ import { descreverCFOP } from '@/lib/cfop'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ClipboardX, Download } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { periodoPendencias } from '@/lib/pendencias-periodo'
 
 const th = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 
-export default async function PendenciasClassificacaoPage() {
+export default async function PendenciasClassificacaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data_inicio?: string; data_final?: string }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
   const supabase = createServiceClient()
 
-  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-  const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
+  const sp = await searchParams
+  const { dataIni: ini12m, dataFim: dataFimPendencias } = periodoPendencias(sp)
 
   // Blocos 1 e 2: cadastro incompleto.
   type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null; inativo: boolean | null }
@@ -160,16 +168,22 @@ export default async function PendenciasClassificacaoPage() {
   const semCadastroLinhas = [...semCadastro.values()].sort((a, b) => b.valor - a.valor)
   const valorSemCadastro = semCadastroLinhas.reduce((s, l) => s + l.valor, 0)
 
-  // Bloco 4: cupons do Faturamento (PDV) sem produto identificado, por mes (ultimos 12).
+  // Bloco 4: cupons do Faturamento (PDV) sem produto identificado, por mes.
   const { data: naoIdentRows } = await supabase
     .from('faturamento_importado')
     .select('mes, valor')
     .eq('loja_id', lojaId)
     .eq('dimensao', 'produto')
     .eq('rotulo', 'Produto não identificado')
+    .gte('mes', ini12m.slice(0, 7))
+    .lte('mes', dataFimPendencias.slice(0, 7))
     .order('mes', { ascending: false })
-    .limit(12)
   const valorNaoIdent = (naoIdentRows ?? []).reduce((s, r) => s + Number(r.valor), 0)
+
+  const campos: CampoFiltro[] = [
+    { tipo: 'data', nome: 'data_inicio', label: 'Data inicial (padrão: 12 meses atrás)' },
+    { tipo: 'data', nome: 'data_final', label: 'Data final (padrão: hoje)' },
+  ]
 
   const Bloco = ({ titulo, valor, exportBloco, children }: { titulo: string; valor: number; exportBloco: string; children: ReactNode }) => (
     <section className="space-y-2">
@@ -178,7 +192,7 @@ export default async function PendenciasClassificacaoPage() {
         <span className="text-[13px] font-normal text-text-muted">
           R$ associado (12 meses): <span className="num font-medium text-text"><Money value={valor} /></span>
         </span>
-        <a href={`/pendencias-classificacao/export?bloco=${exportBloco}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}>
+        <a href={`/pendencias-classificacao/export?bloco=${exportBloco}&data_inicio=${ini12m}&data_final=${dataFimPendencias}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}>
           <Download className="size-4" /> CSV
         </a>
       </h2>
@@ -194,7 +208,16 @@ export default async function PendenciasClassificacaoPage() {
           icon={ClipboardX}
           description="O que arrumar no Omie pra sumir com os 'Sem cadastro/família/tipo' dos relatórios"
           voltarHref="/relatorios"
+          actions={
+            <FiltrosGaveta
+              basePath="/pendencias-classificacao"
+              campos={campos}
+              defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '' }}
+              persistirEm="/pendencias-classificacao"
+            />
+          }
         />
+        <ChipsFiltrosAtivos basePath="/pendencias-classificacao" campos={campos} persistirEm="/pendencias-classificacao" />
       </ListaHeader>
 
       <Bloco titulo={`Produtos sem família (${semFamilia.length})`} valor={valorSemFamilia} exportBloco="sem-familia">

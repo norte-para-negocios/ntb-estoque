@@ -3,13 +3,19 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
 import { buscarItensNFFrio, cfopEntradaDe } from '@/lib/relatorio-frio-nf'
 import { descreverCFOP } from '@/lib/cfop'
+import { periodoPendencias } from '@/lib/pendencias-periodo'
 
 // CSV simples (;) de cada bloco da tela de pendências: ?bloco=sem-familia |
 // sem-tipo | sem-cadastro. Recalcula do zero (mesmas fontes da página).
 export async function GET(req: Request) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
-  const bloco = new URL(req.url).searchParams.get('bloco') ?? 'sem-cadastro'
+  const sp = new URL(req.url).searchParams
+  const bloco = sp.get('bloco') ?? 'sem-cadastro'
+  const { dataIni: ini12m, dataFim: dataFimPendencias } = periodoPendencias({
+    data_inicio: sp.get('data_inicio') ?? undefined,
+    data_final: sp.get('data_final') ?? undefined,
+  })
   const supabase = createServiceClient()
 
   const csv = (linhas: string[][]): Response => {
@@ -42,8 +48,6 @@ export async function GET(req: Request) {
   if (bloco === 'sem-familia') {
     // Sugestão do cliente (Ramon): CFOP de entrada mais frequente ajuda a
     // decidir a classificação sem família cadastrada — mesma lógica da página.
-    const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-    const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
     const corte = limiteJanelaQuente()
     const { data: quentesCfop } = await supabase
       .from('nota_fiscal_items')
@@ -51,6 +55,7 @@ export async function GET(req: Request) {
       .eq('loja_id', lojaId)
       .is('notas_fiscais.deleted_at', null)
       .gte('notas_fiscais.d_emissao_nfe', corte)
+      .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
       .limit(50000)
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
@@ -93,17 +98,16 @@ export async function GET(req: Request) {
       .eq('loja_id', lojaId)
       .eq('dimensao', 'produto')
       .eq('rotulo', 'Produto não identificado')
+      .gte('mes', ini12m.slice(0, 7))
+      .lte('mes', dataFimPendencias.slice(0, 7))
       .order('mes', { ascending: false })
-      .limit(12)
     return csv([
       ['mes', 'valor'],
       ...(data ?? []).map((r) => [r.mes as string, Number(r.valor).toFixed(2).replace('.', ',')]),
     ])
   }
 
-  // sem-cadastro: itens de NF (12 meses, quente+frio) sem produto no cadastro.
-  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-  const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
+  // sem-cadastro: itens de NF (periodo escolhido, quente+frio) sem produto no cadastro.
   const corte = limiteJanelaQuente()
   type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor: string | null }
   // Só NF concluída (etapa 60) e não cancelada -- mesmo filtro da página
@@ -117,6 +121,7 @@ export async function GET(req: Request) {
     .is('notas_fiscais.deleted_at', null)
     .eq('notas_fiscais.c_etapa', '60')
     .gte('notas_fiscais.d_emissao_nfe', corte)
+    .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
     .limit(50000)
   const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { notas_fiscais: { c_razao_social: string | null; c_nome: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null } })[])
     .filter((r) => (r.notas_fiscais?.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
