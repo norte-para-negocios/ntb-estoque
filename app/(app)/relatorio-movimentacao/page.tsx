@@ -120,7 +120,8 @@ export default async function RelatorioMovimentacaoPage({
     // granularidade de MES; o dia escolhido no seletor e ignorado de proposito.
     // Sem filtro explicito, escopo pedido pelo usuario 2026-07-19: só ano
     // corrente (não precisa de nada do ano passado por padrão).
-    const anoCorrenteOp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+    const hojeISOOp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+    const anoCorrenteOp = hojeISOOp.slice(0, 4)
     const mesIniOp = sp.data_inicio ? sp.data_inicio.slice(0, 7) : `${anoCorrenteOp}-01`
     const mesFimOp = sp.data_final ? sp.data_final.slice(0, 7) : null
     const origens = [...new Set(rows.map((r) => r.origem))].sort()
@@ -139,8 +140,7 @@ export default async function RelatorioMovimentacaoPage({
       { tipo: 'data', nome: 'data_final', label: 'Mês final (dia é ignorado)' },
     ]
 
-    const anoCorrenteChip = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
-    const chipsPeriodoOp = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${anoCorrenteChip}-01-01`, dataFim: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }) })
+    const chipsPeriodoOp = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${anoCorrenteOp}-01-01`, dataFim: hojeISOOp })
     const header = (
       <ListaHeader>
         <PageHeader

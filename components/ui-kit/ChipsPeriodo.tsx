@@ -41,13 +41,12 @@ export function ChipsPeriodo({
     <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
       {opcoes.map((o) => {
         // Ativo = os 2 params atuais batem com este chip (ou, pro chip default
-        // vazio, nenhum dos dois está setado -- período customizado da gaveta
-        // sempre desativa todos os chips, igual ao comportamento já existente
-        // em Faturamento).
-        const ativo =
-          o.value === '' && !o.dataIni && !o.dataFim
-            ? !iniAtual && !fimAtual
-            : iniAtual === o.dataIni && fimAtual === o.dataFim
+        // -- value === '', mesmo quando ele carrega datas concretas -- nenhum
+        // dos dois está setado na URL, já que ausência de params sempre
+        // significa "mostrando o default da página"). Período customizado da
+        // gaveta sempre desativa todos os chips, igual ao comportamento já
+        // existente em Faturamento.
+        const ativo = o.value === '' ? !iniAtual && !fimAtual : iniAtual === o.dataIni && fimAtual === o.dataFim
         return (
           <button
             key={o.value || '_default'}
