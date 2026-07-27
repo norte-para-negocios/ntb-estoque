@@ -36,6 +36,13 @@ if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-movimentos; fi
 # faturamento_importado ha mais de uma semana. Roda a cada hora (bloco 0),
 # mesmo ritmo de sync-produtos/sync-previsao/sync-movimentos.
 if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-faturamento; fi
+# Achado real (usuario reportou "Movimentacao so ate abril" 27/07): a RPC
+# relatorio_movimentacao_matriz calculava "preco mais recente por produto" ao
+# vivo (CTE cara, estourava timeout de 8s ocasionalmente e a tela caia em
+# silencio pro historico frio). Migration 090 tirou isso do caminho de leitura
+# pra uma tabela cache (produto_preco_recente) -- esse endpoint mantem ela
+# atualizada. E so um refresh local (nao chama o Omie), roda rapido.
+if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-preco-movimentacao; fi
 
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
