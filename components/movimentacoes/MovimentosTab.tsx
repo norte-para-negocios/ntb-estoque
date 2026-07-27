@@ -4,7 +4,6 @@ import { requirePermissao } from '@/lib/auth'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { dataOmieBR } from '@/lib/data-bahia'
 import type { LojaOmie } from '@/lib/omie/client'
-import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
@@ -13,7 +12,7 @@ import { FiltroLocalMovimentos } from '@/components/movimentacoes/FiltroLocalMov
 import { FiltroFamiliaMovimentos } from '@/components/movimentacoes/FiltroFamiliaMovimentos'
 import { FiltroTipoMovimentos } from '@/components/movimentacoes/FiltroTipoMovimentos'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
-import { LinhaMovimentoTipo } from '@/components/movimentacoes/LinhaMovimentoTipo'
+import { ListaMovimentos } from '@/components/movimentacoes/ListaMovimentos'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { statusNF } from '@/lib/nf-status'
 import {
@@ -42,7 +41,7 @@ function fmtQtd(n: number): string {
 
 type SP = { data_inicio?: string; data_final?: string; produto?: string; local?: string; familia?: string; tipo?: string }
 
-type LinhaDetalhe = {
+export type LinhaDetalhe = {
   chave: string
   data: string
   tipo: string
@@ -451,78 +450,19 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           hint="Digite o nome ou código do produto para ver todos os tipos de movimentação."
         />
       ) : (
-        <Lista
+        <ListaMovimentos
           linhas={movDetalhes}
-          chaveLinha={(m) => m.chave}
-          colunas={[
-            {
-              label: 'Data',
-              larguraDesktop: 'w-36',
-              render: (m) => (
-                <span className="num text-[12px] text-text-muted">{fmtDataDetalhe(m.data)}</span>
-              ),
-            },
-            {
-              label: 'Tipo',
-              primaria: true,
-              larguraDesktop: 'w-44',
-              render: (m) => {
-                const t = TIPOS[m.tipo] ?? { label: m.tipo, cor: 'text-text-muted' }
-                return <LinhaMovimentoTipo label={t.label} cor={t.cor} obs={m.obs} origem={m.origem} />
-              },
-            },
-            {
-              label: 'Quantidade',
-              alinhar: 'right',
-              larguraDesktop: 'w-28',
-              render: (m) => {
-                const negativo = m.tipo === 'SAI' || m.tipo === 'TPQ'
-                const cor = negativo ? 'text-err' : m.tipo === 'ENT' || m.tipo === 'OP' ? 'text-ok' : 'text-text'
-                const sinal = negativo ? '-' : m.tipo === 'ENT' || m.tipo === 'OP' ? '+' : ''
-                return (
-                  <span className={`num font-medium ${cor}`}>
-                    {sinal}{fmtQtd(m.quan)}
-                  </span>
-                )
-              },
-            },
-            {
-              label: 'Local / Destino',
-              larguraDesktop: 'w-48',
-              render: (m) => {
-                if (m.local == null) return <span className="text-text-muted">-</span>
-                const nomeOrig = locaisMap.get(m.local) ?? String(m.local)
-                const nomeDest = m.destino != null ? (locaisMap.get(m.destino) ?? String(m.destino)) : null
-                return (
-                  <span className="text-[12px] text-text-muted">
-                    {nomeOrig}
-                    {nomeDest && <span> → {nomeDest}</span>}
-                  </span>
-                )
-              },
-            },
-            {
-              label: 'Status',
-              larguraDesktop: 'w-28',
-              render: (m) => {
-                const cor = m.status === 'Erro' ? 'text-err' : m.status === 'Concluido' ? 'text-ok' : 'text-text-muted'
-                return <span className={`text-[11px] ${cor}`}>{m.status ?? '-'}</span>
-              },
-            },
-          ]}
-          vazio={
-            <EmptyState
-              icon={ArrowLeftRight}
-              title="Sem movimentações"
-              hint={
-                idsProdDetalhes.length === 0
-                  ? 'Produto não encontrado no cadastro.'
-                  : localFiltro
-                    ? 'Nenhum ajuste registrado neste local e período. OP/NF/inventário não têm local registrado, por isso somem com o filtro de local ativo.'
-                    : 'Nenhuma OP ou movimento encontrado neste período para este produto.'
-              }
-            />
-          }
+          TIPOS={TIPOS}
+          locaisMap={locaisMap}
+          vazioProps={{
+            title: 'Sem movimentações',
+            hint:
+              idsProdDetalhes.length === 0
+                ? 'Produto não encontrado no cadastro.'
+                : localFiltro
+                  ? 'Nenhum ajuste registrado neste local e período. OP/NF/inventário não têm local registrado, por isso somem com o filtro de local ativo.'
+                  : 'Nenhuma OP ou movimento encontrado neste período para este produto.',
+          }}
         />
       )}
     </div>
