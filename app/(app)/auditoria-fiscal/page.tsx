@@ -22,6 +22,8 @@ import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
 import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { btnClass } from '@/components/ui-kit/Button'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { ShieldCheck, Download } from 'lucide-react'
 
 const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
@@ -47,6 +49,7 @@ export default async function AuditoriaFiscalPage({
 
   const sp = await searchParams
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISO.slice(0, 4)}-01-01`, dataFim: hojeISO })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
 
@@ -211,6 +214,7 @@ export default async function AuditoriaFiscalPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/auditoria-fiscal" campos={campos} persistirEm="/auditoria-fiscal" />
+        <ChipsPeriodo basePath="/auditoria-fiscal" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

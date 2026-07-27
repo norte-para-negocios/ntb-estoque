@@ -14,6 +14,8 @@ import { buscarItensNFFrio, filtrarItensCompras, agregarComprasMatriz } from '@/
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { descreverCFOP } from '@/lib/cfop'
 import type { LojaOmie } from '@/lib/omie/client'
 import { Scale, Download } from 'lucide-react'
@@ -56,6 +58,7 @@ export default async function RelatorioIndicadoresPage({
   const familiasSel = valoresMulti(sp.familia)
   const produtoTermo = sp.produto?.trim() || null
   const filtroAtivo = !!(familiasSel.length || produtoTermo)
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
   const familiasOpcoes = await buscarFamilias()
   const campos: CampoFiltro[] = [
@@ -234,6 +237,7 @@ export default async function RelatorioIndicadoresPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-indicadores" campos={campos} persistirEm="/relatorio-indicadores" />
+        <ChipsPeriodo basePath="/relatorio-indicadores" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
