@@ -58,7 +58,10 @@ export async function GET(req: Request) {
       .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
       .limit(50000)
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
+    // Trava no menor entre corteExcl e o teto escolhido pelo usuário -- ver
+    // comentário equivalente em pendencias-classificacao/page.tsx (Task 7).
+    const dataFinalFriaCfop = corteExcl < dataFimPendencias ? corteExcl : dataFimPendencias
+    const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFriaCfop })
     const cfopPorProduto = new Map<number, Map<string, number>>()
     const somar = (codProd: number | null, cfop: string | null) => {
       if (codProd == null || !cfop) return
@@ -131,7 +134,10 @@ export async function GET(req: Request) {
       fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
     }))
   const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-  const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
+  // Trava no menor entre corteExcl e o teto escolhido pelo usuário -- ver
+  // comentário equivalente em pendencias-classificacao/page.tsx (Task 7).
+  const dataFinalFria = corteExcl < dataFimPendencias ? corteExcl : dataFimPendencias
+  const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria })
   const frios: ItemNF[] = friosRaw
     .filter((it) => it.nf_c_etapa === '60' && !it.nf_cancelada)
     .map((it) => ({

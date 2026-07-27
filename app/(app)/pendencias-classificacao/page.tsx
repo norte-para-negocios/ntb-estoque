@@ -82,6 +82,7 @@ export default async function PendenciasClassificacaoPage({
         .is('notas_fiscais.deleted_at', null)
         .eq('notas_fiscais.c_etapa', '60')
         .gte('notas_fiscais.d_emissao_nfe', corte)
+        .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
         .order('id')
         .range(p * 1000, p * 1000 + 999)
       if (!data?.length) break
@@ -90,10 +91,16 @@ export default async function PendenciasClassificacaoPage({
     }
     return acc
   }
+  // Achado real (auditoria Task 7): usar `corteExcl` fixo aqui ignorava o teto
+  // (`dataFimPendencias`) escolhido pelo usuário -- um `data_final` de 1 ano
+  // atrás ainda incluía ~9 meses de dado recente (até hoje) na fatia fria,
+  // silenciosamente. Trava no menor dos dois, mesmo padrão de
+  // `relatorio-compras/page.tsx`.
+  const dataFinalFria = corteExcl < dataFimPendencias ? corteExcl : dataFimPendencias
   const [todos, quentesRaw, friosRaw] = await Promise.all([
     carregarTodosProdutos(),
     carregarQuentes(),
-    buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl }),
+    buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria }),
   ])
   // Achado real (usuário 2026-07-22): produto inativo não precisa de
   // classificação (não vai mais ser comprado/vendido) -- estava aparecendo
