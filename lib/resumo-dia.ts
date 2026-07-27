@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
-import { NAO_CANCELADA_OR } from '@/lib/nf-status'
+import { NAO_CANCELADA_OR, statusNF } from '@/lib/nf-status'
 import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import {
@@ -263,7 +263,7 @@ async function listarCategoria(
 
   if (cat === 'notas') {
     const { data: notasQuentes } = await supabase.from('notas_fiscais')
-      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
+      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, full_object, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
       .eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
@@ -281,13 +281,22 @@ async function listarCategoria(
       for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
       const completos = await Promise.all(
         [...porLoja.entries()].map(([lojaId, itens]) =>
-          complementarNotasFiscais(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+          complementarNotasFiscais(itens, {
+            lojaId,
+            dataInicio: dataIni,
+            dataFinal: dataFim,
+            // Achado real (auditoria 2026-07-26): o endpoint do Contabo não sabe
+            // filtrar por status no servidor -- sem isso, NF pendente/cancelada
+            // vinda do histórico entrava na lista e na soma de valorNotas, ao
+            // contrário da fatia quente (que já filtra .eq('c_etapa','60').or(NAO_CANCELADA_OR)).
+            filtrarFrias: (n) => statusNF(n.c_etapa, n.full_object).label === 'Concluída',
+          })
         )
       )
       data = completos.flat()
     }
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
-    const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
+    const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; full_object: unknown; loja_id: number }[]
     lista = {
       colunas: [{ label: 'Emissão' }, { label: 'NFe' }, { label: 'Fornecedor' }, ...(lojaTag ? [lojaTag] : []), { label: 'Valor', alinharDir: true }],
       total: contagem.notas,
@@ -297,7 +306,7 @@ async function listarCategoria(
           ...(lojas ? [lojas.get(n.loja_id) ?? '-'] : []),
           fmtMoeda(Number(n.n_valor_nfe ?? 0)),
         ],
-        status: n.c_etapa === '60' ? { label: 'Concluída', tom: 'ok' } : { label: 'Pendente', tom: 'warn' },
+        status: statusNF(n.c_etapa, n.full_object),
       })),
     }
     const fornec = new Map<string, number>()
@@ -662,7 +671,9 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   const errosAcao = (errosRaw ?? []).filter((e) => explicarErroOmie(e.error_message as string | null)?.tipo === 'acao')
   if (errosAcao.length) itens.push({ titulo: 'Erros que precisam de ação', tom: 'err', contagem: errosAcao.length, href: '/log' })
 
-  // 2. NF travada (etapa < 60 ha mais de 24h).
+  // 2. NF travada (etapa < 60 ha mais de 24h, e NAO cancelada -- uma NF
+  // cancelada nao precisa de nenhuma acao humana; achado real, auditoria
+  // 2026-07-26: sem NAO_CANCELADA_OR esse card inflava com NF ja cancelada).
   const ontemISO = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
   const { count: nfTravada } = await supabase
     .from('notas_fiscais')
@@ -670,6 +681,7 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
     .in('loja_id', lojaIds)
     .is('deleted_at', null)
     .neq('c_etapa', '60')
+    .or(NAO_CANCELADA_OR)
     .lte('d_emissao_nfe', ontemISO)
   if (nfTravada) itens.push({ titulo: 'Notas fiscais travadas (etapa não concluída)', tom: 'warn', contagem: nfTravada, href: '/nota-fiscal?status=40' })
 

@@ -106,24 +106,33 @@ export async function GET(req: Request) {
   const ini12m = `${Number(hojeISO.slice(0, 4)) - 1}${hojeISO.slice(4, 10)}`
   const corte = limiteJanelaQuente()
   type ItemNF = { n_id_produto: number | null; c_descricao_produto: string | null; c_codigo_produto: string | null; n_qtde_nfe: number | null; n_preco_unit: number | null; fornecedor: string | null }
+  // Só NF concluída (etapa 60) e não cancelada -- mesmo filtro da página
+  // (pendencias-classificacao/page.tsx) e de Compras/Auditoria (migration 083).
+  // Achado real (auditoria 2026-07-26): este export somava R$ de NF pendente
+  // e cancelada, diferente do que a própria tela mostra.
   const { data: quentesRaw } = await supabase
     .from('nota_fiscal_items')
-    .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome)')
+    .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome, full_object)')
     .eq('loja_id', lojaId)
     .is('notas_fiscais.deleted_at', null)
+    .eq('notas_fiscais.c_etapa', '60')
     .gte('notas_fiscais.d_emissao_nfe', corte)
     .limit(50000)
-  const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { notas_fiscais: { c_razao_social: string | null; c_nome: string | null } })[]).map((r) => ({
-    n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
-    n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
-    fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
-  }))
+  const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { notas_fiscais: { c_razao_social: string | null; c_nome: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null } })[])
+    .filter((r) => (r.notas_fiscais?.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
+    .map((r) => ({
+      n_id_produto: r.n_id_produto, c_descricao_produto: r.c_descricao_produto, c_codigo_produto: r.c_codigo_produto,
+      n_qtde_nfe: r.n_qtde_nfe, n_preco_unit: r.n_preco_unit,
+      fornecedor: r.notas_fiscais?.c_razao_social || r.notas_fiscais?.c_nome || null,
+    }))
   const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
   const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: corteExcl })
-  const frios: ItemNF[] = friosRaw.map((it) => ({
-    n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
-    n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
-  }))
+  const frios: ItemNF[] = friosRaw
+    .filter((it) => it.nf_c_etapa === '60' && !it.nf_cancelada)
+    .map((it) => ({
+      n_id_produto: it.n_id_produto, c_descricao_produto: it.c_descricao_produto, c_codigo_produto: it.c_codigo_produto,
+      n_qtde_nfe: Number(it.n_qtde_nfe) || 0, n_preco_unit: Number(it.n_preco_unit) || 0, fornecedor: it.nf_fornecedor ?? null,
+    }))
 
   const codigosCadastro = new Set(todos.map((p) => Number(p.codigo_produto)))
   const grupos = new Map<string, { descricao: string; codigo: string; fornecedor: string; ocorrencias: number; valor: number }>()
