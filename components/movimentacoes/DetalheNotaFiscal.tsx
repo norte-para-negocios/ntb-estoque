@@ -11,7 +11,12 @@ function fmtData(d: string | null): string {
 }
 
 function fmtMoeda(n: number | null): string {
-  return n != null ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'
+  // Number(n) e essencial: NF vinda do fallback frio (Contabo) tem n_valor_nfe
+  // como numeric(20,6) -- o driver pg do servidor Contabo so normaliza bigint/date
+  // (ver AGENTS.md), entao numeric chega como STRING em runtime apesar do tipo TS
+  // dizer number. Sem o cast, toLocaleString cai no Object.prototype (ignora os
+  // argumentos) e mostra o valor cru ("1234.56") em vez de "R$ 1.234,56".
+  return n != null ? Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'
 }
 
 export function DetalheNotaFiscal({ dados }: { dados: DetalheNotaFiscalData }) {
