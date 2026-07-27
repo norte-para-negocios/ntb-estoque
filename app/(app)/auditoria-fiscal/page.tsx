@@ -9,6 +9,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -52,6 +53,7 @@ export default async function AuditoriaFiscalPage({
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISO.slice(0, 4)}-01-01`, dataFim: hojeISO })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
+  const familiasFiltro = valoresMulti(sp.familia)
 
   const supabase = createServiceClient()
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
@@ -61,7 +63,7 @@ export default async function AuditoriaFiscalPage({
   const iniRpc = ini < corte ? corte : ini
   const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim,
-    p_produto: sp.produto || null, p_familia: sp.familia || null,
+    p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null,
     p_fornecedor: sp.fornecedor || null, p_local: localCod,
   })
   const linhas = (cfopRaw ?? []) as LinhaCFOP[]
@@ -79,7 +81,7 @@ export default async function AuditoriaFiscalPage({
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
     const filtrados = filtrarItensAuditoria(itensFrios, {
-      produto: sp.produto || null, familia: sp.familia || null, fornecedor: sp.fornecedor || null, local: localCod,
+      produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
     }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
@@ -128,7 +130,7 @@ export default async function AuditoriaFiscalPage({
       .rpc('relatorio_auditoria_fiscal_itens', {
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel || SEM,
         p_fornecedor: sp.fornecedor || null,
-        p_produto: sp.produto || null, p_familia: sp.familia || null, p_local: localCod,
+        p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null, p_local: localCod,
       })
       .range(0, 299)
     itensSel = (data ?? []) as LinhaItem[]
@@ -144,7 +146,7 @@ export default async function AuditoriaFiscalPage({
         meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
       }
       const filtrados = filtrarItensAuditoria(itensFrios, {
-        produto: sp.produto || null, familia: sp.familia || null, fornecedor: sp.fornecedor || null, local: localCod,
+        produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)
       const friosDrill = mapearAuditoriaItens(filtrados, { cfopDoc: cfopDocSel, cfopEntrada: cfopEntSel || SEM }) as LinhaItem[]
       itensSel = [...itensSel, ...friosDrill]
@@ -166,7 +168,7 @@ export default async function AuditoriaFiscalPage({
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
-    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
     { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
     {
       tipo: 'select',

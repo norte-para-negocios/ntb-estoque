@@ -269,7 +269,7 @@ export function mapearComprasDetalhe(itens: ItemNFFrio[], meta: MetaProdutoNF): 
 
 export type FiltrosAuditoriaFrio = {
   produto: string | null
-  familia: string | null
+  familias: string[]
   fornecedor: string | null
   local: number | null
 }
@@ -284,11 +284,11 @@ export function filtrarItensAuditoria(
     if (it.nf_c_etapa !== '60') return false
     if (it.nf_cancelada) return false
     if (f.produto && !ilike(it.c_descricao_produto, f.produto) && !ilike(it.c_codigo_produto, f.produto)) return false
-    if (f.familia) {
+    if (f.familias.length) {
       const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
       const fam = m?.familia ?? null
-      if (f.familia === SEM) { if (fam !== null) return false }
-      else if (fam !== f.familia) return false
+      const casa = (fam !== null && f.familias.includes(fam)) || (f.familias.includes(SEM) && fam === null)
+      if (!casa) return false
     }
     if (f.fornecedor) {
       if (f.fornecedor === SEM) { if (it.nf_fornecedor != null) return false }
