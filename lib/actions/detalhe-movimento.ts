@@ -85,6 +85,11 @@ export type DetalheTransferencia = {
   itens: import('@/components/transferencia/ContagemTransferencia').ItemMovimento[]
 }
 
+// Sem fallback Contabo (ao contrario de buscarDetalheOP/buscarDetalheNotaFiscal):
+// `transferencias` NAO e uma das tabelas espelhadas no Contabo (o historico frio
+// so cobre movimentos, movimentos_historico, notas_fiscais, nota_fiscal_items,
+// ordens_producao, webhooks -- ver AGENTS.md). Nao ha fonte fria pra completar,
+// entao le so o Supabase, igual a tela de referencia /transferencia/[id]/contagem.
 export async function buscarDetalheTransferencia(id: number): Promise<{ error: string } | DetalheTransferencia> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
@@ -172,6 +177,9 @@ export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: stri
     .eq('loja_id', lojaId)
     .maybeSingle()
 
+  // Fallback Contabo (mesma razao de buscarDetalheOP): notas_fiscais/nota_fiscal_items
+  // sao podadas a 90 dias no Supabase, mas MovimentosTab lista NF de ate 1 ano atras
+  // (fatia fria) -- sem isto, clicar numa "Saida (NF)" antiga daria "nao encontrada".
   const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
   if (!nf) return { error: 'Nota fiscal não encontrada.' }
 
@@ -216,6 +224,10 @@ export type DetalheInventario = {
   itens: import('@/components/inventario/ContagemInventario').ItemContagem[]
 }
 
+// Sem fallback Contabo (mesma razao de buscarDetalheTransferencia): `inventarios`
+// e `inventario_items` NAO estao no conjunto de tabelas espelhadas no Contabo, e a
+// propria lista de SLD em MovimentosTab so vem do Supabase (invItems sem
+// complementarMovimentos), entao toda linha de inventario exibida ja existe aqui.
 export async function buscarDetalheInventario(id: number): Promise<{ error: string } | DetalheInventario> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
