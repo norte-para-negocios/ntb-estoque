@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { OrigemMovimento } from '@/components/movimentacoes/DetalheMovimentoSheet'
 import { requirePermissao } from '@/lib/auth'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { dataOmieBR } from '@/lib/data-bahia'
@@ -12,6 +13,7 @@ import { FiltroLocalMovimentos } from '@/components/movimentacoes/FiltroLocalMov
 import { FiltroFamiliaMovimentos } from '@/components/movimentacoes/FiltroFamiliaMovimentos'
 import { FiltroTipoMovimentos } from '@/components/movimentacoes/FiltroTipoMovimentos'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
+import { LinhaMovimentoTipo } from '@/components/movimentacoes/LinhaMovimentoTipo'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { statusNF } from '@/lib/nf-status'
 import {
@@ -49,6 +51,7 @@ type LinhaDetalhe = {
   destino: number | null
   obs: string | null
   status: string | null
+  origem?: OrigemMovimento
 }
 
 const TIPOS: Record<string, { label: string; cor: string }> = {
@@ -164,7 +167,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       const [{ data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
         supabase
           .from('movimentos')
-          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status, id_ajuste')
+          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status, id_ajuste, transferencia_id')
           .eq('loja_id', lojaId)
           .in('id_prod', idsProdDetalhes)
           .gte('data', ini)
@@ -192,7 +195,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         // evita esse plano ruim (validado: 6/6 execucoes rapidas sem filtro no embed).
         supabase
           .from('nota_fiscal_items')
-          .select('id, n_id_receb, n_sequencia, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
+          .select('id, nota_fiscal_id, n_id_receb, n_sequencia, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
           .eq('loja_id', lojaId)
           .in('n_id_produto', idsProdDetalhes)
           .limit(500),
@@ -204,16 +207,16 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(200),
       ])
 
-      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null }
+      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null; transferencia_id: number | null }
       type RawOP = { id: number; identificacao_n_cod_op: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
-      type RawNFI = { id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
+      type RawNFI = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
       // de join -- aninhado vs colunas nf_* -- normalizados pra este shape comum).
       // n_id_receb/n_sequencia (chave natural do item, mesma usada em
       // complementarNotaFiscalItems): o `id` sozinho nao serve mais pra dedupe
       // quente+frio (Contabo gera seu proprio bigserial `id`, independente do
       // Supabase, desde o dual-write de NF -- ver historico-contabo.ts).
-      type NFIItem = { id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
+      type NFIItem = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
       // /nota_fiscal_items do Contabo so junta d_emissao_nfe/c_numero_nfe/c_natureza_operacao
       // (colunas nf_*) -- nao devolve etapa/cancelamento do cabecalho, por isso
       // `nota_fiscal_id` e usado abaixo pra cruzar com um fetch a parte de /notas_fiscais.
@@ -235,7 +238,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         .map((nfi) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
           return {
-            id: nfi.id, n_id_receb: nfi.n_id_receb, n_sequencia: nfi.n_sequencia, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
+            id: nfi.id, nota_fiscal_id: nfi.nota_fiscal_id, n_id_receb: nfi.n_id_receb, n_sequencia: nfi.n_sequencia, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
             d_emissao_nfe: nf?.d_emissao_nfe ?? null, c_numero_nfe: nf?.c_numero_nfe ?? null, c_natureza_operacao: nf?.c_natureza_operacao ?? null,
           }
         })
@@ -263,7 +266,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         const friosNormalizados: NFIItem[] = friosDoProduto
           .filter((f) => notasValidas.has(f.nota_fiscal_id))
           .map((f) => ({
-            id: f.id, n_id_receb: f.n_id_receb, n_sequencia: f.n_sequencia, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
+            id: f.id, nota_fiscal_id: f.nota_fiscal_id, n_id_receb: f.n_id_receb, n_sequencia: f.n_sequencia, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
             d_emissao_nfe: f.nf_d_emissao_nfe, c_numero_nfe: f.nf_c_numero_nfe, c_natureza_operacao: f.nf_c_natureza_operacao,
           }))
         // Chave natural n_id_receb+n_sequencia (id do ITEM, nao da nota) -- mesma
@@ -284,6 +287,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         destino: m.codigo_local_estoque_destino != null ? Number(m.codigo_local_estoque_destino) : null,
         obs: m.obs,
         status: m.status,
+        origem: m.tipo === 'TRF' && m.transferencia_id != null ? { tipo: 'transferencia', id: m.transferencia_id } : undefined,
       }))
 
       const opLines: LinhaDetalhe[] = ((ops ?? []) as RawOP[]).map((op) => ({
@@ -295,6 +299,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         destino: null,
         obs: `OP ${op.identificacao_c_num_op || op.num_ordem || op.id}${op.concluida ? '' : ' (em andamento)'}`,
         status: op.concluida ? 'Concluido' : 'Iniciado',
+        origem: { tipo: 'op', id: op.id },
       }))
 
       const entLines: LinhaDetalhe[] = nfItems
@@ -311,6 +316,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           destino: null,
           obs: [nfi.c_numero_nfe ? `NF ${nfi.c_numero_nfe}` : null, nfi.c_natureza_operacao ?? null].filter(Boolean).join(' — ') || 'Saída (NF)',
           status: 'Concluido',
+          origem: { tipo: 'nota_fiscal', id: nfi.nota_fiscal_id },
         }))
 
       const sldLines: LinhaDetalhe[] = ((invItems ?? []) as unknown as RawInv[])
@@ -330,6 +336,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
             destino: null,
             obs: 'Inventário',
             status: 'Concluido',
+            origem: inv?.id != null ? { tipo: 'inventario', id: inv.id } : undefined,
           }
         })
 
@@ -461,16 +468,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
               larguraDesktop: 'w-44',
               render: (m) => {
                 const t = TIPOS[m.tipo] ?? { label: m.tipo, cor: 'text-text-muted' }
-                return (
-                  <span>
-                    <span className={`font-medium text-[13px] ${t.cor}`}>{t.label}</span>
-                    {m.obs && (
-                      <span className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-text-muted">
-                        {m.obs}
-                      </span>
-                    )}
-                  </span>
-                )
+                return <LinhaMovimentoTipo label={t.label} cor={t.cor} obs={m.obs} origem={m.origem} />
               },
             },
             {
