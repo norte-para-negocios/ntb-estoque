@@ -85,7 +85,66 @@ export type DetalheTransferencia = {
 }
 
 export async function buscarDetalheTransferencia(id: number): Promise<{ error: string } | DetalheTransferencia> {
-  return { error: 'not implemented' } // substituído na Task 3
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
+
+  const { data: trans } = await supabase
+    .from('transferencias')
+    .select('id, data, codigo_local_origem, codigo_local_destino, status, user_id')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+  if (!trans) return { error: 'Transferência não encontrada.' }
+
+  const { data: responsavel } = trans.user_id
+    ? await supabase.from('profiles').select('name').eq('id', trans.user_id).maybeSingle()
+    : { data: null }
+
+  const { data: movimentos } = await supabase
+    .from('movimentos')
+    .select('id, id_prod, quan, status, descricao_status')
+    .eq('transferencia_id', id)
+    .order('id')
+
+  const codigos = [...new Set((movimentos ?? []).map((m) => m.id_prod))]
+  const { data: produtos } = codigos.length
+    ? await supabase.from('produtos').select('codigo_produto, codigo, descricao, unidade').eq('loja_id', lojaId).in('codigo_produto', codigos)
+    : { data: [] }
+  const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
+
+  const itens = (movimentos ?? []).map((m) => {
+    const p = prodMap.get(m.id_prod)
+    return {
+      id: m.id,
+      id_prod: m.id_prod,
+      descricao: formatarNomeProduto(p?.descricao) || `Produto ${m.id_prod}`,
+      codigo: p?.codigo || String(m.id_prod),
+      unidade: p?.unidade ?? null,
+      quan: m.quan,
+      status: m.status,
+      descricao_status: (m as { descricao_status?: string | null }).descricao_status ?? null,
+    }
+  })
+
+  const { data: locais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+    .in('codigo_local_estoque', [trans.codigo_local_origem, trans.codigo_local_destino].filter((v): v is number => v != null))
+  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+
+  return {
+    id: trans.id,
+    origem: localMap.get(trans.codigo_local_origem) || String(trans.codigo_local_origem),
+    destino: localMap.get(trans.codigo_local_destino) || String(trans.codigo_local_destino),
+    data: trans.data,
+    responsavel: responsavel?.name ?? null,
+    status: trans.status,
+    finalizado: trans.status === 'Concluido',
+    podeEditar,
+    itens,
+  }
 }
 
 export type DetalheNotaFiscal = {
