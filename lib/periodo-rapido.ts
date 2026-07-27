@@ -33,5 +33,9 @@ export function chipsPeriodoPadrao(extra?: ChipPeriodoOpcao): ChipPeriodoOpcao[]
     { value: '6m', label: '6 meses', dataIni: primeiroDiaMesAtras(hoje, 5), dataFim: hoje },
     { value: 'ano_passado', label: 'Ano passado', dataIni: `${anoAtual - 1}-01-01`, dataFim: `${anoAtual - 1}-12-31` },
   ]
-  return extra ? [extra, ...chips] : chips
+  if (!extra) return chips
+  // Evita 2 chips com o mesmo label visível (ex.: uma tela cujo próprio
+  // default também se chama "Este mês") -- remove do array fixo qualquer
+  // chip cujo label colida com o do `extra` antes de prependar.
+  return [extra, ...chips.filter((c) => c.label !== extra.label)]
 }
