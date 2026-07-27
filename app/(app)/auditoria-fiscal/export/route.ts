@@ -40,6 +40,7 @@ export async function GET(request: Request) {
         .from('produtos')
         .select('codigo_produto, tipo_item, descricao_familia')
         .eq('loja_id', lojaId)
+        .order('id', { ascending: true })
         .range(from, from + 999)
       if (!data?.length) break
       prodMetaRaw.push(...data)
