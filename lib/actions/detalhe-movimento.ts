@@ -2,6 +2,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
 
 export type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
 
@@ -20,7 +21,48 @@ export type DetalheOP = {
 }
 
 export async function buscarDetalheOP(opId: number): Promise<{ error: string } | DetalheOP> {
-  return { error: 'not implemented' } // substituído na Task 2
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const { data: op } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, identificacao_d_dt_previsao, dt_conclusao_real, concluida, full_object')
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+  if (!op) return { error: 'Ordem de produção não encontrada.' }
+
+  const { data: prod } = op.identificacao_n_cod_produto
+    ? await supabase.from('produtos').select('descricao, unidade').eq('loja_id', lojaId).eq('codigo_produto', op.identificacao_n_cod_produto).maybeSingle()
+    : { data: null }
+
+  const itensDetalhes = (op.full_object as { itensDetalhes?: { nIdProdutoMalha: number; nQtde: number }[] } | null)?.itensDetalhes ?? []
+  const codsIngrediente = [...new Set(itensDetalhes.map((i) => i.nIdProdutoMalha).filter(Boolean))]
+  const { data: ingProds } = codsIngrediente.length
+    ? await supabase.from('produtos').select('codigo_produto, descricao, unidade').eq('loja_id', lojaId).in('codigo_produto', codsIngrediente)
+    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
+  const ingMap = new Map((ingProds ?? []).map((p) => [p.codigo_produto, p]))
+  const ingredientes: Ingrediente[] = itensDetalhes
+    .filter((i) => i.nIdProdutoMalha)
+    .map((i) => {
+      const p = ingMap.get(i.nIdProdutoMalha)
+      return { cod: i.nIdProdutoMalha, nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`, unidade: p?.unidade ?? '', qtd: Number(i.nQtde) }
+    })
+
+  const podeReverter = await requirePermissao(lojaId, 'Ordens de Producao - Reverter')
+
+  return {
+    id: op.id,
+    numOP: op.identificacao_c_num_op || op.num_ordem || String(op.id),
+    produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
+    unidade: prod?.unidade || 'UN',
+    qtdPlanejada: op.identificacao_n_qtde,
+    qtdProduzida: op.quantidade,
+    dataPrevisao: op.identificacao_d_dt_previsao,
+    dataConclusao: op.dt_conclusao_real,
+    concluida: !!op.concluida,
+    podeReverter,
+    ingredientes,
+  }
 }
 
 export type DetalheTransferencia = {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { DetalheOP as DetalheOPView } from '@/components/movimentacoes/DetalheOP'
 import {
   buscarDetalheOP,
   buscarDetalheTransferencia,
@@ -77,7 +78,9 @@ export function DetalheMovimentoSheet({
           {estado.status === 'erro' && (
             <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">{estado.mensagem}</p>
           )}
-          {/* Task 2 preenche estado.status === 'op' */}
+          {estado.status === 'op' && (
+            <DetalheOPView dados={estado.dados} onRevertido={() => onOpenChange(null)} />
+          )}
           {/* Task 3 preenche estado.status === 'transferencia' */}
           {/* Task 4 preenche estado.status === 'nota_fiscal' */}
           {/* Task 5 preenche estado.status === 'inventario' */}
