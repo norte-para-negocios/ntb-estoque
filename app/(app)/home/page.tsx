@@ -121,7 +121,7 @@ export default async function HomePage() {
   const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
   const { data: vencidasQuentesRaw } = await supabase
     .from('ordens_producao')
-    .select('id, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+    .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
     .eq('loja_id', lojaId)
     .not('validade', 'is', null)
     .or(SALDO_OR)
