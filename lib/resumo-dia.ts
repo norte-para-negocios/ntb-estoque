@@ -665,6 +665,14 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   // cancelada nao precisa de nenhuma acao humana; achado real, auditoria
   // 2026-07-26: sem NAO_CANCELADA_OR esse card inflava com NF ja cancelada).
   const ontemISO = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  // Achado real (reuniao 2026-07-27): NF travada e OP atrasada nao tinham
+  // limite inferior de data -- uma nota/OP muito antiga em aberto (quase
+  // sempre ja manifestada/resolvida por fora, so nao fechada no sistema)
+  // inflava o card pra sempre, igual ao caso real citado ao vivo (47 na
+  // tela, so 9 batiam com "precisa de acao" de verdade). Pedido explicito
+  // do Ramon: restringir aos dois cards ao mes atual (mesmo padrao ja
+  // usado como default em ordem-producao/page.tsx).
+  const primeiroDiaMesISO = `${hojeISO.slice(0, 7)}-01`
   // Vencendo em 7 dias / vencido (mesma logica de /validade). Achado real desta
   // auditoria: so filtrava `quantidade > 0`, mas `quantidade` (o campo "etiqueta",
   // setado manualmente via setQuantidadeOP) fica NULL na maioria das OPs -- a
@@ -706,11 +714,13 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
       .is('deleted_at', null)
       .neq('c_etapa', '60')
       .or(NAO_CANCELADA_OR)
+      .gte('d_emissao_nfe', primeiroDiaMesISO)
       .lte('d_emissao_nfe', ontemISO),
     supabase
       .from('ordens_producao')
       .select('id', { count: 'exact', head: true })
       .in('loja_id', lojaIds)
+      .gte('identificacao_d_dt_previsao', primeiroDiaMesISO)
       .lt('identificacao_d_dt_previsao', hojeISO)
       .eq('concluida', false),
     supabase
