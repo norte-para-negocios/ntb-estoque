@@ -9,6 +9,24 @@ Lida a transcrição inteira, linha a linha (523 linhas). Abaixo, todo item acio
 identificado, na ordem em que apareceu. Onde a fala ficou ambígua por causa da qualidade da
 transcrição, isso está marcado explicitamente — não preenchi lacunas por suposição.
 
+**Revisão de 2026-07-28 (2ª passada):** por pedido do usuário, a reunião foi re-transcrita do
+zero a partir do `.mp4` original (Mistral Voxtral, `/etl-audio`) e cruzada com os 4 arquivos
+de referência que ele mandou (`FAT_SVVM_2026.xlsx`, `MOV_AMJ_2026 - 1º SEM.xlsx`,
+`NFS_ENT_SVVM_26_R0.xlsx`, `OP_SVVM_JUN25 - R1.xlsx`, `NTB Estoque - Relatório SVVM 2026 -
+R06.pptx`). Achados dessa revisão:
+- A retranscrição teve diarização falha (`speakers_count: 1`, mesma limitação do docx
+  original) e um artefato sério: um loop de ~26 minutos (00:42 a 01:09) onde o modelo travou
+  repetindo a mesma frase em vez de transcrever o áudio real. Esse trecho foi recuperado
+  comparando com o docx original, que cobria esse período sem o mesmo problema.
+- **1 correção real**: o item #6 (abaixo) era uma má-atribuição — o pedido "notas fiscais só
+  concluídas" era sobre **Compras**, não Faturamento (Ramon diz explicitamente, minuto ~1:04:03,
+  "o relatório de faturamento, ele já está mais, já está funcionando direitinho" logo antes de
+  reclamar do filtro em Compras). Mesclado com o item #7.
+- **2 achados novos nos arquivos de referência**, incorporados abaixo: a spec exata do
+  formato de "Programação de Produção" (item #10, achada em `OP_SVVM_JUN25`) e os limites de
+  referência reais de Compras/Faturamento e Perdas usados pela consultoria (item #16, achados
+  no pptx).
+
 ## Tabela resumo (todos os itens)
 
 | # | Item | Detalhe | Status |
@@ -18,7 +36,7 @@ transcrição, isso está marcado explicitamente — não preenchi lacunas por s
 | 3 | NF pendente contando notas já manifestadas | Excluir notas manifestadas (etapa 40) da contagem "precisa de ação"; restringir NF em aberto e OP atrasada ao mês atual | Bug confirmado |
 | 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
-| 6 | Faturamento sem filtro concluída/cancelada por padrão | Faturamento não é baseado em Nota Fiscal (é fato de cupom/PDV pré-agregado) — conceito de "concluída/cancelada" de NF não se aplica hoje à arquitetura atual | Não mapeia pro código atual — precisa validar com o Ramon o que ele quis dizer |
+| 6 | ~~Faturamento sem filtro concluída/cancelada~~ | **Correção 2ª passada**: má-atribuição — Ramon diz explicitamente que o Faturamento "já está funcionando direitinho"; o pedido de filtro era sobre Compras, mesmo item que o #7 | Mesclado no #7, não é item separado |
 | 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | **Já corrigido antes desta sessão** — falta só o extra (opção de ver canceladas), que é feature nova, não bug |
 | 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | Bug confirmado |
 | 9 | Erro 500 na emissão de NF-e (homologação) | Investigado: emissão fiscal não existe no código (só leitura/consulta) — decisão de escopo já registrada como alto risco, não é bug | Não é código — precisa decisão explícita antes de construir (certificado + SEFAZ reais) |
@@ -76,17 +94,23 @@ transcrição, isso está marcado explicitamente — não preenchi lacunas por s
    vivo sugere que deveria estar **descontando do estoque** (saldo), não mostrando um valor
    "acumulado". Precisa investigar a lógica exata de cálculo desse campo.
 
-5. **Faturamento: ainda falta filtro concluída/cancelada por padrão.** Confirmado que ainda
-   não estava validado (era pedido de sessões anteriores) — notas fiscais no relatório de
-   Faturamento devem vir só as **concluídas** por padrão. Rodar de novo a verificação
-   cruzada com a tabela de referência já usada antes ("lembra pra ver se bate certinho").
+5. ~~Faturamento: ainda falta filtro concluída/cancelada por padrão~~ — **correção da 2ª
+   passada (2026-07-28)**: reexaminando o contexto completo (não só a frase isolada), Ramon
+   fala "no faturamento, as notas fiscais trazer somente as concluídas" só como transição de
+   assunto — na sequência imediata ele confirma "o relatório de faturamento, ele já está
+   mais, já está funcionando direitinho" e só DEPOIS reclama do filtro que falta, já falando
+   de **Compras** ("se a mercadoria foi concluída ou não aqui, não tem... está puxando
+   tudo"). Item mesclado no #6 abaixo — não existe pedido separado de filtro pro Faturamento.
 
 6. **Compras: falta filtro de status (concluída/cancelada/tudo), hoje traz tudo sem
    filtro.** Confirmado ao vivo que o relatório de Compras "está puxando tudo", sem
    distinguir concluída de cancelada/aberta. Pedido explícito: **adicionar filtro de status
-   tanto em Compras quanto em Faturamento**, com opção de ver concluídas, canceladas ou
-   tudo — mas vindo **fixo/marcado por padrão** para mostrar só as relevantes (Ramon insiste:
-   "coloque aqui a informação... pode trazer já fixo como trouxe o outro").
+   em Compras** (e, por analogia, em Vendas/Faturamento se algum dia ganhar filtro
+   equivalente), com opção de ver concluídas, canceladas ou tudo — mas vindo **fixo/marcado
+   por padrão** para mostrar só as relevantes (Ramon insiste: "coloque aqui a informação...
+   pode trazer já fixo como trouxe o outro"). **Investigado 2026-07-28: já corrigido antes
+   desta sessão** (RPCs de Compras já filtram concluída+não-cancelada por padrão desde a
+   migration 083) — falta só a opção extra de ver canceladas/tudo, que é feature nova.
 
 7. **Transferências e inventários feitos direto no Omie não sincronizam de volta.**
    Confirmado que **nunca puxou**, desde antes: uma transferência ou um inventário feito
@@ -138,6 +162,20 @@ conta, é compra), data, número da ordem, código, descrição do produto, quan
 e **campos em branco para preenchimento manual** (a pessoa imprime em papel e escreve à mão
 a quantidade produzida). Confirmado: é para sair **impresso em papel**, não uma planilha
 digital.
+
+**Spec concreta encontrada em `OP_SVVM_JUN25 - R1.xlsx` (2ª passada, 2026-07-28)** — essa
+planilha É o "modelo de exemplo" que o Ramon citou ("eu tô te mandando esse daqui para você
+usar como base"), tem 2 abas relevantes:
+- **"PROG DE PRODUÇÃO"**: matriz **produto × dia do mês** — colunas fixas `Cód Produto`,
+  `Descrição do Produto`, `Und` (unidade), depois **uma coluna por dia** (1 a 30/31) com a
+  quantidade prevista naquele dia; filtros de cabeçalho: Local de Produção, Número da OP,
+  Etapa, Tipo do Produto. Ou seja, não é uma lista simples (data/produto/qtd em linhas) — é
+  uma grade mensal, um produto por linha, um dia por coluna.
+- **"PROG DE PRODUÇÃO EM ATRASO"**: mesma estrutura de matriz, mas filtrada por
+  `Etapa = 'A Produzir'` — confirma que é uma visão **separada** da "lista de ordens
+  atrasadas" simples que já existe (ele foi explícito sobre isso na call).
+- Confirma também os locais de produção reais usados: `COZINHA`, e (por outras abas do mesmo
+  arquivo) `NUCLEO`/`PIZZARIA` — bate com o que já estava confirmado na call.
 
 ### Relatório de Inventários (equivalente ao de Transferências, que já existe)
 Transferências já tem relatório PDF filtrável por mês. Inventário não tem — só Excel de
@@ -193,10 +231,33 @@ dar dashboards diferentes por permissão de login. Definição de escopo:
   - Produtos parados em estoque (sem movimento).
   - Relação compras/faturamento (%), separada por categoria: revenda (faturamento vs.
     compra de revenda) e produto acabado (faturamento vs. compra de matéria-prima). Métrica
-    já existe (ex.: 41%) mas os dados podem estar desatualizados — conferir.
+    já existe (ex.: 41%) mas os dados podem estar desatualizados — conferir. Ramon disse
+    explicitamente (~1:08:04) que essa relação "não precisa mudar por enquanto" — baixa
+    prioridade dentro do item.
   - Esse dashboard consolidado usaria como fonte o relatório de Movimentações reestruturado
     (ver bug #3 acima): resumo de saídas por origem (NFE / transferência / ajuste manual
     "ND"), resumo de entradas por produto, resumo de transferências por local de destino.
+
+**Limites de referência reais, achados em `NTB Estoque - Relatório SVVM 2026 - R06.pptx`
+(2ª passada, 2026-07-28)** — esse pptx é um relatório de performance que a própria
+NTB Consultoria já monta manualmente pro cliente (Faturamento/Compras/Perdas, Jan-Jul/2026),
+e serve de mockup quase pronto pro dashboard de Gerência. Números concretos que devem
+substituir os hardcoded/genéricos hoje no sistema:
+  - **Índice Compras/Faturamento: limite de referência real é 30%** (não 40% — o valor
+    hardcoded/default documentado em `lojas.meta_compras_pct` — conferir e possivelmente
+    corrigir o default).
+  - **Perda de Matéria-Prima: limite 8%** do faturamento da categoria.
+  - **Perda de Revenda: tolerância ZERO** — qualquer perda em revenda já é considerada
+    anomalia (validade vencida, avaria ou erro de contagem), não uma faixa aceitável.
+  - Conteúdo do pptx que mapeia direto pros itens do dashboard já listados acima: top 20
+    mais/menos vendidos (separado por Revenda e Produto Acabado), ranking de fornecedores,
+    ranking por família, resumo de saídas manuais, 20 maiores perdas (separado por Revenda e
+    Matéria-Prima) — tudo já com números reais calculados manualmente pela consultoria hoje.
+  - Recomendações do próprio relatório que viram pedidos implícitos de feature: régua de
+    compra dinâmica considerando média móvel de vendas recentes (não só saldo mínimo fixo),
+    alertas automáticos quando Compras ou Perdas ultrapassarem o limite (antes do fechamento
+    do mês, não só no relatório mensal), e exigir foto + lançamento de transferência pra toda
+    ocorrência de perda (rastreabilidade).
 
 ## Pesquisa/definição pendente (não é código ainda)
 - **Categorias contábeis / centro de custo**: Ramon vai pesquisar como estruturar isso (não
