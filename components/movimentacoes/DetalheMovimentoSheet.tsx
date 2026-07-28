@@ -31,13 +31,16 @@ const TITULOS: Record<OrigemMovimento['tipo'], string> = {
   inventario: 'Inventário',
 }
 
-type Estado =
-  | { status: 'carregando' }
-  | { status: 'erro'; mensagem: string }
-  | { status: 'op'; dados: DetalheOP }
-  | { status: 'transferencia'; dados: DetalheTransferencia }
-  | { status: 'nota_fiscal'; dados: DetalheNotaFiscal }
-  | { status: 'inventario'; dados: DetalheInventario }
+type Resultado =
+  | { chave: string; status: 'erro'; mensagem: string }
+  | { chave: string; status: 'op'; dados: DetalheOP }
+  | { chave: string; status: 'transferencia'; dados: DetalheTransferencia }
+  | { chave: string; status: 'nota_fiscal'; dados: DetalheNotaFiscal }
+  | { chave: string; status: 'inventario'; dados: DetalheInventario }
+
+function chaveDe(origem: OrigemMovimento): string {
+  return `${origem.tipo}:${origem.id}`
+}
 
 export function DetalheMovimentoSheet({
   origem,
@@ -46,27 +49,33 @@ export function DetalheMovimentoSheet({
   origem: OrigemMovimento | null
   onOpenChange: (o: OrigemMovimento | null) => void
 }) {
-  const [estado, setEstado] = useState<Estado>({ status: 'carregando' })
+  const [resultado, setResultado] = useState<Resultado | null>(null)
 
   useEffect(() => {
     if (!origem) return
-    setEstado({ status: 'carregando' })
+    let cancelado = false
+    const chave = chaveDe(origem)
     ;(async () => {
       if (origem.tipo === 'op') {
         const r = await buscarDetalheOP(origem.id)
-        setEstado('error' in r ? { status: 'erro', mensagem: r.error } : { status: 'op', dados: r })
+        if (!cancelado) setResultado('error' in r ? { chave, status: 'erro', mensagem: r.error } : { chave, status: 'op', dados: r })
       } else if (origem.tipo === 'transferencia') {
         const r = await buscarDetalheTransferencia(origem.id)
-        setEstado('error' in r ? { status: 'erro', mensagem: r.error } : { status: 'transferencia', dados: r })
+        if (!cancelado) setResultado('error' in r ? { chave, status: 'erro', mensagem: r.error } : { chave, status: 'transferencia', dados: r })
       } else if (origem.tipo === 'nota_fiscal') {
         const r = await buscarDetalheNotaFiscal(String(origem.id))
-        setEstado('error' in r ? { status: 'erro', mensagem: r.error } : { status: 'nota_fiscal', dados: r })
+        if (!cancelado) setResultado('error' in r ? { chave, status: 'erro', mensagem: r.error } : { chave, status: 'nota_fiscal', dados: r })
       } else {
         const r = await buscarDetalheInventario(origem.id)
-        setEstado('error' in r ? { status: 'erro', mensagem: r.error } : { status: 'inventario', dados: r })
+        if (!cancelado) setResultado('error' in r ? { chave, status: 'erro', mensagem: r.error } : { chave, status: 'inventario', dados: r })
       }
     })()
+    return () => { cancelado = true }
   }, [origem])
+
+  const chaveAtual = origem ? chaveDe(origem) : null
+  const carregando = chaveAtual !== null && resultado?.chave !== chaveAtual
+  const pronto = resultado?.chave === chaveAtual ? resultado : null
 
   return (
     <Sheet open={origem !== null} onOpenChange={(open) => !open && onOpenChange(null)}>
@@ -75,18 +84,18 @@ export function DetalheMovimentoSheet({
           <SheetTitle>{origem ? TITULOS[origem.tipo] : ''}</SheetTitle>
         </SheetHeader>
         <div className="px-4 pb-6">
-          {estado.status === 'carregando' && (
+          {carregando && (
             <div className="flex items-center justify-center py-12"><Spinner /></div>
           )}
-          {estado.status === 'erro' && (
-            <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">{estado.mensagem}</p>
+          {pronto?.status === 'erro' && (
+            <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">{pronto.mensagem}</p>
           )}
-          {estado.status === 'op' && (
-            <DetalheOPView dados={estado.dados} onRevertido={() => onOpenChange(null)} />
+          {pronto?.status === 'op' && (
+            <DetalheOPView dados={pronto.dados} onRevertido={() => onOpenChange(null)} />
           )}
-          {estado.status === 'transferencia' && <DetalheTransferenciaView dados={estado.dados} />}
-          {estado.status === 'nota_fiscal' && <DetalheNotaFiscalView dados={estado.dados} />}
-          {estado.status === 'inventario' && <DetalheInventarioView dados={estado.dados} />}
+          {pronto?.status === 'transferencia' && <DetalheTransferenciaView dados={pronto.dados} />}
+          {pronto?.status === 'nota_fiscal' && <DetalheNotaFiscalView dados={pronto.dados} />}
+          {pronto?.status === 'inventario' && <DetalheInventarioView dados={pronto.dados} />}
         </div>
       </SheetContent>
     </Sheet>

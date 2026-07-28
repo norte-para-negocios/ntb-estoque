@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import {
   Sheet,
@@ -18,20 +18,19 @@ function chave(rota: string): string {
 }
 
 export function useColunasVisiveis(rota: string, colunas: string[]) {
-  const [visiveis, setVisiveis] = useState<Set<string>>(new Set(colunas))
-
-  useEffect(() => {
+  const [visiveis, setVisiveis] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set(colunas)
     const salvo = localStorage.getItem(chave(rota))
     if (salvo) {
       try {
         const lista = JSON.parse(salvo) as string[]
-        setVisiveis(new Set([COLUNA_OBRIGATORIA, ...lista.filter((c) => colunas.includes(c))]))
+        return new Set([COLUNA_OBRIGATORIA, ...lista.filter((c) => colunas.includes(c))])
       } catch {
         // ignora storage corrompido, mantem o default (todas visiveis)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rota])
+    return new Set(colunas)
+  })
 
   function toggle(col: string) {
     if (col === COLUNA_OBRIGATORIA) return
