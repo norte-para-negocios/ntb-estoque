@@ -52,6 +52,7 @@ export default async function OrdemProducaoPage({
     familia?: string
     op_concluido?: string
     op_status?: string
+    local?: string
     ord?: string
     page?: string
   }>
@@ -484,6 +485,12 @@ export default async function OrdemProducaoPage({
     },
     {
       tipo: 'select',
+      nome: 'local',
+      label: 'Local de produção',
+      opcoes: (locais ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
+    {
+      tipo: 'select',
       nome: 'op_status',
       label: 'Status',
       opcoes: [
@@ -529,6 +536,7 @@ export default async function OrdemProducaoPage({
                   tipo_produto: sp.tipo_produto ?? '',
                   familia: sp.familia ?? '',
                   op_status: sp.op_status ?? '',
+                  local: sp.local ?? '',
                   ord: sp.ord ?? '',
                 }}
                 persistirEm="/ordem-producao"
@@ -538,6 +546,20 @@ export default async function OrdemProducaoPage({
                 className={btnClass('outline')}
               >
                 <Download className="size-4" /> Excel
+              </a>
+              <a
+                href={`/ordem-producao/programacao?mes=${dataInicio.slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
+                title="Matriz produto x dia do mês, com espaço para anotar o produzido"
+              >
+                <Factory className="size-4" /> Imprimir Programação
+              </a>
+              <a
+                href={`/ordem-producao/programacao?mes=${dataInicio.slice(0, 7)}&atraso=1${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
+                title="Só as ordens ainda não concluídas com previsão já vencida"
+              >
+                <Factory className="size-4" /> Imprimir Atrasadas
               </a>
               {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
               {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}
