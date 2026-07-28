@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardList, Pencil, Printer, Download } from 'lucide-react'
+import { ClipboardList, Pencil, Printer, Download, FileText } from 'lucide-react'
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
+import { CopiarLinkRelatorio } from '@/components/inventario/CopiarLinkRelatorio'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -218,6 +219,21 @@ export default async function InventarioPage({
     return `/inventario?${params.toString()}`
   }
 
+  // Reaproveitado pelo Excel, pelo Relatorio PDF e pelo Copiar link -- um so lugar
+  // pra manter os filtros em sincronia entre os 3 (evita o bug ja documentado em
+  // inventario/export/route.ts:31-37, onde um dos links ficava pra tras).
+  const filtrosParams = new URLSearchParams(
+    Object.entries({
+      data_inicio: sp.data_inicio,
+      data_final: sp.data_final,
+      status: sp.status,
+      familia: sp.familia,
+      tipo: sp.tipo,
+      produto: sp.produto,
+      local: sp.local,
+    }).filter((e): e is [string, string] => Boolean(e[1])),
+  )
+
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
@@ -273,23 +289,22 @@ export default async function InventarioPage({
                 persistirEm="/inventario"
               />
               <a
-                href={`/inventario/export?${new URLSearchParams(
-                  Object.entries({
-                    data_inicio: sp.data_inicio,
-                    data_final: sp.data_final,
-                    status: sp.status,
-                    familia: sp.familia,
-                    tipo: sp.tipo,
-                    produto: sp.produto,
-                    local: sp.local,
-                  }).filter((e): e is [string, string] => Boolean(e[1])),
-                ).toString()}`}
+                href={`/inventario/export?${filtrosParams.toString()}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={btnClass('outline')}
               >
                 <Download className="size-4" /> Excel
               </a>
+              <a
+                href={`/inventario/relatorio?${filtrosParams.toString()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={btnClass('outline')}
+              >
+                <FileText className="size-4" /> Relatório PDF
+              </a>
+              <CopiarLinkRelatorio href={`/inventario/relatorio?${filtrosParams.toString()}`} />
               {podeCriar ? <NovoInventario locais={locais ?? []} familias={familias} /> : null}
             </>
           }
