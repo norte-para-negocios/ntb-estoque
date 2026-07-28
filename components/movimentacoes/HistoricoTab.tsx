@@ -103,27 +103,52 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
   const codigosIn = codigosFiltro ? (codigosFiltro.length ? codigosFiltro : [-1]) : null
   const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
 
+  // Achado real (usuario reportou Historico extremamente lento, 2026-07-28):
+  // lojas com volume alto (ex.: loja 5, 9545 linhas so nos ultimos 30 dias)
+  // paginavam em lotes de 1000 SEQUENCIALMENTE -- ate 10 idas ao banco, uma
+  // esperando a anterior terminar, so pra montar a agregacao por mes. O app
+  // roda no Contabo (Franca) e o banco fica no Brasil: cada ida paga
+  // ~230-460ms de latencia de rede, entao 10 idas em serie viram 2-4+
+  // segundos so nesta consulta. Pega o total antes (count exato, sem trazer
+  // linha nenhuma) e dispara as paginas em paralelo (em ondas de
+  // CONCORRENCIA_PAGINAS, pra nao estourar o pool de conexoes do Supabase
+  // num periodo gigante) -- o tempo vira o da pagina mais lenta da onda, nao
+  // a soma de todas.
+  const CONCORRENCIA_PAGINAS = 10
+  function baseQueryHistorico(selectExpr: string, opts?: { count: 'exact'; head: true }) {
+    let q = supabase
+      .from('movimentos_historico')
+      .select(selectExpr, opts)
+      .eq('loja_id', lojaId)
+      .gte('data', ini)
+      .lte('data', fim)
+    if (termo) q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+    if (codigosIn) q = q.in('cod_prod', codigosIn)
+    return q
+  }
+
   async function lerTudo(): Promise<LinhaRaw[]> {
-    const todas: LinhaRaw[] = []
     const LOTE = 1000
-    for (let off = 0; off < TETO_LINHAS; off += LOTE) {
-      let q = supabase
-        .from('movimentos_historico')
-        .select('cod_prod, codigo, descricao, data, entradas, saidas')
-        .eq('loja_id', lojaId)
-        .gte('data', ini)
-        .lte('data', fim)
-        .order('data', { ascending: false })
-        .order('saidas', { ascending: false })
-        .order('cod_prod', { ascending: true })
-        .range(off, off + LOTE - 1)
-      if (termo) q = q.or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
-      if (codigosIn) q = q.in('cod_prod', codigosIn)
-      const { data } = await q
-      const lote = (data ?? []) as LinhaRaw[]
-      todas.push(...lote)
-      if (lote.length < LOTE) break
+    const { count } = await baseQueryHistorico('cod_prod', { count: 'exact', head: true })
+    const total = Math.min(count ?? 0, TETO_LINHAS)
+    const numPaginas = Math.ceil(total / LOTE)
+
+    const todas: LinhaRaw[] = []
+    for (let inicio = 0; inicio < numPaginas; inicio += CONCORRENCIA_PAGINAS) {
+      const tamanhoOnda = Math.min(CONCORRENCIA_PAGINAS, numPaginas - inicio)
+      const onda = await Promise.all(
+        Array.from({ length: tamanhoOnda }, (_, i) => {
+          const pagina = inicio + i
+          return baseQueryHistorico('cod_prod, codigo, descricao, data, entradas, saidas')
+            .order('data', { ascending: false })
+            .order('saidas', { ascending: false })
+            .order('cod_prod', { ascending: true })
+            .range(pagina * LOTE, pagina * LOTE + LOTE - 1)
+        })
+      )
+      for (const r of onda) todas.push(...((r.data ?? []) as unknown as LinhaRaw[]))
     }
+
     if (ini < limiteJanelaQuente()) {
       return complementarMovimentosHistorico(todas, { lojaId, dataInicio: ini, dataFinal: fim })
     }
