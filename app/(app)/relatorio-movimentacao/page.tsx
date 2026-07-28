@@ -196,21 +196,12 @@ export default async function RelatorioMovimentacaoPage({
     const compras = somaSe((r) => /compra/i.test(r.origem) && r.sentido === 'E')
     const consumoOP = somaSe((r) => /consumo da ordem/i.test(r.origem) && r.sentido === 'S')
 
-    // --- Tabela por operação (origem × sentido), respeitando filtro de local ---
-    const baseLocal = locsSel.length ? rows.filter((r) => locsSel.includes(r.local)) : rows
-    const porOper = new Map<string, { origem: string; sentido: 'E' | 'S'; qtde: number; valor: number; conf: boolean }>()
-    for (const r of baseLocal) {
-      const k = `${r.origem}|${r.sentido}`
-      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido, qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido, usarAutomatico) }
-      e.qtde += Number(r.qtde); e.valor += Number(r.valor)
-      porOper.set(k, e)
-    }
-    const opers = [...porOper.values()].sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
-    const totalOperValor = opers.filter((o) => o.conf).reduce((s, o) => s + o.valor, 0)
-
-    // --- Matriz mês a mês, sempre com família + local + tipo juntos (sem
-    // precisar clicar numa linha pra "entrar" na próxima dimensão) --- filtros
-    // op/loc/sent/familia/tipo já estreitam o recorte pela gaveta de filtros.
+    // Filtro combinado (operação/origem, local, sentido, família, tipo SPED,
+    // período) -- compartilhado pela tabela "por operação" logo abaixo e pela
+    // matriz mês a mês. Achado real (reunião 2026-07-27): só a matriz aplicava
+    // esses filtros; a tabela (o elemento mais visível da tela) só respeitava
+    // local, fazendo o Ramon ver "nenhum efeito" ao tentar filtrar por
+    // tipo/origem/família ao vivo.
     const filtradas = rows.filter((r) =>
       (!opsSel.length || opsSel.includes(r.origem)) &&
       (!locsSel.length || locsSel.includes(r.local)) &&
@@ -220,6 +211,21 @@ export default async function RelatorioMovimentacaoPage({
       (!mesIniOp || r.mes >= mesIniOp) &&
       (!mesFimOp || r.mes <= mesFimOp)
     )
+
+    // --- Tabela por operação (origem × sentido), respeitando os mesmos filtros ---
+    const porOper = new Map<string, { origem: string; sentido: 'E' | 'S'; qtde: number; valor: number; conf: boolean }>()
+    for (const r of filtradas) {
+      const k = `${r.origem}|${r.sentido}`
+      const e = porOper.get(k) ?? { origem: r.origem, sentido: r.sentido, qtde: 0, valor: 0, conf: valorConfiavel(r.origem, r.sentido, usarAutomatico) }
+      e.qtde += Number(r.qtde); e.valor += Number(r.valor)
+      porOper.set(k, e)
+    }
+    const opers = [...porOper.values()].sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
+    const totalOperValor = opers.filter((o) => o.conf).reduce((s, o) => s + o.valor, 0)
+
+    // --- Matriz mês a mês, sempre com família + local + tipo juntos (sem
+    // precisar clicar numa linha pra "entrar" na próxima dimensão) --- reusa
+    // `filtradas` acima (mesmos filtros da gaveta já aplicados).
     // Se o recorte ficou só com PDV-saída (valor lixo), a matriz mostra QUANTIDADE.
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const usarQtde = soPdvSaida
