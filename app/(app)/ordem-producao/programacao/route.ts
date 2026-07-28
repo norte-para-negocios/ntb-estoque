@@ -56,17 +56,37 @@ export async function GET(request: Request) {
     localNome = localRow?.descricao ?? String(localCod)
   }
 
-  let query = supabase
-    .from('ordens_producao')
-    .select('identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, identificacao_codigo_local_estoque, concluida, full_object')
-    .eq('loja_id', lojaId)
-    .gte('identificacao_d_dt_previsao', mesIni)
-    .lte('identificacao_d_dt_previsao', mesFim)
-  if (localCod !== null) query = query.eq('identificacao_codigo_local_estoque', localCod)
-
-  const { data: opsRaw } = await query
+  // PostgREST corta em 1000 linhas por padrao sem avisar -- um mes cheio de OPs
+  // facilmente passa disso (ex.: 5000+ numa loja ativa). Pega o total exato
+  // primeiro e busca todas as paginas em paralelo, mesmo padrao ja usado em
+  // relatorio-compras/transferencia.
+  function montarQuery(selectCols: string, opts?: { count: 'exact'; head: true }) {
+    let q = supabase
+      .from('ordens_producao')
+      .select(selectCols, opts)
+      .eq('loja_id', lojaId)
+      .gte('identificacao_d_dt_previsao', mesIni)
+      .lte('identificacao_d_dt_previsao', mesFim)
+    if (localCod !== null) q = q.eq('identificacao_codigo_local_estoque', localCod)
+    return q
+  }
+  type OpRow = {
+    identificacao_n_cod_produto: number | null
+    identificacao_n_qtde: number | null
+    identificacao_d_dt_previsao: string | null
+    identificacao_codigo_local_estoque: number | null
+    concluida: boolean | null
+    full_object: unknown
+  }
+  const SELECT_OP = 'identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, identificacao_codigo_local_estoque, concluida, full_object'
+  const { count: totalOps } = await montarQuery(SELECT_OP, { count: 'exact', head: true })
+  const numPaginasOps = Math.ceil((totalOps ?? 0) / 1000)
+  const blocosOps = await Promise.all(
+    Array.from({ length: numPaginasOps }, (_, p) => montarQuery(SELECT_OP).range(p * 1000, p * 1000 + 999))
+  )
+  const opsRaw = blocosOps.flatMap((r) => (r.data ?? []) as unknown as OpRow[])
   const hojeISO = hojeBahiaISO()
-  const ops = (opsRaw ?? []).filter((o) => !soAtrasadas || opStatus(o, hojeISO) === 'atrasada')
+  const ops = opsRaw.filter((o) => !soAtrasadas || opStatus(o, hojeISO) === 'atrasada')
 
   const codigosProduto = [...new Set(ops.map((o) => o.identificacao_n_cod_produto).filter((c): c is number => c != null))]
   const metaPorCodigo = new Map<number, { codigo: string; descricao: string; unidade: string; tipo: string | null }>()
