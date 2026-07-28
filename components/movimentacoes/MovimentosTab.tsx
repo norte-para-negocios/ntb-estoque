@@ -86,8 +86,16 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   const ini = sp.data_inicio || hojeISO
   const fim = sp.data_final || sp.data_inicio || hojeISO
   const localFiltro = sp.local ? Number(sp.local) : null
+  const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
 
-  const [{ data: locaisRaw }, { data: familiasRaw }, podeCriar] = await Promise.all([
+  // Achado real (2026-07-27, usuario reportou lentidao): o app roda no Contabo
+  // (Franca) e o Supabase fica em sa-east-1 (Brasil) -- cada ida-e-volta ao
+  // banco paga ~230-460ms so de latencia de rede (medido: time_connect=0.23s
+  // ate o pooler). A busca de produtos nao depende de locais/familias/
+  // permissao -- rodava depois, em serie, pagando outra rodada inteira de
+  // latencia por nada. Junta no mesmo Promise.all (mesmo padrao do fix em
+  // Pendencias de Classificacao). Sem termo, so preenche `data: null`.
+  const [{ data: locaisRaw }, { data: familiasRaw }, podeCriar, { data: prodsMatch }] = await Promise.all([
     supabase
       .from('local_estoques')
       .select('codigo_local_estoque, descricao')
@@ -101,11 +109,18 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       .eq('inativo', false)
       .order('nome'),
     requirePermissao(lojaId, 'Movimentacoes - Criar'),
+    termo
+      ? supabase
+          .from('produtos')
+          .select('codigo_produto, codigo, descricao')
+          .eq('loja_id', lojaId)
+          .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+          .limit(100)
+      : Promise.resolve({ data: null as { codigo_produto: number; codigo: string; descricao: string }[] | null }),
   ])
   const locais = (locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null }[]
   const familias = ((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome)
 
-  const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
   let movDetalhes: LinhaDetalhe[] = []
   let idsProdDetalhes: number[] = []
   let produtoUnico: { id_prod: number; codigo: string; descricao: string } | null = null
@@ -119,13 +134,6 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   let totalOmie: { entradas: number; saidas: number } | null = null
 
   if (termo) {
-    const { data: prodsMatch } = await supabase
-      .from('produtos')
-      .select('codigo_produto, codigo, descricao')
-      .eq('loja_id', lojaId)
-      .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
-      .limit(100)
-
     idsProdDetalhes = [...new Set((prodsMatch ?? []).map((p) => Number(p.codigo_produto)).filter(Boolean))]
 
     // Filtro adicional de familia/tipo: restringe os produtos ja achados pela busca.
@@ -148,22 +156,17 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
     if (idsProdDetalhes.length) {
       const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
 
-      const { data: histRowsRaw } = await supabase
-        .from('movimentos_historico')
-        .select('cod_prod, data, entradas, saidas')
-        .eq('loja_id', lojaId)
-        .in('cod_prod', idsProdDetalhes)
-        .gte('data', ini)
-        .lte('data', fim)
-      const histRows = await complementarMovimentosHistorico(histRowsRaw ?? [], { lojaId, dataInicio: ini, dataFinal: fim })
-      if (histRows) {
-        totalOmie = histRows.reduce(
-          (acc, r) => ({ entradas: acc.entradas + (Number(r.entradas) || 0), saidas: acc.saidas + (Number(r.saidas) || 0) }),
-          { entradas: 0, saidas: 0 }
-        )
-      }
-
-      const [{ data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
+      // histRowsRaw nao depende de movs/ops/nfItems/invItems (nem vice-versa) --
+      // mesmo achado do Promise.all acima: juntar numa unica rodada em vez de
+      // esperar uma ida ao banco terminar pra so entao comecar a proxima.
+      const [{ data: histRowsRaw }, { data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
+        supabase
+          .from('movimentos_historico')
+          .select('cod_prod, data, entradas, saidas')
+          .eq('loja_id', lojaId)
+          .in('cod_prod', idsProdDetalhes)
+          .gte('data', ini)
+          .lte('data', fim),
         supabase
           .from('movimentos')
           .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status, id_ajuste, transferencia_id')
@@ -205,6 +208,14 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .in('produto_codigo_produto', idsProdDetalhes)
           .limit(200),
       ])
+
+      const histRows = await complementarMovimentosHistorico(histRowsRaw ?? [], { lojaId, dataInicio: ini, dataFinal: fim })
+      if (histRows) {
+        totalOmie = histRows.reduce(
+          (acc, r) => ({ entradas: acc.entradas + (Number(r.entradas) || 0), saidas: acc.saidas + (Number(r.saidas) || 0) }),
+          { entradas: 0, saidas: 0 }
+        )
+      }
 
       type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null; transferencia_id: number | null }
       type RawOP = { id: number; identificacao_n_cod_op: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
