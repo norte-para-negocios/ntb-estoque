@@ -14,18 +14,18 @@ transcrição, isso está marcado explicitamente — não preenchi lacunas por s
 | # | Item | Detalhe | Status |
 |---|------|---------|--------|
 | 1 | Desligar sistema antigo (teste) | Testar desligamento do app antigo "Norte Para Negócios" no Contabo pra medir ganho de performance | Prazo: 28/07 |
-| 2 | Preço de entrada usando campo errado do Omie | Trocar fonte de "último preço de compra" de valor unitário do fornecedor para CMC (custo médio contábil) da compra | Bug confirmado |
+| 2 | Preço de entrada usando campo errado do Omie | Trocar fonte de "último preço de compra" de valor unitário do fornecedor para CMC (custo médio contábil) da compra | **Corrigido e em produção** (commit `c97c4d5`) — CMC não vem da NF, já existia via posição de estoque |
 | 3 | NF pendente contando notas já manifestadas | Excluir notas manifestadas (etapa 40) da contagem "precisa de ação"; restringir NF em aberto e OP atrasada ao mês atual | Bug confirmado |
 | 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
-| 6 | Faturamento sem filtro concluída/cancelada por padrão | Confirmar/implementar filtro padrão só concluídas + validar contra tabela de referência | Bug confirmado |
-| 7 | Compras sem filtro de status | Adicionar filtro status (concluída/cancelada/tudo), fixo por padrão | Bug confirmado |
+| 6 | Faturamento sem filtro concluída/cancelada por padrão | Faturamento não é baseado em Nota Fiscal (é fato de cupom/PDV pré-agregado) — conceito de "concluída/cancelada" de NF não se aplica hoje à arquitetura atual | Não mapeia pro código atual — precisa validar com o Ramon o que ele quis dizer |
+| 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | **Já corrigido antes desta sessão** — falta só o extra (opção de ver canceladas), que é feature nova, não bug |
 | 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | Bug confirmado |
 | 9 | Erro 500 na emissão de NF-e (homologação) | Investigar causa exata (teste com certificado do Vieiras e Vinhos) antes da próxima reunião | Erro pendente de investigar |
 | 10 | Impressão de "Programação de Produção" | Nova tela/PDF com local de produção, data, ordem, produto, quantidade prevista + campos em branco pra preenchimento manual em papel | Feature nova |
 | 11 | Relatório de Inventários | Equivalente ao de Transferências (hoje só tem Excel + PDF individual), com opção de compartilhamento | Feature nova |
 | 12 | Detalhe clicável de Movimentações + edição inline | Modal ao clicar numa linha, ver tudo do movimento, editar/reverter sem trocar de tela; sempre mostrar unidade de medida junto da quantidade | Feature nova — já em andamento |
-| 13 | Mobile: coluna fixa + rolagem horizontal na tabela de produtos | Nome do produto fixo, demais colunas (margem, mínimo, previsão) rolam horizontalmente | Feature nova |
+| 13 | Mobile: card de produto escondia campos (mínimo, previsão, custo, margem) | Componente compartilhado `Lista` já suportava múltiplos valores com rótulo no card mobile — só as colunas estavam marcadas `ocultarMobile: true` | **Corrigido e em produção** (commit `129eaab`) |
 | 14 | Relatório "Posição de Estoque" com cobertura de inventário | Saldo atual + data do último inventário, por produto e por local de estoque | Feature nova |
 | 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | Feature nova |
 | 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | Feature nova — maior escopo |
@@ -98,7 +98,26 @@ transcrição, isso está marcado explicitamente — não preenchi lacunas por s
    - Ordem de produção alterada dentro do Omie: hoje só traz a ordem, não traz **quem fez a
      alteração** — precisa também puxar o nome/usuário responsável.
 
-## Erro ao vivo — emissão de NF-e (homologação)
+## Erro ao vivo — emissão de NF-e (homologação) — investigado 2026-07-28
+
+**Não é bug de código: a feature não existe no repo.** Emissão de NF-e/NFS-e
+nunca foi implementada — só existe leitura/consulta (`ListarRecebimentos`,
+`ConsultarRecebimento`). Isso é decisão de escopo deliberada, já registrada
+em `docs/superpowers/specs/2026-06-26-omie-varredura-spec.md` (linha ~180):
+"IGNORAR. Emitir NFC-e/SAT requer certificado digital por CNPJ e
+homologação SEFAZ por estado. Não é plug-and-play. Alto risco
+operacional." O upload de certificado digital (`lib/actions/certificado.ts`)
+só guarda o arquivo — a função de descriptografar a senha
+(`lib/cripto.ts` `descriptografar`) não tem NENHUM call site, ou seja,
+nada no repo hoje sequer lê o certificado de volta pra usar. O teste ao
+vivo da reunião rodou fora do repo (nenhum arquivo commitado ou modificado
+na janela da reunião). Antes de qualquer código, precisa de: (1) decisão
+consciente de construir emissão fiscal de verdade (risco alto, tema
+sensível — não fazer sem alinhar explicitamente), e (2) resolver a
+pendência de permissão de emissor com a Omie/contabilidade, que é
+administrativa, não tem nada a ver com código.
+
+
 
 Ao final da reunião, teste ao vivo via Claude Code: emitir NF-e em modo **homologação**
 (não produção) e consultar notas reais, usando o certificado digital já configurado do
