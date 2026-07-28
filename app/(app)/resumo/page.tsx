@@ -74,8 +74,13 @@ export default async function ResumoPage({
     : 'dia'
   const labelPeriodoResumo: Record<PeriodoCob, string> = { dia: 'Diário', semana: 'Semanal', mes: 'Mensal' }
 
-  const { contagem, lista } = await carregarResumoDia(lojaIdsEfetivos, data, cat, periodo)
-  const painelAcao = await carregarPainelAcao(lojaIdsEfetivos)
+  // carregarResumoDia e carregarPainelAcao nao dependem um do outro -- rodar
+  // em paralelo evita pagar 2x a latencia Franca-Brasil (ver comentario em
+  // lib/resumo-dia.ts:carregarPainelAcao).
+  const [{ contagem, lista }, painelAcao] = await Promise.all([
+    carregarResumoDia(lojaIdsEfetivos, data, cat, periodo),
+    carregarPainelAcao(lojaIdsEfetivos),
+  ])
   const catLabel = CATS.find((c) => c.key === cat)!.label
 
   const lojaParam = lojaSel != null ? String(lojaSel) : 'todas'

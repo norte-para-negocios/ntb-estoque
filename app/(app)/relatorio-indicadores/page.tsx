@@ -45,12 +45,6 @@ export default async function RelatorioIndicadoresPage({
   if (!(await getAtorGestao()).podeGerir) notFound()
 
   const supabaseLoja = createServiceClient()
-  const { data: lojaRow } = await supabaseLoja
-    .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, meta_compras_pct')
-    .eq('id', lojaId)
-    .single<LojaOmie & { meta_compras_pct: number | null }>()
-  const metaPct = lojaRow?.meta_compras_pct ?? 40
 
   const sp = await searchParams
   const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
@@ -61,7 +55,14 @@ export default async function RelatorioIndicadoresPage({
   const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
-  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+  // lojaRow (config Omie/meta) e independente de familiasOpcoes/locaisRaw --
+  // rodava sozinho antes deste Promise.all, agora entra na mesma rodada.
+  const [{ data: lojaRow }, familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    supabaseLoja
+      .from('lojas')
+      .select('id, omie_app_key, omie_app_secret, meta_compras_pct')
+      .eq('id', lojaId)
+      .single<LojaOmie & { meta_compras_pct: number | null }>(),
     buscarFamilias(),
     supabaseLoja
       .from('local_estoques')
@@ -69,6 +70,7 @@ export default async function RelatorioIndicadoresPage({
       .eq('loja_id', lojaId)
       .order('descricao'),
   ])
+  const metaPct = lojaRow?.meta_compras_pct ?? 40
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
@@ -159,28 +161,38 @@ export default async function RelatorioIndicadoresPage({
     comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
   }
 
+  // metaRow nao depende de nada do bloco de Compras abaixo -- dispara agora e
+  // so aguarda o resultado quando for de fato usado, mais adiante.
+  const metaRowPromise = supabase
+    .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
+
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte).
   if (compIni < corte) {
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
     // Paginado: lojas com catálogo grande (ex.: 2, 3, 5, 6 têm >1000 produtos)
     // estourariam o corte padrão de 1000 linhas do PostgREST numa chamada única,
     // deixando produtos fora do mapa de tipo/família (mesma classe de bug do rpcTodos).
-    type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
-    const prodMetaRaw: ProdMeta[] = []
+    // Pega o total antes (count exato) e roda isso e o complemento do Contabo em
+    // paralelo -- as duas buscas sao independentes entre si.
+    const [{ count: totalProdutos }, itensFrios] = await Promise.all([
+      supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl }),
+    ])
     const PAGE = 1000
-    for (let p = 0; ; p++) {
-      const { data, error } = await supabase
-        .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
-        .order('id').range(p * PAGE, p * PAGE + PAGE - 1)
-      if (error || !data?.length) break
-      prodMetaRaw.push(...(data as ProdMeta[]))
-      if (data.length < PAGE) break
-    }
+    const numPaginas = Math.ceil((totalProdutos ?? 0) / PAGE)
+    const blocos = await Promise.all(
+      Array.from({ length: numPaginas }, (_, p) =>
+        supabase
+          .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
+          .order('id').range(p * PAGE, p * PAGE + PAGE - 1)
+      )
+    )
+    const prodMetaRaw = blocos.flatMap((r) => (r.data ?? []) as ProdMeta[])
     const meta = new Map<number, { tipo: string | null; familia: string | null }>()
     for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
-    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl })
     const filtrados = filtrarItensCompras(itensFrios, {
       familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: localCod,
     }, meta)
@@ -190,8 +202,7 @@ export default async function RelatorioIndicadoresPage({
     }
   }
 
-  const { data: metaRow } = await supabase
-    .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
+  const { data: metaRow } = await metaRowPromise
 
   // Une os meses das duas fontes (compras pode ter meses que o faturamento ainda não).
   const meses = [...new Set([...Object.keys(fatPorMes), ...Object.keys(comprasPorMes)])].sort()

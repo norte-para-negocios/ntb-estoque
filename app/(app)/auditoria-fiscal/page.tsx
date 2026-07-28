@@ -48,22 +48,29 @@ async function buscarMetaProdutos(
   supabase: ReturnType<typeof createServiceClient>,
   lojaId: number
 ): Promise<Map<number, { tipo: string | null; familia: string | null }>> {
-  const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
-  for (let pg = 0; ; pg++) {
-    const from = pg * 1000
-    const { data } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-      .order('id', { ascending: true })
-      .range(from, from + 999)
-    if (!data?.length) break
-    prodMetaRaw.push(...data)
-    if (data.length < 1000) break
-  }
+  // Pega o total antes (count exato) e busca as paginas em paralelo em vez de
+  // uma de cada vez -- mesma latencia Franca-Brasil por ida, ver comentario em
+  // HistoricoTab.tsx.
+  const { count } = await supabase
+    .from('produtos')
+    .select('codigo_produto', { count: 'exact', head: true })
+    .eq('loja_id', lojaId)
+  const numPaginas = Math.ceil((count ?? 0) / 1000)
+  const blocos = await Promise.all(
+    Array.from({ length: numPaginas }, (_, pg) =>
+      supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .order('id', { ascending: true })
+        .range(pg * 1000, pg * 1000 + 999)
+    )
+  )
   const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-  for (const p of prodMetaRaw) {
-    meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+  for (const { data } of blocos) {
+    for (const p of data ?? []) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
   }
   return meta
 }
@@ -98,9 +105,13 @@ export default async function AuditoriaFiscalPage({
 
   // Complemento frio: mescla o resumo por par CFOP com o pedaço antigo.
   if (ini < corte) {
-    const meta = await buscarMetaProdutos(supabase, lojaId)
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    // buscarMetaProdutos (Supabase) e buscarItensNFFrio (Contabo) sao
+    // independentes entre si -- roda em paralelo em vez de serie.
+    const [meta, itensFrios] = await Promise.all([
+      buscarMetaProdutos(supabase, lojaId),
+      buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
+    ])
     const filtrados = filtrarItensAuditoria(itensFrios, {
       produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
     }, meta)
@@ -159,8 +170,10 @@ export default async function AuditoriaFiscalPage({
     // Complemento frio do drill-down (mesmo par CFOP, pedaço antigo).
     if (ini < corte) {
       const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-      const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-      const meta = await buscarMetaProdutos(supabase, lojaId)
+      const [itensFrios, meta] = await Promise.all([
+        buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
+        buscarMetaProdutos(supabase, lojaId),
+      ])
       const filtrados = filtrarItensAuditoria(itensFrios, {
         produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)

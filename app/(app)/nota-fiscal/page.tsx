@@ -261,10 +261,36 @@ export default async function NotaFiscalPage({
     // contabo.ts: timeout curto demais + falha tratada igual a "acabaram as
     // paginas") -- esse aviso fica como cinto-de-seguranca, mesmo padrao ja
     // usado em ordem-producao/page.tsx.
+    // Base da query quente (Supabase) usada tanto pra contar (count=true, sem
+    // trazer linha) quanto pra buscar as paginas -- os mesmos filtros nos dois
+    // casos, sem duplicar a logica condicional.
+    const montarQueryNF = (selectCols: string, opts?: { count: 'exact'; head: true }) => {
+      let q = supabase
+        .from('notas_fiscais')
+        .select(selectCols, opts)
+        .eq('loja_id', lojaId)
+        .gte('d_emissao_nfe', dataInicio)
+        .lte('d_emissao_nfe', dataFinal)
+        .is('deleted_at', null)
+      if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
+      if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+      if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
+      else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
+      else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+      else if (params.status) q = q.eq('c_etapa', params.status)
+      if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
+      if (categoriaOrClause) q = q.or(categoriaOrClause)
+      if (idsIn) q = q.in('id', idsIn)
+      return q
+    }
+
+    // frias (Contabo) e a contagem da fatia quente sao todas independentes
+    // entre si -- disparadas juntas em vez de em serie.
     const busca = params.num_nfe || params.fornecedor
-    const [friasRaw, friasTotalReal] = await Promise.all([
+    const [friasRaw, friasTotalReal, { count: totalNFQuente }] = await Promise.all([
       buscarFrioTudo<NotaCompleta>('/notas_fiscais', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal, busca }, 2000),
       contarNotasFiscaisAntigas({ lojaId, dataInicio, dataFinal, busca }),
+      montarQueryNF('id', { count: 'exact', head: true }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
 
@@ -285,28 +311,18 @@ export default async function NotaFiscalPage({
 
     // Paginado (nao mais `.limit(2000)`): a fatia quente tambem pode passar de
     // 1000 linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
-    // truncaria a pagina em memoria (nao so o total exibido).
-    const paginaCompletaRaw = await buscarTudoPaginado<NotaCompleta>((from, to) => {
-      let q = supabase
-        .from('notas_fiscais')
-        .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
-        .eq('loja_id', lojaId)
-        .gte('d_emissao_nfe', dataInicio)
-        .lte('d_emissao_nfe', dataFinal)
-        .is('deleted_at', null)
-        .order('id', { ascending: true })
-        .range(from, to)
-      if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-      if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-      if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
-      else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
-      else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
-      else if (params.status) q = q.eq('c_etapa', params.status)
-      if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-      if (categoriaOrClause) q = q.or(categoriaOrClause)
-      if (idsIn) q = q.in('id', idsIn)
-      return q
-    })
+    // truncaria a pagina em memoria (nao so o total exibido). totalNFQuente ja
+    // foi buscado acima (junto com frias) -- so falta buscar as paginas, em
+    // paralelo em vez de uma de cada vez.
+    const numPaginasNF = Math.ceil((totalNFQuente ?? 0) / 1000)
+    const blocosNF = await Promise.all(
+      Array.from({ length: numPaginasNF }, (_, pagina) =>
+        montarQueryNF('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
+          .order('id', { ascending: true })
+          .range(pagina * 1000, pagina * 1000 + 999)
+      )
+    )
+    const paginaCompletaRaw = blocosNF.flatMap((r) => (r.data ?? []) as unknown as NotaCompleta[])
     // Reusa a mesma fatia fria (friasFiltradas), ja filtrada por status e por
     // notaIdsFrioSet acima -- evita uma segunda ida identica ao Contabo.
     const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.n_id_receb))

@@ -23,11 +23,29 @@ export function escapeIlikeOr(s: string): string {
  * query precisa buscar TODAS as linhas que casam (ex: resolver ids pra filtrar
  * depois), nao so uma pagina visivel pro usuario -- senao o filtro trunca em
  * silencio e some com resultado valido.
+ *
+ * `contar`: quando informado (count exato da MESMA tabela/filtros, via
+ * `{count: 'exact', head: true}`, sem trazer linha nenhuma), busca todas as
+ * paginas em paralelo em vez de uma de cada vez -- achado real (usuario
+ * reportou sistema lento, 2026-07-28): o app roda no Contabo (Franca), o
+ * banco fica no Brasil, cada ida paga ~230-460ms de latencia de rede pura, e
+ * paginacao sequencial multiplica isso por pagina. Sem `contar`, mantem o
+ * comportamento sequencial original (rede de seguranca pros call sites que
+ * ainda nao passam essa contagem).
  */
 export async function buscarTudoPaginado<T>(
   build: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+  contar?: () => PromiseLike<{ count: number | null }>,
 ): Promise<T[]> {
   const PAGE_SIZE = 1000
+  if (contar) {
+    const { count } = await contar()
+    const numPaginas = Math.ceil((count ?? 0) / PAGE_SIZE)
+    const blocos = await Promise.all(
+      Array.from({ length: numPaginas }, (_, pagina) => build(pagina * PAGE_SIZE, pagina * PAGE_SIZE + PAGE_SIZE - 1))
+    )
+    return blocos.flatMap((r) => r.data ?? [])
+  }
   const tudo: T[] = []
   for (let pagina = 0; ; pagina++) {
     const from = pagina * PAGE_SIZE

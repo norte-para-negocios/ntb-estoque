@@ -545,22 +545,54 @@ export default async function RelatorioMovimentacaoPage({
     // todo dentro do historico frio), usa fim; senao usa corteExcl fixo (o
     // resto, de cutoff em diante, ja vem do RPC acima).
     const dataFinalFria = fim < corteExcl ? fim : corteExcl
-    const brutasTodas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
-      lojaId, dataInicio: ini, dataFinal: dataFinalFria,
-    })
+
+    // Achado real: metaRows/precoRows nao tinham paginacao nenhuma -- mesma
+    // classe do bug ja corrigido em Estoque Valorizado/Indicadores (PostgREST
+    // corta em 1000 linhas por padrao SEM erro, e 5 das 6 lojas ativas tem
+    // mais de 1000 produtos, ver AGENTS.md). Corrigido com count-first +
+    // paginas em paralelo. As 3 buscas (Contabo + as 2 contagens de Supabase)
+    // sao independentes entre si -- disparadas juntas em vez de em serie.
+    const [brutasTodas, { count: totalProdutos }, { count: totalPrecos }] = await Promise.all([
+      buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
+        lojaId, dataInicio: ini, dataFinal: dataFinalFria,
+      }),
+      supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      supabase
+        .from('nota_fiscal_items')
+        .select('n_id_produto', { count: 'exact', head: true })
+        .eq('loja_id', lojaId)
+        .gt('n_preco_unit', 0),
+    ])
     const brutas = filtrarLinhasMovHistorico(brutasTodas, codigosIn, produtoBusca)
-    const { data: metaRows } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-    const metaPorCodigo = new Map((metaRows ?? []).map((m) => [m.codigo_produto, m]))
-    const { data: precoRows } = await supabase
-      .from('nota_fiscal_items')
-      .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
-      .eq('loja_id', lojaId)
-      .gt('n_preco_unit', 0)
+
+    const numPaginasProd = Math.ceil((totalProdutos ?? 0) / 1000)
+    const numPaginasPreco = Math.ceil((totalPrecos ?? 0) / 1000)
+    const [blocosProd, blocosPreco] = await Promise.all([
+      Promise.all(
+        Array.from({ length: numPaginasProd }, (_, i) =>
+          supabase
+            .from('produtos')
+            .select('codigo_produto, tipo_item, descricao_familia')
+            .eq('loja_id', lojaId)
+            .range(i * 1000, i * 1000 + 999)
+        )
+      ),
+      Promise.all(
+        Array.from({ length: numPaginasPreco }, (_, i) =>
+          supabase
+            .from('nota_fiscal_items')
+            .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
+            .eq('loja_id', lojaId)
+            .gt('n_preco_unit', 0)
+            .range(i * 1000, i * 1000 + 999)
+        )
+      ),
+    ])
+    const metaRows = blocosProd.flatMap((r) => r.data ?? [])
+    const metaPorCodigo = new Map(metaRows.map((m) => [m.codigo_produto, m]))
+    const precoRows = blocosPreco.flatMap((r) => r.data ?? [])
     const precoPorProduto = new Map<number, number>()
-    for (const r of (precoRows ?? []) as { n_id_produto: number; n_preco_unit: number }[]) {
+    for (const r of precoRows as unknown as { n_id_produto: number; n_preco_unit: number }[]) {
       if (r.n_id_produto && !precoPorProduto.has(r.n_id_produto)) precoPorProduto.set(r.n_id_produto, r.n_preco_unit)
     }
     const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
