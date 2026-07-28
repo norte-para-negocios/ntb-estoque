@@ -33,7 +33,7 @@ R06.pptx`). Achados dessa revisão:
 |---|------|---------|--------|
 | 1 | Desligar sistema antigo (teste) | Testar desligamento do app antigo "Norte Para Negócios" no Contabo pra medir ganho de performance | Prazo: 28/07 |
 | 2 | Preço de entrada usando campo errado do Omie | Trocar fonte de "último preço de compra" de valor unitário do fornecedor para CMC (custo médio contábil) da compra | **Corrigido e em produção** (commit `c97c4d5`) — CMC não vem da NF, já existia via posição de estoque |
-| 3 | NF pendente contando notas já manifestadas | Excluir notas manifestadas (etapa 40) da contagem "precisa de ação"; restringir NF em aberto e OP atrasada ao mês atual | Bug confirmado |
+| 3 | NF pendente contando notas já manifestadas | Campo de manifestação real não existe em lugar nenhum do full_object sincronizado (confirmado no banco) — Ramon propôs solução mais simples: restringir NF travada/OP atrasada ao mês atual | **Corrigido e em produção** (commit `0f703bd`) — parte do campo de manifestação de verdade fica pendente, precisa de pesquisa na API da Omie |
 | 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
 | 6 | ~~Faturamento sem filtro concluída/cancelada~~ | **Correção 2ª passada**: má-atribuição — Ramon diz explicitamente que o Faturamento "já está funcionando direitinho"; o pedido de filtro era sobre Compras, mesmo item que o #7 | Mesclado no #7, não é item separado |
