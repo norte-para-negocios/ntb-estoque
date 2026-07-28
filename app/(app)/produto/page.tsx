@@ -574,7 +574,6 @@ export default async function ProdutoPage({
                   label: 'Custo',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-28',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => {
                     const c = custoDe(p.codigo_produto)
                     return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
@@ -585,7 +584,6 @@ export default async function ProdutoPage({
                   label: 'Margem',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-24',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => {
                     const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
                     if (m == null) return <span className="text-text-muted">-</span>
@@ -600,7 +598,6 @@ export default async function ProdutoPage({
                   label: `Sugerido (${alvoPct}%)`,
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-32',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => {
                     // Sem preco de venda nao da sugestao (pedido do fundador 17/06).
                     const s = Number(p.valor_unitario) > 0 ? precoSugerido(custoDe(p.codigo_produto), alvo) : null
@@ -613,7 +610,6 @@ export default async function ProdutoPage({
                   label: 'Mínimo',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-24',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => (
                     <EstoqueMinimoInput
                       produtoId={p.id}
@@ -643,7 +639,6 @@ export default async function ProdutoPage({
                   label: 'Prev. venda',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-24',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => {
                     const pv = prevVendaDe(p.codigo_produto)
                     if (pv == null) return <span className="text-text-muted">-</span>
@@ -676,7 +671,6 @@ export default async function ProdutoPage({
                   label: 'Preço (últ. compra)',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-40',
-                  ocultarMobile: true,
                   render: (p: ProdutoLinha) => {
                     const c = custoDe(p.codigo_produto)
                     if (c == null) return <span className="text-text-muted">-</span>
