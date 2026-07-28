@@ -44,7 +44,7 @@ R06.pptx`). Achados dessa revisão:
 | 11 | Relatório de Inventários | PDF por período (espelha Transferências) + botão "Copiar link" (compartilhar) | **Corrigido e em produção** (commits `0e74ce4`/`9dd4218`/`9c6c5a7`) |
 | 12 | Detalhe clicável de Movimentações + edição inline | Modal ao clicar numa linha, ver tudo do movimento, editar/reverter sem trocar de tela; sempre mostrar unidade de medida junto da quantidade | Feature nova — já em andamento |
 | 13 | Mobile: card de produto escondia campos (mínimo, previsão, custo, margem) | Componente compartilhado `Lista` já suportava múltiplos valores com rótulo no card mobile — só as colunas estavam marcadas `ocultarMobile: true` | **Corrigido e em produção** (commit `129eaab`) |
-| 14 | Relatório "Posição de Estoque" com cobertura de inventário | Saldo atual + data do último inventário, por produto e por local de estoque | Feature nova |
+| 14 | Relatório "Posição de Estoque" com cobertura de inventário | Saldo atual + data do último inventário, por produto e por local de estoque | **Corrigido e em produção** (commits `19ee96f`/`bf98c99`) — aba "Por local" no Estoque Valorizado, não relatório separado |
 | 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | Feature nova |
 | 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | Feature nova — maior escopo |
 | 17 | Categorias contábeis / centro de custo | Ramon vai pesquisar e definir a estrutura; direção já confirmada: CFOP fica no cadastro do produto | Aguardando pesquisa do Ramon |
@@ -197,7 +197,7 @@ do **nome do produto** deve ficar **fixa**, e as demais colunas (margem, estoque
 previsão de venda) devem ficar em uma área de **rolagem horizontal** — comparação explícita
 usada: "como uma tabela de Brasileirão" (time fixo, estatísticas rolando ao lado).
 
-### Novo relatório: "Posição de Estoque" com cobertura de inventário
+### Novo relatório: "Posição de Estoque" com cobertura de inventário — ✅ resolvido 2026-07-28
 Falta um relatório que mostre, por **local de estoque**, a lista de produtos com **saldo
 atual** e a **data do último inventário** (contagem) daquele produto naquele local — para
 identificar cobertura de inventário (o que não é contado há mais de 30 dias, por exemplo).
@@ -206,6 +206,19 @@ saldo + data do último inventário. Sugestão do Joaquim: usar abas/filtro por 
 padrão já usado no relatório de Faturamento). Confirmado: produtos inativos já são
 excluídos de todos os relatórios por regra geral — vale conferir se esse relatório
 específico segue essa regra quando for criado.
+
+**Solução implementada**: seguindo as duas sugestões literalmente — nova aba "Por local"
+(`?ver=local`, componente `SegmentLinks`, mesmo padrão do Faturamento) dentro do próprio
+Estoque Valorizado, em vez de um relatório novo separado. RPC nova
+(`relatorio_estoque_valorizado_local`, migration 091) retorna 1 linha por produto+local
+com saldo, CMC, valor e a data do último inventário (via `inventarios`/`inventario_items`,
+já que não existe hoje nenhum outro lugar no sistema que calcule isso). Linhas "Nunca
+contado" ou com 30+ dias sem contagem aparecem em vermelho, mesmo limiar de 30 dias já
+usado no card "Locais sem contagem de inventário" do resumo operacional. A visão default
+(agregada, "Total") não mudou em nada. Validado com dado real de produção: da loja SVVM,
+1421 combinações produto+local, das quais só 198 (14%) têm alguma contagem de inventário
+registrada — confirma que a lacuna que motivou o pedido é real e grande.
+Plano: `docs/superpowers/plans/2026-07-28-estoque-valorizado-por-local-cobertura.md`.
 
 ### Dashboard de acompanhamento de produção (diário/semanal/mensal, por funcionário)
 Pedido do Andrey: gráfico mostrando, dia a dia (1 a 30), quantas OPs foram feitas e por
