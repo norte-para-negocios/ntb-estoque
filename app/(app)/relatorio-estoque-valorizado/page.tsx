@@ -13,6 +13,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { Boxes } from 'lucide-react'
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
@@ -47,12 +48,31 @@ type Linha = {
   data_foto: string
 }
 
+type LinhaLocal = {
+  codigo_produto: number
+  codigo: string | null
+  descricao: string | null
+  codigo_local_estoque: number
+  local_descricao: string | null
+  n_saldo: number
+  n_cmc: number
+  valor_total: number
+  data_foto: string
+  data_ultimo_inventario: string | null
+}
+
+function diasDesde(dataISO: string): number {
+  const [a, m, d] = dataISO.split('-').map(Number)
+  const dt = new Date(a, m - 1, d)
+  return Math.floor((Date.now() - dt.getTime()) / 86400000)
+}
+
 const LIMITE = 500
 
 export default async function RelatorioEstoqueValorizadoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ familia?: string; tipo?: string; local?: string; busca?: string }>
+  searchParams: Promise<{ familia?: string; tipo?: string; local?: string; busca?: string; ver?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   const ator = await getAtorGestao()
@@ -63,21 +83,33 @@ export default async function RelatorioEstoqueValorizadoPage({
   const tipos = valoresMulti(sp.tipo)
   const locais = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
   const busca = sp.busca?.trim() || null
+  const verLocal = sp.ver === 'local'
 
   const supabase = await createClient()
 
-  const [linhasTodas, familiasOpcoes, locaisOpcoes] = await Promise.all([
+  const [linhasTodas, linhasLocalTodas, familiasOpcoes, locaisOpcoes] = await Promise.all([
     // rpcTodos ao inves de .rpc() direto: o PostgREST corta em 1000 linhas por
     // padrao, sem erro -- lojas com catalogo grande tinham o "Total valorizado"
     // subcontado (so somava as linhas que vinham na 1a pagina), mesma classe de
     // bug ja achada e corrigida no Faturamento nesta sessao.
-    rpcTodos<Linha>(supabase, 'relatorio_estoque_valorizado', {
-      p_loja_id: lojaId,
-      p_familia: familias.length ? familias : null,
-      p_tipo: tipos.length ? tipos : null,
-      p_local: locais.length ? locais : null,
-      p_busca: busca,
-    }),
+    verLocal
+      ? Promise.resolve<Linha[]>([])
+      : rpcTodos<Linha>(supabase, 'relatorio_estoque_valorizado', {
+          p_loja_id: lojaId,
+          p_familia: familias.length ? familias : null,
+          p_tipo: tipos.length ? tipos : null,
+          p_local: locais.length ? locais : null,
+          p_busca: busca,
+        }),
+    verLocal
+      ? rpcTodos<LinhaLocal>(supabase, 'relatorio_estoque_valorizado_local', {
+          p_loja_id: lojaId,
+          p_familia: familias.length ? familias : null,
+          p_tipo: tipos.length ? tipos : null,
+          p_local: locais.length ? locais : null,
+          p_busca: busca,
+        })
+      : Promise.resolve<LinhaLocal[]>([]),
     buscarFamilias(),
     supabase
       .from('local_estoques')
@@ -93,6 +125,10 @@ export default async function RelatorioEstoqueValorizadoPage({
   // Tabela continua mostrando só os 500 de maior valor (RPC já ordena por
   // valor_total desc) -- só o total/contagem dos cards precisava ser exato.
   const linhas = linhasTodas.slice(0, LIMITE)
+
+  const linhasLocal = linhasLocalTodas.slice(0, LIMITE)
+  const totalProdutosLocal = linhasLocalTodas.length
+  const totalValorLocal = linhasLocalTodas.reduce((s, l) => s + Number(l.valor_total), 0)
 
   const campos: CampoFiltro[] = [
     {
@@ -152,122 +188,217 @@ export default async function RelatorioEstoqueValorizadoPage({
           campos={campos}
           persistirEm="/relatorio-estoque-valorizado"
         />
+        <SegmentLinks
+          basePath="/relatorio-estoque-valorizado"
+          param="ver"
+          aria-label="Ver estoque valorizado por"
+          opcoes={[
+            { value: '', label: 'Total' },
+            { value: 'local', label: 'Por local' },
+          ]}
+        />
       </ListaHeader>
 
-      {/* Cards de resumo */}
-      <div className="flex flex-wrap gap-3">
-        <div className="rounded-xl border border-border bg-surface px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total valorizado</p>
-          <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValor)}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-surface px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produtos no estoque</p>
-          <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutos}</p>
-        </div>
-        {dataFoto && (
-          <div className="rounded-xl border border-border bg-surface px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Foto do estoque</p>
-            <p className="mt-0.5 text-sm font-semibold text-text">{fmtData(dataFoto)}</p>
+      {!verLocal ? (
+        <>
+          {/* Cards de resumo */}
+          <div className="flex flex-wrap gap-3">
+            <div className="rounded-xl border border-border bg-surface px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total valorizado</p>
+              <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValor)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produtos no estoque</p>
+              <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutos}</p>
+            </div>
+            {dataFoto && (
+              <div className="rounded-xl border border-border bg-surface px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Foto do estoque</p>
+                <p className="mt-0.5 text-sm font-semibold text-text">{fmtData(dataFoto)}</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {linhas.length === 0 ? (
-        <EmptyState
-          icon={Boxes}
-          title="Sem dados de posicao"
-          hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
-        />
+          {linhas.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="Sem dados de posicao"
+              hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full min-w-[700px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+                    <th className={`text-left ${th} hidden md:table-cell`}>Familia</th>
+                    <th className={`text-left ${th} hidden lg:table-cell`}>Tipo</th>
+                    <th className={`text-right ${th}`}>Saldo</th>
+                    <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>
+                    <th className={`text-right ${th} hidden 2xl:table-cell`}>PDV</th>
+                    <th className={`text-right ${th} hidden 2xl:table-cell`}>Margem</th>
+                    <th className={`text-right ${th}`}>Valor total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map((l) => (
+                    <tr key={l.codigo_produto} className="border-t border-border/60 hover:bg-surface-2/40">
+                      <td className="sticky left-0 z-10 bg-surface px-3 py-2">
+                        <Link
+                          href={`/relatorio-movimentacao?produto=${encodeURIComponent(l.codigo ?? l.descricao ?? '')}`}
+                          className="block max-w-[220px] hover:underline"
+                          title="Ver movimentações deste produto"
+                        >
+                          <div className="truncate text-text" title={l.descricao ?? ''}>
+                            {formatarNomeProduto(l.descricao ?? '')}
+                          </div>
+                          {l.codigo && (
+                            <div className="num text-[11px] text-text-muted">{l.codigo}</div>
+                          )}
+                        </Link>
+                      </td>
+                      <td className="hidden px-3 py-2 text-text-muted md:table-cell">
+                        {l.descricao_familia ?? '-'}
+                      </td>
+                      <td className="hidden px-3 py-2 text-[12px] text-text-muted lg:table-cell">
+                        {TIPO_LABEL.get(l.tipo_item ?? '') ?? l.tipo_item ?? '-'}
+                      </td>
+                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
+                        {fmtNum(Number(l.n_saldo), 3)} {l.unidade ?? ''}
+                      </td>
+                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
+                        {fmtMoeda(Number(l.n_cmc))}
+                      </td>
+                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted 2xl:table-cell">
+                        {l.n_preco_unitario ? fmtMoeda(Number(l.n_preco_unitario)) : '-'}
+                      </td>
+                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right 2xl:table-cell">
+                        <span
+                          className={
+                            l.margem_pct != null && l.margem_pct < 0
+                              ? 'text-err'
+                              : l.margem_pct != null && l.margem_pct >= 30
+                              ? 'text-ok'
+                              : 'text-text-muted'
+                          }
+                        >
+                          {fmtMargem(l.margem_pct)}
+                        </span>
+                      </td>
+                      <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">
+                        {fmtMoeda(Number(l.valor_total))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">
+                      {totalProdutos} produto(s)
+                    </td>
+                    <td className="hidden md:table-cell" />
+                    <td className="hidden lg:table-cell" />
+                    <td />
+                    <td className="hidden sm:table-cell" />
+                    <td className="hidden 2xl:table-cell" />
+                    <td className="hidden 2xl:table-cell" />
+                    <td className="num whitespace-nowrap px-3 py-2 text-right text-text">
+                      {fmtMoeda(totalValor)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {totalProdutos > LIMITE && (
+            <p className="px-1 text-[11px] text-text-muted">
+              Mostrando os {LIMITE} produtos de maior valor (de {totalProdutos} no total). Use os filtros para refinar.
+            </p>
+          )}
+        </>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full min-w-[700px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-surface-2">
-                <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
-                <th className={`text-left ${th} hidden md:table-cell`}>Familia</th>
-                <th className={`text-left ${th} hidden lg:table-cell`}>Tipo</th>
-                <th className={`text-right ${th}`}>Saldo</th>
-                <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>
-                <th className={`text-right ${th} hidden 2xl:table-cell`}>PDV</th>
-                <th className={`text-right ${th} hidden 2xl:table-cell`}>Margem</th>
-                <th className={`text-right ${th}`}>Valor total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((l) => (
-                <tr key={l.codigo_produto} className="border-t border-border/60 hover:bg-surface-2/40">
-                  <td className="sticky left-0 z-10 bg-surface px-3 py-2">
-                    <Link
-                      href={`/relatorio-movimentacao?produto=${encodeURIComponent(l.codigo ?? l.descricao ?? '')}`}
-                      className="block max-w-[220px] hover:underline"
-                      title="Ver movimentações deste produto"
-                    >
-                      <div className="truncate text-text" title={l.descricao ?? ''}>
-                        {formatarNomeProduto(l.descricao ?? '')}
-                      </div>
-                      {l.codigo && (
-                        <div className="num text-[11px] text-text-muted">{l.codigo}</div>
-                      )}
-                    </Link>
-                  </td>
-                  <td className="hidden px-3 py-2 text-text-muted md:table-cell">
-                    {l.descricao_familia ?? '-'}
-                  </td>
-                  <td className="hidden px-3 py-2 text-[12px] text-text-muted lg:table-cell">
-                    {TIPO_LABEL.get(l.tipo_item ?? '') ?? l.tipo_item ?? '-'}
-                  </td>
-                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
-                    {fmtNum(Number(l.n_saldo), 3)} {l.unidade ?? ''}
-                  </td>
-                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
-                    {fmtMoeda(Number(l.n_cmc))}
-                  </td>
-                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted 2xl:table-cell">
-                    {l.n_preco_unitario ? fmtMoeda(Number(l.n_preco_unitario)) : '-'}
-                  </td>
-                  <td className="num hidden whitespace-nowrap px-3 py-2 text-right 2xl:table-cell">
-                    <span
-                      className={
-                        l.margem_pct != null && l.margem_pct < 0
-                          ? 'text-err'
-                          : l.margem_pct != null && l.margem_pct >= 30
-                          ? 'text-ok'
-                          : 'text-text-muted'
-                      }
-                    >
-                      {fmtMargem(l.margem_pct)}
-                    </span>
-                  </td>
-                  <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">
-                    {fmtMoeda(Number(l.valor_total))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">
-                  {totalProdutos} produto(s)
-                </td>
-                <td className="hidden md:table-cell" />
-                <td className="hidden lg:table-cell" />
-                <td />
-                <td className="hidden sm:table-cell" />
-                <td className="hidden 2xl:table-cell" />
-                <td className="hidden 2xl:table-cell" />
-                <td className="num whitespace-nowrap px-3 py-2 text-right text-text">
-                  {fmtMoeda(totalValor)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+        <>
+          <div className="flex flex-wrap gap-3">
+            <div className="rounded-xl border border-border bg-surface px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total valorizado</p>
+              <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValorLocal)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Linhas (produto x local)</p>
+              <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutosLocal}</p>
+            </div>
+          </div>
 
-      {totalProdutos > LIMITE && (
-        <p className="px-1 text-[11px] text-text-muted">
-          Mostrando os {LIMITE} produtos de maior valor (de {totalProdutos} no total). Use os filtros para refinar.
-        </p>
+          {linhasLocal.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="Sem dados de posicao"
+              hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full min-w-[700px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+                    <th className={`text-left ${th}`}>Local</th>
+                    <th className={`text-right ${th}`}>Saldo</th>
+                    <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>
+                    <th className={`text-right ${th}`}>Valor total</th>
+                    <th className={`text-left ${th}`}>Último inventário</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasLocal.map((l) => {
+                    const dias = l.data_ultimo_inventario ? diasDesde(l.data_ultimo_inventario) : null
+                    const critico = dias == null || dias >= 30
+                    return (
+                      <tr
+                        key={`${l.codigo_produto}-${l.codigo_local_estoque}`}
+                        className="border-t border-border/60 hover:bg-surface-2/40"
+                      >
+                        <td className="sticky left-0 z-10 bg-surface px-3 py-2">
+                          <Link
+                            href={`/relatorio-movimentacao?produto=${encodeURIComponent(l.codigo ?? l.descricao ?? '')}`}
+                            className="block max-w-[220px] hover:underline"
+                            title="Ver movimentações deste produto"
+                          >
+                            <div className="truncate text-text" title={l.descricao ?? ''}>
+                              {formatarNomeProduto(l.descricao ?? '')}
+                            </div>
+                            {l.codigo && <div className="num text-[11px] text-text-muted">{l.codigo}</div>}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 text-text-muted">{l.local_descricao ?? l.codigo_local_estoque}</td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
+                          {fmtNum(Number(l.n_saldo), 3)}
+                        </td>
+                        <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
+                          {fmtMoeda(Number(l.n_cmc))}
+                        </td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">
+                          {fmtMoeda(Number(l.valor_total))}
+                        </td>
+                        <td className={`whitespace-nowrap px-3 py-2 ${critico ? 'text-err' : 'text-text-muted'}`}>
+                          {l.data_ultimo_inventario
+                            ? `${fmtData(l.data_ultimo_inventario)} (há ${dias}d)`
+                            : 'Nunca contado'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {totalProdutosLocal > LIMITE && (
+            <p className="px-1 text-[11px] text-text-muted">
+              Mostrando as {LIMITE} linhas de maior valor (de {totalProdutosLocal} no total). Use os filtros para refinar.
+            </p>
+          )}
+        </>
       )}
     </div>
   )
