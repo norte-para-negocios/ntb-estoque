@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { setCategoriaContabilNFItem } from '@/lib/actions/nota-fiscal'
 
@@ -15,19 +15,27 @@ export function CategoriaContabilSelect({
   valorInicial: number | null
   categorias: Categoria[]
 }) {
+  const [valor, setValor] = useState(valorInicial != null ? String(valorInicial) : '')
   const [pending, startTransition] = useTransition()
 
   function salvar(v: string) {
+    const anterior = valor
+    setValor(v) // otimista
     const categoriaId = v ? Number(v) : null
     startTransition(async () => {
-      await setCategoriaContabilNFItem(itemId, categoriaId)
-      toast.success('Categoria salva')
+      const res = await setCategoriaContabilNFItem(itemId, categoriaId)
+      if (res?.error) {
+        toast.error('Erro ao salvar categoria', { description: res.error })
+        setValor(anterior) // desfaz o otimismo
+      } else {
+        toast.success('Categoria salva')
+      }
     })
   }
 
   return (
     <select
-      defaultValue={valorInicial != null ? String(valorInicial) : ''}
+      value={valor}
       onChange={(e) => salvar(e.target.value)}
       disabled={pending}
       className="h-9 w-full max-w-[200px] rounded-md border border-border bg-surface px-2 text-[13px] text-text outline-none transition-colors focus:border-brand disabled:opacity-60"

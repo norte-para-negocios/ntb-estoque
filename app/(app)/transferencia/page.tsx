@@ -348,7 +348,7 @@ export default async function TransferenciaPage({
               const total = Array.isArray(t.movimentos) ? t.movimentos[0]?.count ?? 0 : 0
               const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []
               const concluidos = movStatus.filter((m: { status: string | null }) => m.status === 'Concluido').length
-              const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro')
+              const temErro = movStatus.some((m: { status: string | null }) => m.status === 'Erro' || m.status === 'Sem CMC')
               if (t.status !== 'Concluido') return <span className="num text-text-muted">{total}</span>
               if (total === 0) return <span className="text-text-muted">-</span>
               return (

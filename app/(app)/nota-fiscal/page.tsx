@@ -21,6 +21,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 
 const POR_PAGINA = 50
 
@@ -47,17 +48,6 @@ type NotaCompleta = {
 const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
 type ColSort = (typeof COLUNAS_SORT)[number]
 
-// Categorias semanticas de NF baseadas em keyword matching na natureza da operacao.
-// 'venda' = tudo que nao e bonificacao/cupom/comodato/remessa.
-const CATEGORIAS_NF = [
-  { value: 'bonificacao', label: 'Bonificação / Brinde', keywords: ['BONIF', 'BRINDE', 'DOACAO', 'DOACÃO'] },
-  { value: 'cupom', label: 'Cupom / NFC-e / ECF', keywords: ['CUPOM', 'ECF', 'NFC-E', 'NFC_E', 'NF VIA CUPOM'] },
-  { value: 'comodato', label: 'Comodato', keywords: ['COMODATO'] },
-  { value: 'remessa', label: 'Remessa', keywords: ['REMESSA'] },
-  { value: 'devolucao', label: 'Devolução', keywords: ['DEVOL', 'RETORNO', 'RETORN'] },
-  { value: 'venda', label: 'Venda (demais)', keywords: [] },
-] as const
-type CategoriaKey = (typeof CATEGORIAS_NF)[number]['value']
 
 export default async function NotaFiscalPage({
   searchParams,
@@ -95,30 +85,11 @@ export default async function NotaFiscalPage({
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
 
-  // Resolve categoria(s) → chaves válidas para montar a clausula .or() combinada.
-  // Multi-select: uma linha entra se casar com QUALQUER categoria selecionada.
-  const categoriaKeys = valoresMulti(params.categoria).filter((v): v is CategoriaKey =>
-    (CATEGORIAS_NF.map((c) => c.value) as string[]).includes(v),
-  )
-  // Para categoria "venda" precisamos excluir tudo que bate com as outras keywords.
-  const todasOutrasKeywords = CATEGORIAS_NF.filter((c) => c.keywords.length > 0).flatMap((c) => c.keywords)
-  const keywordsSelecionados = [
-    ...new Set(
-      categoriaKeys
-        .filter((k) => k !== 'venda')
-        .flatMap((k) => CATEGORIAS_NF.find((c) => c.value === k)?.keywords ?? []),
-    ),
-  ]
-  // Monta a clausula .or() combinada uma unica vez (reaplicada na query de lista e na de totais).
-  const categoriaOrClause: string | null = (() => {
-    if (!categoriaKeys.length) return null
-    const orParts = keywordsSelecionados.map((kw) => `c_natureza_operacao.ilike.%${kw}%`)
-    if (categoriaKeys.includes('venda')) {
-      const notParts = todasOutrasKeywords.map((kw) => `c_natureza_operacao.not.ilike.%${kw}%`)
-      orParts.push(`and(${notParts.join(',')})`)
-    }
-    return orParts.length ? orParts.join(',') : null
-  })()
+  // Resolve categoria(s) -> clausula .or() combinada (multi-select: uma linha entra se
+  // casar com QUALQUER categoria selecionada). Reaplicada na query de lista e na de
+  // totais. Logica compartilhada com export/route.ts e relatorio/route.ts (antes vivia
+  // so aqui e os dois ignoravam esse filtro silenciosamente).
+  const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
 
   // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
   // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.

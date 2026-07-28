@@ -11,6 +11,7 @@ import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -42,6 +43,8 @@ export async function GET(request: Request) {
   const tipo = searchParams.get('tipo') || ''
   const tiposArr = valoresMulti(tipo)
   const produto = searchParams.get('produto') || ''
+  const categoria = searchParams.get('categoria') || ''
+  const categoriaOrClause = resolverCategoriaOrClause(categoria)
 
   const supabase = await createClient()
 
@@ -141,6 +144,7 @@ export async function GET(request: Request) {
     if (status === 'C' || status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+    if (categoriaOrClause) q = q.or(categoriaOrClause)
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
     return q
   }
@@ -186,6 +190,12 @@ export async function GET(request: Request) {
   if (status) filtrosAtivos.push(`Status: ${status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : 'Pendente'}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
+  if (categoria) {
+    const nomesCategorias = valoresMulti(categoria)
+      .map((v) => CATEGORIAS_NF.find((c) => c.value === v)?.label ?? v)
+      .join(', ')
+    filtrosAtivos.push(`Categoria: ${nomesCategorias}`)
+  }
 
   const periodo = `${fmtData(dataInicio)} a ${fmtData(dataFinal)}`
   const filtros = filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined

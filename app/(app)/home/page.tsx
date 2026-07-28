@@ -20,7 +20,7 @@ import { CountUp } from '@/components/ui-kit/CountUp'
 import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
-import { limiteJanelaQuente, contarOrdensProducaoAntigas } from '@/lib/historico-contabo'
+import { limiteJanelaQuente, contarOrdensProducaoAntigas, complementarOrdensProducao } from '@/lib/historico-contabo'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -108,6 +108,28 @@ export default async function HomePage() {
   const opsAntigasCount = await contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() })
   const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
 
+  // Estoque JA vencido (validade < hoje, ainda com saldo) -- mesma logica da tela
+  // /validade ("Vencidos"), so que aqui e so a contagem pro alerta. Sem limite
+  // inferior de data, entao busca as linhas (nao head:true) e mescla com o Contabo
+  // por id pra nao contar em dobro o que ainda esta nos dois lugares antes da poda.
+  const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
+  const { data: vencidasQuentesRaw } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+    .eq('loja_id', lojaId)
+    .not('validade', 'is', null)
+    .or(SALDO_OR)
+    .lt('validade', hojeLocal)
+  const vencidasCompletas = await complementarOrdensProducao(vencidasQuentesRaw ?? [], {
+    lojaId,
+    validadeInicio: '0001-01-01',
+    validadeFinal: localISO(-1),
+  })
+  const qtdVencidos = vencidasCompletas.filter((o) => {
+    const temSaldo = Number(o.quantidade ?? 0) > 0 || (o.quantidade == null && Number(o.identificacao_n_qtde ?? 0) > 0)
+    return temSaldo
+  }).length
+
   // Phase 2: produtos a repor + saldo/mínimo para a lista
   const [prodsReporRes, posReporRes] = await Promise.all([
     qtdRepor
@@ -161,7 +183,9 @@ export default async function HomePage() {
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`, href: '/sync-status' })
   if (syncAtraso && isAdmin)
     alertas.push({ icon: TrendingUp, token: 'warn', texto: 'Sincronização com Omie atrasada (mais de 24h)', href: '/sync-status' })
-  if ((vencendo.count ?? 0) > 0)
+  if (qtdVencidos > 0 && pode('Validade'))
+    alertas.push({ icon: CalendarClock, token: 'err', texto: `${qtdVencidos} produto(s) já vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
+  if ((vencendo.count ?? 0) > 0 && pode('Validade'))
     alertas.push({ icon: CalendarClock, token: 'warn', texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`, href: '/validade' })
   if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))
     alertas.push({ icon: ClipboardList, token: 'brand', texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`, href: '/inventario' })

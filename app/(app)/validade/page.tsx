@@ -49,7 +49,7 @@ export default async function ValidadePage({
   searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
+  if (!(await requirePermissao(lojaId, 'Validade'))) notFound()
 
   const sp = await searchParams
   // Modo "vencidos": so os que ja venceram (validade < hoje), do mais vencido pro

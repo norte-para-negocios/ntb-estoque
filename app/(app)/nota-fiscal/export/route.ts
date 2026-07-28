@@ -6,6 +6,7 @@ import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
     status: searchParams.get('status') || undefined,
     tipo: searchParams.get('tipo') || undefined,
     produto: searchParams.get('produto') || undefined,
+    categoria: searchParams.get('categoria') || undefined,
   }
+  const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
 
   const supabase = await createClient()
 
@@ -141,6 +144,7 @@ export async function GET(request: Request) {
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
 
+    if (categoriaOrClause) q = q.or(categoriaOrClause)
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
 
     return q

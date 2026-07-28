@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { setQuantidadeNFItem } from '@/lib/actions/nota-fiscal'
 import { parseNumBR } from '@/lib/num-br'
@@ -14,6 +14,7 @@ export function QuantidadeInput({
   valorInicial: number | null
 }) {
   const [valor, setValor] = useState<string>(valorInicial != null ? String(valorInicial) : '')
+  const valorSalvo = useRef(valor)
   const [pending, startTransition] = useTransition()
 
   function salvar(v: string) {
@@ -22,9 +23,16 @@ export function QuantidadeInput({
       toast.error('Quantidade inválida')
       return
     }
+    const anterior = valorSalvo.current
     startTransition(async () => {
-      await setQuantidadeNFItem(itemId, num)
-      toast.success('Quantidade salva')
+      const res = await setQuantidadeNFItem(itemId, num)
+      if (res?.error) {
+        toast.error('Erro ao salvar quantidade', { description: res.error })
+        setValor(anterior) // desfaz o otimismo
+      } else {
+        valorSalvo.current = v
+        toast.success('Quantidade salva')
+      }
     })
   }
 
