@@ -14,6 +14,8 @@ import { buscarItensNFFrio, filtrarItensCompras, agregarComprasMatriz } from '@/
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { descreverCFOP } from '@/lib/cfop'
 import type { LojaOmie } from '@/lib/omie/client'
 import { Scale, Download } from 'lucide-react'
@@ -37,32 +39,49 @@ const corMeta = (pct: number, meta: number) => (!Number.isFinite(pct) ? 'text-te
 export default async function RelatorioIndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
 
   const supabaseLoja = createServiceClient()
-  const { data: lojaRow } = await supabaseLoja
-    .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, meta_compras_pct')
-    .eq('id', lojaId)
-    .single<LojaOmie & { meta_compras_pct: number | null }>()
-  const metaPct = lojaRow?.meta_compras_pct ?? 40
 
   const sp = await searchParams
   const filtroIni = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : null
   const filtroFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : null
   const familiasSel = valoresMulti(sp.familia)
   const produtoTermo = sp.produto?.trim() || null
-  const filtroAtivo = !!(familiasSel.length || produtoTermo)
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
-  const familiasOpcoes = await buscarFamilias()
+  // lojaRow (config Omie/meta) e independente de familiasOpcoes/locaisRaw --
+  // rodava sozinho antes deste Promise.all, agora entra na mesma rodada.
+  const [{ data: lojaRow }, familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    supabaseLoja
+      .from('lojas')
+      .select('id, omie_app_key, omie_app_secret, meta_compras_pct')
+      .eq('id', lojaId)
+      .single<LojaOmie & { meta_compras_pct: number | null }>(),
+    buscarFamilias(),
+    supabaseLoja
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
+  const metaPct = lojaRow?.meta_compras_pct ?? 40
   const campos: CampoFiltro[] = [
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome)' },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
   ]
 
   const supabase = createServiceClient()
@@ -134,6 +153,7 @@ export default async function RelatorioIndicadoresPage({
     p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',
     p_familias: familiasSel.length ? familiasSel : null,
     p_produto: produtoTermo,
+    p_local: localCod,
   })
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) {
@@ -141,30 +161,40 @@ export default async function RelatorioIndicadoresPage({
     comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
   }
 
+  // metaRow nao depende de nada do bloco de Compras abaixo -- dispara agora e
+  // so aguarda o resultado quando for de fato usado, mais adiante.
+  const metaRowPromise = supabase
+    .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
+
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte).
   if (compIni < corte) {
+    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
+    type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
     // Paginado: lojas com catálogo grande (ex.: 2, 3, 5, 6 têm >1000 produtos)
     // estourariam o corte padrão de 1000 linhas do PostgREST numa chamada única,
     // deixando produtos fora do mapa de tipo/família (mesma classe de bug do rpcTodos).
-    type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
-    const prodMetaRaw: ProdMeta[] = []
+    // Pega o total antes (count exato) e roda isso e o complemento do Contabo em
+    // paralelo -- as duas buscas sao independentes entre si.
+    const [{ count: totalProdutos }, itensFrios] = await Promise.all([
+      supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl }),
+    ])
     const PAGE = 1000
-    for (let p = 0; ; p++) {
-      const { data, error } = await supabase
-        .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
-        .order('id').range(p * PAGE, p * PAGE + PAGE - 1)
-      if (error || !data?.length) break
-      prodMetaRaw.push(...(data as ProdMeta[]))
-      if (data.length < PAGE) break
-    }
+    const numPaginas = Math.ceil((totalProdutos ?? 0) / PAGE)
+    const blocos = await Promise.all(
+      Array.from({ length: numPaginas }, (_, p) =>
+        supabase
+          .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
+          .order('id').range(p * PAGE, p * PAGE + PAGE - 1)
+      )
+    )
+    const prodMetaRaw = blocos.flatMap((r) => (r.data ?? []) as ProdMeta[])
     const meta = new Map<number, { tipo: string | null; familia: string | null }>()
     for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
-    const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl })
     const filtrados = filtrarItensCompras(itensFrios, {
-      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: null,
+      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: localCod,
     }, meta)
     for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
       if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue
@@ -172,8 +202,7 @@ export default async function RelatorioIndicadoresPage({
     }
   }
 
-  const { data: metaRow } = await supabase
-    .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
+  const { data: metaRow } = await metaRowPromise
 
   // Une os meses das duas fontes (compras pode ter meses que o faturamento ainda não).
   const meses = [...new Set([...Object.keys(fatPorMes), ...Object.keys(comprasPorMes)])].sort()
@@ -209,6 +238,7 @@ export default async function RelatorioIndicadoresPage({
   const exportParams = new URLSearchParams()
   if (filtroIni) exportParams.set('data_inicio', filtroIni)
   if (filtroFim) exportParams.set('data_final', filtroFim)
+  if (localCod !== null) exportParams.set('local', String(localCod))
   const exportHref = `/relatorio-indicadores/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   return (
@@ -224,7 +254,7 @@ export default async function RelatorioIndicadoresPage({
               <FiltrosGaveta
                 basePath="/relatorio-indicadores"
                 campos={campos}
-                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '' }}
+                defaults={{ data_inicio: sp.data_inicio ?? '', data_final: sp.data_final ?? '', produto: sp.produto ?? '', familia: sp.familia ?? '', local: sp.local ?? '' }}
                 persistirEm="/relatorio-indicadores"
               />
               <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: Faturamento, Compras, Resultado e % mês a mês">
@@ -234,6 +264,7 @@ export default async function RelatorioIndicadoresPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-indicadores" campos={campos} persistirEm="/relatorio-indicadores" />
+        <ChipsPeriodo basePath="/relatorio-indicadores" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

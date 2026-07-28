@@ -25,6 +25,8 @@ import {
 import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
 import Link from 'next/link'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => { const [a, m] = ym.split('-'); return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}` }
@@ -118,7 +120,8 @@ export default async function RelatorioMovimentacaoPage({
     // granularidade de MES; o dia escolhido no seletor e ignorado de proposito.
     // Sem filtro explicito, escopo pedido pelo usuario 2026-07-19: só ano
     // corrente (não precisa de nada do ano passado por padrão).
-    const anoCorrenteOp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+    const hojeISOOp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+    const anoCorrenteOp = hojeISOOp.slice(0, 4)
     const mesIniOp = sp.data_inicio ? sp.data_inicio.slice(0, 7) : `${anoCorrenteOp}-01`
     const mesFimOp = sp.data_final ? sp.data_final.slice(0, 7) : null
     const origens = [...new Set(rows.map((r) => r.origem))].sort()
@@ -137,6 +140,7 @@ export default async function RelatorioMovimentacaoPage({
       { tipo: 'data', nome: 'data_final', label: 'Mês final (dia é ignorado)' },
     ]
 
+    const chipsPeriodoOp = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${anoCorrenteOp}-01-01`, dataFim: hojeISOOp })
     const header = (
       <ListaHeader>
         <PageHeader
@@ -167,6 +171,7 @@ export default async function RelatorioMovimentacaoPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-movimentacao" campos={campos} persistirEm="/relatorio-movimentacao-op" />
+        <ChipsPeriodo basePath="/relatorio-movimentacao" opcoes={chipsPeriodoOp} />
       </ListaHeader>
     )
 
@@ -452,6 +457,8 @@ export default async function RelatorioMovimentacaoPage({
       opcoes: locaisOpcoes.map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
     },
   ]
+  const hojeISOQtd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodoQtd = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISOQtd.slice(0, 4)}-01-01`, dataFim: hojeISOQtd })
   const header = (
     <ListaHeader>
       <PageHeader
@@ -481,51 +488,111 @@ export default async function RelatorioMovimentacaoPage({
         }
       />
       <ChipsFiltrosAtivos basePath="/relatorio-movimentacao" campos={campos} persistirEm="/relatorio-movimentacao" />
+      <ChipsPeriodo basePath="/relatorio-movimentacao" opcoes={chipsPeriodoQtd} />
     </ListaHeader>
   )
 
   const sentido = sp.sentido === 'entradas' ? 'entradas' : 'saidas'
-  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
-  const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
-  const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
+  const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISOQtd.slice(0, 4)}-01-01`
+  const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISOQtd
 
-  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
+  // Achado real (2026-07-27): a RPC relatorio_movimentacao_matriz tem plano
+  // instável no Postgres (a CTE `preco` varre nota_fiscal_items inteiro sem
+  // filtro de período) e ocasionalmente estoura statement_timeout (57014) --
+  // o código antigo engolia esse erro em silêncio (`if (error...) break`),
+  // fazendo a matriz cair só na fatia fria (Contabo) e a tela parecer
+  // "travada" em meses antigos mesmo com dado novo no banco. Confirmado que a
+  // MESMA chamada funciona na maioria das vezes (2,8-6s) -- retry resolve o
+  // caso comum; quando falha as 3 vezes, `falhou=true` avisa a UI em vez de
+  // mostrar dado incompleto calado.
+  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<{ rows: T[]; falhou: boolean }> {
     const PAGE = 1000
     const todos: T[] = []
     for (let p = 0; ; p++) {
-      const { data, error } = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
-      if (error || !data?.length) break
-      todos.push(...(data as T[]))
+      let data: T[] | null = null
+      let error: unknown = null
+      for (let tentativa = 0; tentativa < 3; tentativa++) {
+        const resp = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
+        data = resp.data as T[] | null
+        error = resp.error
+        if (!error) break
+        console.error(`relatorio-movimentacao: falha na RPC ${fn} (tentativa ${tentativa + 1}/3)`, error)
+      }
+      if (error) return { rows: todos, falhou: true }
+      if (!data?.length) break
+      todos.push(...data)
       if (data.length < PAGE) break
     }
-    return todos
+    return { rows: todos, falhou: false }
   }
 
   const cutoff = limiteJanelaQuente()
   const iniRpc = ini < cutoff ? cutoff : ini
-  const matrizRecente = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
+  // Achado real (auditoria de relatorios, 2026-07-26): iniRpc inclui `cutoff`
+  // (piso do lado quente) e o fetch frio abaixo tambem incluia `cutoff`
+  // (teto do lado frio) -- o dia exato do corte entrava 2x (RPC + JS),
+  // inflando entradas/saidas. corteExcl (1 dia antes) mesmo padrao ja usado
+  // em relatorio-compras/page.tsx (corteExcl/dataFinalFria).
+  const corteExcl = new Date(Date.parse(cutoff) - 86400000).toISOString().slice(0, 10)
+  const { rows: matrizRecente, falhou: falhouMatrizRecente } = await rpcTodos<LinhaMatriz>('relatorio_movimentacao_matriz', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'produto', p_sentido: sentido,
     p_cod_prods: codigosIn, p_produto: produtoBusca ? escapeIlike(produtoBusca) : null,
   })
 
   let matriz = matrizRecente
   if (ini < cutoff) {
-    const brutasTodas = await buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
-      lojaId, dataInicio: ini, dataFinal: cutoff,
-    })
+    // Se o periodo pedido termina antes do corte (fim < corteExcl -- recorte
+    // todo dentro do historico frio), usa fim; senao usa corteExcl fixo (o
+    // resto, de cutoff em diante, ja vem do RPC acima).
+    const dataFinalFria = fim < corteExcl ? fim : corteExcl
+
+    // Achado real: metaRows/precoRows nao tinham paginacao nenhuma -- mesma
+    // classe do bug ja corrigido em Estoque Valorizado/Indicadores (PostgREST
+    // corta em 1000 linhas por padrao SEM erro, e 5 das 6 lojas ativas tem
+    // mais de 1000 produtos, ver AGENTS.md). Corrigido com count-first +
+    // paginas em paralelo. As 3 buscas (Contabo + as 2 contagens de Supabase)
+    // sao independentes entre si -- disparadas juntas em vez de em serie.
+    const [brutasTodas, { count: totalProdutos }, { count: totalPrecos }] = await Promise.all([
+      buscarMovimentosHistoricoBrutos<LinhaMovHistoricoBruta>({
+        lojaId, dataInicio: ini, dataFinal: dataFinalFria,
+      }),
+      supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      supabase
+        .from('nota_fiscal_items')
+        .select('n_id_produto', { count: 'exact', head: true })
+        .eq('loja_id', lojaId)
+        .gt('n_preco_unit', 0),
+    ])
     const brutas = filtrarLinhasMovHistorico(brutasTodas, codigosIn, produtoBusca)
-    const { data: metaRows } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-    const metaPorCodigo = new Map((metaRows ?? []).map((m) => [m.codigo_produto, m]))
-    const { data: precoRows } = await supabase
-      .from('nota_fiscal_items')
-      .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
-      .eq('loja_id', lojaId)
-      .gt('n_preco_unit', 0)
+
+    const numPaginasProd = Math.ceil((totalProdutos ?? 0) / 1000)
+    const numPaginasPreco = Math.ceil((totalPrecos ?? 0) / 1000)
+    const [blocosProd, blocosPreco] = await Promise.all([
+      Promise.all(
+        Array.from({ length: numPaginasProd }, (_, i) =>
+          supabase
+            .from('produtos')
+            .select('codigo_produto, tipo_item, descricao_familia')
+            .eq('loja_id', lojaId)
+            .range(i * 1000, i * 1000 + 999)
+        )
+      ),
+      Promise.all(
+        Array.from({ length: numPaginasPreco }, (_, i) =>
+          supabase
+            .from('nota_fiscal_items')
+            .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
+            .eq('loja_id', lojaId)
+            .gt('n_preco_unit', 0)
+            .range(i * 1000, i * 1000 + 999)
+        )
+      ),
+    ])
+    const metaRows = blocosProd.flatMap((r) => r.data ?? [])
+    const metaPorCodigo = new Map(metaRows.map((m) => [m.codigo_produto, m]))
+    const precoRows = blocosPreco.flatMap((r) => r.data ?? [])
     const precoPorProduto = new Map<number, number>()
-    for (const r of (precoRows ?? []) as { n_id_produto: number; n_preco_unit: number }[]) {
+    for (const r of precoRows as unknown as { n_id_produto: number; n_preco_unit: number }[]) {
       if (r.n_id_produto && !precoPorProduto.has(r.n_id_produto)) precoPorProduto.set(r.n_id_produto, r.n_preco_unit)
     }
     const antiga = agregarMovimentacaoJS(brutas, metaPorCodigo, precoPorProduto, 'produto', sentido)
@@ -574,6 +641,13 @@ export default async function RelatorioMovimentacaoPage({
           Produtos <span className="num font-semibold text-text">{ordenadas.length}</span>
         </span>
       </div>
+
+      {falhouMatrizRecente && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Não foi possível carregar os dados mais recentes agora (instabilidade momentânea do banco). Os meses mais
+          recentes podem estar faltando ou incompletos abaixo — recarregue a página em alguns segundos.
+        </p>
+      )}
 
       <SegmentLinks
         basePath="/relatorio-movimentacao"

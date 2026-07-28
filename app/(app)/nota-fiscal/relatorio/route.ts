@@ -12,6 +12,7 @@ import { labelTipoItem } from '@/lib/constants-omie'
 import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
+import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
 
   // Mesma logica de filtro da tela/export.
   let notaIdsFiltro: number[] | null = null
+  let codigos: string[] | null = null
   if (tiposArr.length || produto) {
     if (tiposArr.length) {
       // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
@@ -71,10 +73,13 @@ export async function GET(request: Request) {
           .in('tipo_item', tiposArr)
           .range(from, to),
       )
-      const codigos = prodCodigos.map((p) => String(p.codigo_produto))
+      codigos = prodCodigos.map((p) => String(p.codigo_produto))
       if (codigos.length === 0) {
         notaIdsFiltro = [-1]
       } else {
+        // codigos e' `let` (reatribuido acima) -- alias `const` pra manter o
+        // narrowing de nao-nulo dentro do closure abaixo.
+        const codigosNaoNulos = codigos
         // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
         // (toda loja ativa ja passa disso) -- mesma razao acima.
         const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
@@ -82,7 +87,7 @@ export async function GET(request: Request) {
             .from('nota_fiscal_items')
             .select('nota_fiscal_id')
             .eq('loja_id', lojaId)
-            .in('produto_codigo', codigos)
+            .in('produto_codigo', codigosNaoNulos)
             .range(from, to)
           if (produto) {
             const p = escapeIlikeOr(produto)
@@ -115,6 +120,7 @@ export async function GET(request: Request) {
   const PAGE_SIZE = 1000
   type Nota = {
     id: number
+    n_id_receb: string
     d_emissao_nfe: string | null
     c_numero_nfe: string | null
     c_razao_social: string | null
@@ -128,7 +134,7 @@ export async function GET(request: Request) {
   function buildQuery(from: number, to: number) {
     let q = supabase
       .from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
+      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
       .eq('loja_id', lojaId)
       .gte('d_emissao_nfe', dataInicio)
       .lte('d_emissao_nfe', dataFinal)
@@ -157,23 +163,23 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  // complementarNotasFiscais busca a fatia fria so por loja/data/busca -- nao
-  // conhece o filtro de tipo/produto (limitacao documentada no AGENTS.md).
-  // Sem filtrar aqui, toda nota fria do periodo entraria no relatorio mesmo
-  // sem casar com o filtro, quando o periodo cruza os 90 dias.
-  const notasCompletasBrutas = dataInicio < limiteJanelaQuente()
+  // Mesmo achado de app/(app)/nota-fiscal/export/route.ts (2026-07-26):
+  // notaIdsFiltro (ids do Supabase) nao pode filtrar linhas do Contabo.
+  const temFiltro = tiposArr.length > 0 || !!produto
+  const notaIdsFrioSet = temFiltro && dataInicio < limiteJanelaQuente()
+    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: produto || null, localCod: null })
+    : null
+  const notasCompletas = dataInicio < limiteJanelaQuente()
     ? await complementarNotasFiscais(notas, {
         lojaId,
         dataInicio,
         dataFinal,
         busca: numNfe || fornecedor,
-        filtrarFrias: status ? (n) => statusBateFiltro(n, status) : undefined,
+        filtrarFrias: (n) =>
+          (!status || statusBateFiltro(n, status)) &&
+          (!notaIdsFrioSet || notaIdsFrioSet.has(n.id)),
       })
     : notas
-  const notaIdsFiltroSet = notaIdsFiltro ? new Set(notaIdsFiltro) : null
-  const notasCompletas = notaIdsFiltroSet
-    ? notasCompletasBrutas.filter((n) => notaIdsFiltroSet.has(n.id))
-    : notasCompletasBrutas
 
   const itens: RelatorioNFItem[] = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),

@@ -98,14 +98,19 @@ export async function GET(
   const codigos = [
     ...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean)),
   ]
-  const { data: produtos } = codigos.length
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, unidade')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', codigos)
-    : { data: [] }
-  const unidadeMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p.unidade]))
+  // Achado real (auditoria de relatórios, 2026-07-26): mesmo fix de
+  // app/(app)/inventario/[id]/contagem/page.tsx -- um único `.in()` sem
+  // paginação cai no teto padrão de 1000 linhas do PostgREST.
+  const produtos: { codigo_produto: number; unidade: string | null }[] = []
+  for (let from = 0; codigos.length && from < codigos.length; from += 1000) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, unidade')
+      .eq('loja_id', lojaId)
+      .in('codigo_produto', codigos.slice(from, from + 1000))
+    if (data?.length) produtos.push(...data)
+  }
+  const unidadeMap = new Map(produtos.map((p) => [p.codigo_produto, p.unidade]))
 
   const itens: ContagemInventarioItem[] = (itensRaw ?? []).map((it) => ({
     codigo: it.produto_codigo || '',

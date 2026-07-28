@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import type { OrigemMovimento } from '@/components/movimentacoes/DetalheMovimentoSheet'
 import { requirePermissao } from '@/lib/auth'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { dataOmieBR } from '@/lib/data-bahia'
 import type { LojaOmie } from '@/lib/omie/client'
-import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
@@ -12,6 +12,7 @@ import { FiltroLocalMovimentos } from '@/components/movimentacoes/FiltroLocalMov
 import { FiltroFamiliaMovimentos } from '@/components/movimentacoes/FiltroFamiliaMovimentos'
 import { FiltroTipoMovimentos } from '@/components/movimentacoes/FiltroTipoMovimentos'
 import { NovoAjusteManual } from '@/components/movimentacoes/NovoAjusteManual'
+import { ListaMovimentos } from '@/components/movimentacoes/ListaMovimentos'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { statusNF } from '@/lib/nf-status'
 import {
@@ -40,7 +41,7 @@ function fmtQtd(n: number): string {
 
 type SP = { data_inicio?: string; data_final?: string; produto?: string; local?: string; familia?: string; tipo?: string }
 
-type LinhaDetalhe = {
+export type LinhaDetalhe = {
   chave: string
   data: string
   tipo: string
@@ -49,6 +50,7 @@ type LinhaDetalhe = {
   destino: number | null
   obs: string | null
   status: string | null
+  origem?: OrigemMovimento
 }
 
 const TIPOS: Record<string, { label: string; cor: string }> = {
@@ -84,8 +86,16 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   const ini = sp.data_inicio || hojeISO
   const fim = sp.data_final || sp.data_inicio || hojeISO
   const localFiltro = sp.local ? Number(sp.local) : null
+  const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
 
-  const [{ data: locaisRaw }, { data: familiasRaw }, podeCriar] = await Promise.all([
+  // Achado real (2026-07-27, usuario reportou lentidao): o app roda no Contabo
+  // (Franca) e o Supabase fica em sa-east-1 (Brasil) -- cada ida-e-volta ao
+  // banco paga ~230-460ms so de latencia de rede (medido: time_connect=0.23s
+  // ate o pooler). A busca de produtos nao depende de locais/familias/
+  // permissao -- rodava depois, em serie, pagando outra rodada inteira de
+  // latencia por nada. Junta no mesmo Promise.all (mesmo padrao do fix em
+  // Pendencias de Classificacao). Sem termo, so preenche `data: null`.
+  const [{ data: locaisRaw }, { data: familiasRaw }, podeCriar, { data: prodsMatch }] = await Promise.all([
     supabase
       .from('local_estoques')
       .select('codigo_local_estoque, descricao')
@@ -99,11 +109,18 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       .eq('inativo', false)
       .order('nome'),
     requirePermissao(lojaId, 'Movimentacoes - Criar'),
+    termo
+      ? supabase
+          .from('produtos')
+          .select('codigo_produto, codigo, descricao')
+          .eq('loja_id', lojaId)
+          .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
+          .limit(100)
+      : Promise.resolve({ data: null as { codigo_produto: number; codigo: string; descricao: string }[] | null }),
   ])
   const locais = (locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null }[]
   const familias = ((familiasRaw ?? []) as { nome: string }[]).map((f) => f.nome)
 
-  const termo = sp.produto ? escapeIlikeOr(sp.produto) : null
   let movDetalhes: LinhaDetalhe[] = []
   let idsProdDetalhes: number[] = []
   let produtoUnico: { id_prod: number; codigo: string; descricao: string } | null = null
@@ -117,13 +134,6 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
   let totalOmie: { entradas: number; saidas: number } | null = null
 
   if (termo) {
-    const { data: prodsMatch } = await supabase
-      .from('produtos')
-      .select('codigo_produto, codigo, descricao')
-      .eq('loja_id', lojaId)
-      .or(`descricao.ilike.%${termo}%,codigo.ilike.%${termo}%`)
-      .limit(100)
-
     idsProdDetalhes = [...new Set((prodsMatch ?? []).map((p) => Number(p.codigo_produto)).filter(Boolean))]
 
     // Filtro adicional de familia/tipo: restringe os produtos ja achados pela busca.
@@ -146,25 +156,20 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
     if (idsProdDetalhes.length) {
       const fimExcl = new Date(Date.parse(fim) + 86400000).toISOString().slice(0, 10)
 
-      const { data: histRowsRaw } = await supabase
-        .from('movimentos_historico')
-        .select('cod_prod, data, entradas, saidas')
-        .eq('loja_id', lojaId)
-        .in('cod_prod', idsProdDetalhes)
-        .gte('data', ini)
-        .lte('data', fim)
-      const histRows = await complementarMovimentosHistorico(histRowsRaw ?? [], { lojaId, dataInicio: ini, dataFinal: fim })
-      if (histRows) {
-        totalOmie = histRows.reduce(
-          (acc, r) => ({ entradas: acc.entradas + (Number(r.entradas) || 0), saidas: acc.saidas + (Number(r.saidas) || 0) }),
-          { entradas: 0, saidas: 0 }
-        )
-      }
-
-      const [{ data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
+      // histRowsRaw nao depende de movs/ops/nfItems/invItems (nem vice-versa) --
+      // mesmo achado do Promise.all acima: juntar numa unica rodada em vez de
+      // esperar uma ida ao banco terminar pra so entao comecar a proxima.
+      const [{ data: histRowsRaw }, { data: movsData }, { data: opsData }, { data: nfItemsData }, { data: invItems }] = await Promise.all([
+        supabase
+          .from('movimentos_historico')
+          .select('cod_prod, data, entradas, saidas')
+          .eq('loja_id', lojaId)
+          .in('cod_prod', idsProdDetalhes)
+          .gte('data', ini)
+          .lte('data', fim),
         supabase
           .from('movimentos')
-          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status')
+          .select('id, data, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, obs, status, id_ajuste, transferencia_id')
           .eq('loja_id', lojaId)
           .in('id_prod', idsProdDetalhes)
           .gte('data', ini)
@@ -173,7 +178,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(500),
         supabase
           .from('ordens_producao')
-          .select('id, identificacao_d_dt_previsao, dt_conclusao_real, concluida, identificacao_n_qtde, quantidade, identificacao_c_num_op, num_ordem')
+          .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao, dt_conclusao_real, concluida, identificacao_n_qtde, quantidade, identificacao_c_num_op, num_ordem')
           .eq('loja_id', lojaId)
           .in('identificacao_n_cod_produto', idsProdDetalhes)
           .gte('identificacao_d_dt_previsao', ini)
@@ -192,7 +197,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         // evita esse plano ruim (validado: 6/6 execucoes rapidas sem filtro no embed).
         supabase
           .from('nota_fiscal_items')
-          .select('id, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
+          .select('id, nota_fiscal_id, n_id_receb, n_sequencia, n_id_produto, n_qtde_nfe, c_codigo_produto, notas_fiscais!inner(d_emissao_nfe, c_numero_nfe, c_natureza_operacao, deleted_at, c_etapa, full_object)')
           .eq('loja_id', lojaId)
           .in('n_id_produto', idsProdDetalhes)
           .limit(500),
@@ -204,16 +209,30 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           .limit(200),
       ])
 
-      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null }
-      type RawOP = { id: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
-      type RawNFI = { id: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
+      const histRows = await complementarMovimentosHistorico(histRowsRaw ?? [], { lojaId, dataInicio: ini, dataFinal: fim })
+      if (histRows) {
+        totalOmie = histRows.reduce(
+          (acc, r) => ({ entradas: acc.entradas + (Number(r.entradas) || 0), saidas: acc.saidas + (Number(r.saidas) || 0) }),
+          { entradas: 0, saidas: 0 }
+        )
+      }
+
+      type RawMov = { id: number; data: string; tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; obs: string | null; status: string | null; id_ajuste: number | null; transferencia_id: number | null }
+      type RawOP = { id: number; identificacao_n_cod_op: number; identificacao_d_dt_previsao: string | null; dt_conclusao_real: string | null; concluida: boolean | null; identificacao_n_qtde: number | null; quantidade: number | null; identificacao_c_num_op: string | null; num_ordem: string | null }
+      type RawNFI = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; c_codigo_produto: string | null; notas_fiscais: { d_emissao_nfe: string; c_numero_nfe: string | null; c_natureza_operacao: string | null; deleted_at: string | null; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }[] }
       // Item de nota fiscal ja normalizado (Supabase e Contabo tem formatos diferentes
       // de join -- aninhado vs colunas nf_* -- normalizados pra este shape comum).
-      type NFIItem = { id: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
+      // n_id_receb/n_sequencia (chave natural do item, mesma usada em
+      // complementarNotaFiscalItems): o `id` sozinho nao serve mais pra dedupe
+      // quente+frio (Contabo gera seu proprio bigserial `id`, independente do
+      // Supabase, desde o dual-write de NF -- ver historico-contabo.ts).
+      type NFIItem = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; d_emissao_nfe: string | null; c_numero_nfe: string | null; c_natureza_operacao: string | null }
       // /nota_fiscal_items do Contabo so junta d_emissao_nfe/c_numero_nfe/c_natureza_operacao
       // (colunas nf_*) -- nao devolve etapa/cancelamento do cabecalho, por isso
       // `nota_fiscal_id` e usado abaixo pra cruzar com um fetch a parte de /notas_fiscais.
-      type RawNFIFrio = { id: number; nota_fiscal_id: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
+      // n_id_receb/n_sequencia sao colunas proprias de nota_fiscal_items (nao
+      // prefixadas nf_*, que sao so do join com o cabecalho) -- o endpoint ja devolve.
+      type RawNFIFrio = { id: number; nota_fiscal_id: number; n_id_receb: string; n_sequencia: number; n_id_produto: number; n_qtde_nfe: number | null; nf_d_emissao_nfe: string | null; nf_c_numero_nfe: string | null; nf_c_natureza_operacao: string | null }
       type RawNFHeaderFrio = { id: number; c_etapa: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null }
       type RawInv = { produto_codigo_produto: number; quan: number | null; inventarios: { id: number; data: string }[] }
 
@@ -229,7 +248,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         .map((nfi) => {
           const nf = Array.isArray(nfi.notas_fiscais) ? nfi.notas_fiscais[0] : nfi.notas_fiscais
           return {
-            id: nfi.id, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
+            id: nfi.id, nota_fiscal_id: nfi.nota_fiscal_id, n_id_receb: nfi.n_id_receb, n_sequencia: nfi.n_sequencia, n_id_produto: nfi.n_id_produto, n_qtde_nfe: nfi.n_qtde_nfe,
             d_emissao_nfe: nf?.d_emissao_nfe ?? null, c_numero_nfe: nf?.c_numero_nfe ?? null, c_natureza_operacao: nf?.c_natureza_operacao ?? null,
           }
         })
@@ -257,11 +276,15 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         const friosNormalizados: NFIItem[] = friosDoProduto
           .filter((f) => notasValidas.has(f.nota_fiscal_id))
           .map((f) => ({
-            id: f.id, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
+            id: f.id, nota_fiscal_id: f.nota_fiscal_id, n_id_receb: f.n_id_receb, n_sequencia: f.n_sequencia, n_id_produto: f.n_id_produto, n_qtde_nfe: f.n_qtde_nfe,
             d_emissao_nfe: f.nf_d_emissao_nfe, c_numero_nfe: f.nf_c_numero_nfe, c_natureza_operacao: f.nf_c_natureza_operacao,
           }))
-        const vistos = new Set(nfItemsQuentes.map((n) => n.id))
-        nfItems = [...nfItemsQuentes, ...friosNormalizados.filter((n) => !vistos.has(n.id))]
+        // Chave natural n_id_receb+n_sequencia (id do ITEM, nao da nota) -- mesma
+        // razao do fix em historico-contabo.ts: o Contabo gera seu proprio `id`
+        // bigserial por linha, independente do Supabase, desde o dual-write de NF.
+        const chave = (n: NFIItem) => `${n.n_id_receb}|${n.n_sequencia}`
+        const vistos = new Set(nfItemsQuentes.map(chave))
+        nfItems = [...nfItemsQuentes, ...friosNormalizados.filter((n) => !vistos.has(chave(n)))]
       }
 
       const movsRaw = movs as RawMov[]
@@ -274,6 +297,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         destino: m.codigo_local_estoque_destino != null ? Number(m.codigo_local_estoque_destino) : null,
         obs: m.obs,
         status: m.status,
+        origem: m.tipo === 'TRF' && m.transferencia_id != null ? { tipo: 'transferencia', id: m.transferencia_id } : undefined,
       }))
 
       const opLines: LinhaDetalhe[] = ((ops ?? []) as RawOP[]).map((op) => ({
@@ -285,6 +309,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
         destino: null,
         obs: `OP ${op.identificacao_c_num_op || op.num_ordem || op.id}${op.concluida ? '' : ' (em andamento)'}`,
         status: op.concluida ? 'Concluido' : 'Iniciado',
+        origem: { tipo: 'op', id: op.id },
       }))
 
       const entLines: LinhaDetalhe[] = nfItems
@@ -301,6 +326,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           destino: null,
           obs: [nfi.c_numero_nfe ? `NF ${nfi.c_numero_nfe}` : null, nfi.c_natureza_operacao ?? null].filter(Boolean).join(' — ') || 'Saída (NF)',
           status: 'Concluido',
+          origem: { tipo: 'nota_fiscal', id: nfi.nota_fiscal_id },
         }))
 
       const sldLines: LinhaDetalhe[] = ((invItems ?? []) as unknown as RawInv[])
@@ -320,6 +346,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
             destino: null,
             obs: 'Inventário',
             status: 'Concluido',
+            origem: inv?.id != null ? { tipo: 'inventario', id: inv.id } : undefined,
           }
         })
 
@@ -359,14 +386,14 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
               if (fim < hojeISO) {
                 const { data: posterioresRaw } = await supabase
                   .from('movimentos')
-                  .select('id, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino')
+                  .select('id, tipo, quan, codigo_local_estoque, codigo_local_estoque_destino, id_ajuste')
                   .eq('loja_id', lojaId)
                   .eq('id_prod', produtoUnico.id_prod)
                   .eq('status', 'Concluido')
                   .gte('data', fimExcl)
                   .limit(1000)
                 const posteriores = await complementarMovimentos(posterioresRaw ?? [], { lojaId, dataInicio: fimExcl })
-                for (const p of posteriores as { tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null }[]) {
+                for (const p of posteriores as { tipo: string; quan: number | null; codigo_local_estoque: number | null; codigo_local_estoque_destino: number | null; id_ajuste: number | null }[]) {
                   saldoAtual -= sinalEm(
                     { tipo: p.tipo, quan: Number(p.quan) || 0, local: p.codigo_local_estoque, destino: p.codigo_local_estoque_destino },
                     localFiltro
@@ -434,87 +461,19 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           hint="Digite o nome ou código do produto para ver todos os tipos de movimentação."
         />
       ) : (
-        <Lista
+        <ListaMovimentos
           linhas={movDetalhes}
-          chaveLinha={(m) => m.chave}
-          colunas={[
-            {
-              label: 'Data',
-              larguraDesktop: 'w-36',
-              render: (m) => (
-                <span className="num text-[12px] text-text-muted">{fmtDataDetalhe(m.data)}</span>
-              ),
-            },
-            {
-              label: 'Tipo',
-              primaria: true,
-              larguraDesktop: 'w-44',
-              render: (m) => {
-                const t = TIPOS[m.tipo] ?? { label: m.tipo, cor: 'text-text-muted' }
-                return (
-                  <span>
-                    <span className={`font-medium text-[13px] ${t.cor}`}>{t.label}</span>
-                    {m.obs && (
-                      <span className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-text-muted">
-                        {m.obs}
-                      </span>
-                    )}
-                  </span>
-                )
-              },
-            },
-            {
-              label: 'Quantidade',
-              alinhar: 'right',
-              larguraDesktop: 'w-28',
-              render: (m) => {
-                const negativo = m.tipo === 'SAI' || m.tipo === 'TPQ'
-                const cor = negativo ? 'text-err' : m.tipo === 'ENT' || m.tipo === 'OP' ? 'text-ok' : 'text-text'
-                const sinal = negativo ? '-' : m.tipo === 'ENT' || m.tipo === 'OP' ? '+' : ''
-                return (
-                  <span className={`num font-medium ${cor}`}>
-                    {sinal}{fmtQtd(m.quan)}
-                  </span>
-                )
-              },
-            },
-            {
-              label: 'Local / Destino',
-              larguraDesktop: 'w-48',
-              render: (m) => {
-                if (m.local == null) return <span className="text-text-muted">-</span>
-                const nomeOrig = locaisMap.get(m.local) ?? String(m.local)
-                const nomeDest = m.destino != null ? (locaisMap.get(m.destino) ?? String(m.destino)) : null
-                return (
-                  <span className="text-[12px] text-text-muted">
-                    {nomeOrig}
-                    {nomeDest && <span> → {nomeDest}</span>}
-                  </span>
-                )
-              },
-            },
-            {
-              label: 'Status',
-              larguraDesktop: 'w-28',
-              render: (m) => {
-                const cor = m.status === 'Erro' ? 'text-err' : m.status === 'Concluido' ? 'text-ok' : 'text-text-muted'
-                return <span className={`text-[11px] ${cor}`}>{m.status ?? '-'}</span>
-              },
-            },
-          ]}
-          vazio={
-            <EmptyState
-              icon={ArrowLeftRight}
-              title="Sem movimentações"
-              hint={
-                idsProdDetalhes.length === 0
-                  ? 'Produto não encontrado no cadastro.'
-                  : localFiltro
-                    ? 'Nenhum ajuste registrado neste local e período. OP/NF/inventário não têm local registrado, por isso somem com o filtro de local ativo.'
-                    : 'Nenhuma OP ou movimento encontrado neste período para este produto.'
-              }
-            />
-          }
+          TIPOS={TIPOS}
+          locaisMap={locaisMap}
+          vazioProps={{
+            title: 'Sem movimentações',
+            hint:
+              idsProdDetalhes.length === 0
+                ? 'Produto não encontrado no cadastro.'
+                : localFiltro
+                  ? 'Nenhum ajuste registrado neste local e período. OP/NF/inventário não têm local registrado, por isso somem com o filtro de local ativo.'
+                  : 'Nenhuma OP ou movimento encontrado neste período para este produto.',
+          }}
         />
       )}
     </div>

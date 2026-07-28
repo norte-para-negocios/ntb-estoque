@@ -56,25 +56,30 @@ export default async function InventarioPage({
   const dir = sp.dir === 'asc' ? 'asc' : 'desc'
 
   // Familias distintas para o select. Loja pode ter ~2000 produtos ativos, acima
-  // do corte padrao de 1000 linhas do PostgREST - pagina com .range() ate esgotar
-  // pra nao perder familias silenciosamente do filtro (mesmo achado das outras
-  // buscas desta pagina).
+  // do corte padrao de 1000 linhas do PostgREST - pega o total antes (count
+  // exato) e busca todas as paginas em paralelo em vez de uma de cada vez
+  // (roda em TODO carregamento da tela).
   const produtosFamilia: { descricao_familia: string | null }[] = []
   {
     const PAGE_SIZE = 1000
-    for (let pagina = 0; ; pagina++) {
-      const from = pagina * PAGE_SIZE
-      const { data: bloco } = await supabase
-        .from('produtos')
-        .select('descricao_familia')
-        .eq('loja_id', lojaId)
-        .not('descricao_familia', 'is', null)
-        .order('codigo_produto')
-        .range(from, from + PAGE_SIZE - 1)
-      if (!bloco?.length) break
-      produtosFamilia.push(...bloco)
-      if (bloco.length < PAGE_SIZE) break
-    }
+    const { count } = await supabase
+      .from('produtos')
+      .select('descricao_familia', { count: 'exact', head: true })
+      .eq('loja_id', lojaId)
+      .not('descricao_familia', 'is', null)
+    const numPaginas = Math.ceil((count ?? 0) / PAGE_SIZE)
+    const blocos = await Promise.all(
+      Array.from({ length: numPaginas }, (_, pagina) =>
+        supabase
+          .from('produtos')
+          .select('descricao_familia')
+          .eq('loja_id', lojaId)
+          .not('descricao_familia', 'is', null)
+          .order('codigo_produto')
+          .range(pagina * PAGE_SIZE, pagina * PAGE_SIZE + PAGE_SIZE - 1)
+      )
+    )
+    for (const { data: bloco } of blocos) produtosFamilia.push(...(bloco ?? []))
   }
 
   const familias = [
@@ -169,19 +174,21 @@ export default async function InventarioPage({
   const temProxima = (inventariosRaw?.length ?? 0) > POR_PAGINA
   const inventarios = temProxima ? inventariosRaw!.slice(0, POR_PAGINA) : inventariosRaw
 
-  const { data: locais } = await supabase
-    .from('local_estoques')
-    .select('codigo_local_estoque, descricao')
-    .eq('loja_id', lojaId)
-    .neq('inativo', 'S')
-    .order('descricao')
-
-  // TODOS os locais (incl. inativos) pro filtro e pra exibir nome de inventário
-  // antigo feito num local hoje inativo (mesmo padrão de transferencia).
-  const { data: todosLocais } = await supabase
-    .from('local_estoques')
-    .select('codigo_local_estoque, descricao')
-    .eq('loja_id', lojaId)
+  // Locais ATIVOS e TODOS os locais (incl. inativos, pro filtro e pra exibir
+  // nome de inventário antigo feito num local hoje inativo) sao independentes
+  // -- roda em paralelo (mesmo padrão de transferencia/page.tsx).
+  const [{ data: locais }, { data: todosLocais }] = await Promise.all([
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .neq('inativo', 'S')
+      .order('descricao'),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId),
+  ])
 
   const localMap = new Map((todosLocais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 

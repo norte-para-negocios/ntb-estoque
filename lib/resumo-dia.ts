@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { statusInfo } from '@/lib/status-cor'
-import { NAO_CANCELADA_OR } from '@/lib/nf-status'
+import { NAO_CANCELADA_OR, statusNF } from '@/lib/nf-status'
 import { explicarErroOmie } from '@/lib/erro-omie-amigavel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import {
@@ -217,6 +217,18 @@ export async function carregarResumoDia(
     supabase.from('audit_log').select('id', { count: 'exact', head: true }).in('loja_id', lojaIds).gte('created_at', ini).lt('created_at', fim),
   ])
 
+  // Achado real (auditoria de relatórios, 2026-07-26): essas 6 contagens
+  // nunca checavam `.error` -- uma falha transitória do Supabase vira "0"
+  // silencioso (`.count ?? 0`), indistinguível de "não teve nenhum" de
+  // verdade. Loga pra ficar visível nos logs do servidor, sem mudar o
+  // contrato de `Contagem` (que já é só números, sem estado de erro).
+  for (const [nome, res] of [
+    ['transferencias', transfCount], ['inventarios', inventCount], ['opsPrevistas', opsPrevCount],
+    ['opsConcluidas', opsConclCount], ['erros', errosCount], ['auditoria', auditCount],
+  ] as const) {
+    if (res.error) console.error(`resumo-dia: falha ao contar ${nome}`, res.error)
+  }
+
   const contagem: Contagem = {
     notas: notasRows.length,
     valorNotas: notasRows.reduce((s, n) => s + Number(n.n_valor_nfe ?? 0), 0),
@@ -251,18 +263,40 @@ async function listarCategoria(
 
   if (cat === 'notas') {
     const { data: notasQuentes } = await supabase.from('notas_fiscais')
-      .select('id, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, loja_id')
+      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_nome, c_razao_social, n_valor_nfe, c_etapa, full_object, loja_id')
       .in('loja_id', lojaIds).gte('d_emissao_nfe', dataIni).lt('d_emissao_nfe', proxDia).is('deleted_at', null)
       .eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       .order('d_emissao_nfe', { ascending: false }).limit(LIMITE_LISTA)
-    let data = notasQuentes ?? []
+    const notasQuentesArr = notasQuentes ?? []
+    let data: typeof notasQuentesArr = notasQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        data = await complementarNotasFiscais(data, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Achado real (mesma classe do fix de 'transferencias' no commit 5e06cff):
+      // acumular notas de TODAS as lojas no mesmo array antes de mesclar com o
+      // Contabo arrisca um n_id_receb de outra loja coincidir por acaso (o
+      // Contabo de cada loja e uma empresa Omie separada -- os ids nao sao
+      // globalmente unicos) e descartar silenciosamente um registro real.
+      // Agrupa por loja ANTES de mesclar, mescla cada loja isoladamente.
+      const porLoja = new Map<number, typeof notasQuentesArr>()
+      for (const n of notasQuentesArr) porLoja.set(n.loja_id, [...(porLoja.get(n.loja_id) ?? []), n])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarNotasFiscais(itens, {
+            lojaId,
+            dataInicio: dataIni,
+            dataFinal: dataFim,
+            // Achado real (auditoria 2026-07-26): o endpoint do Contabo não sabe
+            // filtrar por status no servidor -- sem isso, NF pendente/cancelada
+            // vinda do histórico entrava na lista e na soma de valorNotas, ao
+            // contrário da fatia quente (que já filtra .eq('c_etapa','60').or(NAO_CANCELADA_OR)).
+            filtrarFrias: (n) => statusNF(n.c_etapa, n.full_object).label === 'Concluída',
+          })
+        )
+      )
+      data = completos.flat()
     }
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
-    const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; loja_id: number }[]
+    const rows = data as { d_emissao_nfe: string; c_numero_nfe: string | null; c_nome: string | null; c_razao_social: string | null; n_valor_nfe: number | null; c_etapa: string | null; full_object: unknown; loja_id: number }[]
     lista = {
       colunas: [{ label: 'Emissão' }, { label: 'NFe' }, { label: 'Fornecedor' }, ...(lojaTag ? [lojaTag] : []), { label: 'Valor', alinharDir: true }],
       total: contagem.notas,
@@ -272,7 +306,7 @@ async function listarCategoria(
           ...(lojas ? [lojas.get(n.loja_id) ?? '-'] : []),
           fmtMoeda(Number(n.n_valor_nfe ?? 0)),
         ],
-        status: n.c_etapa === '60' ? { label: 'Concluída', tom: 'ok' } : { label: 'Pendente', tom: 'warn' },
+        status: statusNF(n.c_etapa, n.full_object),
       })),
     }
     const fornec = new Map<string, number>()
@@ -293,16 +327,33 @@ async function listarCategoria(
       nomesLocais(supabase, lojaIds, rows.flatMap((r) => [r.codigo_local_origem, r.codigo_local_destino])),
       multiLoja ? nomesLojas(supabase, lojaIds) : Promise.resolve(null),
       transfIds.length
-        ? supabase.from('movimentos').select('id, transferencia_id, id_prod').in('transferencia_id', transfIds).limit(5000)
-        : Promise.resolve({ data: [] as { id: number; transferencia_id: number; id_prod: number }[] }),
+        ? supabase.from('movimentos').select('id, transferencia_id, id_prod, id_ajuste').in('transferencia_id', transfIds).limit(5000)
+        : Promise.resolve({ data: [] as { id: number; transferencia_id: number; id_prod: number; id_ajuste: number | null }[] }),
     ])
 
     // Resolve product names
-    let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number }[]
+    let movItens = (movRes.data ?? []) as { id: number; transferencia_id: number; id_prod: number; id_ajuste: number | null }[]
     if (transfIds.length && dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        movItens = await complementarMovimentos(movItens, { lojaId })
+      // Achado real (revisao do fix de dedupe 2026-07-25): o loop anterior
+      // acumulava movItens de TODAS as lojas no mesmo array antes de mesclar
+      // com o Contabo -- como mesclarMovimentosPorChaveNatural dedupe so por
+      // `id_ajuste` (sem loja_id, seguro apenas quando quentes+frias ja sao
+      // de 1 loja so), um `id_ajuste` de outra loja podia coincidir e
+      // descartar silenciosamente um registro real (mesma classe de bug do
+      // fix original, só que entre lojas em vez de entre bancos). Agrupa por
+      // loja ANTES de mesclar (via o mapa transferencia_id->loja_id, ja
+      // disponivel em `rows`) e mescla cada loja isoladamente.
+      const lojaPorTransferencia = new Map(rows.map((r) => [r.id, r.loja_id]))
+      const porLoja = new Map<number, typeof movItens>()
+      for (const m of movItens) {
+        const lojaId = lojaPorTransferencia.get(m.transferencia_id)
+        if (lojaId == null) continue
+        porLoja.set(lojaId, [...(porLoja.get(lojaId) ?? []), m])
       }
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) => complementarMovimentos(itens, { lojaId }))
+      )
+      movItens = completos.flat()
     }
     const prodCods = [...new Set(movItens.map((m) => m.id_prod).filter(Boolean))]
     const nomeProd = new Map<number, string>()
@@ -382,13 +433,25 @@ async function listarCategoria(
     // Só o que foi PRODUZIDO no dia (OPs concluídas), agrupado por produto. As
     // "previstas" NÃO entram: previsão é plano, não atividade do dia.
     const { data: opsQuentes } = await supabase.from('ordens_producao')
-      .select('id, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
+      .select('id, loja_id, identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, produto_descricao')
       .in('loja_id', lojaIds).gte('dt_conclusao_real', dataIni).lte('dt_conclusao_real', dataFim).limit(5000)
-    let opsProducaoData = opsQuentes ?? []
+    const opsQuentesArr = opsQuentes ?? []
+    let opsProducaoData: typeof opsQuentesArr = opsQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        opsProducaoData = await complementarOrdensProducao(opsProducaoData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Mesmo achado/fix de 'notas' acima e do commit 5e06cff (transferencias):
+      // agrupa por loja antes de mesclar -- complementarOrdensProducao dedupe
+      // por identificacao_n_cod_op sem loja_id, entao acumular OPs de todas as
+      // lojas no mesmo array antes de mesclar arriscaria descartar um registro
+      // real de outra loja por coincidencia de codigo de OP.
+      const porLoja = new Map<number, typeof opsQuentesArr>()
+      for (const o of opsQuentesArr) porLoja.set(o.loja_id, [...(porLoja.get(o.loja_id) ?? []), o])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarOrdensProducao(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+        )
+      )
+      opsProducaoData = completos.flat()
     }
     const rows = opsProducaoData as { identificacao_n_cod_produto: number | null; identificacao_n_qtde: number | null; produto_descricao: string | null }[]
     // Nome E TIPO do produto: OPs do Omie vêm sem descrição/tipo -> resolve pelo código.
@@ -444,11 +507,26 @@ async function listarCategoria(
     const { data: histQuentes } = await supabase.from('movimentos_historico')
       .select('loja_id, cod_prod, codigo, descricao, data, entradas, saidas').in('loja_id', lojaIds).gte('data', dataIni).lte('data', dataFim)
       .order('saidas', { ascending: false }).limit(LIMITE_LISTA)
-    let movHistData = histQuentes ?? []
+    const histQuentesArr = histQuentes ?? []
+    let movHistData: typeof histQuentesArr = histQuentesArr
     if (dataIni < limiteJanelaQuente()) {
-      for (const lojaId of lojaIds) {
-        movHistData = await complementarMovimentosHistorico(movHistData, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
-      }
+      // Mesmo achado/fix de 'notas'/'producao'/'transferencias' acima (commit
+      // 5e06cff e revisão da Task 5 de dedupe NF/OP): agrupa por loja antes de
+      // mesclar -- complementarMovimentosHistorico dedupe por `cod_prod|data`
+      // sem `loja_id`, então acumular linhas de todas as lojas no mesmo array
+      // antes de mesclar arriscaria descartar um registro real de outra loja
+      // por coincidência de chave (codigo_produto é global no Omie, então essa
+      // colisão nunca se manifestou até hoje, mas o padrão fica inconsistente
+      // com o resto do arquivo e mais frágil do que precisa ser).
+      const porLoja = new Map<number, typeof histQuentesArr>()
+      for (const h of histQuentesArr) porLoja.set(h.loja_id, [...(porLoja.get(h.loja_id) ?? []), h])
+      for (const lojaId of lojaIds) if (!porLoja.has(lojaId)) porLoja.set(lojaId, [])
+      const completos = await Promise.all(
+        [...porLoja.entries()].map(([lojaId, itens]) =>
+          complementarMovimentosHistorico(itens, { lojaId, dataInicio: dataIni, dataFinal: dataFim })
+        )
+      )
+      movHistData = completos.flat()
     }
     const rows = movHistData as { loja_id: number; codigo: string | null; descricao: string | null; entradas: number | null; saidas: number | null }[]
     const lojas = multiLoja ? await nomesLojas(supabase, lojaIds) : null
@@ -583,37 +661,11 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   const hojeISO = hojeBahia()
   const itens: ItemAcao[] = []
 
-  // 1. Erros de integracao que exigem acao (classificador ja existe).
-  const { data: errosRaw } = await supabase
-    .from('integration_attempts')
-    .select('error_message')
-    .in('loja_id', lojaIds)
-    .eq('error', true)
-    .gte('created_at', `${hojeISO}T00:00:00.000Z`)
-  const errosAcao = (errosRaw ?? []).filter((e) => explicarErroOmie(e.error_message as string | null)?.tipo === 'acao')
-  if (errosAcao.length) itens.push({ titulo: 'Erros que precisam de ação', tom: 'err', contagem: errosAcao.length, href: '/log' })
-
-  // 2. NF travada (etapa < 60 ha mais de 24h).
+  // NF travada (etapa < 60 ha mais de 24h, e NAO cancelada -- uma NF
+  // cancelada nao precisa de nenhuma acao humana; achado real, auditoria
+  // 2026-07-26: sem NAO_CANCELADA_OR esse card inflava com NF ja cancelada).
   const ontemISO = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const { count: nfTravada } = await supabase
-    .from('notas_fiscais')
-    .select('id', { count: 'exact', head: true })
-    .in('loja_id', lojaIds)
-    .is('deleted_at', null)
-    .neq('c_etapa', '60')
-    .lte('d_emissao_nfe', ontemISO)
-  if (nfTravada) itens.push({ titulo: 'Notas fiscais travadas (etapa não concluída)', tom: 'warn', contagem: nfTravada, href: '/nota-fiscal?status=40' })
-
-  // 3. OP atrasada (previsao passou, nao concluida).
-  const { count: opAtrasada } = await supabase
-    .from('ordens_producao')
-    .select('id', { count: 'exact', head: true })
-    .in('loja_id', lojaIds)
-    .lt('identificacao_d_dt_previsao', hojeISO)
-    .eq('concluida', false)
-  if (opAtrasada) itens.push({ titulo: 'Ordens de produção atrasadas', tom: 'warn', contagem: opAtrasada, href: '/ordem-producao?status=atrasada' })
-
-  // 4. Vencendo em 7 dias / vencido (mesma logica de /validade). Achado real desta
+  // Vencendo em 7 dias / vencido (mesma logica de /validade). Achado real desta
   // auditoria: so filtrava `quantidade > 0`, mas `quantidade` (o campo "etiqueta",
   // setado manualmente via setQuantidadeOP) fica NULL na maioria das OPs -- a
   // pagina /validade por isso usa SALDO_OR (quantidade>0 OU quantidade IS NULL com
@@ -622,31 +674,83 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   // 5, o correto (batendo com /validade) conta 15 -- subcontagem de 3x.
   const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
-  const { count: vencendo } = await supabase
-    .from('ordens_producao')
-    .select('id', { count: 'exact', head: true })
-    .in('loja_id', lojaIds)
-    .not('validade', 'is', null)
-    .lte('validade', em7dias)
-    .or(SALDO_OR)
+  // Contagem de inventario pendente (30 dias, mesma janela do painel de auditoria).
+  const trintaDiasAtras = new Date(Date.now() - 30 * 86400000).toISOString()
+
+  // Achado real (usuario pediu pra deixar o sistema mais rapido, 2026-07-28):
+  // as 7 consultas abaixo sao todas independentes entre si (nenhuma usa
+  // resultado de outra) mas rodavam uma apos a outra em `await` sequencial --
+  // o app roda no Contabo (Franca), o banco fica no Brasil, cada ida paga
+  // ~230-460ms de latencia de rede pura. 7 idas em serie == 1.6-3.2s so pra
+  // montar este painel, toda vez que alguem abre /resumo. Junta tudo num
+  // Promise.all: o tempo vira o da mais lenta, nao a soma de todas.
+  const [
+    { data: errosRaw },
+    { count: nfTravada },
+    { count: opAtrasada },
+    { count: vencendo },
+    { data: locaisRows },
+    { data: inventRecentes },
+    { count: semFamilia },
+  ] = await Promise.all([
+    supabase
+      .from('integration_attempts')
+      .select('error_message')
+      .in('loja_id', lojaIds)
+      .eq('error', true)
+      .gte('created_at', `${hojeISO}T00:00:00.000Z`),
+    supabase
+      .from('notas_fiscais')
+      .select('id', { count: 'exact', head: true })
+      .in('loja_id', lojaIds)
+      .is('deleted_at', null)
+      .neq('c_etapa', '60')
+      .or(NAO_CANCELADA_OR)
+      .lte('d_emissao_nfe', ontemISO),
+    supabase
+      .from('ordens_producao')
+      .select('id', { count: 'exact', head: true })
+      .in('loja_id', lojaIds)
+      .lt('identificacao_d_dt_previsao', hojeISO)
+      .eq('concluida', false),
+    supabase
+      .from('ordens_producao')
+      .select('id', { count: 'exact', head: true })
+      .in('loja_id', lojaIds)
+      .not('validade', 'is', null)
+      .lte('validade', em7dias)
+      .or(SALDO_OR),
+    supabase.from('local_estoques').select('codigo_local_estoque').in('loja_id', lojaIds).neq('inativo', 'S'),
+    supabase
+      .from('inventarios')
+      .select('codigo_local_estoque')
+      .in('loja_id', lojaIds)
+      .gte('created_at', trintaDiasAtras),
+    // Pendencias de classificacao (produtos sem familia). Produto inativo nao
+    // precisa de classificacao (nao vai mais ser comprado/vendido) -- achado
+    // real 2026-07-22, mesmo fix em app/(app)/pendencias-classificacao/page.tsx.
+    supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).in('loja_id', lojaIds).or('descricao_familia.is.null,descricao_familia.eq.').eq('inativo', false),
+  ])
+
+  // 1. Erros de integracao que exigem acao (classificador ja existe).
+  const errosAcao = (errosRaw ?? []).filter((e) => explicarErroOmie(e.error_message as string | null)?.tipo === 'acao')
+  if (errosAcao.length) itens.push({ titulo: 'Erros que precisam de ação', tom: 'err', contagem: errosAcao.length, href: '/log' })
+
+  // 2. NF travada.
+  if (nfTravada) itens.push({ titulo: 'Notas fiscais travadas (etapa não concluída)', tom: 'warn', contagem: nfTravada, href: '/nota-fiscal?status=40' })
+
+  // 3. OP atrasada (previsao passou, nao concluida).
+  if (opAtrasada) itens.push({ titulo: 'Ordens de produção atrasadas', tom: 'warn', contagem: opAtrasada, href: '/ordem-producao?status=atrasada' })
+
+  // 4. Vencendo em 7 dias ou vencido.
   if (vencendo) itens.push({ titulo: 'Produtos vencendo em até 7 dias (ou vencidos)', tom: 'warn', contagem: vencendo, href: '/validade?dias=7' })
 
-  // 5. Contagem de inventario pendente (30 dias, mesma janela do painel de auditoria).
-  const { data: locaisRows } = await supabase.from('local_estoques').select('codigo_local_estoque').in('loja_id', lojaIds).neq('inativo', 'S')
-  const trintaDiasAtras = new Date(Date.now() - 30 * 86400000).toISOString()
-  const { data: inventRecentes } = await supabase
-    .from('inventarios')
-    .select('codigo_local_estoque')
-    .in('loja_id', lojaIds)
-    .gte('created_at', trintaDiasAtras)
+  // 5. Contagem de inventario pendente.
   const locaisComContagem = new Set((inventRecentes ?? []).map((i) => i.codigo_local_estoque))
   const semContagem = (locaisRows ?? []).filter((l) => !locaisComContagem.has(l.codigo_local_estoque)).length
   if (semContagem) itens.push({ titulo: 'Locais sem contagem de inventário há 30 dias', tom: 'info', contagem: semContagem, href: '/resumo?cat=auditoria' })
 
-  // 6. Pendencias de classificacao (produtos sem familia). Produto inativo
-  // nao precisa de classificacao (nao vai mais ser comprado/vendido) -- achado
-  // real 2026-07-22, mesmo fix em app/(app)/pendencias-classificacao/page.tsx.
-  const { count: semFamilia } = await supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).in('loja_id', lojaIds).or('descricao_familia.is.null,descricao_familia.eq.').eq('inativo', false)
+  // 6. Pendencias de classificacao.
   if (semFamilia) itens.push({ titulo: 'Produtos sem família cadastrada', tom: 'info', contagem: semFamilia, href: '/pendencias-classificacao' })
 
   const ORDEM_TOM: Record<ItemAcao['tom'], number> = { err: 0, warn: 1, info: 2 }

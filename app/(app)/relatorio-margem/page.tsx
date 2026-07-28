@@ -23,10 +23,25 @@ const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { t
 // perdia CMC de boa parte do catalogo e sumia com a maioria dos produtos
 // silenciosamente (achado real: loja com 819 produtos validos mostrava so 324).
 // Mesma classe de bug ja achada e corrigida no Faturamento/Estoque Valorizado.
+// `contar`: quando informado (count exato da mesma tabela/filtros, sem
+// trazer linha nenhuma), busca todas as paginas em paralelo em vez de uma de
+// cada vez -- app roda no Contabo (Franca), banco no Brasil, cada ida paga
+// ~230-460ms de latencia de rede pura. Sem `contar`, mantem o comportamento
+// sequencial original (rede de seguranca pros call sites que ainda nao
+// passam essa contagem).
 async function buscarTodasLinhas<T>(
-  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
+  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+  contar?: () => PromiseLike<{ count: number | null }>,
 ): Promise<T[]> {
   const PAGE = 1000
+  if (contar) {
+    const { count } = await contar()
+    const numPaginas = Math.ceil((count ?? 0) / PAGE)
+    const blocos = await Promise.all(
+      Array.from({ length: numPaginas }, (_, p) => montar(p * PAGE, p * PAGE + PAGE - 1))
+    )
+    return blocos.flatMap((r) => r.data ?? [])
+  }
   const todas: T[] = []
   for (let p = 0; ; p++) {
     const { data } = await montar(p * PAGE, p * PAGE + PAGE - 1)
@@ -59,25 +74,29 @@ export default async function RelatorioMargemPage({
 
   const supabase = createServiceClient()
   const [rowsAll, { data: metaRow }, produtosRaw, { data: locaisRaw }] = await Promise.all([
-    buscarTodasLinhas<Row>((from, to) =>
-      supabase
-        .from('margem_importada')
-        .select('codigo, descricao, familia, mes, pdv, cmc, margem')
-        .eq('loja_id', lojaId)
-        .order('codigo', { ascending: true })
-        .order('mes', { ascending: true })
-        .range(from, to)
+    buscarTodasLinhas<Row>(
+      (from, to) =>
+        supabase
+          .from('margem_importada')
+          .select('codigo, descricao, familia, mes, pdv, cmc, margem')
+          .eq('loja_id', lojaId)
+          .order('codigo', { ascending: true })
+          .order('mes', { ascending: true })
+          .range(from, to),
+      () => supabase.from('margem_importada').select('codigo', { count: 'exact', head: true }).eq('loja_id', lojaId)
     ),
     supabase.from('margem_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     // margem_importada não tem "tipo" (só vem no export do Omie): cruza por código
     // com produtos pra poder filtrar por tipo de item (e por local, via posicao_estoques).
-    buscarTodasLinhas<{ codigo: string | null; tipo_item: string | null; codigo_produto: number | null }>((from, to) =>
-      supabase
-        .from('produtos')
-        .select('codigo, tipo_item, codigo_produto')
-        .eq('loja_id', lojaId)
-        .order('id', { ascending: true })
-        .range(from, to)
+    buscarTodasLinhas<{ codigo: string | null; tipo_item: string | null; codigo_produto: number | null }>(
+      (from, to) =>
+        supabase
+          .from('produtos')
+          .select('codigo, tipo_item, codigo_produto')
+          .eq('loja_id', lojaId)
+          .order('id', { ascending: true })
+          .range(from, to),
+      () => supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId)
     ),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
@@ -103,28 +122,40 @@ export default async function RelatorioMargemPage({
   // contra o Excel do Ramon (diff 0,00-0,37 p.p.).
   if (!rows.length) {
     const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-    const produtosCalc = await buscarTodasLinhas<{
-      codigo: string | null
-      codigo_produto: number
-      descricao: string | null
-      descricao_familia: string | null
-      valor_unitario: number | null
-    }>((from, to) =>
+    // produtosCalc e fotoRow sao independentes entre si -- roda em paralelo em
+    // vez de serie (este e o caminho padrao pra 5 das 6 lojas ativas, sem
+    // import manual de margem).
+    const [produtosCalc, { data: fotoRow }] = await Promise.all([
+      buscarTodasLinhas<{
+        codigo: string | null
+        codigo_produto: number
+        descricao: string | null
+        descricao_familia: string | null
+        valor_unitario: number | null
+      }>(
+        (from, to) =>
+          supabase
+            .from('produtos')
+            .select('codigo, codigo_produto, descricao, descricao_familia, tipo_item, valor_unitario')
+            .eq('loja_id', lojaId)
+            .in('tipo_item', ['04', '00'])
+            .order('id', { ascending: true })
+            .range(from, to),
+        () =>
+          supabase
+            .from('produtos')
+            .select('codigo_produto', { count: 'exact', head: true })
+            .eq('loja_id', lojaId)
+            .in('tipo_item', ['04', '00'])
+      ),
       supabase
-        .from('produtos')
-        .select('codigo, codigo_produto, descricao, descricao_familia, tipo_item, valor_unitario')
+        .from('posicao_estoques')
+        .select('data_posicao')
         .eq('loja_id', lojaId)
-        .in('tipo_item', ['04', '00'])
-        .order('id', { ascending: true })
-        .range(from, to)
-    )
-    const { data: fotoRow } = await supabase
-      .from('posicao_estoques')
-      .select('data_posicao')
-      .eq('loja_id', lojaId)
-      .order('data_posicao', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+        .order('data_posicao', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
     if (fotoRow?.data_posicao && produtosCalc.length) {
       // Pondera por local (soma de custo x saldo, dividido pelo saldo total) em vez
       // de pegar o MAIOR n_cmc entre locais -- mesmo bug já achado e corrigido em
@@ -137,16 +168,25 @@ export default async function RelatorioMargemPage({
       // local real + -3 num local fantasma = 0) e derrubam o produto inteiro do
       // relatorio (loja 2: caiu de 715 pra 196 sem o filtro). So locais com
       // estoque realmente positivo devem entrar na ponderacao.
-      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>((from, to) =>
-        supabase
-          .from('posicao_estoques')
-          .select('n_cod_prod, n_cmc, n_saldo')
-          .eq('loja_id', lojaId)
-          .eq('data_posicao', fotoRow.data_posicao)
-          .gt('n_cmc', 0)
-          .gt('n_saldo', 0)
-          .order('id', { ascending: true })
-          .range(from, to)
+      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>(
+        (from, to) =>
+          supabase
+            .from('posicao_estoques')
+            .select('n_cod_prod, n_cmc, n_saldo')
+            .eq('loja_id', lojaId)
+            .eq('data_posicao', fotoRow.data_posicao)
+            .gt('n_cmc', 0)
+            .gt('n_saldo', 0)
+            .order('id', { ascending: true })
+            .range(from, to),
+        () =>
+          supabase
+            .from('posicao_estoques')
+            .select('n_cod_prod', { count: 'exact', head: true })
+            .eq('loja_id', lojaId)
+            .eq('data_posicao', fotoRow.data_posicao)
+            .gt('n_cmc', 0)
+            .gt('n_saldo', 0)
       )
       const acumPorCod = new Map<number, { valor: number; saldo: number }>()
       for (const p of posRows) {

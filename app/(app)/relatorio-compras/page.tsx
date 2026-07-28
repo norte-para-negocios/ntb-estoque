@@ -29,6 +29,8 @@ import {
 } from '@/lib/relatorio-frio-nf'
 import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { ShoppingCart, Download } from 'lucide-react'
 
@@ -97,6 +99,7 @@ export default async function RelatorioComprasPage({
 
   // Padrão: ano corrente (1º de janeiro até hoje), em America/Bahia.
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISO.slice(0, 4)}-01-01`, dataFim: hojeISO })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
   const familiasSel = valoresMulti(sp.familia)
@@ -159,32 +162,39 @@ export default async function RelatorioComprasPage({
   let filtrados: ItemNFFrio[] = []
   let meta: MetaProdutoNF = new Map()
   if (ini < corte) {
-    // O Supabase corta em 1000 linhas por padrão (sem erro) -- pagina até esgotar
-    // (achado real: lojas com >1000 produtos perdiam o resto do catálogo aqui,
-    // igual ao que já era feito no export/route.ts e export-completo/route.ts).
-    const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
-    for (let pg = 0; ; pg++) {
-      const from = pg * 1000
-      const { data } = await supabase
-        .from('produtos')
-        .select('codigo_produto, tipo_item, descricao_familia')
-        .eq('loja_id', lojaId)
-        .range(from, from + 999)
-      if (!data?.length) break
-      prodMetaRaw.push(...data)
-      if (data.length < 1000) break
-    }
-    meta = new Map()
-    for (const p of prodMetaRaw) {
-      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-    }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     // Achado real: se o período pedido termina antes do corte (fim < corteExcl —
     // ex.: um recorte todo dentro do histórico frio), usar corteExcl fixo aqui
     // buscava dado a mais no Contabo (até o corte, não até `fim`), inflando o
     // total. Trava no menor dos dois.
     const dataFinalFria = fim < corteExcl ? fim : corteExcl
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria })
+
+    // O Supabase corta em 1000 linhas por padrão (sem erro) -- pagina até esgotar
+    // (achado real: lojas com >1000 produtos perdiam o resto do catálogo aqui,
+    // igual ao que já era feito no export/route.ts e export-completo/route.ts).
+    // Pega o total antes (count exato) e busca as paginas em paralelo, e dispara
+    // isso ao mesmo tempo que buscarItensNFFrio (Contabo) -- as duas buscas sao
+    // independentes entre si, mas rodavam em serie; esta tela roda sempre que o
+    // periodo (padrao "ano corrente") cruza a janela quente de 90 dias.
+    const [{ count: totalProdutos }, itensFrios] = await Promise.all([
+      supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria }),
+    ])
+    const numPaginasProd = Math.ceil((totalProdutos ?? 0) / 1000)
+    const blocosProd = await Promise.all(
+      Array.from({ length: numPaginasProd }, (_, pg) =>
+        supabase
+          .from('produtos')
+          .select('codigo_produto, tipo_item, descricao_familia')
+          .eq('loja_id', lojaId)
+          .range(pg * 1000, pg * 1000 + 999)
+      )
+    )
+    const prodMetaRaw = blocosProd.flatMap((r) => r.data ?? [])
+    meta = new Map()
+    for (const p of prodMetaRaw) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
     const fDrill = { familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
     for (const p of pares) {
       const rot = p.rotulo === 'Sem classificação' ? SEM : p.rotulo
@@ -331,6 +341,7 @@ export default async function RelatorioComprasPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/relatorio-compras" campos={campos} persistirEm="/relatorio-compras" />
+        <ChipsPeriodo basePath="/relatorio-compras" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       {/* Total do período + abertura */}

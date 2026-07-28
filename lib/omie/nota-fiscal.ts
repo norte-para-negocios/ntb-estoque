@@ -52,6 +52,72 @@ interface OmieNFResponse {
   recebimentos?: OmieNF[]
 }
 
+interface NotaFiscalItemBulkRow {
+  n_sequencia: number
+  n_id_item: number
+  n_id_pedido: number
+  n_id_it_pedido: number
+  n_id_produto: number
+  c_codigo_produto: string
+  c_descricao_produto: string
+  c_ignorar_item: string
+  c_adicionar_novo: string
+  c_associar_existente: string
+  c_item_devolvido: string
+  c_ncm: string
+  c_ean: string
+  c_cfop: string
+  n_qtde_nfe: number
+  c_unidade_nfe: string
+  n_preco_unit: number
+  full_object: unknown
+}
+
+interface NotaFiscalBulkRow {
+  n_id_receb: string
+  n_id_fornecedor: number
+  c_pessoa_fisica: string
+  c_nome: string
+  c_razao_social: string
+  c_inscricao: string
+  c_cnpj_cpf: string
+  c_chave_nfe: string
+  c_etapa: string
+  c_numero_nfe: string
+  c_serie_nfe: string
+  c_modelo_nfe: string
+  d_emissao_nfe: string | null
+  n_valor_nfe: number
+  c_ambiente_nfe: string
+  c_natureza_operacao: string
+  full_object: unknown
+  itens: NotaFiscalItemBulkRow[]
+}
+
+// Envia a NF (cabecalho + itens) pro Contabo, fire-and-forget -- mesma
+// filosofia de gravarMovimentosNoFrio (lib/omie/sync-ajustes.ts): o upsert no
+// Supabase, que sustenta o sync hoje, nunca pode quebrar por causa do
+// dual-write.
+async function gravarNotaFiscalNoFrio(lojaId: number, nota: NotaFiscalBulkRow): Promise<void> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url) return
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    const resp = await fetch(`${url}/notas_fiscais_bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+      body: JSON.stringify({ loja_id: lojaId, notas: [nota] }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+  } catch (e) {
+    console.error('nota-fiscal: falha ao gravar NF no Contabo', e)
+  }
+}
+
 async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
   const supabase = createServiceClient()
   if (!nf.cabec) return
@@ -125,6 +191,46 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
       throw new Error(`Falha ao salvar itens da NF ${nf.cabec.cNumeroNFe}: ${errItens.message}`)
     }
   }
+
+  await gravarNotaFiscalNoFrio(loja.id, {
+    n_id_receb: String(nf.cabec.nIdReceb),
+    n_id_fornecedor: nf.cabec.nIdFornecedor,
+    c_pessoa_fisica: nf.cabec.cPessoaFisica,
+    c_nome: nf.cabec.cNome,
+    c_razao_social: nf.cabec.cRazaoSocial,
+    c_inscricao: nf.cabec.cInscricao,
+    c_cnpj_cpf: nf.cabec.cCNPJ_CPF,
+    c_chave_nfe: nf.cabec.cChaveNFe,
+    c_etapa: nf.cabec.cEtapa,
+    c_numero_nfe: nf.cabec.cNumeroNFe,
+    c_serie_nfe: nf.cabec.cSerieNFe,
+    c_modelo_nfe: nf.cabec.cModeloNFe,
+    d_emissao_nfe: parseDate(nf.cabec.dEmissaoNFe),
+    n_valor_nfe: nf.cabec.nValorNFe,
+    c_ambiente_nfe: nf.cabec.cAmbienteNFe,
+    c_natureza_operacao: nf.cabec.cNaturezaOperacao,
+    full_object: nf,
+    itens: itens.map((it) => ({
+      n_sequencia: it.itensCabec.nSequencia,
+      n_id_item: it.itensCabec.nIdItem,
+      n_id_pedido: it.itensCabec.nIdPedido,
+      n_id_it_pedido: it.itensCabec.nIdItPedido,
+      n_id_produto: it.itensCabec.nIdProduto,
+      c_codigo_produto: it.itensCabec.cCodigoProduto,
+      c_descricao_produto: it.itensCabec.cDescricaoProduto,
+      c_ignorar_item: it.itensCabec.cIgnorarItem,
+      c_adicionar_novo: it.itensCabec.cAdicionarNovo,
+      c_associar_existente: it.itensCabec.cAssociarExistente,
+      c_item_devolvido: it.itensCabec.cItemDevolvido,
+      c_ncm: it.itensCabec.cNCM,
+      c_ean: it.itensCabec.cEAN,
+      c_cfop: it.itensCabec.cCFOP,
+      n_qtde_nfe: it.itensCabec.nQtdeNFe,
+      c_unidade_nfe: it.itensCabec.cUnidadeNfe,
+      n_preco_unit: it.itensCabec.nPrecoUnit,
+      full_object: it,
+    })),
+  })
 }
 
 export async function syncNotasFiscais(loja: LojaOmie, dataIni?: string, dataFim?: string) {

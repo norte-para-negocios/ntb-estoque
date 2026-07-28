@@ -18,7 +18,7 @@ import { AlertTriangle, DollarSign, Download } from 'lucide-react'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
-import { buscarFatAgregado, buscarFatCupons, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
+import { buscarFatAgregado, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -32,6 +32,7 @@ const CHIPS_PERIODO = [
   { value: '1', label: 'Este mês' },
   { value: '3', label: '3 meses' },
   { value: '6', label: '6 meses' },
+  { value: 'ano_passado', label: 'Ano passado' },
 ] as const
 
 // A ntb-frio-api limita /fat_cupons a 5000 linhas (LIMIT fixo no servidor,
@@ -102,9 +103,16 @@ export default async function RelatorioFaturamentoPage({
   const temPeriodoCustom = !!(dataIni || dataFim)
 
   const mesAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-  const mesIniChip = periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1)) : null
+  const anoAtualNum = Number(mesAtual.slice(0, 4))
+  // "Ano passado" é o único chip que fixa um TETO explícito (os outros 3 vão
+  // implicitamente até o mês atual) -- por isso mesFimChip existe só pra este caso.
+  const mesIniChip =
+    periodo === 'ano_passado' && !temPeriodoCustom ? `${anoAtualNum - 1}-01`
+    : periodo && !temPeriodoCustom ? mesOffset(mesAtual, -(Number(periodo) - 1))
+    : null
+  const mesFimChip = periodo === 'ano_passado' && !temPeriodoCustom ? `${anoAtualNum - 1}-12` : null
   const mesIni = dataIni ? dataIni.slice(0, 7) : mesIniChip
-  const mesFim = dataFim ? dataFim.slice(0, 7) : null
+  const mesFim = dataFim ? dataFim.slice(0, 7) : mesFimChip
 
   const dimParam = dim === 'tipo' ? '' : dim
   const chipHref = (p: string) => {
@@ -208,8 +216,84 @@ export default async function RelatorioFaturamentoPage({
   const matriz = prefixo
     ? matrizCrua.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
     : matrizCrua
+
+  // Achado real (auditoria 2026-07-26): `faturamento_importado` (a fonte por
+  // trás da RPC acima) só guarda o ano corrente pras dimensões tipo/família/
+  // produto -- sem completar com o fato do Contabo, um período CUSTOM que
+  // cruzasse pra ano anterior perdia esse dado em silêncio. Corrigido no
+  // mesmo dia, mas com um efeito colateral sério descoberto ao vivo pelo
+  // usuário: o período padrão "Todos" (sem filtro nenhum) sempre significou
+  // "sem piso de data" (desde o início), então TODA carga da tela sem filtro
+  // passou a disparar a busca cara no Contabo (produtos + cupons + itens
+  // brutos, potencialmente 1+ ano de histórico, reagregado em JS) -- medido
+  // 2,2s só pra meio ano de 1 loja, sem cache. Revertido: "Todos" volta a
+  // significar ano corrente pra efeito desta busca (rápido, só pré-agregado)
+  // -- a busca histórica só dispara quando o usuário escolhe explicitamente
+  // um período (chip fixo ou customizado) cujo início é anterior ao ano
+  // corrente, uma ação deliberada, não o estado padrão da tela.
+  const anoAtualStr = mesAtual.slice(0, 4)
+  const cruzaAnoAnterior = !usarFato && !verCupons && !!mesIni && mesIni < `${anoAtualStr}-01`
+  let historico: LinhaMatriz[] = []
+  if (cruzaAnoAnterior) {
+    // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
+    // `nome` é usado pela dim 'produto' (resolve o id numérico cru do fato pro
+    // nome exibido); tipo/familia são usados pelas outras 2 dims.
+    const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null; nome?: string }>()
+    for (let pagina = 0; ; pagina++) {
+      const from = pagina * 1000
+      const { data } = await supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
+        .eq('loja_id', lojaId)
+        .range(from, from + 999)
+      if (!data?.length) break
+      for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[]) {
+        metaPorCodigo.set(Number(p.codigo_produto), {
+          tipo: p.tipo_item,
+          familia: p.descricao_familia,
+          nome: p.descricao || p.codigo || String(p.codigo_produto),
+        })
+      }
+      if (data.length < 1000) break
+    }
+    const anoAnteriorFim = `${Number(anoAtualStr) - 1}-12-31`
+    const dataFinalHistorico = mesFim && mesFim < `${anoAtualStr}-01` ? fimDoMes(mesFim) : anoAnteriorFim
+    // cruzaAnoAnterior já exige !usarFato, e usarFato é sempre true quando
+    // dim === 'forma_pgto' -- nunca chega aqui com essa dimensão. Com drill
+    // ativo, usa consultaDim (tipo>familia/familia>produto, já calculado no
+    // topo da função) em vez de dim -- mesmo raciocínio de matrizCrua/matriz.
+    const dimHistorico = (prefixo ? consultaDim : dim) as 'tipo' | 'familia' | 'produto' | 'tipo>familia' | 'familia>produto'
+    const rowsBrutas = await buscarFaturamentoFrioHistorico({
+      lojaId, dataInicio: dataIni || '', dataFinal: dataFinalHistorico, dim: dimHistorico, metaPorCodigo,
+    })
+    // Mesmo corte de prefixo que matrizCrua recebe pra virar matriz (linha
+    // ~208) -- sem isso, o histórico com drill ativo devolveria o rótulo
+    // composto inteiro ("Tipo>>Familia") em vez de só a parte do filho
+    // ("Familia"), e nunca bateria com as linhas do lado quente (já cortadas).
+    const rows = prefixo
+      ? rowsBrutas.filter((r) => r.rotulo.startsWith(prefixo)).map((r) => ({ ...r, rotulo: r.rotulo.slice(prefixo.length) }))
+      : rowsBrutas
+    // Guarda defensiva: o concat com `matriz` (em `matrizFinal`, abaixo) assume que o
+    // pré-agregado (RPC) só tem o ano corrente e o histórico só tem antes
+    // dele -- verdade hoje porque syncFaturamento sempre reinsere só o ano
+    // corrente (ver comentário lá), mas se um backfill futuro popular
+    // `faturamento_importado` com anos anteriores, essas duas fontes
+    // passariam a se sobrepor. Filtra aqui pra nunca somar mês >= ano
+    // corrente vindo do histórico, mesmo que isso mude.
+    const semSobreposicao = rows.filter((r) => r.mes < `${anoAtualStr}-01`)
+    // Achado real (revisão final, 2026-07-26): `rotulosFiltro` é o filtro da
+    // dimensão-PAI (a aba, ex. tipo) -- com drill ativo, `r.rotulo` aqui já é
+    // o rótulo-FILHO (família/produto, prefixo já cortado acima), então
+    // `rotulosFiltro.includes(r.rotulo)` nunca bate e zerava o histórico do
+    // drill sempre que um filtro de rótulo estivesse ativo (mesmo espelho do
+    // lado quente, que só aplica `p_rotulos` quando `!prefixo`, linha 185).
+    historico = (!prefixo && rotulosFiltro.length)
+      ? semSobreposicao.filter((r) => rotulosFiltro.includes(r.rotulo))
+      : semSobreposicao
+  }
+
   const matrizFinal: LinhaMatriz[] =
-    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : matriz
+    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : [...matriz, ...historico]
   const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
   const opcoesDe = (d: string) =>
     opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))

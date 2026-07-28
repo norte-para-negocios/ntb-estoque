@@ -4,6 +4,7 @@
 // Mesmo espirito de lib/relatorio-frio-nf.ts: um modulo por dominio de
 // leitura fria, sempre via buscarFrio.
 import { buscarFrio, buscarFrioTudo } from '@/lib/historico-contabo'
+import { TIPO_NOME } from '@/lib/omie/faturamento'
 
 export type LinhaFatAgregado = { rotulo: string; mes?: string; valor: number; qtde_itens: number }
 
@@ -53,6 +54,92 @@ export type ItemFat = {
 export type PagamentoFat = {
   n_id_cupom: number; sequencia: number; tipo_doc: string | null; valor: number
   categoria: string | null; id_conta_corrente: number | null
+}
+
+export type LinhaMatrizFrio = { rotulo: string; mes: string; valor: number }
+
+// Reagrega o fato de faturamento (Contabo) por tipo/familia, cruzando com o
+// cadastro de produtos LOCAL (Contabo nao pode duplicar `produtos` -- mesmo
+// motivo documentado em lib/historico-contabo.ts pra agregarMovimentacaoJS).
+// Usada quando o periodo pedido cruza pra antes do ano corrente -- sem isso,
+// as abas Tipo/Familia perdiam silenciosamente qualquer mes de ano anterior
+// (achado real, auditoria 2026-07-26: `faturamento_importado` so guarda o
+// ano corrente -- ver comentario em lib/omie/faturamento.ts -- e a tela
+// nunca completava com o Contabo nessas abas; loja 5 mostrava R$4,99M em vez
+// de R$9,78M reais na aba Tipo com periodo "Todos").
+function agregarFaturamentoPorTipoFamilia(
+  itens: ItemFat[],
+  mesPorCupom: Map<number, string>,
+  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null; nome?: string }>,
+  dim: 'tipo' | 'familia' | 'tipo>familia' | 'familia>produto'
+): LinhaMatrizFrio[] {
+  const acc = new Map<string, LinhaMatrizFrio>()
+  for (const it of itens) {
+    const mes = mesPorCupom.get(it.n_id_cupom)
+    if (!mes) continue
+    // Mesmo fallback de lib/omie/faturamento.ts (syncFaturamento): v_item cru
+    // pode vir zerado do Omie em casos raros; recalcula a partir de
+    // unit*qtde-desconto quando isso acontece.
+    const v = it.v_item || (it.v_unit * it.quant - it.v_desc)
+    if (!v) continue
+    const info = it.id_produto != null ? metaPorCodigo.get(Number(it.id_produto)) : undefined
+    const tipoLabel = info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado'
+    const familiaLabel = info?.familia || 'Sem família'
+    const produtoLabel = info?.nome || 'Produto não identificado'
+    // Separador literal '>>' -- mesmo usado pela ingestao (lib/omie/faturamento.ts,
+    // add('tipo>familia', ...)/add('familia>produto', ...)) pro drill do
+    // pre-agregado casar com o mesmo formato aqui.
+    const rotulo =
+      dim === 'tipo' ? tipoLabel :
+      dim === 'familia' ? familiaLabel :
+      dim === 'tipo>familia' ? `${tipoLabel}>>${familiaLabel}` :
+      `${familiaLabel}>>${produtoLabel}`
+    const chave = `${rotulo}|${mes}`
+    const ent = acc.get(chave) ?? { rotulo, mes, valor: 0 }
+    ent.valor += v
+    acc.set(chave, ent)
+  }
+  return [...acc.values()]
+}
+
+// Ponto de entrada pro complemento historico das abas Tipo/Familia/Produto do
+// relatorio de Faturamento -- chamado so quando o periodo pedido cruza pra
+// antes do ano corrente (ver app/(app)/relatorio-faturamento/page.tsx).
+// Produto delega pro agregado do servidor (nao precisa cruzar tipo/familia),
+// mas AINDA precisa de `produtos` local pra resolver `id_produto` (rotulo cru
+// que o /fat_agregado devolve, ver docs/superpowers/specs/2026-07-18-*) pro
+// nome exibido -- achado real (revisao 2026-07-26): sem isso, a aba Produto
+// mostrava o id numerico cru pro periodo historico (ilegivel, e sem somar
+// com a linha do mesmo produto no ano corrente, que usa nome como rotulo).
+export async function buscarFaturamentoFrioHistorico(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+  dim: 'tipo' | 'familia' | 'produto' | 'tipo>familia' | 'familia>produto'
+  metaPorCodigo: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
+}): Promise<LinhaMatrizFrio[]> {
+  if (opts.dim === 'produto') {
+    const rows = await buscarFatAgregado({
+      lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, group: 'produto', group2: 'mes',
+    })
+    const acc = new Map<string, LinhaMatrizFrio>()
+    for (const r of rows) {
+      if (!r.mes) continue
+      const idProduto = Number(r.rotulo)
+      const nome = (Number.isFinite(idProduto) ? opts.metaPorCodigo.get(idProduto)?.nome : undefined) || 'Produto não identificado'
+      const chave = `${nome}|${r.mes}`
+      const ent = acc.get(chave) ?? { rotulo: nome, mes: r.mes, valor: 0 }
+      ent.valor += r.valor
+      acc.set(chave, ent)
+    }
+    return [...acc.values()]
+  }
+  const [cupons, itens] = await Promise.all([
+    buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal }),
+    buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal }),
+  ])
+  const mesPorCupom = new Map(cupons.map((c) => [c.n_id_cupom, c.data.slice(0, 7)]))
+  return agregarFaturamentoPorTipoFamilia(itens, mesPorCupom, opts.metaPorCodigo, opts.dim)
 }
 
 export async function buscarFatCupomDetalhe(

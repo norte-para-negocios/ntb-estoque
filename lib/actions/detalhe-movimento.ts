@@ -1,0 +1,295 @@
+'use server'
+
+import { createServiceClient } from '@/lib/supabase/server'
+import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { complementarOrdensProducao, complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
+import { statusNF } from '@/lib/nf-status'
+
+export type Ingrediente = { cod: number; nome: string; unidade: string; qtd: number }
+
+export type DetalheOP = {
+  id: number
+  numOP: string
+  produto: string
+  unidade: string
+  qtdPlanejada: number | null
+  qtdProduzida: number | null
+  dataPrevisao: string | null
+  dataConclusao: string | null
+  concluida: boolean
+  podeReverter: boolean
+  ingredientes: Ingrediente[]
+}
+
+export async function buscarDetalheOP(opId: number): Promise<{ error: string } | DetalheOP> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const { data: opSupabase } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, quantidade, identificacao_d_dt_previsao, dt_conclusao_real, concluida, full_object')
+    .eq('id', opId)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+
+  // OPs mais antigas que 90 dias ja foram podadas do Supabase (so ordens_producao
+  // recentes ficam la, historico completo mora no Contabo) -- sem este fallback,
+  // clicar numa OP fora da janela quente sempre devolvia "nao encontrada", mesmo
+  // ela existindo de verdade. Mesmo padrao de app/(app)/nota-fiscal/[id]/page.tsx.
+  const op = opSupabase ?? (await complementarOrdensProducao([], { lojaId, id: opId }))[0] ?? null
+  if (!op) return { error: 'Ordem de produção não encontrada.' }
+
+  const { data: prod } = op.identificacao_n_cod_produto
+    ? await supabase.from('produtos').select('descricao, unidade').eq('loja_id', lojaId).eq('codigo_produto', op.identificacao_n_cod_produto).maybeSingle()
+    : { data: null }
+
+  const itensDetalhes = (op.full_object as { itensDetalhes?: { nIdProdutoMalha: number; nQtde: number }[] } | null)?.itensDetalhes ?? []
+  const codsIngrediente = [...new Set(itensDetalhes.map((i) => i.nIdProdutoMalha).filter(Boolean))]
+  const { data: ingProds } = codsIngrediente.length
+    ? await supabase.from('produtos').select('codigo_produto, descricao, unidade').eq('loja_id', lojaId).in('codigo_produto', codsIngrediente)
+    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
+  const ingMap = new Map((ingProds ?? []).map((p) => [p.codigo_produto, p]))
+  const ingredientes: Ingrediente[] = itensDetalhes
+    .filter((i) => i.nIdProdutoMalha)
+    .map((i) => {
+      const p = ingMap.get(i.nIdProdutoMalha)
+      return { cod: i.nIdProdutoMalha, nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`, unidade: p?.unidade ?? '', qtd: Number(i.nQtde) }
+    })
+
+  const podeReverter = await requirePermissao(lojaId, 'Ordens de Producao - Reverter')
+
+  return {
+    id: op.id,
+    numOP: op.identificacao_c_num_op || op.num_ordem || String(op.id),
+    produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
+    unidade: prod?.unidade || 'UN',
+    qtdPlanejada: op.identificacao_n_qtde,
+    qtdProduzida: op.quantidade,
+    dataPrevisao: op.identificacao_d_dt_previsao,
+    dataConclusao: op.dt_conclusao_real,
+    concluida: !!op.concluida,
+    podeReverter,
+    ingredientes,
+  }
+}
+
+export type DetalheTransferencia = {
+  id: number
+  origem: string
+  destino: string
+  data: string
+  responsavel: string | null
+  status: string
+  finalizado: boolean
+  podeEditar: boolean
+  itens: import('@/components/transferencia/ContagemTransferencia').ItemMovimento[]
+}
+
+// Sem fallback Contabo (ao contrario de buscarDetalheOP/buscarDetalheNotaFiscal):
+// `transferencias` NAO e uma das tabelas espelhadas no Contabo (o historico frio
+// so cobre movimentos, movimentos_historico, notas_fiscais, nota_fiscal_items,
+// ordens_producao, webhooks -- ver AGENTS.md). Nao ha fonte fria pra completar,
+// entao le so o Supabase, igual a tela de referencia /transferencia/[id]/contagem.
+export async function buscarDetalheTransferencia(id: number): Promise<{ error: string } | DetalheTransferencia> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
+
+  const { data: trans } = await supabase
+    .from('transferencias')
+    .select('id, data, codigo_local_origem, codigo_local_destino, status, user_id')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+  if (!trans) return { error: 'Transferência não encontrada.' }
+
+  const { data: responsavel } = trans.user_id
+    ? await supabase.from('profiles').select('name').eq('id', trans.user_id).maybeSingle()
+    : { data: null }
+
+  const { data: movimentos } = await supabase
+    .from('movimentos')
+    .select('id, id_prod, quan, status, descricao_status')
+    .eq('transferencia_id', id)
+    .order('id')
+
+  const codigos = [...new Set((movimentos ?? []).map((m) => m.id_prod))]
+  const { data: produtos } = codigos.length
+    ? await supabase.from('produtos').select('codigo_produto, codigo, descricao, unidade').eq('loja_id', lojaId).in('codigo_produto', codigos)
+    : { data: [] }
+  const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
+
+  const itens = (movimentos ?? []).map((m) => {
+    const p = prodMap.get(m.id_prod)
+    return {
+      id: m.id,
+      id_prod: m.id_prod,
+      descricao: formatarNomeProduto(p?.descricao) || `Produto ${m.id_prod}`,
+      codigo: p?.codigo || String(m.id_prod),
+      unidade: p?.unidade ?? null,
+      quan: m.quan,
+      status: m.status,
+      descricao_status: (m as { descricao_status?: string | null }).descricao_status ?? null,
+    }
+  })
+
+  const { data: locais } = await supabase
+    .from('local_estoques')
+    .select('codigo_local_estoque, descricao')
+    .eq('loja_id', lojaId)
+    .in('codigo_local_estoque', [trans.codigo_local_origem, trans.codigo_local_destino].filter((v): v is number => v != null))
+  const localMap = new Map((locais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
+
+  return {
+    id: trans.id,
+    origem: localMap.get(trans.codigo_local_origem) || String(trans.codigo_local_origem),
+    destino: localMap.get(trans.codigo_local_destino) || String(trans.codigo_local_destino),
+    data: trans.data,
+    responsavel: responsavel?.name ?? null,
+    status: trans.status,
+    finalizado: trans.status === 'Concluido',
+    podeEditar,
+    itens,
+  }
+}
+
+export type DetalheNotaFiscal = {
+  id: string
+  numero: string | null
+  razaoSocial: string | null
+  dataEmissao: string | null
+  valor: number | null
+  statusLabel: string
+  statusTom: 'ok' | 'warn' | 'err'
+  chaveNfe: string | null
+  itens: import('@/components/nota-fiscal/ItensNotaFiscal').ItemNF[]
+  categorias: { id: number; nome: string }[]
+}
+
+export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: string } | DetalheNotaFiscal> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+
+  const { data: nfSupabase } = await supabase
+    .from('notas_fiscais')
+    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, full_object')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+
+  // Fallback Contabo (mesma razao de buscarDetalheOP): notas_fiscais/nota_fiscal_items
+  // sao podadas a 90 dias no Supabase, mas MovimentosTab lista NF de ate 1 ano atras
+  // (fatia fria) -- sem isto, clicar numa "Saida (NF)" antiga daria "nao encontrada".
+  const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
+  if (!nf) return { error: 'Nota fiscal não encontrada.' }
+
+  const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
+    supabase
+      .from('nota_fiscal_items')
+      .select('id, n_id_receb, n_sequencia, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id')
+      .eq('nota_fiscal_id', id)
+      .eq('loja_id', lojaId)
+      .order('n_sequencia'),
+    supabase.from('categorias_contabeis').select('id, nome').eq('loja_id', lojaId).eq('ativa', true).order('nome'),
+  ])
+
+  const itens = nfSupabase
+    ? (itensRaw ?? [])
+    : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
+
+  const st = statusNF(nf.c_etapa, nf.full_object)
+
+  return {
+    id: String(nf.id),
+    numero: nf.c_numero_nfe,
+    razaoSocial: nf.c_razao_social || nf.c_nome,
+    dataEmissao: nf.d_emissao_nfe,
+    valor: nf.n_valor_nfe,
+    statusLabel: st.label,
+    statusTom: st.tom,
+    chaveNfe: nf.c_chave_nfe,
+    itens,
+    categorias: categorias ?? [],
+  }
+}
+
+export type DetalheInventario = {
+  id: number
+  local: string
+  data: string
+  responsavel: string | null
+  status: string
+  finalizado: boolean
+  podeEditar: boolean
+  itens: import('@/components/inventario/ContagemInventario').ItemContagem[]
+}
+
+// Sem fallback Contabo (mesma razao de buscarDetalheTransferencia): `inventarios`
+// e `inventario_items` NAO estao no conjunto de tabelas espelhadas no Contabo, e a
+// propria lista de SLD em MovimentosTab so vem do Supabase (invItems sem
+// complementarMovimentos), entao toda linha de inventario exibida ja existe aqui.
+export async function buscarDetalheInventario(id: number): Promise<{ error: string } | DetalheInventario> {
+  const lojaId = await getCurrentLojaId()
+  const supabase = createServiceClient()
+  const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
+
+  const { data: inventario } = await supabase
+    .from('inventarios')
+    .select('id, data, codigo_local_estoque, status, user_id')
+    .eq('id', id)
+    .eq('loja_id', lojaId)
+    .maybeSingle()
+  if (!inventario) return { error: 'Inventário não encontrado.' }
+
+  const { data: responsavel } = inventario.user_id
+    ? await supabase.from('profiles').select('name').eq('id', inventario.user_id).maybeSingle()
+    : { data: null }
+
+  // PostgREST corta em 1000 linhas por padrao e sem erro: inventarios podem ter
+  // mais itens que isso, entao pagina com .range() ate esgotar. Mesmo padrao de
+  // app/(app)/inventario/[id]/contagem/page.tsx.
+  const itensRaw: { id: number; produto_codigo: string; produto_descricao: string; produto_familia: string | null; produto_codigo_produto: number; quan: number | null; status: string | null }[] = []
+  const PAGE_SIZE = 1000
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * PAGE_SIZE
+    const { data: bloco } = await supabase
+      .from('inventario_items')
+      .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
+      .eq('inventario_id', id)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1)
+    if (!bloco?.length) break
+    itensRaw.push(...bloco)
+    if (bloco.length < PAGE_SIZE) break
+  }
+
+  const codigos = [...new Set(itensRaw.map((i) => i.produto_codigo_produto).filter(Boolean))]
+  const prods: { codigo_produto: number; unidade: string | null }[] = []
+  for (let from = 0; codigos.length && from < codigos.length; from += 1000) {
+    const { data } = await supabase.from('produtos').select('codigo_produto, unidade').eq('loja_id', lojaId).in('codigo_produto', codigos.slice(from, from + 1000))
+    if (data?.length) prods.push(...data)
+  }
+  const unidadeMap = new Map(prods.map((p) => [p.codigo_produto, p.unidade]))
+
+  const { data: local } = await supabase
+    .from('local_estoques')
+    .select('descricao')
+    .eq('loja_id', lojaId)
+    .eq('codigo_local_estoque', inventario.codigo_local_estoque)
+    .maybeSingle()
+
+  return {
+    id: inventario.id,
+    local: local?.descricao || String(inventario.codigo_local_estoque),
+    data: inventario.data,
+    responsavel: responsavel?.name ?? null,
+    status: inventario.status,
+    finalizado: inventario.status === 'Finalizado',
+    podeEditar,
+    itens: itensRaw.map((i) => ({
+      ...i,
+      produto_descricao: formatarNomeProduto(i.produto_descricao),
+      unidade: unidadeMap.get(i.produto_codigo_produto) ?? null,
+    })),
+  }
+}

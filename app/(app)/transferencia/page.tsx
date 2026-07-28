@@ -10,6 +10,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { Lista } from '@/components/ui-kit/Lista'
@@ -48,24 +50,36 @@ export default async function TransferenciaPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
   // Familias distintas para o select. PostgREST limita a 1000 linhas por
   // requisicao SEM avisar — lojas com mais de 1000 produtos com familia
   // preenchida (a maioria das 6 lojas ativas tem) perdiam a maior parte das
   // familias do dropdown silenciosamente (ex: loja com 52 familias reais
-  // mostrava so 4). Pagina ate esgotar para pegar todas.
+  // mostrava so 4). Pega o total antes (count exato) e busca todas as
+  // paginas em paralelo -- isso roda em TODO carregamento da tela, sequencial
+  // custava ate 2+ idas ao banco em fila so pra montar o dropdown.
+  const { count: totalComFamilia } = await supabase
+    .from('produtos')
+    .select('descricao_familia', { count: 'exact', head: true })
+    .eq('loja_id', lojaId)
+    .not('descricao_familia', 'is', null)
+  const numPaginasFamilia = Math.ceil((totalComFamilia ?? 0) / 1000)
+  const blocosFamilia = await Promise.all(
+    Array.from({ length: numPaginasFamilia }, (_, i) =>
+      supabase
+        .from('produtos')
+        .select('descricao_familia')
+        .eq('loja_id', lojaId)
+        .not('descricao_familia', 'is', null)
+        .range(i * 1000, i * 1000 + 999)
+    )
+  )
   const familiasSet = new Set<string>()
-  for (let from = 0; ; from += 1000) {
-    const { data: bloco } = await supabase
-      .from('produtos')
-      .select('descricao_familia')
-      .eq('loja_id', lojaId)
-      .not('descricao_familia', 'is', null)
-      .range(from, from + 999)
+  for (const { data: bloco } of blocosFamilia) {
     for (const p of bloco ?? []) {
       if (p.descricao_familia) familiasSet.add(p.descricao_familia)
     }
-    if (!bloco?.length || bloco.length < 1000) break
   }
   const familias = [...familiasSet].sort()
 
@@ -99,11 +113,11 @@ export default async function TransferenciaPage({
     const codigosUnicos = [...new Set(codigos)]
 
     if (codigosUnicos.length) {
-      const movsData: { id: number; id_prod: number; transferencia_id: number | null }[] = []
+      const movsData: { id: number; id_prod: number; transferencia_id: number | null; id_ajuste: number | null }[] = []
       for (let from = 0; ; from += 1000) {
         const { data: bloco } = await supabase
           .from('movimentos')
-          .select('id, id_prod, transferencia_id')
+          .select('id, id_prod, transferencia_id, id_ajuste')
           .eq('loja_id', lojaId)
           .in('id_prod', codigosUnicos)
           .not('transferencia_id', 'is', null)
@@ -159,21 +173,22 @@ export default async function TransferenciaPage({
   const temProxima = (transferenciasRaw?.length ?? 0) > POR_PAGINA
   const transferencias = temProxima ? transferenciasRaw!.slice(0, POR_PAGINA) : transferenciasRaw
 
-  // Locais ATIVOS para o seletor de criacao.
-  const { data: locais } = await supabase
-    .from('local_estoques')
-    .select('codigo_local_estoque, descricao')
-    .eq('loja_id', lojaId)
-    .neq('inativo', 'S')
-    .order('descricao')
-
-  // TODOS os locais (incl. inativos) so para exibir o NOME no historico: uma
-  // transferencia antiga de um local hoje inativo ainda deve mostrar o nome, nao
-  // o codigo numerico.
-  const { data: todosLocais } = await supabase
-    .from('local_estoques')
-    .select('codigo_local_estoque, descricao')
-    .eq('loja_id', lojaId)
+  // Locais ATIVOS (seletor de criacao) e TODOS os locais (incl. inativos, so
+  // pra exibir o NOME no historico -- uma transferencia antiga de um local
+  // hoje inativo ainda deve mostrar o nome, nao o codigo numerico) sao
+  // independentes entre si -- roda em paralelo em vez de serie.
+  const [{ data: locais }, { data: todosLocais }] = await Promise.all([
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .neq('inativo', 'S')
+      .order('descricao'),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId),
+  ])
 
   const localMap = new Map((todosLocais ?? []).map((l) => [l.codigo_local_estoque, l.descricao]))
 
@@ -311,6 +326,7 @@ export default async function TransferenciaPage({
             { value: 'C', label: 'Concluídas' },
           ]}
         />
+        <ChipsPeriodo basePath="/transferencia" opcoes={chipsPeriodo} />
         <ChipsFiltrosAtivos basePath="/transferencia" campos={campos} naoMostrar={['status']} persistirEm="/transferencia" />
       </ListaHeader>
 

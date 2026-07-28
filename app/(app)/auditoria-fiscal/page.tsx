@@ -9,6 +9,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/Filtros'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -22,6 +23,8 @@ import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
 import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { btnClass } from '@/components/ui-kit/Button'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { ShieldCheck, Download } from 'lucide-react'
 
 const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
@@ -37,6 +40,41 @@ type LinhaItem = {
 
 const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo', 'Ativo imobilizado', 'Bonificação/Comodato', 'Devolução', 'Outros']
 
+// O Supabase corta em 1000 linhas por padrao (sem erro) -- pagina ate esgotar
+// (achado real: lojas com >1000 produtos perdiam o resto do catalogo aqui,
+// mesmo bug ja corrigido no export/route.ts irmao). Usado tanto no resumo por
+// CFOP quanto no drill-down por item, que fazem a mesma query de metadados.
+async function buscarMetaProdutos(
+  supabase: ReturnType<typeof createServiceClient>,
+  lojaId: number
+): Promise<Map<number, { tipo: string | null; familia: string | null }>> {
+  // Pega o total antes (count exato) e busca as paginas em paralelo em vez de
+  // uma de cada vez -- mesma latencia Franca-Brasil por ida, ver comentario em
+  // HistoricoTab.tsx.
+  const { count } = await supabase
+    .from('produtos')
+    .select('codigo_produto', { count: 'exact', head: true })
+    .eq('loja_id', lojaId)
+  const numPaginas = Math.ceil((count ?? 0) / 1000)
+  const blocos = await Promise.all(
+    Array.from({ length: numPaginas }, (_, pg) =>
+      supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .order('id', { ascending: true })
+        .range(pg * 1000, pg * 1000 + 999)
+    )
+  )
+  const meta = new Map<number, { tipo: string | null; familia: string | null }>()
+  for (const { data } of blocos) {
+    for (const p of data ?? []) {
+      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
+    }
+  }
+  return meta
+}
+
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
@@ -47,8 +85,10 @@ export default async function AuditoriaFiscalPage({
 
   const sp = await searchParams
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Ano corrente', dataIni: `${hojeISO.slice(0, 4)}-01-01`, dataFim: hojeISO })
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
+  const familiasFiltro = valoresMulti(sp.familia)
 
   const supabase = createServiceClient()
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
@@ -58,25 +98,22 @@ export default async function AuditoriaFiscalPage({
   const iniRpc = ini < corte ? corte : ini
   const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim,
-    p_produto: sp.produto || null, p_familia: sp.familia || null,
+    p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null,
     p_fornecedor: sp.fornecedor || null, p_local: localCod,
   })
   const linhas = (cfopRaw ?? []) as LinhaCFOP[]
 
   // Complemento frio: mescla o resumo por par CFOP com o pedaço antigo.
   if (ini < corte) {
-    const { data: prodMetaRaw } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-    const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-    for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
-      meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-    }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    // buscarMetaProdutos (Supabase) e buscarItensNFFrio (Contabo) sao
+    // independentes entre si -- roda em paralelo em vez de serie.
+    const [meta, itensFrios] = await Promise.all([
+      buscarMetaProdutos(supabase, lojaId),
+      buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
+    ])
     const filtrados = filtrarItensAuditoria(itensFrios, {
-      produto: sp.produto || null, familia: sp.familia || null, fornecedor: sp.fornecedor || null, local: localCod,
+      produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
     }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
@@ -125,7 +162,7 @@ export default async function AuditoriaFiscalPage({
       .rpc('relatorio_auditoria_fiscal_itens', {
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel || SEM,
         p_fornecedor: sp.fornecedor || null,
-        p_produto: sp.produto || null, p_familia: sp.familia || null, p_local: localCod,
+        p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null, p_local: localCod,
       })
       .range(0, 299)
     itensSel = (data ?? []) as LinhaItem[]
@@ -133,15 +170,12 @@ export default async function AuditoriaFiscalPage({
     // Complemento frio do drill-down (mesmo par CFOP, pedaço antigo).
     if (ini < corte) {
       const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-      const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-      const { data: prodMetaRaw } = await supabase
-        .from('produtos').select('codigo_produto, tipo_item, descricao_familia').eq('loja_id', lojaId)
-      const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-      for (const p of (prodMetaRaw ?? []) as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[]) {
-        meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
-      }
+      const [itensFrios, meta] = await Promise.all([
+        buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
+        buscarMetaProdutos(supabase, lojaId),
+      ])
       const filtrados = filtrarItensAuditoria(itensFrios, {
-        produto: sp.produto || null, familia: sp.familia || null, fornecedor: sp.fornecedor || null, local: localCod,
+        produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)
       const friosDrill = mapearAuditoriaItens(filtrados, { cfopDoc: cfopDocSel, cfopEntrada: cfopEntSel || SEM }) as LinhaItem[]
       itensSel = [...itensSel, ...friosDrill]
@@ -163,7 +197,7 @@ export default async function AuditoriaFiscalPage({
     { tipo: 'data', nome: 'data_inicio', label: 'Data inicial' },
     { tipo: 'data', nome: 'data_final', label: 'Data final' },
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
-    { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })) },
     { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
     {
       tipo: 'select',
@@ -211,6 +245,7 @@ export default async function AuditoriaFiscalPage({
           }
         />
         <ChipsFiltrosAtivos basePath="/auditoria-fiscal" campos={campos} persistirEm="/auditoria-fiscal" />
+        <ChipsPeriodo basePath="/auditoria-fiscal" opcoes={chipsPeriodo} />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

@@ -11,6 +11,8 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
+import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -81,6 +83,7 @@ export default async function OrdemProducaoPage({
   const ultimoDiaMes = `${hojeISO.slice(0, 7)}-${String(new Date(anoAtual, mesAtual, 0).getDate()).padStart(2, '0')}`
   const dataInicio = sp.data_inicio ?? primeiroDiaMes
   const dataFinal = sp.data_final ?? ultimoDiaMes
+  const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Este mês', dataIni: primeiroDiaMes, dataFim: ultimoDiaMes })
 
   // Filtro de status: concluida (S/N) ou status granular (prevista/pendente/atrasada).
   // op_concluido S/N mantido por compatibilidade; op_status e o novo filtro de 4 estados.
@@ -124,6 +127,7 @@ export default async function OrdemProducaoPage({
 
   type OPRow = {
     id: number
+    identificacao_n_cod_op: number
     num_ordem: string | null
     identificacao_c_num_op: string | null
     identificacao_n_cod_produto: number | null
@@ -146,7 +150,7 @@ export default async function OrdemProducaoPage({
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
+        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
       )
       .eq('loja_id', lojaId)
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
@@ -206,7 +210,12 @@ export default async function OrdemProducaoPage({
     const LOTE = 1000
     const MAX_LOTES = 60 // teto de seguranca (~60k OPs) para nao travar o SSR
     for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
-      const { data } = await baseQuery().range(off, off + LOTE - 1)
+      const { data, error } = await baseQuery().range(off, off + LOTE - 1)
+      // Achado real (auditoria de relatórios, 2026-07-26): um erro transitório
+      // no meio da paginação (ex.: statement-timeout) era tratado igual a
+      // "acabaram os dados" -- marca truncado (mesmo aviso já exibido pro
+      // teto de MAX_LOTES) em vez de deixar o conjunto parecer completo.
+      if (error) { console.error('ordem-producao: falha ao paginar OPs', error); truncado = true; break }
       const lote = (data ?? []) as OPRow[]
       if (!lote.length) break
       todas.push(...lote)
@@ -336,7 +345,7 @@ export default async function OrdemProducaoPage({
     return q
   }
 
-  type TotalRow = { id: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
+  type TotalRow = { id: number; identificacao_n_cod_op: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
   let totConcluidasFinal: number
   let totPrevistasFinal: number
   let totPendentesFinal: number
@@ -352,7 +361,7 @@ export default async function OrdemProducaoPage({
     function totaisRowsQuery() {
       let q = supabase
         .from('ordens_producao')
-        .select('id, concluida, identificacao_d_dt_previsao')
+        .select('id, identificacao_n_cod_op, concluida, identificacao_d_dt_previsao')
         .eq('loja_id', lojaId)
       if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
       if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
@@ -374,7 +383,10 @@ export default async function OrdemProducaoPage({
     const LOTE = 1000
     const MAX_LOTES = 200 // teto de seguranca (~200k OPs) pra nao travar o SSR
     for (let off = 0, i = 0; i < MAX_LOTES; off += LOTE, i++) {
-      const { data } = await totaisRowsQuery().range(off, off + LOTE - 1)
+      const { data, error } = await totaisRowsQuery().range(off, off + LOTE - 1)
+      // Mesmo achado do loop de `todas` acima: erro transitório no meio da
+      // paginação virava "acabaram os dados" em silêncio.
+      if (error) { console.error('ordem-producao: falha ao paginar contadores', error); totaisParciais = true; break }
       const lote = (data ?? []) as TotalRow[]
       if (!lote.length) break
       totaisQuentes.push(...lote)
@@ -400,8 +412,8 @@ export default async function OrdemProducaoPage({
       contarOrdensProducaoAntigas({ lojaId, dataInicio, dataFinal, campo: 'previsao' }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
-    const vistosQuentes = new Set(totaisQuentes.map((r) => r.id))
-    const totaisCompletos = [...totaisQuentes, ...friasRaw.filter((r) => !vistosQuentes.has(r.id))]
+    const vistosQuentes = new Set(totaisQuentes.map((r) => r.identificacao_n_cod_op))
+    const totaisCompletos = [...totaisQuentes, ...friasRaw.filter((r) => !vistosQuentes.has(r.identificacao_n_cod_op))]
     totConcluidasFinal = totaisCompletos.filter((o) => o.concluida).length
     // nulls excluidos explicitamente (nao coalescer pra '' -- '' < qualquer data
     // contaria erroneamente como atrasada): espelha o gte/lte do banco, que tambem
@@ -543,6 +555,7 @@ export default async function OrdemProducaoPage({
             { value: 'concluida', label: 'Concluídas', count: totConcluidasFinal },
           ]}
         />
+        <ChipsPeriodo basePath="/ordem-producao" opcoes={chipsPeriodo} />
         <ChipsFiltrosAtivos
           basePath="/ordem-producao"
           campos={campos}

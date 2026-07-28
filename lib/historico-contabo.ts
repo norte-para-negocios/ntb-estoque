@@ -135,11 +135,6 @@ export async function contarNotasFiscaisAntigas(opts: {
   }
 }
 
-function mesclarPorId<T extends { id: number }>(quentes: T[], frias: T[]): T[] {
-  const vistos = new Set(quentes.map((r) => r.id))
-  return [...quentes, ...frias.filter((r) => !vistos.has(r.id))]
-}
-
 // A API do Contabo tem LIMIT fixo no servidor pros endpoints de historico longo
 // (nao aceita LIMIT arbitrario do cliente, so `offset`) -- acha real (audit Notas
 // Fiscais 2026-07-19): nenhum client deste repo de fato fazia o loop de paginas,
@@ -183,7 +178,43 @@ export async function buscarFrioTudo<T>(
   return tudo
 }
 
-export async function complementarNotasFiscais<T extends { id: number }>(
+// Achado real (auditoria do bug de duplicacao de movimentos, 2026-07-25,
+// estendido pra NF/OP em 2026-07-26): assim que ganharem dual-write continuo
+// pro Contabo (lib/omie/nota-fiscal.ts, lib/omie/ordem-producao.ts), essas 3
+// tabelas passam a ter o MESMO problema que `movimentos` teve -- o Contabo
+// gera seu proprio `id` (bigserial) pra cada linha nova, independente do
+// Supabase. mesclarPorId (por `.id`) nao reconhece como o mesmo registro.
+// Dedupe pela chave natural em vez disso, mesmo padrao ja usado em
+// complementarMovimentos/complementarMovimentosHistorico. Como
+// n_id_receb/n_sequencia/identificacao_n_cod_op sao sempre preenchidos pra
+// todo registro real vindo do Omie (ao contrario de id_ajuste em
+// `movimentos`, que podia ser nulo), nao precisa de fallback pro `.id`.
+function mesclarNotasFiscaisPorChaveNatural<T extends { id: number; n_id_receb: string }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const vistos = new Set(quentes.map((r) => r.n_id_receb))
+  return [...quentes, ...frias.filter((r) => !vistos.has(r.n_id_receb))]
+}
+
+function mesclarNotaFiscalItemsPorChaveNatural<T extends { id: number; n_id_receb: string; n_sequencia: number }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const chave = (r: T) => `${r.n_id_receb}|${r.n_sequencia}`
+  const vistos = new Set(quentes.map(chave))
+  return [...quentes, ...frias.filter((r) => !vistos.has(chave(r)))]
+}
+
+function mesclarOrdensProducaoPorChaveNatural<T extends { id: number; identificacao_n_cod_op: number }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const vistos = new Set(quentes.map((r) => r.identificacao_n_cod_op))
+  return [...quentes, ...frias.filter((r) => !vistos.has(r.identificacao_n_cod_op))]
+}
+
+export async function complementarNotasFiscais<T extends { id: number; n_id_receb: string }>(
   quentes: T[],
   opts: {
     lojaId: number
@@ -206,10 +237,10 @@ export async function complementarNotasFiscais<T extends { id: number }>(
     id: opts.id,
   }, 2000)
   const frias = opts.filtrarFrias ? friasRaw.filter(opts.filtrarFrias) : friasRaw
-  return mesclarPorId(quentes, frias)
+  return mesclarNotasFiscaisPorChaveNatural(quentes, frias)
 }
 
-export async function complementarNotaFiscalItems<T extends { id: number }>(
+export async function complementarNotaFiscalItems<T extends { id: number; n_id_receb: string; n_sequencia: number }>(
   quentes: T[],
   opts: { lojaId: number; notaFiscalId?: number | number[]; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
@@ -220,10 +251,10 @@ export async function complementarNotaFiscalItems<T extends { id: number }>(
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
   }, 5000)
-  return mesclarPorId(quentes, frias)
+  return mesclarNotaFiscalItemsPorChaveNatural(quentes, frias)
 }
 
-export async function complementarOrdensProducao<T extends { id: number }>(
+export async function complementarOrdensProducao<T extends { id: number; identificacao_n_cod_op: number }>(
   quentes: T[],
   opts: {
     lojaId: number
@@ -267,7 +298,39 @@ export async function complementarOrdensProducao<T extends { id: number }>(
         validade_final: opts.validadeFinal,
         busca: opts.busca,
       }, 2000)
-  return mesclarPorId(quentes, frias)
+  return mesclarOrdensProducaoPorChaveNatural(quentes, frias)
+}
+
+// Achado real (auditoria do bug de duplicacao, 2026-07-25): diferente de
+// notas_fiscais/nota_fiscal_items/ordens_producao (copia unica e congelada
+// desde 07-12, id preservado 1:1), `movimentos` ganhou escrita continua pro
+// Contabo em 07-18 (lib/omie/sync-ajustes.ts -> POST /movimentos_bulk) que
+// NUNCA envia o `id` -- cada base gera o seu bigserial de forma independente
+// pro mesmo registro logico. Confirmado ao vivo: mesmo id_ajuste (9568796382)
+// tem id=1036091 no Supabase e id=1035472 no Contabo. mesclarPorId (por
+// `.id`) nao reconhece que e o mesmo registro -- o Supabase hoje NAO poda
+// `movimentos` (guarda historico completo desde 01/07/2025), entao toda vez
+// que um relatorio pede um periodo que cruza a janela quente, a fatia
+// recente aparece duplicada (uma vez vinda do Supabase, outra do Contabo).
+// A chave natural real e `(loja_id, id_ajuste)` -- ja usada corretamente no
+// UPSERT dos dois lados (migration 059, ver AGENTS.md) -- entao dedupe por
+// ela aqui tambem, com fallback pro `id` só pros poucos registros antigos
+// sem `id_ajuste` (existiam antes da chave natural existir). NAO inclui
+// `loja_id` na chave por design -- esta funcao so e segura quando quentes/
+// frias ja sao de 1 loja so (todo caller de complementarMovimentos hoje
+// filtra por loja antes de chamar). Achado na revisao deste fix
+// (2026-07-25): o fallback por `.id` continua exposto ao MESMO bug original
+// em escala reduzida -- dois registros sem `id_ajuste`, um de cada banco,
+// podem coincidir de `id` por acaso (ja provamos que os bigserial das duas
+// bases sao independentes). Aceito como risco residual (poucas dezenas de
+// registros por loja, de antes da chave natural existir).
+function mesclarMovimentosPorChaveNatural<T extends { id: number; id_ajuste: number | null }>(
+  quentes: T[],
+  frias: T[]
+): T[] {
+  const chave = (r: T) => (r.id_ajuste != null ? `aj:${r.id_ajuste}` : `id:${r.id}`)
+  const vistos = new Set(quentes.map(chave))
+  return [...quentes, ...frias.filter((r) => !vistos.has(chave(r)))]
 }
 
 // Achado real (auditoria movimentacao-operacao-auto, 2026-07-19): /movimentos
@@ -276,7 +339,7 @@ export async function complementarOrdensProducao<T extends { id: number }>(
 // offset, entao nunca foi paginado. Loja 5 sozinha tem 51937 ajustes desde
 // 01/07/2025 (so ~10% vinha antes do fix). Servidor ganhou suporte a
 // `offset` (mesmo padrao); client agora pagina igual aos outros.
-export async function complementarMovimentos<T extends { id: number }>(
+export async function complementarMovimentos<T extends { id: number; id_ajuste: number | null }>(
   quentes: T[],
   opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number }
 ): Promise<T[]> {
@@ -288,7 +351,28 @@ export async function complementarMovimentos<T extends { id: number }>(
     id_prod: opts.idProd,
     transferencia_id: opts.transferenciaId,
   }, 5000)
-  return mesclarPorId(quentes, frias)
+  return mesclarMovimentosPorChaveNatural(quentes, frias)
+}
+
+// Achado real (auditoria de relatorios, 2026-07-26): o Postgres do Contabo
+// tem linhas literalmente duplicadas em `movimentos_historico` (mesmo
+// cod_prod+data+valores) -- sobra de reprocessamento de backfill antigo,
+// fora do controle deste app. A chave natural real da tabela e
+// `(loja_id, cod_prod, data)` (migration 015) -- linhas com a mesma chave sao
+// o MESMO registro logico e nao devem ser somadas 2x. Medido: 213 linhas
+// extras em 5 datas so na loja 2, inflando entradas/saidas em ~2%/~0.3%
+// sempre que o periodo cruza os 90 dias. Usado tanto aqui (merge quente+frio)
+// quanto em buscarMovimentosHistoricoBrutos (que nao mescla, so busca cru).
+function dedupeMovimentosHistoricoPorChaveNatural<T extends { cod_prod: number; data: string }>(linhas: T[]): T[] {
+  const vistos = new Set<string>()
+  const unicas: T[] = []
+  for (const l of linhas) {
+    const chave = `${l.cod_prod}|${l.data}`
+    if (vistos.has(chave)) continue
+    vistos.add(chave)
+    unicas.push(l)
+  }
+  return unicas
 }
 
 // Achado real (auditoria 2026-07-19): /movimentos_historico tem o MESMO
@@ -300,12 +384,13 @@ export async function complementarMovimentosHistorico<T extends { cod_prod: numb
   opts: { lojaId: number; codProd?: number; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
-  const frias = await buscarFrioTudo<T>('/movimentos_historico', {
+  const friasRaw = await buscarFrioTudo<T>('/movimentos_historico', {
     loja_id: opts.lojaId,
     cod_prod: opts.codProd,
     data_inicio: opts.dataInicio,
     data_final: opts.dataFinal,
   }, 5000)
+  const frias = dedupeMovimentosHistoricoPorChaveNatural(friasRaw)
   const vistos = new Set(quentes.map((r) => `${r.cod_prod}|${r.data}`))
   return [...quentes, ...frias.filter((r) => !vistos.has(`${r.cod_prod}|${r.data}`))]
 }
@@ -344,9 +429,7 @@ function addDias(dataISO: string, dias: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-// Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
-// sem mesclar com nada, pra agregacao acontecer em JS.
-export async function buscarMovimentosHistoricoBrutos<T>(opts: {
+async function buscarMovimentosHistoricoBrutosSemDedupe<T>(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
@@ -363,10 +446,25 @@ export async function buscarMovimentosHistoricoBrutos<T>(opts: {
   const meio = addDias(opts.dataInicio, Math.floor(diasTotais / 2))
   if (meio <= opts.dataInicio) return lote // 1 dia so e ja bateu o teto -- nao da pra bisectar mais
   const [a, b] = await Promise.all([
-    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataFinal: meio }),
-    buscarMovimentosHistoricoBrutos<T>({ ...opts, dataInicio: addDias(meio, 1) }),
+    buscarMovimentosHistoricoBrutosSemDedupe<T>({ ...opts, dataFinal: meio }),
+    buscarMovimentosHistoricoBrutosSemDedupe<T>({ ...opts, dataInicio: addDias(meio, 1) }),
   ])
   return [...a, ...b]
+}
+
+// Usado so pelo caso especial do relatorio-movimentacao: busca linhas cruas
+// sem mesclar com nada, pra agregacao acontecer em JS. Dedupe por chave
+// natural (ver dedupeMovimentosHistoricoPorChaveNatural acima) aplicado uma
+// unica vez aqui, depois de toda a bisecao terminar -- os pedacos bisectados
+// nao se sobrepoem em data, entao duplicatas so existem DENTRO de cada
+// pedaco, nunca entre eles, mas dedupar so no final evita qualquer duvida.
+export async function buscarMovimentosHistoricoBrutos<T extends { cod_prod: number; data: string }>(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+}): Promise<T[]> {
+  const bruto = await buscarMovimentosHistoricoBrutosSemDedupe<T>(opts)
+  return dedupeMovimentosHistoricoPorChaveNatural(bruto)
 }
 
 export type LinhaMovHistoricoBruta = {

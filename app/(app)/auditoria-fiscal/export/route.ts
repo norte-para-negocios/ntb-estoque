@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_inicio') ?? '') ? searchParams.get('data_inicio')! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_final') ?? '') ? searchParams.get('data_final')! : hojeISO
   const produto = searchParams.get('produto') || null
-  const familia = searchParams.get('familia') || null
+  const familiasFiltro = (searchParams.get('familia') ?? '').split(',').map((v) => v.trim()).filter(Boolean)
   const fornecedor = searchParams.get('fornecedor') || null
   const localCod = searchParams.get('local') && !Number.isNaN(Number(searchParams.get('local'))) ? Number(searchParams.get('local')) : null
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const corte = limiteJanelaQuente()
   const iniRpc = ini < corte ? corte : ini
   const { data } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
-    p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_produto: produto, p_familia: familia, p_fornecedor: fornecedor, p_local: localCod,
+    p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_produto: produto, p_familias: familiasFiltro.length ? familiasFiltro : null, p_fornecedor: fornecedor, p_local: localCod,
   })
   const linhas = (data ?? []) as LinhaCFOP[]
 
@@ -40,6 +40,7 @@ export async function GET(request: Request) {
         .from('produtos')
         .select('codigo_produto, tipo_item, descricao_familia')
         .eq('loja_id', lojaId)
+        .order('id', { ascending: true })
         .range(from, from + 999)
       if (!data?.length) break
       prodMetaRaw.push(...data)
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-    const filtrados = filtrarItensAuditoria(itensFrios, { produto, familia, fornecedor, local: localCod }, meta)
+    const filtrados = filtrarItensAuditoria(itensFrios, { produto, familias: familiasFiltro, fornecedor, local: localCod }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
       const k = `${f.cfop_doc}|${f.cfop_entrada ?? ''}`
@@ -111,7 +112,7 @@ export async function GET(request: Request) {
 
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Auditoria fiscal — compras por CFOP',
-    subtitulo: `Período ${ini} a ${fim}${produto ? ` · Produto: ${produto}` : ''}${familia ? ` · Família: ${familia}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,
+    subtitulo: `Período ${ini} a ${fim}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,
     autoFiltro: true,
   })
   return planilhaResponse('auditoria-fiscal', buffer)

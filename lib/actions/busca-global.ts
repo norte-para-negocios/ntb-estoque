@@ -58,7 +58,7 @@ export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
     try {
       const { data, error } = await supabase
         .from('notas_fiscais')
-        .select('id, c_numero_nfe, c_razao_social, c_nome')
+        .select('id, n_id_receb, c_numero_nfe, c_razao_social, c_nome')
         .eq('loja_id', lojaId)
         .is('deleted_at', null)
         .or(`c_numero_nfe.ilike.${p},c_razao_social.ilike.${p},c_nome.ilike.${p}`)
@@ -80,7 +80,7 @@ export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
     try {
       const { data, error } = await supabase
         .from('ordens_producao')
-        .select('id, num_ordem, identificacao_c_num_op')
+        .select('id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op')
         .eq('loja_id', lojaId)
         .or(`num_ordem.ilike.${p},identificacao_c_num_op.ilike.${p}`)
         .limit(5)

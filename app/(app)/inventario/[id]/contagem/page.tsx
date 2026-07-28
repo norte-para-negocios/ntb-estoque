@@ -55,14 +55,21 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
   }
 
   const codigos = [...new Set((itensRaw ?? []).map((i) => i.produto_codigo_produto).filter(Boolean))]
-  const { data: prods } = codigos.length
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, unidade')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', codigos)
-    : { data: [] }
-  const unidadeMap = new Map((prods ?? []).map((p) => [p.codigo_produto, p.unidade]))
+  // Achado real (auditoria de relatórios, 2026-07-26): um único `.in()` sem
+  // paginação cai no teto padrão de 1000 linhas do PostgREST -- inofensivo
+  // hoje (maior inventário real tem 209 itens), mas lojas já têm até 1963
+  // produtos ativos, então um inventário que um dia cobrir o catálogo inteiro
+  // perderia a unidade dos produtos além da linha 1000 em silêncio.
+  const prods: { codigo_produto: number; unidade: string | null }[] = []
+  for (let from = 0; codigos.length && from < codigos.length; from += 1000) {
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, unidade')
+      .eq('loja_id', lojaId)
+      .in('codigo_produto', codigos.slice(from, from + 1000))
+    if (data?.length) prods.push(...data)
+  }
+  const unidadeMap = new Map(prods.map((p) => [p.codigo_produto, p.unidade]))
 
   const itens = (itensRaw ?? []).map((i) => ({
     ...i,

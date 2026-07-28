@@ -42,6 +42,49 @@ interface OmieOPResponse {
   cadastros?: OmieOP[]
 }
 
+interface OrdemProducaoBulkRow {
+  num_ordem: string
+  identificacao_n_cod_op: number
+  identificacao_c_cod_int_op: string
+  identificacao_c_num_op: string
+  identificacao_n_cod_produto: number
+  identificacao_d_dt_previsao: string | null
+  identificacao_n_qtde: number
+  identificacao_codigo_local_estoque: number
+  concluida: boolean
+  dt_conclusao_real: string | null
+  dt_inclusao: string | null
+  full_object: unknown
+}
+
+const LOTE_ORDENS = 100
+
+// Envia o lote de OPs pro Contabo, fire-and-forget, em pedacos de 100 (mesmo
+// tamanho de pagina ja usado pelo sync). Mesma filosofia de
+// gravarMovimentosNoFrio: nunca bloqueia nem quebra o upsert no Supabase.
+async function gravarOrdensNoFrio(lojaId: number, linhas: OrdemProducaoBulkRow[]): Promise<void> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url || !linhas.length) return
+  for (let i = 0; i < linhas.length; i += LOTE_ORDENS) {
+    const lote = linhas.slice(i, i + LOTE_ORDENS)
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const resp = await fetch(`${url}/ordens_producao_bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+        body: JSON.stringify({ loja_id: lojaId, ordens: lote }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    } catch (e) {
+      console.error('ordem-producao: falha ao gravar ordens no Contabo', e)
+    }
+  }
+}
+
 export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataFim?: string) {
   const supabase = createServiceClient()
   await supabase.from('lojas').update({ ordem_producao_status: 'Processando' }).eq('id', loja.id)
@@ -119,9 +162,28 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           }
         }
 
-        await supabase
+        const { error: upsertError } = await supabase
           .from('ordens_producao')
           .upsert(rows, { onConflict: 'loja_id,identificacao_n_cod_op' })
+        if (upsertError) {
+          throw new Error(
+            `syncOrdensProducao: falha ao upsertar ordens_producao (loja ${loja.id}): ${upsertError.message}`
+          )
+        }
+        await gravarOrdensNoFrio(loja.id, rows.map((r) => ({
+          num_ordem: r.num_ordem,
+          identificacao_n_cod_op: r.identificacao_n_cod_op,
+          identificacao_c_cod_int_op: r.identificacao_c_cod_int_op,
+          identificacao_c_num_op: r.identificacao_c_num_op,
+          identificacao_n_cod_produto: r.identificacao_n_cod_produto,
+          identificacao_d_dt_previsao: r.identificacao_d_dt_previsao,
+          identificacao_n_qtde: r.identificacao_n_qtde,
+          identificacao_codigo_local_estoque: r.identificacao_codigo_local_estoque,
+          concluida: r.concluida,
+          dt_conclusao_real: r.dt_conclusao_real,
+          dt_inclusao: r.dt_inclusao,
+          full_object: r.full_object,
+        })))
       }
 
       pagina++
@@ -160,7 +222,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
   })
   if (res?.identificacao) {
     const itens = (res as Record<string, unknown>).itensDetalhes as unknown[] | undefined
-    await supabase.from('ordens_producao').upsert(
+    const { error: upsertError } = await supabase.from('ordens_producao').upsert(
       {
         loja_id: loja.id,
         num_ordem: res.identificacao.cNumOP,
@@ -177,6 +239,23 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
       },
       { onConflict: 'loja_id,identificacao_n_cod_op' }
     )
+    if (upsertError) {
+      throw new Error(
+        `fetchOrdemProducao: falha ao upsertar ordens_producao (loja ${loja.id}): ${upsertError.message}`
+      )
+    }
+    await gravarOrdensNoFrio(loja.id, [{
+      num_ordem: res.identificacao.cNumOP,
+      identificacao_n_cod_op: res.identificacao.nCodOP,
+      identificacao_c_cod_int_op: res.identificacao.cCodIntOP,
+      identificacao_c_num_op: res.identificacao.cNumOP,
+      identificacao_n_cod_produto: res.identificacao.nCodProduto,
+      identificacao_d_dt_previsao: parseDate(res.identificacao.dDtPrevisao),
+      identificacao_n_qtde: res.identificacao.nQtde,
+      identificacao_codigo_local_estoque: res.identificacao.codigo_local_estoque,
+      ...mapOutrasInf(res),
+      full_object: itens?.length ? { itensDetalhes: itens } : null,
+    }])
   }
 }
 
