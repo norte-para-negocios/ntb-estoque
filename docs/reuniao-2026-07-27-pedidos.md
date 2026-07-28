@@ -16,7 +16,7 @@ transcrição, isso está marcado explicitamente — não preenchi lacunas por s
 | 1 | Desligar sistema antigo (teste) | Testar desligamento do app antigo "Norte Para Negócios" no Contabo pra medir ganho de performance | Prazo: 28/07 |
 | 2 | Preço de entrada usando campo errado do Omie | Trocar fonte de "último preço de compra" de valor unitário do fornecedor para CMC (custo médio contábil) da compra | Bug confirmado |
 | 3 | NF pendente contando notas já manifestadas | Excluir notas manifestadas (etapa 40) da contagem "precisa de ação"; restringir NF em aberto e OP atrasada ao mês atual | Bug confirmado |
-| 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tem efeito no relatório de Movimentações | Bug confirmado — prioridade alta |
+| 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
 | 6 | Faturamento sem filtro concluída/cancelada por padrão | Confirmar/implementar filtro padrão só concluídas + validar contra tabela de referência | Bug confirmado |
 | 7 | Compras sem filtro de status | Adicionar filtro status (concluída/cancelada/tudo), fixo por padrão | Bug confirmado |
