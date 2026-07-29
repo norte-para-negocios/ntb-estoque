@@ -54,6 +54,10 @@ R06.pptx`). Achados dessa revisão:
 | 21 | Tipos de ajuste de estoque (entrada/saída/ajuste positivo) | Confirmado que não precisa mudar: ajuste de saldo já é coberto por Inventário; entrada sem nota já existe | Confirmado OK, sem ação |
 | 22 | Próxima reunião | Quinta-feira 30/07, agora às 19h (antecipada de 21h) | Agenda |
 | 23 | Necessidade de Matéria-Prima (achado 2026-07-29, não pedido na reunião) | Mapa dia-a-dia de MP necessária, explodindo ficha técnica × programação de produção — achado na planilha `OP_SVVM_JUN25 - R1.xlsx`, aba "NECESSIDADE DE MP", que a consultoria já monta na mão | ✅ Resolvido |
+| 24 | Indicador de status/progresso em operações lentas (achado na auditoria 2026-07-29) | Pedido solto na call (~00:52, Andrey): mostrar o que o sistema está fazendo enquanto uma tela demora | Sem spec, sem decisão de prioridade |
+| 25 | Relatório de desconto por forma de pagamento (achado na auditoria 2026-07-29) | 3 abas dedicadas em `FAT_SVVM_2026.xlsx` que a consultoria monta na mão, nunca pedido nem catalogado antes | Não implementado, aguardando prioridade |
+| 26 | Priorização de auditoria por categoria — Material de Consumo (achado na auditoria 2026-07-29) | Recomendação do slide 11 do pptx, ligada ao item #14 já implementado | Não implementado, aguardando prioridade |
+| 27 | Dashboard de rejeitos: só 3 de 6 categorias de baixa (achado na auditoria 2026-07-29) | `MOV_AMJ_2026` rastreia 3 categorias a mais (Gastos Gerais/Desp. Funcionário/MC) que o dashboard do item #16 não soma | Não implementado, escopo a decidir |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
@@ -226,8 +230,12 @@ usar como base"), tem 2 abas relevantes:
 - **"PROG DE PRODUÇÃO EM ATRASO"**: mesma estrutura de matriz, mas filtrada por
   `Etapa = 'A Produzir'` — confirma que é uma visão **separada** da "lista de ordens
   atrasadas" simples que já existe (ele foi explícito sobre isso na call).
-- Confirma também os locais de produção reais usados: `COZINHA`, e (por outras abas do mesmo
-  arquivo) `NUCLEO`/`PIZZARIA` — bate com o que já estava confirmado na call.
+- Confirma também os locais de produção reais usados: `COZINHA`, `BAR` e `PIZZARIA` (aba
+  "Local de Produção") — bate com o que já estava confirmado na call. **Correção
+  2026-07-29 (auditoria independente)**: a versão anterior desta nota citava também
+  `NUCLEO` como confirmado no arquivo — não é verdade, essa string não aparece em
+  nenhuma célula de `OP_SVVM_JUN25 - R1.xlsx`. "Núcleo" como local de produção real é
+  fato só da call (Ramon/Andrey falaram ao vivo), não do arquivo.
 
 ### Relatório de Inventários (equivalente ao de Transferências, que já existe)
 Transferências já tem relatório PDF filtrável por mês. Inventário não tem — só Excel de
@@ -448,6 +456,41 @@ dia a dia.
 Ver nota na seção do item #16 acima — top faturados deveria separar por tipo de produto
 (Produto Acabado vs Revenda), e o cálculo do índice compras/faturamento foi validado
 independentemente contra dado real da planilha (30,72% ≈ limiar de 30%).
+
+## Auditoria independente pós-fechamento (2026-07-29, a pedido do usuário)
+
+O usuário pediu confirmação explícita de que a releitura acima foi de verdade completa.
+Em vez de eu mesmo reafirmar, um agente novo (sem contexto prévio, instruído a ser
+adversarial) releu os 2 transcripts + as 5 planilhas/pptx do zero, cruzando contra o
+catálogo. **Resultado: o catálogo NÃO estava 100% completo.** Achados reais (além da
+correção do #10 acima):
+
+- **#24 — Indicador de status/progresso em operações lentas** (~00:52 da call, Andrey):
+  pedido pra mostrar o que o sistema está fazendo enquanto uma tela demora ("tá
+  consultando a Omie ou não?"). Não é um bug, é uma sugestão de UX solta — nunca virou
+  item nenhum, nem como "adiado". **Sem spec, sem decisão de prioridade ainda.**
+- **#25 — Relatório de desconto por forma de pagamento**: `FAT_SVVM_2026.xlsx` tem 3
+  abas dedicadas ("Desconto 10+", "Desconto por tipo de pgto", "Fat vs forma de pgto")
+  que a consultoria monta todo mês (ex.: R$58.585,57 de desconto só em Pix, jan–jul).
+  Zero menção a desconto/forma de pagamento no catálogo até agora. **Não pedido na
+  reunião, achado só na planilha — mesma categoria dos itens #16/#23.**
+- **#26 — Priorização de auditoria por categoria (Material de Consumo)**: slide 11 do
+  pptx recomenda direcionar as próximas contagens físicas pra Material de Consumo,
+  categoria que opera acima do limite na maioria dos meses. Relacionado ao item #14
+  (Posição de Estoque com cobertura de inventário, já implementado) mas o direcionamento
+  por prioridade de categoria não foi implementado.
+- **#27 — Dashboard de rejeitos/perdas cobre só 3 categorias de baixa, o arquivo de
+  referência rastreia 6**: o dashboard gerencial (item #16, já em produção) soma
+  Matéria-Prima/Revenda/Produto em Processo. `MOV_AMJ_2026 - 1º SEM.xlsx` também rastreia
+  "BAIXA GASTOS GERAIS", "BAIXA DESP. FUNCION." e "BAIXA MC" (todas sob o tipo fiscal
+  "07-Material de Uso e Consumo", com valores reais — lenha, material de limpeza,
+  refeição de funcionário). Essas 3 categorias adicionais não aparecem no dashboard já
+  entregue — não é erro de cálculo, é escopo que ficou de fora sem decisão consciente.
+
+Nenhum dos 4 foi implementado ainda — são achados novos, registrados aqui pra decisão
+de prioridade (provavelmente na reunião de 30/07, 19h), não construídos por conta
+própria como #16/#23 foram (aqueles já tinham sido explicitamente autorizados pelo
+usuário: "pode continuar").
 
 ## Agenda
 - Próxima reunião semanal: **quinta-feira, 30/07, às 19h** (antecipada de 21h a pedido do
