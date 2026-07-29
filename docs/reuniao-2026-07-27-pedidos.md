@@ -45,7 +45,7 @@ R06.pptx`). Achados dessa revisão:
 | 12 | Detalhe clicável de Movimentações + edição inline | Modal ao clicar numa linha, ver tudo do movimento, editar/reverter sem trocar de tela; sempre mostrar unidade de medida junto da quantidade | Feature nova — já em andamento |
 | 13 | Mobile: card de produto escondia campos (mínimo, previsão, custo, margem) | Componente compartilhado `Lista` já suportava múltiplos valores com rótulo no card mobile — só as colunas estavam marcadas `ocultarMobile: true` | **Corrigido e em produção** (commit `129eaab`) |
 | 14 | Relatório "Posição de Estoque" com cobertura de inventário | Saldo atual + data do último inventário, por produto e por local de estoque | **Corrigido e em produção** (commits `19ee96f`/`bf98c99`) — aba "Por local" no Estoque Valorizado, não relatório separado |
-| 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | Feature nova |
+| 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | **Corrigido e em produção** (commits `6994127`/`75b92c0`/`fbdce19`/`2b3444b`/`ea633b6`) — sem histórico de "quem", só a partir de agora |
 | 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | Feature nova — maior escopo |
 | 17 | Categorias contábeis / centro de custo | Ramon vai pesquisar e definir a estrutura; direção já confirmada: CFOP fica no cadastro do produto | Aguardando pesquisa do Ramon |
 | 18 | Auditoria Fiscal e Pendências | Revisão adiada para quando entrarem na parte de notas fiscais | Adiado |
@@ -220,11 +220,32 @@ usado no card "Locais sem contagem de inventário" do resumo operacional. A vis�
 registrada — confirma que a lacuna que motivou o pedido é real e grande.
 Plano: `docs/superpowers/plans/2026-07-28-estoque-valorizado-por-local-cobertura.md`.
 
-### Dashboard de acompanhamento de produção (diário/semanal/mensal, por funcionário)
+### Dashboard de acompanhamento de produção (diário/semanal/mensal, por funcionário) — ✅ resolvido 2026-07-28
 Pedido do Andrey: gráfico mostrando, dia a dia (1 a 30), quantas OPs foram feitas e por
 quem, com opção de visão diária/semanal/mensal — para a gestão identificar rapidamente
 períodos sem produção ou queda de produtividade por funcionário, sem precisar vasculhar
 relatório nenhum.
+
+**Bloqueio real achado antes de construir**: nem a Omie nem o app sabiam "quem" concluía
+uma OP — não existia esse dado em lugar nenhum. Investigação encontrou que a conclusão de
+OP tem sim um fluxo humano real dentro do próprio app (botão "Concluir OP", com sessão).
+Apresentei a decisão pro usuário em vez de assumir sozinho: **decisão dele (2026-07-28)**
+foi rastrear quem está logado no momento do clique, a partir de agora — mesmo padrão já
+usado em `inventarios`/`transferencias` (`user_id`). Duas ressalvas já registradas com ele:
+(1) sem histórico — só conta daqui pra frente, meses passados aparecem 100%
+"Não identificado"; (2) "quem clicou em concluir" pode não ser exatamente "quem produziu"
+numa conclusão em lote feita por um gerente pela equipe toda.
+
+**Solução implementada**: coluna nova `ordens_producao.concluida_por` (migration 092),
+gravada automaticamente em `finishOP`/`finishOPsEmLote` com o usuário da sessão (reenvio
+automático via cron continua gravando null, corretamente). Página nova
+`/relatorio-producao` (hub em `/relatorios`, grupo "Produção") com gráfico de barras
+empilhadas (SVG próprio, sem lib nova), paleta categórica de 7 cores validada
+(contraste + daltonismo) via skill `dataviz`, legenda, tooltip por barra e tabela de
+detalhe abaixo — três granularidades (Diária = dias do mês, Semanal = semanas do mês,
+Mensal = últimos 6 meses). Validado com dado real de produção: 9.851 OPs concluídas só
+em julho/2026 numa das lojas. Plano:
+`docs/superpowers/plans/2026-07-29-dashboard-producao-por-funcionario.md`.
 
 ### Reestruturação do Dashboard/Home por perfil de usuário (pedido maior, several sub-itens)
 Diretriz geral dada pelo Ramon: revisar todos os relatórios/telas perguntando "a pessoa
