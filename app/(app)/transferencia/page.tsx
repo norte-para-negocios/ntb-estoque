@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeftRight, Pencil, FileText, Download } from 'lucide-react'
 import { NovaTransferencia } from '@/components/transferencia/NovaTransferencia'
 import { AcoesTransferencia } from '@/components/transferencia/AcoesTransferencia'
+import { AjustesOmieDetectados } from '@/components/ajustes-omie/AjustesOmieDetectados'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -411,6 +412,8 @@ export default async function TransferenciaPage({
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/transferencia" page={page} temProxima={temProxima} />
       )}
+
+      <AjustesOmieDetectados lojaId={lojaId} tipo="TRF" />
     </div>
   )
 }

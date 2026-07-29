@@ -6,6 +6,7 @@ import { ClipboardList, Pencil, Printer, Download, FileText } from 'lucide-react
 import { NovoInventario } from '@/components/inventario/NovoInventario'
 import { AcoesInventario } from '@/components/inventario/AcoesInventario'
 import { CopiarLinkRelatorio } from '@/components/inventario/CopiarLinkRelatorio'
+import { AjustesOmieDetectados } from '@/components/ajustes-omie/AjustesOmieDetectados'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -411,6 +412,8 @@ export default async function InventarioPage({
       {(page > 1 || temProxima) && (
         <Paginacao basePath="/inventario" page={page} temProxima={temProxima} />
       )}
+
+      <AjustesOmieDetectados lojaId={lojaId} tipo="SLD" />
     </div>
   )
 }
