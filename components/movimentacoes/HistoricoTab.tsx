@@ -349,6 +349,17 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
         </span>
       </div>
 
+      <div className="flex items-start gap-2 rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
+        <span>
+          Entradas/Saídas somam a loja inteira e <strong>incluem transferências entre locais desta mesma loja</strong> —
+          a Omie conta a saída do local de origem sem compensar com a entrada no destino, então um dia com
+          transferência grande infla este número mesmo sem o produto ter saído de verdade do estoque. Pra ver
+          quanto realmente sobrou/faltou num local específico, use o filtro de local na aba <strong>Movimentos</strong>{' '}
+          (mostra Saldo inicial/final, que não é afetado por transferência interna).
+        </span>
+      </div>
+
       {MOSTRAR_VALORES && temCmcAbsurdo && (
         <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />

@@ -440,16 +440,21 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
       {totalOmie && (
         <div className="rounded-lg border border-brand/30 bg-brand-soft/30 px-3.5 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">Total oficial (Omie)</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">Movimentação bruta (Omie)</p>
           <p className="mt-0.5 text-sm text-text">
             Entradas <span className="num font-semibold text-ok">{fmtQtd(totalOmie.entradas)}</span>
             {' · '}
             Saídas <span className="num font-semibold text-err">{fmtQtd(totalOmie.saidas)}</span>
           </p>
           <p className="mt-1 text-[12px] text-text-muted">
-            Vem direto do sync do Omie (mesma fonte da aba Histórico) — é o número que vale. A tabela abaixo é uma
-            reconstrução local (ajustes + OP + NF + inventário) pra explicar <em>o que</em> causou a movimentação;
-            pode não bater 1:1 com o total acima.
+            Vem direto do sync do Omie (mesma fonte da aba Histórico). <strong>Inclui transferências entre locais
+            desta mesma loja</strong> — a Omie conta a saída do local de origem sem compensar com a entrada no
+            destino, então um dia com transferência grande infla este número mesmo sem o produto ter saído de
+            verdade da loja (achado real: transferência interna de 60.000 ml apareceu aqui como &quot;saída&quot;
+            sem queda equivalente no saldo). Pra saber quanto realmente sobrou/faltou no estoque, use{' '}
+            <strong>Saldo inicial/final</strong> acima — vem direto de `posicao_estoques` e não é afetado por
+            transferência interna. A tabela abaixo é uma reconstrução local (ajustes + OP + NF + inventário) pra
+            explicar <em>o que</em> causou a movimentação; pode não bater 1:1 com o total acima.
           </p>
         </div>
       )}
