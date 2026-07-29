@@ -22,7 +22,7 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown, ShoppingCart } from 'lucide-react'
 import {
   complementarOrdensProducao,
   limiteJanelaQuente,
@@ -560,6 +560,13 @@ export default async function OrdemProducaoPage({
                 title="Só as ordens ainda não concluídas com previsão já vencida"
               >
                 <Factory className="size-4" /> Imprimir Atrasadas
+              </a>
+              <a
+                href={`/ordem-producao/necessidade-mp?mes=${dataInicio.slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
+                title="Quantidade de matéria-prima necessária por dia, calculada a partir da ficha técnica das ordens previstas"
+              >
+                <ShoppingCart className="size-4" /> Necessidade de MP
               </a>
               {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
               {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}

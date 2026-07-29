@@ -53,7 +53,7 @@ R06.pptx`). Achados dessa revisão:
 | 20 | Catálogo A4 de QR code | Testado ao vivo, selecionar todos / seleção específica / filtro de inativo funcionando | Confirmado OK — falta só teste de impressão física |
 | 21 | Tipos de ajuste de estoque (entrada/saída/ajuste positivo) | Confirmado que não precisa mudar: ajuste de saldo já é coberto por Inventário; entrada sem nota já existe | Confirmado OK, sem ação |
 | 22 | Próxima reunião | Quinta-feira 30/07, agora às 19h (antecipada de 21h) | Agenda |
-| 23 | Necessidade de Matéria-Prima (achado 2026-07-29, não pedido na reunião) | Mapa dia-a-dia de MP necessária, explodindo ficha técnica × programação de produção — achado na planilha `OP_SVVM_JUN25 - R1.xlsx`, aba "NECESSIDADE DE MP", que a consultoria já monta na mão | Em andamento |
+| 23 | Necessidade de Matéria-Prima (achado 2026-07-29, não pedido na reunião) | Mapa dia-a-dia de MP necessária, explodindo ficha técnica × programação de produção — achado na planilha `OP_SVVM_JUN25 - R1.xlsx`, aba "NECESSIDADE DE MP", que a consultoria já monta na mão | ✅ Resolvido |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
@@ -414,7 +414,7 @@ retranscrição) e lida linha a linha contra o catálogo — nada faltando, todo
 batem com o que foi dito ao vivo. As 5 planilhas/pptx de referência foram relidas a fundo
 (todas as abas, não só as já resumidas antes). Dois achados novos:
 
-### Item #23: Necessidade de Matéria-Prima
+### Item #23: Necessidade de Matéria-Prima — ✅ resolvido 2026-07-29
 Aba "NECESSIDADE DE MP" em `OP_SVVM_JUN25 - R1.xlsx`: um mapa dia-a-dia (mesmo formato de
 matriz do item #10, dia 1 a 30/31 em coluna) de quanto de cada matéria-prima vai ser
 necessário, calculado explodindo a ficha técnica (bill-of-materials) de cada produto contra
@@ -423,6 +423,26 @@ porque X ordens de produção planejadas pra esse dia usam esse ingrediente. **N
 explicitamente na reunião** — é uma extensão natural do item #10 (mesma fonte de dados:
 `ordens_producao.full_object.itensDetalhes`, já usada pelo detalhe clicável do item #12).
 A consultoria já monta isso manualmente hoje pro cliente.
+
+Implementado como novo botão "Necessidade de MP" em Ordens de Produção
+(`app/(app)/ordem-producao/necessidade-mp/route.ts` +
+`components/relatorio/NecessidadeMpPDF.tsx`), espelhando exatamente o padrão de
+`programacao/route.ts`: mesma paginação conta-primeiro (evita o corte de 1000
+linhas do PostgREST num mês cheio de OPs), mesmos filtros (mês/local/tipo do
+produto acabado/só atrasadas). A diferença é a agregação: em vez de somar
+`identificacao_n_qtde` por produto da OP, explode `full_object.itensDetalhes`
+(`{nIdProdutoMalha, nQtde}`) de cada OP e acumula `nQtde` por dia, por
+ingrediente — o mesmo campo já usado por `buscarDetalheOP` no detalhe
+clicável de uma OP (item #12), nunca antes agregado por dia.
+
+**Achado real durante a validação**: a soma direta de `nQtde` (quantidades
+fracionadas em kg) gerava lixo de ponto flutuante na exibição (ex.:
+`0.44999999999999996` em vez de `0.45`). Corrigido arredondando pra 3 casas
+decimais (precisão de grama) só na exibição, mesmo padrão já usado em
+`lib/ajustes-omie.ts`. Validado cruzando a saída do PDF contra um recálculo
+independente direto nas linhas cruas de `ordens_producao` (loja 3, julho/2026,
+produto "ABACAXI (PI)" código 70107/`codigo_produto` 4265684733) — bateu exato
+dia a dia.
 
 ### Refinamento no item #16 (dashboard gerencial)
 Ver nota na seção do item #16 acima — top faturados deveria separar por tipo de produto
