@@ -41,15 +41,19 @@ export function ProducaoChart({
   const alturaPlot = 220
   // Espaço reservado no topo pro rotulo do total da barra mais alta -- sem
   // isso, quando uma barra bate no maximo do eixo o numero fica cortado
-  // pela borda do SVG (achado no QA visual, skill dataviz passo 7).
-  const topoRotulo = 16
+  // pela borda do SVG (achado no QA visual, skill dataviz passo 7). 32px cobre
+  // o pior caso: ate 9 segmentos empilhados (7 cores + Outros + Nao
+  // identificado) somam 16px de gap entre segmentos, mais o texto do rotulo.
+  const topoRotulo = 32
   const alturaUtil = alturaPlot - topoRotulo
   const alturaEixoX = 28
   const larguraEixoY = 40
   const largura = larguraEixoY + buckets.length * (larguraBarra + gap)
   const altura = alturaPlot + alturaEixoX
 
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxTotal * f))
+  // Dedupe -- com maxTotal baixo (ex.: 1), varios multiplos arredondam pro
+  // mesmo valor e desenhariam gridlines/rotulos sobrepostos no mesmo ponto.
+  const yTicks = Array.from(new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxTotal * f))))
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">

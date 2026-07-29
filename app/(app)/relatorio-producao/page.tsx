@@ -115,7 +115,7 @@ export default async function RelatorioProducaoPage({
       {total === 0 ? (
         <EmptyState icon={BarChart3} title="Sem OPs concluídas no período" hint="Ajuste o período ou aguarde novas conclusões." />
       ) : (
-        <ProducaoChart buckets={buckets} funcionariosOrdenados={funcionariosOrdenados} />
+        <ProducaoChart key={`${granularidade}-${mes}`} buckets={buckets} funcionariosOrdenados={funcionariosOrdenados} />
       )}
 
       {/* Tabela de detalhe -- par acessivel do grafico (skill dataviz: sempre precisa existir) */}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { retryOPsPendentes } from '@/lib/actions/ordem-producao'
 import type { LojaOmie } from '@/lib/omie/client'
@@ -12,6 +12,10 @@ export async function POST() {
     return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
   }
 
+  const supabaseSessao = await createClient()
+  const {
+    data: { user },
+  } = await supabaseSessao.auth.getUser()
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
@@ -30,6 +34,7 @@ export async function POST() {
       incluirSemCmc: true,
       limitePorLoja: 50,
       semCmcStaleHoras: 0,
+      usuarioId: user?.id ?? null,
     })
     return NextResponse.json({
       ok: true,

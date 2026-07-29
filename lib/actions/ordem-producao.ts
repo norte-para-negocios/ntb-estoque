@@ -830,17 +830,19 @@ async function comLimiteDeConcorrenciaAgrupado<T>(
 /**
  * Varre OPs pendentes de conclusao (concluida=false AND conclusao_status IS NOT NULL)
  * das lojas informadas e tenta concluir de novo, reusando o nucleo `executarConclusaoOP`
- * (sem sessao -- serve tanto o cron de 10 em 10 min quanto o botao manual "reenviar
- * pendentes"). `incluirSemCmc`: se false, so reenvia erro generico (conexao/Omie);
- * se true, tambem tenta 'Sem CMC', respeitando o throttle acima -- `semCmcStaleHoras`
- * permite o clique manual pular esse throttle (usuario decidiu agora, presumivelmente
- * ja corrigiu o CMC no Omie), passando 0.
+ * -- serve tanto o cron de 10 em 10 min (sem sessao) quanto o botao manual "reenviar
+ * pendentes" (com sessao). `incluirSemCmc`: se false, so reenvia erro generico
+ * (conexao/Omie); se true, tambem tenta 'Sem CMC', respeitando o throttle acima --
+ * `semCmcStaleHoras` permite o clique manual pular esse throttle (usuario decidiu
+ * agora, presumivelmente ja corrigiu o CMC no Omie), passando 0. `usuarioId`: quem
+ * concluiu de fato (gravado em `concluida_por`) -- o cron nao tem usuario logado
+ * (fica null); o reenvio manual tem sessao e deve passar o usuario que clicou.
  */
 export async function retryOPsPendentes(
   lojas: LojaOmie[],
-  opts: { incluirSemCmc?: boolean; limitePorLoja?: number; semCmcStaleHoras?: number } = {}
+  opts: { incluirSemCmc?: boolean; limitePorLoja?: number; semCmcStaleHoras?: number; usuarioId?: string | null } = {}
 ): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number }[]> {
-  const { incluirSemCmc = false, limitePorLoja = 30, semCmcStaleHoras = SEM_CMC_STALE_HORAS } = opts
+  const { incluirSemCmc = false, limitePorLoja = 30, semCmcStaleHoras = SEM_CMC_STALE_HORAS, usuarioId = null } = opts
   const supabase = createServiceClient()
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
 
@@ -887,7 +889,8 @@ export async function retryOPsPendentes(
           loja,
         },
         row.conclusao_data_desejada,
-        row.conclusao_qtde_desejada
+        row.conclusao_qtde_desejada,
+        usuarioId
       )
       if ('error' in res) falhas++
       else sucesso++
