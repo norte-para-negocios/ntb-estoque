@@ -69,6 +69,17 @@
   --warn: #f59e0b;
   --err: #ef4444;
   --info: #3b82f6;
+  /* Paleta categorica p/ graficos (dashboard de producao, por funcionario).
+     7 primeiros slots da paleta de referencia validada da skill dataviz
+     (references/palette.md) -- CVD deltaE >= 8, contraste ok claro/escuro.
+     Slot 8 (vermelho) fica de fora de proposito: ja e --err neste app. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
   /* Tinta: superfície escura de destaque (hero, atalhos). Era hex órfão #10151c. */
   --ink: #10151c;
   /* Raios */
@@ -122,6 +133,13 @@
   --warn: #fbbf24;
   --err: #f87171;
   --info: #60a5fa;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
   --ink: #0a0d13;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
