@@ -35,7 +35,7 @@ R06.pptx`). Achados dessa revisão:
 | 2 | Preço de entrada usando campo errado do Omie | Trocar fonte de "último preço de compra" de valor unitário do fornecedor para CMC (custo médio contábil) da compra | **Corrigido e em produção** (commit `c97c4d5`) — CMC não vem da NF, já existia via posição de estoque |
 | 3 | NF pendente contando notas já manifestadas | Campo de manifestação real não existe em lugar nenhum do full_object sincronizado (confirmado no banco) — Ramon propôs solução mais simples: restringir NF travada/OP atrasada ao mês atual | **Corrigido e em produção** (commit `0f703bd`) — parte do campo de manifestação de verdade fica pendente, precisa de pesquisa na API da Omie |
 | 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
-| 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
+| 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | **Investigado e esclarecido, em produção** (commit `83db1a7`) — causa raiz não é bug de cálculo, é a Omie não compensar transferência interna entre locais |
 | 6 | ~~Faturamento sem filtro concluída/cancelada~~ | **Correção 2ª passada**: má-atribuição — Ramon diz explicitamente que o Faturamento "já está funcionando direitinho"; o pedido de filtro era sobre Compras, mesmo item que o #7 | Mesclado no #7, não é item separado |
 | 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | **Já corrigido antes desta sessão** — falta só o extra (opção de ver canceladas), que é feature nova, não bug |
 | 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | **Corrigido e em produção, os 2 sub-itens** (commits `d1dcfda`/`d9a6cfe`/`ffd415b`) — 8a como visão só-de-leitura (decisão de escopo, sem responsável — API da Omie não tem esse campo) |
@@ -93,6 +93,23 @@ R06.pptx`). Achados dessa revisão:
    detalhe (ex.: leite de coco), a quantidade mostrada parecia estar errada — discussão ao
    vivo sugere que deveria estar **descontando do estoque** (saldo), não mostrando um valor
    "acumulado". Precisa investigar a lógica exata de cálculo desse campo.
+
+   **Investigado e esclarecido em 2026-07-29** (a pedido do usuário, sem transcrição/print
+   disponível — reproduzido direto com dado real de produção). Reproduzido com o produto
+   real "LEITE DE COCO (MP)" (loja 3, código 80074): uma transferência interna de 60.000 ml
+   (DEPOSITO → outro local, em 27/07/2026) aparece no card "Entradas/Saídas" (fonte: sync
+   `ListarMovimentos` da Omie, tabela `movimentos_historico`) como **"Saídas: 60.000"** sem
+   nenhuma "Entrada" compensatória — porque essa tabela não tem dimensão de local (é
+   sempre a loja inteira), e a Omie conta a saída da origem sem contabilizar a entrada no
+   destino no mesmo agregado. Confirmado contra `posicao_estoques`: o estoque **total** da
+   loja pra esse produto não caiu nada perto de 60.000 no período — só mudou de local
+   internamente. **Não é um bug de cálculo do NTB** (o dado vem direto da API da Omie, sem
+   dimensão de local pra filtrar/corrigir) — é a Omie conflar "saiu deste local" com "saiu
+   da empresa". Solução aplicada: nota explicativa nos dois lugares onde esse número
+   aparece (abas Histórico e Movimentos), deixando claro o que o número representa e
+   apontando pro **Saldo inicial/final** (que reconcilia certo quando filtrado por local
+   específico — validado ao vivo: 77.700 → 17.700 bateu exato com os 60.000 de saída ao
+   isolar o local de origem da transferência).
 
 5. ~~Faturamento: ainda falta filtro concluída/cancelada por padrão~~ — **correção da 2ª
    passada (2026-07-28)**: reexaminando o contexto completo (não só a frase isolada), Ramon
