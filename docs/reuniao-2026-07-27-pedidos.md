@@ -38,7 +38,7 @@ R06.pptx`). Achados dessa revisão:
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | Bug confirmado |
 | 6 | ~~Faturamento sem filtro concluída/cancelada~~ | **Correção 2ª passada**: má-atribuição — Ramon diz explicitamente que o Faturamento "já está funcionando direitinho"; o pedido de filtro era sobre Compras, mesmo item que o #7 | Mesclado no #7, não é item separado |
 | 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | **Já corrigido antes desta sessão** — falta só o extra (opção de ver canceladas), que é feature nova, não bug |
-| 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | **8b (quem alterou a OP) corrigido e em produção** (commit `d1dcfda`); **8a (puxar transferência/inventário) parcialmente bloqueado** — API da Omie não tem campo de responsável, ver detalhe abaixo |
+| 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | **Corrigido e em produção, os 2 sub-itens** (commits `d1dcfda`/`d9a6cfe`/`ffd415b`) — 8a como visão só-de-leitura (decisão de escopo, sem responsável — API da Omie não tem esse campo) |
 | 9 | Erro 500 na emissão de NF-e (homologação) | Investigado: emissão fiscal não existe no código (só leitura/consulta) — decisão de escopo já registrada como alto risco, não é bug | Não é código — precisa decisão explícita antes de construir (certificado + SEFAZ reais) |
 | 10 | Impressão de "Programação de Produção" | Matriz produto x dia do mês (landscape A4), linha em branco por dia pra anotar o produzido, variante "atrasadas", filtro de local de produção | **Corrigido e em produção** (commits `108aa75`/`ffd8525`/`6d11ef0`/`1c4ab18`) |
 | 11 | Relatório de Inventários | PDF por período (espelha Transferências) + botão "Copiar link" (compartilhar) | **Corrigido e em produção** (commits `0e74ce4`/`9dd4218`/`9c6c5a7`) |
@@ -131,17 +131,30 @@ R06.pptx`). Achados dessa revisão:
      humano direto na tela da Omie) — confirma que o campo é lido corretamente; se algum dia
      um usuário editar uma OP manualmente na Omie, o nome dele vai aparecer aqui em vez de
      "WEBSERVICE". Sem backfill possível (dado não existia salvo antes desta mudança).
-   - **⚠️ Puxar transferência/inventário — parcialmente bloqueado, PRECISA de decisão do
-     Ramon.** "Transferência" e "Inventário" não são objetos próprios na Omie — os dois
-     usam o mesmo endpoint (`Ajuste de Estoque`), diferenciado só pelo campo `motivo`. Puxar
-     de volta É viável tecnicamente (o endpoint de listagem já é usado neste app pra outra
-     coisa, só precisaria agrupar os ajustes numa transferência/inventário "cabeçalho"). **Mas
-     o campo de responsável que o Ramon pediu não existe na API da Omie** — confirmado
-     contra a documentação oficial (`https://app.omie.com.br/api/v1/estoque/ajuste/`), não é
-     limitação deste app. Ou seja: dá pra trazer a transferência/inventário de volta, mas
-     **nunca** vai vir com o nome de quem fez — só o NTB sabe quem fez quando é criado por
-     aqui. Precisa alinhar com o Ramon se vale a pena construir só a parte que dá, ciente
-     dessa limitação, antes de eu começar (não é uma decisão técnica, é sobre expectativa).
+   - **✅ Puxar transferência/inventário — resolvido 2026-07-29, como visão só-de-leitura
+     (decisão validada com o usuário, ciente da limitação de responsável).** "Transferência"
+     e "Inventário" não são objetos próprios na Omie — os dois usam o mesmo endpoint (`Ajuste
+     de Estoque`), diferenciado só pelo campo `motivo`. **O campo de responsável que o Ramon
+     pediu não existe na API da Omie** — confirmado contra a documentação oficial
+     (`https://app.omie.com.br/api/v1/estoque/ajuste/`), não é limitação deste app.
+
+     **Achado real que mudou o desenho da solução**: sintetizar uma linha de cabeçalho de
+     transferência/inventário "fake" a partir dos ajustes brutos (como o pedido original
+     sugeria) criaria **duplicata** — `movimentos` (populado pelo sync já existente de
+     ajustes) e `inventario_items` (populado só pelo NTB) compartilham o mesmo `id_ajuste`
+     em 858 linhas hoje, ou seja, TODO inventário que o próprio NTB já cria reapareceria como
+     um "achado na Omie" fake. Por isso a solução virou uma seção só-de-leitura ("Feito
+     direto na Omie") dentro de `/transferencia` e `/inventario`, com 3 filtros de exclusão
+     validados contra dado real de produção antes de ir pro ar (`motivo != 'TPQ'`,
+     `obs not ilike '%NTB%'`, dedup contra `inventario_items.id_ajuste`) — sem gerar número
+     de sequência nem virar um registro nativo, só mostra o que foi detectado. Responsável
+     aparece como "Não identificado" nesses casos, sempre.
+
+     Bug real achado e corrigido durante a validação: o filtro inicial usava
+     `.neq()`/`.not(ilike)` do supabase-js, que descarta silenciosamente TODA linha com
+     `motivo`/`obs` nulos (semântica de NULL do SQL) — quase toda transferência externa
+     legítima não tem `obs` preenchido, então a primeira versão escondia quase tudo que
+     devia mostrar. Corrigido e revalidado com SQL direto antes do deploy.
 
 ## Erro ao vivo — emissão de NF-e (homologação) — investigado 2026-07-28
 
