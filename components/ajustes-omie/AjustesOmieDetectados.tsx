@@ -6,7 +6,13 @@ function fmtData(d: string) {
 }
 
 export async function AjustesOmieDetectados({ lojaId, tipo }: { lojaId: number; tipo: 'TRF' | 'SLD' }) {
-  const itens = await carregarAjustesOmieDetectados(lojaId, tipo, '2025-07-01', new Date().toISOString().slice(0, 10))
+  let itens: AjusteOmieDetectado[] = []
+  try {
+    itens = await carregarAjustesOmieDetectados(lojaId, tipo, '2025-07-01', new Date().toISOString().slice(0, 10))
+    console.log(`[DEBUG AjustesOmieDetectados] lojaId=${lojaId} tipo=${tipo} -> ${itens.length} itens`)
+  } catch (e) {
+    console.error(`[DEBUG AjustesOmieDetectados] ERRO lojaId=${lojaId} tipo=${tipo}:`, e)
+  }
   if (itens.length === 0) return null
 
   return (
