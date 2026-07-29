@@ -17,6 +17,8 @@ interface OmieOPOutrasInf {
   cConcluida?: string
   dConclusao?: string
   dInclusao?: string
+  dAlteracao?: string
+  uAlt?: string
 }
 
 interface OmieOP {
@@ -27,12 +29,20 @@ interface OmieOP {
 
 // Conclusao REAL da OP: outrasInf.cConcluida/dConclusao (nao a data planejada de
 // infAdicionais, que pode estar preenchida numa OP nao concluida). Ver migration 012.
+//
+// Item #8 da reuniao 2026-07-27: "quem alterou a OP direto no Omie" -- o campo
+// ja vem em outrasInf.uAlt (usuario da Omie, texto livre, nao referencia um
+// profile do NTB) mas era descartado. So passa a existir daqui pra frente: o
+// full_object gravado hoje ja e reduzido a itensDetalhes (ver toSlim abaixo),
+// entao OPs alteradas antes desta mudanca nao tem como recuperar esse dado.
 function mapOutrasInf(op: OmieOP) {
   const o = op.outrasInf ?? {}
   return {
     concluida: o.cConcluida === 'S',
     dt_conclusao_real: parseDate(o.dConclusao),
     dt_inclusao: parseDate(o.dInclusao),
+    dt_ultima_alteracao_omie: parseDate(o.dAlteracao),
+    alterado_por_omie: o.uAlt || null,
   }
 }
 
@@ -54,6 +64,8 @@ interface OrdemProducaoBulkRow {
   concluida: boolean
   dt_conclusao_real: string | null
   dt_inclusao: string | null
+  dt_ultima_alteracao_omie: string | null
+  alterado_por_omie: string | null
   full_object: unknown
 }
 
@@ -182,6 +194,8 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
           concluida: r.concluida,
           dt_conclusao_real: r.dt_conclusao_real,
           dt_inclusao: r.dt_inclusao,
+          dt_ultima_alteracao_omie: r.dt_ultima_alteracao_omie,
+          alterado_por_omie: r.alterado_por_omie,
           full_object: r.full_object,
         })))
       }
