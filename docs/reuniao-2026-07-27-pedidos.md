@@ -53,6 +53,7 @@ R06.pptx`). Achados dessa revisão:
 | 20 | Catálogo A4 de QR code | Testado ao vivo, selecionar todos / seleção específica / filtro de inativo funcionando | Confirmado OK — falta só teste de impressão física |
 | 21 | Tipos de ajuste de estoque (entrada/saída/ajuste positivo) | Confirmado que não precisa mudar: ajuste de saldo já é coberto por Inventário; entrada sem nota já existe | Confirmado OK, sem ação |
 | 22 | Próxima reunião | Quinta-feira 30/07, agora às 19h (antecipada de 21h) | Agenda |
+| 23 | Necessidade de Matéria-Prima (achado 2026-07-29, não pedido na reunião) | Mapa dia-a-dia de MP necessária, explodindo ficha técnica × programação de produção — achado na planilha `OP_SVVM_JUN25 - R1.xlsx`, aba "NECESSIDADE DE MP", que a consultoria já monta na mão | Em andamento |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
@@ -357,6 +358,15 @@ e em 40% — os limiares novos são só visuais/de referência, decisão de pol�
 fica pra depois), top 10 produtos mais faturados/comprados + maior fornecedor, e produtos
 parados há 30+ dias sem movimento.
 
+**Refinamento achado 2026-07-29 (releitura a fundo da planilha `FAT_SVVM_2026.xlsx`)**: a
+consultoria separa o "top 10 mais faturados" por **tipo de produto** (a aba de referência
+filtra explicitamente `Tipo = 04-Produto Acabado`, não mistura com revenda) — o painel
+gerencial implementado mostra um ranking único, sem essa separação. Também confirmei, com
+números reais dessa planilha (jan-jul/2026, loja SVVM), que o cálculo do índice
+compras/faturamento bate exatamente com o limiar de referência: compras de matéria-prima
+(R$367.737,76) ÷ faturamento de produto acabado (R$1.196.958,65) = **30,72%**, quase idêntico
+ao limite de 30% já usado — validação independente do que já foi implementado.
+
 **Achado real ao investigar, corrigido de brinde**: a home ATUAL já mostrava o valor de cada
 nota fiscal recente (`n_valor_nfe`) pra QUALQUER usuário logado, inclusive quem é só
 Operação — violava a própria regra que este item pede, e já era assim antes desta tarefa
@@ -396,6 +406,28 @@ Plano: `docs/superpowers/plans/2026-07-29-dashboard-home-por-perfil.md`.
 - **Tipos de ajuste de estoque**: confirmado que não é necessário criar "ajuste de saldo"
   separado (isso já é coberto pelo fluxo de Inventário) nem uma "entrada sem nota" separada
   (já é possível registrar como entrada manual hoje). Nenhuma mudança necessária aqui.
+
+## Achados novos da releitura completa (2026-07-29, a pedido do usuário)
+
+Reunião re-transcrita do zero (nova transcrição limpa, sem o artefato de loop da 1ª
+retranscrição) e lida linha a linha contra o catálogo — nada faltando, todos os 22 itens
+batem com o que foi dito ao vivo. As 5 planilhas/pptx de referência foram relidas a fundo
+(todas as abas, não só as já resumidas antes). Dois achados novos:
+
+### Item #23: Necessidade de Matéria-Prima
+Aba "NECESSIDADE DE MP" em `OP_SVVM_JUN25 - R1.xlsx`: um mapa dia-a-dia (mesmo formato de
+matriz do item #10, dia 1 a 30/31 em coluna) de quanto de cada matéria-prima vai ser
+necessário, calculado explodindo a ficha técnica (bill-of-materials) de cada produto contra
+a programação de produção planejada. Ex.: "dia 15, vai precisar de 180ml de leite de coco"
+porque X ordens de produção planejadas pra esse dia usam esse ingrediente. **Não foi pedido
+explicitamente na reunião** — é uma extensão natural do item #10 (mesma fonte de dados:
+`ordens_producao.full_object.itensDetalhes`, já usada pelo detalhe clicável do item #12).
+A consultoria já monta isso manualmente hoje pro cliente.
+
+### Refinamento no item #16 (dashboard gerencial)
+Ver nota na seção do item #16 acima — top faturados deveria separar por tipo de produto
+(Produto Acabado vs Revenda), e o cálculo do índice compras/faturamento foi validado
+independentemente contra dado real da planilha (30,72% ≈ limiar de 30%).
 
 ## Agenda
 - Próxima reunião semanal: **quinta-feira, 30/07, às 19h** (antecipada de 21h a pedido do
