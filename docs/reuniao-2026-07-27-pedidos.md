@@ -46,7 +46,7 @@ R06.pptx`). Achados dessa revisão:
 | 13 | Mobile: card de produto escondia campos (mínimo, previsão, custo, margem) | Componente compartilhado `Lista` já suportava múltiplos valores com rótulo no card mobile — só as colunas estavam marcadas `ocultarMobile: true` | **Corrigido e em produção** (commit `129eaab`) |
 | 14 | Relatório "Posição de Estoque" com cobertura de inventário | Saldo atual + data do último inventário, por produto e por local de estoque | **Corrigido e em produção** (commits `19ee96f`/`bf98c99`) — aba "Por local" no Estoque Valorizado, não relatório separado |
 | 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | **Corrigido e em produção** (commits `6994127`/`75b92c0`/`fbdce19`/`2b3444b`/`ea633b6`) — sem histórico de "quem", só a partir de agora |
-| 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | Feature nova — maior escopo |
+| 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | **Corrigido e em produção, 1ª fase** (commits `9afe6a7`/`1c1304c`/`9a7e805`/`f8c7884`) — régua de compra dinâmica, alertas automáticos e foto obrigatória em perda ficam para depois |
 | 17 | Categorias contábeis / centro de custo | Ramon vai pesquisar e definir a estrutura; direção já confirmada: CFOP fica no cadastro do produto | Aguardando pesquisa do Ramon |
 | 18 | Auditoria Fiscal e Pendências | Revisão adiada para quando entrarem na parte de notas fiscais | Adiado |
 | 19 | App local com sincronização periódica | Ideia inicial (rodar local, sync a cada N minutos, uso offline transparente) — sem escopo ou prazo definido | Watch item, sem decisão |
@@ -247,7 +247,7 @@ Mensal = últimos 6 meses). Validado com dado real de produção: 9.851 OPs conc
 em julho/2026 numa das lojas. Plano:
 `docs/superpowers/plans/2026-07-29-dashboard-producao-por-funcionario.md`.
 
-### Reestruturação do Dashboard/Home por perfil de usuário (pedido maior, several sub-itens)
+### Reestruturação do Dashboard/Home por perfil de usuário (pedido maior, several sub-itens) — ✅ 1ª fase resolvida 2026-07-29
 Diretriz geral dada pelo Ramon: revisar todos os relatórios/telas perguntando "a pessoa
 realmente precisa ver isso" — a tela de "auditoria" hoje mostra contagem de ações do
 usuário no sistema, que não é uma métrica útil. Confirmado tecnicamente possível (Joaquim):
@@ -292,6 +292,33 @@ substituir os hardcoded/genéricos hoje no sistema:
     alertas automáticos quando Compras ou Perdas ultrapassarem o limite (antes do fechamento
     do mês, não só no relatório mensal), e exigir foto + lançamento de transferência pra toda
     ocorrência de perda (rastreabilidade).
+
+**Solução implementada (1ª fase)**: `/home` (tela "Início") passa a ramificar por perfil —
+quem não é gestão continua vendo o painel operacional de sempre (ordens/OPs pendentes,
+produtos abaixo do mínimo, vencidos/vencendo, inventários e transferências em aberto), agora
+com um alerta novo de **notas fiscais pendentes** que faltava (reaproveitando a mesma lógica
+já usada no `/resumo` gerencial, restrita à loja atual e ao mês corrente). Quem tem
+`podeGerir` (Admin/AdminLoja) ganha, abaixo disso, um painel gerencial com gráficos: rejeitos
+por tipo (matéria-prima/revenda/produto em processo, com % sobre o faturamento da categoria e
+o limiar de 8%/0% já sinalizando em vermelho quando estoura), relação compras/faturamento por
+categoria com o limiar real de 30% (não mudei `lojas.meta_compras_pct`, que continua editável
+e em 40% — os limiares novos são só visuais/de referência, decisão de política de negócio
+fica pra depois), top 10 produtos mais faturados/comprados + maior fornecedor, e produtos
+parados há 30+ dias sem movimento.
+
+**Achado real ao investigar, corrigido de brinde**: a home ATUAL já mostrava o valor de cada
+nota fiscal recente (`n_valor_nfe`) pra QUALQUER usuário logado, inclusive quem é só
+Operação — violava a própria regra que este item pede, e já era assim antes desta tarefa
+existir. Essa seção ("Últimas notas fiscais") saiu da home; quem precisa da lista usa
+`/nota-fiscal`. Validado programaticamente (não só visualmente): a página renderizada não tem
+nenhum valor em R$ fora do painel gerencial.
+
+**Fora do escopo desta 1ª fase, por decisão explícita** (não é uma parte esquecida): régua de
+compra dinâmica por média móvel, alertas automáticos de Compras/Perdas antes do fechamento do
+mês, e exigência de foto em toda perda — são "recomendações que viram pedidos implícitos de
+feature" maiores que o escopo direto do item #16 (mostrar o dashboard certo pra cada perfil),
+tratadas como itens novos a priorizar depois, não como pendência deste item.
+Plano: `docs/superpowers/plans/2026-07-29-dashboard-home-por-perfil.md`.
 
 ## Pesquisa/definição pendente (não é código ainda)
 - **Categorias contábeis / centro de custo**: Ramon vai pesquisar como estruturar isso (não
