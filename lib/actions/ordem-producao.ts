@@ -1,6 +1,6 @@
 'use server'
 
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import {
@@ -492,6 +492,7 @@ async function executarConclusaoOP(
   op: OPParaConcluir,
   dataEscolhidaISO?: string | null,
   qtdeProduzida?: number | null,
+  usuarioId?: string | null,
 ): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
   const supabase = createServiceClient()
 
@@ -542,6 +543,7 @@ async function executarConclusaoOP(
       .update({
         concluida: true,
         dt_conclusao_real: mc ? `${mc[3]}-${mc[2]}-${mc[1]}` : null,
+        concluida_por: usuarioId ?? null,
         conclusao_status: null,
         conclusao_erro_msg: null,
         conclusao_tentativas: 0,
@@ -634,6 +636,10 @@ export async function finishOP(
 ): Promise<{ ok: true; insumosPulados?: string[]; avisoRestaurar?: string; semEtiqueta?: boolean } | { error: string }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
+  const supabaseSessao = await createClient()
+  const {
+    data: { user },
+  } = await supabaseSessao.auth.getUser()
   const supabase = createServiceClient()
 
   const { data: op } = await supabase
@@ -661,7 +667,8 @@ export async function finishOP(
   return executarConclusaoOP(
     { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
     dataEscolhidaISO,
-    qtdeProduzida
+    qtdeProduzida,
+    user?.id ?? null
   )
 }
 
@@ -906,6 +913,10 @@ export async function finishOPsEmLote(
     return { sucesso: 0, falhas: opIds.map((id) => ({ id, error: 'Sem permissão' })) }
   }
   if (!opIds.length) return { sucesso: 0, falhas: [] }
+  const supabaseSessao = await createClient()
+  const {
+    data: { user },
+  } = await supabaseSessao.auth.getUser()
   const supabase = createServiceClient()
 
   const { data: linhas } = await supabase
@@ -933,7 +944,8 @@ export async function finishOPsEmLote(
       const res = await executarConclusaoOP(
         { ...op, identificacao_n_cod_op: op.identificacao_n_cod_op, loja_id: lojaId },
         null,
-        null
+        null,
+        user?.id ?? null
       )
       if ('error' in res) falhas.push({ id: op.id, error: res.error })
       else sucesso++
