@@ -3,7 +3,7 @@ import { getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import {
-  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX,
+  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory,
 } from 'lucide-react'
 
 type Rel = {
@@ -20,6 +20,12 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
     itens: [
       { href: '/resumo', titulo: 'Resumo do dia', icon: CalendarCheck, descricao: 'O que entrou, saiu e deu erro no dia, com auditoria de inventario.', pergunta: 'Como foi o estoque hoje?' },
       { href: '/relatorio-movimentacao', titulo: 'Movimentacao', icon: ArrowDownUp, descricao: 'Entradas e saidas por operacao, local e familia, com valores.', pergunta: 'O que mais movimentou e por que?' },
+    ],
+  },
+  {
+    grupo: 'Produção',
+    itens: [
+      { href: '/relatorio-producao', titulo: 'Dashboard de Produção', icon: Factory, descricao: 'OPs concluídas por dia/semana/mês, com quebra por quem concluiu.', pergunta: 'Quem produziu e quando?' },
     ],
   },
   {

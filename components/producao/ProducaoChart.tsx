@@ -39,6 +39,11 @@ export function ProducaoChart({
   const larguraBarra = 28
   const gap = 10
   const alturaPlot = 220
+  // Espaço reservado no topo pro rotulo do total da barra mais alta -- sem
+  // isso, quando uma barra bate no maximo do eixo o numero fica cortado
+  // pela borda do SVG (achado no QA visual, skill dataviz passo 7).
+  const topoRotulo = 16
+  const alturaUtil = alturaPlot - topoRotulo
   const alturaEixoX = 28
   const larguraEixoY = 40
   const largura = larguraEixoY + buckets.length * (larguraBarra + gap)
@@ -67,7 +72,7 @@ export function ProducaoChart({
         <svg width={largura} height={altura} role="img" aria-label="OPs concluídas por período">
           {/* Gridlines horizontais */}
           {yTicks.map((v, i) => {
-            const y = alturaPlot - (v / maxTotal) * alturaPlot
+            const y = alturaPlot - (v / maxTotal) * alturaUtil
             return (
               <g key={i}>
                 <line x1={larguraEixoY} y1={y} x2={largura} y2={y} stroke="var(--border)" strokeWidth={1} />
@@ -83,7 +88,7 @@ export function ProducaoChart({
             const x = larguraEixoY + i * (larguraBarra + gap)
             let yAtual = alturaPlot
             const segmentos = b.porFuncionario.map((f) => {
-              const h = maxTotal > 0 ? (f.qtd / maxTotal) * alturaPlot : 0
+              const h = maxTotal > 0 ? (f.qtd / maxTotal) * alturaUtil : 0
               const y = yAtual - h
               yAtual = y - 2 // gap de 2px entre segmentos
               return { ...f, y, h }
