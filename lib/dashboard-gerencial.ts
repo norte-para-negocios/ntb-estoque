@@ -7,7 +7,8 @@ export type ProdutoParado = { codigoProduto: number; codigo: string; descricao: 
 export type RatioCategoria = { categoria: string; compras: number; faturamento: number; pct: number | null }
 export type DashboardGerencial = {
   rejeitos: RejeitoCategoria[]
-  topFaturados: RankingItem[]
+  topFaturadosAcabado: RankingItem[]
+  topFaturadosRevenda: RankingItem[]
   topComprados: RankingItem[]
   maiorFornecedor: RankingItem | null
   produtosParados: ProdutoParado[]
@@ -36,6 +37,32 @@ function topNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
     .slice(0, n)
 }
 
+// tipo_item por descricao de produto -- pra separar o top faturados por tipo
+// (achado 2026-07-29: a planilha de referencia da consultoria separa "top 10
+// mais faturados" em Produto Acabado, nao mistura com revenda). Paginado:
+// lojas com catalogo grande (>1000 produtos) truncariam sem isso (mesma
+// classe de bug ja corrigida varias vezes nesta sessao).
+async function buscarTipoPorDescricao(
+  supabase: ReturnType<typeof createServiceClient>,
+  lojaId: number
+): Promise<Map<string, string>> {
+  const PAGE = 1000
+  const mapa = new Map<string, string>()
+  for (let p = 0; ; p++) {
+    const { data, error } = await supabase
+      .from('produtos')
+      .select('descricao, tipo_item')
+      .eq('loja_id', lojaId)
+      .range(p * PAGE, p * PAGE + PAGE - 1)
+    if (error || !data?.length) break
+    for (const row of data as { descricao: string | null; tipo_item: string | null }[]) {
+      if (row.descricao) mapa.set(row.descricao, row.tipo_item ?? '')
+    }
+    if (data.length < PAGE) break
+  }
+  return mapa
+}
+
 export async function carregarDashboardGerencial(
   lojaId: number,
   dataIni: string,
@@ -56,6 +83,7 @@ export async function carregarDashboardGerencial(
     faturamentoRevendaRows,
     comprasMateriaPrima,
     comprasRevenda,
+    tipoPorDescricao,
   ] = await Promise.all([
     rpcTodos<{ categoria: string; valor_total: number | null; qtd_movimentos: number }>(supabase, 'relatorio_rejeitos_por_tipo', {
       p_loja_id: lojaId,
@@ -130,6 +158,7 @@ export async function carregarDashboardGerencial(
       p_produto: null,
       p_local: null,
     }),
+    buscarTipoPorDescricao(supabase, lojaId),
   ])
 
   const faturamentoAcabado = faturamentoAcabadoRows.reduce((s, r) => s + Number(r.valor), 0)
@@ -163,9 +192,24 @@ export async function carregarDashboardGerencial(
 
   const fornecedorTop = topNDoMapa(somarPorRotulo(comprasPorFornecedor), 1)
 
+  // Separa por tipo de produto (achado 2026-07-29: a planilha de referencia da
+  // consultoria nao mistura produto acabado com revenda no "top faturados").
+  // Produto sem match em tipoPorDescricao (ex.: "Taxa de Servico", que nao e
+  // produto de catalogo) cai fora dos dois buckets -- nao aparece em nenhum
+  // top, mesmo padrao de tolerancia ja usado em /pendencias-classificacao.
+  const faturamentoPorProdutoMapa = somarPorRotulo(faturamentoPorProduto)
+  const faturamentoAcabadoMapa = new Map<string, number>()
+  const faturamentoRevendaMapa = new Map<string, number>()
+  for (const [descricao, valor] of faturamentoPorProdutoMapa) {
+    const tipo = tipoPorDescricao.get(descricao)
+    if (tipo === '04') faturamentoAcabadoMapa.set(descricao, valor)
+    else if (tipo === '00') faturamentoRevendaMapa.set(descricao, valor)
+  }
+
   return {
     rejeitos,
-    topFaturados: topNDoMapa(somarPorRotulo(faturamentoPorProduto), topN),
+    topFaturadosAcabado: topNDoMapa(faturamentoAcabadoMapa, topN),
+    topFaturadosRevenda: topNDoMapa(faturamentoRevendaMapa, topN),
     topComprados: topNDoMapa(somarPorRotulo(comprasPorProduto), topN),
     maiorFornecedor: fornecedorTop[0] ?? null,
     produtosParados,

@@ -80,17 +80,27 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
         </div>
       </div>
 
-      {/* Top faturados / comprados */}
+      {/* Top faturados / comprados -- faturados separado por tipo (achado
+          2026-07-29: a planilha de referencia da consultoria nao mistura
+          produto acabado com revenda no "top 10 mais faturados"). */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados</h3>
-          {d.topFaturados.length === 0 ? (
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados (produto acabado)</h3>
+          {d.topFaturadosAcabado.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem faturamento no período" hint="" />
           ) : (
-            <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturados }} />
+            <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosAcabado }} />
           )}
         </div>
         <div>
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados (revenda)</h3>
+          {d.topFaturadosRevenda.length === 0 ? (
+            <EmptyState icon={AlertTriangle} title="Sem faturamento de revenda no período" hint="" />
+          ) : (
+            <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosRevenda }} />
+          )}
+        </div>
+        <div className="lg:col-span-2">
           <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais comprados</h3>
           {d.topComprados.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem compras no período" hint="" />
