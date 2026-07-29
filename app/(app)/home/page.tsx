@@ -1,6 +1,7 @@
-import { getProfile, getPermissoesNomes } from '@/lib/auth'
+import { getProfile, getPermissoesNomes, getAtorGestao } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { NAO_CANCELADA_OR } from '@/lib/nf-status'
 import Link from 'next/link'
 import {
   Package,
@@ -17,16 +18,10 @@ import {
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { SyncButton } from '@/components/SyncButton'
 import { CountUp } from '@/components/ui-kit/CountUp'
-import { Money } from '@/components/ui-kit/Money'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { limiteJanelaQuente, contarOrdensProducaoAntigas, complementarOrdensProducao } from '@/lib/historico-contabo'
-
-function fmtData(d: string | null): string {
-  if (!d) return '-'
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
-}
+import { PainelGerencial } from '@/components/home/PainelGerencial'
 
 export default async function HomePage() {
   const profile = await getProfile()
@@ -43,6 +38,7 @@ export default async function HomePage() {
 
   const lojaId = profile.current_loja_id
   const supabase = await createClient()
+  const ator = await getAtorGestao()
 
   const isAdmin = profile.perfil === 'Admin'
   const perms = await getPermissoesNomes(lojaId)
@@ -74,12 +70,14 @@ export default async function HomePage() {
   }
   const trintaDias = localISO(-30)
   const hojeLocal = localISO(0)
+  const ontemLocal = localISO(-1)
   const seteDias = localISO(7)
+  const primeiroDiaMesISO = `${hojeLocal.slice(0, 7)}-01`
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
 
   // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
-  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, ultimasNotas, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
+  const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, nfPendentes, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
       supabase.from('notas_fiscais').select('id', head).eq('loja_id', lojaId).gte('d_emissao_nfe', trintaDias).is('deleted_at', null),
@@ -94,7 +92,20 @@ export default async function HomePage() {
       supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).or('quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'),
       supabase.from('integration_attempts').select('id', head).eq('loja_id', lojaId).eq('error', true).gte('created_at', desde24h),
       supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
-      supabase.from('notas_fiscais').select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe').eq('loja_id', lojaId).is('deleted_at', null).order('d_emissao_nfe', { ascending: false }).limit(5),
+      // Item #16: mesma logica de "NF travada" ja usada no painel de acao
+      // gerencial (lib/resumo-dia.ts, carregarPainelAcao) -- mes atual, etapa
+      // != concluida (60), nao cancelada, ate ontem (hoje ainda esta em
+      // processamento natural). Antes, a home nao tinha esse alerta -- so o
+      // /resumo (gerencial) tinha.
+      supabase
+        .from('notas_fiscais')
+        .select('id', head)
+        .eq('loja_id', lojaId)
+        .is('deleted_at', null)
+        .neq('c_etapa', '60')
+        .or(NAO_CANCELADA_OR)
+        .gte('d_emissao_nfe', primeiroDiaMesISO)
+        .lte('d_emissao_nfe', ontemLocal),
       supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
       supabase.from('transferencias').select('id', head).eq('loja_id', lojaId).neq('status', 'Concluido'),
       supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
@@ -197,6 +208,8 @@ export default async function HomePage() {
     alertas.push({ icon: ClipboardList, token: 'brand', texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`, href: '/inventario' })
   if ((transfAbertas.count ?? 0) > 0 && pode('Transferencias - Ver'))
     alertas.push({ icon: ArrowLeftRight, token: 'brand', texto: `${transfAbertas.count} transferência(s) em aberto`, href: '/transferencia' })
+  if ((nfPendentes.count ?? 0) > 0 && pode('Notas Fiscais'))
+    alertas.push({ icon: FileText, token: 'warn', texto: `${nfPendentes.count} nota(s) fiscal(is) pendente(s) este mês`, href: '/nota-fiscal?status=P' })
 
   const secundarios = [
     { label: 'Notas fiscais', value: nfs.count ?? 0, hint: '30 dias', href: '/nota-fiscal', perm: 'Notas Fiscais' },
@@ -367,37 +380,12 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Últimas notas */}
-      {pode('Notas Fiscais') && (
-        <section>
-          <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Últimas notas fiscais</h2>
-            <Link href="/nota-fiscal" className="text-[13px] text-brand hover:underline">
-              ver todas →
-            </Link>
-          </div>
-          {ultimasNotas.data?.length ? (
-            <table className="w-full text-sm">
-              <tbody>
-                {ultimasNotas.data.map((nf) => (
-                  <tr key={nf.id} className="border-b border-border last:border-0 u-motion hover:bg-surface-2/60">
-                    <td className="py-3 pr-3 num text-text-muted w-24">{fmtData(nf.d_emissao_nfe)}</td>
-                    <td className="py-3 pr-4 num font-medium text-text w-28">{nf.c_numero_nfe}</td>
-                    <td className="py-3 pr-4 text-text/80 truncate max-w-0 w-full">
-                      {nf.c_razao_social || nf.c_nome || '-'}
-                    </td>
-                    <td className="py-3 text-right num font-semibold text-text whitespace-nowrap">
-                      <Money value={nf.n_valor_nfe} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState icon={FileText} title="Nenhuma nota fiscal" hint="Sincronize com o Omie para ver as notas." />
-          )}
-        </section>
-      )}
+      {/* Item #16: painel gerencial (graficos) so pra quem pode gerir --
+          Operacao nunca ve valor de faturamento/compra/rejeito aqui. A secao
+          "Ultimas notas fiscais" que existia antes (mostrava n_valor_nfe pra
+          TODO MUNDO, inclusive Operacao -- vazamento real, achado nesta
+          tarefa) saiu daqui; quem precisa dessa lista usa /nota-fiscal. */}
+      {ator.podeGerir && <PainelGerencial lojaId={lojaId} />}
     </div>
   )
 }
