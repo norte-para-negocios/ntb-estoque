@@ -43,6 +43,14 @@ if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-faturamento; fi
 # pra uma tabela cache (produto_preco_recente) -- esse endpoint mantem ela
 # atualizada. E so um refresh local (nao chama o Omie), roda rapido.
 if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-preco-movimentacao; fi
+# Achado real (usuario reportou erro ao excluir uma OP "fantasma", 30/07): o
+# endpoint /api/cron/sync-reconciliar-op existe desde 10/07 (acha OPs abertas
+# e atrasadas que foram excluidas direto no Omie sem o sync normal detectar)
+# mas, igual sync-faturamento antes dele, nunca foi incluido aqui -- ficou de
+# fora silenciosamente na migracao do GitHub Actions pra este script. A OP
+# que o usuario tentou excluir estava atrasada desde 14/07, 16 dias sem essa
+# limpeza automatica rodar nem uma vez.
+if [ "$bloco" -eq 0 ]; then hit /api/cron/sync-reconciliar-op; fi
 
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

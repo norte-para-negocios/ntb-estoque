@@ -301,7 +301,7 @@ export async function reconciliarOPsFantasmas(
   const supabase = createServiceClient()
   const limiteData = new Date(Date.now() - diasAtraso * 86400000).toISOString().slice(0, 10)
 
-  const { data: candidatas } = await supabase
+  const { data: candidatas, error: candidatasError } = await supabase
     .from('ordens_producao')
     .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao')
     .eq('loja_id', loja.id)
@@ -310,6 +310,15 @@ export async function reconciliarOPsFantasmas(
     .not('identificacao_n_cod_op', 'is', null)
     .order('identificacao_d_dt_previsao', { ascending: true })
     .limit(limite)
+  // Achado real (2026-07-30): rodando as 6 lojas concorrentes (Promise.allSettled
+  // na rota), essa query as vezes da "statement timeout" no Supabase. Sem checar
+  // o erro aqui, `candidatas` virava null e `candidatas ?? []` mascarava isso como
+  // "0 candidatas, nada pra fazer" -- um falso negativo silencioso bem perigoso
+  // pra um job cujo unico proposito e achar OPs que sumiram. Agora propaga o erro
+  // pra aparecer como `erros` no resumo em vez de sumir.
+  if (candidatasError) {
+    throw new Error(`reconciliarOPsFantasmas: falha ao buscar candidatas (loja ${loja.id}): ${candidatasError.message}`)
+  }
 
   let excluidas = 0
   let erros = 0
