@@ -10,6 +10,7 @@ import {
   excluirOrdemProducao,
   reverterOrdemProducao,
   alterarOrdemProducao,
+  pareceOPNaoExiste,
 } from '@/lib/omie/ordem-producao'
 import { consultarEstrutura, incluirEstrutura, excluirEstrutura } from '@/lib/omie/malha'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
@@ -720,16 +721,35 @@ export async function excluirOP(opId: number) {
   const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
+  let fantasma = false
   try {
     // Concluida: reverte (estorna a producao) antes de excluir.
     if (op.concluida) {
-      await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+      try {
+        await reverterOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+      } catch (e) {
+        // Achado real (2026-07-30): a OP existe aqui mas ja foi apagada direto no
+        // Omie (mesmo cenario "fantasma" de reconciliarOPsFantasmas) -- sem esse
+        // catch, o usuario via o erro cru da Omie ("nao cadastrada para o Codigo
+        // [...]") ao tentar excluir algo que ja nao existe do outro lado.
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!pareceOPNaoExiste(msg)) throw e
+        fantasma = true
+      }
     }
-    await excluirOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+    if (!fantasma) {
+      try {
+        await excluirOrdemProducao(op.loja, op.identificacao_n_cod_op!)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!pareceOPNaoExiste(msg)) throw e
+        fantasma = true
+      }
+    }
     await supabase.from('ordens_producao').delete().eq('id', opId).eq('loja_id', lojaId)
     await registrarAuditoria('excluir', 'ordem de produção', op.identificacao_n_cod_op, null)
     revalidatePath('/ordem-producao')
-    return { ok: true }
+    return { ok: true, fantasma }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao excluir no Omie' }
   }

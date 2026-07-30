@@ -277,7 +277,7 @@ export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
 // nunca criada de verdade). So esse erro especifico autoriza apagar o registro local
 // -- qualquer outro erro (rede instavel, rate limit, timeout) e tratado como
 // inconclusivo e a OP fica intocada, pra nao apagar produção real por falso positivo.
-function pareceOPNaoExiste(msg: string): boolean {
+export function pareceOPNaoExiste(msg: string): boolean {
   return /nao cadastrada|não cadastrada/i.test(msg)
 }
 

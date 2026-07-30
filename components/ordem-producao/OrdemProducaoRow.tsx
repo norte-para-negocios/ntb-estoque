@@ -329,6 +329,7 @@ function useOP(op: OPData) {
     startTransition(async () => {
       const res = await excluirOP(op.id)
       if (res?.error) toast.error('Erro ao excluir', { description: res.error })
+      else if (res?.fantasma) toast.success('OP removida — já não existia mais no Omie')
       else toast.success('OP excluída no Omie')
     })
   }
