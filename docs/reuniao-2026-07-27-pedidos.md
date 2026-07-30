@@ -58,6 +58,9 @@ R06.pptx`). Achados dessa revisão:
 | 25 | Relatório de desconto por forma de pagamento (achado na auditoria 2026-07-29) | 3 abas dedicadas em `FAT_SVVM_2026.xlsx` que a consultoria monta na mão, nunca pedido nem catalogado antes | Não implementado, aguardando prioridade |
 | 26 | Priorização de auditoria por categoria — Material de Consumo (achado na auditoria 2026-07-29) | Recomendação do slide 11 do pptx, ligada ao item #14 já implementado | Não implementado, aguardando prioridade |
 | 27 | Dashboard de rejeitos: só 3 de 6 categorias de baixa (achado na auditoria 2026-07-29) | `MOV_AMJ_2026` rastreia 3 categorias a mais (Gastos Gerais/Desp. Funcionário/MC) que o dashboard do item #16 não soma | Não implementado, escopo a decidir |
+| 28 | Filtro de status em Faturamento — pedido real, separado do #6 (achado na 3ª auditoria 2026-07-30) | Ramon pede ao vivo (~01:07min) o mesmo filtro concluído/cancelado do #6, olhando uma nota cancelada dentro do próprio relatório de Faturamento | Não implementado, aguardando prioridade |
+| 29 | Relatório de Margem por Produto (achado na 3ª auditoria 2026-07-30) | Aba "MARGEM" em `FAT_SVVM_2026.xlsx`: matriz produto × mês com V.Unit/CMC/%Margem, 581 linhas, que a consultoria já monta na mão | Não implementado, aguardando prioridade |
+| 30 | Top produtos por quantidade vendida (achado na 3ª auditoria 2026-07-30) | Aba "10 mais por quant" em `FAT_SVVM_2026.xlsx` — ranking por quantidade, eixo diferente do top faturados por R$ (item #16) | Não implementado, aguardando prioridade |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
@@ -122,7 +125,12 @@ R06.pptx`). Achados dessa revisão:
    assunto — na sequência imediata ele confirma "o relatório de faturamento, ele já está
    mais, já está funcionando direitinho" e só DEPOIS reclama do filtro que falta, já falando
    de **Compras** ("se a mercadoria foi concluída ou não aqui, não tem... está puxando
-   tudo"). Item mesclado no #6 abaixo — não existe pedido separado de filtro pro Faturamento.
+   tudo"). Item mesclado no #6 abaixo — não existe pedido separado de filtro pro Faturamento
+   **NESSE MOMENTO da call**. **Correção 2026-07-30 (3ª auditoria independente)**: essa
+   conclusão estava certa pra esse trecho específico (~55min), mas incompleta — tem um
+   pedido SEPARADO e explícito de filtro pro Faturamento mais tarde na mesma reunião
+   (~01:07min), registrado como item #28 abaixo. Não misturar os dois: aquele ali foi
+   falso alarme, este é pedido real.
 
 6. **Compras: falta filtro de status (concluída/cancelada/tudo), hoje traz tudo sem
    filtro.** Confirmado ao vivo que o relatório de Compras "está puxando tudo", sem
@@ -469,11 +477,15 @@ correção do #10 acima):
   pedido pra mostrar o que o sistema está fazendo enquanto uma tela demora ("tá
   consultando a Omie ou não?"). Não é um bug, é uma sugestão de UX solta — nunca virou
   item nenhum, nem como "adiado". **Sem spec, sem decisão de prioridade ainda.**
-- **#25 — Relatório de desconto por forma de pagamento**: `FAT_SVVM_2026.xlsx` tem 3
-  abas dedicadas ("Desconto 10+", "Desconto por tipo de pgto", "Fat vs forma de pgto")
-  que a consultoria monta todo mês (ex.: R$58.585,57 de desconto só em Pix, jan–jul).
-  Zero menção a desconto/forma de pagamento no catálogo até agora. **Não pedido na
-  reunião, achado só na planilha — mesma categoria dos itens #16/#23.**
+- **#25 — Relatório de desconto por forma de pagamento**: `FAT_SVVM_2026.xlsx` tem 2
+  abas dedicadas ("Desconto 10+", "Desconto pot tipo de pgto" — erro de digitação da
+  própria planilha, não é "por") que a consultoria monta todo mês (ex.: R$58.585,57 de
+  desconto só em Pix, jan–jul). **Correção 2026-07-30 (3ª auditoria independente)**: a
+  versão anterior desta nota citava também "Fat vs forma de pgto" como uma 3ª aba de
+  desconto — não é, o cabeçalho real dessa aba é "FATURAMENTO POR FORMA DE PAGAMENTO"
+  (faturamento total por forma de pagamento, não desconto). Zero menção a desconto/forma
+  de pagamento no catálogo até agora. **Não pedido na reunião, achado só na planilha —
+  mesma categoria dos itens #16/#23.**
 - **#26 — Priorização de auditoria por categoria (Material de Consumo)**: slide 11 do
   pptx recomenda direcionar as próximas contagens físicas pra Material de Consumo,
   categoria que opera acima do limite na maioria dos meses. Relacionado ao item #14
@@ -491,6 +503,41 @@ Nenhum dos 4 foi implementado ainda — são achados novos, registrados aqui pra
 de prioridade (provavelmente na reunião de 30/07, 19h), não construídos por conta
 própria como #16/#23 foram (aqueles já tinham sido explicitamente autorizados pelo
 usuário: "pode continuar").
+
+## 3ª auditoria independente (2026-07-30, a pedido do usuário)
+
+Usuário pediu de novo, pela terceira vez, confirmação de leitura completa ("eu quero que
+você leia tudo de novo: tudo, cada página, cada aba, tudo"). Desta vez rodados 3 agentes
+independentes em paralelo (não sequencial), cada um sem ver o trabalho dos outros: 1 para
+os 2 transcripts completos, 2 releituras independentes e redundantes de todas as abas dos
+5 arquivos de referência (prova de cobertura: todas as abas de todos os workbooks foram
+abertas e listadas, incluindo abas vazias como "Diário de Bordo"/"BD"). Achados:
+
+- **Item #28** (novo) e correção no item #5 — ver acima.
+- **Itens #29 e #30** (novos) — ver tabela acima.
+- **Correção no item #25** — "Fat vs forma de pgto" NÃO é aba de desconto (é faturamento
+  total por forma de pagamento); só 2 das 3 abas citadas antes são de fato sobre desconto.
+  Corrigido acima.
+- **Achados menores, não viraram item novo** (baixa confiança / provavelmente já
+  resolvidos, registrados só pra não sumir):
+  - (~51:46min) Ramon sugere cachear o relatório "por operação" em vez de buscar o ano
+    inteiro toda vez, usando o sinal de alteração que a própria Omie manda em vez de
+    repuxar tudo sempre. Joaquim responde pouco depois que já adicionou cache — parece já
+    resolvido, mas a abordagem específica ("usar sinal de alteração da Omie") não está
+    documentada em nenhum item.
+  - (~55:21min) Ramon sugere separar "operação" num ambiente à parte por performance;
+    Joaquim rejeita na hora ("não tem necessidade"). Nunca foi registrado, ao contrário de
+    outras rejeições na hora que o catálogo já lista (ex.: item #21).
+  - `NFS_ENT_SVVM_26_R0.xlsx` tem categorização fiscal bem mais profunda (16 abas: ICMS
+    00/20/60/90, CFOP por tipo, flag "ERRO CFOP 1407", "N GERA ESTOQUE"/"N GERA C A
+    PAGAR") do que os itens #17/#18 ("pesquisa pendente do Ramon"/"adiado") deixam claro
+    — não é item novo, é nota de escopo: quando o Ramon voltar com a estrutura de
+    categorias contábeis (#17), o escopo real é maior do que "definir categoria e CFOP no
+    cadastro do produto" sozinho.
+
+Depois desta rodada: **30 itens no catálogo, 23 originais + a 1ª rodada de auditoria (#23-27)
+resolvidos/documentados, mais #28-30 dessa 3ª rodada — nenhum dos #24-30 foi implementado
+ainda**, todos aguardando decisão de prioridade do usuário.
 
 ## Agenda
 - Próxima reunião semanal: **quinta-feira, 30/07, às 19h** (antecipada de 21h a pedido do
