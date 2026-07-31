@@ -79,6 +79,8 @@ const DOCKER_TIMEOUT_MS = 90_000 // boot completo dos containers mediu ~40-60s
 // incluso) tem custo e risco real, nao e algo pra repetir a cada minuto.
 const COOLDOWN_ACAO_MS = 3 * 60 * 1000
 
+// 'supabase-db' NAO esta nesta lista de proposito -- ver
+// garantirBancoStandbySempreLigado() logo abaixo pra explicacao completa.
 const CONTAINERS_FAILOVER = [
   'supabase-kong',
   'supabase-pooler',
@@ -88,11 +90,10 @@ const CONTAINERS_FAILOVER = [
   'supabase-meta',
   'supabase-auth',
   'supabase-rest',
-  'supabase-db',
   'supabase-studio',
   'supabase-imgproxy',
 ]
-const CONTAINER_REPRESENTATIVO = 'supabase-db' // usado só pra sondar se a stack esta de pe
+const CONTAINER_REPRESENTATIVO = 'supabase-kong' // usado so pra sondar se o RESTO da stack esta de pe (nao o banco, que fica sempre ligado)
 
 type Status = 'up' | 'down'
 
@@ -171,6 +172,44 @@ async function standbyEstaRodando(): Promise<boolean> {
   }
 }
 
+// Achado real em producao (2026-07-31): o 'supabase-db' fazia parte do
+// grupo CONTAINERS_FAILOVER acima (ligado/desligado junto com o resto da
+// stack, so durante failovers reais). Isso quebra a replicacao logica que
+// alimenta esse banco -- o Postgres real (Supabase cloud) mantem um slot de
+// replicacao que exige um assinante conectado; se o assinante fica
+// desconectado tempo demais (o normal aqui, ja que o container so sobe em
+// emergencia), o WAL retido pro slot passa do limite e o Supabase INVALIDA
+// o slot (wal_status='lost', invalidation_reason='wal_removed') -- nao da
+// pra so reconectar depois, precisa recriar a subscription do zero. Achado
+// via scripts/verificar-completude-contabo.mjs (Task 1 da migracao pra
+// Contabo como principal): 20 das 41 tabelas replicadas estavam
+// divergentes, congeladas num ponto do passado, nao por atraso e sim por
+// isso. Correcao: 'supabase-db' fica de fora do grupo liga/desliga e e
+// mantido sempre rodando por conta propria (funcao abaixo) -- so o banco,
+// nao o resto do stack (Kong/Auth/Storage etc. continuam desligados ate uma
+// queda real), custo extra minimo (um Postgres ocioso).
+async function garantirBancoStandbySempreLigado() {
+  try {
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['inspect', '-f', '{{.State.Running}}', 'supabase-db'],
+      { timeout: DOCKER_TIMEOUT_MS }
+    )
+    if (stdout.trim() === 'true') return
+  } catch {
+    // container nao existe ou docker nao respondeu -- tenta o start mesmo
+    // assim, deixa o proprio start falhar/logar se for o caso real
+  }
+  try {
+    const { stdout, stderr } = await execFileAsync('docker', ['start', 'supabase-db'], {
+      timeout: DOCKER_TIMEOUT_MS,
+    })
+    console.log('[failover] supabase-db (replica sempre ligada) iniciado:', (stdout || stderr).trim())
+  } catch (e) {
+    console.error('[failover] falha ao garantir supabase-db ligado (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
+  }
+}
+
 // So dispara o docker start se o standby REALMENTE nao estiver rodando (nao
 // so "achamos que nao esta"), e nunca sobrepoe outro start/stop em curso.
 async function ligarStackFailoverSeNecessario() {
@@ -222,6 +261,7 @@ async function tick() {
   if (s.emExecucao) return // tick anterior ainda rodando (TIMEOUT_MS == INTERVALO_MS, pode sobrepor)
   s.emExecucao = true
   try {
+    void garantirBancoStandbySempreLigado()
     const saudavel = await checarSupabaseReal()
 
     if (saudavel) {
