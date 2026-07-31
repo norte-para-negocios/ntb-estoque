@@ -75,13 +75,21 @@ export default async function HomePage() {
   const primeiroDiaMesISO = `${hojeLocal.slice(0, 7)}-01`
   const desde24h = new Date(Date.now() - 24 * 3600000).toISOString()
   const head = { count: 'exact' as const, head: true }
+  // Achado real (2026-07-30): count('exact') em ordens_producao sozinho leva
+  // ~1.9s (74 mil linhas na janela quente de 90 dias) -- bem mais caro que as
+  // outras contagens da mesma tela. 'estimated' usa a estatistica do
+  // planner do Postgres (pg_class.reltuples via EXPLAIN), quase instantaneo.
+  // Troca deliberada: o numero deixa de ser exato ao segundo, pode ficar
+  // levemente desatualizado ate o proximo ANALYZE/autovacuum -- aceitavel
+  // pra um card de exibicao que nao alimenta paginacao nem logica critica.
+  const headEstimado = { count: 'estimated' as const, head: true }
 
   // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
   const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, nfPendentes, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
     await Promise.all([
       supabase.from('produtos').select('id', head).eq('loja_id', lojaId),
       supabase.from('notas_fiscais').select('id', head).eq('loja_id', lojaId).gte('d_emissao_nfe', trintaDias).is('deleted_at', null),
-      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId),
+      supabase.from('ordens_producao').select('id', headEstimado).eq('loja_id', lojaId),
       supabase.from('inventarios').select('id', head).eq('loja_id', lojaId).neq('status', 'Finalizado'),
       // SALDO_OR (não só `quantidade.gt.0`): `quantidade` é a etiqueta setada
       // manualmente e fica NULL na maioria das OPs -- o saldo real cai em
