@@ -302,36 +302,30 @@ export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number) {
 
 // Marca o recebimento como CONCLUÍDO no Omie (ConcluirRecebimento) --
 // equivalente a "manifestar": move da coluna Pendente pra Recebido no
-// Kanban de Compras da Omie. cChaveNfe e opcional na Omie mas mandamos
-// quando disponivel (mais preciso que so nIdReceb).
-export async function concluirRecebimento(
-  loja: LojaOmie,
-  nIdReceb: number,
-  cChaveNfe?: string | null
-) {
+// Kanban de Compras da Omie. A Omie rejeita a chamada com "Preencha apenas
+// a Tag [nIdReceb] ou a tag [cChaveNfe]!" se as duas forem enviadas juntas
+// (confirmado ao vivo em produção) -- manda só nIdReceb, que já é obrigatório.
+export async function concluirRecebimento(loja: LojaOmie, nIdReceb: number) {
   return omieRequest({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
     endpoint: 'v1/produtos/recebimentonfe',
     call: 'ConcluirRecebimento',
-    data: { nIdReceb, ...(cChaveNfe ? { cChaveNfe } : {}), cEtapa: '60' },
+    data: { nIdReceb, cEtapa: '60' },
   })
 }
 
-// Desfaz a conclusao (ReverterRecebimento) -- volta pra Pendente.
-export async function reverterRecebimento(
-  loja: LojaOmie,
-  nIdReceb: number,
-  cChaveNfe?: string | null
-) {
+// Desfaz a conclusao (ReverterRecebimento) -- volta pra Pendente. Mesmo
+// motivo acima: só nIdReceb, nunca junto com cChaveNfe.
+export async function reverterRecebimento(loja: LojaOmie, nIdReceb: number) {
   return omieRequest({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
     endpoint: 'v1/produtos/recebimentonfe',
     call: 'ReverterRecebimento',
-    data: { nIdReceb, ...(cChaveNfe ? { cChaveNfe } : {}), cEtapa: '40' },
+    data: { nIdReceb, cEtapa: '40' },
   })
 }
 

@@ -84,7 +84,7 @@ export async function manifestarNF(notaId: number) {
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
   try {
-    await concluirRecebimento(nf.loja, Number(nf.n_id_receb), nf.c_chave_nfe)
+    await concluirRecebimento(nf.loja, Number(nf.n_id_receb))
     await supabase
       .from('notas_fiscais')
       .update({ c_etapa: '60', updated_at: new Date().toISOString() })
@@ -108,7 +108,7 @@ export async function reverterManifestacaoNF(notaId: number) {
     return { error: 'Só dá para reverter uma nota concluída.' }
   }
   try {
-    await reverterRecebimento(nf.loja, Number(nf.n_id_receb), nf.c_chave_nfe)
+    await reverterRecebimento(nf.loja, Number(nf.n_id_receb))
     await supabase
       .from('notas_fiscais')
       .update({ c_etapa: '40', updated_at: new Date().toISOString() })
