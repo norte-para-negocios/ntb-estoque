@@ -173,6 +173,7 @@ export default async function NotaFiscalPage({
   if (params.status === 'C' || params.status === 'CONCLUIDA') query = query.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
   else if (params.status === 'P' || params.status === 'PENDENTE') query = query.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
   else if (params.status === 'CANCELADA') query = query.eq('full_object->infoCadastro->>cCancelada', 'S')
+  else if (params.status === 'MANIFESTADA') query = query.eq('full_object->infoCadastro->>cRecebido', 'S')
   else if (params.status) query = query.eq('c_etapa', params.status)
   if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
   if (categoriaOrClause) query = query.or(categoriaOrClause)
@@ -197,6 +198,7 @@ export default async function NotaFiscalPage({
     if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+    else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
     else if (params.status) q = q.eq('c_etapa', params.status)
     if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
     if (categoriaOrClause) q = q.or(categoriaOrClause)
@@ -248,6 +250,7 @@ export default async function NotaFiscalPage({
       if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
       else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+      else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
       else if (params.status) q = q.eq('c_etapa', params.status)
       if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
       if (categoriaOrClause) q = q.or(categoriaOrClause)
@@ -360,6 +363,7 @@ export default async function NotaFiscalPage({
       label: 'Situação',
       opcoes: [
         { value: 'CONCLUIDA', label: 'Concluída' },
+        { value: 'MANIFESTADA', label: 'Manifestada' },
         { value: 'PENDENTE', label: 'Pendente' },
         { value: 'CANCELADA', label: 'Cancelada' },
       ],
@@ -438,6 +442,7 @@ export default async function NotaFiscalPage({
           opcoes={[
             { value: '', label: 'Todas' },
             { value: 'CONCLUIDA', label: 'Concluídas' },
+            { value: 'MANIFESTADA', label: 'Manifestadas' },
             { value: 'PENDENTE', label: 'Pendentes' },
             { value: 'CANCELADA', label: 'Canceladas' },
           ]}

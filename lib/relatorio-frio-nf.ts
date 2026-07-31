@@ -27,6 +27,7 @@ export type ItemNFFrio = {
   nf_c_etapa?: string | null
   nf_fornecedor?: string | null
   nf_cancelada?: boolean
+  nf_manifestada?: boolean
 }
 
 type HeaderNFFrio = {
@@ -95,8 +96,9 @@ export async function buscarItensNFFrio(opts: {
     const h = porId.get(it.nota_fiscal_id)
     it.nf_c_etapa = h?.c_etapa ?? null
     it.nf_fornecedor = h?.c_razao_social || h?.c_nome || null
-    const info = (h?.full_object as { infoCadastro?: { cCancelada?: string } } | null)?.infoCadastro
+    const info = (h?.full_object as { infoCadastro?: { cCancelada?: string; cRecebido?: string } } | null)?.infoCadastro
     it.nf_cancelada = (info?.cCancelada ?? 'N') === 'S'
+    it.nf_manifestada = (info?.cRecebido ?? 'N') === 'S'
   }
   return itens
 }
@@ -154,14 +156,17 @@ const right3 = (s: string | null): string => (s ?? '').replace(/\D/g, '').slice(
 const ilike = (campo: string | null | undefined, termo: string): boolean =>
   (campo ?? '').toLowerCase().includes(termo.toLowerCase())
 
-// Espelha a funcao SQL nf_bate_status (migration 097) -- CONCLUIDA e o
+// Espelha a funcao SQL nf_bate_status (migrations 097/098) -- CONCLUIDA e o
 // padrao (bate com o hardcode anterior de Compras/Auditoria), PENDENTE e
 // CANCELADA se somam exatamente ao TODAS (particao exaustiva, validado
-// contra dado real na migration).
+// contra dado real na migration). MANIFESTADA usa cRecebido, campo PROPRIO
+// da Omie -- nao e sinonimo de CONCLUIDA (achado real: c_etapa='60' so tem
+// cRecebido='S' em 10487 de 10491 casos).
 function itemBateStatus(it: ItemNFFrio, status: string | undefined): boolean {
   const s = status || 'CONCLUIDA'
   if (s === 'TODAS') return true
   if (s === 'CANCELADA') return !!it.nf_cancelada
+  if (s === 'MANIFESTADA') return !!it.nf_manifestada
   if (s === 'PENDENTE') return it.nf_c_etapa !== '60' && !it.nf_cancelada
   return it.nf_c_etapa === '60' && !it.nf_cancelada
 }

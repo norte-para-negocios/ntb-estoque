@@ -32,6 +32,7 @@ import { ShieldCheck, Download } from 'lucide-react'
 // na parte de NF -- migration 097): mesmo filtro de status de Compras.
 const OPCOES_STATUS = [
   { value: '', label: 'Concluída' },
+  { value: 'MANIFESTADA', label: 'Manifestada' },
   { value: 'PENDENTE', label: 'Pendente' },
   { value: 'CANCELADA', label: 'Cancelada' },
   { value: 'TODAS', label: 'Todas' },

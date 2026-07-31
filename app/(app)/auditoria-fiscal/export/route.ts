@@ -111,7 +111,7 @@ export async function GET(request: Request) {
     }
   })
 
-  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
+  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', MANIFESTADA: 'Manifestada', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Auditoria fiscal — compras por CFOP',
     subtitulo: `Período ${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,

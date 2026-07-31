@@ -149,6 +149,7 @@ export async function GET(request: Request) {
     if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+    else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
 
     if (categoriaOrClause) q = q.or(categoriaOrClause)
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)

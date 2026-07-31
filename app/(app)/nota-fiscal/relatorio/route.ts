@@ -150,6 +150,7 @@ export async function GET(request: Request) {
     if (status === 'C' || status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
+    else if (status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
     if (categoriaOrClause) q = q.or(categoriaOrClause)
     if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
     return q
@@ -193,7 +194,7 @@ export async function GET(request: Request) {
   const filtrosAtivos: string[] = []
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
-  if (status) filtrosAtivos.push(`Status: ${status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : 'Pendente'}`)
+  if (status) filtrosAtivos.push(`Status: ${status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : status === 'MANIFESTADA' ? 'Manifestada' : 'Pendente'}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
   if (categoria) {

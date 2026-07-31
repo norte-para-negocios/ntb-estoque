@@ -42,6 +42,7 @@ import { ShoppingCart, Download } from 'lucide-react'
 // entao "Concluida" fica destacado por padrao sem precisar de query string.
 const OPCOES_STATUS = [
   { value: '', label: 'Concluída' },
+  { value: 'MANIFESTADA', label: 'Manifestada' },
   { value: 'PENDENTE', label: 'Pendente' },
   { value: 'CANCELADA', label: 'Cancelada' },
   { value: 'TODAS', label: 'Todas' },

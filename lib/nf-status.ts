@@ -12,13 +12,23 @@
 // != '60' vira "Pendente (etapa X)", nunca escondendo o codigo cru.
 export type StatusNF = { label: string; tom: 'ok' | 'warn' | 'err' }
 
-type FullObjectComCadastro = { infoCadastro?: { cCancelada?: string | null } } | null | undefined
+type FullObjectComCadastro =
+  | { infoCadastro?: { cCancelada?: string | null; cRecebido?: string | null } }
+  | null
+  | undefined
 
 export function statusNF(cEtapa: string | null, fullObject: unknown): StatusNF {
   const cancelada = (fullObject as FullObjectComCadastro)?.infoCadastro?.cCancelada === 'S'
   if (cancelada) return { label: 'Cancelada', tom: 'err' }
   if (cEtapa === '60') return { label: 'Concluída', tom: 'ok' }
   return { label: `Pendente (etapa ${cEtapa ?? '?'})`, tom: 'warn' }
+}
+
+// cRecebido é campo PRÓPRIO da Omie (independente de c_etapa -- achado real
+// 2026-07-31: c_etapa='40' sempre tem cRecebido='N', mas c_etapa='60' só tem
+// cRecebido='S' em 10487 de 10491 casos, não é sinônimo exato de Concluída).
+export function manifestada(fullObject: unknown): boolean {
+  return (fullObject as FullObjectComCadastro)?.infoCadastro?.cRecebido === 'S'
 }
 
 // Fragmento null-safe pra "nao cancelada", usado dentro de .or(...) do
@@ -39,5 +49,6 @@ export function statusBateFiltro(nf: { c_etapa: string | null; full_object: unkn
   if (status === 'C' || status === 'CONCLUIDA') return label === 'Concluída'
   if (status === 'P' || status === 'PENDENTE') return label !== 'Concluída' && label !== 'Cancelada'
   if (status === 'CANCELADA') return label === 'Cancelada'
+  if (status === 'MANIFESTADA') return manifestada(nf.full_object)
   return nf.c_etapa === status
 }

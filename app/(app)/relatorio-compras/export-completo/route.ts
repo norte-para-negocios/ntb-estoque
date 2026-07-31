@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     return raw
   }
 
-  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
+  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', MANIFESTADA: 'Manifestada', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
   const sub = `${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
 
   const abas: AbaPlanilha[] = []
