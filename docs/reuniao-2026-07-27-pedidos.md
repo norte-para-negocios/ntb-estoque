@@ -58,9 +58,10 @@ R06.pptx`). Achados dessa revisão:
 | 25 | Relatório de desconto por forma de pagamento (achado na auditoria 2026-07-29) | 3 abas dedicadas em `FAT_SVVM_2026.xlsx` que a consultoria monta na mão, nunca pedido nem catalogado antes | Não implementado, aguardando prioridade |
 | 26 | Priorização de auditoria por categoria — Material de Consumo (achado na auditoria 2026-07-29) | Recomendação do slide 11 do pptx, ligada ao item #14 já implementado | Não implementado, aguardando prioridade |
 | 27 | Dashboard de rejeitos: só 3 de 6 categorias de baixa (achado na auditoria 2026-07-29) | `MOV_AMJ_2026` rastreia 3 categorias a mais (Gastos Gerais/Desp. Funcionário/MC) que o dashboard do item #16 não soma | Não implementado, escopo a decidir |
-| 28 | Filtro de status em Faturamento — pedido real, separado do #6 (achado na 3ª auditoria 2026-07-30) | Ramon pede ao vivo (~01:07min) o mesmo filtro concluído/cancelado do #6, olhando uma nota cancelada dentro do próprio relatório de Faturamento | Não implementado, aguardando prioridade |
+| 28 | Filtro de status em Faturamento — pedido real, separado do #6 (achado na 3ª auditoria 2026-07-30) | Ramon pede ao vivo (~01:07min) o mesmo filtro concluído/cancelado do #6, olhando uma nota cancelada dentro do próprio relatório de Faturamento | ✅ Resolvido 2026-07-31 — filtro Normal/Cancelado/Devolvido/Todos, só no modo "Ver cupons" (único lugar onde esse dado existe) |
 | 29 | Relatório de Margem por Produto (achado na 3ª auditoria 2026-07-30) | Aba "MARGEM" em `FAT_SVVM_2026.xlsx`: matriz produto × mês com V.Unit/CMC/%Margem, 581 linhas, que a consultoria já monta na mão | Não implementado, aguardando prioridade |
 | 30 | Top produtos por quantidade vendida (achado na 3ª auditoria 2026-07-30) | Aba "10 mais por quant" em `FAT_SVVM_2026.xlsx` — ranking por quantidade, eixo diferente do top faturados por R$ (item #16) | Não implementado, aguardando prioridade |
+| 31 | Tabela de "Ver cupons" sem paginação (achado 2026-07-31, testando o item #28) | Período de 1 ano (13 mil+ cupons) faz o navegador travar ao montar a tabela sem limite de linhas — reproduz igual sem filtro nenhum, não foi causado pelo filtro de status | Não implementado, achado incidental registrado pra decisão de prioridade |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
