@@ -241,6 +241,13 @@ export async function carregarDashboardGerencial(
       },
     ],
   }
-  cacheDashboard.set(chaveCache, { dados: resultado, expiraEm: Date.now() + CACHE_TTL_MS })
+  // Nao cacheia resultado com cara de falha transitoria (rejeitos, produtosParados
+  // e topComprados todos vazios ao mesmo tempo) -- toda fonte acima engole erro e
+  // devolve [], entao um blip do Supabase virava snapshot degradado servido pra
+  // todo mundo por 90s. Sem cache, a proxima requisicao tenta de novo do zero.
+  const pareceuDegradado = resultado.rejeitos.length === 0 && resultado.produtosParados.length === 0 && resultado.topComprados.length === 0
+  if (!pareceuDegradado) {
+    cacheDashboard.set(chaveCache, { dados: resultado, expiraEm: Date.now() + CACHE_TTL_MS })
+  }
   return resultado
 }

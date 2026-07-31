@@ -50,6 +50,11 @@ _qa_*.mjs
 # checkpoints de sync (estado de runtime)
 scripts/.ajustes-checkpoint-*.json
 
+# estado de runtime do failover-supabase-watch.sh
+.failover-state
+.failover-count
+failover-watch.log
+
 .vercel
 .env*
 

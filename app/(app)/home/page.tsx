@@ -77,12 +77,15 @@ export default async function HomePage() {
   const head = { count: 'exact' as const, head: true }
   // Achado real (2026-07-30): count('exact') em ordens_producao sozinho leva
   // ~1.9s (74 mil linhas na janela quente de 90 dias) -- bem mais caro que as
-  // outras contagens da mesma tela. 'estimated' usa a estatistica do
-  // planner do Postgres (pg_class.reltuples via EXPLAIN), quase instantaneo.
+  // outras contagens da mesma tela. 'estimated' e hibrido no PostgREST: so
+  // cai pra estatistica do planner (pg_class.reltuples) quando a contagem
+  // exata passaria do limite de linhas (max-rows, default 1000 no Supabase)
+  // -- aqui, bem acima do limite, cai pro estimado e fica quase instantaneo.
   // Troca deliberada: o numero deixa de ser exato ao segundo, pode ficar
   // levemente desatualizado ate o proximo ANALYZE/autovacuum -- aceitavel
   // pra um card de exibicao que nao alimenta paginacao nem logica critica.
   const headEstimado = { count: 'estimated' as const, head: true }
+  const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
 
   // Phase 1: todas as contagens + data mais recente de posicao (para valor do estoque)
   const [produtos, nfs, ops, invAbertos, vencendo, errosSync, loja, nfPendentes, reporRes, transfAbertas, maxPosRes, opsPendentesRetry] =
@@ -97,7 +100,7 @@ export default async function HomePage() {
       // Achado real (auditoria de relatórios, 2026-07-26): mesmo bug já
       // corrigido em /validade e lib/resumo-dia.ts, deixado pra trás aqui --
       // loja 4 mostrava 0 produtos vencendo quando o real era 6.
-      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).or('quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'),
+      supabase.from('ordens_producao').select('id', head).eq('loja_id', lojaId).not('validade', 'is', null).gte('validade', hojeLocal).lte('validade', seteDias).or(SALDO_OR),
       supabase.from('integration_attempts').select('id', head).eq('loja_id', lojaId).eq('error', true).gte('created_at', desde24h),
       supabase.from('lojas').select('produto_ultima_atualizacao').eq('id', lojaId).single(),
       // Item #16: mesma logica de "NF travada" ja usada no painel de acao
@@ -126,12 +129,21 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
+  // Card "Ordens de producao" (ops.count, ja calculado no Promise.all acima) nao
+  // tem filtro de data (conta todas as recentes, pos-poda). Completa com a parte
+  // antiga do Contabo via contagem real (count=true, sem LIMIT) pra nao truncar
+  // o numero -- disjunta do que o Supabase ja tem, sem duplicar.
+  //
+  // Estoque JA vencido (validade < hoje, ainda com saldo) -- mesma logica da tela
+  // /validade ("Vencidos"), so que aqui e so a contagem pro alerta. Sem limite
+  // inferior de data, entao busca as linhas (nao head:true) e mescla com o Contabo
+  // por id pra nao contar em dobro o que ainda esta nos dois lugares antes da poda.
+  //
   // Paraleliza contarOrdensProducaoAntigas com a query de vencidas -- as
   // duas nao dependem uma da outra (so complementarOrdensProducao depende
   // do resultado de vencidasQuentesRaw). Achado real (2026-07-30): rodavam
   // em sequencia sem necessidade, cada uma custando uma rodada inteira de
   // rede ate Supabase/Contabo.
-  const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
   const [opsAntigasCount, { data: vencidasQuentesRaw }] = await Promise.all([
     contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() }),
     supabase
