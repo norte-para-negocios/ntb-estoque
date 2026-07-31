@@ -19,6 +19,26 @@ import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { buscarFatAgregado, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+
+// Pedido real do Ramon (reuniao 27/07, item #28): filtro de status tambem
+// em Faturamento -- mas aqui o "status" e do CUPOM (cancelado/devolvido/
+// normal, achado em fat_cupons), diferente do c_etapa de NF usado em
+// Compras/Auditoria (migration 097). So existe dado de status por linha no
+// modo "Ver cupons" (o pre-agregado, modo padrao, nao carrega esse campo) --
+// o filtro so aparece e so se aplica nessa visao especifica.
+const OPCOES_STATUS_CUPOM = [
+  { value: '', label: 'Normal' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+  { value: 'DEVOLVIDO', label: 'Devolvido' },
+  { value: 'TODOS', label: 'Todos' },
+]
+function cupomBateStatus(c: CupomFat, status: string): boolean {
+  if (status === 'TODOS') return true
+  if (status === 'CANCELADO') return c.cancelado
+  if (status === 'DEVOLVIDO') return c.devolvido
+  return !c.cancelado && !c.devolvido // Normal (padrao)
+}
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -78,6 +98,7 @@ export default async function RelatorioFaturamentoPage({
     forma_pgto?: string
     drill?: string
     ver?: string
+    status?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -168,7 +189,8 @@ export default async function RelatorioFaturamentoPage({
   const dataInicioFato = mesIni ? `${mesIni}-01` : ''
   const dataFinalFato = fimDoMes(mesFim ?? mesAtual)
 
-  const [matrizFato, cuponsFato]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
+  const statusCupomSel = sp.status || 'NORMAL'
+  const [matrizFato, cuponsFatoTodos]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
     usarFato && !verCupons
       ? buscarFatAgregado({
           lojaId,
@@ -182,6 +204,7 @@ export default async function RelatorioFaturamentoPage({
       ? buscarFatCupons({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato })
       : Promise.resolve([]),
   ])
+  const cuponsFato = verCupons ? cuponsFatoTodos.filter((c) => cupomBateStatus(c, statusCupomSel)) : cuponsFatoTodos
 
   const supabase = createServiceClient()
   const [matrizCrua, { data: metaRow }, opcoesRaw] = await Promise.all([
@@ -439,15 +462,17 @@ export default async function RelatorioFaturamentoPage({
           </div>
 
           {verCupons ? (
-            !cuponsFato.length ? (
+            <>
+              <ChipsStatus basePath="/relatorio-faturamento" param="status" opcoes={OPCOES_STATUS_CUPOM} />
+              {!cuponsFato.length ? (
               <EmptyState
                 icon={DollarSign}
                 title="Sem cupons no período"
-                hint="Tente ampliar o período no filtro."
+                hint="Tente ampliar o período ou o filtro de situação."
               />
             ) : (
               <>
-              {cuponsFato.length >= LIMITE_FAT_CUPONS && (
+              {cuponsFatoTodos.length >= LIMITE_FAT_CUPONS && (
                 <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                   <span>
@@ -482,7 +507,8 @@ export default async function RelatorioFaturamentoPage({
                 </table>
               </div>
               </>
-            )
+            )}
+            </>
           ) : !matrizFinal.length ? (
             <EmptyState
               icon={DollarSign}
