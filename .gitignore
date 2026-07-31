@@ -55,8 +55,4 @@ scripts/.ajustes-checkpoint-*.json
 .failover-count
 failover-watch.log
 
-.vercel
-.env*
-
 .worktrees/
-.superpowers/
