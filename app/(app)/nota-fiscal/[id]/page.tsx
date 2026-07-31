@@ -8,6 +8,7 @@ import { FileText, Download } from 'lucide-react'
 import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 import { statusNF } from '@/lib/nf-status'
 import { DetalhesFiscaisNF } from '@/components/nota-fiscal/DetalhesFiscaisNF'
+import { AcoesNF } from '@/components/nota-fiscal/AcoesNF'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -110,6 +111,9 @@ export default async function NotaFiscalItensPage({
                 </a>
               </div>
             )}
+            <div className="pt-1">
+              <AcoesNF notaId={Number(id)} cEtapa={nf.c_etapa} />
+            </div>
           </div>
         }
       />
