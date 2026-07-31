@@ -61,7 +61,7 @@ R06.pptx`). Achados dessa revisão:
 | 28 | Filtro de status em Faturamento — pedido real, separado do #6 (achado na 3ª auditoria 2026-07-30) | Ramon pede ao vivo (~01:07min) o mesmo filtro concluído/cancelado do #6, olhando uma nota cancelada dentro do próprio relatório de Faturamento | ✅ Resolvido 2026-07-31 — filtro Normal/Cancelado/Devolvido/Todos, só no modo "Ver cupons" (único lugar onde esse dado existe) |
 | 29 | Relatório de Margem por Produto (achado na 3ª auditoria 2026-07-30) | Aba "MARGEM" em `FAT_SVVM_2026.xlsx`: matriz produto × mês com V.Unit/CMC/%Margem, 581 linhas, que a consultoria já monta na mão | Não implementado, aguardando prioridade |
 | 30 | Top produtos por quantidade vendida (achado na 3ª auditoria 2026-07-30) | Aba "10 mais por quant" em `FAT_SVVM_2026.xlsx` — ranking por quantidade, eixo diferente do top faturados por R$ (item #16) | Não implementado, aguardando prioridade |
-| 31 | Tabela de "Ver cupons" sem paginação (achado 2026-07-31, testando o item #28) | Período de 1 ano (13 mil+ cupons) faz o navegador travar ao montar a tabela sem limite de linhas — reproduz igual sem filtro nenhum, não foi causado pelo filtro de status | Não implementado, achado incidental registrado pra decisão de prioridade |
+| 31 | Tabela de "Ver cupons" sem paginação (achado 2026-07-31, testando o item #28) | Período de 1 ano (13 mil+ cupons) faz o navegador travar ao montar a tabela sem limite de linhas — reproduz igual sem filtro nenhum, não foi causado pelo filtro de status | ✅ Resolvido 2026-07-31 — corte de exibição em 1000 linhas (mais recentes primeiro), busca continua completa |
 
 ## ⚠️ Ação com prazo explícito
 - **Testar amanhã (28/07) o desligamento do sistema antigo "Norte Para Negócios" no
