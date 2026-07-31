@@ -37,7 +37,7 @@ R06.pptx`). Achados dessa revisão:
 | 4 | Filtros do relatório "por operação" quebrados | Nenhum filtro (tipo, local, família, origem) tinha efeito na tabela | **Corrigido e em produção** (commit `0646e8b`, 2026-07-28) |
 | 5 | Quantidade errada no detalhe de Movimentações | Card mostra valor "acumulado" onde parece que deveria descontar do estoque | **Investigado e esclarecido, em produção** (commit `83db1a7`) — causa raiz não é bug de cálculo, é a Omie não compensar transferência interna entre locais |
 | 6 | ~~Faturamento sem filtro concluída/cancelada~~ | **Correção 2ª passada**: má-atribuição — Ramon diz explicitamente que o Faturamento "já está funcionando direitinho"; o pedido de filtro era sobre Compras, mesmo item que o #7 | Mesclado no #7, não é item separado |
-| 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | **Já corrigido antes desta sessão** — falta só o extra (opção de ver canceladas), que é feature nova, não bug |
+| 7 | Compras sem filtro de status | Verificado ao vivo nas 4 RPCs (`relatorio_compras_total/_dim/_matriz/_detalhe`) + espelho JS: já filtram por padrão só concluída+não cancelada (migration 083) | ✅ Resolvido 2026-07-31 (migration 097, chips Concluída/Pendente/Cancelada/Todas) |
 | 8 | Sync de transferência/inventário feito no Omie não volta | Nunca puxou; ao trazer, gerar número de sequência local + trazer campo responsável; trazer quem alterou a OP no Omie | **Corrigido e em produção, os 2 sub-itens** (commits `d1dcfda`/`d9a6cfe`/`ffd415b`) — 8a como visão só-de-leitura (decisão de escopo, sem responsável — API da Omie não tem esse campo) |
 | 9 | Erro 500 na emissão de NF-e (homologação) | Investigado: emissão fiscal não existe no código (só leitura/consulta) — decisão de escopo já registrada como alto risco, não é bug | Não é código — precisa decisão explícita antes de construir (certificado + SEFAZ reais) |
 | 10 | Impressão de "Programação de Produção" | Matriz produto x dia do mês (landscape A4), linha em branco por dia pra anotar o produzido, variante "atrasadas", filtro de local de produção | **Corrigido e em produção** (commits `108aa75`/`ffd8525`/`6d11ef0`/`1c4ab18`) |
@@ -48,7 +48,7 @@ R06.pptx`). Achados dessa revisão:
 | 15 | Dashboard de produção diário/semanal/mensal por funcionário | Gráfico de OPs feitas por dia, com quem produziu | **Corrigido e em produção** (commits `6994127`/`75b92c0`/`fbdce19`/`2b3444b`/`ea633b6`) — sem histórico de "quem", só a partir de agora |
 | 16 | Dashboard/Home por perfil (Operação × Gerência) | Operação: enxuto e acionável (ordens atrasadas, NF pendente, transferência aberta, produto abaixo do mínimo). Gerência: completo e gráfico (rejeitos, top faturados/comprados, parados em estoque, relação compras/faturamento) | **Corrigido e em produção, 1ª fase** (commits `9afe6a7`/`1c1304c`/`9a7e805`/`f8c7884`) — régua de compra dinâmica, alertas automáticos e foto obrigatória em perda ficam para depois |
 | 17 | Categorias contábeis / centro de custo | Ramon vai pesquisar e definir a estrutura; direção já confirmada: CFOP fica no cadastro do produto | Aguardando pesquisa do Ramon |
-| 18 | Auditoria Fiscal e Pendências | Revisão adiada para quando entrarem na parte de notas fiscais | Adiado |
+| 18 | Auditoria Fiscal e Pendências | Revisão adiada para quando entrarem na parte de notas fiscais | ✅ Auditoria Fiscal resolvida 2026-07-31 (mesmo filtro de status do #7, migration 097) — Pendências continua adiado |
 | 19 | App local com sincronização periódica | Ideia inicial (rodar local, sync a cada N minutos, uso offline transparente) — sem escopo ou prazo definido | Watch item, sem decisão |
 | 20 | Catálogo A4 de QR code | Testado ao vivo, selecionar todos / seleção específica / filtro de inativo funcionando | Confirmado OK — falta só teste de impressão física |
 | 21 | Tipos de ajuste de estoque (entrada/saída/ajuste positivo) | Confirmado que não precisa mudar: ajuste de saldo já é coberto por Inventário; entrada sem nota já existe | Confirmado OK, sem ação |
@@ -141,6 +141,17 @@ R06.pptx`). Achados dessa revisão:
    pode trazer já fixo como trouxe o outro"). **Investigado 2026-07-28: já corrigido antes
    desta sessão** (RPCs de Compras já filtram concluída+não-cancelada por padrão desde a
    migration 083) — falta só a opção extra de ver canceladas/tudo, que é feature nova.
+
+   **✅ Resolvido 2026-07-31**: chips de status (Concluída/Pendente/Cancelada/Todas,
+   Concluída como padrão) adicionados em Compras — mesmo componente (`ChipsStatus`) já
+   usado em Nota Fiscal. Migration 097 trocou o hardcode das 4 RPCs
+   (`relatorio_compras_total/_dim/_matriz/_detalhe`) por um parâmetro `p_status` com
+   default `'CONCLUIDA'` (sem regressão: validado que o default bate exatamente com o
+   comportamento anterior, e que Concluída+Pendente+Cancelada soma exato com Todas, com
+   dado real da loja 3). Espelhado também no complemento frio (Contabo) e nas 2 rotas de
+   export. Auditoria Fiscal (item #18) ganhou o mesmo filtro no mesmo commit, já que
+   dependia exatamente desta parte de notas fiscais que faltava. Faturamento continua
+   pendente (item #28) — usa outro dado (status do cupom, não `c_etapa` de NF).
 
 7. **Transferências e inventários feitos direto no Omie não sincronizam de volta.**
    Confirmado que **nunca puxou**, desde antes: uma transferência ou um inventário feito
