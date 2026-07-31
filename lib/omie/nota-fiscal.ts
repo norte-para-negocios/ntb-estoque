@@ -300,6 +300,61 @@ export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number) {
   if (res?.cabec) await saveNotaFiscal(loja, res)
 }
 
+// Marca o recebimento como CONCLUÍDO no Omie (ConcluirRecebimento) --
+// equivalente a "manifestar": move da coluna Pendente pra Recebido no
+// Kanban de Compras da Omie. cChaveNfe e opcional na Omie mas mandamos
+// quando disponivel (mais preciso que so nIdReceb).
+export async function concluirRecebimento(
+  loja: LojaOmie,
+  nIdReceb: number,
+  cChaveNfe?: string | null
+) {
+  return omieRequest({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/recebimentonfe',
+    call: 'ConcluirRecebimento',
+    data: { nIdReceb, ...(cChaveNfe ? { cChaveNfe } : {}), cEtapa: '60' },
+  })
+}
+
+// Desfaz a conclusao (ReverterRecebimento) -- volta pra Pendente.
+export async function reverterRecebimento(
+  loja: LojaOmie,
+  nIdReceb: number,
+  cChaveNfe?: string | null
+) {
+  return omieRequest({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/recebimentonfe',
+    call: 'ReverterRecebimento',
+    data: { nIdReceb, ...(cChaveNfe ? { cChaveNfe } : {}), cEtapa: '40' },
+  })
+}
+
+// Remove o recebimento inteiro do Omie (ExcluirRecebimento) -- so aceita
+// nIdReceb, nao tem cChaveNfe nesse metodo especifico (confirmado na doc).
+export async function excluirRecebimento(loja: LojaOmie, nIdReceb: number) {
+  return omieRequest({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    endpoint: 'v1/produtos/recebimentonfe',
+    call: 'ExcluirRecebimento',
+    data: { nIdReceb },
+  })
+}
+
+// Mesma logica de lib/omie/ordem-producao.ts:pareceOPNaoExiste -- detecta
+// pelo texto do erro quando o recebimento ja nao existe mais do lado da
+// Omie (excluido direto por la, ou id invalido).
+export function pareceRecebimentoNaoExiste(msg: string): boolean {
+  return /nao cadastrada|não cadastrada|nao encontrado|não encontrado/i.test(msg)
+}
+
 function parseDate(d: string | null | undefined): string | null {
   if (!d) return null
   const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
