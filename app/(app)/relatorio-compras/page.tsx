@@ -32,7 +32,20 @@ import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
 import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import { ShoppingCart, Download } from 'lucide-react'
+
+// Pedido real do Ramon (reuniao 27/07, item #6): poder escolher ver
+// Concluida/Pendente/Cancelada/Todas, com Concluida fixo como padrao.
+// value:'' (sem status na URL) mapeia pro chip "Concluida" -- ChipsStatus
+// marca como ativo o chip cujo value bate com o searchParam ausente (''),
+// entao "Concluida" fica destacado por padrao sem precisar de query string.
+const OPCOES_STATUS = [
+  { value: '', label: 'Concluída' },
+  { value: 'PENDENTE', label: 'Pendente' },
+  { value: 'CANCELADA', label: 'Cancelada' },
+  { value: 'TODAS', label: 'Todas' },
+]
 
 // Converte lista vazia em null (RPC trata null como "sem filtro"; array vazio
 // com `= any()` não bateria com nada).
@@ -80,6 +93,7 @@ export default async function RelatorioComprasPage({
     cfop?: string
     produto?: string
     local?: string
+    status?: string
     drill?: string
   }>
 }) {
@@ -108,6 +122,7 @@ export default async function RelatorioComprasPage({
   const fornecedor = sp.fornecedor || null
   const produto = sp.produto || null
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const statusSel = sp.status || 'CONCLUIDA'
   const filtros = {
     p_familias: arrOrNull(familiasSel),
     p_tipos: arrOrNull(tiposSel),
@@ -115,6 +130,7 @@ export default async function RelatorioComprasPage({
     p_cfops: arrOrNull(cfopsSel),
     p_produto: produto,
     p_local: localCod,
+    p_status: statusSel,
   }
   // Pares da trilha sobrescrevem o filtro correspondente (drill restringe).
   const drillFiltros: Record<string, unknown> = {}
@@ -151,7 +167,7 @@ export default async function RelatorioComprasPage({
     supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill }),
     rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dimExibida ?? 'produto', ...filtrosComDrill }),
     // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
-    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop' }),
+    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop', p_status: statusSel }),
   ])
   let total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
   let nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
@@ -195,7 +211,7 @@ export default async function RelatorioComprasPage({
     for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
-    const fDrill = { familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
+    const fDrill = { status: statusSel, familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
     for (const p of pares) {
       const rot = p.rotulo === 'Sem classificação' ? SEM : p.rotulo
       if (p.dim === 'familia') fDrill.familias = [rot]
@@ -290,6 +306,7 @@ export default async function RelatorioComprasPage({
   // nunca os carregava, mesmo as rotas de export já sabendo lê-los.
   if (produto) exportParams.set('produto', produto)
   if (sp.local) exportParams.set('local', sp.local)
+  if (sp.status) exportParams.set('status', sp.status)
 
   // Cabeçalho de coluna (th) padrão.
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
@@ -342,6 +359,7 @@ export default async function RelatorioComprasPage({
         />
         <ChipsFiltrosAtivos basePath="/relatorio-compras" campos={campos} persistirEm="/relatorio-compras" />
         <ChipsPeriodo basePath="/relatorio-compras" opcoes={chipsPeriodo} />
+        <ChipsStatus basePath="/relatorio-compras" param="status" opcoes={OPCOES_STATUS} />
       </ListaHeader>
 
       {/* Total do período + abertura */}

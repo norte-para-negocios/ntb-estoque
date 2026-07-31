@@ -154,7 +154,20 @@ const right3 = (s: string | null): string => (s ?? '').replace(/\D/g, '').slice(
 const ilike = (campo: string | null | undefined, termo: string): boolean =>
   (campo ?? '').toLowerCase().includes(termo.toLowerCase())
 
+// Espelha a funcao SQL nf_bate_status (migration 097) -- CONCLUIDA e o
+// padrao (bate com o hardcode anterior de Compras/Auditoria), PENDENTE e
+// CANCELADA se somam exatamente ao TODAS (particao exaustiva, validado
+// contra dado real na migration).
+function itemBateStatus(it: ItemNFFrio, status: string | undefined): boolean {
+  const s = status || 'CONCLUIDA'
+  if (s === 'TODAS') return true
+  if (s === 'CANCELADA') return !!it.nf_cancelada
+  if (s === 'PENDENTE') return it.nf_c_etapa !== '60' && !it.nf_cancelada
+  return it.nf_c_etapa === '60' && !it.nf_cancelada
+}
+
 export type FiltrosComprasFrio = {
+  status: string
   familias: string[]
   tipos: string[]
   fornecedor: string | null
@@ -166,16 +179,16 @@ export type FiltrosComprasFrio = {
 const SEM = '__sem__'
 
 /** Espelha o WHERE das relatorio_compras_* (incl. exclusão de CFOP 910/908, o
- * sentinela '__sem__' = valor nulo (migration 077), e etapa 60 + não cancelada
- * (migration 083)). */
+ * sentinela '__sem__' = valor nulo (migration 077), e o filtro de status
+ * (migration 097, default CONCLUIDA — mesmo comportamento do hardcode
+ * anterior da migration 083)). */
 export function filtrarItensCompras(
   itens: ItemNFFrio[],
   f: FiltrosComprasFrio,
   meta: MetaProdutoNF
 ): ItemNFFrio[] {
   return itens.filter((it) => {
-    if (it.nf_c_etapa !== '60') return false
-    if (it.nf_cancelada) return false
+    if (!itemBateStatus(it, f.status)) return false
     const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
     if (f.familias.length) {
       const fam = m?.familia ?? null
@@ -268,21 +281,21 @@ export function mapearComprasDetalhe(itens: ItemNFFrio[], meta: MetaProdutoNF): 
 }
 
 export type FiltrosAuditoriaFrio = {
+  status: string
   produto: string | null
   familias: string[]
   fornecedor: string | null
   local: number | null
 }
 
-/** Espelha o WHERE das relatorio_auditoria_fiscal_* (etapa 60, não cancelada). */
+/** Espelha o WHERE das relatorio_auditoria_fiscal_* (status via nf_bate_status, migration 097). */
 export function filtrarItensAuditoria(
   itens: ItemNFFrio[],
   f: FiltrosAuditoriaFrio,
   meta: MetaProdutoNF
 ): ItemNFFrio[] {
   return itens.filter((it) => {
-    if (it.nf_c_etapa !== '60') return false
-    if (it.nf_cancelada) return false
+    if (!itemBateStatus(it, f.status)) return false
     if (f.produto && !ilike(it.c_descricao_produto, f.produto) && !ilike(it.c_codigo_produto, f.produto)) return false
     if (f.familias.length) {
       const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined

@@ -154,6 +154,11 @@ export default async function RelatorioIndicadoresPage({
     p_familias: familiasSel.length ? familiasSel : null,
     p_produto: produtoTermo,
     p_local: localCod,
+    // Sem toggle de status nesta tela (pedido do Ramon foi especifico de
+    // Compras/Faturamento/Auditoria, item #6/#28) -- fixo em CONCLUIDA,
+    // mesmo comportamento de sempre (migration 097 so mudou o default de
+    // hardcoded pra parametro, nao muda nada aqui sem passar p_status).
+    p_status: 'CONCLUIDA',
   })
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) {
@@ -194,7 +199,7 @@ export default async function RelatorioIndicadoresPage({
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const filtrados = filtrarItensCompras(itensFrios, {
-      familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: localCod,
+      status: 'CONCLUIDA', familias: familiasSel, tipos: [], fornecedor: null, cfops: [], produto: produtoTermo, local: localCod,
     }, meta)
     for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
       if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue

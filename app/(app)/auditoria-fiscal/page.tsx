@@ -25,7 +25,17 @@ import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { btnClass } from '@/components/ui-kit/Button'
 import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
 import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
+import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import { ShieldCheck, Download } from 'lucide-react'
+
+// Pedido real do Ramon (reuniao 27/07, item #6, adiado pra quando entrasse
+// na parte de NF -- migration 097): mesmo filtro de status de Compras.
+const OPCOES_STATUS = [
+  { value: '', label: 'Concluída' },
+  { value: 'PENDENTE', label: 'Pendente' },
+  { value: 'CANCELADA', label: 'Cancelada' },
+  { value: 'TODAS', label: 'Todas' },
+]
 
 const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
 const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -78,7 +88,7 @@ async function buscarMetaProdutos(
 export default async function AuditoriaFiscalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string; produto?: string; familia?: string; local?: string; drill?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; cfop?: string; fornecedor?: string; produto?: string; familia?: string; local?: string; status?: string; drill?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) notFound()
@@ -89,6 +99,7 @@ export default async function AuditoriaFiscalPage({
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISO.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISO
   const familiasFiltro = valoresMulti(sp.familia)
+  const statusSel = sp.status || 'CONCLUIDA'
 
   const supabase = createServiceClient()
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
@@ -99,7 +110,7 @@ export default async function AuditoriaFiscalPage({
   const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim,
     p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null,
-    p_fornecedor: sp.fornecedor || null, p_local: localCod,
+    p_fornecedor: sp.fornecedor || null, p_local: localCod, p_status: statusSel,
   })
   const linhas = (cfopRaw ?? []) as LinhaCFOP[]
 
@@ -113,7 +124,7 @@ export default async function AuditoriaFiscalPage({
       buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
     ])
     const filtrados = filtrarItensAuditoria(itensFrios, {
-      produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
+      status: statusSel, produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
     }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
@@ -163,6 +174,7 @@ export default async function AuditoriaFiscalPage({
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel || SEM,
         p_fornecedor: sp.fornecedor || null,
         p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null, p_local: localCod,
+        p_status: statusSel,
       })
       .range(0, 299)
     itensSel = (data ?? []) as LinhaItem[]
@@ -175,7 +187,7 @@ export default async function AuditoriaFiscalPage({
         buscarMetaProdutos(supabase, lojaId),
       ])
       const filtrados = filtrarItensAuditoria(itensFrios, {
-        produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
+        status: statusSel, produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
       }, meta)
       const friosDrill = mapearAuditoriaItens(filtrados, { cfopDoc: cfopDocSel, cfopEntrada: cfopEntSel || SEM }) as LinhaItem[]
       itensSel = [...itensSel, ...friosDrill]
@@ -217,6 +229,7 @@ export default async function AuditoriaFiscalPage({
   if (sp.familia) exportParams.set('familia', sp.familia)
   if (sp.fornecedor) exportParams.set('fornecedor', sp.fornecedor)
   if (sp.local) exportParams.set('local', sp.local)
+  if (sp.status) exportParams.set('status', sp.status)
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
 
@@ -246,6 +259,7 @@ export default async function AuditoriaFiscalPage({
         />
         <ChipsFiltrosAtivos basePath="/auditoria-fiscal" campos={campos} persistirEm="/auditoria-fiscal" />
         <ChipsPeriodo basePath="/auditoria-fiscal" opcoes={chipsPeriodo} />
+        <ChipsStatus basePath="/auditoria-fiscal" param="status" opcoes={OPCOES_STATUS} />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">

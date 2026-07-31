@@ -72,6 +72,7 @@ export async function GET(request: Request) {
   const fornecedor = searchParams.get('fornecedor') || null
   const produto = searchParams.get('produto') || null
   const localCod = searchParams.get('local') && !Number.isNaN(Number(searchParams.get('local'))) ? Number(searchParams.get('local')) : null
+  const status = searchParams.get('status') || 'CONCLUIDA'
   const filtros = {
     p_familias: arrOrNull(familias),
     p_tipos: arrOrNull(tipos),
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
     p_cfops: arrOrNull(cfops),
     p_produto: produto,
     p_local: localCod,
+    p_status: status,
   }
 
   const supabase = await createClient()
@@ -101,7 +103,8 @@ export async function GET(request: Request) {
     return raw
   }
 
-  const sub = `${ini} a ${fim}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
+  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
+  const sub = `${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
 
   const abas: AbaPlanilha[] = []
 
@@ -139,7 +142,7 @@ export async function GET(request: Request) {
     const dataFinalFria = fim < corteExcl ? fim : corteExcl
     const itensFrios: ItemNFFrio[] = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria })
     filtrados = filtrarItensCompras(itensFrios, {
-      familias, tipos, fornecedor, cfops, produto, local: localCod,
+      status, familias, tipos, fornecedor, cfops, produto, local: localCod,
     }, meta)
   }
 

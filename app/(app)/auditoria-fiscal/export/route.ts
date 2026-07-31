@@ -21,12 +21,13 @@ export async function GET(request: Request) {
   const familiasFiltro = (searchParams.get('familia') ?? '').split(',').map((v) => v.trim()).filter(Boolean)
   const fornecedor = searchParams.get('fornecedor') || null
   const localCod = searchParams.get('local') && !Number.isNaN(Number(searchParams.get('local'))) ? Number(searchParams.get('local')) : null
+  const status = searchParams.get('status') || 'CONCLUIDA'
 
   const supabase = createServiceClient()
   const corte = limiteJanelaQuente()
   const iniRpc = ini < corte ? corte : ini
   const { data } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
-    p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_produto: produto, p_familias: familiasFiltro.length ? familiasFiltro : null, p_fornecedor: fornecedor, p_local: localCod,
+    p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_produto: produto, p_familias: familiasFiltro.length ? familiasFiltro : null, p_fornecedor: fornecedor, p_local: localCod, p_status: status,
   })
   const linhas = (data ?? []) as LinhaCFOP[]
 
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
-    const filtrados = filtrarItensAuditoria(itensFrios, { produto, familias: familiasFiltro, fornecedor, local: localCod }, meta)
+    const filtrados = filtrarItensAuditoria(itensFrios, { status, produto, familias: familiasFiltro, fornecedor, local: localCod }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
       const k = `${f.cfop_doc}|${f.cfop_entrada ?? ''}`
@@ -110,9 +111,10 @@ export async function GET(request: Request) {
     }
   })
 
+  const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Auditoria fiscal — compras por CFOP',
-    subtitulo: `Período ${ini} a ${fim}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,
+    subtitulo: `Período ${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,
     autoFiltro: true,
   })
   return planilhaResponse('auditoria-fiscal', buffer)
