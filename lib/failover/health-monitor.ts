@@ -55,10 +55,29 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 const INTERVALO_MS = 5000
-const FALHAS_PARA_CAIR = 3
-const SUCESSOS_PARA_VOLTAR = 3
-const TIMEOUT_MS = 5000
+// Achado real em producao (2026-07-31, poucas horas apos o deploy da versao
+// unificada): com so 3 checagens (15s) pra virar, o Supabase real oscilou
+// (provavelmente por lentidao momentanea do PROPRIO servidor Contabo sob
+// carga, nao uma queda real -- confirmado testando direto do meu proprio
+// computador no mesmo instante: sempre 200/200, rapido) e o monitor ficou
+// ligando/desligando os 11 containers repetidas vezes em poucos minutos
+// (visto ao vivo no log: start as 18:33:25, stop as 18:33:41, start de novo
+// as 18:34:48...). Isso classifica como pior que o problema original: gasta
+// CPU restartando Postgres repetidamente, arrisca corromper o standby se
+// matar o container no meio de um boot, e ainda ROTEIA requisicoes reais
+// (login incluso) pro standby just nesses picos, travando por ate 60s
+// esperando um standby que mal comecou a subir. Limiares subidos de 3 pra
+// 12 (60s de falha/sucesso sustentado, nao so um blip) + cooldown de acao
+// abaixo, especificamente pra parar esse tipo de oscilacao rapida.
+const FALHAS_PARA_CAIR = 12
+const SUCESSOS_PARA_VOLTAR = 12
+const TIMEOUT_MS = 8000
 const DOCKER_TIMEOUT_MS = 90_000 // boot completo dos containers mediu ~40-60s
+// Trava dura contra oscilacao: mesmo que o status vire de novo rapido, nao
+// deixa uma segunda acao de docker (start OU stop) disparar antes desse
+// tempo da ultima -- cada start/stop de verdade da stack inteira (Postgres
+// incluso) tem custo e risco real, nao e algo pra repetir a cada minuto.
+const COOLDOWN_ACAO_MS = 3 * 60 * 1000
 
 const CONTAINERS_FAILOVER = [
   'supabase-kong',
@@ -82,6 +101,7 @@ interface FailoverState {
   falhasConsecutivas: number
   sucessosConsecutivos: number
   dockerComandoEmAndamento: boolean // guarda contra start/stop sobrepostos (um docker start pode levar ~1min)
+  ultimaAcaoDockerEm: number | null // timestamp do ultimo start/stop bem-sucedido -- base do cooldown
   emExecucao: boolean // guarda contra tick() sobreposto (TIMEOUT_MS == INTERVALO_MS)
   iniciado: boolean // guarda iniciarMonitorDeSaude() ser chamado 2x antes do setup async terminar
   intervalId: ReturnType<typeof setInterval> | null
@@ -96,6 +116,7 @@ function getState(): FailoverState {
       falhasConsecutivas: 0,
       sucessosConsecutivos: 0,
       dockerComandoEmAndamento: false,
+      ultimaAcaoDockerEm: null,
       emExecucao: false,
       iniciado: false,
       intervalId: null,
@@ -161,6 +182,7 @@ async function ligarStackFailoverSeNecessario() {
   // travar, sobrepondo start/stop de verdade se o `docker inspect` demorasse
   // mais que um tick (5s).
   if (s.dockerComandoEmAndamento) return
+  if (s.ultimaAcaoDockerEm !== null && Date.now() - s.ultimaAcaoDockerEm < COOLDOWN_ACAO_MS) return
   s.dockerComandoEmAndamento = true
   try {
     if (await standbyEstaRodando()) return // ja confirmado rodando, nada a fazer
@@ -168,6 +190,7 @@ async function ligarStackFailoverSeNecessario() {
       timeout: DOCKER_TIMEOUT_MS,
     })
     console.log('[failover] docker start disparado:', (stdout || stderr).trim())
+    s.ultimaAcaoDockerEm = Date.now()
   } catch (e) {
     console.error('[failover] falha ao ligar a stack Docker do standby (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
   } finally {
@@ -178,6 +201,7 @@ async function ligarStackFailoverSeNecessario() {
 async function desligarStackFailoverSeNecessario() {
   const s = getState()
   if (s.dockerComandoEmAndamento) return
+  if (s.ultimaAcaoDockerEm !== null && Date.now() - s.ultimaAcaoDockerEm < COOLDOWN_ACAO_MS) return
   s.dockerComandoEmAndamento = true
   try {
     if (!(await standbyEstaRodando())) return // ja confirmado parado, nada a fazer
@@ -185,6 +209,7 @@ async function desligarStackFailoverSeNecessario() {
       timeout: DOCKER_TIMEOUT_MS,
     })
     console.log('[failover] docker stop disparado:', (stdout || stderr).trim())
+    s.ultimaAcaoDockerEm = Date.now()
   } catch (e) {
     console.error('[failover] falha ao desligar a stack Docker do standby (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
   } finally {
