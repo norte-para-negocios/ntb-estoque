@@ -1,6 +1,15 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 
+// Cache em memoria de curta duracao -- home/PainelGerencial recalculava os
+// mesmos 10 agregados toda vez que a pagina carregava, mesmo em visitas
+// repetidas segundos depois (achado real 2026-07-30, investigando lentidao
+// da home). Valido: o app roda como processo systemd unico (nao serverless,
+// nao multiplas instancias) -- um Map no topo do modulo persiste entre
+// requisicoes com seguranca, sem precisar de Redis/cache externo.
+const CACHE_TTL_MS = 90_000
+const cacheDashboard = new Map<string, { dados: DashboardGerencial; expiraEm: number }>()
+
 export type RankingItem = { label: string; valor: number }
 export type RejeitoCategoria = { categoria: string; valorTotal: number; qtdMovimentos: number; pctDoFaturamento: number | null }
 export type ProdutoParado = { codigoProduto: number; codigo: string; descricao: string; saldo: number; diasSemMovimento: number }
@@ -69,6 +78,10 @@ export async function carregarDashboardGerencial(
   dataFim: string,
   topN: number
 ): Promise<DashboardGerencial> {
+  const chaveCache = JSON.stringify([lojaId, dataIni, dataFim, topN])
+  const emCache = cacheDashboard.get(chaveCache)
+  if (emCache && emCache.expiraEm > Date.now()) return emCache.dados
+
   const supabase = createServiceClient()
   const mesIni = dataIni.slice(0, 7)
   const mesFim = dataFim.slice(0, 7)
@@ -206,7 +219,7 @@ export async function carregarDashboardGerencial(
     else if (tipo === '00') faturamentoRevendaMapa.set(descricao, valor)
   }
 
-  return {
+  const resultado: DashboardGerencial = {
     rejeitos,
     topFaturadosAcabado: topNDoMapa(faturamentoAcabadoMapa, topN),
     topFaturadosRevenda: topNDoMapa(faturamentoRevendaMapa, topN),
@@ -228,4 +241,6 @@ export async function carregarDashboardGerencial(
       },
     ],
   }
+  cacheDashboard.set(chaveCache, { dados: resultado, expiraEm: Date.now() + CACHE_TTL_MS })
+  return resultado
 }
