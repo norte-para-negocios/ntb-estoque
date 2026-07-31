@@ -55,32 +55,20 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 const INTERVALO_MS = 5000
-// Achado real em producao (2026-07-31, poucas horas apos o deploy da versao
-// unificada): com so 3 checagens (15s) pra virar, o Supabase real oscilou
-// (provavelmente por lentidao momentanea do PROPRIO servidor Contabo sob
-// carga, nao uma queda real -- confirmado testando direto do meu proprio
-// computador no mesmo instante: sempre 200/200, rapido) e o monitor ficou
-// ligando/desligando os 11 containers repetidas vezes em poucos minutos
-// (visto ao vivo no log: start as 18:33:25, stop as 18:33:41, start de novo
-// as 18:34:48...). Isso classifica como pior que o problema original: gasta
-// CPU restartando Postgres repetidamente, arrisca corromper o standby se
-// matar o container no meio de um boot, e ainda ROTEIA requisicoes reais
-// (login incluso) pro standby just nesses picos, travando por ate 60s
-// esperando um standby que mal comecou a subir. Limiares subidos de 3 pra
-// 12 (60s de falha/sucesso sustentado, nao so um blip) + cooldown de acao
-// abaixo, especificamente pra parar esse tipo de oscilacao rapida.
-const FALHAS_PARA_CAIR = 12
-const SUCESSOS_PARA_VOLTAR = 12
 const TIMEOUT_MS = 8000
 const DOCKER_TIMEOUT_MS = 90_000 // boot completo dos containers mediu ~40-60s
-// Trava dura contra oscilacao: mesmo que o status vire de novo rapido, nao
-// deixa uma segunda acao de docker (start OU stop) disparar antes desse
-// tempo da ultima -- cada start/stop de verdade da stack inteira (Postgres
-// incluso) tem custo e risco real, nao e algo pra repetir a cada minuto.
-const COOLDOWN_ACAO_MS = 3 * 60 * 1000
 
-// 'supabase-db' NAO esta nesta lista de proposito -- ver
-// garantirBancoStandbySempreLigado() logo abaixo pra explicacao completa.
+// PAUSA PRE-CORTE (2026-07-31): o Contabo virou o banco principal de fato
+// (corte real, ver docs/superpowers/plans/2026-07-31-migracao-contabo-primario.md
+// Task 5). A partir de agora TODOS os containers do stack self-hosted
+// precisam ficar sempre ligados (sao a producao, nao mais um standby de
+// emergencia) -- por isso a lista abaixo nao e mais "liga/desliga sob
+// demanda", e sim so a lista do que garantirStackSempreLigada() confere a
+// cada tick. O desligamento condicional (que existia aqui antes do corte)
+// foi removido -- nao ha mais standby pra desligar quando "tudo normaliza".
+// Este arquivo inteiro sera apagado pela Task 6, dias depois deste corte,
+// quando o Supabase cloud ja estiver confirmado estavel como rede de
+// seguranca (ver docs/superpowers/plans/2026-07-31-migracao-contabo-primario.md).
 const CONTAINERS_FAILOVER = [
   'supabase-kong',
   'supabase-pooler',
@@ -90,10 +78,10 @@ const CONTAINERS_FAILOVER = [
   'supabase-meta',
   'supabase-auth',
   'supabase-rest',
+  'supabase-db',
   'supabase-studio',
   'supabase-imgproxy',
 ]
-const CONTAINER_REPRESENTATIVO = 'supabase-kong' // usado so pra sondar se o RESTO da stack esta de pe (nao o banco, que fica sempre ligado)
 
 type Status = 'up' | 'down'
 
@@ -101,8 +89,7 @@ interface FailoverState {
   status: Status
   falhasConsecutivas: number
   sucessosConsecutivos: number
-  dockerComandoEmAndamento: boolean // guarda contra start/stop sobrepostos (um docker start pode levar ~1min)
-  ultimaAcaoDockerEm: number | null // timestamp do ultimo start/stop bem-sucedido -- base do cooldown
+  dockerComandoEmAndamento: boolean // guarda contra varreduras de garantirStackSempreLigada() sobrepostas
   emExecucao: boolean // guarda contra tick() sobreposto (TIMEOUT_MS == INTERVALO_MS)
   iniciado: boolean // guarda iniciarMonitorDeSaude() ser chamado 2x antes do setup async terminar
   intervalId: ReturnType<typeof setInterval> | null
@@ -117,7 +104,6 @@ function getState(): FailoverState {
       falhasConsecutivas: 0,
       sucessosConsecutivos: 0,
       dockerComandoEmAndamento: false,
-      ultimaAcaoDockerEm: null,
       emExecucao: false,
       iniciado: false,
       intervalId: null,
@@ -156,101 +142,34 @@ async function checarSupabaseReal(): Promise<boolean> {
   return bancoOk && authOk
 }
 
-// true se o container representativo do standby estiver rodando agora --
-// consultado de novo a cada tick relevante (nunca cacheado numa flag), pra
-// nunca depender de uma decisao antiga que pode ter ficado desatualizada.
-async function standbyEstaRodando(): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync(
-      'docker',
-      ['inspect', '-f', '{{.State.Running}}', CONTAINER_REPRESENTATIVO],
-      { timeout: DOCKER_TIMEOUT_MS }
-    )
-    return stdout.trim() === 'true'
-  } catch {
-    return false // container nao existe, docker nao responde, etc -- trata como "nao rodando"
-  }
-}
-
-// Achado real em producao (2026-07-31): o 'supabase-db' fazia parte do
-// grupo CONTAINERS_FAILOVER acima (ligado/desligado junto com o resto da
-// stack, so durante failovers reais). Isso quebra a replicacao logica que
-// alimenta esse banco -- o Postgres real (Supabase cloud) mantem um slot de
-// replicacao que exige um assinante conectado; se o assinante fica
-// desconectado tempo demais (o normal aqui, ja que o container so sobe em
-// emergencia), o WAL retido pro slot passa do limite e o Supabase INVALIDA
-// o slot (wal_status='lost', invalidation_reason='wal_removed') -- nao da
-// pra so reconectar depois, precisa recriar a subscription do zero. Achado
-// via scripts/verificar-completude-contabo.mjs (Task 1 da migracao pra
-// Contabo como principal): 20 das 41 tabelas replicadas estavam
-// divergentes, congeladas num ponto do passado, nao por atraso e sim por
-// isso. Correcao: 'supabase-db' fica de fora do grupo liga/desliga e e
-// mantido sempre rodando por conta propria (funcao abaixo) -- so o banco,
-// nao o resto do stack (Kong/Auth/Storage etc. continuam desligados ate uma
-// queda real), custo extra minimo (um Postgres ocioso).
-async function garantirBancoStandbySempreLigado() {
-  try {
-    const { stdout } = await execFileAsync(
-      'docker',
-      ['inspect', '-f', '{{.State.Running}}', 'supabase-db'],
-      { timeout: DOCKER_TIMEOUT_MS }
-    )
-    if (stdout.trim() === 'true') return
-  } catch {
-    // container nao existe ou docker nao respondeu -- tenta o start mesmo
-    // assim, deixa o proprio start falhar/logar se for o caso real
-  }
-  try {
-    const { stdout, stderr } = await execFileAsync('docker', ['start', 'supabase-db'], {
-      timeout: DOCKER_TIMEOUT_MS,
-    })
-    console.log('[failover] supabase-db (replica sempre ligada) iniciado:', (stdout || stderr).trim())
-  } catch (e) {
-    console.error('[failover] falha ao garantir supabase-db ligado (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
-  }
-}
-
-// So dispara o docker start se o standby REALMENTE nao estiver rodando (nao
-// so "achamos que nao esta"), e nunca sobrepoe outro start/stop em curso.
-async function ligarStackFailoverSeNecessario() {
-  const s = getState()
-  // Trava ANTES de checar a realidade (nao depois) -- achado de revisao
-  // independente (2026-07-31): checar-depois-travar deixava um vao entre o
-  // `await standbyEstaRodando()` e o `s.dockerComandoEmAndamento = true`
-  // onde 2 ticks podiam passar os dois pela checagem antes de qualquer um
-  // travar, sobrepondo start/stop de verdade se o `docker inspect` demorasse
-  // mais que um tick (5s).
-  if (s.dockerComandoEmAndamento) return
-  if (s.ultimaAcaoDockerEm !== null && Date.now() - s.ultimaAcaoDockerEm < COOLDOWN_ACAO_MS) return
-  s.dockerComandoEmAndamento = true
-  try {
-    if (await standbyEstaRodando()) return // ja confirmado rodando, nada a fazer
-    const { stdout, stderr } = await execFileAsync('docker', ['start', ...CONTAINERS_FAILOVER], {
-      timeout: DOCKER_TIMEOUT_MS,
-    })
-    console.log('[failover] docker start disparado:', (stdout || stderr).trim())
-    s.ultimaAcaoDockerEm = Date.now()
-  } catch (e) {
-    console.error('[failover] falha ao ligar a stack Docker do standby (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
-  } finally {
-    s.dockerComandoEmAndamento = false
-  }
-}
-
-async function desligarStackFailoverSeNecessario() {
+// Pos-corte (2026-07-31): garante que TODOS os containers do stack
+// self-hosted fiquem sempre rodando -- sao a producao agora, nao mais um
+// standby liga/desliga sob demanda. Confere um por um (docker inspect),
+// so chama `docker start` no que estiver realmente parado. Nunca cacheia
+// numa flag -- mesma filosofia autocorretiva do design anterior.
+async function garantirStackSempreLigada() {
   const s = getState()
   if (s.dockerComandoEmAndamento) return
-  if (s.ultimaAcaoDockerEm !== null && Date.now() - s.ultimaAcaoDockerEm < COOLDOWN_ACAO_MS) return
   s.dockerComandoEmAndamento = true
   try {
-    if (!(await standbyEstaRodando())) return // ja confirmado parado, nada a fazer
-    const { stdout, stderr } = await execFileAsync('docker', ['stop', ...CONTAINERS_FAILOVER], {
-      timeout: DOCKER_TIMEOUT_MS,
-    })
-    console.log('[failover] docker stop disparado:', (stdout || stderr).trim())
-    s.ultimaAcaoDockerEm = Date.now()
-  } catch (e) {
-    console.error('[failover] falha ao desligar a stack Docker do standby (verifica de novo no proximo tick):', e instanceof Error ? e.message : e)
+    for (const container of CONTAINERS_FAILOVER) {
+      try {
+        const { stdout } = await execFileAsync(
+          'docker',
+          ['inspect', '-f', '{{.State.Running}}', container],
+          { timeout: DOCKER_TIMEOUT_MS }
+        )
+        if (stdout.trim() === 'true') continue
+      } catch {
+        // container nao existe ou docker nao respondeu -- tenta o start mesmo assim
+      }
+      try {
+        await execFileAsync('docker', ['start', container], { timeout: DOCKER_TIMEOUT_MS })
+        console.log('[failover] container da producao estava parado, religado:', container)
+      } catch (e) {
+        console.error('[failover] falha ao religar container da producao (verifica de novo no proximo tick):', container, e instanceof Error ? e.message : e)
+      }
+    }
   } finally {
     s.dockerComandoEmAndamento = false
   }
@@ -261,56 +180,20 @@ async function tick() {
   if (s.emExecucao) return // tick anterior ainda rodando (TIMEOUT_MS == INTERVALO_MS, pode sobrepor)
   s.emExecucao = true
   try {
-    void garantirBancoStandbySempreLigado()
+    void garantirStackSempreLigada()
     const saudavel = await checarSupabaseReal()
-
+    // Status so serve pra log/observabilidade agora -- nenhuma acao de
+    // Docker depende mais dele (ver garantirStackSempreLigada acima).
     if (saudavel) {
       s.falhasConsecutivas = 0
       s.sucessosConsecutivos++
-      if (s.status === 'down' && s.sucessosConsecutivos >= SUCESSOS_PARA_VOLTAR) {
-        s.status = 'up'
-        console.log('[failover] Supabase real recuperado -- voltando a usar como principal')
-      }
-      if (s.status === 'up') {
-        // Autocorretivo: confirma de novo a cada tick que o standby esta
-        // mesmo parado (corrige um `docker stop` anterior que falhou).
-        void desligarStackFailoverSeNecessario()
-      }
     } else {
       s.sucessosConsecutivos = 0
       s.falhasConsecutivas++
-      if (s.status === 'up' && s.falhasConsecutivas >= FALHAS_PARA_CAIR) {
-        s.status = 'down'
-        console.log('[failover] Supabase real inacessivel -- trocando para o stack self-hosted do Contabo')
-      }
-      if (s.status === 'down') {
-        // Autocorretivo: confirma de novo a cada tick que o standby esta
-        // mesmo rodando (corrige um `docker start` anterior que falhou ou
-        // um container que caiu depois de subir).
-        void ligarStackFailoverSeNecessario()
-      }
     }
   } finally {
     s.emExecucao = false
   }
-}
-
-// Roda uma vez no boot, ANTES do primeiro tick do setInterval: pergunta pro
-// Docker (nao assume) se o standby ja esta de pe, e inicializa o status a
-// partir da realidade. Fecha o gap de um restart de processo (deploy
-// manual, crash) acontecer no meio de uma queda real -- sem isso, o status
-// sempre nascia 'up', e o tick() seguinte (que so desliga o standby quando
-// status='up') teria desligado um standby que uma queda real ainda precisa.
-async function sincronizarComRealidade(): Promise<void> {
-  const s = getState()
-  if (await standbyEstaRodando()) {
-    s.status = 'down'
-    console.log('[failover] boot: standby ja estava rodando -- status inicial = down')
-  }
-  // Se nao esta rodando (ou inconclusivo -- Docker pode nao estar pronto
-  // ainda no exato instante do boot), mantem o default 'up'. Nao e um risco
-  // permanente: os ticks seguintes reconferem a realidade a cada 5s de
-  // qualquer forma (mesma logica autocorretiva acima).
 }
 
 export function iniciarMonitorDeSaude() {
@@ -318,7 +201,10 @@ export function iniciarMonitorDeSaude() {
   if (s.iniciado) return // ja iniciado (evita duplicar em hot-reload/re-import ou chamada dupla)
   s.iniciado = true
   void (async () => {
-    await sincronizarComRealidade() // so DEPOIS disso o 1o tick roda, pra nao correr com o boot-sync
+    // Primeiro tick ja chama garantirStackSempreLigada() -- religa qualquer
+    // container que nao esteja de pe no boot, sem precisar de um passo
+    // separado de sincronizacao (o corte tornou isso simples: nao existe
+    // mais "standby vs principal" pra decidir, so "esta tudo ligado?").
     await tick()
     s.intervalId = setInterval(tick, INTERVALO_MS)
   })()
