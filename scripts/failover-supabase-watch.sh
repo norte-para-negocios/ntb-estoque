@@ -12,11 +12,16 @@ COUNT_FILE=/opt/ntb-estoque/.failover-count   # checagens seguidas discordantes 
 LOG=/opt/ntb-estoque/failover-watch.log
 CONTAINERS="supabase-kong supabase-pooler supabase-storage supabase-edge-functions realtime-dev.supabase-realtime supabase-meta supabase-auth supabase-rest supabase-db supabase-studio supabase-imgproxy"
 LIMIAR=3   # 3 checagens seguidas (cron de 5min = 15min) pra trocar de estado -- evita flapping num blip transitorio
+# O gateway Kong deste projeto exige header apikey em /auth/v1/health -- sem
+# ele responde sempre 401 (mesmo saudavel), o que faria o script achar que o
+# Supabase esta sempre fora do ar. Le a anon key do .env.local, mesmo padrao
+# de scripts/sync-cron.sh pro CRON_SECRET.
+ANON_KEY=$(grep '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' /opt/ntb-estoque/.env.local | head -1 | cut -d'=' -f2- | tr -d '"')
 
 estado=$(cat "$STATE_FILE" 2>/dev/null || echo "up")
 contagem=$(cat "$COUNT_FILE" 2>/dev/null || echo "0")
 
-codigo=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$SUPABASE_URL/auth/v1/health" || echo "000")
+codigo=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -H "apikey: $ANON_KEY" "$SUPABASE_URL/auth/v1/health" || echo "000")
 saudavel="nao"
 [ "$codigo" = "200" ] && saudavel="sim"
 
