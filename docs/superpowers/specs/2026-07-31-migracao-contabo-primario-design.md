@@ -184,3 +184,17 @@ primeiras horas/dias de uso real, com rollback pronto).
   o caso).
 - Calibração exata dos comandos/scripts do roteiro de corte — fica para o
   plano de implementação.
+
+## Achado colateral (fora do escopo do banco, registrado pra não se perder)
+
+Durante a checagem de completude ("tudo, incluindo logins") apareceu um
+sistema Laravel legado (`estoque.norteparanegocios.com.br`, banco MariaDB
+próprio, nada a ver com Supabase/Postgres) que deveria estar desativado mas
+ainda recebia escrita real — o Omie provavelmente ainda tinha a URL antiga
+cadastrada como destino de webhook, ao lado da URL do app novo. Os workers
+de fila e o processo Reverb desse sistema foram parados via
+`supervisorctl` em 2026-07-31 (reversível, não desinstalado). Limpeza do
+cadastro de webhook no portal do Omie (não tem API pra isso, é manual, por
+loja) delegada ao Ramon. Não afeta esta migração — só registrado aqui para
+o próximo que mexer no servidor não se confundir com o motivo do sistema
+antigo estar mudo.
