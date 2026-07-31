@@ -55,15 +55,16 @@ const CHIPS_PERIODO = [
   { value: 'ano_passado', label: 'Ano passado' },
 ] as const
 
-// A ntb-frio-api limita /fat_cupons a 5000 linhas (LIMIT fixo no servidor,
-// fora deste repo -- ver AGENTS.md) sem devolver erro nem suportar paginação
-// (parâmetro `offset` é ignorado, confirmado testando direto na API).
-// Achado real: período "Todos" numa loja de movimento alto (loja 5, ~14 mil
-// cupons num intervalo de 6 meses) cortava silenciosamente os cupons mais
-// antigos da lista em "Ver cupons", sem qualquer aviso. Não dá pra corrigir
-// aqui (o corte é no servidor da API fria); o mínimo é avisar em vez de
-// deixar parecer lista completa.
-const LIMITE_FAT_CUPONS = 5000
+// Comentário anterior (removido 2026-07-31) dizia que a ntb-frio-api não
+// suportava paginação em /fat_cupons e cortava em silêncio acima de 5000 --
+// isso já foi corrigido (buscarFatCupons/buscarFrioTudo paginam por completo
+// via `offset`, confirmado ao vivo: loja 3 devolveu as 13.758 linhas reais
+// de um ano inteiro, não só 5000). O problema real hoje é outro, na
+// RENDERIZAÇÃO: uma tabela HTML sem paginação/virtualização travava o
+// navegador tentando montar milhares de `<tr>` de uma vez (achado real
+// 2026-07-31, testando o filtro de status do item #28). LIMITE_LINHAS_CUPONS
+// corta só a EXIBIÇÃO (mais recentes primeiro) -- a busca continua completa.
+const LIMITE_LINHAS_CUPONS = 1000
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => {
   const [a, m] = ym.split('-')
@@ -204,7 +205,21 @@ export default async function RelatorioFaturamentoPage({
       ? buscarFatCupons({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato })
       : Promise.resolve([]),
   ])
-  const cuponsFato = verCupons ? cuponsFatoTodos.filter((c) => cupomBateStatus(c, statusCupomSel)) : cuponsFatoTodos
+  const cuponsFatoFiltrados = verCupons ? cuponsFatoTodos.filter((c) => cupomBateStatus(c, statusCupomSel)) : cuponsFatoTodos
+  // Achado real (2026-07-31, testando o filtro de status): a tabela de "Ver
+  // cupons" renderizava TODA a lista sem limite -- um período de 1 ano (13
+  // mil+ cupons) travava o navegador ao montar a tabela (sem virtualização).
+  // O aviso de "Lista incompleta" que já existia aqui embaixo era sobre a
+  // BUSCA (um teto de paginação antigo, já resolvido -- buscarFrioTudo pagina
+  // até esgotar) e não impedia isso -- o problema sempre foi na
+  // RENDERIZAÇÃO, não na busca. Corta na exibição, mais recentes primeiro,
+  // mesmo padrão já usado em Auditoria Fiscal (300) e no
+  // detalhe de Compras (500).
+  const cuponsFato = verCupons
+    ? [...cuponsFatoFiltrados]
+        .sort((a, b) => `${b.data}${b.hora ?? ''}`.localeCompare(`${a.data}${a.hora ?? ''}`))
+        .slice(0, LIMITE_LINHAS_CUPONS)
+    : cuponsFatoFiltrados
 
   const supabase = createServiceClient()
   const [matrizCrua, { data: metaRow }, opcoesRaw] = await Promise.all([
@@ -472,13 +487,13 @@ export default async function RelatorioFaturamentoPage({
               />
             ) : (
               <>
-              {cuponsFatoTodos.length >= LIMITE_FAT_CUPONS && (
+              {cuponsFatoFiltrados.length > LIMITE_LINHAS_CUPONS && (
                 <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                   <span>
-                    <strong className="text-warn">Lista incompleta</strong> — o período tem mais de{' '}
-                    {LIMITE_FAT_CUPONS.toLocaleString('pt-BR')} cupons, o limite por consulta. Estão faltando os
-                    cupons mais antigos do período. Reduza o intervalo de datas pra ver todos.
+                    <strong className="text-warn">Mostrando os {LIMITE_LINHAS_CUPONS.toLocaleString('pt-BR')} mais recentes</strong>{' '}
+                    de {cuponsFatoFiltrados.length.toLocaleString('pt-BR')} cupons neste período/situação. Reduza o
+                    intervalo de datas ou ajuste o filtro de situação pra ver os demais.
                   </span>
                 </div>
               )}
