@@ -126,25 +126,23 @@ export default async function HomePage() {
   const qtdRepor = codigosRepor.length
   const maxDate = (maxPosRes.data as { data_posicao: string } | null)?.data_posicao ?? null
 
-  // Card "Ordens de producao" (ops.count, ja calculado no Promise.all acima) nao
-  // tem filtro de data (conta todas as recentes, pos-poda). Completa com a parte
-  // antiga do Contabo via contagem real (count=true, sem LIMIT) pra nao truncar
-  // o numero -- disjunta do que o Supabase ja tem, sem duplicar.
-  const opsAntigasCount = await contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() })
-  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
-
-  // Estoque JA vencido (validade < hoje, ainda com saldo) -- mesma logica da tela
-  // /validade ("Vencidos"), so que aqui e so a contagem pro alerta. Sem limite
-  // inferior de data, entao busca as linhas (nao head:true) e mescla com o Contabo
-  // por id pra nao contar em dobro o que ainda esta nos dois lugares antes da poda.
+  // Paraleliza contarOrdensProducaoAntigas com a query de vencidas -- as
+  // duas nao dependem uma da outra (so complementarOrdensProducao depende
+  // do resultado de vencidasQuentesRaw). Achado real (2026-07-30): rodavam
+  // em sequencia sem necessidade, cada uma custando uma rodada inteira de
+  // rede ate Supabase/Contabo.
   const SALDO_OR = 'quantidade.gt.0,and(quantidade.is.null,identificacao_n_qtde.gt.0)'
-  const { data: vencidasQuentesRaw } = await supabase
-    .from('ordens_producao')
-    .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
-    .eq('loja_id', lojaId)
-    .not('validade', 'is', null)
-    .or(SALDO_OR)
-    .lt('validade', hojeLocal)
+  const [opsAntigasCount, { data: vencidasQuentesRaw }] = await Promise.all([
+    contarOrdensProducaoAntigas({ lojaId, dataFinal: limiteJanelaQuente() }),
+    supabase
+      .from('ordens_producao')
+      .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, quantidade, identificacao_n_qtde')
+      .eq('loja_id', lojaId)
+      .not('validade', 'is', null)
+      .or(SALDO_OR)
+      .lt('validade', hojeLocal),
+  ])
+  const opsTotalCount = (ops.count ?? 0) + opsAntigasCount
   const vencidasCompletas = await complementarOrdensProducao(vencidasQuentesRaw ?? [], {
     lojaId,
     validadeInicio: '0001-01-01',
