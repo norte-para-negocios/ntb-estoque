@@ -29,6 +29,10 @@ const standby = new pg.Client({
 async function main() {
   await cloud.connect()
   await standby.connect()
+  // Tabelas grandes (ordens_producao, movimentos) estouram o statement_timeout
+  // default do projeto free tier num count(*) simples -- ja documentado em
+  // AGENTS.md como padrao recorrente. So pra esta verificacao, nao pro app.
+  await cloud.query("SET statement_timeout = '120000'")
 
   const { rows: tabelas } = await cloud.query(`
     select tablename from pg_publication_tables
