@@ -7,6 +7,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { FileText, Download } from 'lucide-react'
 import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 import { statusNF } from '@/lib/nf-status'
+import { DetalhesFiscaisNF } from '@/components/nota-fiscal/DetalhesFiscaisNF'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -112,6 +113,7 @@ export default async function NotaFiscalItensPage({
           </div>
         }
       />
+      <DetalhesFiscaisNF fullObject={nf.full_object} />
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} />
     </div>
   )
