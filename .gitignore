@@ -54,3 +54,4 @@ scripts/.ajustes-checkpoint-*.json
 .env*
 
 .worktrees/
+.superpowers/
