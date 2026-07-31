@@ -86,6 +86,27 @@ no cliente falha silenciosamente (string `"123"` ≠ number `123`) e datas quebr
 na formatação. Se algum endpoint novo for adicionado à API, checar se ele também
 precisa dessa normalização.
 
+### Backup noturno do Postgres do Contabo (`ntb-backup-postgres`)
+
+Script versionado em `scripts/backup-postgres-contabo.sh` (também existe uma
+cópia idêntica em `/opt/ntb-estoque/scripts/` no servidor — copiar de novo com
+`scp` sempre que o script mudar aqui). `pg_dump` via `docker exec` no container
+`supabase-db` (schemas `public`/`auth`/`storage`), gzip, retenção de 14 dias em
+`/root/backups-ntb-estoque/`.
+
+Agendado por systemd timer, **não** crontab — o `cron` deste servidor (Ubuntu
+24.04, pacote `cron` 3.0pl1-184ubuntu2) ignora `CRON_TZ` silenciosamente
+(confirmado ao vivo e na doc do pacote), então um `0 3 * * *` normal dispara no
+fuso do servidor (Europe/Berlin), não em Brasília. As units, fora deste repo
+git (só no servidor, mesmo padrão do `ntb-frio-api` acima):
+`/etc/systemd/system/ntb-backup-postgres.service` e
+`/etc/systemd/system/ntb-backup-postgres.timer`. O timer usa
+`OnCalendar=*-*-* 03:00:00 America/Sao_Paulo` — o fuso vai dentro da própria
+expressão de calendário (gramática do `systemd.time(7)`), **não** a chave
+`TimeZone=` em `[Timer]`, que não existe nesta versão do systemd (255;
+`systemd-analyze verify` acusa "Unknown key name"). Conferir agendamento com
+`systemctl list-timers ntb-backup-postgres.timer`.
+
 ## Reunião com o Ramon de 2026-07-14 (transcrita via `/etl-audio`) e priorização pós-reunião
 
 Reunião de ~55min testando ao vivo o app com o Ramon (opera o sistema nas

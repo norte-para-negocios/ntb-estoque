@@ -4,6 +4,16 @@
 # /opt/ntb-estoque-standby/), com retencao de 14 dias. Necessario a
 # partir da virada pra Contabo como principal -- o Supabase cloud cobria
 # esse papel antes, sem custo pra nos gerenciar.
+#
+# Agendamento: systemd timer no servidor (NAO crontab -- o cron do Ubuntu
+# 24.04 aqui ignora CRON_TZ silenciosamente, testado ao vivo e confirmado
+# na doc do proprio pacote). Units ficam so no servidor, fora deste repo
+# git (mesmo padrao do systemd service ntb-frio-api, ver AGENTS.md):
+#   /etc/systemd/system/ntb-backup-postgres.service
+#   /etc/systemd/system/ntb-backup-postgres.timer
+# O timer usa OnCalendar=*-*-* 03:00:00 America/Sao_Paulo (fuso dentro da
+# propria expressao de calendario, gramatica do systemd.time(7) -- NAO a
+# chave TimeZone= em [Timer], que nao existe nesta versao do systemd/255).
 set -euo pipefail
 
 DEST_DIR="/root/backups-ntb-estoque"
