@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { buscarFatAgregado } from '@/lib/faturamento-frio'
 
 // Cache em memoria de curta duracao -- home/PainelGerencial recalculava os
 // mesmos 10 agregados toda vez que a pagina carregava, mesmo em visitas
@@ -22,6 +23,8 @@ export type DashboardGerencial = {
   maiorFornecedor: RankingItem | null
   produtosParados: ProdutoParado[]
   ratioCompraFaturamento: RatioCategoria[]
+  bottomFaturados: RankingItem[]
+  topPorQuantidade: RankingItem[]
 }
 
 type MatrizRow = { rotulo: string; mes: string; valor: number }
@@ -43,6 +46,14 @@ function topNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
   return Array.from(mapa.entries())
     .map(([label, valor]) => ({ label, valor }))
     .sort((a, b) => b.valor - a.valor)
+    .slice(0, n)
+}
+
+function bottomNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
+  return Array.from(mapa.entries())
+    .filter(([, valor]) => valor > 0) // exclui produto sem venda no periodo, nao e "pior desempenho"
+    .map(([label, valor]) => ({ label, valor }))
+    .sort((a, b) => a.valor - b.valor)
     .slice(0, n)
 }
 
@@ -123,6 +134,7 @@ export async function carregarDashboardGerencial(
     comprasMateriaPrima,
     comprasRevenda,
     tipoPorDescricao,
+    qtdePorProdutoRows,
   ] = await Promise.all([
     rpcTodos<{ categoria: string; valor_total: number | null; qtd_movimentos: number }>(supabase, 'relatorio_rejeitos_por_tipo', {
       p_loja_id: lojaId,
@@ -198,7 +210,23 @@ export async function carregarDashboardGerencial(
       p_local: null,
     }),
     buscarTipoPorDescricao(supabase, lojaId),
+    // Bottom-10/top-por-quantidade (auditoria FAT_SVVM_2026.xlsx): quantidade
+    // por produto só existe no fato do Contabo (faturamento_importado é só
+    // valor, sem qtde_itens) -- mesmo fato usado pela aba "Forma de pgto"/
+    // "Ver cupons" de relatorio-faturamento, aqui agregado direto por produto.
+    buscarFatAgregado({ lojaId, dataInicio: dataIni, dataFinal: dataFim, group: 'produto' }),
   ])
+
+  // Quantidade por produto vem do fato do Contabo com o código numérico cru
+  // (sem duplicar a tabela produtos lá) -- resolve pro nome de exibição com
+  // o mesmo helper (buscarNomePorCodigo) já usado por faturamento-descontos.
+  const nomePorCodigo = await buscarNomePorCodigo(supabase, lojaId)
+  const qtdePorProdutoMapa = new Map<string, number>()
+  for (const r of qtdePorProdutoRows) {
+    const cod = Number(r.rotulo)
+    const nome = nomePorCodigo.get(cod) ?? `Produto ${cod}`
+    qtdePorProdutoMapa.set(nome, (qtdePorProdutoMapa.get(nome) ?? 0) + r.qtde_itens)
+  }
 
   const faturamentoAcabado = faturamentoAcabadoRows.reduce((s, r) => s + Number(r.valor), 0)
   const faturamentoRevenda = faturamentoRevendaRows.reduce((s, r) => s + Number(r.valor), 0)
@@ -252,6 +280,8 @@ export async function carregarDashboardGerencial(
     topComprados: topNDoMapa(somarPorRotulo(comprasPorProduto), topN),
     maiorFornecedor: fornecedorTop[0] ?? null,
     produtosParados,
+    bottomFaturados: bottomNDoMapa(faturamentoPorProdutoMapa, topN),
+    topPorQuantidade: topNDoMapa(qtdePorProdutoMapa, topN),
     ratioCompraFaturamento: [
       {
         categoria: 'Produto acabado (vs. compra de matéria-prima)',

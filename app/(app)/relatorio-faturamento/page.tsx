@@ -20,6 +20,7 @@ import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { buscarFatAgregado, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { calcularDescontoPorProduto, calcularDescontoPorFormaPgto, type DescontoRanking } from '@/lib/faturamento-descontos'
 
 // Pedido real do Ramon (reuniao 27/07, item #28): filtro de status tambem
 // em Faturamento -- mas aqui o "status" e do CUPOM (cancelado/devolvido/
@@ -220,6 +221,18 @@ export default async function RelatorioFaturamentoPage({
         .sort((a, b) => `${b.data}${b.hora ?? ''}`.localeCompare(`${a.data}${a.hora ?? ''}`))
         .slice(0, LIMITE_LINHAS_CUPONS)
     : cuponsFatoFiltrados
+
+  // Aba "Descontos" (auditoria FAT_SVVM_2026.xlsx): igual usarFato/verCupons acima, só dispara a
+  // agregação (cara -- itens + pagamentos do fato inteiro do período) quando o
+  // usuário está de fato nessa aba, reaproveitando dataInicioFato/dataFinalFato
+  // já calculados pro modo "Ver cupons".
+  const verDescontos = sp.ver === 'descontos'
+  const [descontoPorProduto, descontoPorForma]: [DescontoRanking[], DescontoRanking[]] = verDescontos
+    ? await Promise.all([
+        calcularDescontoPorProduto({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato, topN: 10 }),
+        calcularDescontoPorFormaPgto({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato }),
+      ])
+    : [[], []]
 
   const supabase = createServiceClient()
   const [matrizCrua, { data: metaRow }, opcoesRaw] = await Promise.all([
@@ -474,9 +487,43 @@ export default async function RelatorioFaturamentoPage({
             <Link href={verCupons ? '/relatorio-faturamento' : '?ver=cupons'} className={verCupons ? chipAtivo : chipInativo}>
               {verCupons ? 'Ver resumo' : 'Ver cupons'}
             </Link>
+            <Link href={verDescontos ? '/relatorio-faturamento' : '?ver=descontos'} className={verDescontos ? chipAtivo : chipInativo}>
+              Descontos
+            </Link>
           </div>
 
-          {verCupons ? (
+          {verDescontos ? (
+            !descontoPorProduto.length && !descontoPorForma.length ? (
+              <EmptyState
+                icon={DollarSign}
+                title="Sem descontos no período"
+                hint="Tente ampliar o período."
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                  <table className="w-full border-collapse text-sm">
+                    <thead><tr className="bg-surface-2"><th className={`text-left ${th}`}>Produto</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
+                    <tbody>
+                      {descontoPorProduto.map((d) => (
+                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                  <table className="w-full border-collapse text-sm">
+                    <thead><tr className="bg-surface-2"><th className={`text-left ${th}`}>Forma de pagamento</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
+                    <tbody>
+                      {descontoPorForma.map((d) => (
+                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          ) : verCupons ? (
             <>
               <ChipsStatus basePath="/relatorio-faturamento" param="status" opcoes={OPCOES_STATUS_CUPOM} />
               {!cuponsFato.length ? (

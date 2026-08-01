@@ -91,6 +91,9 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosAcabado }} />
           )}
+          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[12px] text-brand hover:underline">
+            ver evolução mensal →
+          </Link>
         </div>
         <div>
           <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados (revenda)</h3>
@@ -99,6 +102,9 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosRevenda }} />
           )}
+          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[12px] text-brand hover:underline">
+            ver evolução mensal →
+          </Link>
         </div>
         <div className="lg:col-span-2">
           <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais comprados</h3>
@@ -111,6 +117,33 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
             <p className="mt-2 text-[12px] text-text-muted">
               Maior fornecedor: <span className="font-medium text-text">{d.maiorFornecedor.label}</span> ({fmtMoeda(d.maiorFornecedor.valor)})
             </p>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom-10 faturados / top por quantidade -- auditoria FAT_SVVM_2026.xlsx
+          (planilha de referencia da consultoria financeira do cliente): a
+          consultoria acompanha tanto os produtos com faturamento mais fraco
+          (candidatos a descontinuar) quanto os mais vendidos em QUANTIDADE
+          (nao em R$ -- um combo barato pode liderar em volume sem aparecer
+          no top faturados acima). unidade 'num' formata como numero puro,
+          mesmo padrao ja usado em graficos de quantidade/producao/movimento
+          (lib/resumo-dia.ts) -- 'reais' aqui daria simbolo de moeda errado. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">10 menos faturados</h3>
+          {d.bottomFaturados.length === 0 ? (
+            <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
+          ) : (
+            <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.bottomFaturados }} />
+          )}
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais vendidos (quantidade)</h3>
+          {d.topPorQuantidade.length === 0 ? (
+            <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
+          ) : (
+            <ResumoGrafico grafico={{ titulo: '', unidade: 'num', itens: d.topPorQuantidade }} />
           )}
         </div>
       </div>
