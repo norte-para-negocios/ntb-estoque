@@ -43,6 +43,12 @@ const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', c
 const fmtN = (n: number) => n.toLocaleString('pt-BR')
 
 type LinhaCFOP = { cfop_doc: string; cfop_entrada: string; itens: number; valor: number; credita_icms: number; move_estoque: number }
+type LinhaCST = {
+  cst_doc: string; cst_entrada: string; cfop_entrada: string
+  itens_com_credito: number; valor_com_credito: number
+  itens_sem_credito: number; valor_sem_credito: number
+  itens: number; valor: number
+}
 type LinhaItem = {
   data: string; nota: string; fornecedor: string; produto: string; codigo: string
   cfop_doc: string; cfop_entrada: string; cst_icms: string; origem: string
@@ -144,6 +150,19 @@ export default async function AuditoriaFiscalPage({
     }
     linhas.sort((a, b) => Number(b.valor) - Number(a.valor))
   }
+
+  // Cruzamento CST do documento x CST de entrada x CFOP (migration 102, achado
+  // 2026-08-01) -- a tela nunca expunha o CST DE ENTRADA, que e onde mora a
+  // decisao de creditar ou nao o ICMS. Diagnostico, nao veredito: mostra os dois
+  // lados (com/sem credito) pra o contador comparar. Le direto o periodo pedido
+  // (o banco tem historico completo desde jun/2025, nao precisa do merge
+  // quente/frio que a matriz de CFOP acima ainda faz).
+  const { data: cstRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cst', {
+    p_loja_id: lojaId, p_ini: ini, p_fim: fim,
+  })
+  const linhasCst = (cstRaw ?? []) as LinhaCST[]
+  const cstDivergentes = linhasCst.filter((l) => Number(l.itens_com_credito) > 0 && Number(l.itens_sem_credito) > 0)
+  const valorDivergente = cstDivergentes.reduce((s, l) => s + Number(l.valor), 0)
 
   const totItens = linhas.reduce((s, l) => s + Number(l.itens), 0)
   const totValor = linhas.reduce((s, l) => s + Number(l.valor), 0)
@@ -402,6 +421,68 @@ export default async function AuditoriaFiscalPage({
             CFOP de entrada é como a NTB classificou cada compra no Omie. &quot;Uso/consumo&quot; não credita ICMS nem entra no estoque
             de revenda. &quot;Credita ICMS&quot; e &quot;Não estoca&quot; destacam as exceções para revisão com o contador.
           </p>
+
+          {/* CST do documento x CST de entrada x CFOP (migration 102) */}
+          {linhasCst.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="px-1 text-[13px] font-semibold text-text">CST do documento × CST de entrada</h2>
+                {cstDivergentes.length > 0 && (
+                  <span className="rounded-md border border-warn/40 bg-warn/10 px-2.5 py-1 text-[12px] text-text-muted">
+                    <strong className="text-warn">{fmtN(cstDivergentes.length)}</strong> combinaç{cstDivergentes.length === 1 ? 'ão' : 'ões'} com
+                    tratamento divergente · <span className="num">{fmtMoeda(valorDivergente)}</span>
+                  </span>
+                )}
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                <table className="w-full min-w-[720px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-surface-2">
+                      <th className={`text-center ${th}`}>CST doc</th>
+                      <th className={`text-center ${th}`}>CST entrada</th>
+                      <th className={`text-left ${th}`}>CFOP entrada</th>
+                      <th className={`text-right ${th}`}>Com crédito</th>
+                      <th className={`text-right ${th}`}>Sem crédito</th>
+                      <th className={`text-right ${th}`}>Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhasCst.map((l) => {
+                      const divergente = Number(l.itens_com_credito) > 0 && Number(l.itens_sem_credito) > 0
+                      return (
+                        <tr
+                          key={`${l.cst_doc}|${l.cst_entrada}|${l.cfop_entrada}`}
+                          className={`border-t border-border/60 hover:bg-surface-2/40 ${divergente ? 'bg-warn/5' : ''}`}
+                        >
+                          <td className="num px-3 py-2 text-center text-text">{l.cst_doc}</td>
+                          <td className="num px-3 py-2 text-center text-text">{l.cst_entrada}</td>
+                          <td className="px-3 py-2 text-text-muted">
+                            <span className="num">{l.cfop_entrada}</span>
+                            {l.cfop_entrada !== '—' && (
+                              <span className="ml-1.5 text-[12px]">{descreverCFOP(l.cfop_entrada).desc}</span>
+                            )}
+                          </td>
+                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${Number(l.itens_com_credito) ? 'text-info' : 'text-text-muted'}`}>
+                            {Number(l.itens_com_credito) ? fmtN(Number(l.itens_com_credito)) : '—'}
+                          </td>
+                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${divergente ? 'font-medium text-warn' : 'text-text-muted'}`}>
+                            {Number(l.itens_sem_credito) ? fmtN(Number(l.itens_sem_credito)) : '—'}
+                          </td>
+                          <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(Number(l.valor))}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="px-1 text-[11px] text-text-muted">
+                CST de entrada é como a compra foi classificada no Omie ao dar entrada — é aí que se decide aproveitar ou não o
+                crédito de ICMS. As linhas destacadas têm o <strong>mesmo</strong> CST de origem e CFOP tratados das{' '}
+                <strong>duas</strong> formas no período: isso é uma divergência objetiva da base, não um veredito de erro —
+                qual lado está correto é avaliação do contador.
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>
