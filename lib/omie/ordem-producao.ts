@@ -282,16 +282,24 @@ export function pareceOPNaoExiste(msg: string): boolean {
 }
 
 /**
- * Reconcilia OPs ABERTAS e ATRASADAS (previsao no passado, nunca concluidas) que
- * podem ter sido excluidas direto no Omie sem isso refletir aqui -- achado real
- * em 2026-07-10: um lote de 44 OPs (loja 6, mesmo created_at) ficou "fantasma"
- * apos alguem recriar as mesmas OPs manualmente no Omie; o sync normal
- * (syncOrdensProducao/ListarOrdemProducao, filtrado por data de CONCLUSAO) nunca
- * pega esse caso porque uma OP aberta nao tem dConclusao. Verifica cada uma via
- * ConsultarOrdemProducao (a UNICA forma confiavel de saber se ainda existe) e
- * apaga localmente as que o Omie confirma nao existirem mais. `limite` limita
- * quantas verificar nesta chamada (respeita rate limit do Omie, roda aos poucos
- * via cron em vez de vasculhar tudo de uma vez).
+ * Reconcilia OPs ABERTAS (nunca concluidas) que podem ter sido excluidas direto
+ * no Omie sem isso refletir aqui -- achado real em 2026-07-10: um lote de 44 OPs
+ * (loja 6, mesmo created_at) ficou "fantasma" apos alguem recriar as mesmas OPs
+ * manualmente no Omie; o sync normal (syncOrdensProducao/ListarOrdemProducao,
+ * filtrado por data de CONCLUSAO) nunca pega esse caso porque uma OP aberta nao
+ * tem dConclusao. Verifica cada uma via ConsultarOrdemProducao (a UNICA forma
+ * confiavel de saber se ainda existe) e apaga localmente as que o Omie confirma
+ * nao existirem mais.
+ *
+ * Duas fatias por chamada, `limite` cada (respeita rate limit do Omie, roda aos
+ * poucos via cron em vez de vasculhar tudo de uma vez):
+ * - "recentes" (created_at desc, sem filtro de atraso): achado real 2026-08-01 --
+ *   o usuario testa excluindo OPs recem-criadas direto no Omie e elas ficavam
+ *   fantasma indefinidamente, porque a fatia antiga (so `diasAtraso` dias no
+ *   passado) nunca as alcancava.
+ * - "atrasadas" (previsao no passado, mais antigas primeiro): comportamento
+ *   original, mantido pra continuar varrendo o backlog historico.
+ * Um id que caia nas duas fatias so e verificado uma vez.
  */
 export async function reconciliarOPsFantasmas(
   loja: LojaOmie,
@@ -300,8 +308,27 @@ export async function reconciliarOPsFantasmas(
 ): Promise<{ verificadas: number; excluidas: number; erros: number }> {
   const supabase = createServiceClient()
   const limiteData = new Date(Date.now() - diasAtraso * 86400000).toISOString().slice(0, 10)
+  const metade = Math.ceil(limite / 2)
 
-  const { data: candidatas, error: candidatasError } = await supabase
+  const { data: recentes, error: recentesError } = await supabase
+    .from('ordens_producao')
+    .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao')
+    .eq('loja_id', loja.id)
+    .eq('concluida', false)
+    .not('identificacao_n_cod_op', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(metade)
+  // Achado real (2026-07-30): rodando as 6 lojas concorrentes (Promise.allSettled
+  // na rota), essa query as vezes da "statement timeout" no Supabase. Sem checar
+  // o erro aqui, `candidatas` virava null e `candidatas ?? []` mascarava isso como
+  // "0 candidatas, nada pra fazer" -- um falso negativo silencioso bem perigoso
+  // pra um job cujo unico proposito e achar OPs que sumiram. Agora propaga o erro
+  // pra aparecer como `erros` no resumo em vez de sumir.
+  if (recentesError) {
+    throw new Error(`reconciliarOPsFantasmas: falha ao buscar recentes (loja ${loja.id}): ${recentesError.message}`)
+  }
+
+  const { data: atrasadas, error: atrasadasError } = await supabase
     .from('ordens_producao')
     .select('id, identificacao_n_cod_op, identificacao_d_dt_previsao')
     .eq('loja_id', loja.id)
@@ -309,20 +336,21 @@ export async function reconciliarOPsFantasmas(
     .lt('identificacao_d_dt_previsao', limiteData)
     .not('identificacao_n_cod_op', 'is', null)
     .order('identificacao_d_dt_previsao', { ascending: true })
-    .limit(limite)
-  // Achado real (2026-07-30): rodando as 6 lojas concorrentes (Promise.allSettled
-  // na rota), essa query as vezes da "statement timeout" no Supabase. Sem checar
-  // o erro aqui, `candidatas` virava null e `candidatas ?? []` mascarava isso como
-  // "0 candidatas, nada pra fazer" -- um falso negativo silencioso bem perigoso
-  // pra um job cujo unico proposito e achar OPs que sumiram. Agora propaga o erro
-  // pra aparecer como `erros` no resumo em vez de sumir.
-  if (candidatasError) {
-    throw new Error(`reconciliarOPsFantasmas: falha ao buscar candidatas (loja ${loja.id}): ${candidatasError.message}`)
+    .limit(metade)
+  if (atrasadasError) {
+    throw new Error(`reconciliarOPsFantasmas: falha ao buscar atrasadas (loja ${loja.id}): ${atrasadasError.message}`)
   }
+
+  const vistas = new Set<number>()
+  const candidatas = [...(recentes ?? []), ...(atrasadas ?? [])].filter((op) => {
+    if (vistas.has(op.id)) return false
+    vistas.add(op.id)
+    return true
+  }) as { id: number; identificacao_n_cod_op: number }[]
 
   let excluidas = 0
   let erros = 0
-  for (const op of (candidatas ?? []) as { id: number; identificacao_n_cod_op: number }[]) {
+  for (const op of candidatas) {
     try {
       await fetchOrdemProducao(loja, op.identificacao_n_cod_op)
     } catch (e) {
@@ -337,7 +365,7 @@ export async function reconciliarOPsFantasmas(
     await sleep(400)
   }
 
-  return { verificadas: candidatas?.length ?? 0, excluidas, erros }
+  return { verificadas: candidatas.length, excluidas, erros }
 }
 
 /**
