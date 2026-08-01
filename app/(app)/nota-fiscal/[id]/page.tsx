@@ -18,6 +18,13 @@ export default async function NotaFiscalItensPage({
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) notFound()
 
+  // Permissoes de acao por botao (mesmo padrao de ordem-producao/page.tsx) --
+  // as 3 Server Actions chamam a API real da Omie, entao precisam de
+  // permissao propria, separada da de so acessar/ver a tela.
+  const podeManifestar = await requirePermissao(lojaId, 'Notas Fiscais - Manifestar')
+  const podeReverter = await requirePermissao(lojaId, 'Notas Fiscais - Reverter')
+  const podeExcluir = await requirePermissao(lojaId, 'Notas Fiscais - Excluir')
+
   const { id } = await params
   const supabase = await createClient()
 
@@ -26,6 +33,7 @@ export default async function NotaFiscalItensPage({
     .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb, full_object')
     .eq('id', id)
     .eq('loja_id', lojaId)
+    .is('deleted_at', null)
     .maybeSingle()
 
   const nf = nfSupabase ?? (await complementarNotasFiscais([], { lojaId, id: Number(id) }))[0] ?? null
@@ -50,6 +58,14 @@ export default async function NotaFiscalItensPage({
   const itens = nfSupabase
     ? itensRaw
     : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
+
+  // Mesma fonte unica de status usada no selo abaixo (lib/nf-status.ts):
+  // c_etapa === '60' sozinho NAO significa "concluida" de verdade -- uma nota
+  // pode estar em c_etapa='60' E cancelada ao mesmo tempo. Os botoes de acao
+  // (AcoesNF) usam este calculo, nunca a prop crua c_etapa.
+  const statusInfo = nf.c_etapa ? statusNF(nf.c_etapa, nf.full_object) : null
+  const concluida = statusInfo?.label === 'Concluída'
+  const cancelada = statusInfo?.label === 'Cancelada'
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -76,16 +92,13 @@ export default async function NotaFiscalItensPage({
               {nf.n_valor_nfe != null && (
                 <span>Valor: <span className="num font-medium text-text">{Number(nf.n_valor_nfe).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>
               )}
-              {nf.c_etapa && (() => {
-                const { label, tom } = statusNF(nf.c_etapa, nf.full_object)
-                return (
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${tom === 'ok' ? 'text-ok bg-ok/10' : tom === 'err' ? 'text-err bg-err/10' : 'text-warn bg-warn/10'}`}
-                  >
-                    {label} <span className="num ml-1 opacity-70">({nf.c_etapa})</span>
-                  </span>
-                )
-              })()}
+              {statusInfo && (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusInfo.tom === 'ok' ? 'text-ok bg-ok/10' : statusInfo.tom === 'err' ? 'text-err bg-err/10' : 'text-warn bg-warn/10'}`}
+                >
+                  {statusInfo.label} <span className="num ml-1 opacity-70">({nf.c_etapa})</span>
+                </span>
+              )}
             </div>
             {nf.c_chave_nfe && (
               <p className="num text-[11px] text-text-muted break-all">{nf.c_chave_nfe}</p>
@@ -111,9 +124,26 @@ export default async function NotaFiscalItensPage({
                 </a>
               </div>
             )}
-            <div className="pt-1">
-              <AcoesNF notaId={Number(id)} cEtapa={nf.c_etapa} />
-            </div>
+            {/* So renderiza os botoes de acao quando a nota veio do Supabase
+                "quente" de verdade (nfSupabase, ANTES do fallback pro
+                Contabo). A lista mescla ids de duas fontes que nao
+                compartilham o mesmo espaco de ids -- um id vindo do Contabo
+                pode, por coincidencia, corresponder a uma nota DIFERENTE no
+                Supabase. As Server Actions sempre buscam na mesma tabela
+                quente por id+loja_id, entao so podem ser chamadas com
+                seguranca quando foi essa busca que encontrou a nota. */}
+            {nfSupabase && (
+              <div className="pt-1">
+                <AcoesNF
+                  notaId={Number(id)}
+                  concluida={concluida}
+                  cancelada={cancelada}
+                  podeManifestar={podeManifestar}
+                  podeReverter={podeReverter}
+                  podeExcluir={podeExcluir}
+                />
+              </div>
+            )}
           </div>
         }
       />

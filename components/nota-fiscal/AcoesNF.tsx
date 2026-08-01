@@ -7,10 +7,23 @@ import { CheckCircle2, RotateCcw, Trash2 } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { manifestarNF, reverterManifestacaoNF, excluirRecebimentoNF } from '@/lib/actions/nota-fiscal'
 
-export function AcoesNF({ notaId, cEtapa }: { notaId: number; cEtapa: string | null }) {
+export function AcoesNF({
+  notaId,
+  concluida,
+  cancelada,
+  podeManifestar,
+  podeReverter,
+  podeExcluir,
+}: {
+  notaId: number
+  concluida: boolean
+  cancelada: boolean
+  podeManifestar: boolean
+  podeReverter: boolean
+  podeExcluir: boolean
+}) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
-  const concluida = cEtapa === '60'
 
   function manifestar() {
     if (!window.confirm('Marcar esta nota como recebida/concluída no Omie?')) return
@@ -42,21 +55,25 @@ export function AcoesNF({ notaId, cEtapa }: { notaId: number; cEtapa: string | n
     })
   }
 
+  if (!podeManifestar && !podeReverter && !podeExcluir) return null
+
   return (
     <div className="flex flex-wrap gap-2">
-      {!concluida && (
+      {podeManifestar && !concluida && !cancelada && (
         <button type="button" disabled={pending} onClick={manifestar} className={btnClass('outline')}>
           <CheckCircle2 className="size-4" /> Manifestar (marcar recebida)
         </button>
       )}
-      {concluida && (
+      {podeReverter && concluida && (
         <button type="button" disabled={pending} onClick={reverter} className={btnClass('outline')}>
           <RotateCcw className="size-4" /> Reverter conclusão
         </button>
       )}
-      <button type="button" disabled={pending} onClick={excluir} className={btnClass('outline')}>
-        <Trash2 className="size-4" /> Excluir recebimento
-      </button>
+      {podeExcluir && (
+        <button type="button" disabled={pending} onClick={excluir} className={btnClass('outline')}>
+          <Trash2 className="size-4" /> Excluir recebimento
+        </button>
+      )}
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
   pareceRecebimentoNaoExiste,
 } from '@/lib/omie/nota-fiscal'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { statusNF } from '@/lib/nf-status'
 import type { LojaOmie } from '@/lib/omie/client'
 
 export async function setQuantidadeNFItem(itemId: number, quantidade: number | null) {
@@ -49,14 +50,14 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
   const supabase = createServiceClient()
   const { data: nf, error: dbError } = await supabase
     .from('notas_fiscais')
-    .select('n_id_receb, c_chave_nfe, c_etapa, c_numero_nfe, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('n_id_receb, c_etapa, c_numero_nfe, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', notaId)
     .eq('loja_id', lojaId)
     .single<{
       n_id_receb: string | null
-      c_chave_nfe: string | null
       c_etapa: string | null
       c_numero_nfe: string | null
+      full_object: unknown
       loja: LojaOmie
     }>()
   if (dbError) {
@@ -80,16 +81,25 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
  * junto à SEFAZ, que a API da Omie não expõe).
  */
 export async function manifestarNF(notaId: number) {
-  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais')
+  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Manifestar')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
+  // Defesa no servidor: a Server Action e chamavel diretamente, entao a UI
+  // escondendo o botao (AcoesNF.tsx) nao basta. c_etapa === '60' sozinho NAO
+  // significa "concluida" de verdade -- uma nota pode estar em c_etapa='60' E
+  // cancelada ao mesmo tempo (casos reais confirmados). statusNF ja cruza os
+  // dois sinais.
+  const statusAtual = statusNF(nf.c_etapa, nf.full_object).label
+  if (statusAtual === 'Cancelada') return { error: 'Não dá pra manifestar uma nota cancelada.' }
+  if (statusAtual === 'Concluída') return { error: 'Nota já está concluída.' }
   try {
     await concluirRecebimento(nf.loja, Number(nf.n_id_receb))
-    await supabase
+    const { error: updError } = await supabase
       .from('notas_fiscais')
       .update({ c_etapa: '60', updated_at: new Date().toISOString() })
       .eq('id', notaId)
       .eq('loja_id', lojaId)
+    if (updError) return { error: updError.message }
     await registrarAuditoria('concluir', 'nota fiscal', nf.c_numero_nfe, null)
     revalidatePath(`/nota-fiscal/${notaId}`)
     revalidatePath('/nota-fiscal')
@@ -101,7 +111,7 @@ export async function manifestarNF(notaId: number) {
 
 /** Reverte a conclusão -- volta a nota pra Pendente. */
 export async function reverterManifestacaoNF(notaId: number) {
-  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais')
+  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Reverter')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
   if (nf.c_etapa !== '60') {
@@ -109,11 +119,12 @@ export async function reverterManifestacaoNF(notaId: number) {
   }
   try {
     await reverterRecebimento(nf.loja, Number(nf.n_id_receb))
-    await supabase
+    const { error: updError } = await supabase
       .from('notas_fiscais')
       .update({ c_etapa: '40', updated_at: new Date().toISOString() })
       .eq('id', notaId)
       .eq('loja_id', lojaId)
+    if (updError) return { error: updError.message }
     await registrarAuditoria('reverter', 'nota fiscal', nf.c_numero_nfe, null)
     revalidatePath(`/nota-fiscal/${notaId}`)
     revalidatePath('/nota-fiscal')
@@ -124,12 +135,15 @@ export async function reverterManifestacaoNF(notaId: number) {
 }
 
 /**
- * Exclui o recebimento no Omie e remove a nota do banco local (itens
- * cascateiam via FK). IRREVERSÍVEL -- a UI precisa confirmar antes de
- * chamar isso.
+ * Exclui o recebimento no Omie e soft-deleta a nota no banco local
+ * (deleted_at, mesma convencao usada em todo o projeto -- NAO delete fisico:
+ * o Contabo guarda historico completo em modo append-only e nunca aprende
+ * sobre deleted_at, entao um delete fisico faria a nota "ressuscitar" via
+ * leitura hibrida sempre que um relatorio cruzasse os 90 dias). IRREVERSÍVEL
+ * do lado da Omie -- a UI precisa confirmar antes de chamar isso.
  */
 export async function excluirRecebimentoNF(notaId: number) {
-  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais')
+  const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
   let fantasma = false
@@ -141,7 +155,12 @@ export async function excluirRecebimentoNF(notaId: number) {
       if (!pareceRecebimentoNaoExiste(msg)) throw e
       fantasma = true
     }
-    await supabase.from('notas_fiscais').delete().eq('id', notaId).eq('loja_id', lojaId)
+    const { error: delError } = await supabase
+      .from('notas_fiscais')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', notaId)
+      .eq('loja_id', lojaId)
+    if (delError) return { error: delError.message }
     await registrarAuditoria('excluir', 'nota fiscal', nf.c_numero_nfe, null)
     revalidatePath('/nota-fiscal')
     return { ok: true as const, fantasma }

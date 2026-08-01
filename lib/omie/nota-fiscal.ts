@@ -344,9 +344,13 @@ export async function excluirRecebimento(loja: LojaOmie, nIdReceb: number) {
 
 // Mesma logica de lib/omie/ordem-producao.ts:pareceOPNaoExiste -- detecta
 // pelo texto do erro quando o recebimento ja nao existe mais do lado da
-// Omie (excluido direto por la, ou id invalido).
+// Omie (excluido direto por la, ou id invalido). "nao encontrado" fica de
+// fora de proposito: e generico demais na Omie (aparece em erros nao
+// relacionados a "registro nao existe mais"), classificaria erro real como
+// fantasma e apagaria a nota localmente mesmo com o recebimento ainda
+// existindo na Omie.
 export function pareceRecebimentoNaoExiste(msg: string): boolean {
-  return /nao cadastrada|não cadastrada|nao encontrado|não encontrado/i.test(msg)
+  return /nao cadastrada|não cadastrada/i.test(msg)
 }
 
 function parseDate(d: string | null | undefined): string | null {

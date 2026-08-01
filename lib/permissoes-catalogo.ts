@@ -27,8 +27,14 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
   {
     modulo: 'Notas Fiscais',
     grupo: 'Operação',
-    // Importada do Omie (nao se cria NF aqui): so acessar/ver.
-    permissoes: [{ nome: 'Notas Fiscais', label: 'Acessar' }],
+    // Importada do Omie (nao se cria NF aqui): acessar/ver + as 3 acoes reais
+    // que chamam a API da Omie (manifestar/reverter/excluir recebimento).
+    permissoes: [
+      { nome: 'Notas Fiscais', label: 'Acessar' },
+      { nome: 'Notas Fiscais - Manifestar', label: 'Manifestar' },
+      { nome: 'Notas Fiscais - Reverter', label: 'Reverter' },
+      { nome: 'Notas Fiscais - Excluir', label: 'Excluir' },
+    ],
   },
   {
     modulo: 'Ordens de Produção',
