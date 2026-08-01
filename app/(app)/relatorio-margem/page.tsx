@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -58,6 +59,83 @@ type Row = { codigo: string; descricao: string | null; familia: string | null; m
 // abaixo de -100% = custo > 2x preço = claramente inválido (revisar no Omie).
 const margemValida = (m: number | null): m is number => m != null && m > -100
 const corMargem = (m: number) => (m >= 60 ? 'text-ok' : m >= 40 ? 'text-text' : m >= 0 ? 'text-warn' : 'text-err')
+
+const MESES_ABREV_EVOLUCAO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const mesLabelEvolucao = (ym: string) => {
+  const [a, m] = ym.split('-')
+  return `${MESES_ABREV_EVOLUCAO[Number(m) - 1] ?? m}/${a.slice(2)}`
+}
+// `data_snapshot` (coluna `date`, sem hora) vem do PostgREST como 'YYYY-MM-DD'.
+// Passar por `new Date(iso)` e formatar com timeZone America/Bahia (UTC-3)
+// quebraria o dia (meia-noite UTC de uma data vira o dia ANTERIOR lá) --
+// formata direto da string, sem passar por Date.
+const fmtDataSimples = (iso: string) => {
+  const [ano, mes, dia] = iso.split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
+type LinhaEvolucao = { codigo: string; descricao: string | null; meses: Record<string, number> }
+
+// Matriz produto x mês (mesmo espírito de relatorio-faturamento/page.tsx:
+// linhas + lista de meses distintos), restrita aos produtos que sobreviveram
+// aos filtros ativos na tela (mesmos códigos de `produtos`, pra ficar
+// consistente com o que já está na tabela principal) e só com margem válida
+// (mesmo critério de `validos` -- CMC podre não deveria aparecer também aqui).
+function construirEvolucaoMensal(rowsFonte: Row[], codigosValidos: Set<string>): { linhas: LinhaEvolucao[]; meses: string[] } {
+  const validas = rowsFonte.filter((r) => codigosValidos.has(r.codigo) && margemValida(r.margem))
+  const porCodigo = new Map<string, LinhaEvolucao>()
+  for (const r of validas) {
+    const ent = porCodigo.get(r.codigo) ?? { codigo: r.codigo, descricao: r.descricao, meses: {} }
+    ent.meses[r.mes] = Number(r.margem)
+    porCodigo.set(r.codigo, ent)
+  }
+  const meses = [...new Set(validas.map((r) => r.mes))].sort()
+  const linhas = [...porCodigo.values()].sort((a, b) => (a.descricao ?? a.codigo).localeCompare(b.descricao ?? b.codigo, 'pt-BR'))
+  return { linhas, meses }
+}
+
+// Markup reaproveitado de relatorio-faturamento/page.tsx (matriz mês a mês,
+// sticky header/coluna) -- mesmo espírito visual, trocando o "Total" (soma,
+// que faz sentido pra R$) por "Média" (a soma de % não significa nada).
+function TabelaEvolucaoMensal({ linhas, meses, th }: { linhas: LinhaEvolucao[]; meses: string[]; th: string }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+      <table className="w-full min-w-[600px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-surface-2">
+            <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+            {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabelEvolucao(m)}</th>))}
+            <th className={`text-right ${th}`}>Média</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((l) => {
+            const valores = meses.map((m) => l.meses[m]).filter((v): v is number => v != null)
+            const media = valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : null
+            return (
+              <tr key={l.codigo} className="border-t border-border/60 hover:bg-surface-2/40">
+                <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={l.descricao ?? l.codigo}>
+                  {l.descricao ?? l.codigo}
+                </td>
+                {meses.map((m) => {
+                  const v = l.meses[m] ?? null
+                  return (
+                    <td key={m} className={`num whitespace-nowrap px-3 py-2 text-right ${v != null ? corMargem(v) : 'text-text-muted'}`}>
+                      {fmtPct(v)}
+                    </td>
+                  )
+                })}
+                <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${media != null ? corMargem(media) : 'text-text-muted'}`}>
+                  {fmtPct(media)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export default async function RelatorioMargemPage({
   searchParams,
@@ -289,6 +367,34 @@ export default async function RelatorioMargemPage({
   const margemMedia = validos.length ? validos.reduce((s, p) => s + Number(p.margem), 0) / validos.length : 0
   const menor = validos[0]
 
+  // Evolução mensal (Task 5): segunda seção informativa, sem interferir na
+  // tabela principal acima (que continua "mais recente por produto"). Restrita
+  // aos mesmos códigos que sobreviveram aos filtros ativos na tela (busca/
+  // família/tipo/local), pra ficar consistente com o que já está na tela.
+  const codigosFiltrados = new Set(produtos.map((p) => p.codigo))
+  // Import manual real (rows já tem `mes` por linha, sem precisar de query nova).
+  const evolucaoImportada = !calculadaAoVivo ? construirEvolucaoMensal(rows, codigosFiltrados) : null
+
+  // Cálculo ao vivo: a série real mora em `margem_snapshot_diario` (migration
+  // 101/Task 4), arquivada 1x/dia desde 2026-08-01 -- ainda não sustenta uma
+  // matriz mensal de verdade pra ninguém no dia em que o snapshot começou.
+  let evolucaoSnapshot: { linhas: LinhaEvolucao[]; meses: string[] } | null = null
+  let primeiroSnapshotEm: string | null = null
+  if (calculadaAoVivo) {
+    const [snapshotRows, { data: primeiroRow }] = await Promise.all([
+      rpcTodos<Row>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }),
+      supabase
+        .from('margem_snapshot_diario')
+        .select('data_snapshot')
+        .eq('loja_id', lojaId)
+        .order('data_snapshot', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ])
+    evolucaoSnapshot = construirEvolucaoMensal(snapshotRows, codigosFiltrados)
+    primeiroSnapshotEm = (primeiroRow?.data_snapshot as string | undefined) ?? null
+  }
+
   const campos: CampoFiltro[] = [
     { tipo: 'texto', nome: 'busca', label: 'Produto (nome ou código)' },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familiaOpcoes },
@@ -425,6 +531,30 @@ export default async function RelatorioMargemPage({
           ? 'Margem calculada automaticamente (preço de venda × custo médio da última posição de estoque) para produtos acabados e de revenda — sem import manual.'
           : 'Margem mais recente por produto, importada da aba MARGEM do FAT_DRV (produto acabado / venda PDV). A % é a que o Omie calcula.'}
       </p>
+
+      {!calculadaAoVivo && evolucaoImportada && evolucaoImportada.meses.length > 1 && (
+        <div className="space-y-2">
+          <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
+          <TabelaEvolucaoMensal linhas={evolucaoImportada.linhas} meses={evolucaoImportada.meses} th={th} />
+        </div>
+      )}
+
+      {calculadaAoVivo && (
+        <div className="space-y-2">
+          <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
+          {evolucaoSnapshot && evolucaoSnapshot.meses.length > 1 ? (
+            <TabelaEvolucaoMensal linhas={evolucaoSnapshot.linhas} meses={evolucaoSnapshot.meses} th={th} />
+          ) : (
+            <div className="rounded-lg border border-border bg-surface p-3.5">
+              <p className="text-[13px] text-text-muted">
+                Evolução mensal real ainda não disponível pra esta loja — o sistema passou a arquivar o custo diário a
+                partir de <strong className="text-text">{primeiroSnapshotEm ? fmtDataSimples(primeiroSnapshotEm) : 'hoje'}</strong>.
+                Volte em algumas semanas pra ver a tendência.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
