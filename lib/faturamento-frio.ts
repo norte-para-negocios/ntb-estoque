@@ -47,6 +47,14 @@ export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: st
   return rows.map((i) => ({ ...i, quant: Number(i.quant) || 0, v_unit: Number(i.v_unit) || 0, v_desc: Number(i.v_desc) || 0, v_item: Number(i.v_item) || 0 }))
 }
 
+// Busca em lote (nao 1 cupom por vez) -- mesmo padrao de buscarFatCupomItens.
+export async function buscarFatCupomPagamentosPeriodo(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<PagamentoFat[]> {
+  const rows = await buscarFrioTudo<PagamentoFat & { valor: string | number }>(
+    '/fat_cupom_pagamentos', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000,
+  )
+  return rows.map((p) => ({ ...p, valor: Number(p.valor) || 0 }))
+}
+
 export type ItemFat = {
   id_item: number; n_id_cupom: number; id_produto: number | null; cfop: string | null; ncm: string | null
   quant: number; v_unit: number; v_desc: number; v_item: number; x_prod: string | null
