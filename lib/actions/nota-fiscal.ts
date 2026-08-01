@@ -53,6 +53,7 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
     .select('n_id_receb, c_etapa, c_numero_nfe, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
     .eq('id', notaId)
     .eq('loja_id', lojaId)
+    .is('deleted_at', null)
     .single<{
       n_id_receb: string | null
       c_etapa: string | null
