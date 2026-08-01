@@ -67,5 +67,12 @@ if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-preco-movimentacao; fi
 hora=$(date -u +%H)
 if [ "$bloco" -eq 0 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-margem-diario; fi
 
+# Snapshot do PLANEJADO das OPs abertas (migration 103). Mesma logica de 1x/dia
+# do job acima, meia hora depois (bloco 3 = min 30-39) so pra nao empilhar os
+# dois no mesmo minuto. Precisa rodar antes das conclusoes do dia comecarem:
+# ao concluir, a Omie sobrescreve nQtde com o produzido e o planejado se perde
+# pra sempre -- e a Omie nao guarda os dois (confirmado ao vivo na API).
+if [ "$bloco" -eq 3 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-op-planejada; fi
+
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
