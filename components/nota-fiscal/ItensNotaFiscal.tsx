@@ -111,6 +111,7 @@ export function ItensNotaFiscal({
               <th className="text-right">Qtd p/ etiqueta</th>
               <th>Categoria contábil</th>
               <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -129,18 +130,7 @@ export function ItensNotaFiscal({
                       />
                     </td>
                     <td className="num text-text-muted">{item.c_codigo_produto}</td>
-                    <td className="max-w-md truncate">
-                      {item.c_descricao_produto}
-                      {impostos.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpandido(item.id)}
-                          className="ml-2 inline-flex items-center gap-0.5 text-[11px] text-brand hover:underline"
-                        >
-                          Impostos {expandido.has(item.id) ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-                        </button>
-                      )}
-                    </td>
+                    <td className="max-w-md truncate">{item.c_descricao_produto}</td>
                     <td className="num text-text-muted">{item.c_cfop || '-'}</td>
                     <td className="text-right">
                       <Num value={item.n_qtde_nfe} frac={3} />{' '}
@@ -160,6 +150,17 @@ export function ItensNotaFiscal({
                     <td>
                       <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />
                     </td>
+                    <td className="text-right whitespace-nowrap">
+                      {impostos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandido(item.id)}
+                          className="inline-flex items-center gap-0.5 text-[11px] text-brand hover:underline"
+                        >
+                          Impostos {expandido.has(item.id) ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                        </button>
+                      )}
+                    </td>
                     <td className="text-right">
                       <DialogImprimirEtiqueta
                         href={`${base}?itens=${item.id}`}
@@ -174,7 +175,7 @@ export function ItensNotaFiscal({
                   {expandido.has(item.id) && impostos.length > 0 && (
                     <tr key={`${item.id}-impostos`}>
                       <td></td>
-                      <td colSpan={8} className="bg-bg/60 py-2">
+                      <td colSpan={9} className="bg-bg/60 py-2">
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
                           {impostos.map((imp) => (
                             <span key={imp.label} className="text-text-muted">
