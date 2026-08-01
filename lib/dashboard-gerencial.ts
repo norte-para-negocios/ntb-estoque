@@ -72,6 +72,32 @@ async function buscarTipoPorDescricao(
   return mapa
 }
 
+// Mapa codigo_produto -> descricao, usado pra resolver nomes de produto
+// a partir do id numerico cru que /fat_agregado e /fat_cupom_itens
+// devolvem (o fato do Contabo nao duplica a tabela produtos, so guarda
+// o codigo). Mesmo padrao paginado de buscarTipoPorDescricao (produtos
+// passa de 1000 linhas em 5 das 6 lojas ativas).
+export async function buscarNomePorCodigo(
+  supabase: ReturnType<typeof createServiceClient>,
+  lojaId: number
+): Promise<Map<number, string>> {
+  const PAGE = 1000
+  const mapa = new Map<number, string>()
+  for (let p = 0; ; p++) {
+    const { data, error } = await supabase
+      .from('produtos')
+      .select('codigo_produto, descricao, codigo')
+      .eq('loja_id', lojaId)
+      .range(p * PAGE, p * PAGE + PAGE - 1)
+    if (error || !data?.length) break
+    for (const row of data as { codigo_produto: number; descricao: string | null; codigo: string | null }[]) {
+      mapa.set(Number(row.codigo_produto), row.descricao || row.codigo || String(row.codigo_produto))
+    }
+    if (data.length < PAGE) break
+  }
+  return mapa
+}
+
 export async function carregarDashboardGerencial(
   lojaId: number,
   dataIni: string,
