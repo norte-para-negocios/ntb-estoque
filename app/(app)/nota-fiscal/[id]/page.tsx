@@ -43,7 +43,7 @@ export default async function NotaFiscalItensPage({
   const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
     supabase
       .from('nota_fiscal_items')
-      .select('id, n_id_receb, n_sequencia, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id')
+      .select('id, n_id_receb, n_sequencia, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id, full_object')
       .eq('nota_fiscal_id', id)
       .eq('loja_id', lojaId)
       .order('n_sequencia'),
