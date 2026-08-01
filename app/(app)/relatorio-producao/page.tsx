@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
+import { createServiceClient } from '@/lib/supabase/server'
 import { carregarDashboardProducao, type Granularidade } from '@/lib/dashboard-producao'
 import { ProducaoChart } from '@/components/producao/ProducaoChart'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -15,6 +16,15 @@ const GRANULARIDADES: { value: Granularidade; label: string }[] = [
   { value: 'semana', label: 'Semanal' },
   { value: 'mes', label: 'Mensal' },
 ]
+
+type LinhaPrevProd = {
+  n_cod_op: number; num_op: string | null; produto: string | null
+  dt_previsao: string | null; dt_conclusao: string | null
+  qtde_planejada: number; qtde_produzida: number; divergencia: number; pct: number | null
+}
+
+const fmtQtd = (n: number) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 3 })
+const fmtDataBr = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '-')
 
 function mesAtualISO(): string {
   const hoje = new Date()
@@ -39,6 +49,27 @@ export default async function RelatorioProducaoPage({
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesAtualISO()
 
   const { buckets, funcionariosOrdenados } = await carregarDashboardProducao(lojaId, granularidade, mes)
+
+  // Previsto x produzido (migration 103). A Omie nao guarda as duas
+  // quantidades -- ao concluir, nQtde vira o produzido e o planejado se perde.
+  // O cron snapshot-op-planejada captura o planejado enquanto a OP esta aberta,
+  // entao isso so tem dado a partir do primeiro dia em que ele rodou, e so pras
+  // OPs que ainda estavam abertas naquele momento.
+  const supabase = createServiceClient()
+  const [{ data: divRaw }, { data: capturaRow }] = await Promise.all([
+    supabase.rpc('relatorio_op_previsto_produzido', {
+      p_loja_id: lojaId, p_ini: `${mes}-01`, p_fim: `${mes}-31`,
+    }),
+    supabase
+      .from('op_qtde_planejada')
+      .select('primeira_vez_em')
+      .eq('loja_id', lojaId)
+      .order('primeira_vez_em', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ])
+  const divergencias = (divRaw ?? []) as LinhaPrevProd[]
+  const capturaDesde = (capturaRow?.primeira_vez_em as string | undefined) ?? null
 
   const total = buckets.reduce((s, b) => s + b.total, 0)
   const bucketsComProducao = buckets.filter((b) => b.total > 0)
@@ -144,6 +175,65 @@ export default async function RelatorioProducaoPage({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Previsto x produzido (migration 103) */}
+      <div className="space-y-2 pt-2">
+        <h2 className="px-1 text-[13px] font-semibold text-text">Previsto × produzido</h2>
+        {divergencias.length > 0 ? (
+          <>
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full min-w-[680px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">OP</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produto</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Conclusão</th>
+                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Previsto</th>
+                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produzido</th>
+                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {divergencias.map((d) => {
+                    const aMais = Number(d.divergencia) > 0
+                    return (
+                      <tr key={d.n_cod_op} className="border-t border-border/60 hover:bg-surface-2/40">
+                        <td className="num whitespace-nowrap px-3 py-2 text-text-muted">{d.num_op ?? d.n_cod_op}</td>
+                        <td className="max-w-[260px] truncate px-3 py-2 text-text" title={d.produto ?? ''}>{d.produto ?? '-'}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-text-muted">{fmtDataBr(d.dt_conclusao)}</td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(d.qtde_planejada)}</td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtQtd(d.qtde_produzida)}</td>
+                        <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${aMais ? 'text-ok' : 'text-warn'}`}>
+                          {aMais ? '+' : ''}{fmtQtd(d.divergencia)}
+                          {d.pct != null && <span className="ml-1 font-normal text-text-muted">({aMais ? '+' : ''}{Number(d.pct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="px-1 text-[11px] text-text-muted">
+              Só aparecem OPs em que o produzido ficou diferente do previsto. O previsto é capturado enquanto a OP está
+              aberta — a Omie não guarda as duas quantidades (ao concluir, ela sobrescreve o previsto com o produzido).
+            </p>
+          </>
+        ) : (
+          <div className="rounded-lg border border-border bg-surface p-3.5">
+            <p className="text-[13px] text-text-muted">
+              {capturaDesde ? (
+                <>
+                  Nenhuma diferença entre previsto e produzido nas OPs concluídas neste mês. A captura do previsto começou
+                  em <strong className="text-text">{fmtDataBr(capturaDesde)}</strong> — OPs concluídas antes disso não
+                  entram na comparação (a Omie não guarda o previsto depois de concluir).
+                </>
+              ) : (
+                <>Comparação previsto × produzido ainda não disponível — a captura do previsto começa na próxima execução diária.</>
+              )}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
