@@ -1,23 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getFailoverStatus } from '@/lib/failover/health-monitor'
 
-// Credenciais do stack self-hosted do Contabo (Fase 1 do failover) -- o app
-// roda no MESMO servidor, entao acessa via loopback (as portas so escutam
-// em 127.0.0.1 desde a correcao de seguranca da Fase 1, nunca reabrir pra
-// 0.0.0.0). So usadas quando o monitor de saude confirma o Supabase real
-// inacessivel (lib/failover/health-monitor.ts).
-const STANDBY_URL = 'http://127.0.0.1:8100'
-const STANDBY_ANON_KEY = process.env.FAILOVER_STANDBY_ANON_KEY!
-const STANDBY_SERVICE_ROLE_KEY = process.env.FAILOVER_STANDBY_SERVICE_ROLE_KEY!
-
+// O app roda 100% no stack self-hosted do Contabo desde a migracao de
+// 2026-07-31 (NEXT_PUBLIC_SUPABASE_URL aponta pro loopback 127.0.0.1:8100 --
+// as portas so escutam em localhost, nunca reabrir pra 0.0.0.0).
+//
+// O failover que existia aqui (troca automatica pro standby quando o monitor
+// de saude via o Supabase cloud fora do ar) foi removido em 2026-08-01: com o
+// Contabo virando o PRIMARIO, os dois lados do `if` ja apontavam pro mesmo
+// lugar -- codigo morto que so confundia. O cloud tambem deixou de ser um
+// fallback real (a replicacao morreu com o slot invalidado, e ele ficou
+// ~20 mil OPs atras), entao manter a ilusao de rede de seguranca era pior
+// que nao ter nenhuma.
 export function urlEChaveAtuais(tipo: 'anon' | 'service') {
-  if (getFailoverStatus() === 'down') {
-    return {
-      url: STANDBY_URL,
-      key: tipo === 'anon' ? STANDBY_ANON_KEY : STANDBY_SERVICE_ROLE_KEY,
-    }
-  }
   return {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     key: tipo === 'anon' ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! : process.env.SUPABASE_SERVICE_ROLE_KEY!,
