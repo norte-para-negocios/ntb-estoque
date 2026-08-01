@@ -56,5 +56,16 @@ if [ "$bloco" -eq 3 ]; then hit /api/cron/sync-faturamento; fi
 # atualizada. E so um refresh local (nao chama o Omie), roda rapido.
 if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-preco-movimentacao; fi
 
+# Snapshot diario de CMC/margem (migration 101) -- precisa rodar so 1x/DIA
+# (arquivo append-only, uma linha por produto/dia; rodar a cada 10min como os
+# outros jobs so reescreveria a mesma data_snapshot repetidas vezes por nada).
+# Nao ha precedente de "1x/dia" dentro deste script (o unico outro job diario,
+# o backup do Postgres, roda via systemd timer separado, fora daqui -- ver
+# AGENTS.md). Resolvido com hora UTC: casa "bloco 0" (min 00-09) com hora 06
+# (03h em America/Sao_Paulo, fora do horario de pico de sync) pra disparar 1x
+# por dia de verdade, sem depender de infra nova so pra este job.
+hora=$(date -u +%H)
+if [ "$bloco" -eq 0 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-margem-diario; fi
+
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
