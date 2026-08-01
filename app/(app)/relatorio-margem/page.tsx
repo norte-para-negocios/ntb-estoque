@@ -372,15 +372,22 @@ export default async function RelatorioMargemPage({
   // aos mesmos códigos que sobreviveram aos filtros ativos na tela (busca/
   // família/tipo/local), pra ficar consistente com o que já está na tela.
   const codigosFiltrados = new Set(produtos.map((p) => p.codigo))
-  // Import manual real (rows já tem `mes` por linha, sem precisar de query nova).
-  const evolucaoImportada = !calculadaAoVivo ? construirEvolucaoMensal(rows, codigosFiltrados) : null
+  // Usa `rowsAll` (import cru), NAO `rows` -- achado real 2026-08-01: `rows` é
+  // esvaziado logo acima quando o import está desatualizado (linha ~195), o que
+  // é certo pra tabela principal (mostrar margem ATUAL de um import parado
+  // engana) mas errado aqui: mês histórico não fica errado só porque ninguém
+  // subiu o arquivo do mês corrente. Sem isso, a loja 3 -- única com import
+  // manual, e com 6 meses reais (jan-jun/2026) na base -- nunca via a evolução,
+  // caindo no aviso de "acumulando" apesar do dado existir.
+  const evolucaoImportada = rowsAll.length ? construirEvolucaoMensal(rowsAll, codigosFiltrados) : null
 
   // Cálculo ao vivo: a série real mora em `margem_snapshot_diario` (migration
   // 101/Task 4), arquivada 1x/dia desde 2026-08-01 -- ainda não sustenta uma
   // matriz mensal de verdade pra ninguém no dia em que o snapshot começou.
   let evolucaoSnapshot: { linhas: LinhaEvolucao[]; meses: string[] } | null = null
   let primeiroSnapshotEm: string | null = null
-  if (calculadaAoVivo) {
+  const temEvolucaoImportada = !!evolucaoImportada && evolucaoImportada.meses.length > 1
+  if (!temEvolucaoImportada) {
     const [snapshotRows, { data: primeiroRow }] = await Promise.all([
       rpcTodos<Row>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }),
       supabase
@@ -532,14 +539,19 @@ export default async function RelatorioMargemPage({
           : 'Margem mais recente por produto, importada da aba MARGEM do FAT_DRV (produto acabado / venda PDV). A % é a que o Omie calcula.'}
       </p>
 
-      {!calculadaAoVivo && evolucaoImportada && evolucaoImportada.meses.length > 1 && (
+      {temEvolucaoImportada && evolucaoImportada && (
         <div className="space-y-2">
           <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
           <TabelaEvolucaoMensal linhas={evolucaoImportada.linhas} meses={evolucaoImportada.meses} th={th} />
+          {calculadaAoVivo && (
+            <p className="px-1 text-[11px] text-text-muted">
+              Histórico do último import manual do FAT_DRV (a tabela acima usa o cálculo ao vivo, mais recente).
+            </p>
+          )}
         </div>
       )}
 
-      {calculadaAoVivo && (
+      {!temEvolucaoImportada && (
         <div className="space-y-2">
           <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
           {evolucaoSnapshot && evolucaoSnapshot.meses.length > 1 ? (
