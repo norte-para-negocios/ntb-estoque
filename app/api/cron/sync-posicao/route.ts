@@ -34,8 +34,24 @@ export async function GET(request: Request) {
   )
 
   ultimas.sort((a, b) => a.updated - b.updated)
-  const alvo = ultimas[0].loja
 
-  const registros = await syncPosicaoEstoque(alvo)
-  return NextResponse.json({ ok: true, loja: alvo.id, registros })
+  // Acha real 2026-08-03: sempre tentava só a loja MAIS desatualizada -- se
+  // essa loja tiver credencial da Omie quebrada (ex.: chave suspensa), ela
+  // fica pra sempre no topo do rodizio (nunca atualiza, nunca sai do lugar) e
+  // trava a atualização de posição de estoque de TODAS as outras lojas junto,
+  // porque o erro não tratado derrubava a requisição inteira com 500 antes de
+  // chegar na próxima. Achado ao vivo: loja 7 quebrada desde 31/07 travou a
+  // posição de estoque (CMC) das outras 5 lojas no mesmo dia -- 3 dias sem
+  // atualizar, sem ninguém perceber. Agora tenta em ordem até uma funcionar,
+  // sem deixar uma loja permanentemente quebrada bloquear as demais.
+  const falhas: { loja_id: number; erro: string }[] = []
+  for (const { loja } of ultimas) {
+    try {
+      const registros = await syncPosicaoEstoque(loja)
+      return NextResponse.json({ ok: true, loja: loja.id, registros, puladas: falhas })
+    } catch (e) {
+      falhas.push({ loja_id: loja.id, erro: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return NextResponse.json({ ok: false, msg: 'todas as lojas falharam', falhas }, { status: 502 })
 }
