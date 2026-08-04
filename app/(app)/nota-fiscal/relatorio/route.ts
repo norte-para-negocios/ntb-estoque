@@ -9,10 +9,8 @@ import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/Rel
 import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
-import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
-import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -164,23 +162,14 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  // Mesmo achado de app/(app)/nota-fiscal/export/route.ts (2026-07-26):
-  // notaIdsFiltro (ids do Supabase) nao pode filtrar linhas do Contabo.
-  const temFiltro = tiposArr.length > 0 || !!produto
-  const notaIdsFrioSet = temFiltro && dataInicio < limiteJanelaQuente()
-    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: produto || null, localCod: null })
-    : null
-  const notasCompletas = dataInicio < limiteJanelaQuente()
-    ? await complementarNotasFiscais(notas, {
-        lojaId,
-        dataInicio,
-        dataFinal,
-        busca: numNfe || fornecedor,
-        filtrarFrias: (n) =>
-          (!status || statusBateFiltro(n, status)) &&
-          (!notaIdsFrioSet || notaIdsFrioSet.has(n.id)),
-      })
-    : notas
+  // Task 1 (auditoria de filtros/completude, 2026-08-04, ver
+  // lib/historico-contabo.ts e task-1-report.md "Fix round 1"): antes, este
+  // guard decidia se completava com o Contabo-frio quando o periodo cruzava
+  // os 90 dias. Verificado ao vivo que o Supabase self-hosted ja cobre
+  // virtualmente o mesmo intervalo que o frio pra notas_fiscais/
+  // nota_fiscal_items -- o complemento (e o calculo de notaIdsFrioSet, que so
+  // filtrava a fatia fria) virou trabalho jogado fora. Usa so o Supabase.
+  const notasCompletas = notas
 
   const itens: RelatorioNFItem[] = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),

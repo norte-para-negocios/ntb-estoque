@@ -4,10 +4,8 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
-import { complementarNotasFiscais, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
+import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
-import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -165,26 +163,15 @@ export async function GET(request: Request) {
     if (bloco.length < PAGE_SIZE) break
   }
 
-  // Achado real (2026-07-26): antes disso, o filtro de tipo/produto na fatia
-  // fria reusava notaIdsFiltro (ids do SUPABASE) pra filtrar linhas do
-  // CONTABO -- espaco de ID errado desde que o dual-write de NF entrou em
-  // producao (o Contabo gera seu proprio id). notaIdsFrioSet resolve o
-  // mesmo filtro no espaco certo (ver lib/relatorio-frio-nf.ts).
-  const temFiltro = tiposArr.length > 0 || !!params.produto
-  const notaIdsFrioSet = temFiltro && dataInicio < limiteJanelaQuente()
-    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: params.produto || null, localCod: null })
-    : null
-  const notasCompletas = dataInicio < limiteJanelaQuente()
-    ? await complementarNotasFiscais(notas, {
-        lojaId,
-        dataInicio,
-        dataFinal,
-        busca: params.num_nfe || params.fornecedor,
-        filtrarFrias: (n) =>
-          (!params.status || statusBateFiltro(n, params.status!)) &&
-          (!notaIdsFrioSet || notaIdsFrioSet.has(n.id)),
-      })
-    : notas
+  // Task 1 (auditoria de filtros/completude, 2026-08-04, ver
+  // lib/historico-contabo.ts e task-1-report.md "Fix round 1"): antes, este
+  // guard decidia se completava com o Contabo-frio quando o periodo cruzava
+  // os 90 dias (e notaIdsFrioSet filtrava aquela fatia fria pra tipo/produto,
+  // achado real de 2026-07-26). Verificado ao vivo que o Supabase self-hosted
+  // ja cobre virtualmente o mesmo intervalo que o frio pra notas_fiscais/
+  // nota_fiscal_items -- os dois calculos viraram trabalho jogado fora. Usa
+  // so o Supabase.
+  const notasCompletas = notas
 
   const rows = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),

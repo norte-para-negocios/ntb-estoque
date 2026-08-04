@@ -13,9 +13,12 @@ const JANELA_QUENTE_DIAS = 90
 // tabelas.
 //
 // Verificado ao vivo (producao) especificamente pra `notas_fiscais`, loja 3
-// (DONANA RIO VERMELHO, referencia ja usada em docs/validacao-dados-2026-08-01.md):
+// (DONANA RIO VERMELHO, referencia ja usada em docs/validacao-dados-2026-08-01.md),
+// com uma unica query rodando count(*)/sum(n_valor_nfe)/min/max juntos (evita
+// number chutado num comentario permanente -- achado C1 da revisao desta task):
 //   - Periodo de 6 meses cruzando os 90 dias (2026-02-01 a 2026-08-04): Supabase
-//     self-hosted = 1025 notas (R$1.369.374,66); Contabo-frio = 1026 notas.
+//     self-hosted = 1025 notas, sum(n_valor_nfe) = R$1.369.374,66;
+//     Contabo-frio (count=true) = 1026 notas.
 //   - SEM filtro de data (historico inteiro, desde 2025-06-28): Supabase
 //     self-hosted = 2397 notas; Contabo-frio = 2393 notas.
 //   - Tela de Nota Fiscal em producao (mesmo filtro, loja 3, fev-ago/2026):
@@ -30,6 +33,19 @@ const JANELA_QUENTE_DIAS = 90
 // leitura do Contabo-frio (buscarFrioTudo, mesclar*PorChaveNatural,
 // contarNotasFiscaisAntigas) continua intacto, so passou a ser chamado com
 // menos frequencia.
+//
+// Fix round 1 (achado C2 da revisao desta task): 2 callers destas funcoes --
+// app/(app)/nota-fiscal/relatorio/route.ts e app/(app)/nota-fiscal/export/route.ts
+// -- tinham seu PROPRIO guard duplicado (`dataInicio < limiteJanelaQuente()`)
+// decidindo se completavam com o frio antes mesmo de chamar
+// complementarNotasFiscais. Com o gate interno simplificado pra so olhar
+// `opts.id`, aquele guard externo virou morto (sempre chamava a funcao, que
+// agora so retorna as quentes) -- na pratica, as 2 rotas paravam de buscar o
+// frio pra QUALQUER periodo, silenciosamente. Corrigido nos 2 arquivos: removido
+// o guard externo (e o calculo de notaIdsFrioSet/buscarNotaIdsFrio, que so
+// filtrava a fatia fria que deixou de ser buscada), deixando explicito que
+// essas 2 rotas usam so o Supabase agora -- consistente com o mesmo achado.
+// Retestado ao vivo (ver task-1-report.md, secao "Fix round 1").
 //
 // NAO testado (e por isso NAO alterado) neste achado: `movimentos`,
 // `movimentos_historico` e `ordens_producao` -- `complementarMovimentos`,
