@@ -1,5 +1,45 @@
 const JANELA_QUENTE_DIAS = 90
 
+// Achado real (Task 1 do plano de auditoria de filtros/completude, 2026-08-04,
+// ver .superpowers/sdd/2026-08-04-auditoria-filtros-relatorios/task-1-report.md):
+// JANELA_QUENTE_DIAS=90 foi calibrado pro Supabase CLOUD (free tier, 500MB), que
+// so guardava os ultimos 90 dias de fato. NESTA MESMA SESSAO o Supabase cloud foi
+// desligado -- o app roda 100% self-hosted no Contabo (container `supabase-db`)
+// desde entao, sem limite de disco. Confirmado lendo o cron de poda
+// (app/api/cron/prune/route.ts): ele so apaga `webhooks` e
+// `integration_attempts` -- nunca `movimentos`, `movimentos_historico`,
+// `notas_fiscais`, `nota_fiscal_items` ou `ordens_producao`. Ou seja, a premissa
+// que gerou este arquivo (Supabase = so 90 dias) esta obsoleta pra essas 5
+// tabelas.
+//
+// Verificado ao vivo (producao) especificamente pra `notas_fiscais`, loja 3
+// (DONANA RIO VERMELHO, referencia ja usada em docs/validacao-dados-2026-08-01.md):
+//   - Periodo de 6 meses cruzando os 90 dias (2026-02-01 a 2026-08-04): Supabase
+//     self-hosted = 1025 notas (R$1.369.374,66); Contabo-frio = 1026 notas.
+//   - SEM filtro de data (historico inteiro, desde 2025-06-28): Supabase
+//     self-hosted = 2397 notas; Contabo-frio = 2393 notas.
+//   - Tela de Nota Fiscal em producao (mesmo filtro, loja 3, fev-ago/2026):
+//     1026 notas / R$1.370.142,66 -- bate com o merge quente+frio (a 1 nota de
+//     diferenca e sincronizacao normal do dia, nao um buraco sistematico).
+// Conclusao: pra `notas_fiscais`/`nota_fiscal_items`, o Supabase self-hosted ja
+// cobre virtualmente o mesmo intervalo que o Contabo-frio -- a distincao
+// quente/frio baseada em JANELA_QUENTE_DIAS virou redundante pra essas duas
+// tabelas. `complementarNotasFiscais`/`complementarNotaFiscalItems` abaixo foram
+// simplificadas pra so consultar o frio no lookup por id/notaFiscalId (nota
+// especifica que por algum motivo nao esteja no Supabase) -- o codigo de
+// leitura do Contabo-frio (buscarFrioTudo, mesclar*PorChaveNatural,
+// contarNotasFiscaisAntigas) continua intacto, so passou a ser chamado com
+// menos frequencia.
+//
+// NAO testado (e por isso NAO alterado) neste achado: `movimentos`,
+// `movimentos_historico` e `ordens_producao` -- `complementarMovimentos`,
+// `complementarMovimentosHistorico` e `complementarOrdensProducao` continuam
+// gateados por `foraDaJanelaQuente` como antes. Essas tabelas tem achados
+// proprios documentados abaixo (duplicatas reais em `movimentos_historico`,
+// gap estatico conhecido em `movimentos`) que precisam de verificacao propria
+// antes de aplicar a mesma simplificacao -- ver Tasks 5 (Producao) e 6
+// (Movimentacoes) do mesmo plano de auditoria.
+//
 // Data mais antiga que ainda fica no Supabase apos a poda. Qualquer consulta
 // que peca algo mais velho que isso precisa completar com o Contabo.
 function limiteJanelaQuente(): string {
@@ -228,7 +268,13 @@ export async function complementarNotasFiscais<T extends { id: number; n_id_rece
     filtrarFrias?: (row: T) => boolean
   }
 ): Promise<T[]> {
-  if (!foraDaJanelaQuente(opts.dataInicio) && !opts.id) return quentes
+  // Simplificado (Task 1, ver achado no topo do arquivo): Supabase self-hosted
+  // ja cobre o mesmo intervalo que o Contabo-frio pra notas_fiscais -- so
+  // completa do frio pra lookup por id (nota especifica que por algum motivo
+  // nao esteja no Supabase). Antes: `if (!foraDaJanelaQuente(opts.dataInicio)
+  // && !opts.id) return quentes` (consultava o frio sempre que o periodo
+  // cruzasse os 90 dias, mesmo sem necessidade real).
+  if (!opts.id) return quentes
   const friasRaw = await buscarFrioTudo<T>('/notas_fiscais', {
     loja_id: opts.lojaId,
     data_inicio: opts.dataInicio,
@@ -244,7 +290,11 @@ export async function complementarNotaFiscalItems<T extends { id: number; n_id_r
   quentes: T[],
   opts: { lojaId: number; notaFiscalId?: number | number[]; dataInicio?: string; dataFinal?: string }
 ): Promise<T[]> {
-  if (!opts.notaFiscalId && !foraDaJanelaQuente(opts.dataInicio)) return quentes
+  // Simplificado (Task 1, ver achado no topo do arquivo): mesmo raciocinio de
+  // complementarNotasFiscais -- so completa do frio pra lookup por
+  // notaFiscalId especifico. Antes: `if (!opts.notaFiscalId &&
+  // !foraDaJanelaQuente(opts.dataInicio)) return quentes`.
+  if (!opts.notaFiscalId) return quentes
   const frias = await buscarFrioTudo<T>('/nota_fiscal_items', {
     loja_id: opts.lojaId,
     nota_fiscal_id: Array.isArray(opts.notaFiscalId) ? opts.notaFiscalId.join(',') : opts.notaFiscalId,
