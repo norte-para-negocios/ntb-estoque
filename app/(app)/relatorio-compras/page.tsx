@@ -145,12 +145,32 @@ export default async function RelatorioComprasPage({
   const filtrosComDrill = { ...filtros, ...drillFiltros }
 
   const supabase = await createClient()
+  // Achado real (auditoria de filtros/relatórios, Task 2, 2026-08-04): a migration
+  // 097 (adiciona p_status às RPCs de Compras/Auditoria Fiscal) nunca tinha sido
+  // aplicada em produção, mesmo com este código já chamando as RPCs com p_status
+  // há dias -- toda chamada falhava com "function ... does not exist" e, como
+  // ninguém aqui checava `error`, o total/matriz da janela quente (Supabase, os
+  // ~90 dias mais recentes -- "os meses atuais" da queixa do Ramon) silenciosamente
+  // virava 0/[] em TODAS as lojas, sobrando só o complemento frio (Contabo, mais
+  // antigo). Corrigido aplicando a migration em produção (não é um bug de código
+  // deste arquivo) -- mas o silêncio em si era real, então agora logamos e
+  // avisamos na tela se uma dessas RPCs falhar de novo por qualquer motivo
+  // (schema desalinhado, RPC renomeada, etc.), em vez de mostrar um total errado
+  // sem nenhum sinal.
+  const errosRpc: string[] = []
+  function logErroRpc(fn: string, error: { message: string } | null) {
+    if (!error) return
+    errosRpc.push(fn)
+    console.error(`relatorio-compras: RPC ${fn} falhou -- total pode estar sem a janela quente (Supabase)`, error.message)
+  }
+
   // A matriz pode passar de 1000 linhas (PostgREST corta) em dim=produto: pagina.
   async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
     const PAGE = 1000
     const todos: T[] = []
     for (let p = 0; ; p++) {
       const { data, error } = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
+      if (error) logErroRpc(fn, error)
       if (error || !data?.length) break
       todos.push(...(data as T[]))
       if (data.length < PAGE) break
@@ -164,12 +184,14 @@ export default async function RelatorioComprasPage({
   const corte = limiteJanelaQuente()
   const iniRpc = ini < corte ? corte : ini
 
-  const [{ data: totalRows }, matrizRaw, { data: cfopDimRaw }] = await Promise.all([
+  const [{ data: totalRows, error: erroTotal }, matrizRaw, { data: cfopDimRaw, error: erroDim }] = await Promise.all([
     supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill }),
     rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dimExibida ?? 'produto', ...filtrosComDrill }),
     // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
     supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop', p_status: statusSel }),
   ])
+  logErroRpc('relatorio_compras_total', erroTotal)
+  logErroRpc('relatorio_compras_dim', erroDim)
   let total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
   let nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
 
@@ -231,9 +253,10 @@ export default async function RelatorioComprasPage({
   // Nível final: itens individuais (RPC de detalhe + pedaço frio mapeado).
   let itensDetalhe: LinhaDetalheCompra[] = []
   if (nivelItens) {
-    const { data: det } = await supabase
+    const { data: det, error: erroDetalhe } = await supabase
       .rpc('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill })
       .range(0, 499)
+    logErroRpc('relatorio_compras_detalhe', erroDetalhe)
     itensDetalhe = (det ?? []) as LinhaDetalheCompra[]
     if (ini < corte) {
       itensDetalhe = [...mapearComprasDetalhe(filtrados, meta), ...itensDetalhe]
@@ -375,6 +398,12 @@ export default async function RelatorioComprasPage({
           Notas <span className="num font-semibold text-text">{nNotas}</span>
         </span>
       </div>
+      {errosRpc.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar os dados recentes (Supabase) — o total acima pode estar
+          incompleto para os últimos ~90 dias. Recarregue a página; se persistir, avise o suporte.
+        </p>
+      )}
       <p className="px-1 text-[11px] text-text-muted">
         Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra/gasto e não entram nestes números.
       </p>
