@@ -258,6 +258,21 @@ rodar de novo um backfill no mesmo molde (script foi ad-hoc, fora do repo).
   existia antes do dual-write — não são recuperáveis (Omie não tem endpoint pra
   "listar webhooks antigos"). Dual-write garante que não se perde mais nada dali
   pra frente.
-- Filtro de tipo/família/produto em `nota-fiscal/page.tsx` quando o período cruza
-  os 90 dias só enxerga notas que já tinham itens correspondentes no Supabase — o
-  cruzamento com o Contabo não foi implementado para esse caso específico.
+- `.in('coluna', [...])` do PostgREST/supabase-js com uma lista grande de
+  valores (centenas+) gera uma URL longa o bastante pra estourar o limite de
+  ~8KB do nginx/PostgREST e responder 414 URI Too Long — e `buscarTudoPaginado`
+  trata QUALQUER erro de query como "acabaram as páginas", então o filtro vira
+  silenciosamente "nenhum resultado" em vez de dar erro. Achado real (Task 10
+  da auditoria de filtros/relatórios, 2026-08-05): o filtro de tipo/família/
+  produto/local em Notas Fiscais (`nota-fiscal/page.tsx`, `export/route.ts`,
+  `relatorio/route.ts`) resolve dois `.in()` em sequência que podem chegar a
+  milhares de elementos (loja 3, tipo=01 = Matéria Prima, 1626 ids; tipo=07,
+  633 códigos de produto) — os dois sofriam 414 e zeravam o resultado, mesmo
+  100% dentro da janela quente. Corrigido com `buscarTodosPorIds` (`lib/
+  utils-busca.ts`), que quebra o filtro em lotes pequenos o bastante pra nunca
+  estourar o limite de URL (e ainda pagina por OFFSET dentro de cada lote,
+  necessário quando a coluna filtrada não é chave primária). Risco sistêmico
+  não auditado: `transferencia` e `inventario` (`page.tsx`, `export/route.ts`,
+  `relatorio/route.ts`) usam o mesmo padrão (`idsFiltrados`) e podem ter a
+  mesma vulnerabilidade se o filtro resolver uma lista grande o bastante —
+  candidato forte pra um follow-up dedicado.
