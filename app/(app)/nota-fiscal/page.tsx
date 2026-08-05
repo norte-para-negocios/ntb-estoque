@@ -194,7 +194,17 @@ export default async function NotaFiscalPage({
   function aplicarFiltrosNF(qIn: any): any {
     let q = qIn
     if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-    if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+    // Achado real (revisão final round 3, 2026-08-05): `escapeIlike` só escapa
+    // curingas de LIKE (`%`/`_`), não vírgula/parênteses -- dentro de um
+    // `.or()` do PostgREST esses dois caracteres são sintaxe própria (separam
+    // condições e agrupam), então um fornecedor com "," ou "(" no nome/razão
+    // social (ex.: "ELETRICA CAPITAL LTDA (1 MATRIZ)") quebrava o parsing da
+    // árvore lógica do filtro. Envolver o valor em aspas duplas dentro da
+    // string do `.or()` neutraliza `,`/`(`/`)` pro parser do PostgREST sem
+    // alterar o valor buscado (ao contrário de `escapeIlikeOr`, que apaga
+    // esses caracteres -- inaceitável aqui, pois eles fazem parte do nome real
+    // do fornecedor).
+    if (params.fornecedor) q = q.or(`c_razao_social.ilike."%${escapeIlike(params.fornecedor)}%",c_nome.ilike."%${escapeIlike(params.fornecedor)}%"`)
     // Status: 'CONCLUIDA'/'PENDENTE'/'CANCELADA' (novos), 'C'/'P' (compat com
     // links antigos) ou a etapa real direta (ex.: '60', '40') -- ver lib/nf-status.ts.
     if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
@@ -328,7 +338,8 @@ export default async function NotaFiscalPage({
         .lte('d_emissao_nfe', dataFinal)
         .is('deleted_at', null)
       if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-      if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+      // Mesmo fix de comma/parenteses aplicado acima em aplicarFiltrosNF -- ver comentario la.
+      if (params.fornecedor) q = q.or(`c_razao_social.ilike."%${escapeIlike(params.fornecedor)}%",c_nome.ilike."%${escapeIlike(params.fornecedor)}%"`)
       if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
       else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
       else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')

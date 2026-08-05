@@ -160,7 +160,15 @@ export async function GET(request: Request) {
     // diferente do nome fantasia (fornecedor=SENDAS: 73 notas na tela, 0 no
     // Excel antes deste fix). Replicado aqui, mesmo padrão de escape
     // (`escapeIlike`, igual ao que page.tsx já usa dentro do próprio `.or()`).
-    if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+    // Achado real (revisão final round 3, 2026-08-05): `escapeIlike` só escapa
+    // curingas de LIKE (`%`/`_`), não vírgula/parênteses -- dentro de um
+    // `.or()` do PostgREST esses dois caracteres são sintaxe própria (separam
+    // condições e agrupam), então um fornecedor com "," ou "(" no nome/razão
+    // social quebrava o parsing da árvore lógica do filtro. Envolver o valor
+    // em aspas duplas dentro da string do `.or()` neutraliza `,`/`(`/`)` pro
+    // parser do PostgREST sem alterar o valor buscado (ao contrário de
+    // `escapeIlikeOr`, que apaga esses caracteres).
+    if (params.fornecedor) q = q.or(`c_razao_social.ilike."%${escapeIlike(params.fornecedor)}%",c_nome.ilike."%${escapeIlike(params.fornecedor)}%"`)
 
     if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
