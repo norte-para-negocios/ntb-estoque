@@ -492,6 +492,19 @@ export default async function RelatorioFaturamentoPage({
             </Link>
           </div>
 
+          {/* Achado da auditoria 2026-08-04 (item #8 reuniao 03/08): o filtro de
+              situacao (Normal/Cancelado/Devolvido/Todos, commit c229715) so existe
+              dentro de "Ver cupons" -- Ramon ja tinha pedido isso, foi entregue, e
+              perguntou de novo por nao achar. Confirmado ao vivo com dado real
+              (loja 4, cupons 67068/66426/58403/55944) que o filtro funciona certo;
+              o gap real e so descoberta. Melhoria minima (sem query nova, sem
+              feature nova -- so um texto) pra apontar onde o filtro mora. */}
+          {!verCupons && !verDescontos && (
+            <p className="text-[12px] text-text-muted">
+              Precisa separar notas canceladas ou devolvidas? Ative <strong className="text-text">Ver cupons</strong> para ver e filtrar por situação (Normal/Cancelado/Devolvido/Todos).
+            </p>
+          )}
+
           {verDescontos ? (
             !descontoPorProduto.length && !descontoPorForma.length ? (
               <EmptyState
