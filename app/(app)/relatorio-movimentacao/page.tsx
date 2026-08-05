@@ -12,7 +12,7 @@ import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { escapeIlike } from '@/lib/utils-busca'
-import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { ArrowDownUp, Download, AlertTriangle } from 'lucide-react'
 import {
@@ -23,6 +23,15 @@ import {
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
+import {
+  buscarMovimentosManuais,
+  buscarMetaProdutosMovManual,
+  agregarMovimentacaoManual,
+  type LinhaMovManualBruta,
+  type MetaProdutoMovManual,
+} from '@/lib/movimentacao-manual'
+import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
+import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import Link from 'next/link'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { ChipsPeriodo } from '@/components/ui-kit/ChipsPeriodo'
@@ -55,6 +64,7 @@ export default async function RelatorioMovimentacaoPage({
     data_inicio?: string; data_final?: string; sentido?: string; modo?: string
     op?: string; loc?: string; sent?: string; dim?: string
     produto?: string; tipo?: string; familia?: string; local?: string
+    fonte?: string
     drill?: string
   }>
 }) {
@@ -385,6 +395,22 @@ export default async function RelatorioMovimentacaoPage({
   const locaisSel = valoresMulti(sp.local)
   const produtoBusca = sp.produto?.trim() || null
 
+  // Fonte "manual" (item #10, reunião 2026-08-03): em vez do dado misto de
+  // movimentos_historico (ListarMovimentos da Omie, sem coluna de origem --
+  // ver AGENTS.md), lê de `movimentos` (ListarAjusteEstoque) filtrado pra só
+  // ajuste manual de verdade -- ver lib/movimentacao-manual.ts pro achado
+  // completo. Toggle novo; a fonte "todos" (default) continua exatamente
+  // como antes.
+  const fonte = sp.fonte === 'manual' ? 'manual' : 'todos'
+  const pares = fonte === 'manual' ? parseDrill(sp.drill) : []
+  const DIMS_MANUAL = [
+    { value: 'familia', label: 'Família' },
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'local', label: 'Local de estoque' },
+  ] as const
+  const dimSelManual = DIMS_MANUAL.some((d) => d.value === sp.dim) ? sp.dim! : 'familia'
+  const dimExibidaManual: 'tipo' | 'familia' | 'local' | 'produto' = pares.length > 0 ? 'produto' : (dimSelManual as 'tipo' | 'familia' | 'local')
+
   const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
     buscarFamilias(),
     supabase
@@ -418,12 +444,17 @@ export default async function RelatorioMovimentacaoPage({
     }
     codigosFiltro = [...new Set(produtosFiltrados.map((p) => p.codigo_produto).filter((v): v is number => v != null))]
   }
+  // Snapshot ANTES da narrowing por local (usado pela fonte "manual" abaixo,
+  // que filtra local direto por codigo_local_estoque de `movimentos` -- não
+  // precisa (nem deve) passar pela aproximação via posicao_estoques).
+  const codigosFiltroSemLocal = codigosFiltro
   // Local de estoque: movimentos_historico não guarda local por movimento (o
   // ListarMovimentos do Omie não traz essa informação) — restringe aos produtos
   // que têm posição de estoque no(s) local(is) escolhido(s) (mesmo padrão de
   // relatorio_estoque_valorizado). Paginado pelo mesmo motivo acima: locais
   // "principais" (depósito) rotineiramente passam de 1000 posições por loja.
-  if (locaisSel.length) {
+  // Só se aplica à fonte "todos" -- ver comentário acima.
+  if (locaisSel.length && fonte !== 'manual') {
     const PAGE = 1000
     const posicoes: { n_cod_prod: number | null }[] = []
     for (let p = 0; ; p++) {
@@ -501,6 +532,190 @@ export default async function RelatorioMovimentacaoPage({
   const sentido = sp.sentido === 'entradas' ? 'entradas' : 'saidas'
   const ini = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_inicio ?? '') ? sp.data_inicio! : `${hojeISOQtd.slice(0, 4)}-01-01`
   const fim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : hojeISOQtd
+
+  const fonteToggle = (
+    <SegmentLinks
+      basePath="/relatorio-movimentacao"
+      param="fonte"
+      aria-label="Fonte"
+      opcoes={[
+        { value: '', label: 'Todos os movimentos' },
+        { value: 'manual', label: 'Só manual (item #10)' },
+      ]}
+    />
+  )
+
+  // ---------- Fonte "manual": movimentos (ListarAjusteEstoque), sem venda
+  // (PDV) nem transferência — ver lib/movimentacao-manual.ts pro achado
+  // completo desta task (#10 + #11). Ramo separado do "todos" abaixo pra não
+  // arriscar a fonte já existente (RPC relatorio_movimentacao_matriz,
+  // migration 090) — pedido explícito: "não sobrescreva a existente".
+  if (fonte === 'manual') {
+    const [linhasBrutas, metaPorCodigoManual] = await Promise.all([
+      buscarMovimentosManuais({ lojaId, dataInicio: ini, dataFinal: fim }),
+      buscarMetaProdutosMovManual(lojaId),
+    ])
+    const locaisPorCodigoManual = new Map(
+      locaisOpcoes.map((l) => [Number(l.codigo_local_estoque), l.descricao ?? String(l.codigo_local_estoque)])
+    )
+
+    // Busca por produto (nome/código) aplicada direto sobre o metadado —
+    // movimentos.id_prod é o código do produto (mesmo domínio de
+    // produtos.codigo_produto, confirmado em lib/omie/sync-ajustes.ts).
+    let codigosProdutoSet: Set<number> | null = codigosFiltroSemLocal !== null ? new Set(codigosFiltroSemLocal) : null
+    if (produtoBusca) {
+      const termo = produtoBusca.toLowerCase()
+      const casam = new Set<number>()
+      for (const [cod, m] of metaPorCodigoManual) {
+        if ((m.descricao ?? '').toLowerCase().includes(termo) || (m.codigo ?? '').toLowerCase().includes(termo)) casam.add(cod)
+      }
+      codigosProdutoSet = codigosProdutoSet === null ? casam : new Set([...codigosProdutoSet].filter((c) => casam.has(c)))
+    }
+    const locaisCodigosSet = locaisSel.length ? new Set(locaisSel.map(Number)) : null
+
+    // Drill: dim escolhida (família/tipo/local) -> produto. Só 1 nível (a
+    // trilha nunca passa de 1 par nesta tela -- produto é o nível final,
+    // sem "itens individuais" ainda).
+    const parDrill = pares[0]
+    const filtroExtra = parDrill
+      ? (
+          l: LinhaMovManualBruta,
+          meta: MetaProdutoMovManual | undefined,
+          localLabel: string
+        ) => {
+          const alvo = parDrill.rotulo === SEM ? 'Sem classificação' : parDrill.rotulo
+          if (parDrill.dim === 'tipo') return (meta?.tipo || 'Sem classificação') === alvo
+          if (parDrill.dim === 'familia') return (meta?.familia || 'Sem classificação') === alvo
+          if (parDrill.dim === 'local') return localLabel === alvo
+          return true
+        }
+      : undefined
+
+    const agregadoManual = agregarMovimentacaoManual(
+      linhasBrutas, metaPorCodigoManual, locaisPorCodigoManual, dimExibidaManual, sentido,
+      { codigosProduto: codigosProdutoSet, locaisCodigos: locaisCodigosSet, filtroExtra }
+    )
+
+    const rotuloDeManual = (raw: string): string => {
+      if (raw === 'Sem classificação') return explicarRotulo('Sem classificação')?.label ?? raw
+      if (dimExibidaManual === 'tipo') return labelTipoItem(raw)
+      if (dimExibidaManual === 'produto') return formatarNomeProduto(raw) || raw
+      return raw
+    }
+
+    const mesesM = [...new Set(agregadoManual.map((m) => m.mes))].sort()
+    const porRotuloM = new Map<string, { total: number; meses: Record<string, number> }>()
+    for (const r of agregadoManual) {
+      const ent = porRotuloM.get(r.rotulo) ?? { total: 0, meses: {} }
+      ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + r.valor
+      ent.total += r.valor
+      porRotuloM.set(r.rotulo, ent)
+    }
+    const ordenadasM = [...porRotuloM.entries()].sort((a, b) => b[1].total - a[1].total)
+    const linhasM = ordenadasM.slice(0, LIMITE_LINHAS).map(([rotulo, ent]) => ({ rotuloRaw: rotulo, rotulo: rotuloDeManual(rotulo), meses: ent.meses, total: ent.total }))
+    const ocultadasM = ordenadasM.length - linhasM.length
+    const totalPorMesM: Record<string, number> = {}
+    for (const [, ent] of porRotuloM) for (const m of mesesM) totalPorMesM[m] = (totalPorMesM[m] ?? 0) + (ent.meses[m] ?? 0)
+    const totalGeralM = Object.values(totalPorMesM).reduce((s, v) => s + v, 0)
+    const dimLabelM = DIMS_MANUAL.find((d) => d.value === dimExibidaManual)?.label ?? (dimExibidaManual === 'produto' ? 'Produto' : dimExibidaManual)
+    const fmtCelM = (n: number) => (n ? fmtMoeda(n) : '-')
+
+    return (
+      <div className="space-y-4">
+        {header}
+        {seg}
+        {fonteToggle}
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
+          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+            Total <span className="num font-semibold text-text">{fmtMoeda(totalGeralM)}</span>
+          </span>
+        </div>
+        <p className="px-1 text-[11px] text-text-muted">
+          Só ajuste manual de estoque (Omie: ListarAjusteEstoque) — exclui venda de PDV e transferência entre
+          locais (essas já têm relatório próprio: Faturamento e Transferências).
+        </p>
+
+        <SegmentLinks
+          basePath="/relatorio-movimentacao"
+          param="sentido"
+          aria-label="Sentido"
+          opcoes={[
+            { value: '', label: 'Saídas (perda/baixa)' },
+            { value: 'entradas', label: 'Entradas' },
+          ]}
+        />
+
+        {pares.length === 0 ? (
+          <SegmentLinks
+            basePath="/relatorio-movimentacao"
+            param="dim"
+            aria-label="Abrir por"
+            opcoes={DIMS_MANUAL.map((d) => ({ value: d.value === 'familia' ? '' : d.value, label: d.label }))}
+          />
+        ) : (
+          <DrillBreadcrumb
+            basePath="/relatorio-movimentacao"
+            sp={sp}
+            pares={pares}
+            raiz={`Manual por ${(DIMS_MANUAL.find((d) => d.value === dimSelManual)?.label ?? dimSelManual).toLowerCase()}`}
+            rotuloDe={(p) => (p.rotulo === SEM ? explicarRotulo('Sem classificação')!.label : p.dim === 'tipo' ? labelTipoItem(p.rotulo) : p.rotulo)}
+          />
+        )}
+
+        {linhasM.length === 0 ? (
+          <EmptyState icon={ArrowDownUp} title="Sem movimento manual no período" hint="Ajuste o período ou os filtros. Volte um nível na trilha se estiver detalhando por produto." />
+        ) : (
+          <div className="space-y-1.5">
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full min-w-[600px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-2">
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimLabelM}</th>
+                    {mesesM.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
+                    <th className={`text-right ${th}`}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasM.map((l) => {
+                    const parNovo = { dim: dimExibidaManual === 'produto' ? dimSelManual : dimExibidaManual, rotulo: l.rotuloRaw === 'Sem classificação' ? SEM : l.rotuloRaw }
+                    const linkavel = pares.length === 0 // só a linha do topo (família/tipo/local) drilla pra produto
+                    return (
+                    <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
+                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={l.rotulo}>
+                        <div className="max-w-[160px] truncate">
+                          {linkavel ? (
+                            <Link href={hrefComDrill('/relatorio-movimentacao', sp, [parNovo])} className="hover:underline">{l.rotulo}</Link>
+                          ) : (
+                            <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotuloRaw)}`} className="hover:underline">{l.rotulo}</Link>
+                          )}
+                        </div>
+                      </td>
+                      {mesesM.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCelM(l.meses[m] ?? 0)}</td>))}
+                      <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCelM(l.total)}</td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total</td>
+                    {mesesM.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCelM(totalPorMesM[m] ?? 0)}</td>))}
+                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCelM(totalGeralM)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="px-1 text-[11px] text-text-muted">
+              {pares.length === 0 ? 'Clique numa linha pra ver quais produtos compõem o valor.' : 'Detalhamento por produto dentro do recorte selecionado.'}
+              {ocultadasM > 0 && ` Mostrando os ${LIMITE_LINHAS} maiores de ${ordenadasM.length}.`}
+            </p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // Achado real (2026-07-27): a RPC relatorio_movimentacao_matriz tem plano
   // instável no Postgres (a CTE `preco` varre nota_fiscal_items inteiro sem
@@ -640,6 +855,7 @@ export default async function RelatorioMovimentacaoPage({
     <div className="space-y-4">
       {header}
       {seg}
+      {fonteToggle}
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
