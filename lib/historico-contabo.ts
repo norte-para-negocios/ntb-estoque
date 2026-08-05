@@ -191,44 +191,24 @@ export async function contarNotasFiscaisAntigas(opts: {
   }
 }
 
-// Mesmo padrao acima, para /movimentos -- usado como cinto-de-seguranca em
-// `complementarMovimentos` (parametro opcional `onFrioIncompleto`, ver
-// abaixo): compara contra o numero de linhas frias efetivamente trazidas por
-// buscarFrioTudo pra detectar paginacao incompleta (Contabo fora do ar bem no
-// meio, ou as 3 tentativas de buscarFrioTudo esgotadas). Achado real (revisao
-// final da auditoria de filtros/relatorios, item I5): antes, essa truncagem
-// so virava um `console.error` (ver buscarFrioTudo) -- fonte=manual em
-// /relatorio-movimentacao podia mostrar total silenciosamente incompleto sem
-// nenhum aviso na tela, mesmo padrao de bug ja corrigido em nota-fiscal
-// (totaisParciais).
-export async function contarMovimentosAntigas(opts: {
-  lojaId: number
-  dataInicio?: string
-  dataFinal?: string
-}): Promise<number> {
-  const url = process.env.NTB_FRIO_API_URL
-  const key = process.env.NTB_FRIO_API_KEY
-  if (!url) return 0
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
-    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), count: 'true' })
-    if (opts.dataInicio) qs.set('data_inicio', opts.dataInicio)
-    if (opts.dataFinal) qs.set('data_final', opts.dataFinal)
-    const resp = await fetch(`${url}/movimentos?${qs.toString()}`, {
-      headers: { 'X-Api-Key': key ?? '' },
-      signal: controller.signal,
-      cache: 'no-store', // ver comentario em buscarFrio sobre cache de fetch mascarar dado historico
-    })
-    clearTimeout(timeoutId)
-    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
-    const json = (await resp.json()) as { count?: number }
-    return json.count ?? 0
-  } catch (e) {
-    console.error('historico-contabo: falha ao contar movimentos antigos', e)
-    return 0
-  }
-}
+// REMOVIDO (revisão final round 2, 2026-08-05, problema 1): existia uma
+// `contarMovimentosAntigas` aqui, mesmo padrão de `contarNotasFiscaisAntigas`
+// acima (usa `count=true` do endpoint pra saber o total real sem LIMIT).
+// Achado real: ao contrário de `/notas_fiscais` e `/ordens_producao`, o
+// endpoint `/movimentos` da `ntb-frio-api` NUNCA implementou `count=true`
+// (confirmado em `server.js` no servidor Contabo, fora deste repo) -- pedir
+// `count=true` pra ele devolve as linhas normais (`{"rows":[...]}`, até o
+// LIMIT do servidor), não uma contagem. Como a função só lia `json.count`
+// (sempre `undefined` nessa resposta), o retorno era sempre 0 -- e o
+// cinto-de-seguranca que dependia dele (`frias.length < friasEsperadas`,
+// abaixo em `complementarMovimentos`) NUNCA disparava: código morto. PIOR:
+// a chamada em si baixava a tabela `movimentos` inteira do período (medido
+// ao vivo: ~2,9MB, ~17,6s extras) só pra alimentar essa checagem inútil, em
+// TODO carregamento do relatório de Movimentação (período padrão cruza os
+// 90 dias quase sempre). Substituído por um sinal mais barato: `buscarFrioTudo`
+// já sabe internamente quando desiste depois de 3 tentativas (ver
+// `onTruncado` logo abaixo) -- não precisa de uma segunda chamada de rede
+// cara só para decidir SE avisa.
 
 // A API do Contabo tem LIMIT fixo no servidor pros endpoints de historico longo
 // (nao aceita LIMIT arbitrario do cliente, so `offset`) -- acha real (audit Notas
@@ -248,10 +228,21 @@ export async function contarMovimentosAntigas(opts: {
 // silencio, de forma nao-deterministica (dependia so da latencia daquele
 // carregamento). Agora falha distinta (`null`) tenta de novo com backoff antes
 // de desistir, e so para o loop numa resposta bem-sucedida curta o bastante.
+//
+// `onTruncado` (revisao final round 2, 2026-08-05, problema 1): callback
+// opcional -- nao muda a assinatura pra nenhum dos varios callers existentes
+// que nao passam nada. Disparado exatamente quando as 3 tentativas se
+// esgotam (o `console.error` acima), ou seja, quando esta funcao SABE que
+// devolveu um array truncado. Callers que precisam avisar o usuario disso
+// (ex: `complementarMovimentos`, aviso `totaisParciais` de
+// relatorio-movimentacao) usam este sinal em vez de uma segunda chamada
+// `count=true` cara -- que pra `/movimentos` nem funciona (ver comentario
+// removido de `contarMovimentosAntigas`, acima).
 export async function buscarFrioTudo<T>(
   caminho: string,
   params: Record<string, string | number | undefined>,
   tamanhoPagina: number,
+  onTruncado?: () => void,
 ): Promise<T[]> {
   const tudo: T[] = []
   for (let offset = 0; ; offset += tamanhoPagina) {
@@ -265,6 +256,7 @@ export async function buscarFrioTudo<T>(
       console.error(
         `historico-contabo: desistindo de ${caminho} no offset ${offset} apos 3 tentativas -- dado pode estar incompleto`,
       )
+      onTruncado?.()
       break
     }
     tudo.push(...pagina)
@@ -449,13 +441,24 @@ function mesclarMovimentosPorChaveNatural<T extends { id: number; id_ajuste: num
 // nao passam nada (lib/movimentacao-operacao-auto.ts, lib/resumo-dia.ts,
 // lib/actions/busca-global.ts) -- mesmo padrao non-breaking ja usado no
 // `onErro` de rpcTodos (lib/supabase/rpc-todos.ts) nesta mesma rodada de
-// hardening. So dispara a query extra de contagem (contarMovimentosAntigas)
-// quando o caller passa o callback, pra nao pagar o custo de rede a mais nos
-// 3 call sites que nao precisam desse sinal.
+// hardening.
+//
+// Round 2 (revisao final, 2026-08-05, problema 1): a implementacao original
+// disparava uma SEGUNDA chamada de rede (`contarMovimentosAntigas`,
+// `count=true`) so pra saber se `buscarFrioTudo` truncou. Achado real:
+// `/movimentos` nunca implementou `count=true` no servidor (so
+// `/notas_fiscais` e `/ordens_producao` tem) -- a resposta vinha com as
+// linhas normais em vez de uma contagem, `json.count` era sempre
+// `undefined`, e o aviso NUNCA disparava (codigo morto) -- so que a chamada
+// em si baixava a tabela inteira do periodo (medido: ~2,9MB, ~17,6s extras
+// em TODO carregamento do relatorio de Movimentacao). Trocado por
+// `buscarFrioTudo`'s `onTruncado`: ela ja sabe, sem nenhuma chamada extra,
+// quando desistiu depois de 3 tentativas -- repassa o mesmo callback direto
+// pra ela em vez de comparar contagens.
 export async function complementarMovimentos<T extends { id: number; id_ajuste: number | null }>(
   quentes: T[],
   opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number },
-  onFrioIncompleto?: (friasEncontradas: number, friasEsperadas: number) => void
+  onFrioIncompleto?: () => void
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
   const frias = await buscarFrioTudo<T>('/movimentos', {
@@ -464,11 +467,7 @@ export async function complementarMovimentos<T extends { id: number; id_ajuste: 
     data_final: opts.dataFinal,
     id_prod: opts.idProd,
     transferencia_id: opts.transferenciaId,
-  }, 5000)
-  if (onFrioIncompleto) {
-    const friasEsperadas = await contarMovimentosAntigas({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
-    if (frias.length < friasEsperadas) onFrioIncompleto(frias.length, friasEsperadas)
-  }
+  }, 5000, onFrioIncompleto)
   return mesclarMovimentosPorChaveNatural(quentes, frias)
 }
 
