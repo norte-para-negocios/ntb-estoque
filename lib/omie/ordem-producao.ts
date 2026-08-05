@@ -37,12 +37,21 @@ interface OmieOP {
 // entao OPs alteradas antes desta mudanca nao tem como recuperar esse dado.
 function mapOutrasInf(op: OmieOP) {
   const o = op.outrasInf ?? {}
+  const concluida = o.cConcluida === 'S'
   return {
-    concluida: o.cConcluida === 'S',
+    concluida,
     dt_conclusao_real: parseDate(o.dConclusao),
     dt_inclusao: parseDate(o.dInclusao),
     dt_ultima_alteracao_omie: parseDate(o.dAlteracao),
     alterado_por_omie: o.uAlt || null,
+    // Achado real (2026-08-05): quando o Omie ja confirma concluida=true por aqui
+    // (sync/fetch), qualquer conclusao_status/erro de uma tentativa anterior
+    // (ex.: "ja foi concluida", corrida entre executarConclusaoOP e um reenvio)
+    // fica obsoleto -- mas o upsert desta funcao nunca tocava essas colunas, entao
+    // ficavam presas mostrando erro numa OP que na verdade concluiu certo.
+    // executarConclusaoOP ja limpa isso no caminho direto (marcarConcluidaLocal);
+    // aqui e o mesmo para quando quem descobre a conclusao e o sync, nao o app.
+    ...(concluida ? { conclusao_status: null, conclusao_erro_msg: null, conclusao_tentativas: 0 } : {}),
   }
 }
 

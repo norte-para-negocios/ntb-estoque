@@ -930,10 +930,10 @@ export async function retryOPsPendentes(
  */
 export async function finishOPsEmLote(
   opIds: number[]
-): Promise<{ sucesso: number; falhas: { id: number; error: string }[] }> {
+): Promise<{ sucesso: number; falhas: { id: number; numOP: string; error: string }[] }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) {
-    return { sucesso: 0, falhas: opIds.map((id) => ({ id, error: 'Sem permissão' })) }
+    return { sucesso: 0, falhas: opIds.map((id) => ({ id, numOP: '-', error: 'Sem permissão' })) }
   }
   if (!opIds.length) return { sucesso: 0, falhas: [] }
   const supabaseSessao = await createClient()
@@ -945,23 +945,26 @@ export async function finishOPsEmLote(
   const { data: linhas } = await supabase
     .from('ordens_producao')
     .select(
-      `id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)`
+      `id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)`
     )
     .eq('loja_id', lojaId)
     .eq('concluida', false)
     .in('id', opIds)
 
   let sucesso = 0
-  const falhas: { id: number; error: string }[] = []
+  const falhas: { id: number; numOP: string; error: string }[] = []
   await comLimiteDeConcorrenciaAgrupado(
     (linhas ?? []) as unknown as (Omit<OPRetryRow, 'conclusao_qtde_desejada' | 'conclusao_data_desejada'> & {
+      identificacao_c_num_op: string | null
+      num_ordem: string | null
       loja: LojaOmie
     })[],
     (op) => `${op.identificacao_n_cod_produto}|${op.identificacao_d_dt_previsao}`,
     CONCORRENCIA_OMIE,
     async (op) => {
+      const numOP = op.identificacao_c_num_op || op.num_ordem || `#${op.id}`
       if (!op.identificacao_n_cod_op || !op.loja) {
-        falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida (aguarde o próximo sync)' })
+        falhas.push({ id: op.id, numOP, error: 'OP sem código Omie ou loja inválida (aguarde o próximo sync)' })
         return
       }
       const res = await executarConclusaoOP(
@@ -970,7 +973,7 @@ export async function finishOPsEmLote(
         null,
         user?.id ?? null
       )
-      if ('error' in res) falhas.push({ id: op.id, error: res.error })
+      if ('error' in res) falhas.push({ id: op.id, numOP, error: res.error })
       else sucesso++
     }
   )

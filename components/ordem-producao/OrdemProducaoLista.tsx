@@ -56,11 +56,12 @@ export function OrdemProducaoLista({
       if (res.sucesso) toast.success(`${res.sucesso} OP(s) concluída(s) no Omie`)
       if (res.falhas.length) {
         toast.error(`${res.falhas.length} falharam ao concluir`, {
-          description: `Entraram na fila de reenvio automático. ${res.falhas
-            .slice(0, 3)
-            .map((f) => f.error)
-            .join('; ')}`,
-          duration: 15000,
+          description: `Entraram na fila de reenvio automático.\n${res.falhas
+            .slice(0, 5)
+            .map((f) => `OP ${f.numOP}: ${f.error}`)
+            .join('\n')}${res.falhas.length > 5 ? `\n... e mais ${res.falhas.length - 5}` : ''}`,
+          descriptionClassName: 'whitespace-pre-line',
+          duration: 20000,
         })
       }
       setSel(new Set())
