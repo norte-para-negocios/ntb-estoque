@@ -27,6 +27,7 @@ import {
   buscarMovimentosManuais,
   buscarMetaProdutosMovManual,
   agregarMovimentacaoManual,
+  agregarSaldoContado,
   type LinhaMovManualBruta,
   type MetaProdutoMovManual,
 } from '@/lib/movimentacao-manual'
@@ -598,12 +599,36 @@ export default async function RelatorioMovimentacaoPage({
       { codigosProduto: codigosProdutoSet, locaisCodigos: locaisCodigosSet, filtroExtra }
     )
 
+    // Saldo contado no inventário (tipo=SLD) -- NÃO é movimento, é foto do
+    // saldo contado num instante (achado real, fix round 2: join
+    // movimentos×inventario_items bateu 883/883, quan=contagem física, não
+    // delta). Por isso nunca entra na tabela de entrada/saída em R$ acima
+    // -- exibido à parte, em CONTAGEM DE EVENTOS (nunca soma de quantidade
+    // entre contagens diferentes, ver lib/movimentacao-manual.ts). Só no
+    // nível raiz (família/tipo/local) -- não desce pro drill de produto,
+    // pra não expandir o escopo desta correção urgente.
+    const agregadoSaldo = pares.length === 0
+      ? agregarSaldoContado(linhasBrutas, metaPorCodigoManual, locaisPorCodigoManual, dimExibidaManual, { codigosProduto: codigosProdutoSet, locaisCodigos: locaisCodigosSet })
+      : []
+    const porRotuloS = new Map<string, { contagens: number; zeradas: number }>()
+    for (const r of agregadoSaldo) {
+      const ent = porRotuloS.get(r.rotulo) ?? { contagens: 0, zeradas: 0 }
+      ent.contagens += r.contagens
+      ent.zeradas += r.zeradas
+      porRotuloS.set(r.rotulo, ent)
+    }
+
     const rotuloDeManual = (raw: string): string => {
       if (raw === 'Sem classificação') return explicarRotulo('Sem classificação')?.label ?? raw
       if (dimExibidaManual === 'tipo') return labelTipoItem(raw)
       if (dimExibidaManual === 'produto') return formatarNomeProduto(raw) || raw
       return raw
     }
+
+    const linhasS = [...porRotuloS.entries()]
+      .sort((a, b) => b[1].zeradas - a[1].zeradas || b[1].contagens - a[1].contagens)
+      .slice(0, LIMITE_LINHAS)
+      .map(([rotulo, v]) => ({ rotulo: rotuloDeManual(rotulo), contagens: v.contagens, zeradas: v.zeradas }))
 
     const mesesM = [...new Set(agregadoManual.map((m) => m.mes))].sort()
     const porRotuloM = new Map<string, { total: number; meses: Record<string, number> }>()
@@ -713,6 +738,47 @@ export default async function RelatorioMovimentacaoPage({
               {pares.length === 0 ? 'Clique numa linha pra ver quais produtos compõem o valor.' : 'Detalhamento por produto dentro do recorte selecionado.'}
               {ocultadasM > 0 && ` Mostrando os ${LIMITE_LINHAS} maiores de ${ordenadasM.length}.`}
             </p>
+          </div>
+        )}
+
+        {pares.length === 0 && (
+          <div className="space-y-1.5">
+            <p className="px-1 text-[13px] font-semibold text-text">Saldo contado no inventário</p>
+            <p className="px-1 text-[11px] text-text-muted">
+              Contagens físicas de inventário (Omie: tipo=SLD) — isso NÃO é movimento de
+              estoque, é uma foto do saldo contado num instante (confirmado: bate exato com
+              `inventario_items`). Por isso aparece em quantidade de contagens, não em R$ —
+              somar o valor contado ao longo do ano não tem significado de negócio (a mesma
+              prateleira contada 10 vezes não &quot;movimentou&quot; 10x o que foi contado
+              cada vez). &quot;Zeradas&quot; = quantas vezes um produto foi contado e achado
+              em zero (perda total naquele local de estoque).
+            </p>
+            {linhasS.length === 0 ? (
+              <EmptyState icon={ArrowDownUp} title="Sem contagem de inventário no período" />
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                <table className="w-full min-w-[420px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-surface-2">
+                      <th className={`text-left ${th}`}>{dimLabelM}</th>
+                      <th className={`text-right ${th}`}>Contagens</th>
+                      <th className={`text-right ${th}`}>Zeradas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhasS.map((l) => (
+                      <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
+                        <td className="px-3 py-2 text-text" title={l.rotulo}>
+                          <div className="max-w-[160px] truncate">{l.rotulo}</div>
+                        </td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{l.contagens}</td>
+                        <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.zeradas ? 'font-medium text-err' : 'text-text-muted'}`}>{l.zeradas || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

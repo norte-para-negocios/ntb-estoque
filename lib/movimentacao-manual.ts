@@ -35,28 +35,43 @@
 // menor que o de `quan` (valor fica ~estável entre lançamentos do mesmo
 // produto mesmo quando a quantidade varia 10-200x -- ex: id_prod 4775275749,
 // quan=12 e quan=216, valor=4.95 nas duas linhas). O total em R$ correto é
-// `Math.abs(quan) * valor`, não `valor` sozinho -- sem isso o relatório
-// SUBCONTAVA o total real em ~13x (medido: loja 3, 1 ano, SLD sozinho ia de
-// R$136.371,20 pra R$1.739.247,71 depois do fix). Ver task-6-report.md,
-// seção "Fix round 1", pro antes/depois completo.
+// `Math.abs(quan) * valor`, não `valor` sozinho. Esse fix continua válido no
+// fix round 2 (abaixo) -- só passou a se aplicar SÓ a ENT/SAI, porque SLD
+// saiu inteiramente do cálculo de R$ (não é movimento, ver achado #4). Ver
+// task-6-report.md, seções "Fix round 1" e "Fix round 2".
 //
-// Achado real #4 (fix round 1): `tipo='SLD'` (ajuste por contagem de
-// inventário) não tem `quan` com sinal — o campo é sempre o valor ABSOLUTO
-// contado fisicamente (nunca negativo: confirmado em TODA a base, 5 lojas,
-// histórico completo, 0 linhas com quan<0 ou valor<0 pra SLD), ao contrário
-// do que `components/movimentacoes/MovimentosTab.tsx:78` documenta
-// ("ja assinado"). Aplicando a MESMA convenção de lá (sinal de `quan` decide
-// o sentido, não incondicionalmente "saída"), e dado que `quan` de SLD nunca
-// é negativo na prática, SLD passa a contar como ENTRADA (ganho de
-// inventário) em vez de SAÍDA -- mudança grande de classificação (não só de
-// valor). Isso NÃO está 100% confirmado contra a documentação oficial da
-// Omie (não encontrada) nem contra um caso real de contagem com falta
-// (nunca observado); é a leitura mais consistente com o resto do código
-// (MovimentosTab.tsx) e com como os 2 pontos de escrita deste app geram SLD
-// (sempre com a contagem física, nunca negativa). Se algum dia aparecer uma
-// linha SLD com quan<0, o código abaixo já trata como saída corretamente --
-// mas a interpretação "SLD = sempre ganho" merece confirmação com o Ramon ou
-// suporte Omie antes de ser tratada como definitiva (ver task-6-report.md).
+// Achado real #4 (fix round 2, SUBSTITUI o achado #4 do fix round 1 --
+// aquele estava errado): `tipo='SLD'` NÃO é um movimento de estoque -- é uma
+// FOTO DO SALDO contado fisicamente no inventário num instante, não uma
+// quantidade que entrou/saiu. Confirmado por join independente
+// `movimentos`(SLD) × `inventario_items` por `id_ajuste`: 883/883 linhas
+// batem exato, `movimentos.quan` = `inventario_items.quan` (a contagem
+// digitada pelo operador). Evidência adicional: (1) contagens repetidas do
+// mesmo produto traçam um NÍVEL ao longo do tempo (ex.: 34 → 14 → 13 → 13 →
+// 21 → 45 → 8 → 3), não uma série de movimentos; (2) `movimentos_historico`
+// (feed oficial de movimento da Omie) mostra, no mesmo dia de um SLD, um
+// fluxo real de estoque completamente diferente do número do SLD; (3) 1.454
+// linhas SLD têm `quan=0` (prateleira contada vazia) -- como delta seria um
+// no-op sem sentido repetido 1454 vezes, como saldo contado é rotina normal
+// (achar zero é informação real: a prateleira estava vazia).
+//
+// Por isso SLD NUNCA entra no total de entrada/saída em R$ (`agregarMovimentacaoManual`
+// só olha tipo IN ('ENT','SAI'), que são movimento de verdade) -- somar
+// `quan` de SLD ao longo do ano é somar "fotos" tiradas em instantes
+// diferentes, sem significado de negócio nenhum (achado real de produção:
+// um erro de digitação, loja 5, 2026-05-30, quan=2.720.000 × R$24,90 virou
+// R$67.728.000 de "entrada manual" com o código do fix round 1 -- rodando
+// pra toda a base de uma loja, SLD sozinho já somava R$70.843.233,42,
+// 98,4% das linhas, um número sem nenhum sentido de negócio). SLD é
+// exposto separadamente por `agregarSaldoContado` abaixo -- contagem de
+// eventos (quantas vezes um produto foi contado, quantas fecharam em zero),
+// nunca soma de `quan` entre contagens diferentes.
+//
+// O "delta real" de estoque que uma contagem de inventário efetivamente
+// causou (quanto entrou/saiu de fato pra corrigir o saldo) NÃO existe hoje
+// em `movimentos` -- precisaria gravar o saldo ANTERIOR no momento do
+// ajuste (dado novo, não capturado) ou outro endpoint da Omie que traga
+// isso. Fora do escopo desta task -- ver task-6-report.md, "Fix round 2".
 //
 // Achado real #2: ao contrário de `notas_fiscais` (Task 1 desta auditoria,
 // ver lib/historico-contabo.ts), o lado quente (Supabase self-hosted) de
@@ -89,6 +104,12 @@ export type LinhaMovManualBruta = {
 export type MetaProdutoMovManual = { tipo: string | null; familia: string | null; descricao: string | null; codigo: string | null }
 
 export type LinhaMovManualAgregada = { rotulo: string; mes: string; qtde: number; valor: number }
+
+// SLD (saldo contado): contagem de EVENTOS, não soma de quantidade -- somar
+// `quan` entre contagens diferentes do mesmo produto não tem significado
+// (ver achado real #4 no topo do arquivo). `zeradas` é o sinal que interessa
+// pro Ramon (produto contado e achado em zero = perda total naquele local).
+export type LinhaSaldoContadoAgregada = { rotulo: string; mes: string; contagens: number; zeradas: number }
 
 async function paginarTodos<T>(
   montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
@@ -182,17 +203,14 @@ export function agregarMovimentacaoManual(
 ): LinhaMovManualAgregada[] {
   const grupos = new Map<string, LinhaMovManualAgregada>()
   for (const l of linhas) {
+    // SLD não é movimento (é foto de saldo contado) -- nunca entra no total
+    // de entrada/saída em R$. Ver achado real #4 no topo do arquivo e
+    // `agregarSaldoContado` pra exibição separada dele.
+    if (l.tipo !== 'ENT' && l.tipo !== 'SAI') continue
     const quanNum = Number(l.quan) || 0
-    // ENT/SAI: `quan` sempre vem positivo do Omie, a direção é o campo
+    // `quan` sempre vem positivo do Omie pra ENT/SAI, a direção é o campo
     // `tipo` (confirmado ao vivo, nenhuma linha de SAI tem quan negativo).
-    // SLD: sem sinal confiável no dado real (sempre >=0 na prática -- ver
-    // achado #4 no topo do arquivo), mas trata pelo sinal de `quan` (mesma
-    // convenção de MovimentosTab.tsx:78) em vez de cravar como "saída" --
-    // se um dia aparecer negativo, cai certo em "saídas".
-    const sentidoLinha: 'entradas' | 'saidas' =
-      l.tipo === 'ENT' ? 'entradas'
-      : l.tipo === 'SLD' ? (quanNum >= 0 ? 'entradas' : 'saidas')
-      : 'saidas'
+    const sentidoLinha: 'entradas' | 'saidas' = l.tipo === 'ENT' ? 'entradas' : 'saidas'
     if (sentidoLinha !== sentido) continue
     if (opts.codigosProduto && (l.id_prod == null || !opts.codigosProduto.has(l.id_prod))) continue
     if (opts.locaisCodigos && (l.codigo_local_estoque == null || !opts.locaisCodigos.has(l.codigo_local_estoque))) continue
@@ -220,6 +238,49 @@ export function agregarMovimentacaoManual(
     const acc = grupos.get(chave) ?? { rotulo, mes, qtde: 0, valor: 0 }
     acc.qtde += qtde
     acc.valor += valor
+    grupos.set(chave, acc)
+  }
+  return [...grupos.values()]
+}
+
+// Agrega as linhas SLD (saldo contado no inventário, NÃO movimento -- ver
+// achado real #4 no topo do arquivo) por rótulo × mês, em CONTAGEM DE
+// EVENTOS -- nunca soma `quan`/`valor` entre contagens diferentes (isso não
+// tem significado: cada linha é uma foto de um instante, não um fluxo).
+// `zeradas` é o sinal que interessa pro Ramon: quantas vezes um produto foi
+// contado e encontrado em ZERO (perda total naquele local) -- por isso
+// linhas com quan=0 são contadas normalmente aqui (ao contrário de
+// agregarMovimentacaoManual, onde qtde=0 e valor=0 juntos descartam a
+// linha).
+export function agregarSaldoContado(
+  linhas: LinhaMovManualBruta[],
+  metaPorCodigo: Map<number, MetaProdutoMovManual>,
+  locaisPorCodigo: Map<number, string>,
+  dim: 'tipo' | 'familia' | 'local' | 'produto',
+  opts: {
+    codigosProduto?: Set<number> | null
+    locaisCodigos?: Set<number> | null
+    filtroExtra?: (l: LinhaMovManualBruta, meta: MetaProdutoMovManual | undefined, localLabel: string) => boolean
+  } = {}
+): LinhaSaldoContadoAgregada[] {
+  const grupos = new Map<string, LinhaSaldoContadoAgregada>()
+  for (const l of linhas) {
+    if (l.tipo !== 'SLD') continue
+    if (opts.codigosProduto && (l.id_prod == null || !opts.codigosProduto.has(l.id_prod))) continue
+    if (opts.locaisCodigos && (l.codigo_local_estoque == null || !opts.locaisCodigos.has(l.codigo_local_estoque))) continue
+    const meta = l.id_prod != null ? metaPorCodigo.get(l.id_prod) : undefined
+    const localLabel = l.codigo_local_estoque != null ? (locaisPorCodigo.get(l.codigo_local_estoque) ?? String(l.codigo_local_estoque)) : 'Sem local'
+    if (opts.filtroExtra && !opts.filtroExtra(l, meta, localLabel)) continue
+    const rotulo =
+      dim === 'tipo' ? (meta?.tipo || 'Sem classificação')
+      : dim === 'familia' ? (meta?.familia || 'Sem classificação')
+      : dim === 'local' ? localLabel
+      : (meta?.descricao || (l.id_prod != null ? `Produto ${l.id_prod}` : 'Sem classificação'))
+    const mes = String(l.data).slice(0, 7)
+    const chave = JSON.stringify([rotulo, mes])
+    const acc = grupos.get(chave) ?? { rotulo, mes, contagens: 0, zeradas: 0 }
+    acc.contagens += 1
+    if ((Number(l.quan) || 0) === 0) acc.zeradas += 1
     grupos.set(chave, acc)
   }
   return [...grupos.values()]
