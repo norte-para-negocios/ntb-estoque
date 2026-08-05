@@ -6,21 +6,57 @@
 // plano ("a tabela `movimentos` já é só ajuste manual, sem venda/compra
 // misturado") estava PARCIALMENTE certa. `movimentos` nunca recebe compra
 // (NF de entrada é outra tabela inteira, nunca grava aqui) -- mas venda de
-// PDV SIM aparece aqui, de duas formas: origem='PDV' direto (raro) e
-// origem='AJU'/motivo='PDV' (a baixa de estoque que o Omie gera pra cada
-// venda, majoritária -- medido ao vivo: 88-118 mil linhas por loja, R$4-5
-// milhões, vs. só dezenas de linhas/algumas centenas de R$ de perda manual
-// "pura", motivo='PER'). A distinção, porém, é POSSÍVEL (ao contrário de
-// `movimentos_historico`, que não tem nenhuma coluna de origem) porque
-// `motivo`/`origem` sempre vêm preenchidos pelo Omie -- o mesmo filtro já
-// usado em `lib/movimentacao-operacao-auto.ts` (`gerarMovimentacaoOperacaoAutomatica`,
-// categoria "Movimento Manual de Estoque") resolve isso, e é reaproveitado
-// aqui via `ehMovimentoManual`.
+// PDV SIM aparece aqui, de duas formas: origem='PDV' direto (rara: medido ao
+// vivo, loja 2 tem 102.797 linhas/R$4,70M assim) e origem='AJU'/motivo='PDV'
+// (a baixa de estoque que o Omie gera pra cada venda, majoritária: loja 2
+// tem 14.035 linhas/R$723k assim), vs. só dezenas de linhas/algumas centenas
+// de R$ de perda manual "pura", motivo='PER'. A distinção, porém, é POSSÍVEL
+// (ao contrário de `movimentos_historico`, que não tem nenhuma coluna de
+// origem) porque `motivo`/`origem` sempre vêm preenchidos pelo Omie -- o
+// mesmo filtro já usado em `lib/movimentacao-operacao-auto.ts`
+// (`gerarMovimentacaoOperacaoAutomatica`, categoria "Movimento Manual de
+// Estoque") resolve isso, e é reaproveitado aqui via `ehMovimentoManual`.
 //
 // `movimentos` também exclui TRF/TPQ (transferência entre locais): não é um
 // "entrada/saída" de estoque líquido no sentido que o Ramon pediu -- é
 // deslocamento entre locais da mesma loja, e já tem visão própria
-// (Transferências).
+// (Transferências). Exclusão checa `tipo` E `motivo` (achado da revisão,
+// fix round 1): 2 linhas em toda a base (loja 2, R$61,51) tinham
+// `motivo='TRF'` com `tipo='ENT'` -- vazavam pro "manual" porque só o `tipo`
+// era checado, igual ao padrão já usado pro PDV (2 campos).
+//
+// Achado real #3 (fix round 1, revisão independente): `valor` em `movimentos`
+// NÃO é o valor total do movimento -- é o CUSTO UNITÁRIO (CMC) usado no
+// ajuste, confirmado em 2 lugares: `lib/actions/inventario.ts` e
+// `lib/actions/movimentacoes.ts` mandam pro Omie `valor: posicao?.n_cmc ?? 0`
+// (unitário) tanto pro ajuste de inventário quanto pro ajuste manual comum --
+// nunca `quan * cmc`. Confirmado também estatisticamente: 308 de 331 produtos
+// com 5+ linhas de ajuste (loja 3) têm o coeficiente de variação de `valor`
+// menor que o de `quan` (valor fica ~estável entre lançamentos do mesmo
+// produto mesmo quando a quantidade varia 10-200x -- ex: id_prod 4775275749,
+// quan=12 e quan=216, valor=4.95 nas duas linhas). O total em R$ correto é
+// `Math.abs(quan) * valor`, não `valor` sozinho -- sem isso o relatório
+// SUBCONTAVA o total real em ~13x (medido: loja 3, 1 ano, SLD sozinho ia de
+// R$136.371,20 pra R$1.739.247,71 depois do fix). Ver task-6-report.md,
+// seção "Fix round 1", pro antes/depois completo.
+//
+// Achado real #4 (fix round 1): `tipo='SLD'` (ajuste por contagem de
+// inventário) não tem `quan` com sinal — o campo é sempre o valor ABSOLUTO
+// contado fisicamente (nunca negativo: confirmado em TODA a base, 5 lojas,
+// histórico completo, 0 linhas com quan<0 ou valor<0 pra SLD), ao contrário
+// do que `components/movimentacoes/MovimentosTab.tsx:78` documenta
+// ("ja assinado"). Aplicando a MESMA convenção de lá (sinal de `quan` decide
+// o sentido, não incondicionalmente "saída"), e dado que `quan` de SLD nunca
+// é negativo na prática, SLD passa a contar como ENTRADA (ganho de
+// inventário) em vez de SAÍDA -- mudança grande de classificação (não só de
+// valor). Isso NÃO está 100% confirmado contra a documentação oficial da
+// Omie (não encontrada) nem contra um caso real de contagem com falta
+// (nunca observado); é a leitura mais consistente com o resto do código
+// (MovimentosTab.tsx) e com como os 2 pontos de escrita deste app geram SLD
+// (sempre com a contagem física, nunca negativa). Se algum dia aparecer uma
+// linha SLD com quan<0, o código abaixo já trata como saída corretamente --
+// mas a interpretação "SLD = sempre ganho" merece confirmação com o Ramon ou
+// suporte Omie antes de ser tratada como definitiva (ver task-6-report.md).
 //
 // Achado real #2: ao contrário de `notas_fiscais` (Task 1 desta auditoria,
 // ver lib/historico-contabo.ts), o lado quente (Supabase self-hosted) de
@@ -73,7 +109,9 @@ async function paginarTodos<T>(
 // não inventa um critério novo.
 export function ehMovimentoManual(r: { origem: string | null; motivo: string | null; tipo: string }): boolean {
   if (r.origem === 'PDV' || r.motivo === 'PDV') return false
-  if (r.tipo === 'TRF' || r.tipo === 'TPQ') return false
+  // Checa tipo E motivo (fix round 1): 2 linhas em produção tinham
+  // motivo='TRF' com tipo='ENT' -- só checar `tipo` deixava vazar.
+  if (r.tipo === 'TRF' || r.tipo === 'TPQ' || r.motivo === 'TRF' || r.motivo === 'TPQ') return false
   return true
 }
 
@@ -144,11 +182,17 @@ export function agregarMovimentacaoManual(
 ): LinhaMovManualAgregada[] {
   const grupos = new Map<string, LinhaMovManualAgregada>()
   for (const l of linhas) {
-    // Mesma convenção já usada em gerarMovimentacaoOperacaoAutomatica: `quan`
-    // sempre vem positivo do Omie, a direção é o campo `tipo` (ENT = entrada;
-    // SAI/SLD = saída -- confirmado ao vivo, nenhuma linha de SAI/SLD tem
-    // quan negativo).
-    const sentidoLinha: 'entradas' | 'saidas' = l.tipo === 'ENT' ? 'entradas' : 'saidas'
+    const quanNum = Number(l.quan) || 0
+    // ENT/SAI: `quan` sempre vem positivo do Omie, a direção é o campo
+    // `tipo` (confirmado ao vivo, nenhuma linha de SAI tem quan negativo).
+    // SLD: sem sinal confiável no dado real (sempre >=0 na prática -- ver
+    // achado #4 no topo do arquivo), mas trata pelo sinal de `quan` (mesma
+    // convenção de MovimentosTab.tsx:78) em vez de cravar como "saída" --
+    // se um dia aparecer negativo, cai certo em "saídas".
+    const sentidoLinha: 'entradas' | 'saidas' =
+      l.tipo === 'ENT' ? 'entradas'
+      : l.tipo === 'SLD' ? (quanNum >= 0 ? 'entradas' : 'saidas')
+      : 'saidas'
     if (sentidoLinha !== sentido) continue
     if (opts.codigosProduto && (l.id_prod == null || !opts.codigosProduto.has(l.id_prod))) continue
     if (opts.locaisCodigos && (l.codigo_local_estoque == null || !opts.locaisCodigos.has(l.codigo_local_estoque))) continue
@@ -161,8 +205,13 @@ export function agregarMovimentacaoManual(
       : dim === 'local' ? localLabel
       : (meta?.descricao || (l.id_prod != null ? `Produto ${l.id_prod}` : 'Sem classificação'))
     const mes = String(l.data).slice(0, 7)
-    const qtde = Number(l.quan) || 0
-    const valor = Number(l.valor) || 0
+    const qtde = Math.abs(quanNum)
+    // `l.valor` é o custo UNITÁRIO (CMC), não o total do movimento -- achado
+    // #3 no topo do arquivo. Total em R$ = quantidade x custo unitário.
+    // Math.abs em tudo: nunca deixa um valor com sinal inesperado subtrair
+    // do total do bucket em vez de somar.
+    const unitValor = Number(l.valor) || 0
+    const valor = qtde * unitValor
     if (!qtde && !valor) continue
     // JSON.stringify em vez de "|": rótulo vem de descrição/família sem
     // sanitização (mesmo achado real já corrigido em lib/omie/faturamento.ts
