@@ -69,6 +69,7 @@ export async function GET(request: Request) {
           .select('codigo_produto')
           .eq('loja_id', lojaId)
           .in('tipo_item', tiposArr)
+          .order('id', { ascending: true })
           .range(from, to),
       )
       codigos = prodCodigos.map((p) => String(p.codigo_produto))
@@ -89,6 +90,7 @@ export async function GET(request: Request) {
             .select('nota_fiscal_id')
             .eq('loja_id', lojaId)
             .in('produto_codigo', loteCodigos)
+            .order('id', { ascending: true })
             .range(from, to)
           if (produto) {
             const p = escapeIlikeOr(produto)
@@ -109,6 +111,7 @@ export async function GET(request: Request) {
           .select('nota_fiscal_id')
           .eq('loja_id', lojaId)
           .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          .order('id', { ascending: true })
           .range(from, to),
       )
       const notaIds = Array.from(
