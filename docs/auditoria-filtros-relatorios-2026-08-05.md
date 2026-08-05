@@ -96,6 +96,26 @@ real de produção (este projeto não tem staging).
   frio) — artefato do corte de failover daquela data, não investigado a
   fundo aqui.
 
+## Achado fora do plano original, resolvido em 2026-08-06
+
+Queixa do usuário: "concluir todas as OPs" às vezes deixava OP parecendo
+com problema. Investigado com dado real (25 OPs concluídas recentes,
+cruzadas ao vivo contra a Omie) — **não achei nenhum mismatch ativo**
+(`concluida=true` sempre bateu com a Omie de verdade). Achei, em vez disso,
+a causa provável da confusão: `conclusao_status`/`conclusao_erro_msg`
+ficavam presos em "Erro" numa OP que na verdade já tinha concluído certo,
+porque o sync (`syncOrdensProducao`/`fetchOrdemProducao` →
+`mapOutrasInf`) nunca limpava esses campos ao descobrir `concluida=true`
+— só o caminho direto de conclusão fazia isso. Corrigido (`mapOutrasInf`
+agora limpa os 3 campos quando `cConcluida='S'`); também melhorado o toast
+de erro do "concluir selecionadas" pra mostrar o número de cada OP que
+falhou, não só uma mensagem genérica. 54 OPs com esse estado sujo
+pré-existente (lojas 3/4/6) foram corrigidas via UPDATE direto no banco.
+Não corrigido (fora de escopo desta rodada, registrado como follow-up): a
+integração ntb-vendas (`app/api/integracao/ordem-producao/route.ts`) tem
+um gap de robustez onde, se o sync pós-conclusão falhar, a Omie fica
+concluída mas o NTB Estoque mostra pendente.
+
 ## Como isso foi verificado
 
 Cada task seguiu: investigar com SQL real (Postgres de produção via SSH
