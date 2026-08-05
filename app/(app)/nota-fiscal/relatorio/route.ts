@@ -158,7 +158,15 @@ export async function GET(request: Request) {
   function aplicarFiltrosComuns(qIn: any): any {
     let q = qIn
     if (numNfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(numNfe)}%`)
-    if (fornecedor) q = q.ilike('c_nome', `%${escapeIlike(fornecedor)}%`)
+    // Achado real (revisão final round 2, 2026-08-05, problema 2): fornecedor
+    // só filtrava `c_nome` (nome fantasia) -- mesma classe de bug de família/
+    // local/natureza já corrigida acima (ficou de fora daquela rodada). A
+    // tela (nota-fiscal/page.tsx) já filtra com OR de razão social + nome
+    // fantasia -- medido ao vivo, loja 3: 1819 de 2402 notas têm razão social
+    // diferente do nome fantasia (fornecedor=SENDAS: 73 notas na tela, PDF
+    // vazio antes deste fix). Replicado aqui, mesmo padrão de escape
+    // (`escapeIlike`, igual ao que page.tsx já usa dentro do próprio `.or()`).
+    if (fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(fornecedor)}%,c_nome.ilike.%${escapeIlike(fornecedor)}%`)
     if (status === 'C' || status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
