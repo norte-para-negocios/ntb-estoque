@@ -35,10 +35,17 @@ export async function GET(request: Request) {
   const soAtrasadas = searchParams.get('atraso') === '1'
 
   const [ano, mes] = mesParam.split('-').map(Number)
-  const numDias = new Date(ano, mes, 0).getDate()
+  // Achado real (reconfirmado item #3b, reuniao 03/08 -- auditoria de
+  // filtros/relatorios, Task 5, 2026-08-04): no modo "atraso=1", a grade pode
+  // trazer OPs de MESES ANTERIORES ao mesParam selecionado (uma OP atrasada de
+  // verdade e, por definicao, planejada no passado e nunca concluida -- o mes
+  // em que ela foi planejada normalmente NAO e o mes atual). 31 dias cobre
+  // qualquer mes de origem; ver montarQuery abaixo pra a mudanca principal.
+  const numDias = soAtrasadas ? 31 : new Date(ano, mes, 0).getDate()
   const dias = Array.from({ length: numDias }, (_, i) => i + 1)
   const mesIni = `${mesParam}-01`
   const mesFim = `${mesParam}-${String(numDias).padStart(2, '0')}`
+  const hojeISO = hojeBahiaISO()
 
   const supabase = await createClient()
 
@@ -61,12 +68,20 @@ export async function GET(request: Request) {
   // primeiro e busca todas as paginas em paralelo, mesmo padrao ja usado em
   // relatorio-compras/transferencia.
   function montarQuery(selectCols: string, opts?: { count: 'exact'; head: true }) {
-    let q = supabase
-      .from('ordens_producao')
-      .select(selectCols, opts)
-      .eq('loja_id', lojaId)
-      .gte('identificacao_d_dt_previsao', mesIni)
-      .lte('identificacao_d_dt_previsao', mesFim)
+    let q = supabase.from('ordens_producao').select(selectCols, opts).eq('loja_id', lojaId)
+    if (soAtrasadas) {
+      // "Atrasada" (lib/op-status.ts) e definida contra HOJE, nao contra o mes
+      // selecionado -- restringir por mesIni/mesFim aqui escondia (com PDF vazio,
+      // sem nenhum aviso) toda OP atrasada planejada num mes anterior ao atual, que
+      // e o caso mais comum (uma OP so fica "atrasada" depois que o mes dela passou
+      // sem ela ser concluida). Confirmado com dado real: loja 4, local PIZZA, tinha
+      // 1 OP atrasada (prevista 31/07), e "Imprimir Atrasadas" em agosto voltava
+      // "Nenhuma ordem de produção prevista" -- reproduzido ao vivo na conta QA
+      // antes deste fix.
+      q = q.lt('identificacao_d_dt_previsao', hojeISO)
+    } else {
+      q = q.gte('identificacao_d_dt_previsao', mesIni).lte('identificacao_d_dt_previsao', mesFim)
+    }
     if (localCod !== null) q = q.eq('identificacao_codigo_local_estoque', localCod)
     return q
   }
@@ -85,7 +100,9 @@ export async function GET(request: Request) {
     Array.from({ length: numPaginasOps }, (_, p) => montarQuery(SELECT_OP).range(p * 1000, p * 1000 + 999))
   )
   const opsRaw = blocosOps.flatMap((r) => (r.data ?? []) as unknown as OpRow[])
-  const hojeISO = hojeBahiaISO()
+  // opStatus() e a fonte da verdade pra "concluida" (trata full_object como fallback
+  // quando a coluna concluida vem NULL, ver lib/op-status.ts) -- mantido aqui em vez
+  // de mover pra montarQuery pra nao perder esse fallback.
   const ops = opsRaw.filter((o) => !soAtrasadas || opStatus(o, hojeISO) === 'atrasada')
 
   const codigosProduto = [...new Set(ops.map((o) => o.identificacao_n_cod_produto).filter((c): c is number => c != null))]
@@ -131,10 +148,15 @@ export async function GET(request: Request) {
   if (soAtrasadas) filtrosAtivos.push('Somente atrasadas')
 
   const nomeArquivo = `programacao-producao-${mesParam}${soAtrasadas ? '-atrasadas' : ''}.pdf`
+  // No modo atraso, o resultado pode cruzar varios meses (ver montarQuery acima) --
+  // o rotulo nao pode mais dizer "agosto/2026" como se so aquele mes contasse.
+  const mesLabel = soAtrasadas
+    ? `Em atraso · até ${String(hojeISO.slice(8, 10))}/${hojeISO.slice(5, 7)}/${hojeISO.slice(0, 4)}`
+    : `${MESES[mes - 1]}/${ano}`
   const element = createElement(ProgramacaoProducaoPDF, {
     loja: lojaNome,
     local: localNome,
-    mesLabel: `${soAtrasadas ? 'Em atraso · ' : ''}${MESES[mes - 1]}/${ano}`,
+    mesLabel,
     filtros: filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined,
     dias,
     linhas,

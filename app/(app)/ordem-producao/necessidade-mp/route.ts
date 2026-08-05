@@ -36,10 +36,14 @@ export async function GET(request: Request) {
   const soAtrasadas = searchParams.get('atraso') === '1'
 
   const [ano, mes] = mesParam.split('-').map(Number)
-  const numDias = new Date(ano, mes, 0).getDate()
+  // Mesmo achado/fix de programacao/route.ts (item #3b, reuniao 03/08 -- Task 5,
+  // 2026-08-04): no modo atraso a grade pode cruzar varios meses, entao usa 31 dias
+  // fixo em vez do numero de dias do mesParam especifico.
+  const numDias = soAtrasadas ? 31 : new Date(ano, mes, 0).getDate()
   const dias = Array.from({ length: numDias }, (_, i) => i + 1)
   const mesIni = `${mesParam}-01`
   const mesFim = `${mesParam}-${String(numDias).padStart(2, '0')}`
+  const hojeISO = hojeBahiaISO()
 
   const supabase = await createClient()
 
@@ -60,12 +64,14 @@ export async function GET(request: Request) {
   // Mesmo padrao de paginacao de programacao/route.ts: PostgREST corta em 1000
   // linhas sem avisar, um mes cheio de OPs facilmente passa disso.
   function montarQuery(selectCols: string, opts?: { count: 'exact'; head: true }) {
-    let q = supabase
-      .from('ordens_producao')
-      .select(selectCols, opts)
-      .eq('loja_id', lojaId)
-      .gte('identificacao_d_dt_previsao', mesIni)
-      .lte('identificacao_d_dt_previsao', mesFim)
+    let q = supabase.from('ordens_producao').select(selectCols, opts).eq('loja_id', lojaId)
+    if (soAtrasadas) {
+      // Mesmo achado/fix de programacao/route.ts: "atrasada" e relativo a HOJE, nao
+      // ao mesParam selecionado -- ver comentario la pro detalhe do bug reproduzido.
+      q = q.lt('identificacao_d_dt_previsao', hojeISO)
+    } else {
+      q = q.gte('identificacao_d_dt_previsao', mesIni).lte('identificacao_d_dt_previsao', mesFim)
+    }
     if (localCod !== null) q = q.eq('identificacao_codigo_local_estoque', localCod)
     return q
   }
@@ -83,7 +89,8 @@ export async function GET(request: Request) {
     Array.from({ length: numPaginasOps }, (_, p) => montarQuery(SELECT_OP).range(p * 1000, p * 1000 + 999))
   )
   const opsRaw = blocosOps.flatMap((r) => (r.data ?? []) as unknown as OpRow[])
-  const hojeISO = hojeBahiaISO()
+  // opStatus() trata full_object como fallback quando concluida vem NULL -- mantido
+  // aqui em vez de mover pra montarQuery pra nao perder esse fallback.
   const ops = opsRaw.filter((o) => !soAtrasadas || opStatus(o, hojeISO) === 'atrasada')
 
   // Filtro de tipo_produto se refere ao tipo do produto ACABADO da OP (mesmo
@@ -159,10 +166,14 @@ export async function GET(request: Request) {
   if (soAtrasadas) filtrosAtivos.push('Somente atrasadas')
 
   const nomeArquivo = `necessidade-mp-${mesParam}${soAtrasadas ? '-atrasadas' : ''}.pdf`
+  // No modo atraso o resultado pode cruzar varios meses (ver montarQuery acima).
+  const mesLabel = soAtrasadas
+    ? `Em atraso · até ${hojeISO.slice(8, 10)}/${hojeISO.slice(5, 7)}/${hojeISO.slice(0, 4)}`
+    : `${MESES[mes - 1]}/${ano}`
   const element = createElement(NecessidadeMpPDF, {
     loja: lojaNome,
     local: localNome,
-    mesLabel: `${soAtrasadas ? 'Em atraso · ' : ''}${MESES[mes - 1]}/${ano}`,
+    mesLabel,
     filtros: filtrosAtivos.length ? filtrosAtivos.join(', ') : undefined,
     dias,
     linhas,
