@@ -518,9 +518,11 @@ export default async function RelatorioMovimentacaoPage({
               }}
               persistirEm="/relatorio-movimentacao"
             />
-            <a href={`/relatorio-movimentacao/export${exportQs.toString() ? `?${exportQs}` : ''}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: saídas/entradas por produto (com filtros)">
-              <Download className="size-4" /> Baixar
-            </a>
+            {fonte !== 'manual' && (
+              <a href={`/relatorio-movimentacao/export${exportQs.toString() ? `?${exportQs}` : ''}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: saídas/entradas por produto (com filtros)">
+                <Download className="size-4" /> Baixar
+              </a>
+            )}
           </>
         }
       />
