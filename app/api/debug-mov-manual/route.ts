@@ -28,6 +28,22 @@ export async function GET(req: NextRequest) {
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
   }
 
+  // Valida o drill: pega a família de maior valor e reagrega por produto
+  // filtrando só ela (mesma lógica que a página faz ao clicar numa linha) --
+  // a soma dos produtos tem que bater com o valor da família.
+  const top1 = somaPorRotulo(agg1)[0]
+  let drillCheck: unknown = null
+  if (top1) {
+    const [famAlvo, valorFamAlvo] = top1
+    const aggProduto = agregarMovimentacaoManual(linhas1, meta, new Map(), 'produto', 'saidas', {
+      filtroExtra: (_l, m) => (m?.familia || 'Sem classificação') === famAlvo,
+    })
+    const somaProdutos = new Map<string, number>()
+    for (const r of aggProduto) somaProdutos.set(r.rotulo, (somaProdutos.get(r.rotulo) ?? 0) + r.valor)
+    const somaTotal = [...somaProdutos.values()].reduce((s, v) => s + v, 0)
+    drillCheck = { familia: famAlvo, valorFamilia: valorFamAlvo, somaProdutos: somaTotal, bate: Math.abs(somaTotal - valorFamAlvo) < 0.05, nProdutos: somaProdutos.size }
+  }
+
   return NextResponse.json({
     lojaId, ini, fim,
     metaMapSize: meta.size,
@@ -37,5 +53,6 @@ export async function GET(req: NextRequest) {
     idsRun1SemRun2: linhas1.filter((l) => !linhas2.some((x) => x.id === l.id)).length,
     idsRun2SemRun1: linhas2.filter((l) => !linhas1.some((x) => x.id === l.id)).length,
     amostraSemMeta: semMeta1.slice(0, 5).map((l) => ({ id: l.id, id_prod: l.id_prod, tipo: l.tipo, valor: l.valor, data: l.data })),
+    drillCheck,
   })
 }
