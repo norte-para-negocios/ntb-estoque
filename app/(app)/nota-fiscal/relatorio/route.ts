@@ -3,7 +3,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
+import { escapeIlike, escapeIlikeOr, buscarTudoPaginado, buscarTodosPorIds } from '@/lib/utils-busca'
 import { fmtData } from '@/lib/pdf-utils'
 import { RelatorioNFPDF, type RelatorioNFItem } from '@/components/relatorio/RelatorioNFPDF'
 import { PdfErro } from '@/components/relatorio/PdfChrome'
@@ -127,22 +127,14 @@ export async function GET(request: Request) {
     c_etapa: string | null
     full_object: unknown
   }
-  const notas: Nota[] = []
+  let notas: Nota[] = []
 
-  function buildQuery(from: number, to: number) {
-    let q = supabase
-      .from('notas_fiscais')
-      .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
-      .eq('loja_id', lojaId)
-      .gte('d_emissao_nfe', dataInicio)
-      .lte('d_emissao_nfe', dataFinal)
-      .is('deleted_at', null)
-      // d_emissao_nfe se repete (varias notas no mesmo dia) -- sem um desempate
-      // unico, paginar em blocos de 1000 pode duplicar ou pular linhas no
-      // limite entre blocos (mesmo risco do resto do fix desta auditoria).
-      .order('d_emissao_nfe', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, to)
+  // Filtros comuns (texto/status/categoria), sem id nem paginação -- usados
+  // tanto pela query direta (sem filtro de produto/tipo) quanto pelos lotes
+  // de id abaixo (ver buscarTodosPorIds).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- builder de query do supabase-js, tipo concreto muda a cada `.eq()/.ilike()/.or()` encadeado
+  function aplicarFiltrosComuns(qIn: any): any {
+    let q = qIn
     if (numNfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(numNfe)}%`)
     if (fornecedor) q = q.ilike('c_nome', `%${escapeIlike(fornecedor)}%`)
     if (status === 'C' || status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
@@ -150,16 +142,59 @@ export async function GET(request: Request) {
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     else if (status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
     if (categoriaOrClause) q = q.or(categoriaOrClause)
-    if (notaIdsFiltro !== null) q = q.in('id', notaIdsFiltro)
     return q
   }
 
-  for (let pagina = 0; ; pagina++) {
-    const from = pagina * PAGE_SIZE
-    const { data: bloco } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (!bloco?.length) break
-    notas.push(...(bloco as Nota[]))
-    if (bloco.length < PAGE_SIZE) break
+  if (notaIdsFiltro !== null) {
+    // Achado real (Task 10, 2026-08-04/05, auditoria de filtros/relatorios):
+    // notaIdsFiltro resolve o filtro de tipo/produto em TODO o historico da
+    // loja (sem limite de data), podendo chegar a milhares de ids (ex.: loja
+    // 3, tipo=01 = Materia Prima, 1626 notas historicas). Um .in('id', [...])
+    // direto com essa lista gera uma URL de ~11KB e o PostgREST/nginx
+    // respondem 414 URI Too Long -- silenciosamente tratado como "nenhuma
+    // nota" (ver buscarTodosPorIds em lib/utils-busca.ts). Busca em lotes
+    // pequenos o bastante pra nunca estourar o limite de URL.
+    notas = await buscarTodosPorIds<Nota>(notaIdsFiltro, (lote) =>
+      aplicarFiltrosComuns(
+        supabase
+          .from('notas_fiscais')
+          .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
+          .eq('loja_id', lojaId)
+          .gte('d_emissao_nfe', dataInicio)
+          .lte('d_emissao_nfe', dataFinal)
+          .is('deleted_at', null)
+          .in('id', lote),
+      ),
+    )
+    notas.sort((a, b) => {
+      const cmp = (a.d_emissao_nfe ?? '') < (b.d_emissao_nfe ?? '') ? -1 : (a.d_emissao_nfe ?? '') > (b.d_emissao_nfe ?? '') ? 1 : a.id - b.id
+      return cmp
+    })
+  } else {
+    function buildQuery(from: number, to: number) {
+      const q = supabase
+        .from('notas_fiscais')
+        .select('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, full_object')
+        .eq('loja_id', lojaId)
+        .gte('d_emissao_nfe', dataInicio)
+        .lte('d_emissao_nfe', dataFinal)
+        .is('deleted_at', null)
+        // d_emissao_nfe se repete (varias notas no mesmo dia) -- sem um desempate
+        // unico, paginar em blocos de 1000 pode duplicar ou pular linhas no
+        // limite entre blocos (mesmo risco do resto do fix desta auditoria).
+        .order('d_emissao_nfe', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+      return aplicarFiltrosComuns(q)
+    }
+
+    for (let pagina = 0; ; pagina++) {
+      const from = pagina * PAGE_SIZE
+      const { data: bloco } = await buildQuery(from, from + PAGE_SIZE - 1)
+      if (!bloco?.length) break
+      notas.push(...(bloco as Nota[]))
+      if (bloco.length < PAGE_SIZE) break
+    }
   }
 
   // Task 1 (auditoria de filtros/completude, 2026-08-04, ver

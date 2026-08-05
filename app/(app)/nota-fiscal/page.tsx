@@ -17,7 +17,7 @@ import { Money } from '@/components/ui-kit/Money'
 import { SELO_CLASSE } from '@/lib/status-cor'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
-import { escapeIlike, escapeIlikeOr, buscarTudoPaginado } from '@/lib/utils-busca'
+import { escapeIlike, escapeIlikeOr, buscarTudoPaginado, buscarTodosPorIds } from '@/lib/utils-busca'
 import { buscarFamilias } from '@/lib/actions/produto'
 import { FileText, Download } from 'lucide-react'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -156,45 +156,18 @@ export default async function NotaFiscalPage({
     ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: params.produto || null, localCod })
     : null
 
-  // Query da listagem (paginada).
-  let query = supabase
-    .from('notas_fiscais')
-    .select('id, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
-    .eq('loja_id', lojaId)
-    .gte('d_emissao_nfe', dataInicio)
-    .lte('d_emissao_nfe', dataFinal)
-    .is('deleted_at', null)
-    .order(ord, { ascending: dir === 'asc' })
-    .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
-  if (params.num_nfe) query = query.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-  if (params.fornecedor) query = query.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
-  // Status: 'CONCLUIDA'/'PENDENTE'/'CANCELADA' (novos), 'C'/'P' (compat com
-  // links antigos) ou a etapa real direta (ex.: '60', '40') -- ver lib/nf-status.ts.
-  if (params.status === 'C' || params.status === 'CONCLUIDA') query = query.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
-  else if (params.status === 'P' || params.status === 'PENDENTE') query = query.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
-  else if (params.status === 'CANCELADA') query = query.eq('full_object->infoCadastro->>cCancelada', 'S')
-  else if (params.status === 'MANIFESTADA') query = query.eq('full_object->infoCadastro->>cRecebido', 'S')
-  else if (params.status) query = query.eq('c_etapa', params.status)
-  if (params.natureza) query = query.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-  if (categoriaOrClause) query = query.or(categoriaOrClause)
-  if (idsIn) query = query.in('id', idsIn)
+  const SELECT_LISTAGEM = 'id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object'
 
-  // Query dos totais (mesmos filtros, sem paginacao visivel ao usuario): soma R$ + count.
-  // Paginada por baixo dos panos -- confirmado empiricamente que o PostgREST trunca
-  // em 1000 linhas mesmo com `.limit(100000)` explicito (nao ha erro, so silencio),
-  // e nenhuma loja hoje passa disso em notas_fiscais mas o numero cresce todo dia.
-  function buildTotaisQuery(from: number, to: number) {
-    let q = supabase
-      .from('notas_fiscais')
-      .select('id, n_id_receb, n_valor_nfe')
-      .eq('loja_id', lojaId)
-      .gte('d_emissao_nfe', dataInicio)
-      .lte('d_emissao_nfe', dataFinal)
-      .is('deleted_at', null)
-      .order('id', { ascending: true })
-      .range(from, to)
+  // Filtros comuns de texto/status/categoria/natureza, sem id nem paginacao --
+  // reaproveitados tanto pela query direta paginada (idsIn ausente) quanto
+  // pelos lotes de id abaixo (idsIn presente, ver achado grande logo abaixo).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- builder de query do supabase-js, tipo concreto muda a cada `.eq()/.ilike()/.or()` encadeado
+  function aplicarFiltrosNF(qIn: any): any {
+    let q = qIn
     if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
     if (params.fornecedor) q = q.or(`c_razao_social.ilike.%${escapeIlike(params.fornecedor)}%,c_nome.ilike.%${escapeIlike(params.fornecedor)}%`)
+    // Status: 'CONCLUIDA'/'PENDENTE'/'CANCELADA' (novos), 'C'/'P' (compat com
+    // links antigos) ou a etapa real direta (ex.: '60', '40') -- ver lib/nf-status.ts.
     if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
@@ -202,14 +175,93 @@ export default async function NotaFiscalPage({
     else if (params.status) q = q.eq('c_etapa', params.status)
     if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
     if (categoriaOrClause) q = q.or(categoriaOrClause)
-    if (idsIn) q = q.in('id', idsIn)
     return q
   }
 
-  const [{ data: notasRaw }, totaisRaw] = await Promise.all([
-    query,
-    buscarTudoPaginado<{ id: number; n_id_receb: string; n_valor_nfe: number | string | null }>(buildTotaisQuery),
-  ])
+  let notasRaw: NotaCompleta[] | null
+  let totaisRaw: { id: number; n_id_receb: string; n_valor_nfe: number | string | null }[]
+  // Quando idsIn esta ativo, guarda o conjunto COMPLETO (todas as notas
+  // quentes que casam, sem fatiar por pagina) -- reaproveitado mais abaixo
+  // pelo merge quente+frio (que precisa de TODAS as notas quentes do
+  // periodo, nao so as da pagina atual), evitando refazer a mesma busca.
+  let notasQuentesCompletas: NotaCompleta[] | null = null
+
+  if (idsIn) {
+    // Achado real (Task 10, 2026-08-05, auditoria de filtros/relatorios): idsIn
+    // resolve o filtro de tipo/familia/produto/local em TODO o historico da
+    // loja (sem limite de data -- os ids so cruzam com o periodo pedido
+    // DEPOIS, na query abaixo), podendo chegar a milhares de elementos pra
+    // tipos/familias comuns (ex.: loja 3, tipo=01 = Materia Prima, 1626 notas
+    // historicas = lista de ~11KB). Um `.in('id', idsIn)` direto nessa escala
+    // faz o PostgREST/nginx responderem 414 URI Too Long -- e
+    // `buscarTudoPaginado` trata QUALQUER erro (inclusive 414) como
+    // "acabaram as paginas", entao o filtro virava silenciosamente "nenhuma
+    // nota" pra QUALQUER periodo, inclusive 100% dentro da janela quente (sem
+    // fallback do Contabo pra mascarar, ao contrario do caso que cruza os 90
+    // dias). Corrigido buscando as notas quentes em LOTES de id
+    // (`buscarTodosPorIds`, ver lib/utils-busca.ts -- cada lote fica bem
+    // abaixo do limite de URL) e ordenando/paginando em memoria, mesmo
+    // espirito do merge quente+frio logo abaixo.
+    notasQuentesCompletas = await buscarTodosPorIds<NotaCompleta>(idsIn, (lote) =>
+      aplicarFiltrosNF(
+        supabase
+          .from('notas_fiscais')
+          .select(SELECT_LISTAGEM)
+          .eq('loja_id', lojaId)
+          .gte('d_emissao_nfe', dataInicio)
+          .lte('d_emissao_nfe', dataFinal)
+          .is('deleted_at', null)
+          .in('id', lote),
+      ),
+    )
+    totaisRaw = notasQuentesCompletas.map((r) => ({ id: r.id, n_id_receb: r.n_id_receb, n_valor_nfe: r.n_valor_nfe }))
+    const ordenadas = [...notasQuentesCompletas].sort((a, b) => {
+      const av = a[ord] ?? ''
+      const bv = b[ord] ?? ''
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0
+      return dir === 'asc' ? cmp : -cmp
+    })
+    const inicio = (page - 1) * POR_PAGINA
+    notasRaw = ordenadas.slice(inicio, inicio + POR_PAGINA + 1)
+  } else {
+    // Caminho original, sem filtro de tipo/familia/produto/local: `.range()`
+    // direto e seguro (o `.in('id', ...)` que causa o 414 acima nunca entra
+    // em jogo quando idsIn e null).
+    let query = supabase
+      .from('notas_fiscais')
+      .select(SELECT_LISTAGEM)
+      .eq('loja_id', lojaId)
+      .gte('d_emissao_nfe', dataInicio)
+      .lte('d_emissao_nfe', dataFinal)
+      .is('deleted_at', null)
+      .order(ord, { ascending: dir === 'asc' })
+      .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
+    query = aplicarFiltrosNF(query)
+
+    // Query dos totais (mesmos filtros, sem paginacao visivel ao usuario): soma R$ + count.
+    // Paginada por baixo dos panos -- confirmado empiricamente que o PostgREST trunca
+    // em 1000 linhas mesmo com `.limit(100000)` explicito (nao ha erro, so silencio),
+    // e nenhuma loja hoje passa disso em notas_fiscais mas o numero cresce todo dia.
+    function buildTotaisQuery(from: number, to: number) {
+      const q = supabase
+        .from('notas_fiscais')
+        .select('id, n_id_receb, n_valor_nfe')
+        .eq('loja_id', lojaId)
+        .gte('d_emissao_nfe', dataInicio)
+        .lte('d_emissao_nfe', dataFinal)
+        .is('deleted_at', null)
+        .order('id', { ascending: true })
+        .range(from, to)
+      return aplicarFiltrosNF(q)
+    }
+
+    const [{ data }, totais] = await Promise.all([
+      query,
+      buscarTudoPaginado<{ id: number; n_id_receb: string; n_valor_nfe: number | string | null }>(buildTotaisQuery),
+    ])
+    notasRaw = data
+    totaisRaw = totais
+  }
 
   let notas = notasRaw
   let temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
@@ -254,17 +306,22 @@ export default async function NotaFiscalPage({
       else if (params.status) q = q.eq('c_etapa', params.status)
       if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
       if (categoriaOrClause) q = q.or(categoriaOrClause)
-      if (idsIn) q = q.in('id', idsIn)
+      // NAO aplica idsIn aqui: quando idsIn esta ativo, notasQuentesCompletas
+      // (calculado acima em lotes de id, ver achado do 414) ja cobre a fatia
+      // quente inteira -- montarQueryNF so e usado abaixo quando idsIn e null.
       return q
     }
 
     // frias (Contabo) e a contagem da fatia quente sao todas independentes
-    // entre si -- disparadas juntas em vez de em serie.
+    // entre si -- disparadas juntas em vez de em serie. Quando idsIn esta
+    // ativo, notasQuentesCompletas ja tem a fatia quente inteira (buscada em
+    // lotes de id acima) -- pula a contagem via montarQueryNF (que sofreria o
+    // MESMO 414 se ainda aplicasse `.in('id', idsIn)`).
     const busca = params.num_nfe || params.fornecedor
-    const [friasRaw, friasTotalReal, { count: totalNFQuente }] = await Promise.all([
+    const [friasRaw, friasTotalReal, totalNFQuenteResp] = await Promise.all([
       buscarFrioTudo<NotaCompleta>('/notas_fiscais', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal, busca }, 2000),
       contarNotasFiscaisAntigas({ lojaId, dataInicio, dataFinal, busca }),
-      montarQueryNF('id', { count: 'exact', head: true }),
+      notasQuentesCompletas ? Promise.resolve(null) : montarQueryNF('id', { count: 'exact', head: true }),
     ])
     if (friasRaw.length < friasTotalReal) totaisParciais = true
 
@@ -283,20 +340,29 @@ export default async function NotaFiscalPage({
     qtdNotas = totaisCompletos.length
     totalValor = totaisCompletos.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
 
-    // Paginado (nao mais `.limit(2000)`): a fatia quente tambem pode passar de
-    // 1000 linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
+    // paginaCompletaRaw: TODAS as notas quentes do periodo (sem filtro de
+    // pagina do usuario). Quando idsIn esta ativo, reaproveita
+    // notasQuentesCompletas (ja buscado em lotes de id acima, ver achado do
+    // 414) -- senao (idsIn null, sem filtro de tipo/familia/produto/local),
+    // pagina por OFFSET como antes: a fatia quente tambem pode passar de 1000
+    // linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
     // truncaria a pagina em memoria (nao so o total exibido). totalNFQuente ja
     // foi buscado acima (junto com frias) -- so falta buscar as paginas, em
     // paralelo em vez de uma de cada vez.
-    const numPaginasNF = Math.ceil((totalNFQuente ?? 0) / 1000)
-    const blocosNF = await Promise.all(
-      Array.from({ length: numPaginasNF }, (_, pagina) =>
-        montarQueryNF('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
-          .order('id', { ascending: true })
-          .range(pagina * 1000, pagina * 1000 + 999)
+    let paginaCompletaRaw: NotaCompleta[]
+    if (notasQuentesCompletas) {
+      paginaCompletaRaw = notasQuentesCompletas
+    } else {
+      const numPaginasNF = Math.ceil((totalNFQuenteResp?.count ?? 0) / 1000)
+      const blocosNF = await Promise.all(
+        Array.from({ length: numPaginasNF }, (_, pagina) =>
+          montarQueryNF('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
+            .order('id', { ascending: true })
+            .range(pagina * 1000, pagina * 1000 + 999)
+        )
       )
-    )
-    const paginaCompletaRaw = blocosNF.flatMap((r) => (r.data ?? []) as unknown as NotaCompleta[])
+      paginaCompletaRaw = blocosNF.flatMap((r) => (r.data ?? []) as unknown as NotaCompleta[])
+    }
     // Reusa a mesma fatia fria (friasFiltradas), ja filtrada por status e por
     // notaIdsFrioSet acima -- evita uma segunda ida identica ao Contabo.
     const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.n_id_receb))
@@ -501,7 +567,7 @@ export default async function NotaFiscalPage({
               )
             },
           },
-          { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe} /> },
+          { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe == null ? null : Number(nf.n_valor_nfe)} /> },
         ]}
         acao={(nf) => (
           <Link href={`/nota-fiscal/${nf.id}`} className="text-brand hover:underline whitespace-nowrap">
