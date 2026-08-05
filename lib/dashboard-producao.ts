@@ -64,6 +64,12 @@ async function buscarOpsPaginado(lojaId: number, dataIni: string, dataFim: strin
       .eq('concluida', true)
       .gte('dt_conclusao_real', dataIni)
       .lte('dt_conclusao_real', dataFim)
+      // Achado real (revisão final da auditoria de filtros/relatórios, item
+      // M1): paginação por OFFSET sem ORDER BY determinístico -- mesmo risco
+      // já corrigido em nota-fiscal/relatorio/route.ts (Postgres não garante
+      // ordem estável entre chamadas sem um critério explícito, podendo
+      // duplicar ou pular linha no limite entre páginas).
+      .order('id', { ascending: true })
     if (local != null) q = q.eq('identificacao_codigo_local_estoque', local)
     const { data, error } = await q.range(p * PAGE, p * PAGE + PAGE - 1)
     if (error || !data?.length) break
@@ -88,6 +94,10 @@ async function buscarProdutosMeta(lojaId: number): Promise<Map<number, ProdutoMe
       .from('produtos')
       .select('codigo_produto, tipo_item, descricao_familia, descricao, codigo')
       .eq('loja_id', lojaId)
+      // Achado real (revisão final da auditoria de filtros/relatórios, item
+      // M1): mesmo risco de ORDER BY ausente na paginação por OFFSET, ver
+      // comentário em buscarOpsPaginado acima.
+      .order('id', { ascending: true })
       .range(p * PAGE, p * PAGE + PAGE - 1)
     if (error || !data?.length) break
     for (const p2 of data) {
