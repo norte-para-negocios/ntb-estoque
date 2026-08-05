@@ -479,7 +479,9 @@ export default async function AuditoriaFiscalPage({
                 CST de entrada é como a compra foi classificada no Omie ao dar entrada — é aí que se decide aproveitar ou não o
                 crédito de ICMS. As linhas destacadas têm o <strong>mesmo</strong> CST de origem e CFOP tratados das{' '}
                 <strong>duas</strong> formas no período: isso é uma divergência objetiva da base, não um veredito de erro —
-                qual lado está correto é avaliação do contador.
+                qual lado está correto é avaliação do contador. Esta tabela considera o período inteiro da loja e{' '}
+                <strong>não</strong> muda com os filtros de produto/família/tipo acima — é uma classificação fiscal do
+                documento, não do item.
               </p>
             </div>
           )}
