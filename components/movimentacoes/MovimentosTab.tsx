@@ -75,6 +75,12 @@ function sinalEm(m: { tipo: string; quan: number; local: number | null; destino:
   if (m.local !== localX) return 0
   if (m.tipo === 'ENT') return abs
   if (m.tipo === 'SAI') return -abs
+  // SUPERSEDED (auditoria 2026-08-05): "ja assinado" esta ERRADO -- SLD nao e
+  // um movimento assinado, e o SALDO CONTADO no inventario (foto de um
+  // instante, nao fluxo). Ver lib/movimentacao-manual.ts (achado real #4 no
+  // cabecalho do arquivo: join movimentos(SLD) x inventario_items bateu
+  // 883/883) e AGENTS.md. Nao corrigido aqui de proposito -- fix de verdade
+  // fica pra depois, fora de escopo desta rodada; comportamento inalterado.
   if (m.tipo === 'SLD') return m.quan // ja assinado (diferenca de contagem de inventario)
   return 0
 }

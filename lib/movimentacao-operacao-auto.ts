@@ -238,6 +238,13 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     if (data < DESDE || data > hoje) continue
     if (!produtoCasa(a.id_prod)) continue
     const meta = a.id_prod != null ? metaPorCodigo.get(Number(a.id_prod)) : undefined
+    // SUPERSEDED (auditoria 2026-08-05): sentido/valor abaixo tratam
+    // tipo='SLD' como se fosse um movimento assinado (ENT/SAI) -- PROVADO
+    // ERRADO, SLD e o SALDO CONTADO no inventario (foto de um instante, nao
+    // fluxo real de estoque). Ver lib/movimentacao-manual.ts (achado real #4
+    // no cabecalho do arquivo, codigo corrigido) e AGENTS.md. Nao corrigido
+    // aqui de proposito -- fix de verdade fica pra depois, fora de escopo
+    // desta rodada; comportamento inalterado.
     const sentido: 'E' | 'S' = a.tipo === 'ENT' ? 'E' : 'S'
     add({
       origem: 'Movimento Manual de Estoque', sentido, local: nomeLocal(a.codigo_local_estoque),

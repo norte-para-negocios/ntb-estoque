@@ -276,3 +276,129 @@ rodar de novo um backfill no mesmo molde (script foi ad-hoc, fora do repo).
   `relatorio/route.ts`) usam o mesmo padrão (`idsFiltrados`) e podem ter a
   mesma vulnerabilidade se o filtro resolver uma lista grande o bastante —
   candidato forte pra um follow-up dedicado.
+
+## Infra de deploy e migrations — riscos sistêmicos (revisão final, 2026-08-05)
+
+### Migrations: aplicadas à mão, sem tracking
+
+Este projeto **não tem runner automático de migration**. `supabase/migrations/*.sql`
+é só um diretório de arquivos versionados — cada um precisa ser aplicado à mão,
+via `docker exec -i supabase-db psql -U supabase_admin -d postgres <
+arquivo.sql`, direto no Postgres self-hosted do Contabo. Não existe nada como
+`supabase_migrations.schema_migrations` (a tabela que o Supabase CLI usaria
+pra saber quais migrations já rodaram) — o único "registro" de que uma
+migration foi aplicada é a memória de quem rodou o comando.
+
+Isso já causou bug real em produção **2 vezes** na mesma auditoria:
+
+1. **Migration 097** (`filtro_status_compras_auditoria.sql`) — ficou meses
+   sem aplicar; as RPCs de Compras/Auditoria Fiscal chamadas com `p_status`
+   falhavam com `function ... does not exist` em silêncio (código não
+   checava `error` do `.rpc()`), escondendo os ~90 dias mais recentes de
+   Compras em TODAS as 6 lojas. Corrigido na Task 2 desta auditoria (commit
+   `4bd9867`).
+2. **5 migrations da revisão final** (087, 089, 091, 095, 096) — nunca
+   aplicadas em produção. A mais grave: 091
+   (`relatorio_estoque_valorizado_local`) quebrava AO VIVO o toggle "Por
+   local" do Estoque Valorizado (RPC inexistente, tela voltava vazia/R$0,00
+   em silêncio). As outras 4 eram índices de performance (089/095/096, sem
+   os quais certas queries estouravam `statement_timeout`) e um tiebreak de
+   paginação (087). Aplicadas via o mesmo comando `docker exec -i
+   supabase-db psql ... < supabase/migrations/0XX_*.sql`, na ordem numérica,
+   e revalidadas ao vivo (ex.: `?ver=local` voltou a bater exato com SQL
+   direto: R$1.086.711,29/1381 linhas, loja 3).
+
+**Achado incidental da mesma verificação**: `relatorio_auditoria_fiscal_cfop`/
+`relatorio_auditoria_fiscal_itens` tinham 2 overloads coexistindo em
+produção — uma versão obsoleta (`p_familia text` singular, de antes da
+migration 088) e a versão atual (`p_familias text[]` + `p_status`, criada do
+zero pela migration 097 sem nunca passar pela forma intermediária de 088,
+porque 088 também nunca rodou). Não era bug ativo (PostgREST desambigua por
+nome de argumento quando o caller nomeia todos), mas era uma bomba-relógio
+pro primeiro caller que não nomeasse um argumento. Removida a versão
+obsoleta com `DROP FUNCTION` (assinatura exata, sem tocar na versão em uso).
+
+**Se você aplicar uma migration nova**: confirme com `\df`/
+`pg_get_functiondef` DIRETO no Postgres de produção antes de assumir que já
+rodou — nunca confie só no fato de o arquivo existir no repo. E depois de
+aplicar uma migration que crie/recrie uma função já existente, cheque `\df
+nome_da_funcao` pra ver se sobrou mais de 1 overload (sinal de que uma
+migration anterior na cadeia nunca rodou e o `DROP FUNCTION` dela nunca
+disparou).
+
+### Deploy: manual, `deploy.sh` não versionado, `.next` não é limpo
+
+`git push origin main` **sozinho não deploya nada** — o servidor não tem
+watcher nem CI/CD ligado a esse push. Deploy é sempre uma ação manual:
+
+```bash
+ssh -i ~/.ssh/notebook_contabo_key root@185.193.66.240 "cd /opt/ntb-estoque && bash deploy.sh"
+```
+
+rodado de forma SÍNCRONA (sem `nohup`/background), aguardando a saída
+completa antes de considerar o deploy feito. `deploy.sh` em si **não está
+versionado neste repo** — vive só no servidor (mesmo padrão de outros
+scripts de infra já documentados acima, tipo `ntb-frio-api`). Faz, nessa
+ordem: `git pull`, `npm ci`, `npm run build`, restart do `systemctl` do
+serviço `ntb-estoque`. **Não roda migrations** (ver seção acima) — só
+código.
+
+**Achado real (Task 10 da auditoria de filtros/relatórios, 2026-08-05)**:
+`deploy.sh` não limpa `.next` antes de rodar `npm run build` — pelo menos 1
+vez isso produziu um build que não refletia o commit recém-deployado
+(suspeita: `.next/cache/.tsbuildinfo`, cache incremental do
+TypeScript/RSC, não invalidado corretamente). Sintoma: o mesmo commit,
+testado ao vivo logo após o deploy, mostrava comportamento do código
+ANTERIOR; um segundo `npm run build` (sem `rm -rf .next`) resolveu sozinho.
+Desde então, prática padrão: se qualquer deploy da sessão mostrar sinal de
+build stale (código deployado não bate com o comportamento observado ao
+vivo), rodar `rm -rf .next` antes do próximo `npm run build` pra garantir um
+build limpo. `deploy.sh` em si não foi alterado pra fazer isso por padrão
+(fora do escopo das tasks que encontraram o problema) — candidato a
+follow-up.
+
+Depois de todo deploy, confirmar com:
+```bash
+curl -s -o /dev/null -w "HTTP %{http_code}\n" https://app-estoque.norteparanegocios.com.br/login
+```
+esperando `200`.
+
+### O "trap" do SLD em Movimentações
+
+`tipo='SLD'` em `movimentos` é o SALDO CONTADO no inventário num instante
+(foto da contagem física), **não** um movimento de estoque que
+entrou/saiu — achado real confirmado por join `movimentos`(SLD) ×
+`inventario_items`: 883/883 linhas batem exato, `quan` = a contagem digitada
+pelo operador (ver `lib/movimentacao-manual.ts`, achado real #4 no
+cabeçalho do arquivo, pro código CORRIGIDO e a evidência completa). Dois
+lugares no código ainda tratam SLD como se fosse um movimento assinado
+(ENT/SAI) — comportamento SUPERSEDED, mas **não corrigido** nesta rodada de
+propósito (fix de verdade fica pra depois, fora de escopo):
+
+- `components/movimentacoes/MovimentosTab.tsx:78` (`sinalEm`) — soma
+  `m.quan` de SLD direto no saldo de um local, como se já viesse assinado.
+- `lib/movimentacao-operacao-auto.ts` (linha do `sentido`, dentro do loop de
+  `ajustes`, ~236-246) — atribui `sentido='S'` e soma `quan`/`valor` de
+  qualquer ajuste que não seja `TRF`/`TPQ`/PDV, incluindo SLD, na matriz de
+  "Movimento Manual de Estoque".
+
+Comentários `// SUPERSEDED (auditoria 2026-08-05): ...` foram adicionados
+direto nessas 2 linhas, apontando pra esta explicação, sem mudar o
+comportamento de nenhuma delas. Se for corrigir de verdade:
+`lib/movimentacao-manual.ts` já tem o padrão certo (SLD nunca soma em R$,
+exposto separadamente por `agregarSaldoContado` como contagem de eventos,
+não soma de quantidade entre contagens diferentes).
+
+### `.env.local` local aponta pro Supabase cloud descontinuado
+
+`NEXT_PUBLIC_SUPABASE_URL` em `.env.local`
+(`https://waubqgkftwrufepwhctc.supabase.co`) ainda é o Supabase **cloud**,
+desligado nesta mesma sessão de auditoria (ver topo deste arquivo, seção
+"Arquitetura de histórico"). `npm run dev` local contra esse `.env.local`
+mostra dado da nuvem congelada, não de produção — qualquer QA precisa ser
+feito direto contra `https://app-estoque.norteparanegocios.com.br` (conta
+`claude.qa@ntb-estoque.dev`), nunca contra `localhost`. Achado já registrado
+na Task 1 desta auditoria; nota aqui só pra centralizar — atualizar
+`.env.local` pras credenciais do self-hosted é candidato a follow-up rápido
+(não fizemos porque pode conflitar com o setup de dev de quem já usa o
+repo).
