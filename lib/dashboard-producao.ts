@@ -14,7 +14,21 @@ export type DashboardProducao = {
   funcionariosOrdenados: string[]
 }
 
-type OpRow = { dt_conclusao_real: string | null; concluida_por: string | null }
+// Filtros novos (auditoria de filtros/relatorios, Task 5, 2026-08-04): Producao
+// era a unica tela de relatorio sem filtro de tipo/familia/produto/local --
+// ordens_producao nao guarda tipo/familia direto, so codigo_produto e local, entao
+// tipo/familia sempre precisam cruzar com o mapa de produtos (buscarProdutosMeta).
+export type FiltrosProducao = {
+  tipos?: string[]
+  familias?: string[]
+  /** Texto livre: casa por codigo OU descricao do produto (case-insensitive, substring). */
+  produto?: string
+  local?: number | null
+}
+
+type OpRow = { dt_conclusao_real: string | null; concluida_por: string | null; identificacao_n_cod_produto: number | null }
+
+type ProdutoMeta = { tipo: string | null; familia: string | null; descricao: string | null; codigo: string | null }
 
 const NAO_IDENTIFICADO = 'Não identificado'
 const MAX_SERIES = 7
@@ -38,19 +52,20 @@ function ultimosMeses(mesRef: string, n: number): string[] {
 
 const MES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-async function buscarOpsPaginado(lojaId: number, dataIni: string, dataFim: string): Promise<OpRow[]> {
+async function buscarOpsPaginado(lojaId: number, dataIni: string, dataFim: string, local: number | null): Promise<OpRow[]> {
   const supabase = createServiceClient()
   const PAGE = 1000
   const todas: OpRow[] = []
   for (let p = 0; ; p++) {
-    const { data, error } = await supabase
+    let q = supabase
       .from('ordens_producao')
-      .select('dt_conclusao_real, concluida_por')
+      .select('dt_conclusao_real, concluida_por, identificacao_n_cod_produto')
       .eq('loja_id', lojaId)
       .eq('concluida', true)
       .gte('dt_conclusao_real', dataIni)
       .lte('dt_conclusao_real', dataFim)
-      .range(p * PAGE, p * PAGE + PAGE - 1)
+    if (local != null) q = q.eq('identificacao_codigo_local_estoque', local)
+    const { data, error } = await q.range(p * PAGE, p * PAGE + PAGE - 1)
     if (error || !data?.length) break
     todas.push(...(data as OpRow[]))
     if (data.length < PAGE) break
@@ -58,20 +73,74 @@ async function buscarOpsPaginado(lojaId: number, dataIni: string, dataFim: strin
   return todas
 }
 
+// Mapa codigo_produto -> {tipo, familia, descricao, codigo}, usado pra filtrar por
+// tipo/familia/produto (ordens_producao so guarda o codigo do produto, nao essas
+// dimensoes). Lojas ativas tem 2300-2900+ produtos (so a loja 7 escapa com 693) --
+// um .select() sem paginar corta em 1000 e perde produto silenciosamente (mesmo
+// bug ja visto 2x neste projeto, ver relatorio-compras/page.tsx e
+// relatorio-indicadores/page.tsx), entao pagina sempre com .range().
+async function buscarProdutosMeta(lojaId: number): Promise<Map<number, ProdutoMeta>> {
+  const supabase = createServiceClient()
+  const PAGE = 1000
+  const meta = new Map<number, ProdutoMeta>()
+  for (let p = 0; ; p++) {
+    const { data, error } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia, descricao, codigo')
+      .eq('loja_id', lojaId)
+      .range(p * PAGE, p * PAGE + PAGE - 1)
+    if (error || !data?.length) break
+    for (const p2 of data) {
+      meta.set(Number(p2.codigo_produto), {
+        tipo: p2.tipo_item,
+        familia: p2.descricao_familia,
+        descricao: p2.descricao,
+        codigo: p2.codigo,
+      })
+    }
+    if (data.length < PAGE) break
+  }
+  return meta
+}
+
 export async function carregarDashboardProducao(
   lojaId: number,
   granularidade: Granularidade,
-  mesRef: string
+  mesRef: string,
+  filtros: FiltrosProducao = {}
 ): Promise<DashboardProducao> {
   const supabase = createServiceClient()
 
   const dataIni = granularidade === 'mes' ? `${ultimosMeses(mesRef, 6)[0]}-01` : mesParaIntervalo(mesRef).ini
   const dataFim = mesParaIntervalo(mesRef).fim
 
-  const ops = await buscarOpsPaginado(lojaId, dataIni, dataFim)
+  // Local vai direto no WHERE (coluna existe em ordens_producao); tipo/familia/produto
+  // nao existem na tabela e sao aplicados depois, cruzando com o mapa de produtos.
+  const ops = await buscarOpsPaginado(lojaId, dataIni, dataFim, filtros.local ?? null)
 
-  // Nomes: so busca os profiles realmente referenciados nas OPs do periodo.
-  const idsUnicos = Array.from(new Set(ops.map((o) => o.concluida_por).filter((id): id is string => !!id)))
+  const tiposSet = filtros.tipos?.length ? new Set(filtros.tipos) : null
+  const familiasSet = filtros.familias?.length ? new Set(filtros.familias) : null
+  const termoBusca = filtros.produto?.trim().toLowerCase() || null
+  const precisaMeta = !!(tiposSet || familiasSet || termoBusca)
+  const opsFiltradas = precisaMeta
+    ? await (async () => {
+        const meta = await buscarProdutosMeta(lojaId)
+        return ops.filter((o) => {
+          const cod = o.identificacao_n_cod_produto
+          const m = cod != null ? meta.get(cod) : undefined
+          if (tiposSet && !(m?.tipo && tiposSet.has(m.tipo))) return false
+          if (familiasSet && !(m?.familia && familiasSet.has(m.familia))) return false
+          if (termoBusca) {
+            const alvo = `${m?.codigo ?? ''} ${m?.descricao ?? ''}`.toLowerCase()
+            if (!alvo.includes(termoBusca)) return false
+          }
+          return true
+        })
+      })()
+    : ops
+
+  // Nomes: so busca os profiles realmente referenciados nas OPs do periodo (ja filtradas).
+  const idsUnicos = Array.from(new Set(opsFiltradas.map((o) => o.concluida_por).filter((id): id is string => !!id)))
   const nomePorId = new Map<string, string>()
   if (idsUnicos.length) {
     const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', idsUnicos)
@@ -116,7 +185,7 @@ export async function carregarDashboardProducao(
     }
   }
 
-  for (const op of ops) {
+  for (const op of opsFiltradas) {
     if (!op.dt_conclusao_real) continue
     const { chave } = chaveDoRegistro(op.dt_conclusao_real)
     const bucket = buckets.get(chave)

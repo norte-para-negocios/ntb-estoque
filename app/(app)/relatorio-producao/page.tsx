@@ -6,7 +6,13 @@ import { carregarDashboardProducao, type Granularidade } from '@/lib/dashboard-p
 import { ProducaoChart } from '@/components/producao/ProducaoChart'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { buscarFamilias } from '@/lib/actions/produto'
 import { BarChart3 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -31,14 +37,23 @@ function mesAtualISO(): string {
   return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
 }
 
-function linkPara(g: Granularidade, mes: string) {
-  return `/relatorio-producao?g=${g}&mes=${mes}`
+// Achado real (auditoria de filtros/relatorios, Task 5, 2026-08-04): os links de
+// granularidade/mes eram montados so com g+mes, descartando tipo/familia/produto/
+// local -- ao trocar de Diaria pra Semanal (ou de mes), qualquer filtro ativo
+// desaparecia da URL sem o usuario pedir. `filtrosURL` carrega os filtros atuais
+// pra dentro de cada link, do mesmo jeito que ChipsPeriodo/ChipsFiltrosAtivos
+// preservam os demais params ao navegar.
+function linkPara(g: Granularidade, mes: string, filtrosURL: URLSearchParams) {
+  const params = new URLSearchParams(filtrosURL)
+  params.set('g', g)
+  params.set('mes', mes)
+  return `/relatorio-producao?${params.toString()}`
 }
 
 export default async function RelatorioProducaoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ g?: string; mes?: string }>
+  searchParams: Promise<{ g?: string; mes?: string; tipo?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const ator = await getAtorGestao()
   if (!ator.podeGerir) notFound()
@@ -48,14 +63,51 @@ export default async function RelatorioProducaoPage({
   const granularidade: Granularidade = ['dia', 'semana', 'mes'].includes(sp.g ?? '') ? (sp.g as Granularidade) : 'dia'
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesAtualISO()
 
-  const { buckets, funcionariosOrdenados } = await carregarDashboardProducao(lojaId, granularidade, mes)
+  // Filtros novos: tipo/familia (multi-select), produto (texto), local (select) --
+  // unica tela de relatorio que ainda nao tinha nenhuma dessas dimensoes.
+  const tiposSel = valoresMulti(sp.tipo)
+  const familiasSel = valoresMulti(sp.familia)
+  const produtoTexto = sp.produto?.trim() || undefined
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const filtrosURL = new URLSearchParams()
+  if (sp.tipo) filtrosURL.set('tipo', sp.tipo)
+  if (sp.familia) filtrosURL.set('familia', sp.familia)
+  if (sp.produto) filtrosURL.set('produto', sp.produto)
+  if (sp.local) filtrosURL.set('local', sp.local)
+
+  const supabase = createServiceClient()
+  const [{ buckets, funcionariosOrdenados }, familias, { data: locaisRaw }] = await Promise.all([
+    carregarDashboardProducao(lojaId, granularidade, mes, {
+      tipos: tiposSel,
+      familias: familiasSel,
+      produto: produtoTexto,
+      local: localCod,
+    }),
+    buscarFamilias(),
+    supabase
+      .from('local_estoques')
+      .select('codigo_local_estoque, descricao')
+      .eq('loja_id', lojaId)
+      .order('descricao'),
+  ])
+
+  const campos: CampoFiltro[] = [
+    { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
+    { tipo: 'multi-select', nome: 'tipo', label: 'Tipo de mercadoria', opcoes: PRODUTO_TIPO_ITEM },
+    { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f.descricao, label: f.descricao })) },
+    {
+      tipo: 'select',
+      nome: 'local',
+      label: 'Local de estoque',
+      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
+    },
+  ]
 
   // Previsto x produzido (migration 103). A Omie nao guarda as duas
   // quantidades -- ao concluir, nQtde vira o produzido e o planejado se perde.
   // O cron snapshot-op-planejada captura o planejado enquanto a OP esta aberta,
   // entao isso so tem dado a partir do primeiro dia em que ele rodou, e so pras
   // OPs que ainda estavam abertas naquele momento.
-  const supabase = createServiceClient()
   const [{ data: divRaw }, { data: capturaRow }] = await Promise.all([
     supabase.rpc('relatorio_op_previsto_produzido', {
       p_loja_id: lojaId, p_ini: `${mes}-01`, p_fim: `${mes}-31`,
@@ -91,7 +143,21 @@ export default async function RelatorioProducaoPage({
           icon={BarChart3}
           description="OPs concluídas por período, com quebra por quem concluiu."
           voltarHref="/relatorios"
+          actions={
+            <FiltrosGaveta
+              basePath="/relatorio-producao"
+              campos={campos}
+              defaults={{
+                produto: sp.produto ?? '',
+                tipo: sp.tipo ?? '',
+                familia: sp.familia ?? '',
+                local: sp.local ?? '',
+              }}
+              persistirEm="/relatorio-producao"
+            />
+          }
         />
+        <ChipsFiltrosAtivos basePath="/relatorio-producao" campos={campos} persistirEm="/relatorio-producao" />
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -99,7 +165,7 @@ export default async function RelatorioProducaoPage({
           {GRANULARIDADES.map((g) => (
             <Link
               key={g.value}
-              href={linkPara(g.value, mes)}
+              href={linkPara(g.value, mes, filtrosURL)}
               aria-current={granularidade === g.value ? 'true' : undefined}
               className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion ${
                 granularidade === g.value
@@ -113,12 +179,12 @@ export default async function RelatorioProducaoPage({
         </div>
         {granularidade !== 'mes' && (
           <div className="flex items-center gap-2 text-[13px]">
-            <Link href={linkPara(granularidade, mesAnteriorISO)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
+            <Link href={linkPara(granularidade, mesAnteriorISO, filtrosURL)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
               ← Mês anterior
             </Link>
             <span className="font-medium text-text">{mes}</span>
             {!ehMesAtual && (
-              <Link href={linkPara(granularidade, mesSeguinteISO)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
+              <Link href={linkPara(granularidade, mesSeguinteISO, filtrosURL)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
                 Mês seguinte →
               </Link>
             )}
@@ -177,9 +243,11 @@ export default async function RelatorioProducaoPage({
         </table>
       </div>
 
-      {/* Previsto x produzido (migration 103) */}
+      {/* Previsto x produzido (migration 103) -- RPC propria (relatorio_op_previsto_produzido),
+          nao aceita tipo/familia/produto/local: os filtros da gaveta acima nao afetam esta secao. */}
       <div className="space-y-2 pt-2">
         <h2 className="px-1 text-[13px] font-semibold text-text">Previsto × produzido</h2>
+        <p className="px-1 text-[11px] text-text-muted">Esta seção sempre mostra todas as OPs do mês, sem os filtros de tipo/família/produto/local acima.</p>
         {divergencias.length > 0 ? (
           <>
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
