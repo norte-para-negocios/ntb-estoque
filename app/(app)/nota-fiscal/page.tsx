@@ -412,6 +412,11 @@ export default async function NotaFiscalPage({
   }
 
   // Helper para construir URL de sort (mantém todos os searchParams existentes)
+  //
+  // Achado real (revisão final da auditoria de filtros/relatórios, 2026-08-05,
+  // item I3): familia/local faltavam aqui -- clicar num cabeçalho de coluna
+  // pra ordenar limpava esses 2 filtros silenciosamente (o resto do estado
+  // sobrevivia, só esses dois somem).
   function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
     const sp = new URLSearchParams()
     if (params.data_inicio) sp.set('data_inicio', params.data_inicio)
@@ -423,11 +428,20 @@ export default async function NotaFiscalPage({
     if (params.natureza) sp.set('natureza', params.natureza)
     if (params.produto) sp.set('produto', params.produto)
     if (params.categoria) sp.set('categoria', params.categoria)
+    if (params.familia) sp.set('familia', params.familia)
+    if (params.local) sp.set('local', params.local)
     sp.set('ord', key)
     sp.set('dir', newDir)
     return `/nota-fiscal?${sp.toString()}`
   }
 
+  // Achado real (revisão final da auditoria de filtros/relatórios, 2026-08-05,
+  // item I3): relatorioParams (usado pelo Excel/PDF) nunca incluía
+  // familia/local -- a tela mostrava um número e o Excel/PDF exportavam outro
+  // (medido: loja 3, 01/05-05/08, família "Horti - Frut": 117 na tela x 516 no
+  // Excel/PDF, 4,4x de diferença). Corrigido incluindo os 2 aqui + tratando o
+  // filtro em export/route.ts e relatorio/route.ts (que também não tinham
+  // NENHUMA menção a natureza/familia/local antes deste fix).
   const relatorioParams = new URLSearchParams()
   relatorioParams.set('data_inicio', dataInicio)
   relatorioParams.set('data_final', dataFinal)
@@ -438,6 +452,8 @@ export default async function NotaFiscalPage({
   if (params.natureza) relatorioParams.set('natureza', params.natureza)
   if (params.produto) relatorioParams.set('produto', params.produto)
   if (params.categoria) relatorioParams.set('categoria', params.categoria)
+  if (params.familia) relatorioParams.set('familia', params.familia)
+  if (params.local) relatorioParams.set('local', params.local)
 
   const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
     buscarFamilias(),

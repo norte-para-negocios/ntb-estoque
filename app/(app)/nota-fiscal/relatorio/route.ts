@@ -38,12 +38,23 @@ export async function GET(request: Request) {
   const fornecedor = searchParams.get('fornecedor') || ''
   const numNfe = searchParams.get('num_nfe') || ''
   const status = searchParams.get('status') || ''
-  // tipo vem como lista separada por virgula (multi-select) na URL.
+  // tipo/familia vem como lista separada por virgula (multi-select) na URL.
   const tipo = searchParams.get('tipo') || ''
   const tiposArr = valoresMulti(tipo)
   const produto = searchParams.get('produto') || ''
   const categoria = searchParams.get('categoria') || ''
   const categoriaOrClause = resolverCategoriaOrClause(categoria)
+  // Achado real (revisão final da auditoria de filtros/relatórios,
+  // 2026-08-05, item I3): natureza/familia/local eram filtros expostos na
+  // tela (nota-fiscal/page.tsx) mas NUNCA chegavam até aqui -- o PDF gerava
+  // sempre sem esses 3 filtros, mesmo quando ativos na tela (medido: loja 3,
+  // 01/05-05/08, família "Horti - Frut": 117 na tela x 516 no PDF, 4,4x de
+  // diferença).
+  const natureza = searchParams.get('natureza') || ''
+  const familia = searchParams.get('familia') || ''
+  const familiasArr = valoresMulti(familia)
+  const localParam = searchParams.get('local') || ''
+  const localCod = localParam && !Number.isNaN(Number(localParam)) ? Number(localParam) : null
 
   const supabase = await createClient()
 
@@ -55,27 +66,31 @@ export async function GET(request: Request) {
 
   const nomeLoja = loja?.nome_fantasia || loja?.nome || 'Loja'
 
-  // Mesma logica de filtro da tela/export.
+  // Mesma logica de filtro da tela/export (nota-fiscal/page.tsx e
+  // export/route.ts), agora incluindo familia/local.
   let notaIdsFiltro: number[] | null = null
   let codigos: string[] | null = null
-  if (tiposArr.length || produto) {
-    if (tiposArr.length) {
-      // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
-      // (ex: loja 6, tipo "99" tem 1143) -- sem .range() o PostgREST trunca em
-      // silencio e o relatorio some com notas validas.
-      const prodCodigos = await buscarTudoPaginado<{ codigo_produto: string | number }>((from, to) =>
-        supabase
-          .from('produtos')
-          .select('codigo_produto')
-          .eq('loja_id', lojaId)
-          .in('tipo_item', tiposArr)
-          .order('id', { ascending: true })
-          .range(from, to),
-      )
+  if (tiposArr.length || familiasArr.length || produto || localCod !== null) {
+    if (tiposArr.length || familiasArr.length) {
+      // Paginado: produtos.tipo_item/descricao_familia pode passar de 1000
+      // linhas numa unica loja (ex: loja 6, tipo "99" tem 1143) -- sem
+      // .range() o PostgREST trunca em silencio e o relatorio some com
+      // notas validas.
+      const prodCodigos = await buscarTudoPaginado<{ codigo_produto: string | number }>((from, to) => {
+        let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).order('id', { ascending: true }).range(from, to)
+        if (tiposArr.length) q = q.in('tipo_item', tiposArr)
+        if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
+        return q
+      })
       codigos = prodCodigos.map((p) => String(p.codigo_produto))
       if (codigos.length === 0) {
         notaIdsFiltro = [-1]
-      } else {
+      }
+    }
+
+    if (notaIdsFiltro === null) {
+      let itemRows: { nota_fiscal_id: number | null }[]
+      if (codigos) {
         // codigos e' `let` (reatribuido acima) -- alias `const` pra manter o
         // narrowing de nao-nulo dentro do closure abaixo.
         const codigosNaoNulos = codigos
@@ -84,7 +99,7 @@ export async function GET(request: Request) {
         // `.in('produto_codigo', codigos)` direto sofre o MESMO 414 URI Too
         // Long do filtro de id mais abaixo. Busca em lotes de codigo
         // (buscarTodosPorIds, ver lib/utils-busca.ts) em vez de um `.in()` unico.
-        const itemRows = await buscarTodosPorIds<{ nota_fiscal_id: number | null }>(codigosNaoNulos, (loteCodigos, from, to) => {
+        itemRows = await buscarTodosPorIds<{ nota_fiscal_id: number | null }>(codigosNaoNulos, (loteCodigos, from, to) => {
           let q = supabase
             .from('nota_fiscal_items')
             .select('nota_fiscal_id')
@@ -96,24 +111,25 @@ export async function GET(request: Request) {
             const p = escapeIlikeOr(produto)
             q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
           }
+          if (localCod !== null) q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
           return q
         })
-        const notaIds = Array.from(
-          new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
-        )
-        notaIdsFiltro = notaIds.length ? notaIds : [-1]
+      } else {
+        itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
+          let q = supabase
+            .from('nota_fiscal_items')
+            .select('nota_fiscal_id')
+            .eq('loja_id', lojaId)
+            .order('id', { ascending: true })
+            .range(from, to)
+          if (produto) {
+            const p = escapeIlikeOr(produto)
+            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          }
+          if (localCod !== null) q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
+          return q
+        })
       }
-    } else if (produto) {
-      const p = escapeIlikeOr(produto)
-      const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) =>
-        supabase
-          .from('nota_fiscal_items')
-          .select('nota_fiscal_id')
-          .eq('loja_id', lojaId)
-          .or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
-          .order('id', { ascending: true })
-          .range(from, to),
-      )
       const notaIds = Array.from(
         new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
       )
@@ -147,6 +163,9 @@ export async function GET(request: Request) {
     else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     else if (status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
+    // Achado real (revisão final, item I3): natureza nunca era aplicado aqui,
+    // mesmo sendo repassado na URL -- mesma lógica de nota-fiscal/page.tsx.
+    if (natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(natureza)}%`)
     if (categoriaOrClause) q = q.or(categoriaOrClause)
     return q
   }
@@ -233,6 +252,20 @@ export async function GET(request: Request) {
       .map((v) => CATEGORIAS_NF.find((c) => c.value === v)?.label ?? v)
       .join(', ')
     filtrosAtivos.push(`Categoria: ${nomesCategorias}`)
+  }
+  // Achado real (revisão final, item I3): familia/local/natureza faltavam no
+  // subtitulo do PDF -- mesmos 3 filtros que faltavam na aplicação do filtro
+  // em si (corrigido acima).
+  if (natureza) filtrosAtivos.push(`Natureza: ${natureza}`)
+  if (familiasArr.length) filtrosAtivos.push(`Família: ${familiasArr.join(', ')}`)
+  if (localCod !== null) {
+    const { data: localRow } = await supabase
+      .from('local_estoques')
+      .select('descricao')
+      .eq('loja_id', lojaId)
+      .eq('codigo_local_estoque', localCod)
+      .maybeSingle()
+    filtrosAtivos.push(`Local: ${localRow?.descricao ?? localCod}`)
   }
 
   const periodo = `${fmtData(dataInicio)} a ${fmtData(dataFinal)}`
