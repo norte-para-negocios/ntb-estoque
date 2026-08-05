@@ -554,10 +554,20 @@ export default async function RelatorioMovimentacaoPage({
   // arriscar a fonte já existente (RPC relatorio_movimentacao_matriz,
   // migration 090) — pedido explícito: "não sobrescreva a existente".
   if (fonte === 'manual') {
+    // Achado real (revisão final da auditoria de filtros/relatórios, item
+    // I5): busca fria (Contabo) pode falhar parcialmente (3 tentativas
+    // esgotadas) e `buscarMovimentosManuais` mesclava isso em silêncio antes
+    // -- `avisosFrioManual` sinaliza esse caso pro banner abaixo (mesmo
+    // padrão visual do `totaisParciais` de nota-fiscal/page.tsx). Array (não
+    // `let` reatribuído) -- ESLint deste projeto (`react-hooks/immutability`)
+    // barra reassignment de variável fechada em função async de Server
+    // Component (mesmo achado já registrado na Task 2 desta auditoria).
+    const avisosFrioManual: true[] = []
     const [linhasBrutas, metaPorCodigoManual] = await Promise.all([
-      buscarMovimentosManuais({ lojaId, dataInicio: ini, dataFinal: fim }),
+      buscarMovimentosManuais({ lojaId, dataInicio: ini, dataFinal: fim, onFrioIncompleto: () => avisosFrioManual.push(true) }),
       buscarMetaProdutosMovManual(lojaId),
     ])
+    const falhouBuscaFriaManual = avisosFrioManual.length > 0
     const locaisPorCodigoManual = new Map(
       locaisOpcoes.map((l) => [Number(l.codigo_local_estoque), l.descricao ?? String(l.codigo_local_estoque)])
     )
@@ -663,6 +673,13 @@ export default async function RelatorioMovimentacaoPage({
           Só ajuste manual de estoque (Omie: ListarAjusteEstoque) — exclui venda de PDV e transferência entre
           locais (essas já têm relatório próprio: Faturamento e Transferências).
         </p>
+
+        {falhouBuscaFriaManual && (
+          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+            Período muito longo: o total acima pode estar abaixo do real (falha temporária ao buscar o
+            histórico completo). Tente recarregar a página ou use um período mais curto.
+          </p>
+        )}
 
         <SegmentLinks
           basePath="/relatorio-movimentacao"

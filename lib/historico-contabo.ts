@@ -191,6 +191,45 @@ export async function contarNotasFiscaisAntigas(opts: {
   }
 }
 
+// Mesmo padrao acima, para /movimentos -- usado como cinto-de-seguranca em
+// `complementarMovimentos` (parametro opcional `onFrioIncompleto`, ver
+// abaixo): compara contra o numero de linhas frias efetivamente trazidas por
+// buscarFrioTudo pra detectar paginacao incompleta (Contabo fora do ar bem no
+// meio, ou as 3 tentativas de buscarFrioTudo esgotadas). Achado real (revisao
+// final da auditoria de filtros/relatorios, item I5): antes, essa truncagem
+// so virava um `console.error` (ver buscarFrioTudo) -- fonte=manual em
+// /relatorio-movimentacao podia mostrar total silenciosamente incompleto sem
+// nenhum aviso na tela, mesmo padrao de bug ja corrigido em nota-fiscal
+// (totaisParciais).
+export async function contarMovimentosAntigas(opts: {
+  lojaId: number
+  dataInicio?: string
+  dataFinal?: string
+}): Promise<number> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url) return 0
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const qs = new URLSearchParams({ loja_id: String(opts.lojaId), count: 'true' })
+    if (opts.dataInicio) qs.set('data_inicio', opts.dataInicio)
+    if (opts.dataFinal) qs.set('data_final', opts.dataFinal)
+    const resp = await fetch(`${url}/movimentos?${qs.toString()}`, {
+      headers: { 'X-Api-Key': key ?? '' },
+      signal: controller.signal,
+      cache: 'no-store', // ver comentario em buscarFrio sobre cache de fetch mascarar dado historico
+    })
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+    const json = (await resp.json()) as { count?: number }
+    return json.count ?? 0
+  } catch (e) {
+    console.error('historico-contabo: falha ao contar movimentos antigos', e)
+    return 0
+  }
+}
+
 // A API do Contabo tem LIMIT fixo no servidor pros endpoints de historico longo
 // (nao aceita LIMIT arbitrario do cliente, so `offset`) -- acha real (audit Notas
 // Fiscais 2026-07-19): nenhum client deste repo de fato fazia o loop de paginas,
@@ -405,9 +444,18 @@ function mesclarMovimentosPorChaveNatural<T extends { id: number; id_ajuste: num
 // offset, entao nunca foi paginado. Loja 5 sozinha tem 51937 ajustes desde
 // 01/07/2025 (so ~10% vinha antes do fix). Servidor ganhou suporte a
 // `offset` (mesmo padrao); client agora pagina igual aos outros.
+// `onFrioIncompleto` (revisao final da auditoria de filtros/relatorios, item
+// I5): parametro opcional, nao quebra nenhum dos 3 call sites existentes que
+// nao passam nada (lib/movimentacao-operacao-auto.ts, lib/resumo-dia.ts,
+// lib/actions/busca-global.ts) -- mesmo padrao non-breaking ja usado no
+// `onErro` de rpcTodos (lib/supabase/rpc-todos.ts) nesta mesma rodada de
+// hardening. So dispara a query extra de contagem (contarMovimentosAntigas)
+// quando o caller passa o callback, pra nao pagar o custo de rede a mais nos
+// 3 call sites que nao precisam desse sinal.
 export async function complementarMovimentos<T extends { id: number; id_ajuste: number | null }>(
   quentes: T[],
-  opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number }
+  opts: { lojaId: number; dataInicio?: string; dataFinal?: string; idProd?: number; transferenciaId?: number },
+  onFrioIncompleto?: (friasEncontradas: number, friasEsperadas: number) => void
 ): Promise<T[]> {
   if (!foraDaJanelaQuente(opts.dataInicio)) return quentes
   const frias = await buscarFrioTudo<T>('/movimentos', {
@@ -417,6 +465,10 @@ export async function complementarMovimentos<T extends { id: number; id_ajuste: 
     id_prod: opts.idProd,
     transferencia_id: opts.transferenciaId,
   }, 5000)
+  if (onFrioIncompleto) {
+    const friasEsperadas = await contarMovimentosAntigas({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+    if (frias.length < friasEsperadas) onFrioIncompleto(frias.length, friasEsperadas)
+  }
   return mesclarMovimentosPorChaveNatural(quentes, frias)
 }
 

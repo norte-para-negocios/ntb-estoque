@@ -142,10 +142,18 @@ export function ehMovimentoManual(r: { origem: string | null; motivo: string | n
 // .lte no Postgres) porque `data` é timestamptz -- comparar contra uma data
 // pura no servidor cortaria o próprio dia final às 00:00 (mesmo cuidado já
 // tomado em gerarMovimentacaoOperacaoAutomatica).
+//
+// `onFrioIncompleto` (revisão final da auditoria de filtros/relatórios, item
+// I5): achado real -- depois de 3 tentativas falhas, `buscarFrioTudo` desiste
+// e devolve um array truncado, e `complementarMovimentos` mesclava isso em
+// silêncio, sem sinalizar nada pro usuário (mesma classe de bug já corrigida
+// em nota-fiscal/page.tsx, aviso `totaisParciais`). Parâmetro opcional --
+// não muda a assinatura pra quem já chama esta função sem ele.
 export async function buscarMovimentosManuais(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
+  onFrioIncompleto?: () => void
 }): Promise<LinhaMovManualBruta[]> {
   const supabase = createServiceClient()
   const quentes = await paginarTodos<LinhaMovManualBruta>((from, to) =>
@@ -157,11 +165,11 @@ export async function buscarMovimentosManuais(opts: {
       .order('id')
       .range(from, to)
   )
-  const todas = await complementarMovimentos(quentes, {
-    lojaId: opts.lojaId,
-    dataInicio: opts.dataInicio,
-    dataFinal: opts.dataFinal,
-  })
+  const todas = await complementarMovimentos(
+    quentes,
+    { lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal },
+    opts.onFrioIncompleto ? () => opts.onFrioIncompleto!() : undefined
+  )
   return todas.filter((l) => {
     const d = String(l.data).slice(0, 10)
     return d >= opts.dataInicio && d <= opts.dataFinal && ehMovimentoManual(l)
