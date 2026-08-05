@@ -72,14 +72,17 @@ export async function GET(request: Request) {
         // codigos e' `let` (reatribuido acima) -- alias `const` pra manter o
         // narrowing de nao-nulo dentro do closure abaixo.
         const codigosNaoNulos = codigos
-        // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
-        // (toda loja ativa ja passa disso) -- mesma razao acima.
-        const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
+        // Achado real (Task 10, 2026-08-05): `codigos` pode ter centenas/
+        // milhares de elementos (ex.: loja 3, tipo=07, 633 codigos) -- um
+        // `.in('produto_codigo', codigos)` direto sofre o MESMO 414 URI Too
+        // Long do filtro de id mais abaixo. Busca em lotes de codigo
+        // (buscarTodosPorIds, ver lib/utils-busca.ts) em vez de um `.in()` unico.
+        const itemRows = await buscarTodosPorIds<{ nota_fiscal_id: number | null }>(codigosNaoNulos, (loteCodigos, from, to) => {
           let q = supabase
             .from('nota_fiscal_items')
             .select('nota_fiscal_id')
             .eq('loja_id', lojaId)
-            .in('produto_codigo', codigosNaoNulos)
+            .in('produto_codigo', loteCodigos)
             .order('id', { ascending: true })
             .range(from, to)
           if (params.produto) {
@@ -153,7 +156,7 @@ export async function GET(request: Request) {
     // respondem 414 URI Too Long -- silenciosamente tratado como "nenhuma
     // nota" (ver buscarTodosPorIds em lib/utils-busca.ts). Busca em lotes
     // pequenos o bastante pra nunca estourar o limite de URL.
-    notas = await buscarTodosPorIds<Nota>(notaIdsFiltro, (lote) =>
+    notas = await buscarTodosPorIds<Nota>(notaIdsFiltro, (lote, from, to) =>
       aplicarFiltrosComuns(
         supabase
           .from('notas_fiscais')
@@ -162,7 +165,8 @@ export async function GET(request: Request) {
           .gte('d_emissao_nfe', dataInicio)
           .lte('d_emissao_nfe', dataFinal)
           .is('deleted_at', null)
-          .in('id', lote),
+          .in('id', lote)
+          .range(from, to),
       ),
     )
     notas.sort((a, b) => {

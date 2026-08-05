@@ -57,37 +57,44 @@ export async function buscarTudoPaginado<T>(
   return tudo
 }
 
-// PostgREST/nginx tem limite de tamanho de URL (~8KB) -- um `.in('id', [...])`
-// com uma lista grande de ids gera uma URL enorme e falha com 414 URI Too
-// Long. Achado real (Task 10 da auditoria de filtros/relatorios, 2026-08-05):
-// em Notas Fiscais, o filtro de tipo/familia/produto/local resolve
-// `nota_fiscal_id` casando em TODO o historico da loja (sem limite de data --
-// os ids so sao cruzados com o periodo DEPOIS, na query final) -- pra um tipo
-// comum (loja 3, tipo='01' = Materia Prima) isso gera uma lista de 1626 ids
-// (~10.9KB), e o `.in('id', idsIn)` resultante falhava com 414 SEMPRE,
-// mesmo pra periodos 100% dentro da janela quente (sem qualquer fallback do
-// Contabo pra mascarar). Como `buscarTudoPaginado` trata QUALQUER erro da
-// query como "acabaram as paginas" (nao distingue "sem mais dados" de "a
-// query falhou"), o filtro virava silenciosamente "nenhuma nota encontrada"
-// -- o mesmo bug, em espirito, que ja foi corrigido do lado do Contabo em
+// PostgREST/nginx tem limite de tamanho de URL (~8KB) -- um `.in('coluna',
+// [...])` com uma lista grande de valores gera uma URL enorme e falha com 414
+// URI Too Long. Achado real (Task 10 da auditoria de filtros/relatorios,
+// 2026-08-05): em Notas Fiscais, o filtro de tipo/familia/produto/local usa
+// DOIS `.in()` em sequencia, os dois vulneraveis a essa mesma escala --
+// (1) `nota_fiscal_items.in('produto_codigo', codigos)`, onde `codigos` vem
+// de produtos.tipo_item/descricao_familia (loja 3, tipo='07' = Material de
+// Uso e Consumo, 633 produtos -- 414 mesmo so nesse primeiro passo); (2)
+// `notas_fiscais.in('id', notaIds)`, resolvido em TODO o historico da loja
+// sem limite de data (loja 3, tipo='01' = Materia Prima, 1626 ids -- 414 no
+// segundo passo, mesmo quando o primeiro passa por ter poucos produtos).
+// Como `buscarTudoPaginado` trata QUALQUER erro da query como "acabaram as
+// paginas" (nao distingue "sem mais dados" de "a query falhou"), qualquer um
+// dos dois pontos falhando vira silenciosamente "nenhuma nota encontrada" --
+// o mesmo bug, em espirito, que ja foi corrigido do lado do Contabo em
 // `buscarFrio`/`buscarFrioTudo` (historico-contabo.ts), so que aqui do lado
-// do Supabase. Corrige quebrando os ids em lotes bem menores que o limite de
-// URL, rodando os lotes em paralelo (cada lote e independente, ids nunca se
-// repetem entre lotes) e juntando o resultado -- mesmo espirito de
-// `buscarTudoPaginado` (quebra por OFFSET) e `buscarComPaginacaoPorData`
-// (quebra por DATA), aqui quebrando por ID. Cada lote de 200 ids retorna no
-// maximo 200 linhas (ids sao a chave primaria da tabela-alvo), bem abaixo do
-// teto de 1000 linhas do PostgREST -- não precisa de `.range()` dentro do
-// lote.
+// do Supabase, em cascata. Corrige quebrando os valores em lotes bem menores
+// que o limite de URL, rodando os lotes em paralelo (cada lote e
+// independente, valores nunca se repetem entre lotes) -- mesmo espirito de
+// `buscarComPaginacaoPorData` (quebra por DATA), aqui quebrando por
+// valor/id. Cada lote AINDA pagina por OFFSET internamente (via
+// `buscarTudoPaginado`): quando o valor filtrado e uma chave primaria (ex.:
+// `notas_fiscais.id`) um lote de 200 nunca passa de 200 linhas, mas quando
+// NAO e (ex.: `produto_codigo` -- um so codigo pode aparecer em centenas de
+// itens de NF), um lote pequeno de valores ainda pode devolver mais de 1000
+// linhas, e paginar por OFFSET evita o mesmo estouro silencioso do PostgREST
+// (ver `buscarTudoPaginado` acima) dentro de cada lote.
 const TAMANHO_LOTE_IDS = 200
 
 export async function buscarTodosPorIds<T>(
   ids: readonly (number | string)[],
-  build: (lote: (number | string)[]) => PromiseLike<{ data: T[] | null }>,
+  build: (lote: (number | string)[], from: number, to: number) => PromiseLike<{ data: T[] | null }>,
 ): Promise<T[]> {
   if (ids.length === 0) return []
   const lotes: (number | string)[][] = []
   for (let i = 0; i < ids.length; i += TAMANHO_LOTE_IDS) lotes.push(ids.slice(i, i + TAMANHO_LOTE_IDS))
-  const resultados = await Promise.all(lotes.map((lote) => build(lote)))
-  return resultados.flatMap((r) => r.data ?? [])
+  const resultados = await Promise.all(
+    lotes.map((lote) => buscarTudoPaginado<T>((from, to) => build(lote, from, to))),
+  )
+  return resultados.flat()
 }

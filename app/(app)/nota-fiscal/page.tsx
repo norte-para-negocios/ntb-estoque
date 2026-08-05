@@ -122,25 +122,54 @@ export default async function NotaFiscalPage({
     }
 
     if (notaIds === null) {
-      // Paginado: nota_fiscal_items facilmente passa de 1000 linhas por loja
-      // (toda loja ativa ja passa disso) -- mesma razao acima.
-      const itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
-        let q = supabase
-          .from('nota_fiscal_items')
-          .select('nota_fiscal_id')
-          .eq('loja_id', lojaId)
-          .order('id', { ascending: true })
-          .range(from, to)
-        if (codigos) q = q.in('produto_codigo', codigos)
-        if (params.produto) {
-          const p = escapeIlikeOr(params.produto)
-          q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
-        }
-        if (localCod !== null) {
-          q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
-        }
-        return q
-      })
+      let itemRows: { nota_fiscal_id: number | null }[]
+      if (codigos) {
+        // Achado real (Task 10, 2026-08-05): `codigos` (produtos casando
+        // tipo/familia) pode ter centenas/milhares de elementos (ex.: loja 3,
+        // tipo=07 = Material de Uso e Consumo, 633 codigos) -- um
+        // `.in('produto_codigo', codigos)` direto sofre o MESMO 414 URI Too
+        // Long do filtro de id mais abaixo (buscarNotaIdsFrio/idsIn). Busca
+        // em lotes de codigo (buscarTodosPorIds, ver lib/utils-busca.ts) em
+        // vez de um `.in()` unico.
+        itemRows = await buscarTodosPorIds<{ nota_fiscal_id: number | null }>(codigos, (loteCodigos, from, to) => {
+          let q = supabase
+            .from('nota_fiscal_items')
+            .select('nota_fiscal_id')
+            .eq('loja_id', lojaId)
+            .in('produto_codigo', loteCodigos)
+            .order('id', { ascending: true })
+            .range(from, to)
+          if (params.produto) {
+            const p = escapeIlikeOr(params.produto)
+            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          }
+          if (localCod !== null) {
+            q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
+          }
+          return q
+        })
+      } else {
+        // Sem filtro de tipo/familia (so produto e/ou local ativos): sem
+        // lista grande de codigo envolvida, paginacao por OFFSET direta e
+        // segura. Paginado: nota_fiscal_items facilmente passa de 1000
+        // linhas por loja (toda loja ativa ja passa disso).
+        itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
+          let q = supabase
+            .from('nota_fiscal_items')
+            .select('nota_fiscal_id')
+            .eq('loja_id', lojaId)
+            .order('id', { ascending: true })
+            .range(from, to)
+          if (params.produto) {
+            const p = escapeIlikeOr(params.produto)
+            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
+          }
+          if (localCod !== null) {
+            q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
+          }
+          return q
+        })
+      }
       notaIds = Array.from(
         new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
       )
@@ -202,7 +231,7 @@ export default async function NotaFiscalPage({
     // (`buscarTodosPorIds`, ver lib/utils-busca.ts -- cada lote fica bem
     // abaixo do limite de URL) e ordenando/paginando em memoria, mesmo
     // espirito do merge quente+frio logo abaixo.
-    notasQuentesCompletas = await buscarTodosPorIds<NotaCompleta>(idsIn, (lote) =>
+    notasQuentesCompletas = await buscarTodosPorIds<NotaCompleta>(idsIn, (lote, from, to) =>
       aplicarFiltrosNF(
         supabase
           .from('notas_fiscais')
@@ -211,7 +240,8 @@ export default async function NotaFiscalPage({
           .gte('d_emissao_nfe', dataInicio)
           .lte('d_emissao_nfe', dataFinal)
           .is('deleted_at', null)
-          .in('id', lote),
+          .in('id', lote)
+          .range(from, to),
       ),
     )
     totaisRaw = notasQuentesCompletas.map((r) => ({ id: r.id, n_id_receb: r.n_id_receb, n_valor_nfe: r.n_valor_nfe }))
