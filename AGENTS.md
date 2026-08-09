@@ -427,3 +427,34 @@ na Task 1 desta auditoria; nota aqui só pra centralizar — atualizar
 `.env.local` pras credenciais do self-hosted é candidato a follow-up rápido
 (não fizemos porque pode conflitar com o setup de dev de quem já usa o
 repo).
+
+### Auditoria do Estoque Valorizado (Task 12, 2026-08-09) — sem bug no relatório, achado incidental em `posicao_estoques`
+
+Reconferido ao vivo que as migrations 087 (tiebreak) e 091
+(`relatorio_estoque_valorizado_local`) continuam aplicadas em produção e
+batendo exato com o código-fonte (`pg_get_functiondef` comparado linha a
+linha) — nenhuma regressão desde a correção de 2026-08-05. Paginação do
+`rpcTodos` revalidada contra um caso real que cruza a fronteira de 1000
+linhas (loja 3, RPC `relatorio_estoque_valorizado` sem filtro: 1021 linhas)
+— soma e contagem das 2 páginas bateram exato com o total via SQL direto,
+sem duplicata nem lacuna. Checado também o `INNER JOIN produtos` das duas
+RPCs (exclui silenciosamente qualquer posição sem cadastro correspondente
+na loja): zero linhas órfãs nas 6 lojas ativas na foto de hoje — risco
+real, mas não manifestado.
+
+**Achado incidental (fora do escopo deste relatório, não corrigido)**: linhas
+de `posicao_estoques` com `n_saldo < 0` têm `n_cmc` com magnitude
+absurda em algumas lojas — ex. loja 6, produto com `n_cmc` = R$
+27.960.529.129,45/unidade (`valor = n_cmc * n_saldo` chega a -R$783
+bilhões numa única linha); loja 5 também afetada (~-R$10,8 bilhões
+somados). `n_cmc` vem direto do Omie (`p.nCMC` em
+`lib/omie/posicao-estoque.ts`, sem transformação local) — não é bug
+introduzido por este app, mas também não foi confirmado se é o que o Omie
+realmente retorna ou um problema de parsing/campo. **Não afeta o Estoque
+Valorizado**: a RPC já filtra `n_saldo > 0` (propósito do relatório é
+"estoque atual", só posição positiva) e as linhas positivas reais
+verificadas são todas plausíveis (maior valor de linha único: R$447.000).
+Mas `posicao_estoques` é lido por outras 6 telas/RPCs sem esse mesmo filtro
+de saldo positivo (`relatorio-margem`, `produto`, `home`, `resumo`,
+`relatorio-movimentacao`, `sync-posicao`) — candidato a follow-up dedicado
+pra confirmar se algum desses consumidores herda o valor corrompido.
