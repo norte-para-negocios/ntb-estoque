@@ -83,6 +83,10 @@ export default async function RelatorioProducaoPage({
       produto: produtoTexto,
       local: localCod,
     }),
+    // SUPERSEDED (Task 10, auditoria 2026-08-09, revisão): buscarFamilias()
+    // (lib/actions/produto.ts) tem o MESMO padrão de `.error` não checado
+    // corrigido logo abaixo pra local_estoques -- fora do escopo desta task
+    // (helper compartilhado com vários outros relatórios), não corrigido aqui.
     buscarFamilias(),
     supabase
       .from('local_estoques')
