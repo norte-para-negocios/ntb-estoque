@@ -458,3 +458,48 @@ Mas `posicao_estoques` é lido por outras 6 telas/RPCs sem esse mesmo filtro
 de saldo positivo (`relatorio-margem`, `produto`, `home`, `resumo`,
 `relatorio-movimentacao`, `sync-posicao`) — candidato a follow-up dedicado
 pra confirmar se algum desses consumidores herda o valor corrompido.
+
+**Correção (Task 13, 2026-08-09)**: pelo menos `relatorio-margem` já filtra
+`n_saldo > 0`/`n_cmc > 0` — na tela (`page.tsx`) e no cron de snapshot
+(`snapshot-margem-diario`), não herda o valor corrompido. A exportação
+(`export/route.ts`) é a exceção: ver auditoria abaixo.
+
+### Auditoria da Margem (Task 13, 2026-08-09) — export com fórmula desatualizada + `.error` não checado em 3 cópias locais
+
+**Achado real principal**: `relatorio-margem/export/route.ts` calculava o
+CMC "ao vivo" (caminho usado por 5 das 6 lojas ativas, sem import manual do
+FAT_DRV) com o algoritmo ANTIGO — maior `n_cmc` entre locais, sem filtrar
+`n_saldo > 0` — que já tinha sido substituído em `page.tsx` e no cron
+`snapshot-margem-diario` em 2026-07-19 (migration 082: "o maior valor
+sozinho superestima o custo") por uma ponderação por saldo. A exportação
+nunca recebeu esse fix, então a margem do Excel divergia da margem
+mostrada na tela pro MESMO produto no MESMO dia. Confirmado ao vivo (loja
+2, foto de hoje): 287 produtos com CMC divergente entre os dois métodos
+(diff média R$3,71/un., máx. R$137,14/un.); ex. "Moq. Mariscada 1300g
+PIRAO E FRADINHO" saía 34,9% na exportação contra 43,0% na tela — 8,1 p.p.
+de diferença no mesmo produto. Corrigido trocando pra ponderação por saldo
+idêntica à tela/cron. Achado adicional no mesmo bloco: um `.filter()` final
+escondia da planilha qualquer produto sem CMC/PDV cadastrado — o mesmo bug
+já corrigido na tela em 2026-07-19, nunca replicado na exportação. Removido.
+
+**Achado secundário (padrão recorrente desta auditoria)**: as 3 cópias
+locais hand-rolled de `buscarTodasLinhas` (`page.tsx`, `export/route.ts`,
+`snapshot-margem-diario/route.ts`) não checavam `error` — mesma classe de
+bug da migration 097. Extraídas pro helper compartilhado
+`lib/supabase/buscar-todas-linhas.ts` (mesmo padrão de `lib/supabase/
+rpc-todos.ts`, já usado nas RPCs). No cron (mais grave, porque grava num
+append-only sem retroativo possível — migration 101), uma falha de query
+agora NÃO grava o snapshot do dia daquela loja (vira buraco detectável na
+série, em vez de número errado gravado como se fosse real); a rota também
+passou a responder 502 se todas as lojas falharem no mesmo dia (mesmo
+padrão de `sync-posicao`/`sync-previsao`).
+
+Cron confirmado rodando de verdade (não é o silêncio "-> 200 sem fazer
+nada" da Task 9): `margem_snapshot_diario` tem os 9 dias esperados
+(01–09/08) em todas as 6 lojas ativas, sem buraco (`count(distinct
+data_snapshot) = max - min + 1` bate exato). Série ainda curta demais
+(9 dias) pra a UI precisar de indicador de buraco na tendência — não
+implementado; se um buraco real aparecer no futuro, `evolução mensal`
+(matriz por mês, migration 101) hoje só faz `avg()` do que existe, sem
+sinalizar dia faltando — candidato a follow-up se a série crescer e algum
+dia realmente faltar.

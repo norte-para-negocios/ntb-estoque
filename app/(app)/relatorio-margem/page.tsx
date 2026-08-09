@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -24,34 +25,13 @@ const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { t
 // perdia CMC de boa parte do catalogo e sumia com a maioria dos produtos
 // silenciosamente (achado real: loja com 819 produtos validos mostrava so 324).
 // Mesma classe de bug ja achada e corrigida no Faturamento/Estoque Valorizado.
-// `contar`: quando informado (count exato da mesma tabela/filtros, sem
-// trazer linha nenhuma), busca todas as paginas em paralelo em vez de uma de
-// cada vez -- app roda no Contabo (Franca), banco no Brasil, cada ida paga
-// ~230-460ms de latencia de rede pura. Sem `contar`, mantem o comportamento
-// sequencial original (rede de seguranca pros call sites que ainda nao
-// passam essa contagem).
-async function buscarTodasLinhas<T>(
-  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
-  contar?: () => PromiseLike<{ count: number | null }>,
-): Promise<T[]> {
-  const PAGE = 1000
-  if (contar) {
-    const { count } = await contar()
-    const numPaginas = Math.ceil((count ?? 0) / PAGE)
-    const blocos = await Promise.all(
-      Array.from({ length: numPaginas }, (_, p) => montar(p * PAGE, p * PAGE + PAGE - 1))
-    )
-    return blocos.flatMap((r) => r.data ?? [])
-  }
-  const todas: T[] = []
-  for (let p = 0; ; p++) {
-    const { data } = await montar(p * PAGE, p * PAGE + PAGE - 1)
-    if (!data?.length) break
-    todas.push(...data)
-    if (data.length < PAGE) break
-  }
-  return todas
-}
+// `buscarTodasLinhas` (Task 13, auditoria 2026-08-09): era uma copia local
+// hand-rolled, igual as de export/route.ts e do cron -- nenhuma checava
+// `error`, tratando falha de query no meio da paginacao exatamente igual a
+// "acabaram as paginas" (mesma classe de bug da migration 097, ja corrigida
+// em outros relatorios nesta auditoria). Trocado pelo helper compartilhado
+// `lib/supabase/buscar-todas-linhas.ts`, que loga o erro real e aceita
+// `onErro` pra sinalizar na tela (ver `errosConsulta`/banner abaixo).
 
 type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null }
 
@@ -150,6 +130,18 @@ export default async function RelatorioMargemPage({
   const familiasArr = valoresMulti(sp.familia)
   const tiposArr = valoresMulti(sp.tipo)
 
+  // Task 13 (auditoria 2026-08-09): acumula falhas reais de query pra avisar
+  // na tela em vez de deixar `buscarTodasLinhas` engolir o erro e devolver
+  // resultado parcial como se fosse completo (mesmo padrão já aplicado em
+  // relatorio-compras/page.tsx e relatorio-estoque-valorizado/page.tsx).
+  const errosConsulta: string[] = []
+  function logErro(rotulo: string) {
+    return (error: { message: string }) => {
+      errosConsulta.push(rotulo)
+      console.error(`relatorio-margem: consulta "${rotulo}" falhou -- dado pode estar incompleto`, error.message)
+    }
+  }
+
   const supabase = createServiceClient()
   const [rowsAll, { data: metaRow }, produtosRaw, { data: locaisRaw }] = await Promise.all([
     buscarTodasLinhas<Row>(
@@ -161,7 +153,8 @@ export default async function RelatorioMargemPage({
           .order('codigo', { ascending: true })
           .order('mes', { ascending: true })
           .range(from, to),
-      () => supabase.from('margem_importada').select('codigo', { count: 'exact', head: true }).eq('loja_id', lojaId)
+      () => supabase.from('margem_importada').select('codigo', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      logErro('margem importada')
     ),
     supabase.from('margem_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle(),
     // margem_importada não tem "tipo" (só vem no export do Omie): cruza por código
@@ -174,7 +167,8 @@ export default async function RelatorioMargemPage({
           .eq('loja_id', lojaId)
           .order('id', { ascending: true })
           .range(from, to),
-      () => supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId)
+      () => supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
+      logErro('produtos (tipo/local)')
     ),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
@@ -203,7 +197,7 @@ export default async function RelatorioMargemPage({
     // produtosCalc e fotoRow sao independentes entre si -- roda em paralelo em
     // vez de serie (este e o caminho padrao pra 5 das 6 lojas ativas, sem
     // import manual de margem).
-    const [produtosCalc, { data: fotoRow }] = await Promise.all([
+    const [produtosCalc, { data: fotoRow, error: erroFotoRow }] = await Promise.all([
       buscarTodasLinhas<{
         codigo: string | null
         codigo_produto: number
@@ -224,7 +218,8 @@ export default async function RelatorioMargemPage({
             .from('produtos')
             .select('codigo_produto', { count: 'exact', head: true })
             .eq('loja_id', lojaId)
-            .in('tipo_item', ['04', '00'])
+            .in('tipo_item', ['04', '00']),
+        logErro('produtos (cálculo ao vivo)')
       ),
       supabase
         .from('posicao_estoques')
@@ -234,6 +229,12 @@ export default async function RelatorioMargemPage({
         .limit(1)
         .maybeSingle(),
     ])
+    // Sem isto, um erro aqui (timeout, conexão) fazia `fotoRow` ficar `undefined`
+    // igualzinho a "loja sem nenhuma posição de estoque ainda" -- a tela cairia
+    // no EmptyState "Sem margem importada" escondendo que na verdade a query
+    // falhou (achado real desta auditoria: esta é a ÚNICA fonte de dado pra 5
+    // das 6 lojas ativas, que não fazem import manual do FAT_DRV).
+    if (erroFotoRow) logErro('posição de estoque (data mais recente)')(erroFotoRow)
     if (fotoRow?.data_posicao && produtosCalc.length) {
       // Pondera por local (soma de custo x saldo, dividido pelo saldo total) em vez
       // de pegar o MAIOR n_cmc entre locais -- mesmo bug já achado e corrigido em
@@ -264,7 +265,8 @@ export default async function RelatorioMargemPage({
             .eq('loja_id', lojaId)
             .eq('data_posicao', fotoRow.data_posicao)
             .gt('n_cmc', 0)
-            .gt('n_saldo', 0)
+            .gt('n_saldo', 0),
+        logErro('posição de estoque (CMC/saldo)')
       )
       const acumPorCod = new Map<number, { valor: number; saldo: number }>()
       for (const p of posRows) {
@@ -306,14 +308,17 @@ export default async function RelatorioMargemPage({
   const localSel = valoresMulti(sp.local).map(Number).filter((n) => !Number.isNaN(n))
   let codigosNoLocal: Set<string> | null = null
   if (localSel.length) {
-    const pos = await buscarTodasLinhas<{ n_cod_prod: number }>((from, to) =>
-      supabase
-        .from('posicao_estoques')
-        .select('n_cod_prod')
-        .eq('loja_id', lojaId)
-        .in('codigo_local_estoque', localSel)
-        .order('id', { ascending: true })
-        .range(from, to)
+    const pos = await buscarTodasLinhas<{ n_cod_prod: number }>(
+      (from, to) =>
+        supabase
+          .from('posicao_estoques')
+          .select('n_cod_prod')
+          .eq('loja_id', lojaId)
+          .in('codigo_local_estoque', localSel)
+          .order('id', { ascending: true })
+          .range(from, to),
+      undefined,
+      logErro('posição de estoque (filtro de local)')
     )
     const codProds = new Set(pos.map((p) => Number(p.n_cod_prod)))
     codigosNoLocal = new Set(
@@ -332,6 +337,12 @@ export default async function RelatorioMargemPage({
         <ListaHeader>
           <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} voltarHref="/relatorios" />
         </ListaHeader>
+        {errosConsulta.length > 0 && (
+          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+            Falha ao consultar dados de estoque/produto — a tela abaixo pode estar
+            vazia por causa disso, não por falta real de margem importada. Recarregue a página; se persistir, avise o suporte.
+          </p>
+        )}
         <EmptyState
           icon={Percent}
           title="Sem margem importada"
@@ -388,8 +399,8 @@ export default async function RelatorioMargemPage({
   let primeiroSnapshotEm: string | null = null
   const temEvolucaoImportada = !!evolucaoImportada && evolucaoImportada.meses.length > 1
   if (!temEvolucaoImportada) {
-    const [snapshotRows, { data: primeiroRow }] = await Promise.all([
-      rpcTodos<Row>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }),
+    const [snapshotRows, { data: primeiroRow, error: erroPrimeiroRow }] = await Promise.all([
+      rpcTodos<Row>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }, logErro('evolução mensal (snapshot)')),
       supabase
         .from('margem_snapshot_diario')
         .select('data_snapshot')
@@ -398,6 +409,7 @@ export default async function RelatorioMargemPage({
         .limit(1)
         .maybeSingle(),
     ])
+    if (erroPrimeiroRow) logErro('evolução mensal (primeiro snapshot)')(erroPrimeiroRow)
     evolucaoSnapshot = construirEvolucaoMensal(snapshotRows, codigosFiltrados)
     primeiroSnapshotEm = (primeiroRow?.data_snapshot as string | undefined) ?? null
   }
@@ -477,6 +489,13 @@ export default async function RelatorioMargemPage({
           </span>
         )}
       </div>
+
+      {errosConsulta.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar dados de estoque/produto — os números acima podem estar
+          incompletos. Recarregue a página; se persistir, avise o suporte.
+        </p>
+      )}
 
       {produtos.length === 0 ? (
         <EmptyState

@@ -2,6 +2,7 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { gerarPlanilha, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,19 +13,12 @@ const margemValida = (m: number | null): m is number => m != null && m > -100
 // paginacao de app/(app)/relatorio-margem/page.tsx (achado real: sem isto,
 // `produtos`/`posicao_estoques` truncavam e a exportacao saia incompleta ou
 // vazia pras lojas com catalogo/posicao acima de 1000 linhas).
-async function buscarTodasLinhas<T>(
-  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>
-): Promise<T[]> {
-  const PAGE = 1000
-  const todas: T[] = []
-  for (let p = 0; ; p++) {
-    const { data } = await montar(p * PAGE, p * PAGE + PAGE - 1)
-    if (!data?.length) break
-    todas.push(...data)
-    if (data.length < PAGE) break
-  }
-  return todas
-}
+// Task 13 (auditoria 2026-08-09): esta era uma copia local hand-rolled que
+// NAO checava `error` -- uma falha de query no meio da paginacao virava
+// silenciosamente "acabaram as paginas" e o Excel saia incompleto sem
+// nenhum aviso, nem no log. Trocado pelo helper compartilhado
+// `lib/supabase/buscar-todas-linhas.ts` (loga o erro real via console.error,
+// mesmo padrao aplicado ao `rpcTodos` do export de Compras na Task 11).
 
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
@@ -83,29 +77,54 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle()
     if (fotoRow?.data_posicao && produtosCalc.length) {
-      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number }>((from, to) =>
+      // Achado real (Task 13, auditoria 2026-08-09): este cálculo tinha ficado
+      // pra trás do mesmo fix já aplicado em relatorio-margem/page.tsx e no cron
+      // snapshot-margem-diario (2026-07-19/migration 082) -- pegava o MAIOR
+      // n_cmc entre locais, sem filtrar n_saldo>0. Isso reintroduz os 2 bugs já
+      // corrigidos nos outros 2 lugares: (a) quando o mesmo produto tem CMC
+      // divergente entre locais, o maior valor sozinho superestima o custo e
+      // derruba a margem (confirmado ao vivo, loja 2: 287 produtos com CMC
+      // divergente, ex. "Moq. Mariscada 1300g" mostrava 34,9% na exportação
+      // contra 43,0% na tela -- mesmo produto, mesmo dia); (b) sem o filtro de
+      // saldo positivo, locais "fantasma" com saldo negativo entram na conta.
+      // Troca pra ponderação por saldo (soma custo×saldo / saldo total),
+      // idêntica à tela/cron.
+      const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>((from, to) =>
         supabase
           .from('posicao_estoques')
-          .select('n_cod_prod, n_cmc')
+          .select('n_cod_prod, n_cmc, n_saldo')
           .eq('loja_id', lojaId)
           .eq('data_posicao', fotoRow.data_posicao)
           .gt('n_cmc', 0)
+          .gt('n_saldo', 0)
           .order('id', { ascending: true })
           .range(from, to)
       )
-      const cmcPorCod = new Map<number, number>()
+      const acumPorCod = new Map<number, { valor: number; saldo: number }>()
       for (const p of posRows) {
-        const atual = cmcPorCod.get(Number(p.n_cod_prod))
-        if (atual == null || Number(p.n_cmc) > atual) cmcPorCod.set(Number(p.n_cod_prod), Number(p.n_cmc))
+        const cod = Number(p.n_cod_prod)
+        const saldo = Number(p.n_saldo) || 0
+        const ent = acumPorCod.get(cod) ?? { valor: 0, saldo: 0 }
+        ent.valor += Number(p.n_cmc) * saldo
+        ent.saldo += saldo
+        acumPorCod.set(cod, ent)
       }
-      rows = produtosCalc
-        .map((p) => {
-          const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
-          const pdv = Number(p.valor_unitario) || null
-          const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
-          return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
-        })
-        .filter((r) => r.cmc != null && r.pdv != null)
+      const cmcPorCod = new Map<number, number>()
+      for (const [cod, e] of acumPorCod) {
+        if (e.saldo > 0) cmcPorCod.set(cod, e.valor / e.saldo)
+      }
+      // Achado real adicional: o `.filter()` final escondia da planilha
+      // QUALQUER produto sem CMC ou sem preço cadastrado -- exatamente o bug já
+      // corrigido na tela em 2026-07-19 ("Achado real (usuário 2026-07-19)" em
+      // page.tsx), que a exportação nunca recebeu. Removido: agora todo produto
+      // do tipo certo sai na planilha, com "Situação" = "CMC inválido (revisar
+      // no Omie)" quando não tem cmc/pdv válidos, em vez de sumir sem aviso.
+      rows = produtosCalc.map((p) => {
+        const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
+        const pdv = Number(p.valor_unitario) || null
+        const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
+        return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
+      })
     }
   }
   if (!rows.length) return new Response('Sem margem importada', { status: 404 })

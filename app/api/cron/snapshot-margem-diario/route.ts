@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const maxDuration = 300
 
@@ -14,31 +15,17 @@ export const maxDuration = 300
 // (loja 3) e mensal/agregado e nao serve pra essa serie.
 
 // PostgREST corta em 1000 linhas por padrao, sem erro -- mesma paginacao de
-// app/(app)/relatorio-margem/page.tsx (achado real: sem isto, `produtos`/
-// `posicao_estoques` truncavam silenciosamente pra lojas acima de 1000
-// linhas). `contar`: quando informado, busca todas as paginas em paralelo.
-async function buscarTodasLinhas<T>(
-  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
-  contar?: () => PromiseLike<{ count: number | null }>,
-): Promise<T[]> {
-  const PAGE = 1000
-  if (contar) {
-    const { count } = await contar()
-    const numPaginas = Math.ceil((count ?? 0) / PAGE)
-    const blocos = await Promise.all(
-      Array.from({ length: numPaginas }, (_, p) => montar(p * PAGE, p * PAGE + PAGE - 1))
-    )
-    return blocos.flatMap((r) => r.data ?? [])
-  }
-  const todas: T[] = []
-  for (let p = 0; ; p++) {
-    const { data } = await montar(p * PAGE, p * PAGE + PAGE - 1)
-    if (!data?.length) break
-    todas.push(...data)
-    if (data.length < PAGE) break
-  }
-  return todas
-}
+// app/(app)/relatorio-margem/page.tsx. Task 13 (auditoria 2026-08-09): a
+// copia local hand-rolled que existia aqui nao checava `error` -- pior aqui
+// do que na tela/export, porque este cron ESCREVE o resultado numa tabela
+// append-only sem retroativo possivel (comentario da migration 101): uma
+// falha de query no meio da paginacao viraria silenciosamente "acabaram as
+// paginas", e o CMC truncado/errado ficaria gravado pra sempre como se fosse
+// o snapshot real do dia. Trocado pelo helper compartilhado
+// `lib/supabase/buscar-todas-linhas.ts` (loga o erro real) + `onErro` usado
+// abaixo pra NAO gravar o snapshot da loja nesse dia quando alguma consulta
+// falhar (melhor um dia faltando na serie -- visivel como buraco -- do que
+// um numero errado gravado como se fosse real).
 
 type Linha = {
   codigo_produto: number
@@ -60,9 +47,15 @@ export async function GET(request: Request) {
 
   const resumo: { loja_id: number; linhas: number; erro: string | null }[] = []
   for (const loja of lojas) {
+    let houveErroConsulta = false
+    const marcarErro = (etapa: string) => (error: { message: string }) => {
+      houveErroConsulta = true
+      console.error(`snapshot-margem-diario: loja ${loja.id}, consulta "${etapa}" falhou -- snapshot do dia NAO sera gravado`, error.message)
+    }
+
     // produtosCalc e fotoRow sao independentes entre si -- roda em paralelo
     // (mesmo padrao de relatorio-margem/page.tsx).
-    const [produtosCalc, { data: fotoRow }] = await Promise.all([
+    const [produtosCalc, { data: fotoRow, error: erroFotoRow }] = await Promise.all([
       buscarTodasLinhas<{
         codigo: string | null
         codigo_produto: number
@@ -83,7 +76,8 @@ export async function GET(request: Request) {
             .from('produtos')
             .select('codigo_produto', { count: 'exact', head: true })
             .eq('loja_id', loja.id)
-            .in('tipo_item', ['04', '00'])
+            .in('tipo_item', ['04', '00']),
+        marcarErro('produtos')
       ),
       supabase
         .from('posicao_estoques')
@@ -93,6 +87,7 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle(),
     ])
+    if (erroFotoRow) marcarErro('posição de estoque (data mais recente)')(erroFotoRow)
 
     let linhas: Linha[] = []
     if (fotoRow?.data_posicao && produtosCalc.length) {
@@ -122,7 +117,8 @@ export async function GET(request: Request) {
             .eq('loja_id', loja.id)
             .eq('data_posicao', fotoRow.data_posicao)
             .gt('n_cmc', 0)
-            .gt('n_saldo', 0)
+            .gt('n_saldo', 0),
+        marcarErro('posição de estoque (CMC/saldo)')
       )
       const acumPorCod = new Map<number, { valor: number; saldo: number }>()
       for (const p of posRows) {
@@ -156,7 +152,12 @@ export async function GET(request: Request) {
       })
     }
 
-    if (linhas.length) {
+    if (houveErroConsulta) {
+      // Nao grava: um snapshot parcial/truncado gravado como se fosse o real
+      // do dia seria pior do que um buraco na serie (buraco pelo menos e
+      // detectavel depois; numero errado gravado no append-only, nao).
+      resumo.push({ loja_id: loja.id, linhas: 0, erro: 'falha ao consultar produtos/posição de estoque -- snapshot do dia não gravado' })
+    } else if (linhas.length) {
       const { error } = await supabase.from('margem_snapshot_diario').upsert(
         linhas.map((l) => ({ loja_id: loja.id, data_snapshot: hoje, ...l })),
         { onConflict: 'loja_id,data_snapshot,codigo_produto' }
@@ -166,5 +167,10 @@ export async function GET(request: Request) {
       resumo.push({ loja_id: loja.id, linhas: 0, erro: null })
     }
   }
-  return NextResponse.json({ total_lojas: lojas.length, resumo })
+  // Mesmo padrao ja aplicado em sync-posicao/sync-previsao/sync-preco-movimentacao
+  // (achado da Task 9 desta auditoria: um cron que sempre responde 200, mesmo
+  // com todas as lojas falhando, fica mudo no log -- "-> 200" nao diferencia
+  // sucesso de apagao total). Se TODAS as lojas com resultado falharam, 502.
+  const todasFalharam = resumo.length > 0 && resumo.every((r) => r.erro !== null)
+  return NextResponse.json({ total_lojas: lojas.length, resumo }, { status: todasFalharam ? 502 : 200 })
 }
