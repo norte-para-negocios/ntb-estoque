@@ -887,9 +887,20 @@ export default async function RelatorioMovimentacaoPage({
         Array.from({ length: numPaginasPreco }, (_, i) =>
           supabase
             .from('nota_fiscal_items')
-            .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
+            .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe)')
             .eq('loja_id', lojaId)
             .gt('n_preco_unit', 0)
+            // Achado real (auditoria Task 9, 2026-08-09): faltava replicar o
+            // WHERE/ORDER BY do CTE `preco` da RPC relatorio_movimentacao_matriz
+            // (deleted_at is null + preço mais recente por produto) -- sem isso,
+            // a fatia fria podia usar preço de NF cancelada, ou o preço de
+            // qualquer NF (nao necessariamente a mais recente), divergindo da
+            // RPC. Sem efeito visivel hoje (o campo valor/precoPorProduto nao e
+            // exibido no modo "Em quantidade" -- so qtde), mas mantem a
+            // reimplementacao JS fiel ao SQL, como o comentario de
+            // agregarMovimentacaoJS ja pede.
+            .is('notas_fiscais.deleted_at', null)
+            .order('d_emissao_nfe', { foreignTable: 'notas_fiscais', ascending: false })
             .range(i * 1000, i * 1000 + 999)
         )
       ),

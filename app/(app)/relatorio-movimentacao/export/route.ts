@@ -196,18 +196,55 @@ export async function GET(request: Request) {
   let metaPorCodigo: Map<number, { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }> | null = null
   let precoPorProduto: Map<number, number> | null = null
   if (ini < cutoff) {
-    const { data: metaRows } = await supabase
-      .from('produtos')
-      .select('codigo_produto, tipo_item, descricao_familia')
-      .eq('loja_id', lojaId)
-    metaPorCodigo = new Map((metaRows ?? []).map((m) => [m.codigo_produto, m]))
-    const { data: precoRows } = await supabase
-      .from('nota_fiscal_items')
-      .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at)')
-      .eq('loja_id', lojaId)
-      .gt('n_preco_unit', 0)
+    // Achado real (auditoria Task 9, 2026-08-09): sem paginação -- mesma
+    // classe de bug já corrigida em app/(app)/relatorio-movimentacao/page.tsx
+    // (achado 2026-07-26, ver AGENTS.md) e em várias outras telas: PostgREST
+    // corta em 1000 linhas por padrão sem erro, e 5 das 6 lojas ativas têm
+    // mais de 1000 produtos. Sem efeito visível hoje (metaPorCodigo só
+    // importa pros dims 'tipo'/'familia' em agregarMovimentacaoJS, e este
+    // export sempre chama com dim='produto'), mas corrigido por consistência
+    // com a page.tsx (mesmo padrão de paginação com .range()+.order('id')).
+    const metaRowsTodos: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
+    for (let p = 0; ; p++) {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('codigo_produto, tipo_item, descricao_familia')
+        .eq('loja_id', lojaId)
+        .order('id')
+        .range(p * 1000, p * 1000 + 999)
+      if (error || !data?.length) break
+      metaRowsTodos.push(...data)
+      if (data.length < 1000) break
+    }
+    metaPorCodigo = new Map(metaRowsTodos.map((m) => [m.codigo_produto, m]))
+    // Achado real (auditoria Task 9, 2026-08-09): 2 bugs na mesma query --
+    // (1) sem paginacao (mesma classe do bug ja corrigido varias vezes nesta
+    // sessao, ver AGENTS.md: PostgREST corta em 1000 linhas por padrao, e
+    // lojas grandes tem muito mais que isso de itens com preco>0); (2) faltava
+    // `.is('notas_fiscais.deleted_at', null)` + ordenar por d_emissao_nfe desc
+    // pra replicar o CTE `preco` da RPC relatorio_movimentacao_matriz (preço
+    // mais recente entre NFs nao-canceladas). Sem efeito visivel hoje (o
+    // export "Em quantidade" só usa qtde, nunca valor/precoPorProduto), mas
+    // mantém a reimplementação JS fiel ao SQL, como o comentário de
+    // agregarMovimentacaoJS já pede -- corrigido no mesmo padrão de paginação
+    // já usado acima para metaRows/produtos.
+    const PAGE_PRECO = 1000
+    const precoRowsTodos: { n_id_produto: number; n_preco_unit: number }[] = []
+    for (let p = 0; ; p++) {
+      const { data, error } = await supabase
+        .from('nota_fiscal_items')
+        .select('n_id_produto, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe)')
+        .eq('loja_id', lojaId)
+        .gt('n_preco_unit', 0)
+        .is('notas_fiscais.deleted_at', null)
+        .order('d_emissao_nfe', { foreignTable: 'notas_fiscais', ascending: false })
+        .range(p * PAGE_PRECO, p * PAGE_PRECO + PAGE_PRECO - 1)
+      if (error || !data?.length) break
+      precoRowsTodos.push(...(data as unknown as { n_id_produto: number; n_preco_unit: number }[]))
+      if (data.length < PAGE_PRECO) break
+    }
     precoPorProduto = new Map<number, number>()
-    for (const r of (precoRows ?? []) as { n_id_produto: number; n_preco_unit: number }[]) {
+    for (const r of precoRowsTodos) {
       if (r.n_id_produto && !precoPorProduto.has(r.n_id_produto)) precoPorProduto.set(r.n_id_produto, r.n_preco_unit)
     }
   }
