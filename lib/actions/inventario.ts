@@ -611,7 +611,7 @@ export async function retryAjustesInventarioPendentes(
     }
 
     for (const [inventarioId, itemIds] of porInventario) {
-      const { data: inventarioHeader } = await supabase
+      const { data: inventarioHeader, error: erroHeader } = await supabase
         .from('inventarios')
         .select(
           'id, codigo_local_estoque, tipo, origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret)'
@@ -620,23 +620,43 @@ export async function retryAjustesInventarioPendentes(
         .eq('loja_id', loja.id)
         .single<InventarioHeader>()
 
-      if (!inventarioHeader?.loja) {
+      // Qualquer saida antecipada daqui pra baixo precisa DEVOLVER o status de
+      // 'Processando' pra 'Erro' nos itens que nao vao ser processados -- senao
+      // eles ficam presos em 'Processando' pra sempre, invisiveis ao filtro
+      // status='Erro'/'Sem CMC' do proximo ciclo do cron (achado da re-revisao,
+      // Fix round 2: o marcar-como-'Processando' do round 1 precisa de um
+      // "estorno" simetrico em todo caminho que nao termina em
+      // processarItemInventario).
+      if (erroHeader || !inventarioHeader?.loja) {
+        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', itemIds)
         falhas += itemIds.length
         continue
       }
 
-      const { data: itensElegiveis } = await supabase
+      const { data: itensElegiveis, error: erroItens } = await supabase
         .from('inventario_items')
         .select('id, produto_codigo, produto_codigo_produto, quan, status, id_ajuste, tentativas')
         .in('id', itemIds)
+
+      if (erroItens) {
+        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', itemIds)
+        falhas += itemIds.length
+        continue
+      }
 
       const dataAjuste = dataOmieBR(inventarioHeader.data)
       const inventario: InventarioComItens = { ...inventarioHeader, items: [] }
 
       // Se algum id elegivel nao vier no resultado (linha some entre selecao e
-      // fetch), conta como falha em vez de descartar silenciosamente.
+      // fetch), conta como falha E estorna o status desses ids especificos de
+      // volta pra 'Erro' (nao precisa reconstruir o status original exato tipo
+      // 'Sem CMC' -- 'Erro' ja garante que o proximo ciclo do cron tenta de novo).
       const idsEncontrados = new Set((itensElegiveis ?? []).map((i) => i.id))
-      falhas += itemIds.filter((id) => !idsEncontrados.has(id)).length
+      const idsNaoEncontrados = itemIds.filter((id) => !idsEncontrados.has(id))
+      if (idsNaoEncontrados.length > 0) {
+        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', idsNaoEncontrados)
+        falhas += idsNaoEncontrados.length
+      }
 
       for (const item of (itensElegiveis ?? []) as InventarioItemRow[]) {
         await processarItemInventario(inventario, item, loja.id, dataAjuste)
