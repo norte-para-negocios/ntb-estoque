@@ -244,6 +244,12 @@ export default async function RelatorioIndicadoresPage({
   if (filtroIni) exportParams.set('data_inicio', filtroIni)
   if (filtroFim) exportParams.set('data_final', filtroFim)
   if (localCod !== null) exportParams.set('local', String(localCod))
+  // Achado real (auditoria 2026-08-09, Task 14): produto e família ficavam de
+  // fora daqui -- filtravam a tela, mas o Excel sempre baixava o total da loja
+  // inteira em silêncio, sem nenhum aviso (mesma classe de bug já corrigida em
+  // relatorio-compras/page.tsx). export/route.ts já sabe ler os dois agora.
+  if (produtoTermo) exportParams.set('produto', produtoTermo)
+  if (familiasSel.length) exportParams.set('familia', familiasSel.join(','))
   const exportHref = `/relatorio-indicadores/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   return (

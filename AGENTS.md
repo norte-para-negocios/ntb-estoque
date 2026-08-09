@@ -542,3 +542,66 @@ data_snapshot) = max - min + 1` bate exato), 2700–8178 linhas/loja
 
 Série ainda curta (9 dias) — não implementado retry no cron nesta rodada
 (fora de escopo), só o buraco virou visível via `dias`.
+
+### Auditoria do Faturamento × Compras (Task 14, 2026-08-09) — export ignorava produto/família + card financeiro documentado aqui em cima nunca existiu de fato
+
+**Achado real principal**: o link "Baixar" de `relatorio-indicadores/page.tsx`
+só levava `data_inicio`/`data_final`/`local` pra `export/route.ts` — os
+filtros de produto e família (que a tela aplica dos dois lados da razão,
+com o aviso visível "Indicadores filtrados") nunca chegavam na URL do
+Excel, e `export/route.ts` nem sequer sabia ler esses dois parâmetros nem
+tinha o complemento frio (Contabo) de Compras que `page.tsx` já tem desde
+2026-07-17. Mesma classe de bug já corrigida antes em
+`relatorio-compras/page.tsx` (ver comentário no `exportParams` de lá,
+"produto e local ficavam de fora"), nunca replicada aqui. Confirmado ao
+vivo o tamanho do problema (loja 3, família "DRINKS"): Faturamento
+filtrado = R$89.268,07 contra R$4.516.364,14 sem filtro (1,98% do total);
+Compras filtradas = R$0 (nenhuma NF de entrada classificada em DRINKS no
+período) contra R$3.137.500,09 sem filtro — ou seja, um usuário filtrando
+por família na tela via ~0% de Compras÷Faturamento mas, ao clicar
+"Baixar", recebia o Excel com a razão da loja INTEIRA (~69,5%), sem
+nenhum aviso de que o filtro foi ignorado. Corrigido: `page.tsx` agora
+inclui `produto`/`familia` no `exportParams`; `export/route.ts` foi
+reescrito pra espelhar `page.tsx` em tudo — mesma seleção de dimensão
+(produto > família > tipo), mesmos parâmetros nas duas RPCs, e o mesmo
+complemento frio de Compras (paginação de `produtos` + `buscarItensNFFrio`
++ `filtrarItensCompras`/`agregarComprasMatriz`) para o pedaço anterior aos
+~90 dias.
+
+**Achado documental (não é bug de código, mas confundiu a auditoria)**: a
+seção "Card financeiro 'hoje'" registrada mais acima neste arquivo
+(2026-07-18) descreve um card com saldo em conta/a pagar/fluxo de caixa
+via `lib/omie/financeiro-resumo.ts` → `ObterResumoFinancas` que **não
+existe mais** — removido no dia seguinte por pedido explícito do usuário
+(commit `c337167`, 2026-07-20: "Indicadores/Fat x Compras não deve trazer
+'coisas do financeiro'"). O arquivo `lib/omie/financeiro-resumo.ts` foi
+apagado junto; nada no `page.tsx` atual o referencia. A documentação acima
+nunca foi atualizada para refletir a reversão — mantida aqui só como nota
+de rodapé pra quem ler a seção de 07-18 e se confundir como esta auditoria
+se confundiu; a seção antiga não foi editada/removida para preservar o
+histórico do porquê a feature existiu e foi tirada.
+
+**Verificado, sem achado**: `lojas.meta_compras_pct` (meta de
+Compras÷Faturamento, editável em "Minha loja") — 4 das 6 lojas ativas
+(2, 4, 6, 7) têm o campo `NULL` hoje; `metaPct = lojaRow?.meta_compras_pct
+?? 40` cobre tanto "coluna nula" quanto "query da loja falhou" (mesmo
+fallback, sem `NaN`/`undefined` em nenhum dos dois casos) — confirmado
+direto no Postgres de produção.
+
+**Achado incidental (não corrigido, magnitude pequena)**: a comparação
+entre a RPC `relatorio_compras_matriz` chamada com o período INTEIRO
+direto (o que `export/route.ts` fazia antes desta correção) e o mesmo
+período via o par clamp-90-dias + complemento frio que `page.tsx` sempre
+usou mostrou uma diferença de ~0,14% pra loja 3 (R$2.535.024,48 direto da
+RPC contra R$2.530.788,50 somando o espelho frio do Contabo pro mesmo
+intervalo) — o Supabase self-hosted já cobre esse período por inteiro
+(mesmo achado do Task 1 da auditoria de 2026-08-04, que já tinha
+simplificado 2 outros callers de NF por causa disso), então o número que a
+TELA mostra fica ligeiramente desatualizado em relação ao que uma consulta
+direta à RPC traria. Não corrigido agora porque manter `page.tsx` e
+`export/route.ts` calculando exatamente do MESMO jeito (mesmo se ambos
+carregam uma pequena defasagem) é mais seguro do que os dois discordarem
+entre si — simplificar as duas rotas pra parar de clampar e de usar o
+complemento frio (deixando a RPC direto cobrir o período inteiro, como o
+Task 1 já fez em `nota-fiscal/relatorio` e `nota-fiscal/export`) é
+candidato a follow-up dedicado, fora do escopo desta task.
