@@ -208,6 +208,93 @@ primeira dobra) — a verificação usou o conteúdo real do DOM renderizado,
 não só o que aparecia na primeira captura de tela, para não gerar falso
 negativo.
 
+## Itens do spec original conscientemente fora do escopo desta reconciliação
+
+O spec original (`docs/superpowers/specs/2026-08-08-reconciliacao-vercel-contabo-design.md`)
+levantou 3 itens divergentes que as 5 tasks deste plano deliberadamente
+**não** reconciliaram. Ficam documentados aqui, com investigação real onde
+fazia sentido, pra não se perder:
+
+### 1. `movimentos` manuais/SLD (tipo SLD, fora de transferência) — 88 linhas só no cloud
+
+Reflexo dos 26 inventários já reconciliados nas Tasks 3/4, não um achado
+independente: 88 linhas em `movimentos` (`tipo='SLD'`, criadas depois do
+fork de `inventarios` em 31/07 16:39 UTC) existem no Supabase cloud e não
+têm par no Contabo pela chave natural `(loja_id, id_ajuste)` — verificado
+ao vivo nesta correção, não só citado do spec.
+
+**Hipótese testada:** o cron `sync-ajustes`
+(`lib/omie/sync-ajustes.ts`) não depende de `inventario_items` local — ele
+lê `ListarAjusteEstoque` direto da Omie e grava em `movimentos` por
+`(loja_id, id_ajuste)` (RPC `upsert_movimentos_ajuste`, migration 079).
+Como a Task 2 confirmou que 909/930 desses ajustes existem de verdade na
+Omie, a hipótese era que esse cron traria as 88 linhas sozinho, mais cedo
+ou mais tarde, rodando no Contabo (produção).
+
+**Resultado: hipótese refutada — o cron NÃO vai trazer essas 88 linhas
+sozinho, hoje.** Query direta no Contabo (`docker exec supabase-db psql`)
+comparando as 88 pares `(loja_id, id_ajuste)` do cloud contra `movimentos`
+do Contabo: **0 de 88 encontrados**. Causa raiz encontrada: `sync-ajustes`
+usa um **cursor incremental por loja** (`MAX(id_ajuste)` já sincronizado),
+e só busca ajustes com `id_ajuste` **maior** que esse cursor — ele nunca
+olha pra trás. O cursor de cada loja envolvida já avançou muito além do
+intervalo dessas 88 linhas, porque a Omie atribui `id_ajuste` de forma
+crescente e global por loja (não por sistema de origem), e o Contabo
+continuou gerando ajustes mais recentes (via uso orgânico pós-fork)
+enquanto essas 88 ajustes específicos — criados pelo app rodando no cloud
+— ficaram "no meio do caminho", nunca sincronizados:
+
+| Loja | Intervalo `id_ajuste` das linhas só-cloud | `MAX(id_ajuste)` já sincronizado no Contabo hoje |
+|---|---|---|
+| 2 | 9.576.060.778 – 9.576.096.078 (42 linhas) | 9.576.737.440 (já passou) |
+| 3 | 4.857.656.086 – 4.859.316.562 (2 linhas) | 4.859.319.985 (já passou) |
+| 5 | 3.800.846.698 – 3.801.752.300 (44 linhas) | 3.802.640.062 (já passou) |
+
+Ou seja: é um **buraco permanente no meio da sequência**, não uma cauda
+"ainda não chegou" — o cursor atual (`MAX`) é incapaz de detectar ou
+preencher esse tipo de lacuna, porque só compara contra o maior id já
+visto, não contra o conjunto completo. Sem uma mudança no cron (ex.:
+também verificar ids intermediários faltantes) ou um backfill pontual
+igual ao que a Task 2 já fez pra verificação, essas 88 linhas **nunca**
+vão aparecer sozinhas no Contabo.
+
+**Decisão para o futuro (não executada aqui):** como o estoque físico
+nesses casos já foi confirmado correto na Omie (parte dos 909/930 da Task
+2), o risco de deixar como está é só de **registro**/auditoria interna
+incompleta, mesma natureza dos outros achados já reconciliados — não afeta
+saldo real. Duas opções ficam em aberto pra decisão do usuário: (a)
+backfill pontual dessas 88 linhas no Contabo (mesmo padrão de INSERT usado
+nas Tasks 3/4, remapeando id), ou (b) corrigir `sync-ajustes` pra detectar
+e preencher lacunas na sequência, não só avançar o cursor. Nenhuma das
+duas foi feita nesta correção — é achado de investigação, fora do escopo
+autorizado (só documentação).
+
+*(Nota: o spec original citava 87 linhas; a verificação ao vivo desta
+correção, usando o mesmo critério — `tipo='SLD'`, criadas após o fork —
+encontrou 88. Diferença de 1 linha, provavelmente por causa da janela de
+tempo exata usada em cada investigação; não muda a conclusão.)*
+
+### 2. `audit_log` — 233 colisões de id entre os dois bancos
+
+Tabela de log de auditoria (histórico de ações do sistema), não dado
+operacional/transacional. Conscientemente deixada fora da reconciliação —
+log de auditoria não precisa do mesmo rigor de reconciliação campo-a-campo
+que `inventarios`/`transferencias`, e um id duplicado ali não afeta saldo,
+estoque nem nenhuma tela do app. Confirmado que a tabela tem ids
+contíguos sem buraco em ambos os bancos (cloud: 1–1189; Contabo: 1–1278),
+consistente com uma faixa de sobreposição na casa das centenas — sem
+necessidade de ação.
+
+### 3. `profiles`/`loja_user` — 1 linha só no Contabo (Edson dos Santos Dias, loja 5)
+
+Direção **oposta** aos outros achados deste incidente: Edson dos Santos
+Dias (`santosedson260201@gmail.com`, loja 5) existe em `profiles`/
+`loja_user` **só no Contabo**, confirmado nesta correção (`select ... from
+profiles where name ilike '%edson%'` — 0 linhas no cloud, 1 no Contabo).
+Ele nunca teve conta no Supabase cloud — não é um usuário "perdido" nem
+"duplicado", ele sempre esteve no sistema certo (o de produção) desde o
+início. **Benigno, sem ação necessária.**
+
 ## Achados laterais (fora de escopo deste incidente)
 
 Encontrados durante a investigação/reconciliação, sem relação direta com
