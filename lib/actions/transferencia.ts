@@ -710,6 +710,25 @@ export async function retryMovimentosTransferenciaPendentes(
       }
 
       for (const mov of (movsElegiveis ?? []) as MovimentoRow[]) {
+        if (mov.id_ajuste !== null || mov.quan === null || !(mov.quan > 0)) {
+          // Mudou de estado entre a selecao e agora (ex: enviarMovimento da tela de
+          // contagem, que nao tem trava de 'Processando', processou esse movimento
+          // nesse meio tempo e setou id_ajuste, ou zerou/negativou quan) -- nao
+          // reprocessa: processarMovimento duplicaria o lancamento no Omie se ja
+          // tem id_ajuste, ou DELETARIA a linha silenciosamente se quan for null
+          // (mesma guarda que ja existe no filtro de selecao, reaplicada aqui
+          // porque o estado pode ter mudado entre a selecao e o refetch). So
+          // estorna pra 'Erro' e deixa o proximo ciclo do cron reavaliar do zero.
+          const { error: erroEstorno } = await supabase
+            .from('movimentos')
+            .update({ status: 'Erro' })
+            .eq('id', mov.id)
+          if (erroEstorno) {
+            errosEstorno.push(`estorno p/ movimento ${mov.id} (mudou de estado) falhou: ${erroEstorno.message}`)
+          }
+          falhas++
+          continue
+        }
         await processarMovimento(trans, mov, loja.id, dataMov, await carimboUsuario())
         const { data: final } = await supabase
           .from('movimentos')
