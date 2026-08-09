@@ -308,9 +308,19 @@ async function processarMovimento(
       // 'Sem CMC' (nao 'Erro'): o produto ainda nao tem custo medio fechado no Omie.
       // Nao e falha de integracao nossa; o placar trata separado e reenviar resolve
       // quando o custo aparecer. Igual ao fluxo do inventario.
+      // Grava tentativas/ultima_tentativa_em tambem aqui (nao so no try/catch de
+      // baixo) -- sem isso o throttle do retry automatico nunca reconhece uma
+      // tentativa de 'Sem CMC' como "recente", e o cron reenviaria esse movimento a
+      // cada 10 min pra sempre em vez de 1x/hora com teto (mesmo achado da Task 4
+      // em lib/actions/inventario.ts).
       await supabase
         .from('movimentos')
-        .update({ status: 'Sem CMC', descricao_status: 'Sem CMC' })
+        .update({
+          status: 'Sem CMC',
+          descricao_status: 'Sem CMC',
+          tentativas: (mov.tentativas ?? 0) + 1,
+          ultima_tentativa_em: new Date().toISOString(),
+        })
         .eq('id', mov.id)
       return
     }
@@ -501,6 +511,226 @@ export async function forceSyncTransferencia(transferenciaId: number) {
 
   revalidatePath('/transferencia')
   return { ok: true }
+}
+
+const SEM_CMC_MAX_TENTATIVAS = 20
+const SEM_CMC_STALE_HORAS = 1
+
+type MovimentoTransferenciaRetryRow = {
+  id: number
+  transferencia_id: number
+  loja_id: number
+  status: string | null
+  tentativas: number | null
+  id_ajuste: number | null
+  quan: number | null
+}
+
+type TransferenciaHeader = Omit<TransferenciaComMovimentos, 'movimentos'>
+
+/**
+ * Varre movimentos de transferencia pendentes de lancamento no Omie (status 'Erro'
+ * ou 'Sem CMC', `transferencia_id IS NOT NULL`) das lojas informadas e tenta
+ * reenviar, reusando `processarMovimento` -- serve o cron de 10 em 10 min. Sem
+ * sessao de usuario (contexto de cron), por isso `lojaId` vem explicito em vez de
+ * `getCurrentLojaId()`/`requirePermissao()`. Mesma filosofia de
+ * `retryAjustesInventarioPendentes` (`lib/actions/inventario.ts`, ja revisada em 3
+ * rounds): 'Erro' reenvia sempre, sem teto (falha transitoria se resolve sozinha
+ * reenviando); 'Sem CMC' tem teto de tentativas + throttle de 1h (nao vai se
+ * resolver sem acao humana no cadastro do Omie, entao nao adianta bater todo cron).
+ *
+ * Como `processarMovimento` exige o objeto `trans` completo (com `loja` embutida),
+ * agrupamos os movimentos elegiveis por `transferencia_id` e buscamos o cabecalho
+ * de cada transferencia 1x (SEM `movimentos(*)` do pai inteiro -- mesmo motivo do
+ * inventario.ts: isso incluiria a coluna `response` de TODOS os movimentos irmaos
+ * a cada 10 min, payload multi-MB desnecessario), processando so os movimentos que
+ * bateram no filtro de retry acima -- nao todos os "pendentes" da transferencia.
+ * Processamento sequencial (sem paralelizar).
+ */
+export async function retryMovimentosTransferenciaPendentes(
+  lojas: LojaOmie[],
+  opts: { limitePorLoja?: number } = {}
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[]> {
+  const limitePorLoja = opts.limitePorLoja ?? 30
+  const supabase = createServiceClient()
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
+
+  for (const loja of lojas) {
+    const { data: errosGenericos, error: erroErros } = await supabase
+      .from('movimentos')
+      .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan')
+      .eq('loja_id', loja.id)
+      .not('transferencia_id', 'is', null)
+      .eq('status', 'Erro')
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
+    const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
+    const { data: semCmc, error: erroSemCmc } = await supabase
+      .from('movimentos')
+      .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan')
+      .eq('loja_id', loja.id)
+      .not('transferencia_id', 'is', null)
+      .eq('status', 'Sem CMC')
+      .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
+      .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
+    // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
+    // de parse do .or()), reportar explicitamente por loja em vez de tratar como
+    // "0 pendentes" -- mesmo padrao de bug ja visto 3x neste repo (AGENTS.md: RPC
+    // que engolia erro escondeu 90 dias de Compras, buscarFrio devolvendo [],
+    // buscarTudoPaginado tratando erro como fim de pagina).
+    if (erroErros || erroSemCmc) {
+      resultados.push({
+        loja_id: loja.id,
+        tentadas: 0,
+        sucesso: 0,
+        falhas: 0,
+        erro: (erroErros ?? erroSemCmc)!.message,
+      })
+      continue
+    }
+
+    // Segunda camada de protecao (defesa em profundidade, mesmo criterio de
+    // finishTransferencia/forceSyncTransferencia): nunca reprocessar movimento que
+    // ja tem id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan/quan
+    // <= 0 (seria DELETADO ou nunca deveria ter sido enviado por processarMovimento).
+    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? [])]
+      .filter((m) => m.id_ajuste === null && m.quan !== null && m.quan > 0)
+      .slice(0, limitePorLoja) as MovimentoTransferenciaRetryRow[]
+
+    if (pendentes.length === 0) {
+      resultados.push({ loja_id: loja.id, tentadas: 0, sucesso: 0, falhas: 0 })
+      continue
+    }
+
+    // Marca 'Processando' JA, antes de chamar o Omie: torna esses movimentos
+    // invisiveis pro filtro status='Erro'/'Sem CMC' de uma proxima execucao do cron
+    // que comece antes desta terminar -- sem isso, duas execucoes concorrentes
+    // reenviariam os MESMOS movimentos (double-send no Omie).
+    const idsSelecionados = pendentes.map((m) => m.id)
+    const { error: erroMarcar } = await supabase
+      .from('movimentos')
+      .update({ status: 'Processando' })
+      .in('id', idsSelecionados)
+    if (erroMarcar) {
+      resultados.push({
+        loja_id: loja.id,
+        tentadas: 0,
+        sucesso: 0,
+        falhas: 0,
+        erro: `falha ao marcar 'Processando': ${erroMarcar.message}`,
+      })
+      continue
+    }
+
+    let sucesso = 0
+    let falhas = 0
+    // Erros dos proprios updates de estorno ('Processando' -> 'Erro') abaixo --
+    // se o estorno em si falhar (erro transiente de banco, timeout), o movimento
+    // fica preso em 'Processando' de novo. Sem retry automatico pra esse update
+    // especifico, mas nao pode passar em silencio: acumula e sobe no `erro` do
+    // resultado da loja (mesmo cuidado do fix round 3 de retryAjustesInventarioPendentes).
+    const errosEstorno: string[] = []
+
+    const porTransferencia = new Map<number, number[]>()
+    for (const mov of pendentes) {
+      const lista = porTransferencia.get(mov.transferencia_id)
+      if (lista) lista.push(mov.id)
+      else porTransferencia.set(mov.transferencia_id, [mov.id])
+    }
+
+    for (const [transferenciaId, movIds] of porTransferencia) {
+      const { data: transHeader, error: erroHeader } = await supabase
+        .from('transferencias')
+        .select('id, codigo_local_origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret)')
+        .eq('id', transferenciaId)
+        .eq('loja_id', loja.id)
+        .single<TransferenciaHeader>()
+
+      // Qualquer saida antecipada daqui pra baixo precisa DEVOLVER o status de
+      // 'Processando' pra 'Erro' nos movimentos que nao vao ser processados --
+      // senao eles ficam presos em 'Processando' pra sempre, invisiveis ao filtro
+      // status='Erro'/'Sem CMC' do proximo ciclo do cron.
+      if (erroHeader || !transHeader?.loja) {
+        const { error: erroEstorno } = await supabase
+          .from('movimentos')
+          .update({ status: 'Erro' })
+          .in('id', movIds)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ movimento(s) [${movIds.join(',')}] (transferencia ${transferenciaId}, falha no header) falhou: ${erroEstorno.message}`
+          )
+        }
+        falhas += movIds.length
+        continue
+      }
+
+      const { data: movsElegiveis, error: erroMovs } = await supabase
+        .from('movimentos')
+        .select('id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, quan, status, id_ajuste, tentativas')
+        .in('id', movIds)
+
+      if (erroMovs) {
+        const { error: erroEstorno } = await supabase
+          .from('movimentos')
+          .update({ status: 'Erro' })
+          .in('id', movIds)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ movimento(s) [${movIds.join(',')}] (transferencia ${transferenciaId}, falha no refetch) falhou: ${erroEstorno.message}`
+          )
+        }
+        falhas += movIds.length
+        continue
+      }
+
+      const dataMov = dataOmieBR(transHeader.data)
+      const trans: TransferenciaComMovimentos = { ...transHeader, movimentos: [] }
+
+      // Se algum id elegivel nao vier no resultado (linha some entre selecao e
+      // fetch), conta como falha E estorna o status desses ids especificos de
+      // volta pra 'Erro' (nao precisa reconstruir o status original exato --
+      // 'Erro' ja garante que o proximo ciclo do cron tenta de novo).
+      const idsEncontrados = new Set((movsElegiveis ?? []).map((m) => m.id))
+      const idsNaoEncontrados = movIds.filter((id) => !idsEncontrados.has(id))
+      if (idsNaoEncontrados.length > 0) {
+        const { error: erroEstorno } = await supabase
+          .from('movimentos')
+          .update({ status: 'Erro' })
+          .in('id', idsNaoEncontrados)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ movimento(s) [${idsNaoEncontrados.join(',')}] (transferencia ${transferenciaId}, sumiram no refetch) falhou: ${erroEstorno.message}`
+          )
+        }
+        falhas += idsNaoEncontrados.length
+      }
+
+      for (const mov of (movsElegiveis ?? []) as MovimentoRow[]) {
+        await processarMovimento(trans, mov, loja.id, dataMov, await carimboUsuario())
+        const { data: final } = await supabase
+          .from('movimentos')
+          .select('status')
+          .eq('id', mov.id)
+          .single<{ status: string | null }>()
+        if (final?.status === 'Concluido') sucesso++
+        else falhas++
+      }
+    }
+
+    resultados.push({
+      loja_id: loja.id,
+      tentadas: pendentes.length,
+      sucesso,
+      falhas,
+      ...(errosEstorno.length > 0 ? { erro: errosEstorno.join(' | ') } : {}),
+    })
+  }
+
+  return resultados
 }
 
 /**
