@@ -2,14 +2,23 @@
 --
 -- NAO EXECUTADO AINDA -- precisa de aprovação humana explícita. Preparado
 -- durante a Task 11 (auditoria do relatório Compras, plano
--- 2026-08-09-retry-omie-auditoria-detalhes). Corrigido na "Fix round 1"
--- depois de revisão independente (ver task-11-report.md, seção "Fix round
--- 1", pro achado completo com evidência e pros 2 problemas Critical + 4
--- Important que a v1 deste script tinha).
+-- 2026-08-09-retry-omie-auditoria-detalhes). Corrigido na "Fix round 1" e na
+-- "Fix round 2" depois de 2 revisões independentes, ambas read-only direto
+-- em produção (ver task-11-report.md pro achado completo e pros problemas
+-- de cada rodada).
 --
--- RODAR CONTRA: o Postgres NATIVO do Contabo (banco `ntb_frio`), NÃO o
--- supabase-db. No servidor Contabo:
---   sudo -u postgres psql -d ntb_frio -f reconcile-notas-fiscais-frio.sql
+-- COMO RODAR -- OBRIGATÓRIO: sessão `psql` INTERATIVA, nunca `psql -f` nem
+-- qualquer forma não-interativa. Este arquivo de propósito NÃO tem um
+-- `COMMIT` no final (fix round 2: a v1 tinha `COMMIT;` na última linha, o
+-- que faria `psql -f` rodar preview + UPDATE + COMMIT tudo numa passada só,
+-- sem parar pra nenhum humano conferir a contagem do preview antes da
+-- escrita virar permanente). No servidor Contabo:
+--   sudo -u postgres psql -d ntb_frio
+-- Dentro da sessão interativa, cole o conteúdo deste arquivo (ou `\i
+-- reconcile-notas-fiscais-frio.sql`), CONFIRA o resultado do preview (passo
+-- 1: tem que retornar exatamente 134) e do UPDATE (passo 2: tem que
+-- retornar "UPDATE 134"), e só então digite `COMMIT;` você mesmo -- ou
+-- `ROLLBACK;` se qualquer um dos dois números não bater com o esperado.
 --
 -- ACHADO: o dual-write de `notas_fiscais` pro Postgres do Contabo
 -- (gravarNotaFiscalNoFrio, lib/omie/nota-fiscal.ts) é fire-and-forget, sem
@@ -18,25 +27,37 @@
 -- (retry-ajustes-movimentos, retry-ajustes-inventario, retry-op-conclusao).
 -- Qualquer falha transitória nesse dual-write (ex.: o incidente documentado
 -- em AGENTS.md de 2026-07-18, quando frio-api.* respondeu 404 por um
--- período) deixa a NF PERMANENTEMENTE desatualizada no Contabo, mesmo que o
--- Supabase (fonte quente, sempre correta) já tenha sido atualizado
--- corretamente pelo mesmo código.
+-- período) deixa a NF PERMANENTEMENTE desatualizada -- ou, em casos piores,
+-- AUSENTE -- no Contabo, mesmo que o Supabase (fonte quente, sempre
+-- correta) já tenha sido atualizado corretamente pelo mesmo código.
 --
--- URGÊNCIA (corrigida na Fix round 1 -- a v1 relatava impacto ATUAL errado):
--- as 134 notas abaixo foram TODAS emitidas entre 2026-06-01 e 2026-07-12 --
--- 100% dentro da janela quente atual (hoje 2026-08-09, corte = hoje-90d ~=
--- 2026-05-11). A tela de Compras SEMPRE serve esse período pela RPC quente
--- (Supabase, correta), nunca pela fatia fria -- então o impacto real HOJE é
--- ~zero (validado: loja 3, período totalmente frio jan-mai/2026, RPC quente
--- x SQL direto no frio bateram quase exato, R$9,02 de diferença em
--- R$995 mil, arredondamento). Isto é uma BOMBA-RELÓGIO: a partir de
--- ~30/08/2026 (quando a nota mais antiga das 134, 2026-06-01, cruzar os 90
--- dias) o problema começa a aparecer no total "Concluída" da tela, crescendo
--- até cobrir as 134 notas por volta de ~11/10/2026 (quando a mais recente,
--- 2026-07-12, cruzar também) -- nesse ponto ~R$189.555 em compras já
--- concluídas somem silenciosamente do total padrão em todas as 5 lojas
--- ativas, sem nenhum erro ou sinal na tela. Rodar esta correção ANTES de
--- 30/08/2026 evita o problema aparecer de vez.
+-- URGÊNCIA -- LEIA COM CUIDADO (fix round 2: a versão anterior deste
+-- cabeçalho dizia "impacto hoje é ~zero", verdade só pras 134 notas que
+-- ESTE script corrige, e isso invertia a prioridade real dos 2 achados
+-- desta task):
+--
+--   * MAIS URGENTE, JÁ SANGRANDO HOJE, ESTE SCRIPT NÃO CORRIGE: existe um
+--     buraco MAIOR (ver "GAP MAIOR" abaixo) de 142 notas que não existem DE
+--     JEITO NENHUM no espelho do Contabo -- não é status errado, é linha
+--     ausente por completo, precisaria de INSERT, não UPDATE. 141 das 142
+--     já estão dentro da janela fria HOJE (2026-08-09) -- só 1 ainda está
+--     na janela quente. Maior destaque: loja 5, 105 notas emitidas em
+--     março/2026, R$131.897,55 já ausentes do total "Concluída" da tela de
+--     Compras AGORA MESMO (medido ao vivo, read-only). Somando as 141 notas
+--     já frias em todas as lojas: ~R$161.067,94. Resolver ISSO é mais
+--     urgente que rodar este script -- mas este script não resolve.
+--
+--   * MENOS URGENTE, ESTE SCRIPT RESOLVE: as 134 notas abaixo (status
+--     desatualizado, não ausentes) foram TODAS emitidas entre 2026-06-01 e
+--     2026-07-12 -- 100% dentro da janela quente atual (corte = hoje-90d ~=
+--     2026-05-11) -- o impacto de SÓ essas 134 é ~zero hoje (validado: loja
+--     3, período totalmente frio jan-mai/2026, RPC quente x SQL direto no
+--     frio bateram quase exato, R$9,02 de diferença em R$995 mil,
+--     arredondamento). É uma bomba-relógio: a partir de ~30/08/2026 (quando
+--     a nota mais antiga das 134 cruzar os 90 dias) o problema começa a
+--     aparecer, crescendo até cobrir as 134 notas (~R$189.555) por volta de
+--     ~11/10/2026. Rodar ESTA correção antes de 30/08/2026 evita que ela se
+--     some ao buraco maior acima.
 --
 -- ESCOPO DESTE SCRIPT: só as 134 chaves (loja_id, n_id_receb) diagnosticadas
 -- ao vivo em 2026-08-09 como desatualizadas (c_etapa='40' no frio quando já
@@ -47,19 +68,23 @@
 -- sobrescritas com o lado quente) -- sobrescrever o JSON inteiro arriscava
 -- corromper dado não relacionado ao bug sendo corrigido aqui.
 --
--- GAP MAIOR, NÃO COBERTO POR ESTE SCRIPT (documentado, não corrigido --
--- mesma causa raiz, mas precisaria de INSERT, não UPDATE):
+-- GAP MAIOR, NÃO COBERTO POR ESTE SCRIPT E MAIS URGENTE (ver "URGÊNCIA"
+-- acima) -- documentado, não corrigido, mesma causa raiz, mas precisaria de
+-- INSERT, não UPDATE:
 --   * 142 notas existem no Supabase (quente) e NÃO EXISTEM DE JEITO NENHUM
 --     no espelho do Contabo (não é status errado, é linha ausente por
 --     completo) -- mesmo dual-write sem retry, provavelmente a mesma classe
 --     de falha transitória, só que na chamada de INSERT em vez de UPDATE.
+--     141 das 142 já estão na janela fria hoje, sangrando ~R$161.067,94 no
+--     total (loja 5/mar-2026 sozinha: R$131.897,55/105 notas).
 --   * 163 linhas do lado frio não existem no lado quente -- 161 delas são
 --     TODAS da loja 7, que tem ZERO linhas no Supabase hoje (provavelmente
 --     loja desativada/histórica) -- inalcançáveis por qualquer reconciliação
 --     partindo do lado quente, já que não há fonte de verdade viva pra elas.
--- Resolver isso é candidato a um follow-up separado (provavelmente o mesmo
--- mecanismo de retry sugerido acima pra `gravarNotaFiscalNoFrio`, capaz de
--- INSERT além de UPDATE) -- fora do escopo desta correção pontual.
+-- Resolver o buraco de 142 é candidato a um follow-up separado (provavelmente
+-- o mesmo mecanismo de retry sugerido acima pra `gravarNotaFiscalNoFrio`,
+-- capaz de INSERT além de UPDATE) -- fora do escopo desta correção pontual,
+-- mas é o mais urgente dos dois achados desta task.
 --
 -- Idempotente: o UPDATE só toca linhas onde `c_etapa` ainda diverge (roda
 -- de novo sem efeito colateral se já tiver sido aplicado).
@@ -144,7 +169,12 @@ WHERE (loja_id, n_id_receb) IN (
 )
 AND c_etapa IS DISTINCT FROM '60';
 
--- Confira que o "UPDATE 134" acima bate com o "linhas_que_vao_mudar" do
--- preview antes de commitar. Se bater: COMMIT. Se não bater: ROLLBACK e
--- investigue antes de tentar de novo.
-COMMIT;
+-- FIM DO SCRIPT -- de propósito, SEM COMMIT/ROLLBACK aqui (fix round 2, ver
+-- cabeçalho). A transação acima fica ABERTA depois do UPDATE. Confira, na
+-- SUA sessão psql interativa:
+--   1) o preview (passo 1) retornou "134"?
+--   2) o UPDATE (passo 2) respondeu "UPDATE 134"?
+-- Se os dois baterem: digite `COMMIT;` você mesmo. Se qualquer um não
+-- bater: digite `ROLLBACK;` e investigue antes de tentar de novo -- não
+-- rode este arquivo inteiro de novo sem entender por que os números
+-- mudaram desde o diagnóstico de 2026-08-09.
