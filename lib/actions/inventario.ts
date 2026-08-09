@@ -507,7 +507,11 @@ type InventarioItemRetryRow = {
   loja_id: number
   status: string | null
   tentativas: number | null
+  id_ajuste: number | null
+  quan: number | null
 }
+
+type InventarioHeader = Omit<InventarioComItens, 'items'>
 
 /**
  * Varre itens de inventario pendentes de lancamento no Omie (status 'Erro' ou
@@ -520,48 +524,85 @@ type InventarioItemRetryRow = {
  * humana no cadastro do Omie, entao nao adianta bater todo cron).
  *
  * Como `processarItemInventario` exige o objeto `inventario` completo (com `loja`
- * embutida), agrupamos os itens elegiveis por `inventario_id` e buscamos cada
- * inventario 1x (mesmo padrao de `forceSyncInventario`), processando so os itens
- * que bateram no filtro de retry acima -- nao todos os "pendentes" do inventario.
- * Processamento sequencial (sem paralelizar), mesmo espirito comedido do resto
- * deste arquivo agora que existe retry automatico.
+ * embutida), agrupamos os itens elegiveis por `inventario_id` e buscamos o
+ * cabecalho de cada inventario 1x (sem os itens do pai -- mesmo padrao de
+ * `enviarInventarioItem`), processando so os itens que bateram no filtro de retry
+ * acima -- nao todos os "pendentes" do inventario. Processamento sequencial (sem
+ * paralelizar), mesmo espirito comedido do resto deste arquivo agora que existe
+ * retry automatico.
  */
 export async function retryAjustesInventarioPendentes(
   lojas: LojaOmie[],
   opts: { limitePorLoja?: number } = {}
-): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number }[]> {
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[]> {
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
-  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
 
   for (const loja of lojas) {
-    const { data: errosGenericos } = await supabase
+    const { data: errosGenericos, error: erroErros } = await supabase
       .from('inventario_items')
-      .select('id, inventario_id, loja_id, status, tentativas')
+      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
       .eq('loja_id', loja.id)
       .eq('status', 'Erro')
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
-    let pendentes = (errosGenericos ?? []) as InventarioItemRetryRow[]
-
     const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
-    const { data: semCmc } = await supabase
+    const { data: semCmc, error: erroSemCmc } = await supabase
       .from('inventario_items')
-      .select('id, inventario_id, loja_id, status, tentativas')
+      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
       .eq('loja_id', loja.id)
       .eq('status', 'Sem CMC')
       .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
-    pendentes = [...pendentes, ...((semCmc ?? []) as InventarioItemRetryRow[])].slice(0, limitePorLoja)
+
+    // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
+    // de parse do .or()), reportar explicitamente por loja em vez de tratar como
+    // "0 pendentes" -- mesmo padrao de bug ja visto 3x neste repo (AGENTS.md: RPC
+    // que engolia erro escondeu 90 dias de Compras, buscarFrio devolvendo [],
+    // buscarTudoPaginado tratando erro como fim de pagina).
+    if (erroErros || erroSemCmc) {
+      resultados.push({
+        loja_id: loja.id,
+        tentadas: 0,
+        sucesso: 0,
+        falhas: 0,
+        erro: (erroErros ?? erroSemCmc)!.message,
+      })
+      continue
+    }
+
+    // Segunda camada de protecao (defesa em profundidade, mesmo criterio de
+    // finishInventario/forceSyncInventario): nunca reprocessar item que ja tem
+    // id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan (seria
+    // DELETADO por processarItemInventario em vez de processado).
+    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? [])]
+      .filter((i) => i.id_ajuste === null && i.quan !== null)
+      .slice(0, limitePorLoja) as InventarioItemRetryRow[]
+
+    if (pendentes.length === 0) {
+      resultados.push({ loja_id: loja.id, tentadas: 0, sucesso: 0, falhas: 0 })
+      continue
+    }
+
+    // Marca 'Processando' JA, antes de chamar o Omie: torna esses itens invisiveis
+    // pro filtro status='Erro'/'Sem CMC' de uma proxima execucao do cron que comece
+    // antes desta terminar (ex.: essa demorar mais que os 10 min do intervalo) --
+    // sem isso, duas execucoes concorrentes reenviariam os MESMOS itens (double-send
+    // no Omie).
+    const idsSelecionados = pendentes.map((i) => i.id)
+    await supabase.from('inventario_items').update({ status: 'Processando' }).in('id', idsSelecionados)
 
     let sucesso = 0
     let falhas = 0
 
-    // Agrupa por inventario_id: 1 fetch do inventario completo por grupo (com a
-    // loja embutida), so entao processa os itens elegiveis desse grupo.
+    // Agrupa por inventario_id: 1 fetch do CABECALHO do inventario (sem
+    // `items:inventario_items(*)` -- isso incluiria a coluna `response` de TODOS
+    // os itens do inventario, ate 1626 num caso real, payload multi-MB a cada 10
+    // min pra um Postgres de 500MB) + 1 fetch so das linhas elegiveis desse grupo.
     const porInventario = new Map<number, number[]>()
     for (const item of pendentes) {
       const lista = porInventario.get(item.inventario_id)
@@ -570,24 +611,34 @@ export async function retryAjustesInventarioPendentes(
     }
 
     for (const [inventarioId, itemIds] of porInventario) {
-      const { data: inventario } = await supabase
+      const { data: inventarioHeader } = await supabase
         .from('inventarios')
         .select(
-          'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+          'id, codigo_local_estoque, tipo, origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret)'
         )
         .eq('id', inventarioId)
         .eq('loja_id', loja.id)
-        .single<InventarioComItens>()
+        .single<InventarioHeader>()
 
-      if (!inventario?.loja) {
+      if (!inventarioHeader?.loja) {
         falhas += itemIds.length
         continue
       }
 
-      const dataAjuste = dataOmieBR(inventario.data)
-      const itensParaRetry = inventario.items.filter((i) => itemIds.includes(i.id))
+      const { data: itensElegiveis } = await supabase
+        .from('inventario_items')
+        .select('id, produto_codigo, produto_codigo_produto, quan, status, id_ajuste, tentativas')
+        .in('id', itemIds)
 
-      for (const item of itensParaRetry) {
+      const dataAjuste = dataOmieBR(inventarioHeader.data)
+      const inventario: InventarioComItens = { ...inventarioHeader, items: [] }
+
+      // Se algum id elegivel nao vier no resultado (linha some entre selecao e
+      // fetch), conta como falha em vez de descartar silenciosamente.
+      const idsEncontrados = new Set((itensElegiveis ?? []).map((i) => i.id))
+      falhas += itemIds.filter((id) => !idsEncontrados.has(id)).length
+
+      for (const item of (itensElegiveis ?? []) as InventarioItemRow[]) {
         await processarItemInventario(inventario, item, loja.id, dataAjuste)
         const { data: final } = await supabase
           .from('inventario_items')
