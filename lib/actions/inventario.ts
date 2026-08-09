@@ -304,9 +304,17 @@ async function processarItemInventario(
     const valor = posicao?.n_cmc ?? 0
 
     if (valor <= 0) {
+      // Grava tentativas/ultima_tentativa_em tambem aqui (nao so no try/catch de
+      // baixo) -- sem isso o throttle do retry automatico nunca reconhece uma
+      // tentativa de 'Sem CMC' como "recente", e o cron reenviaria esse item a
+      // cada 10 min pra sempre em vez de 1x/hora com teto (achado na Task 4).
       await supabase
         .from('inventario_items')
-        .update({ status: 'Sem CMC' })
+        .update({
+          status: 'Sem CMC',
+          tentativas: (item.tentativas ?? 0) + 1,
+          ultima_tentativa_em: new Date().toISOString(),
+        })
         .eq('id', item.id)
       return
     }
@@ -488,6 +496,113 @@ export async function forceSyncInventario(inventarioId: number) {
 
   revalidatePath('/inventario')
   return { ok: true }
+}
+
+const SEM_CMC_MAX_TENTATIVAS = 20
+const SEM_CMC_STALE_HORAS = 1
+
+type InventarioItemRetryRow = {
+  id: number
+  inventario_id: number
+  loja_id: number
+  status: string | null
+  tentativas: number | null
+}
+
+/**
+ * Varre itens de inventario pendentes de lancamento no Omie (status 'Erro' ou
+ * 'Sem CMC') das lojas informadas e tenta reenviar, reusando `processarItemInventario`
+ * -- serve o cron de 10 em 10 min. Sem sessao de usuario (contexto de cron), por
+ * isso `lojaId` vem explicito em vez de `getCurrentLojaId()`/`requirePermissao()`.
+ * Mesma filosofia de `retryOPsPendentes` (`lib/actions/ordem-producao.ts`): 'Erro'
+ * reenvia sempre, sem teto (falha transitoria se resolve sozinha reenviando);
+ * 'Sem CMC' tem teto de tentativas + throttle de 1h (nao vai se resolver sem acao
+ * humana no cadastro do Omie, entao nao adianta bater todo cron).
+ *
+ * Como `processarItemInventario` exige o objeto `inventario` completo (com `loja`
+ * embutida), agrupamos os itens elegiveis por `inventario_id` e buscamos cada
+ * inventario 1x (mesmo padrao de `forceSyncInventario`), processando so os itens
+ * que bateram no filtro de retry acima -- nao todos os "pendentes" do inventario.
+ * Processamento sequencial (sem paralelizar), mesmo espirito comedido do resto
+ * deste arquivo agora que existe retry automatico.
+ */
+export async function retryAjustesInventarioPendentes(
+  lojas: LojaOmie[],
+  opts: { limitePorLoja?: number } = {}
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number }[]> {
+  const limitePorLoja = opts.limitePorLoja ?? 30
+  const supabase = createServiceClient()
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
+
+  for (const loja of lojas) {
+    const { data: errosGenericos } = await supabase
+      .from('inventario_items')
+      .select('id, inventario_id, loja_id, status, tentativas')
+      .eq('loja_id', loja.id)
+      .eq('status', 'Erro')
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
+    let pendentes = (errosGenericos ?? []) as InventarioItemRetryRow[]
+
+    const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
+    const { data: semCmc } = await supabase
+      .from('inventario_items')
+      .select('id, inventario_id, loja_id, status, tentativas')
+      .eq('loja_id', loja.id)
+      .eq('status', 'Sem CMC')
+      .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
+      .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+    pendentes = [...pendentes, ...((semCmc ?? []) as InventarioItemRetryRow[])].slice(0, limitePorLoja)
+
+    let sucesso = 0
+    let falhas = 0
+
+    // Agrupa por inventario_id: 1 fetch do inventario completo por grupo (com a
+    // loja embutida), so entao processa os itens elegiveis desse grupo.
+    const porInventario = new Map<number, number[]>()
+    for (const item of pendentes) {
+      const lista = porInventario.get(item.inventario_id)
+      if (lista) lista.push(item.id)
+      else porInventario.set(item.inventario_id, [item.id])
+    }
+
+    for (const [inventarioId, itemIds] of porInventario) {
+      const { data: inventario } = await supabase
+        .from('inventarios')
+        .select(
+          'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+        )
+        .eq('id', inventarioId)
+        .eq('loja_id', loja.id)
+        .single<InventarioComItens>()
+
+      if (!inventario?.loja) {
+        falhas += itemIds.length
+        continue
+      }
+
+      const dataAjuste = dataOmieBR(inventario.data)
+      const itensParaRetry = inventario.items.filter((i) => itemIds.includes(i.id))
+
+      for (const item of itensParaRetry) {
+        await processarItemInventario(inventario, item, loja.id, dataAjuste)
+        const { data: final } = await supabase
+          .from('inventario_items')
+          .select('status')
+          .eq('id', item.id)
+          .single<{ status: string | null }>()
+        if (final?.status === 'Concluido') sucesso++
+        else falhas++
+      }
+    }
+
+    resultados.push({ loja_id: loja.id, tentadas: pendentes.length, sucesso, falhas })
+  }
+
+  return resultados
 }
 
 /**
