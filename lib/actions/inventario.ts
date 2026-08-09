@@ -132,7 +132,7 @@ export async function enviarInventarioItem(
   const { data: item } = await supabase
     .from('inventario_items')
     .select(
-      'id, produto_codigo, produto_codigo_produto, id_ajuste, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+      'id, produto_codigo, produto_codigo_produto, id_ajuste, tentativas, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
     )
     .eq('id', itemId)
     .eq('loja_id', lojaId)
@@ -141,6 +141,7 @@ export async function enviarInventarioItem(
       produto_codigo: string
       produto_codigo_produto: number
       id_ajuste: number | null
+      tentativas: number | null
       inventario: {
         id: number
         codigo_local_estoque: number
@@ -202,6 +203,7 @@ export async function enviarInventarioItem(
     quan,
     status: 'Iniciado',
     id_ajuste: null,
+    tentativas: item.tentativas,
   }
 
   const dataAjuste = dataOmieBR(item.inventario.data)
@@ -256,6 +258,7 @@ type InventarioItemRow = {
   quan: number | null
   status: string | null
   id_ajuste: number | null
+  tentativas: number | null
 }
 
 type InventarioComItens = {
@@ -361,13 +364,20 @@ async function processarItemInventario(
         id_movest: res.id_movest ?? null,
         id_ajuste: res.id_ajuste ?? null,
         response: JSON.stringify(res),
+        tentativas: sucesso ? 0 : (item.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', item.id)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await supabase
       .from('inventario_items')
-      .update({ status: 'Erro', response: msg })
+      .update({
+        status: 'Erro',
+        response: msg,
+        tentativas: (item.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
+      })
       .eq('id', item.id)
     await logIntegrationAttempt({
       loja_id: lojaId,
