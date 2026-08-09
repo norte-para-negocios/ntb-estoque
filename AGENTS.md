@@ -319,14 +319,19 @@ Isso já causou bug real em produção **3 vezes** na mesma auditoria:
    em `Promise.allSettled` e sempre respondia 200 mesmo com `falhas ===
    total`). Corrigido aplicando o resto do arquivo 090 + endurecendo 2
    pontos que a revisão desta correção achou: (a) `atualizar_preco_recente`
-   fazia só UPSERT, nunca DELETE — um produto cuja única NF de preço válido
-   fosse cancelada depois ficava com preço órfão preso pra sempre no cache
-   (confirmado ao vivo: loja 5/entradas, 6 produtos, R$927,05 de divergência
-   permanente); fix em migration nova (105,
+   fazia só UPSERT, nunca DELETE — um produto cujo item de preço válido
+   (`nota_fiscal_items`) sumia ou era ressincronizado sem casar mais
+   `n_preco_unit > 0` (a NF pai continuando ativa — confirmado ao vivo que
+   NÃO existe nenhuma `notas_fiscais.deleted_at` preenchido em nenhuma loja,
+   a causa não é "NF cancelada") ficava com preço órfão preso pra sempre no
+   cache (confirmado ao vivo: loja 5/entradas, 6 produtos, R$927,05 de
+   divergência permanente); fix em migration nova (105,
    `movimentacao_preco_cache_delete_orfaos.sql`) que apaga a linha órfã antes
-   do upsert. (b) a rota do cron passou a responder HTTP 502 quando TODAS as
-   lojas falham (mesmo padrão de `sync-posicao`/`sync-previsao`), pra um
-   apagão como esse aparecer no log da próxima vez.
+   do upsert — a condição do DELETE é genérica ("não existe mais nenhum item
+   válido"), cobre qualquer causa de sumiço, não só NF cancelada. (b) a rota
+   do cron passou a responder HTTP 502 quando TODAS as lojas falham (mesmo
+   padrão de `sync-posicao`/`sync-previsao`), pra um apagão como esse
+   aparecer no log da próxima vez.
 
 **Achado incidental da mesma verificação**: `relatorio_auditoria_fiscal_cfop`/
 `relatorio_auditoria_fiscal_itens` tinham 2 overloads coexistindo em
