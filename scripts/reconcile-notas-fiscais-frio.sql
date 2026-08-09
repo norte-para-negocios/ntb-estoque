@@ -1,19 +1,30 @@
 -- reconcile-notas-fiscais-frio.sql
 --
--- NAO EXECUTADO AINDA -- precisa de aprovação humana explícita. Preparado
--- durante a Task 11 (auditoria do relatório Compras, plano
+-- EXECUTADO em 2026-08-09 com autorização explícita do usuário. Preview
+-- retornou 134 (esperado), UPDATE retornou "UPDATE 134", COMMIT confirmado,
+-- e um SELECT pós-fix confirmou 0 linhas ainda desatualizadas entre as 134
+-- chaves. Conexão real usada (achado durante a execução: o cabeçalho abaixo
+-- dizia "sudo -u postgres psql -d ntb_frio", mas isso não existe como banco
+-- dentro do container `supabase-db` -- o Postgres do `ntb_frio` é uma
+-- instância NATIVA separada no host, fora do Docker, ouvindo em
+-- localhost:5432; a connection string real está em
+-- /opt/ntb-frio-api/.env, `DATABASE_URL`, usuário `ntb_frio_app`). Script
+-- mantido como registro/auditoria; não precisa rodar de novo (idempotente,
+-- mas as 134 linhas já estão corrigidas).
+--
+-- Preparado durante a Task 11 (auditoria do relatório Compras, plano
 -- 2026-08-09-retry-omie-auditoria-detalhes). Corrigido na "Fix round 1" e na
 -- "Fix round 2" depois de 2 revisões independentes, ambas read-only direto
 -- em produção (ver task-11-report.md pro achado completo e pros problemas
 -- de cada rodada).
 --
--- COMO RODAR -- OBRIGATÓRIO: sessão `psql` INTERATIVA, nunca `psql -f` nem
--- qualquer forma não-interativa. Este arquivo de propósito NÃO tem um
--- `COMMIT` no final (fix round 2: a v1 tinha `COMMIT;` na última linha, o
--- que faria `psql -f` rodar preview + UPDATE + COMMIT tudo numa passada só,
--- sem parar pra nenhum humano conferir a contagem do preview antes da
--- escrita virar permanente). No servidor Contabo:
---   sudo -u postgres psql -d ntb_frio
+-- COMO RODAR (histórico, já executado) -- sessão `psql` INTERATIVA, nunca
+-- `psql -f` nem qualquer forma não-interativa. Este arquivo de propósito NÃO
+-- tem um `COMMIT` no final (fix round 2: a v1 tinha `COMMIT;` na última
+-- linha, o que faria `psql -f` rodar preview + UPDATE + COMMIT tudo numa
+-- passada só, sem parar pra nenhum humano conferir a contagem do preview
+-- antes da escrita virar permanente). No servidor Contabo, banco correto:
+--   psql "$(grep '^DATABASE_URL=' /opt/ntb-frio-api/.env | cut -d= -f2-)"
 -- Dentro da sessão interativa, cole o conteúdo deste arquivo (ou `\i
 -- reconcile-notas-fiscais-frio.sql`), CONFIRA o resultado do preview (passo
 -- 1: tem que retornar exatamente 134) e do UPDATE (passo 2: tem que
