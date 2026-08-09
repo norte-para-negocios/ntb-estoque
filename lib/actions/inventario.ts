@@ -598,6 +598,13 @@ export async function retryAjustesInventarioPendentes(
 
     let sucesso = 0
     let falhas = 0
+    // Erros dos proprios updates de estorno ('Processando' -> 'Erro') abaixo --
+    // se o estorno em si falhar (erro transiente de banco, timeout), o item fica
+    // preso em 'Processando' de novo, reproduzindo o bug do Fix round 2 num nivel
+    // mais fundo. Nao ha retry automatico pra esse update especifico (fora de
+    // escopo), mas nao pode passar em silencio: acumula e sobe no `erro` do
+    // resultado da loja (achado da re-revisao, Fix round 3).
+    const errosEstorno: string[] = []
 
     // Agrupa por inventario_id: 1 fetch do CABECALHO do inventario (sem
     // `items:inventario_items(*)` -- isso incluiria a coluna `response` de TODOS
@@ -628,7 +635,15 @@ export async function retryAjustesInventarioPendentes(
       // "estorno" simetrico em todo caminho que nao termina em
       // processarItemInventario).
       if (erroHeader || !inventarioHeader?.loja) {
-        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', itemIds)
+        const { error: erroEstorno } = await supabase
+          .from('inventario_items')
+          .update({ status: 'Erro' })
+          .in('id', itemIds)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ item(s) [${itemIds.join(',')}] (inventario ${inventarioId}, falha no header) falhou: ${erroEstorno.message}`
+          )
+        }
         falhas += itemIds.length
         continue
       }
@@ -639,7 +654,15 @@ export async function retryAjustesInventarioPendentes(
         .in('id', itemIds)
 
       if (erroItens) {
-        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', itemIds)
+        const { error: erroEstorno } = await supabase
+          .from('inventario_items')
+          .update({ status: 'Erro' })
+          .in('id', itemIds)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ item(s) [${itemIds.join(',')}] (inventario ${inventarioId}, falha no refetch) falhou: ${erroEstorno.message}`
+          )
+        }
         falhas += itemIds.length
         continue
       }
@@ -654,7 +677,15 @@ export async function retryAjustesInventarioPendentes(
       const idsEncontrados = new Set((itensElegiveis ?? []).map((i) => i.id))
       const idsNaoEncontrados = itemIds.filter((id) => !idsEncontrados.has(id))
       if (idsNaoEncontrados.length > 0) {
-        await supabase.from('inventario_items').update({ status: 'Erro' }).in('id', idsNaoEncontrados)
+        const { error: erroEstorno } = await supabase
+          .from('inventario_items')
+          .update({ status: 'Erro' })
+          .in('id', idsNaoEncontrados)
+        if (erroEstorno) {
+          errosEstorno.push(
+            `estorno p/ item(s) [${idsNaoEncontrados.join(',')}] (inventario ${inventarioId}, sumiram no refetch) falhou: ${erroEstorno.message}`
+          )
+        }
         falhas += idsNaoEncontrados.length
       }
 
@@ -670,7 +701,13 @@ export async function retryAjustesInventarioPendentes(
       }
     }
 
-    resultados.push({ loja_id: loja.id, tentadas: pendentes.length, sucesso, falhas })
+    resultados.push({
+      loja_id: loja.id,
+      tentadas: pendentes.length,
+      sucesso,
+      falhas,
+      ...(errosEstorno.length > 0 ? { erro: errosEstorno.join(' | ') } : {}),
+    })
   }
 
   return resultados
