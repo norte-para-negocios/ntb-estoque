@@ -207,6 +207,16 @@ export default async function RelatorioFaturamentoPage({
       : Promise.resolve([]),
   ])
   const cuponsFatoFiltrados = verCupons ? cuponsFatoTodos.filter((c) => cupomBateStatus(c, statusCupomSel)) : cuponsFatoTodos
+  // Task 7 (auditoria retry-omie): cupom cancelado já era excluído do total
+  // faturado (lib/omie/faturamento.ts, cCupomCancelado === 'S') e já ficava
+  // visível linha a linha em "Ver cupons" com o filtro certo, mas nunca teve
+  // um resumo (contador + soma) do que foi excluído -- invisível pra quem não
+  // soubesse ativar o filtro de situação. Calculado sobre cuponsFatoTodos (a
+  // lista completa já buscada pro período, antes do filtro de status e do
+  // corte de exibição LIMITE_LINHAS_CUPONS), independente de qual situação
+  // está selecionada no momento -- não dispara busca nova.
+  const cuponsCancelados = verCupons ? cuponsFatoTodos.filter((c) => c.cancelado) : []
+  const totalCancelado = cuponsCancelados.reduce((s, c) => s + c.valor, 0)
   // Achado real (2026-07-31, testando o filtro de status): a tabela de "Ver
   // cupons" renderizava TODA a lista sem limite -- um período de 1 ano (13
   // mil+ cupons) travava o navegador ao montar a tabela (sem virtualização).
@@ -539,6 +549,16 @@ export default async function RelatorioFaturamentoPage({
           ) : verCupons ? (
             <>
               <ChipsStatus basePath="/relatorio-faturamento" param="status" opcoes={OPCOES_STATUS_CUPOM} />
+              {cuponsCancelados.length > 0 && (
+                <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
+                  <span>
+                    <strong className="text-warn">{cuponsCancelados.length.toLocaleString('pt-BR')} cupom{cuponsCancelados.length === 1 ? '' : 's'} cancelado{cuponsCancelados.length === 1 ? '' : 's'}</strong>{' '}
+                    neste período — {fmtMoeda(totalCancelado)}. Excluídos do &quot;Total faturado&quot; no topo da tela (e do resumo padrão, fora
+                    de &quot;Ver cupons&quot;).
+                  </span>
+                </div>
+              )}
               {!cuponsFato.length ? (
               <EmptyState
                 icon={DollarSign}
