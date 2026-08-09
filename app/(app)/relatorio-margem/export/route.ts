@@ -6,7 +6,11 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const dynamic = 'force-dynamic'
 
-type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null }
+// `semEstoque` (Fix round 1, Task 13): ver mesmo campo em page.tsx --
+// distingue "sem estoque na foto de hoje" (benigno) de "CMC de verdade
+// ausente/podre no Omie" (precisa de ação), pra não rotular ~85% das linhas
+// como "CMC inválido" quando na verdade é só estoque zerado.
+type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null; semEstoque?: boolean }
 const margemValida = (m: number | null): m is number => m != null && m > -100
 
 // PostgREST corta em 1000 linhas por padrao, sem erro -- espelha a mesma
@@ -89,23 +93,38 @@ export async function GET(request: Request) {
       // saldo positivo, locais "fantasma" com saldo negativo entram na conta.
       // Troca pra ponderação por saldo (soma custo×saldo / saldo total),
       // idêntica à tela/cron.
+      //
+      // Fix round 1 (revisão da Task 13, 2026-08-09): `n_cmc > 0` saiu da
+      // query -- fica só `n_saldo > 0`, e `n_cmc > 0` passa a ser checado em
+      // JS. Sem isso não dá pra distinguir "sem estoque na foto de hoje"
+      // (nenhuma linha com saldo positivo -- benigno) de "tem estoque mas
+      // CMC não veio do Omie" (precisa de ação): as duas causas geravam o
+      // mesmo resultado (`cmcPorCod` sem entrada) e o rótulo "CMC inválido"
+      // mentia em massa -- o próprio fix de fórmula acima faz ~85% das
+      // linhas que tinham margem colapsarem pra "inválido" (achado real do
+      // revisor via snapshot do cron: loja 3 774→116, loja 4 819→104, loja 5
+      // 851→107, loja 6 671→76), e a imensa maioria é só estoque zerado, não
+      // CMC podre.
       const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>((from, to) =>
         supabase
           .from('posicao_estoques')
           .select('n_cod_prod, n_cmc, n_saldo')
           .eq('loja_id', lojaId)
           .eq('data_posicao', fotoRow.data_posicao)
-          .gt('n_cmc', 0)
           .gt('n_saldo', 0)
           .order('id', { ascending: true })
           .range(from, to)
       )
       const acumPorCod = new Map<number, { valor: number; saldo: number }>()
+      const temEstoque = new Set<number>()
       for (const p of posRows) {
         const cod = Number(p.n_cod_prod)
+        temEstoque.add(cod)
+        const cmcLinha = Number(p.n_cmc)
+        if (!(cmcLinha > 0)) continue
         const saldo = Number(p.n_saldo) || 0
         const ent = acumPorCod.get(cod) ?? { valor: 0, saldo: 0 }
-        ent.valor += Number(p.n_cmc) * saldo
+        ent.valor += cmcLinha * saldo
         ent.saldo += saldo
         acumPorCod.set(cod, ent)
       }
@@ -117,13 +136,23 @@ export async function GET(request: Request) {
       // QUALQUER produto sem CMC ou sem preço cadastrado -- exatamente o bug já
       // corrigido na tela em 2026-07-19 ("Achado real (usuário 2026-07-19)" em
       // page.tsx), que a exportação nunca recebeu. Removido: agora todo produto
-      // do tipo certo sai na planilha, com "Situação" = "CMC inválido (revisar
-      // no Omie)" quando não tem cmc/pdv válidos, em vez de sumir sem aviso.
+      // do tipo certo sai na planilha, com "Situação" refletindo o motivo
+      // (ver `situacao` mais abaixo), em vez de sumir sem aviso.
       rows = produtosCalc.map((p) => {
-        const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
+        const cod = Number(p.codigo_produto)
+        const cmc = cmcPorCod.get(cod) ?? null
         const pdv = Number(p.valor_unitario) || null
         const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
-        return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
+        return {
+          codigo: p.codigo ?? String(cod),
+          descricao: p.descricao,
+          familia: p.descricao_familia,
+          mes: mesAtualISO,
+          pdv,
+          cmc,
+          margem,
+          semEstoque: cmc == null && !temEstoque.has(cod),
+        }
       })
     }
   }
@@ -207,7 +236,9 @@ export async function GET(request: Request) {
     pdv: p.pdv ?? 0,
     cmc: p.cmc ?? 0,
     margem: margemValida(p.margem) ? `${Number(p.margem).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-',
-    situacao: margemValida(p.margem) ? 'OK' : 'CMC inválido (revisar no Omie)',
+    // Fix round 1 (Task 13): "Sem estoque na foto" (benigno, motivo mais comum)
+    // separado de "CMC inválido" (precisa de ação no Omie) -- ver `semEstoque`.
+    situacao: margemValida(p.margem) ? 'OK' : p.semEstoque ? 'Sem estoque na foto' : 'CMC inválido (revisar no Omie)',
   }))
 
   const buffer = await gerarPlanilha(planRows, colunas, {

@@ -467,8 +467,9 @@ pra confirmar se algum desses consumidores herda o valor corrompido.
 ### Auditoria da Margem (Task 13, 2026-08-09) — export com fórmula desatualizada + `.error` não checado em 3 cópias locais
 
 **Achado real principal**: `relatorio-margem/export/route.ts` calculava o
-CMC "ao vivo" (caminho usado por 5 das 6 lojas ativas, sem import manual do
-FAT_DRV) com o algoritmo ANTIGO — maior `n_cmc` entre locais, sem filtrar
+CMC "ao vivo" (caminho usado hoje por 6 de 6 lojas ativas — inclusive a
+loja 3, única com import manual do FAT_DRV, porque esse import parou em
+jun/2026) com o algoritmo ANTIGO — maior `n_cmc` entre locais, sem filtrar
 `n_saldo > 0` — que já tinha sido substituído em `page.tsx` e no cron
 `snapshot-margem-diario` em 2026-07-19 (migration 082: "o maior valor
 sozinho superestima o custo") por uma ponderação por saldo. A exportação
@@ -497,9 +498,47 @@ padrão de `sync-posicao`/`sync-previsao`).
 Cron confirmado rodando de verdade (não é o silêncio "-> 200 sem fazer
 nada" da Task 9): `margem_snapshot_diario` tem os 9 dias esperados
 (01–09/08) em todas as 6 lojas ativas, sem buraco (`count(distinct
-data_snapshot) = max - min + 1` bate exato). Série ainda curta demais
-(9 dias) pra a UI precisar de indicador de buraco na tendência — não
-implementado; se um buraco real aparecer no futuro, `evolução mensal`
-(matriz por mês, migration 101) hoje só faz `avg()` do que existe, sem
-sinalizar dia faltando — candidato a follow-up se a série crescer e algum
-dia realmente faltar.
+data_snapshot) = max - min + 1` bate exato), 2700–8178 linhas/loja
+(mínimo real é a loja 7, com 2700).
+
+**Fix round 1 (revisão independente, 2026-08-09)** — 4 achados Important:
+
+1. **Magnitude subestimada em ~10x.** A medição original só comparou o
+   VALOR de CMC na interseção das 2 fórmulas (287 produtos, loja 2). Mas o
+   CONJUNTO de linhas com margem válida também muda: produtos com
+   `n_saldo <= 0` em TODOS os locais (maioria = estoque zerado hoje, não
+   CMC quebrado) não geram CMC ponderado — e a fórmula antiga do export
+   incluía qualquer linha com `n_cmc > 0`, sem olhar saldo. Números reais
+   (produtos com margem válida, antes→depois da correção da fórmula):
+   loja 2: 716→434; loja 3: 774→116; loja 4: 819→104; loja 5: 851→107;
+   loja 6: 671→76; loja 7: 99→72. Lojas 3–6 perdem ~85% das linhas que
+   tinham margem — é o que o usuário nota primeiro no Excel.
+2. **Rótulo "CMC inválido" enganava em escala.** Na maioria desses ~700
+   casos/loja recém-expostos a causa é só `n_saldo = 0` (sem estoque na
+   foto), não CMC quebrado. Corrigido em `page.tsx`/`export/route.ts`: a
+   query de `posicao_estoques` deixou de filtrar `n_cmc > 0` (só
+   `n_saldo > 0`), com o filtro de CMC movido pra JS — isso permite montar
+   um Set `temEstoque` e distinguir "Sem estoque na foto" (benigno) de
+   "CMC inválido" de verdade (precisa de ação no Omie), tanto na tela
+   quanto na coluna "Situação" do Excel.
+3. **Buraco na série ficava invisível** — o próprio fix original (skip do
+   snapshot do dia quando uma consulta falha, em vez de gravar dado
+   corrompido) cria um buraco por desenho, e sem retry (cron roda só 1x/dia)
+   uma falha transiente vira buraco permanente. `relatorio_margem_snapshot_matriz`
+   fazia só `avg()` sem indicar quantos dias entraram. Corrigido com
+   `supabase/migrations/106_margem_snapshot_dias_com_dado.sql` — a RPC
+   agora também retorna `dias` (`count(distinct data_snapshot)` por
+   codigo/mês); a tela mostra "(Xd)" ao lado do mês na "Evolução mensal".
+   Aplicada em produção via `DROP FUNCTION` + `CREATE FUNCTION` (
+   `CREATE OR REPLACE` não permite mudar a lista de colunas de saída de
+   uma função `RETURNS TABLE`).
+4. **Bug lógico no `todasFalharam`**: `every((r) => r.erro !== null)` era
+   derrotado por qualquer loja legitimamente vazia (`erro: null`, mas sem
+   gravar nada) — 5 lojas com erro real + 1 vazia ainda retornava 200,
+   exatamente a classe de bug "cron parece bem durante um apagão" que a
+   correção original queria fechar. Corrigido com um campo `sucesso:
+   boolean` por loja (`true` só quando gravou `linhas > 0` sem erro) — a
+   rota só responde 200 quando pelo menos 1 loja teve sucesso real.
+
+Série ainda curta (9 dias) — não implementado retry no cron nesta rodada
+(fora de escopo), só o buraco virou visível via `dias`.

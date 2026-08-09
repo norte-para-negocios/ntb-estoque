@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const lojas = await getLojasAtivas()
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
 
-  const resumo: { loja_id: number; linhas: number; erro: string | null }[] = []
+  const resumo: { loja_id: number; linhas: number; erro: string | null; sucesso: boolean }[] = []
   for (const loja of lojas) {
     let houveErroConsulta = false
     const marcarErro = (etapa: string) => (error: { message: string }) => {
@@ -156,21 +156,38 @@ export async function GET(request: Request) {
       // Nao grava: um snapshot parcial/truncado gravado como se fosse o real
       // do dia seria pior do que um buraco na serie (buraco pelo menos e
       // detectavel depois; numero errado gravado no append-only, nao).
-      resumo.push({ loja_id: loja.id, linhas: 0, erro: 'falha ao consultar produtos/posição de estoque -- snapshot do dia não gravado' })
+      resumo.push({ loja_id: loja.id, linhas: 0, erro: 'falha ao consultar produtos/posição de estoque -- snapshot do dia não gravado', sucesso: false })
     } else if (linhas.length) {
       const { error } = await supabase.from('margem_snapshot_diario').upsert(
         linhas.map((l) => ({ loja_id: loja.id, data_snapshot: hoje, ...l })),
         { onConflict: 'loja_id,data_snapshot,codigo_produto' }
       )
-      resumo.push({ loja_id: loja.id, linhas: linhas.length, erro: error?.message ?? null })
+      resumo.push({ loja_id: loja.id, linhas: linhas.length, erro: error?.message ?? null, sucesso: !error })
     } else {
-      resumo.push({ loja_id: loja.id, linhas: 0, erro: null })
+      // Fix round 1 (revisao da Task 13, 2026-08-09): esta loja nao teve erro
+      // de consulta, mas TAMBEM nao escreveu nenhuma linha (sem foto de
+      // posicao ainda, ou 0 produtos do tipo certo) -- e um 3o estado, "sucesso
+      // sem dado", que NAO deve contar como prova de que o cron funcionou.
+      // Achado real do revisor: a versao anterior usava `erro !== null` como
+      // unico criterio pra decidir 200/502 -- 5 lojas com erro real + 1 loja
+      // nesse estado (erro:null, mas sem gravar nada) ainda voltava 200,
+      // porque a unica loja sem erro "salvava" o healthcheck mesmo sem ter
+      // escrito nada de fato. Agora "sucesso" so e true quando linhas>0 E sem
+      // erro no upsert -- ver o calculo de `houveAlgumSucesso` abaixo.
+      resumo.push({ loja_id: loja.id, linhas: 0, erro: null, sucesso: false })
     }
   }
   // Mesmo padrao ja aplicado em sync-posicao/sync-previsao/sync-preco-movimentacao
   // (achado da Task 9 desta auditoria: um cron que sempre responde 200, mesmo
   // com todas as lojas falhando, fica mudo no log -- "-> 200" nao diferencia
-  // sucesso de apagao total). Se TODAS as lojas com resultado falharam, 502.
-  const todasFalharam = resumo.length > 0 && resumo.every((r) => r.erro !== null)
-  return NextResponse.json({ total_lojas: lojas.length, resumo }, { status: todasFalharam ? 502 : 200 })
+  // sucesso de apagao total). Fix round 1: o criterio antigo (`every(erro !==
+  // null)`) era derrotado por qualquer loja "sucesso sem dado" (erro:null,
+  // linhas:0) mesmo com todas as outras realmente falhando. Agora so responde
+  // 200 quando pelo menos 1 loja teve sucesso DE VERDADE (gravou linha(s) sem
+  // erro) -- caso contrario, 502 (inclui o caso de todas as lojas legitimamente
+  // vazias no mesmo dia, que tambem merece um alerta: 6 lojas ativas sem
+  // nenhum produto elegivel/posicao no mesmo dia e mais provavel de ser
+  // problema sistemico do que coincidencia).
+  const houveAlgumSucesso = resumo.some((r) => r.sucesso)
+  return NextResponse.json({ total_lojas: lojas.length, resumo }, { status: houveAlgumSucesso ? 200 : 502 })
 }

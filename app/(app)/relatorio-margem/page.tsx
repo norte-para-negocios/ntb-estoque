@@ -33,7 +33,13 @@ const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { t
 // `lib/supabase/buscar-todas-linhas.ts`, que loga o erro real e aceita
 // `onErro` pra sinalizar na tela (ver `errosConsulta`/banner abaixo).
 
-type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null }
+// `semEstoque` (Fix round 1, Task 13): so preenchido no calculo ao vivo --
+// distingue "produto sem estoque na foto de hoje" (n_saldo<=0 em todos os
+// locais, motivo BENIGNO e hoje maioria disparada dos casos invalidos, ver
+// comentario mais abaixo) de "CMC realmente ausente/podre no Omie" (motivo
+// que precisa de acao). Sem essa distincao o rotulo "CMC invalido" mentia
+// pra ~700 produtos/loja que so estao sem posicao de estoque hoje.
+type Row = { codigo: string; descricao: string | null; familia: string | null; mes: string; pdv: number | null; cmc: number | null; margem: number | null; semEstoque?: boolean }
 
 // CMC podre faz a margem explodir (ex.: Casquinha de siri CMC R$100bi). Margem
 // abaixo de -100% = custo > 2x preço = claramente inválido (revisar no Omie).
@@ -77,14 +83,23 @@ function construirEvolucaoMensal(rowsFonte: Row[], codigosValidos: Set<string>):
 // Markup reaproveitado de relatorio-faturamento/page.tsx (matriz mês a mês,
 // sticky header/coluna) -- mesmo espírito visual, trocando o "Total" (soma,
 // que faz sentido pra R$) por "Média" (a soma de % não significa nada).
-function TabelaEvolucaoMensal({ linhas, meses, th }: { linhas: LinhaEvolucao[]; meses: string[]; th: string }) {
+// `diasPorMes` (Fix round 1, Task 13): só usado na evolução via snapshot
+// diário -- mostra quantos dias entraram na média daquele mês, pra não
+// esconder que um mês com poucos dias (buraco no cron, sem retry hoje --
+// ver migration 106) é bem menos confiável que um mês completo.
+function TabelaEvolucaoMensal({ linhas, meses, th, diasPorMes }: { linhas: LinhaEvolucao[]; meses: string[]; th: string; diasPorMes?: Record<string, number> }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
       <table className="w-full min-w-[600px] border-collapse text-sm">
         <thead>
           <tr className="bg-surface-2">
             <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
-            {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabelEvolucao(m)}</th>))}
+            {meses.map((m) => (
+              <th key={m} className={`text-right ${th}`} title={diasPorMes?.[m] != null ? `Média de ${diasPorMes[m]} dia(s) com snapshot` : undefined}>
+                {mesLabelEvolucao(m)}
+                {diasPorMes?.[m] != null && <span className="ml-1 font-normal normal-case text-text-muted">({diasPorMes[m]}d)</span>}
+              </th>
+            ))}
             <th className={`text-right ${th}`}>Média</th>
           </tr>
         </thead>
@@ -195,8 +210,9 @@ export default async function RelatorioMargemPage({
   if (!rows.length) {
     const mesAtualISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
     // produtosCalc e fotoRow sao independentes entre si -- roda em paralelo em
-    // vez de serie (este e o caminho padrao pra 5 das 6 lojas ativas, sem
-    // import manual de margem).
+    // vez de serie (este e o caminho padrao pras 6 lojas ativas hoje -- loja 3,
+    // unica com import manual do FAT_DRV, tambem cai aqui porque o import
+    // parou em jun/2026 e o bloco acima ja zerou `rows` por estar desatualizado).
     const [produtosCalc, { data: fotoRow, error: erroFotoRow }] = await Promise.all([
       buscarTodasLinhas<{
         codigo: string | null
@@ -232,8 +248,8 @@ export default async function RelatorioMargemPage({
     // Sem isto, um erro aqui (timeout, conexão) fazia `fotoRow` ficar `undefined`
     // igualzinho a "loja sem nenhuma posição de estoque ainda" -- a tela cairia
     // no EmptyState "Sem margem importada" escondendo que na verdade a query
-    // falhou (achado real desta auditoria: esta é a ÚNICA fonte de dado pra 5
-    // das 6 lojas ativas, que não fazem import manual do FAT_DRV).
+    // falhou (achado real desta auditoria: esta é a ÚNICA fonte de dado pras 6
+    // lojas ativas hoje, ver comentário acima).
     if (erroFotoRow) logErro('posição de estoque (data mais recente)')(erroFotoRow)
     if (fotoRow?.data_posicao && produtosCalc.length) {
       // Pondera por local (soma de custo x saldo, dividido pelo saldo total) em vez
@@ -247,6 +263,19 @@ export default async function RelatorioMargemPage({
       // local real + -3 num local fantasma = 0) e derrubam o produto inteiro do
       // relatorio (loja 2: caiu de 715 pra 196 sem o filtro). So locais com
       // estoque realmente positivo devem entrar na ponderacao.
+      // Fix round 1 (revisão da Task 13, 2026-08-09): o filtro `n_cmc > 0` saiu
+      // da query -- fica só `n_saldo > 0`, e o `n_cmc > 0` passa a ser checado
+      // em JS ao acumular. Motivo: sem isso não dá pra distinguir DEPOIS "produto
+      // sem estoque na foto de hoje" (não tem NENHUMA linha com saldo positivo --
+      // motivo benigno, é a maioria disparada dos casos, ver `temEstoque` abaixo)
+      // de "tem estoque mas o CMC não veio do Omie" (motivo real de alerta). Com
+      // os dois filtros na query como antes, as duas causas ficavam
+      // indistinguíveis (mesmo resultado: `cmcPorCod` sem entrada) e o rótulo
+      // "CMC inválido" mentia em massa (achado real do revisor: ~85% das linhas
+      // que tinham margem colapsaram pra "inválido" quando o fix do saldo
+      // ponderado foi aplicado, loja 3: 774→116, loja 4: 819→104, loja 5:
+      // 851→107, loja 6: 671→76 -- a maioria é só estoque zerado hoje, não CMC
+      // podre).
       const posRows = await buscarTodasLinhas<{ n_cod_prod: number; n_cmc: number; n_saldo: number }>(
         (from, to) =>
           supabase
@@ -254,7 +283,6 @@ export default async function RelatorioMargemPage({
             .select('n_cod_prod, n_cmc, n_saldo')
             .eq('loja_id', lojaId)
             .eq('data_posicao', fotoRow.data_posicao)
-            .gt('n_cmc', 0)
             .gt('n_saldo', 0)
             .order('id', { ascending: true })
             .range(from, to),
@@ -264,16 +292,19 @@ export default async function RelatorioMargemPage({
             .select('n_cod_prod', { count: 'exact', head: true })
             .eq('loja_id', lojaId)
             .eq('data_posicao', fotoRow.data_posicao)
-            .gt('n_cmc', 0)
             .gt('n_saldo', 0),
         logErro('posição de estoque (CMC/saldo)')
       )
       const acumPorCod = new Map<number, { valor: number; saldo: number }>()
+      const temEstoque = new Set<number>()
       for (const p of posRows) {
         const cod = Number(p.n_cod_prod)
+        temEstoque.add(cod)
+        const cmcLinha = Number(p.n_cmc)
+        if (!(cmcLinha > 0)) continue
         const saldo = Number(p.n_saldo) || 0
         const ent = acumPorCod.get(cod) ?? { valor: 0, saldo: 0 }
-        ent.valor += Number(p.n_cmc) * saldo
+        ent.valor += cmcLinha * saldo
         ent.saldo += saldo
         acumPorCod.set(cod, ent)
       }
@@ -286,13 +317,23 @@ export default async function RelatorioMargemPage({
       // produtos tem "venda R$ 0,00" no Omie) -- silenciosamente sumiam da
       // lista, sem contar nem como "CMC inválido". Removido: agora todo
       // produto do tipo certo aparece, e o que não tem cmc/pdv/margem válidos
-      // cai na seção "CMC inválido" já existente (mesma lógica do import
-      // manual), em vez de desaparecer sem aviso.
+      // cai na seção "CMC inválido"/"Sem estoque na foto" (ver `semEstoque`
+      // abaixo), em vez de desaparecer sem aviso.
       rows = produtosCalc.map((p) => {
-        const cmc = cmcPorCod.get(Number(p.codigo_produto)) ?? null
+        const cod = Number(p.codigo_produto)
+        const cmc = cmcPorCod.get(cod) ?? null
         const pdv = Number(p.valor_unitario) || null
         const margem = pdv && cmc && pdv > 0 && cmc > 0 ? Number((((pdv - cmc) / pdv) * 100).toFixed(1)) : null
-        return { codigo: p.codigo ?? String(p.codigo_produto), descricao: p.descricao, familia: p.descricao_familia, mes: mesAtualISO, pdv, cmc, margem }
+        return {
+          codigo: p.codigo ?? String(cod),
+          descricao: p.descricao,
+          familia: p.descricao_familia,
+          mes: mesAtualISO,
+          pdv,
+          cmc,
+          margem,
+          semEstoque: cmc == null && !temEstoque.has(cod),
+        }
       })
       calculadaAoVivo = true
     }
@@ -375,6 +416,14 @@ export default async function RelatorioMargemPage({
   })
   const validos = produtos.filter((p) => margemValida(p.margem)).sort((a, b) => Number(a.margem) - Number(b.margem))
   const invalidos = produtos.filter((p) => !margemValida(p.margem))
+  // Fix round 1 (Task 13): separa os dois motivos de "sem margem válida" --
+  // "sem estoque na foto de hoje" (n_saldo<=0 em todos os locais, benigno,
+  // hoje é a maioria disparada) de "CMC de verdade ausente/podre no Omie"
+  // (precisa de ação no Omie). So existe pra `calculadaAoVivo` -- import
+  // manual (margem_importada) nao tem esse conceito, `semEstoque` fica
+  // undefined e cai tudo em `cmcInvalidos`.
+  const semEstoque = invalidos.filter((p) => p.semEstoque)
+  const cmcInvalidos = invalidos.filter((p) => !p.semEstoque)
   const margemMedia = validos.length ? validos.reduce((s, p) => s + Number(p.margem), 0) / validos.length : 0
   const menor = validos[0]
 
@@ -397,10 +446,17 @@ export default async function RelatorioMargemPage({
   // matriz mensal de verdade pra ninguém no dia em que o snapshot começou.
   let evolucaoSnapshot: { linhas: LinhaEvolucao[]; meses: string[] } | null = null
   let primeiroSnapshotEm: string | null = null
+  // `diasPorMes` (Fix round 1, Task 13/migration 106): quantos dias distintos
+  // entraram na média de cada mês -- o cron passou a PULAR (não gravar) o dia
+  // de uma loja quando uma consulta falha, sem retry, então um mês pode ter
+  // menos dias que o esperado sem nenhum aviso na tela. `dias` vem igual pra
+  // todo produto do mesmo mês (é uma propriedade da série, não do produto) --
+  // guarda só 1 valor por mês.
+  let diasPorMes: Record<string, number> = {}
   const temEvolucaoImportada = !!evolucaoImportada && evolucaoImportada.meses.length > 1
   if (!temEvolucaoImportada) {
     const [snapshotRows, { data: primeiroRow, error: erroPrimeiroRow }] = await Promise.all([
-      rpcTodos<Row>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }, logErro('evolução mensal (snapshot)')),
+      rpcTodos<Row & { dias: number }>(supabase, 'relatorio_margem_snapshot_matriz', { p_loja_id: lojaId }, logErro('evolução mensal (snapshot)')),
       supabase
         .from('margem_snapshot_diario')
         .select('data_snapshot')
@@ -412,6 +468,9 @@ export default async function RelatorioMargemPage({
     if (erroPrimeiroRow) logErro('evolução mensal (primeiro snapshot)')(erroPrimeiroRow)
     evolucaoSnapshot = construirEvolucaoMensal(snapshotRows, codigosFiltrados)
     primeiroSnapshotEm = (primeiroRow?.data_snapshot as string | undefined) ?? null
+    for (const r of snapshotRows) {
+      if (diasPorMes[r.mes] == null) diasPorMes[r.mes] = r.dias
+    }
   }
 
   const campos: CampoFiltro[] = [
@@ -475,9 +534,14 @@ export default async function RelatorioMargemPage({
             <span className="text-text-muted"> · {menor.descricao}</span>
           </span>
         )}
-        {invalidos.length > 0 && (
+        {cmcInvalidos.length > 0 && (
           <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            CMC inválido <span className="num font-semibold text-err">{invalidos.length}</span>
+            CMC inválido <span className="num font-semibold text-err">{cmcInvalidos.length}</span>
+          </span>
+        )}
+        {semEstoque.length > 0 && (
+          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+            Sem estoque na foto <span className="num font-semibold text-text-muted">{semEstoque.length}</span>
           </span>
         )}
         {!calculadaAoVivo && metaRow?.importado_em && (
@@ -534,21 +598,31 @@ export default async function RelatorioMargemPage({
         </div>
       )}
 
-      {invalidos.length > 0 && (
+      {cmcInvalidos.length > 0 && (
         <div className="rounded-lg border border-border bg-surface p-3.5">
           <p className="flex items-center gap-1.5 text-sm font-medium text-text">
-            <AlertTriangle className="size-4 text-err" /> {invalidos.length} produto(s) com CMC inválido no Omie
+            <AlertTriangle className="size-4 text-err" /> {cmcInvalidos.length} produto(s) com CMC inválido no Omie
           </p>
           <p className="mt-0.5 text-[13px] text-text-muted">
-            O custo médio (CMC) desses produtos está absurdo no Omie (ex.: bilhões), então a margem não fecha. Corrigir o CMC no Omie:
+            Esses produtos têm estoque na foto de hoje, mas o custo médio (CMC) não veio ou está absurdo no Omie (ex.: bilhões), então a margem não fecha. Corrigir o CMC no Omie:
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {invalidos.map((p) => (
+            {cmcInvalidos.map((p) => (
               <span key={p.codigo} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-[12px] text-text" title={`CMC ${fmtMoeda(p.cmc)}`}>
                 {p.descricao ?? p.codigo}
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {semEstoque.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface p-3.5">
+          <p className="text-[13px] text-text-muted">
+            <span className="font-medium text-text">{semEstoque.length} produto(s) sem estoque na foto de hoje</span> — não têm
+            saldo positivo em nenhum local agora, então não dá pra calcular um CMC ponderado (motivo normal: estoque zerado, não é
+            problema de cadastro no Omie).
+          </p>
         </div>
       )}
 
@@ -574,7 +648,7 @@ export default async function RelatorioMargemPage({
         <div className="space-y-2">
           <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
           {evolucaoSnapshot && evolucaoSnapshot.meses.length > 1 ? (
-            <TabelaEvolucaoMensal linhas={evolucaoSnapshot.linhas} meses={evolucaoSnapshot.meses} th={th} />
+            <TabelaEvolucaoMensal linhas={evolucaoSnapshot.linhas} meses={evolucaoSnapshot.meses} th={th} diasPorMes={diasPorMes} />
           ) : (
             <div className="rounded-lg border border-border bg-surface p-3.5">
               <p className="text-[13px] text-text-muted">
