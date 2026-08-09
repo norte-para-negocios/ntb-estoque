@@ -87,6 +87,20 @@ export default async function RelatorioEstoqueValorizadoPage({
 
   const supabase = await createClient()
 
+  // Fix round 1 (revisao independente da Task 12, 2026-08-09): rpcTodos ja
+  // loga erro no servidor e retorna o que coletou ate falhar, mas sem
+  // `onErro` nenhum sinal chegava na tela -- totalValor/totalProdutos
+  // mostrariam um numero incompleto sem aviso se a RPC falhar (timeout,
+  // drift de schema -- exatamente a classe de incidente da migration 097
+  // que esta auditoria inteira existe pra pegar). Mesmo padrao ja aplicado
+  // em `relatorio-compras/page.tsx` (Task 11): acumula erros e mostra um
+  // banner visivel.
+  const errosRpc: string[] = []
+  function logErroRpc(fn: string, error: { message: string }) {
+    errosRpc.push(fn)
+    console.error(`relatorio-estoque-valorizado: RPC ${fn} falhou -- total pode estar incompleto`, error.message)
+  }
+
   const [linhasTodas, linhasLocalTodas, familiasOpcoes, locaisOpcoes] = await Promise.all([
     // rpcTodos ao inves de .rpc() direto: o PostgREST corta em 1000 linhas por
     // padrao, sem erro -- lojas com catalogo grande tinham o "Total valorizado"
@@ -94,21 +108,31 @@ export default async function RelatorioEstoqueValorizadoPage({
     // bug ja achada e corrigida no Faturamento nesta sessao.
     verLocal
       ? Promise.resolve<Linha[]>([])
-      : rpcTodos<Linha>(supabase, 'relatorio_estoque_valorizado', {
-          p_loja_id: lojaId,
-          p_familia: familias.length ? familias : null,
-          p_tipo: tipos.length ? tipos : null,
-          p_local: locais.length ? locais : null,
-          p_busca: busca,
-        }),
+      : rpcTodos<Linha>(
+          supabase,
+          'relatorio_estoque_valorizado',
+          {
+            p_loja_id: lojaId,
+            p_familia: familias.length ? familias : null,
+            p_tipo: tipos.length ? tipos : null,
+            p_local: locais.length ? locais : null,
+            p_busca: busca,
+          },
+          (error) => logErroRpc('relatorio_estoque_valorizado', error)
+        ),
     verLocal
-      ? rpcTodos<LinhaLocal>(supabase, 'relatorio_estoque_valorizado_local', {
-          p_loja_id: lojaId,
-          p_familia: familias.length ? familias : null,
-          p_tipo: tipos.length ? tipos : null,
-          p_local: locais.length ? locais : null,
-          p_busca: busca,
-        })
+      ? rpcTodos<LinhaLocal>(
+          supabase,
+          'relatorio_estoque_valorizado_local',
+          {
+            p_loja_id: lojaId,
+            p_familia: familias.length ? familias : null,
+            p_tipo: tipos.length ? tipos : null,
+            p_local: locais.length ? locais : null,
+            p_busca: busca,
+          },
+          (error) => logErroRpc('relatorio_estoque_valorizado_local', error)
+        )
       : Promise.resolve<LinhaLocal[]>([]),
     buscarFamilias(),
     supabase
@@ -198,6 +222,13 @@ export default async function RelatorioEstoqueValorizadoPage({
           ]}
         />
       </ListaHeader>
+
+      {errosRpc.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar os dados de posição — o total acima pode estar
+          incompleto. Recarregue a página; se persistir, avise o suporte.
+        </p>
+      )}
 
       {!verLocal ? (
         <>
