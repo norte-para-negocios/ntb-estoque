@@ -124,6 +124,14 @@ export default async function ResumoPage({
       recentsQuery,
       supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaIdCob).neq('inativo', 'S'),
     ])
+    // Fix round 1 (achado da revisão): mesmo padrão de `.error` não checado já
+    // corrigido em lib/resumo-dia.ts (carregarResumoDia/carregarPainelAcao) --
+    // aqui uma falha transitória do Supabase fazia a barra de cobertura e a lista
+    // "sem contagem" virarem silenciosamente "vazio"/0%, indistinguível de "não
+    // tem dado de verdade". Só loga (não muda o comportamento em si).
+    if (cobRes.error) console.error('resumo/page: falha ao carregar inventario_cobertura', cobRes.error)
+    if (recentsRes.error) console.error('resumo/page: falha ao carregar inventario_items recentes', recentsRes.error)
+    if (locaisRes.error) console.error('resumo/page: falha ao carregar local_estoques', locaisRes.error)
 
     coberturaData = (cobRes.data ?? []) as RowCobertura[]
     locaisOpcoes = (locaisRes.data ?? []).map((l) => ({
@@ -146,14 +154,17 @@ export default async function ResumoPage({
       .limit(5000)
     if (tiposSel.length) produtosQuery = produtosQuery.in('tipo_item', tiposSel)
 
-    const [{ data: produtosRaw }, posicaoRes] = await Promise.all([
+    const [produtosRawRes, posicaoRes] = await Promise.all([
       produtosQuery,
       // Restringe aos produtos que de fato têm posição num dos locais selecionados
       // (produto "não existe" nesse local não deveria aparecer como "não contado" nele).
       locaisSel.length
         ? supabase.from('posicao_estoques').select('codigo_produto').eq('loja_id', lojaIdCob).in('codigo_local_estoque', locaisSel)
-        : Promise.resolve({ data: null }),
+        : Promise.resolve({ data: null, error: null }),
     ])
+    const { data: produtosRaw, error: produtosErr } = produtosRawRes
+    if (produtosErr) console.error('resumo/page: falha ao carregar produtos (sem contagem)', produtosErr)
+    if (posicaoRes.error) console.error('resumo/page: falha ao carregar posicao_estoques', posicaoRes.error)
 
     const codigosNoLocal = locaisSel.length
       ? new Set(((posicaoRes.data ?? []) as { codigo_produto: number }[]).map((p) => p.codigo_produto))
