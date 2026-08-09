@@ -237,7 +237,13 @@ export async function GET(request: Request) {
         .eq('loja_id', lojaId)
         .gt('n_preco_unit', 0)
         .is('notas_fiscais.deleted_at', null)
-        .order('d_emissao_nfe', { foreignTable: 'notas_fiscais', ascending: false })
+        // Fix round 1 (revisão): `{ foreignTable }` só ordena o recurso
+        // embutido, não a linha pai (mesmo achado do page.tsx acima) --
+        // `order('tabela(coluna)')` sem essa opção é a forma correta.
+        // Tiebreak por `id` pelo mesmo motivo (evita pular/duplicar linha
+        // entre páginas quando `d_emissao_nfe` empata).
+        .order('notas_fiscais(d_emissao_nfe)', { ascending: false })
+        .order('id', { ascending: false })
         .range(p * PAGE_PRECO, p * PAGE_PRECO + PAGE_PRECO - 1)
       if (error || !data?.length) break
       precoRowsTodos.push(...(data as unknown as { n_id_produto: number; n_preco_unit: number }[]))

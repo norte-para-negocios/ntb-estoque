@@ -900,7 +900,18 @@ export default async function RelatorioMovimentacaoPage({
             // reimplementacao JS fiel ao SQL, como o comentario de
             // agregarMovimentacaoJS ja pede.
             .is('notas_fiscais.deleted_at', null)
-            .order('d_emissao_nfe', { foreignTable: 'notas_fiscais', ascending: false })
+            // Fix round 1 (revisão): `{ referencedTable/foreignTable }` só
+            // ordena o recurso EMBUTIDO (não afeta a ordem da linha pai) --
+            // doc do postgrest-js confirma: "Ordering with `referencedTable`
+            // doesn't affect the ordering of the parent table". A forma que
+            // afeta a linha pai é `order('tabela(coluna)')` sem essa opção.
+            // Tiebreak por `id` (chave primária): `d_emissao_nfe` sozinho tem
+            // muitos empates (mesma data) -- sem 2º critério determinístico,
+            // paginar com `.range()` por cima pode pular/duplicar linha entre
+            // páginas (mesma classe de bug já corrigida na migration 087, ver
+            // AGENTS.md).
+            .order('notas_fiscais(d_emissao_nfe)', { ascending: false })
+            .order('id', { ascending: false })
             .range(i * 1000, i * 1000 + 999)
         )
       ),

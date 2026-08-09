@@ -289,7 +289,7 @@ arquivo.sql`, direto no Postgres self-hosted do Contabo. Não existe nada como
 pra saber quais migrations já rodaram) — o único "registro" de que uma
 migration foi aplicada é a memória de quem rodou o comando.
 
-Isso já causou bug real em produção **2 vezes** na mesma auditoria:
+Isso já causou bug real em produção **3 vezes** na mesma auditoria:
 
 1. **Migration 097** (`filtro_status_compras_auditoria.sql`) — ficou meses
    sem aplicar; as RPCs de Compras/Auditoria Fiscal chamadas com `p_status`
@@ -307,6 +307,26 @@ Isso já causou bug real em produção **2 vezes** na mesma auditoria:
    supabase-db psql ... < supabase/migrations/0XX_*.sql`, na ordem numérica,
    e revalidadas ao vivo (ex.: `?ver=local` voltou a bater exato com SQL
    direto: R$1.086.711,29/1381 linhas, loja 3).
+3. **Migration 090** (`movimentacao_preco_cache.sql`) — aplicada **pela
+   metade** (Task 9 da auditoria de 2026-08-09): o `create table if not
+   exists produto_preco_recente` rodou (ou foi criado à parte), mas a função
+   `atualizar_preco_recente` e a troca da RPC `relatorio_movimentacao_matriz`
+   pro JOIN na tabela cache nunca rodaram — a RPC ficou presa na CTE cara
+   original (o mesmo risco de `statement_timeout` que a migration existia
+   pra eliminar), e o cron horário `/api/cron/sync-preco-movimentacao`
+   chamava uma função inexistente, falhando **silenciosamente por 9 dias**
+   (`sync-cron.log` mostrava `-> 200` toda hora, porque a rota engolia o erro
+   em `Promise.allSettled` e sempre respondia 200 mesmo com `falhas ===
+   total`). Corrigido aplicando o resto do arquivo 090 + endurecendo 2
+   pontos que a revisão desta correção achou: (a) `atualizar_preco_recente`
+   fazia só UPSERT, nunca DELETE — um produto cuja única NF de preço válido
+   fosse cancelada depois ficava com preço órfão preso pra sempre no cache
+   (confirmado ao vivo: loja 5/entradas, 6 produtos, R$927,05 de divergência
+   permanente); fix em migration nova (105,
+   `movimentacao_preco_cache_delete_orfaos.sql`) que apaga a linha órfã antes
+   do upsert. (b) a rota do cron passou a responder HTTP 502 quando TODAS as
+   lojas falham (mesmo padrão de `sync-posicao`/`sync-previsao`), pra um
+   apagão como esse aparecer no log da próxima vez.
 
 **Achado incidental da mesma verificação**: `relatorio_auditoria_fiscal_cfop`/
 `relatorio_auditoria_fiscal_itens` tinham 2 overloads coexistindo em
