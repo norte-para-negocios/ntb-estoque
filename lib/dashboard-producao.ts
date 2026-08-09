@@ -72,7 +72,17 @@ async function buscarOpsPaginado(lojaId: number, dataIni: string, dataFim: strin
       .order('id', { ascending: true })
     if (local != null) q = q.eq('identificacao_codigo_local_estoque', local)
     const { data, error } = await q.range(p * PAGE, p * PAGE + PAGE - 1)
-    if (error || !data?.length) break
+    // Hardening (Task 10, auditoria 2026-08-09): antes, `error || !data?.length`
+    // tratava qualquer falha de query (RPC/tabela quebrada, timeout) exatamente
+    // igual a "acabaram as páginas" -- mesma classe de bug já documentada no
+    // AGENTS.md (3+ incidentes reais) e já corrigida em `rpcTodos`/`resumo/page.tsx`.
+    // Loga o erro real em vez de engolir; resultado parcial continua sendo
+    // retornado (comportamento inalterado), mas agora visível no log do servidor.
+    if (error) {
+      console.error('dashboard-producao: falha ao paginar ordens_producao -- resultado pode estar incompleto', error)
+      break
+    }
+    if (!data?.length) break
     todas.push(...(data as OpRow[]))
     if (data.length < PAGE) break
   }
@@ -99,7 +109,12 @@ async function buscarProdutosMeta(lojaId: number): Promise<Map<number, ProdutoMe
       // comentário em buscarOpsPaginado acima.
       .order('id', { ascending: true })
       .range(p * PAGE, p * PAGE + PAGE - 1)
-    if (error || !data?.length) break
+    // Mesmo hardening de buscarOpsPaginado acima -- ver comentário lá.
+    if (error) {
+      console.error('dashboard-producao: falha ao paginar produtos (meta tipo/familia) -- resultado pode estar incompleto', error)
+      break
+    }
+    if (!data?.length) break
     for (const p2 of data) {
       meta.set(Number(p2.codigo_produto), {
         tipo: p2.tipo_item,
@@ -153,7 +168,8 @@ export async function carregarDashboardProducao(
   const idsUnicos = Array.from(new Set(opsFiltradas.map((o) => o.concluida_por).filter((id): id is string => !!id)))
   const nomePorId = new Map<string, string>()
   if (idsUnicos.length) {
-    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', idsUnicos)
+    const { data: profiles, error: profilesError } = await supabase.from('profiles').select('id, name').in('id', idsUnicos)
+    if (profilesError) console.error('dashboard-producao: falha ao carregar profiles -- nomes podem cair em "Não identificado"', profilesError)
     for (const p of profiles ?? []) nomePorId.set(p.id, p.name || NAO_IDENTIFICADO)
   }
 

@@ -76,7 +76,7 @@ export default async function RelatorioProducaoPage({
   if (sp.local) filtrosURL.set('local', sp.local)
 
   const supabase = createServiceClient()
-  const [{ buckets, funcionariosOrdenados }, familias, { data: locaisRaw }] = await Promise.all([
+  const [{ buckets, funcionariosOrdenados }, familias, locaisRes] = await Promise.all([
     carregarDashboardProducao(lojaId, granularidade, mes, {
       tipos: tiposSel,
       familias: familiasSel,
@@ -90,6 +90,12 @@ export default async function RelatorioProducaoPage({
       .eq('loja_id', lojaId)
       .order('descricao'),
   ])
+  // Hardening (Task 10, auditoria 2026-08-09): .error nunca era checado nas 2
+  // queries abaixo (mesmo padrão já corrigido em resumo/page.tsx e lib/resumo-dia.ts,
+  // documentado no AGENTS.md -- já causou 3+ incidentes de dado zerado em silêncio).
+  // Só loga; não muda o comportamento em caso de sucesso.
+  if (locaisRes.error) console.error('relatorio-producao: falha ao carregar local_estoques', locaisRes.error)
+  const { data: locaisRaw } = locaisRes
 
   const campos: CampoFiltro[] = [
     { tipo: 'texto', nome: 'produto', label: 'Produto (nome ou código)' },
@@ -108,7 +114,7 @@ export default async function RelatorioProducaoPage({
   // O cron snapshot-op-planejada captura o planejado enquanto a OP esta aberta,
   // entao isso so tem dado a partir do primeiro dia em que ele rodou, e so pras
   // OPs que ainda estavam abertas naquele momento.
-  const [{ data: divRaw }, { data: capturaRow }] = await Promise.all([
+  const [divRes, capturaRes] = await Promise.all([
     supabase.rpc('relatorio_op_previsto_produzido', {
       p_loja_id: lojaId, p_ini: `${mes}-01`, p_fim: `${mes}-31`,
     }),
@@ -120,6 +126,15 @@ export default async function RelatorioProducaoPage({
       .limit(1)
       .maybeSingle(),
   ])
+  // Mesmo hardening acima: sem isto, uma RPC quebrada (ex.: migration 103 não
+  // aplicada em produção -- já aconteceu com outras 6 migrations nesta mesma
+  // auditoria, ver AGENTS.md) faria a seção "Previsto × produzido" mostrar
+  // silenciosamente "nenhuma diferença" -- indistinguível de "verificado, sem
+  // divergência real".
+  if (divRes.error) console.error('relatorio-producao: falha ao carregar relatorio_op_previsto_produzido', divRes.error)
+  if (capturaRes.error) console.error('relatorio-producao: falha ao carregar op_qtde_planejada', capturaRes.error)
+  const { data: divRaw } = divRes
+  const { data: capturaRow } = capturaRes
   const divergencias = (divRaw ?? []) as LinhaPrevProd[]
   const capturaDesde = (capturaRow?.primeira_vez_em as string | undefined) ?? null
 
