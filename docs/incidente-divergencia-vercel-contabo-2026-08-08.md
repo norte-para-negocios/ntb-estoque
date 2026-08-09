@@ -105,8 +105,10 @@ remapeado acima do maior id já existente, preservando
 conteúdo/timestamp/usuário original.** Verificado de forma independente
 via o log de auditoria `outbox` (trigger `outbox_trigger`, ativo nas 4
 tabelas envolvidas, sem consumidor — ver achados laterais): confirmou
-100% `INSERT`, 0% `UPDATE`/`DELETE`, exatamente nas faixas de id
-alegadas, nas duas tasks de escrita.
+100% `INSERT`, 0% `UPDATE`/`DELETE` **da própria reconciliação**,
+exatamente nas faixas de id alegadas, nas duas tasks de escrita (ver nota
+sobre 2 `DELETE`s legítimos e sem relação com a reconciliação, logo
+abaixo).
 
 ### `inventarios` + `inventario_items`
 
@@ -118,6 +120,26 @@ produtos distintos) e totais gerais: 0 mismatches. Zero órfãos de FK,
 zero duplicatas (inclusive checado por `id_ajuste` da Omie duplicado, que
 seria a assinatura de um ajuste físico gravado 2×). Sequences avançadas
 corretamente ao final, sem risco de colisão com escrita orgânica futura.
+
+**Nota sobre 2 `DELETE`s legítimos no `outbox`, sem relação com a
+reconciliação:** a auditoria bruta do `outbox` para `inventario_items` no
+período tem exatamente 2 linhas `DELETE` dentro da faixa de id
+reconciliada (ids 7260 e 7261) — não é uma violação da regra de ouro
+acima, e um auditor futuro rodando a mesma query do `outbox` não deve
+interpretar como tal. São 2 linhas criadas organicamente por um usuário
+real às 17:55:54–17:55:56 UTC de 08/08 (inventário #224, sem
+`id_ajuste`, nunca chegaram a ser lançadas na Omie) e apagadas pelo
+próprio usuário 15–19 segundos depois (17:56:10–17:56:14 UTC) — 8 horas
+antes da reconciliação rodar (01:52 UTC de 09/08). Como consequência, o
+`MAX(id)` calculado pela reconciliação depois dessas exclusões reaproveitou
+os ids 7260 e 7261 (que antes pertenciam às 2 linhas apagadas) para 2 dos
+744 itens novos reconciliados. **Risco teórico registrado, não
+materializado aqui:** o método de verificação da Task 2 cruza contra a
+Omie via `cod_int_ajuste = "ITEM<id>"` — reuso de id é um vetor teórico de
+falso-match nesse método. Não aconteceu neste caso (os ids reaproveitados
+nunca tiveram ajuste na Omie), mas vale como cuidado para reconciliações
+futuras: preferir remapear para ids fora de qualquer faixa já
+usada/liberada por exclusão, não só acima do `MAX` atual.
 
 ### `transferencias` + `movimentos`
 
@@ -215,64 +237,70 @@ levantou 3 itens divergentes que as 5 tasks deste plano deliberadamente
 **não** reconciliaram. Ficam documentados aqui, com investigação real onde
 fazia sentido, pra não se perder:
 
-### 1. `movimentos` manuais/SLD (tipo SLD, fora de transferência) — 88 linhas só no cloud
+### 1. `movimentos` sem sincronização — cron `sync-ajustes` nunca foi ligado no Contabo (~8.048 linhas, crescendo)
 
-Reflexo dos 26 inventários já reconciliados nas Tasks 3/4, não um achado
-independente: 88 linhas em `movimentos` (`tipo='SLD'`, criadas depois do
-fork de `inventarios` em 31/07 16:39 UTC) existem no Supabase cloud e não
-têm par no Contabo pela chave natural `(loja_id, id_ajuste)` — verificado
-ao vivo nesta correção, não só citado do spec.
+**Correção sobre a versão anterior deste documento:** a versão anterior
+descrevia isto como "88 linhas" com causa no cursor incremental do cron
+`sync-ajustes` já ter avançado além do intervalo. Essa descrição estava
+errada nos dois eixos — causa raiz e tamanho — e foi corrigida nesta
+revisão, com evidência coletada ao vivo (2026-08-09).
 
-**Hipótese testada:** o cron `sync-ajustes`
-(`lib/omie/sync-ajustes.ts`) não depende de `inventario_items` local — ele
-lê `ListarAjusteEstoque` direto da Omie e grava em `movimentos` por
-`(loja_id, id_ajuste)` (RPC `upsert_movimentos_ajuste`, migration 079).
-Como a Task 2 confirmou que 909/930 desses ajustes existem de verdade na
-Omie, a hipótese era que esse cron traria as 88 linhas sozinho, mais cedo
-ou mais tarde, rodando no Contabo (produção).
+**Causa raiz real:** `sync-ajustes` (`/api/cron/sync-ajustes`,
+`lib/omie/sync-ajustes.ts`) só está agendado em `vercel.json`
+(`30 4 * * *`). O crontab real de produção no Contabo
+(`/opt/ntb-estoque/scripts/sync-cron.sh`) **nunca chama essa rota** —
+confirmado lendo o script ao vivo no servidor: ele dispara `sync-nfs`,
+`sync-ops`, `retry-op-conclusao`, `sync-posicao`, `sync-reconciliar-op`,
+`sync-locais`, `sync-produtos`, `sync-previsao`, `sync-movimentos`,
+`sync-faturamento`, `sync-preco-movimentacao`,
+`snapshot-margem-diario` e `snapshot-op-planejada` — `sync-ajustes` não
+está na lista. Não é sobre o cursor nunca "olhar pra trás" — é o cron
+inteiro nunca ter rodado no Contabo, nem uma vez.
 
-**Resultado: hipótese refutada — o cron NÃO vai trazer essas 88 linhas
-sozinho, hoje.** Query direta no Contabo (`docker exec supabase-db psql`)
-comparando as 88 pares `(loja_id, id_ajuste)` do cloud contra `movimentos`
-do Contabo: **0 de 88 encontrados**. Causa raiz encontrada: `sync-ajustes`
-usa um **cursor incremental por loja** (`MAX(id_ajuste)` já sincronizado),
-e só busca ajustes com `id_ajuste` **maior** que esse cursor — ele nunca
-olha pra trás. O cursor de cada loja envolvida já avançou muito além do
-intervalo dessas 88 linhas, porque a Omie atribui `id_ajuste` de forma
-crescente e global por loja (não por sistema de origem), e o Contabo
-continuou gerando ajustes mais recentes (via uso orgânico pós-fork)
-enquanto essas 88 ajustes específicos — criados pelo app rodando no cloud
-— ficaram "no meio do caminho", nunca sincronizados:
+`/api/cron/sync-movimentos`, que esse sim roda no Contabo (bloco 2 do
+`sync-cron.sh`), grava em `movimentos_historico` — uma tabela agregada
+diferente (entradas/saídas por produto/dia, mês-a-mês) — e não substitui
+`sync-ajustes` de nenhuma forma.
 
-| Loja | Intervalo `id_ajuste` das linhas só-cloud | `MAX(id_ajuste)` já sincronizado no Contabo hoje |
-|---|---|---|
-| 2 | 9.576.060.778 – 9.576.096.078 (42 linhas) | 9.576.737.440 (já passou) |
-| 3 | 4.857.656.086 – 4.859.316.562 (2 linhas) | 4.859.319.985 (já passou) |
-| 5 | 3.800.846.698 – 3.801.752.300 (44 linhas) | 3.802.640.062 (já passou) |
+**Resultado:** desde **2026-08-02 05:20 UTC** (~7 dias e contando), a
+tabela `movimentos` no Contabo não recebe nenhum registro novo vindo de
+ajuste da Omie via `id_ajuste`. Só o Supabase cloud continua recebendo
+esses registros, porque o agendamento do Vercel segue ativo lá.
 
-Ou seja: é um **buraco permanente no meio da sequência**, não uma cauda
-"ainda não chegou" — o cursor atual (`MAX`) é incapaz de detectar ou
-preencher esse tipo de lacuna, porque só compara contra o maior id já
-visto, não contra o conjunto completo. Sem uma mudança no cron (ex.:
-também verificar ids intermediários faltantes) ou um backfill pontual
-igual ao que a Task 2 já fez pra verificação, essas 88 linhas **nunca**
-vão aparecer sozinhas no Contabo.
+**Tamanho real, reconfirmado nesta correção (SQL direto, 2026-08-09):**
+comparando `movimentos` com `id_ajuste` não nulo, sem `transferencia_id`
+(exclui os `TRF` nativos de transferência local, que entram por outro
+caminho, `lib/actions/transferencia.ts`), criados após 2026-08-02 05:20
+UTC:
+
+| Loja | Linhas só no cloud (Contabo = 0) |
+|---|---:|
+| 2 | 1.686 |
+| 3 | 3.188 |
+| 5 | 2.446 |
+| 6 | 728 |
+| **Total** | **8.048** |
+
+Por tipo: 7.803 `SAI` (venda, majoritário), 143 `TRF` (tipo de ajuste da
+Omie, não confundir com a tabela `transferencias` local), 88 `SLD`
+(exatamente a fatia que a versão anterior deste documento já citava — mas
+como "as 88" no total, quando eram só a fatia SLD) e 14 `ENT`; nenhum
+`TPQ` neste corte. **Este número cresce a cada hora que passa** — quem for
+agir sobre isso deve reconfirmar a contagem antes, não reusar os valores
+acima.
 
 **Decisão para o futuro (não executada aqui):** como o estoque físico
 nesses casos já foi confirmado correto na Omie (parte dos 909/930 da Task
 2), o risco de deixar como está é só de **registro**/auditoria interna
 incompleta, mesma natureza dos outros achados já reconciliados — não afeta
-saldo real. Duas opções ficam em aberto pra decisão do usuário: (a)
-backfill pontual dessas 88 linhas no Contabo (mesmo padrão de INSERT usado
-nas Tasks 3/4, remapeando id), ou (b) corrigir `sync-ajustes` pra detectar
-e preencher lacunas na sequência, não só avançar o cursor. Nenhuma das
-duas foi feita nesta correção — é achado de investigação, fora do escopo
-autorizado (só documentação).
-
-*(Nota: o spec original citava 87 linhas; a verificação ao vivo desta
-correção, usando o mesmo critério — `tipo='SLD'`, criadas após o fork —
-encontrou 88. Diferença de 1 linha, provavelmente por causa da janela de
-tempo exata usada em cada investigação; não muda a conclusão.)*
+saldo real. Duas ações ficam em aberto pra decisão do usuário, e não são
+alternativas — as duas são necessárias: (a) adicionar `/api/cron/sync-ajustes`
+ao `sync-cron.sh` do Contabo, pra parar de crescer; (b) rodar um backfill
+pontual pra fechar o gap já acumulado (mesmo padrão de `INSERT` usado nas
+Tasks 3/4, remapeando id) — o cron sozinho, mesmo ligado, não volta atrás
+pra preencher o que já ficou pra trás do cursor. Nenhuma das duas foi
+feita nesta correção — é achado de investigação, fora do escopo autorizado
+(só documentação).
 
 ### 2. `audit_log` — 233 colisões de id entre os dois bancos
 
@@ -332,10 +360,20 @@ todos os envolvidos confirmarem que pararam de usar o Vercel/cloud — a
 causa raiz deste incidente (login funcionando nos dois sistemas sem
 aviso) continua existindo até essa fase rodar.
 
-**(c) Follow-ups de menor prioridade** (achados laterais (b)/(c)/(d)
-acima): atualizar metadado de `ordens_producao` pro sync trazer de volta
-(ou aceitar a perda como limitação documentada); rotacionar/proteger a
-senha do Postgres standby fora do `crontab` em texto plano; decidir se
+**⚠️ BLOQUEIO — não fazer isso antes de resolver o item 1 acima
+(`movimentos` sem sincronização).** Hoje o Supabase cloud é a **única**
+fonte que ainda sincroniza `movimentos` vindos de ajuste da Omie — o
+cron `sync-ajustes` nunca foi ligado no Contabo. Aposentar o
+Vercel/Supabase cloud sem antes (1) adicionar `sync-ajustes` ao
+`sync-cron.sh` do Contabo e (2) rodar o backfill que fecha o gap atual
+mataria essa sincronização de vez, não só atrasaria — ninguém mais
+escreveria em `movimentos` a partir de ajuste da Omie depois disso.
+
+**(c) Follow-ups de menor prioridade** (achados laterais 2, 3 e 4 acima):
+atualizar metadado de `ordens_producao` pro sync trazer de volta (ou
+aceitar a perda como limitação documentada); resolver o achado de
+segurança já reportado diretamente ao dono do projeto (achado lateral 3,
+detalhes fora deste documento público de propósito); decidir se
 `outbox_trigger`/tabela `outbox` devem ser aposentados (mecanismo de
 failover que os originou já foi removido) ou mantidos como log de
 auditoria intencional com uma política de retenção.
