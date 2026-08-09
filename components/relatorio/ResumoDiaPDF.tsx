@@ -63,16 +63,16 @@ function Secao({ label, lista, quebra }: { label: string; lista: CategoriaLista;
 
 export function ResumoDiaPDF({
   loja,
-  dataBR,
+  periodoLabel,
   contagem,
   listas,
 }: {
   loja: string
-  dataBR: string
+  periodoLabel: string
   contagem: Contagem
   listas: { cat: CategoriaKey; label: string; lista: CategoriaLista }[]
 }) {
-  const sub = [loja, `Dia: ${dataBR}`].filter(Boolean).join(' · ')
+  const sub = [loja, periodoLabel].filter(Boolean).join(' · ')
   const comDados = listas.filter((s) => s.lista.linhas.length > 0)
 
   return (

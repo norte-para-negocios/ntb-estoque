@@ -639,13 +639,21 @@ export const CATEGORIA_ORDEM: CategoriaKey[] = [
 ]
 
 // Relatório COMPLETO do dia: contagem + a lista de TODAS as categorias (para o PDF).
-export async function carregarResumoDiaCompleto(lojaIds: number[], dataISO: string) {
-  const base = await carregarResumoDia(lojaIds, dataISO, 'notas')
+// Achado real (auditoria 2026-08-09): `periodo` nunca era recebido/repassado aqui --
+// a tela /resumo deixa escolher Diário/Semanal/Mensal e o link do PDF já monta a URL
+// com `&periodo=...`, mas a rota `imprimir/route.ts` nunca lia esse parâmetro e esta
+// função sempre chamava `carregarResumoDia` (e cada `listarCategoria` do loop) com o
+// default 'dia'. Resultado: um gerente que escolhe "Mensal" na tela e clica em PDF
+// recebia, em silêncio, um PDF só do dia -- números diferentes dos que ele acabou de
+// ver na tela, sem nenhum aviso. Corrigido recebendo `periodo` e repassando pros dois
+// pontos que faziam a leitura (a base e o loop de categorias).
+export async function carregarResumoDiaCompleto(lojaIds: number[], dataISO: string, periodo: PeriodoResumo = 'dia') {
+  const base = await carregarResumoDia(lojaIds, dataISO, 'notas', periodo)
   const { contagem, multiLoja } = base
   const supabase = createServiceClient()
   const listas: { cat: CategoriaKey; label: string; lista: CategoriaLista }[] = []
   for (const c of CATEGORIA_ORDEM) {
-    const lista = c === 'notas' ? base.lista : await listarCategoria(supabase, lojaIds, dataISO, c, contagem, multiLoja)
+    const lista = c === 'notas' ? base.lista : await listarCategoria(supabase, lojaIds, dataISO, c, contagem, multiLoja, periodo)
     listas.push({ cat: c, label: CATEGORIA_LABEL[c], lista })
   }
   return { contagem, multiLoja, listas }
@@ -693,13 +701,13 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
   // montar este painel, toda vez que alguem abre /resumo. Junta tudo num
   // Promise.all: o tempo vira o da mais lenta, nao a soma de todas.
   const [
-    { data: errosRaw },
-    { count: nfTravada },
-    { count: opAtrasada },
-    { count: vencendo },
-    { data: locaisRows },
-    { data: inventRecentes },
-    { count: semFamilia },
+    errosRes,
+    nfTravadaRes,
+    opAtrasadaRes,
+    vencendoRes,
+    locaisRes,
+    inventRecentesRes,
+    semFamiliaRes,
   ] = await Promise.all([
     supabase
       .from('integration_attempts')
@@ -741,6 +749,29 @@ export async function carregarPainelAcao(lojaIds: number[]): Promise<ItemAcao[]>
     // real 2026-07-22, mesmo fix em app/(app)/pendencias-classificacao/page.tsx.
     supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).in('loja_id', lojaIds).or('descricao_familia.is.null,descricao_familia.eq.').eq('inativo', false),
   ])
+
+  // Achado real (auditoria 2026-08-09): nenhuma das 7 consultas acima checava
+  // `.error` -- mesma classe de bug ja corrigida em carregarResumoDia (ver
+  // comentario acima, linha ~220), so que aqui o efeito e pior: e `if (contagem)`
+  // que decide se o card de "Precisa de acao" aparece, entao uma falha
+  // transitoria do Supabase (count/data vindo null) faz o card correspondente
+  // simplesmente SUMIR da tela, sem nenhum sinal -- o gerente ve "tudo certo"
+  // quando na verdade a consulta falhou. Loga pra ficar visivel nos logs do
+  // servidor, sem mudar o contrato de ItemAcao[] (ja e so o que "deveria"
+  // aparecer, sem estado de erro).
+  const { data: errosRaw, error: errosErr } = errosRes
+  const { count: nfTravada, error: nfTravadaErr } = nfTravadaRes
+  const { count: opAtrasada, error: opAtrasadaErr } = opAtrasadaRes
+  const { count: vencendo, error: vencendoErr } = vencendoRes
+  const { data: locaisRows, error: locaisErr } = locaisRes
+  const { data: inventRecentes, error: inventRecentesErr } = inventRecentesRes
+  const { count: semFamilia, error: semFamiliaErr } = semFamiliaRes
+  for (const [nome, err] of [
+    ['errosAcao', errosErr], ['nfTravada', nfTravadaErr], ['opAtrasada', opAtrasadaErr],
+    ['vencendo', vencendoErr], ['locais', locaisErr], ['inventRecentes', inventRecentesErr], ['semFamilia', semFamiliaErr],
+  ] as const) {
+    if (err) console.error(`resumo-dia: falha ao carregar painel de acao (${nome})`, err)
+  }
 
   // 1. Erros de integracao que exigem acao (classificador ja existe).
   const errosAcao = (errosRaw ?? []).filter((e) => explicarErroOmie(e.error_message as string | null)?.tipo === 'acao')
