@@ -127,7 +127,7 @@ export async function enviarMovimento(
   const { data: mov } = await supabase
     .from('movimentos')
     .select(
-      'id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, id_ajuste, transferencia:transferencias(id, codigo_local_origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+      'id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, id_ajuste, tentativas, transferencia:transferencias(id, codigo_local_origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
     )
     .eq('id', movimentoId)
     .eq('loja_id', lojaId)
@@ -138,6 +138,7 @@ export async function enviarMovimento(
       codigo_local_estoque_destino: number
       tipo: string
       id_ajuste: number | null
+      tentativas: number | null
       transferencia: {
         id: number
         codigo_local_origem: number
@@ -200,6 +201,7 @@ export async function enviarMovimento(
     quan,
     status: 'Iniciado',
     id_ajuste: null,
+    tentativas: mov.tentativas,
   }
 
   const dataMov = dataOmieBR(mov.transferencia.data)
@@ -257,6 +259,7 @@ type MovimentoRow = {
   quan: number | null
   status: string | null
   id_ajuste: number | null
+  tentativas: number | null
 }
 
 type TransferenciaComMovimentos = {
@@ -371,13 +374,20 @@ async function processarMovimento(
         id_movest: res.id_movest ?? null,
         id_ajuste: res.id_ajuste ?? null,
         response: JSON.stringify(res),
+        tentativas: sucesso ? 0 : (mov.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', mov.id)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await supabase
       .from('movimentos')
-      .update({ status: 'Erro', response: msg })
+      .update({
+        status: 'Erro',
+        response: msg,
+        tentativas: (mov.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
+      })
       .eq('id', mov.id)
     await logIntegrationAttempt({
       loja_id: lojaId,

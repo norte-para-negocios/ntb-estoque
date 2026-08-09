@@ -70,7 +70,7 @@ export async function criarAjusteManual(input: {
       obs: obsCarimbo,
       status: 'Processando',
     })
-    .select('id')
+    .select('id, tentativas')
     .single()
   if (!mov) return { error: 'Falha ao gravar o movimento' }
 
@@ -130,6 +130,8 @@ export async function criarAjusteManual(input: {
         id_movest: res.id_movest ?? null,
         id_ajuste: res.id_ajuste ?? null,
         response: JSON.stringify(res),
+        tentativas: sucesso ? 0 : (mov.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', mov.id)
 
@@ -138,7 +140,15 @@ export async function criarAjusteManual(input: {
     return { id: mov.id, status: sucesso ? 'Concluido' : 'Erro', erro: sucesso ? undefined : (res.descricao_status ?? 'Omie recusou o ajuste') }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    await supabase.from('movimentos').update({ status: 'Erro', descricao_status: msg }).eq('id', mov.id)
+    await supabase
+      .from('movimentos')
+      .update({
+        status: 'Erro',
+        descricao_status: msg,
+        tentativas: (mov.tentativas ?? 0) + 1,
+        ultima_tentativa_em: new Date().toISOString(),
+      })
+      .eq('id', mov.id)
     await logIntegrationAttempt({ loja_id: lojaId, model: 'Movimento', request: JSON.stringify(input), error: true, error_message: msg })
     revalidatePath('/movimentacoes')
     return { error: msg }
