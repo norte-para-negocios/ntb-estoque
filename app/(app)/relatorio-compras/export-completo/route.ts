@@ -6,6 +6,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import {
   buscarItensNFFrio,
   filtrarItensCompras,
@@ -85,17 +86,12 @@ export async function GET(request: Request) {
 
   const supabase = await createClient()
   // RPC pode passar de 1000 linhas (PostgREST corta): pagina com .range.
-  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
-    const PAGE = 1000
-    const todos: T[] = []
-    for (let p = 0; ; p++) {
-      const { data, error } = await supabase.rpc(fn, args).range(p * PAGE, p * PAGE + PAGE - 1)
-      if (error || !data?.length) break
-      todos.push(...(data as T[]))
-      if (data.length < PAGE) break
-    }
-    return todos
-  }
+  // Achado real (Task 11, auditoria de retry/detalhes 2026-08-09): a versao
+  // anterior desta funcao (local, hand-rolled, igual a de export/route.ts)
+  // tratava erro de RPC igual a "fim das paginas" sem logar nada -- mesma
+  // classe de bug da migration 097 (ver comentario equivalente em
+  // export/route.ts). Troca pelo helper compartilhado
+  // `lib/supabase/rpc-todos.ts`, que loga o erro real via console.error.
 
   const rotuloDe = (dim: string, raw: string): string => {
     if (dim === 'tipo') return TIPO_LABEL.get(raw) ?? raw
@@ -148,7 +144,7 @@ export async function GET(request: Request) {
 
   // Uma matriz mensal por dimensão.
   for (const d of DIMS) {
-    const matriz = await rpcTodos<LinhaMatriz>('relatorio_compras_matriz', {
+    const matriz = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: d.dim, ...filtros,
     })
     if (ini < corte) matriz.push(...agregarComprasMatriz(filtrados, d.dim, meta))
@@ -182,7 +178,7 @@ export async function GET(request: Request) {
   }
 
   // Aba Detalhado (item a item) com AutoFiltro.
-  const detalhe = await rpcTodos<LinhaDetalhe>('relatorio_compras_detalhe', {
+  const detalhe = await rpcTodos<LinhaDetalhe>(supabase, 'relatorio_compras_detalhe', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros,
   })
   if (ini < corte) detalhe.push(...mapearComprasDetalhe(filtrados, meta))

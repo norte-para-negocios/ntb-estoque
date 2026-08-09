@@ -6,6 +6,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import {
   buscarItensNFFrio,
   filtrarItensCompras,
@@ -99,19 +100,20 @@ export async function GET(request: Request) {
   // RPC pode devolver muito mais de 1000 linhas (detalhe item a item, ou matriz
   // por produto). O PostgREST limita a 1000 por resposta, entao paginamos com
   // .range ate vir uma pagina incompleta. Sem isso o Excel truncava em 1000.
-  async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<T[]> {
-    const PAGE_SIZE = 1000
-    const todos: T[] = []
-    for (let pagina = 0; ; pagina++) {
-      const from = pagina * PAGE_SIZE
-      const { data, error } = await supabase.rpc(fn, args).range(from, from + PAGE_SIZE - 1)
-      if (error || !data?.length) break
-      todos.push(...(data as T[]))
-      if (data.length < PAGE_SIZE) break
-    }
-    return todos
-  }
-
+  //
+  // Achado real (Task 11, auditoria de retry/detalhes 2026-08-09): a versao
+  // anterior desta funcao (local, hand-rolled) fazia `if (error || !data?.length)
+  // break` -- tratava qualquer erro de RPC (funcao inexistente, assinatura
+  // errada, timeout) exatamente igual a "acabaram as paginas", sem logar nada.
+  // Era a MESMA classe de bug que a migration 097 expos em page.tsx (ja
+  // corrigido la, Task 2 da auditoria de 2026-08-05) -- so que aqui, no Excel
+  // de export, ninguem tinha corrigido ainda: se qualquer uma das RPCs de
+  // Compras falhasse de novo por qualquer motivo, o Excel sairia
+  // silenciosamente vazio/incompleto sem nenhum sinal, nem no log do
+  // servidor. `lib/supabase/rpc-todos.ts` (helper compartilhado, criado
+  // exatamente pra essa classe de bug e ja usado em relatorio-faturamento/
+  // export e relatorio-indicadores/export) loga o erro real via
+  // console.error -- troca a implementacao local por ele.
   // A janela quente (Supabase) so cobre ~90 dias; a RPC nunca deve pedir algo
   // mais antigo (linhas ja podadas), entao clampa o inicio. A fatia antiga
   // (ini < corte) vem do Contabo, reagregada em JS (mesmo padrao da page.tsx).
@@ -119,8 +121,8 @@ export async function GET(request: Request) {
   const iniRpc = ini < corte ? corte : ini
 
   const [detalheRaw, matrizRaw] = await Promise.all([
-    rpcTodos<LinhaDetalhe>('relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros }),
-    rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dim, ...filtros }),
+    rpcTodos<LinhaDetalhe>(supabase, 'relatorio_compras_detalhe', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtros }),
+    rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dim, ...filtros }),
   ])
 
   if (ini < corte) {

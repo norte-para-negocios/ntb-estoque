@@ -1,0 +1,72 @@
+-- reconcile-notas-fiscais-frio.sql
+--
+-- NAO EXECUTADO AINDA. Preparado durante a Task 11 (auditoria do relatório
+-- Compras, plano 2026-08-09-retry-omie-auditoria-detalhes) -- a tentativa de
+-- rodar isso ao vivo via SSH foi bloqueada pelo classificador de segurança do
+-- Claude Code (escrita/execução de SQL em massa gerado dinamicamente contra
+-- produção, sem staging). Precisa de aprovação humana explícita antes de
+-- rodar. Ver task-11-report.md para o achado completo com evidência.
+--
+-- ACHADO: o dual-write de `notas_fiscais` pro Postgres do Contabo
+-- (gravarNotaFiscalNoFrio, lib/omie/nota-fiscal.ts) é fire-and-forget, sem
+-- nenhum mecanismo de retry -- ao contrário de ajustes de movimento/
+-- inventário/conclusão de OP, que têm crons dedicados
+-- (retry-ajustes-movimentos, retry-ajustes-inventario, retry-op-conclusao).
+-- Qualquer falha transitória nesse dual-write (ex.: o incidente documentado
+-- em AGENTS.md de 2026-07-18, quando frio-api.* respondeu 404 por um
+-- período) deixa a NF PERMANENTEMENTE com c_etapa/full_object desatualizados
+-- no Contabo, mesmo que o Supabase (fonte quente, sempre correta) já tenha
+-- sido atualizado corretamente pelo mesmo código.
+--
+-- IMPACTO CONFIRMADO (2026-08-09, dados reais de produção): centenas de NF
+-- em TODAS as lojas ativas estão presas em c_etapa='40' (Pendente) no
+-- Contabo quando já estão '60' (Concluída) no Supabase/Omie:
+--   loja 2: 89 pendentes no frio vs 37 no quente (52 presas)
+--   loja 3: 108 pendentes no frio vs 54 no quente (54 presas)
+--   loja 4: 50 pendentes no frio vs 39 no quente (11 presas)
+--   loja 5: 58 pendentes no frio vs 46 no quente (12 presas)
+--   loja 6: 74 pendentes no frio vs 68 no quente (6 presas)
+-- Como o filtro padrão de Compras (e Auditoria Fiscal) é "Concluída", e a
+-- fatia fria (>90 dias) usa SOMENTE o c_etapa do Contabo (lib/relatorio-frio-
+-- nf.ts, itemBateStatus), essas NF ficam silenciosamente EXCLUÍDAS do total
+-- de compras sempre que o período consultado cruza a janela quente -- que é
+-- o caso do período padrão da tela ("ano corrente"). Exemplo medido: loja 3,
+-- maio-junho/2026, R$68.832,34 (53 notas) de compras já concluídas
+-- silenciosamente ausentes do total "Concluída" da fatia fria.
+--
+-- CORREÇÃO (dados): ressincroniza c_etapa e full_object do Contabo
+-- (ntb_frio.notas_fiscais) a partir do Supabase (fonte quente, sempre
+-- atualizada), casando por (loja_id, n_id_receb) -- mesma chave natural
+-- usada em todo o dual-write existente. Idempotente (IS DISTINCT FROM evita
+-- tocar linhas já iguais) e não mexe em nenhuma outra tabela.
+--
+-- CORREÇÃO (código, ainda não feita -- candidato a follow-up dedicado, fora
+-- do escopo de "auditar o relatório Compras"): dar a `gravarNotaFiscalNoFrio`
+-- o mesmo tratamento de retry que `sync-ajustes` já tem (fila +
+-- cron dedicado), pra essa classe de staleness não voltar a acontecer depois
+-- da próxima falha transitória do frio-api.
+--
+-- COMO RODAR (precisa de acesso SSH root ao Contabo, autorização explícita):
+--
+--   1) No servidor Contabo, gerar os UPDATEs a partir do Supabase (fonte
+--      quente) e aplicá-los direto no Postgres nativo (ntb_frio), num único
+--      pipe, sem escrever nada em disco:
+--
+--   docker exec supabase-db psql -U supabase_admin -d postgres -t -A -c "
+--     select format('UPDATE notas_fiscais SET c_etapa=%L, full_object=%L::jsonb, updated_at=now() WHERE loja_id=%L AND n_id_receb=%L AND (c_etapa IS DISTINCT FROM %L OR full_object IS DISTINCT FROM %L::jsonb);',
+--       c_etapa, full_object::text, loja_id, n_id_receb, c_etapa, full_object::text)
+--     from notas_fiscais where deleted_at is null;
+--   " | sudo -u postgres psql -d ntb_frio
+--
+--   2) Validar (antes/depois) com a mesma query de diagnóstico usada na
+--      auditoria, deve bater exato entre as duas bases após o passo 1:
+--
+--   -- Contabo (ntb_frio):
+--   sudo -u postgres psql -d ntb_frio -c "select loja_id, c_etapa, count(*) from notas_fiscais where deleted_at is null group by 1,2 order by 1,2;"
+--   -- Supabase (hot):
+--   docker exec supabase-db psql -U supabase_admin -d postgres -c "select loja_id, c_etapa, count(*) from notas_fiscais where deleted_at is null group by 1,2 order by 1,2;"
+--
+--   3) Revalidar o total de Compras (ex.: loja 3, maio-junho/2026) batendo
+--      entre o RPC (fonte quente, se aplicado a esse período) e a reagregação
+--      JS sobre o Contabo já corrigido -- ver task-11-report.md pra query
+--      exata usada.
