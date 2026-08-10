@@ -651,3 +651,44 @@ período inteiro quando ele não cruza 01/07/2025 (mesmo padrão já aplicado
 em `nota-fiscal/relatorio`/`nota-fiscal/export` pelo Task 1 da auditoria
 de 2026-08-04), com um aviso explícito se o filtro cruzar o limite de
 backfill.
+
+### Auditoria da Auditoria Fiscal (Task 15, 2026-08-09) — sem bug de dado ativo, mas RPCs/frio sem sinalização de falha
+
+Confirmado ao vivo que as migrations 076/078/081/088/097 (RPCs
+`relatorio_auditoria_fiscal_cfop`/`_itens`) e 102 (`_cst`) estão aplicadas
+em produção, cada função com exatamente 1 overload (sem duplicata), e
+`pg_get_functiondef` bate byte a byte com o corpo final esperado (097 pras
+duas primeiras, 102 pra CST) — nenhuma regressão desde as correções
+anteriores desta auditoria. Cross-validado com SQL direto pra loja 3 no
+período `[corte_90d, hoje]`: `relatorio_auditoria_fiscal_cfop` bateu exato
+(2630 itens / R$613.001,26) e `relatorio_auditoria_fiscal_cst` também
+(6855 itens / R$1.737.072,21 no ano corrente). O espelho frio (Contabo)
+também tem dado real presente pro pedaço antigo da loja 3 (jan–10/mai:
+4087 itens / R$1.094.741,38) — a API do Contabo está no ar hoje (401 sem
+chave, não 404/timeout), então não há perda ativa de dado agora.
+
+**Achado real (mesma classe de bug já corrigida em Compras/Margem/
+Indicadores nesta mesma auditoria, Tasks 2/12/13/14)**: nenhuma das 3 RPCs
+desta tela (`page.tsx` e `export/route.ts`) checava `error`, a paginação
+de `produtos` em `buscarMetaProdutos` (usada pra classificar
+tipo/família) também não, e — mais importante — as duas chamadas a
+`buscarItensNFFrio` (resumo por CFOP e drill-down por item) nunca
+passavam o `onErro` que a Task 14 já tinha adicionado a
+`lib/relatorio-frio-nf.ts` especificamente pra sinalizar quando o Contabo
+falha (`buscarFrio` engole timeout/erro de rede e devolve `null`, que
+virava `[]` idêntico a "sem NF antiga de verdade" -- incidente real já
+documentado, rebuild do Hestia em 2026-07-18). Como o período padrão desta
+tela ("Ano corrente") sempre cruza a janela quente de 90 dias, o
+complemento frio roda em toda carga default -- sem essa sinalização, uma
+falha no Contabo hoje encolheria o resumo por CFOP em silêncio, sem
+nenhum aviso. Corrigido: as 3 RPCs e `buscarMetaProdutos` agora acumulam
+erro num array (`errosConsulta`, mesmo padrão de `relatorio-margem`/
+`relatorio-compras`) com banner de aviso na tela; as duas chamadas a
+`buscarItensNFFrio` passam `onErro`; `export/route.ts` ganhou o mesmo
+tratamento com o aviso embutido no subtítulo da planilha (mesmo padrão de
+`relatorio-indicadores/export`). Nenhum dado exibido mudou -- é
+instrumentação preventiva, não correção de número errado.
+
+**Não corrigido (mesmo achado documentado nas Tasks 11/14, fora de
+escopo)**: `relatorio-compras` também chama `buscarItensNFFrio` sem
+`onErro` -- candidato a follow-up pra fechar a mesma lacuna lá.

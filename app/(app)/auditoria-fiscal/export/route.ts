@@ -26,9 +26,18 @@ export async function GET(request: Request) {
   const supabase = createServiceClient()
   const corte = limiteJanelaQuente()
   const iniRpc = ini < corte ? corte : ini
-  const { data } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
+  // Achado real (auditoria 2026-08-09, Task 15): nem a RPC nem a paginação de
+  // `produtos` checavam `error`, e `buscarItensNFFrio` era chamado sem o
+  // `onErro` que Task 14 adicionou pra este exato caso -- mesma classe de bug
+  // já corrigida em Compras/Margem/Indicadores. `avisoQuente`/`avisoFrio`
+  // viram parte do subtítulo da planilha (Excel não tem como mostrar um
+  // banner clicável, mesmo raciocínio de relatorio-indicadores/export).
+  let avisoQuente = false
+  let avisoFrio = false
+  const { data, error: erroCfop } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_produto: produto, p_familias: familiasFiltro.length ? familiasFiltro : null, p_fornecedor: fornecedor, p_local: localCod, p_status: status,
   })
+  if (erroCfop) { avisoQuente = true; console.error('auditoria-fiscal/export: RPC relatorio_auditoria_fiscal_cfop falhou', erroCfop.message) }
   const linhas = (data ?? []) as LinhaCFOP[]
 
   if (ini < corte) {
@@ -37,12 +46,13 @@ export async function GET(request: Request) {
     const prodMetaRaw: { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }[] = []
     for (let pg = 0; ; pg++) {
       const from = pg * 1000
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('produtos')
         .select('codigo_produto, tipo_item, descricao_familia')
         .eq('loja_id', lojaId)
         .order('id', { ascending: true })
         .range(from, from + 999)
+      if (error) { avisoQuente = true; console.error('auditoria-fiscal/export: paginação de produtos falhou', error.message); break }
       if (!data?.length) break
       prodMetaRaw.push(...data)
       if (data.length < 1000) break
@@ -52,7 +62,7 @@ export async function GET(request: Request) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
-    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl })
+    const itensFrios = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl, onErro: () => { avisoFrio = true } })
     const filtrados = filtrarItensAuditoria(itensFrios, { status, produto, familias: familiasFiltro, fornecedor, local: localCod }, meta)
     const porChave = new Map(linhas.map((l) => [`${l.cfop_doc}|${l.cfop_entrada ?? ''}`, l]))
     for (const f of agregarAuditoriaCfop(filtrados)) {
@@ -112,9 +122,13 @@ export async function GET(request: Request) {
   })
 
   const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', MANIFESTADA: 'Manifestada', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
+  const aviso = [
+    avisoQuente ? 'ATENÇÃO: falha ao consultar a janela quente (Supabase) -- valores podem estar incompletos' : null,
+    avisoFrio ? 'ATENÇÃO: falha ao consultar o histórico do Contabo (NFs anteriores a ~90 dias) -- valores podem estar subcontados' : null,
+  ].filter(Boolean).map((a) => ` · ${a}`).join('')
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Auditoria fiscal — compras por CFOP',
-    subtitulo: `Período ${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`,
+    subtitulo: `Período ${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${produto ? ` · Produto: ${produto}` : ''}${familiasFiltro.length ? ` · Família: ${familiasFiltro.join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}${aviso}`,
     autoFiltro: true,
   })
   return planilhaResponse('auditoria-fiscal', buffer)

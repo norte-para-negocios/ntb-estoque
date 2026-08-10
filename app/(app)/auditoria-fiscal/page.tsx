@@ -61,17 +61,25 @@ const ORDEM_CAT: CategoriaCFOP[] = ['Comercialização/Indústria', 'Uso/consumo
 // (achado real: lojas com >1000 produtos perdiam o resto do catalogo aqui,
 // mesmo bug ja corrigido no export/route.ts irmao). Usado tanto no resumo por
 // CFOP quanto no drill-down por item, que fazem a mesma query de metadados.
+// `onErro` (achado real, auditoria 2026-08-09, Task 15): nem o count nem as
+// paginas checavam `error` -- uma falha no meio da paginacao (timeout,
+// conexao) virava silenciosamente "produto sem familia/tipo" pra tudo que
+// vinha depois da pagina que falhou, igual ao bug ja corrigido em
+// relatorio-compras/relatorio-margem (mesma classe: query engolindo erro e
+// devolvendo resultado parcial como se fosse completo).
 async function buscarMetaProdutos(
   supabase: ReturnType<typeof createServiceClient>,
-  lojaId: number
+  lojaId: number,
+  onErro?: (error: { message: string }) => void
 ): Promise<Map<number, { tipo: string | null; familia: string | null }>> {
   // Pega o total antes (count exato) e busca as paginas em paralelo em vez de
   // uma de cada vez -- mesma latencia Franca-Brasil por ida, ver comentario em
   // HistoricoTab.tsx.
-  const { count } = await supabase
+  const { count, error: erroCount } = await supabase
     .from('produtos')
     .select('codigo_produto', { count: 'exact', head: true })
     .eq('loja_id', lojaId)
+  if (erroCount) onErro?.(erroCount)
   const numPaginas = Math.ceil((count ?? 0) / 1000)
   const blocos = await Promise.all(
     Array.from({ length: numPaginas }, (_, pg) =>
@@ -84,7 +92,8 @@ async function buscarMetaProdutos(
     )
   )
   const meta = new Map<number, { tipo: string | null; familia: string | null }>()
-  for (const { data } of blocos) {
+  for (const { data, error } of blocos) {
+    if (error) onErro?.(error)
     for (const p of data ?? []) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
@@ -109,16 +118,34 @@ export default async function AuditoriaFiscalPage({
   const statusSel = sp.status || 'CONCLUIDA'
 
   const supabase = createServiceClient()
+  // Achado real (auditoria 2026-08-09, Task 15): nenhuma das 3 RPCs (cfop/
+  // itens/cst) checava `error`, e o complemento frio (Contabo) chamava
+  // buscarItensNFFrio sem o `onErro` que Task 14 já tinha adicionado em
+  // relatorio-frio-nf.ts especificamente pra este tipo de falha -- mesma
+  // classe de bug já corrigida em Compras/Margem/Indicadores nesta mesma
+  // auditoria (migration 097 não aplicada, RPC renomeada, timeout no Contabo:
+  // qualquer um desses casos zerava/encolhia o relatório em silêncio). Como o
+  // período padrão "Ano corrente" SEMPRE cruza a janela quente de 90 dias, o
+  // complemento frio roda em toda carga default desta tela -- sem aviso, uma
+  // falha no Contabo hoje passaria despercebida.
+  const errosConsulta: string[] = []
+  function logErro(rotulo: string) {
+    return (error: { message: string }) => {
+      errosConsulta.push(rotulo)
+      console.error(`auditoria-fiscal: consulta "${rotulo}" falhou -- dado pode estar incompleto`, error.message)
+    }
+  }
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
   // Janela quente cobre ~90 dias; RPC clampa o início e a fatia antiga
   // ([ini, corte)) vem do Contabo reagregada em JS (lib/relatorio-frio-nf.ts).
   const corte = limiteJanelaQuente()
   const iniRpc = ini < corte ? corte : ini
-  const { data: cfopRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
+  const { data: cfopRaw, error: erroCfop } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim,
     p_produto: sp.produto || null, p_familias: familiasFiltro.length ? familiasFiltro : null,
     p_fornecedor: sp.fornecedor || null, p_local: localCod, p_status: statusSel,
   })
+  if (erroCfop) logErro('classificação por CFOP (janela quente)')(erroCfop)
   const linhas = (cfopRaw ?? []) as LinhaCFOP[]
 
   // Complemento frio: mescla o resumo por par CFOP com o pedaço antigo.
@@ -127,8 +154,8 @@ export default async function AuditoriaFiscalPage({
     // buscarMetaProdutos (Supabase) e buscarItensNFFrio (Contabo) sao
     // independentes entre si -- roda em paralelo em vez de serie.
     const [meta, itensFrios] = await Promise.all([
-      buscarMetaProdutos(supabase, lojaId),
-      buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
+      buscarMetaProdutos(supabase, lojaId, logErro('produtos (tipo/família)')),
+      buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl, onErro: () => errosConsulta.push('histórico do Contabo (compras > 90 dias)') }),
     ])
     const filtrados = filtrarItensAuditoria(itensFrios, {
       status: statusSel, produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
@@ -157,9 +184,10 @@ export default async function AuditoriaFiscalPage({
   // lados (com/sem credito) pra o contador comparar. Le direto o periodo pedido
   // (o banco tem historico completo desde jun/2025, nao precisa do merge
   // quente/frio que a matriz de CFOP acima ainda faz).
-  const { data: cstRaw } = await supabase.rpc('relatorio_auditoria_fiscal_cst', {
+  const { data: cstRaw, error: erroCst } = await supabase.rpc('relatorio_auditoria_fiscal_cst', {
     p_loja_id: lojaId, p_ini: ini, p_fim: fim,
   })
+  if (erroCst) logErro('cruzamento CST doc × CST entrada')(erroCst)
   const linhasCst = (cstRaw ?? []) as LinhaCST[]
   const cstDivergentes = linhasCst.filter((l) => Number(l.itens_com_credito) > 0 && Number(l.itens_sem_credito) > 0)
   const valorDivergente = cstDivergentes.reduce((s, l) => s + Number(l.valor), 0)
@@ -189,7 +217,7 @@ export default async function AuditoriaFiscalPage({
   const cfopEntSel = parCfop ? (parCfop.rotulo.split('→')[1] || SEM) : aliasEnt || ''
   let itensSel: LinhaItem[] = []
   if (cfopDocSel) {
-    const { data } = await supabase
+    const { data, error: erroItens } = await supabase
       .rpc('relatorio_auditoria_fiscal_itens', {
         p_loja_id: lojaId, p_ini: ini, p_fim: fim, p_cfop_doc: cfopDocSel, p_cfop_entrada: cfopEntSel || SEM,
         p_fornecedor: sp.fornecedor || null,
@@ -197,14 +225,15 @@ export default async function AuditoriaFiscalPage({
         p_status: statusSel,
       })
       .range(0, 299)
+    if (erroItens) logErro('detalhe por item (janela quente)')(erroItens)
     itensSel = (data ?? []) as LinhaItem[]
 
     // Complemento frio do drill-down (mesmo par CFOP, pedaço antigo).
     if (ini < corte) {
       const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
       const [itensFrios, meta] = await Promise.all([
-        buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl }),
-        buscarMetaProdutos(supabase, lojaId),
+        buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: corteExcl, onErro: () => errosConsulta.push('histórico do Contabo (detalhe por item)') }),
+        buscarMetaProdutos(supabase, lojaId, logErro('produtos (tipo/família, detalhe)')),
       ])
       const filtrados = filtrarItensAuditoria(itensFrios, {
         status: statusSel, produto: sp.produto || null, familias: familiasFiltro, fornecedor: sp.fornecedor || null, local: localCod,
@@ -297,6 +326,13 @@ export default async function AuditoriaFiscalPage({
           Não estocam <span className={`num font-semibold ${totNaoEstoca ? 'text-warn' : 'text-text'}`}>{fmtN(totNaoEstoca)}</span>
         </span>
       </div>
+
+      {errosConsulta.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+          números acima podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
+        </p>
+      )}
 
       {!linhas.length ? (
         <EmptyState icon={ShieldCheck} title="Sem notas no período" hint="Ajuste o período. A auditoria usa as NFs de entrada (compras)." />
