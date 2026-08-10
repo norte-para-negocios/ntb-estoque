@@ -692,3 +692,46 @@ instrumentação preventiva, não correção de número errado.
 **Não corrigido (mesmo achado documentado nas Tasks 11/14, fora de
 escopo)**: `relatorio-compras` também chama `buscarItensNFFrio` sem
 `onErro` -- candidato a follow-up pra fechar a mesma lacuna lá.
+
+### Auditoria das Pendências de Classificação (Task 16, 2026-08-09) — última task da série (8-16), sem bug de dado ativo, mesma lacuna de sinalização de falha
+
+Suspeita do brief confirmada: as 3 chamadas a `buscarItensNFFrio` desta
+tela (`page.tsx:103`, `export/route.ts:64` no bloco `sem-familia`,
+`export/route.ts:140` no bloco `sem-cadastro`) rodavam sem `onErro`, e 5
+consultas Supabase (`carregarTodosProdutos`/`carregarQuentes`/
+`naoIdentRows` em `page.tsx` + as 2 equivalentes em `export/route.ts`) não
+checavam `error` -- mesma classe de bug das Tasks 12-15. Confirmado ao
+vivo com join direto no Postgres nativo do Contabo (`ntb_frio`, fora do
+Docker) que o pedaço frio carrega valor substancial nesta tela (NF
+concluída no período `[ini12m, corte)`, ~9 meses: loja 2 R$1.908.580,
+loja 3 R$2.324.772, loja 4 R$968.364, loja 5 R$2.976.431, loja 6
+R$1.701.654, loja 7 R$102.215) -- uma falha silenciosa do Contabo
+encolheria os 3 blocos de "R$ associado" (sem família/tipo/cadastro) por
+essa magnitude sem aviso nenhum. Corrigido: mesmo padrão de
+`errosConsulta`/banner em `page.tsx`. `export/route.ts` é o único export
+CSV puro do app (todos os outros são xlsx com "subtítulo de planilha") --
+sem esse slot disponível, o aviso vira uma linha `AVISO: ...` prependada
+antes do cabeçalho quando alguma consulta falha (convenção nova,
+documentada em comentário no arquivo). Nenhum dado exibido mudou --
+instrumentação preventiva. Commit `dc7de81`.
+
+### Rollup: `buscarItensNFFrio` sem `onErro` (Tasks 11/14/15/16, 2026-08-09)
+
+Consolidando o que ficou espalhado em prosa nas Tasks 11/14/15/16 -- todo
+call site de `buscarItensNFFrio` (`lib/relatorio-frio-nf.ts`) na base,
+status de `onErro` a partir de 2026-08-09:
+
+- **Faturamento × Compras** (`relatorio-indicadores/page.tsx`,
+  `relatorio-indicadores/export/route.ts`) -- corrigido, Task 14.
+- **Auditoria Fiscal** (`auditoria-fiscal/page.tsx`,
+  `auditoria-fiscal/export/route.ts`) -- corrigido, Task 15.
+- **Pendências de Classificação** (`pendencias-classificacao/page.tsx`,
+  `pendencias-classificacao/export/route.ts`) -- corrigido, Task 16.
+- **Compras** (`relatorio-compras`) -- **ainda falta**, 3 call sites:
+  `page.tsx:220`, `export/route.ts:153`, `export-completo/route.ts:139`.
+  Já mencionado como achado (fora de escopo) nas Tasks 11/14/15/16 sem
+  nunca virar correção -- escopo fechado da Task 11 original desta
+  auditoria, portanto não corrigido aqui. **Candidato a follow-up
+  dedicado**: aplicar o mesmo padrão de `errosConsulta`/banner (páginas)
+  e aviso embutido no export (subtítulo de planilha nos xlsx,
+  `export-completo` incluso) já usado nos 3 relatórios acima.
