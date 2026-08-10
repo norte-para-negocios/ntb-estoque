@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRef, useState, useTransition } from 'react'
 import { Printer, Check, Minus, Plus, Undo2, Trash2, CalendarCheck, Pencil, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
@@ -784,10 +785,14 @@ export function OrdemProducaoRow({
           <StatusBadge status={op.status} />
         </td>
         <td className="max-w-xs align-middle">
-          <div className="truncate font-medium text-text" title={op.produto}>
+          <Link
+            href={`/ordem-producao/${op.id}`}
+            className="block truncate font-medium text-text hover:text-brand hover:underline"
+            title={op.produto}
+          >
             {op.produto}
             <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
-          </div>
+          </Link>
         </td>
         <td className="align-middle !px-0 overflow-hidden">
           <StepperQtdOP op={op} ctrl={ctrl} />
@@ -863,7 +868,13 @@ export function OrdemProducaoCard({
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium leading-snug text-text" title={op.produto}>{op.produto}</div>
+          <Link
+            href={`/ordem-producao/${op.id}`}
+            className="block truncate text-[13px] font-medium leading-snug text-text hover:text-brand hover:underline"
+            title={op.produto}
+          >
+            {op.produto}
+          </Link>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
             <StatusBadge status={op.status} />
             <span className="num">{op.numOP}</span>
