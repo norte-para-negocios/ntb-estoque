@@ -949,3 +949,43 @@ Omie), este reenvio é só entre Supabase e Contabo -- ambos já têm o dado
 completo, só falta copiar. Candidato a follow-up dedicado; também vale medir
 de novo a magnitude antes de implementar (o achado é de 2026-08-09, pode ter
 crescido).
+
+## Revisão final do plano de retry Omie + auditoria (2026-08-10)
+
+A revisão final de todo o branch (36 commits, plano `2026-08-09-retry-omie-
+auditoria-detalhes`) achou 1 Critical ativo em produção: `retry-
+ajustes-movimentos` (fluxo manual, `retryMovimentosManuaisPendentes` em
+`lib/actions/movimentacoes.ts`) não filtrava por `tipo`, reenviando
+registros `TRF` (que só deveriam existir vinculados a uma transferência)
+pra Omie sem parar -- 100% das chamadas reais desde o deploy anterior
+foram rejeitadas (falta `codigo_local_estoque_destino`, que só o fluxo de
+transferência preenche), e como `status='Erro'` genérico não tem teto de
+tentativas, isso rodava a cada 10min pra sempre. Corrigido com
+`.in('tipo', ['ENT','SAI'])` nas 3 queries de elegibilidade.
+
+O fix desse Critical (junto com outros 4 achados Important da mesma
+revisão -- reclaim de `'Processando'` travado, timeout de 120s dos crons
+novos, crons sempre retornando 200, e este mesmo achado das 142 notas
+documentado acima) passou por 1 rodada de re-revisão, que achou um
+regressão HIGH: o reclaim de `'Processando'` reabria a mesma janela de
+double-send que o marcador de `'Processando'` existe pra evitar (o update
+em lote não gravava `ultima_tentativa_em`, então uma linha `Sem CMC`
+recém-selecionada -- que só é elegível quando já tem >1h de idade --
+ficava reclamável pelo próprio reclaim enquanto ainda estava em voo).
+Corrigido gravando o timestamp no mesmo update (3 lugares:
+`inventario.ts`, `movimentacoes.ts`, `transferencia.ts`), reordenando
+`processandoTravados` pra frente da fila de prioridade (evita fome do
+reclaim sob `limitePorLoja=10`), e adicionando `flock -n` no crontab (o
+`-m 240` do curl aumentou o pior caso de execução do ciclo pra perto do
+próprio intervalo de 10min, sem isso duas execuções do script poderiam
+sobrepor).
+
+**Resíduo não resolvido, deixado como está por decisão explícita do
+usuário (2026-08-10)**: 23 linhas de `movimentos` (`tipo='TRF'`,
+`transferencia_id IS NULL`) ficaram presas em `Erro`/`Sem CMC`/
+`Processando` (ids 37/39 loja 3, 126-155 loja 4, 285-308 loja 6,
+`tentativas` de 1 a 6) por causa do bug do parágrafo acima. O fix já
+impede que sejam selecionadas de novo pelo retry (mesmo filtro de `tipo`
+as exclui) -- são inofensivas agora, só resíduo visual/histórico. Causa
+raiz de como viraram `TRF` sem `transferencia_id` vinculado não foi
+investigada; candidato a follow-up se reaparecer.
