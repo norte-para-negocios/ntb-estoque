@@ -261,13 +261,44 @@ export default async function RelatorioFaturamentoPage({
   // Mesmo tipo de custo que já levou esta página a reverter uma agregação JS
   // parecida no período padrão "Todos" pro caminho `cruzaAnoAnterior` (ver
   // comentário logo abaixo, "'Todos' volta a significar ano corrente").
-  // Aplica o mesmo raciocínio aqui: quando o usuário NÃO escolheu um período
-  // explícito (chip "Todos", `mesIni` null), o filtro de Situação clampa a
-  // busca pro ano corrente em vez de buscar histórico ilimitado -- um
-  // período explícito (chip fixo tipo "6 meses"/"Ano passado", ou datas
-  // customizadas) continua respeitado como pedido, mesmo que isso seja caro,
-  // porque é uma ação deliberada do usuário, não o estado padrão da tela.
-  const dataInicioSituacao = statusForcaAgregacao && !mesIni ? `${anoAtualStr}-01-01` : dataInicioFato
+  // Aplica o mesmo raciocínio aqui: quando o usuário NÃO escolheu NENHUM
+  // período (nem chip fixo, nem datas customizadas -- ver os 2 fixes abaixo,
+  // round 2), o filtro de Situação clampa a busca pro ano corrente em vez de
+  // buscar histórico ilimitado -- um período explícito continua respeitado
+  // como pedido, mesmo que isso seja caro, porque é uma ação deliberada do
+  // usuário, não o estado padrão da tela.
+  //
+  // Fix round 2 (revisão independente, 2026-08-10, achados Important #1 e
+  // #2 daquela rodada):
+  // (1) `dim !== 'forma_pgto'` -- a aba Forma de pgto é a ÚNICA que já usava
+  //     o fato SEM filtro de Situação (gatilho pré-existente, ver
+  //     `usarFato` acima), e "Todos" nela sempre significou all-time de
+  //     verdade (comentário logo abaixo, "'Todos' precisa continuar
+  //     significando sem piso de data pro fato também" -- é EXATAMENTE o
+  //     mesmo incidente real já documentado ali, loja 5, R$510.901 vs
+  //     R$9.782.342,80). Aplicar o mesmo clamp de "ano corrente" nessa aba
+  //     reproduziria aquele incidente: medido ao vivo, ativar Situação
+  //     nela derrubava o total em silêncio (loja 5: R$10.440.572,74 ->
+  //     R$5.655.202,28, -46%; loja 3: R$7.958.246,71 -> R$4.524.497,85,
+  //     -43%), com o chip "Todos" continuando aceso. Nas abas Tipo/Família/
+  //     Produto o clamp é uma melhoria de verdade (o pré-agregado sem
+  //     Situação só tem o ano corrente pra essas dims mesmo, então o clamp
+  //     só aproxima do que já era o padrão); na aba Forma de pgto ele
+  //     seria uma REGRESSÃO -- por isso fica de fora.
+  // (2) `!mesIni && !mesFim` (era só `!mesIni`) -- preencher só "Data
+  //     final" (sem "Data inicial") deixa `mesIni` null mesmo com o
+  //     usuário tendo escolhido um teto de verdade (`temPeriodoCustom`
+  //     fica true, mas `mesIniChip` cai no `: null` porque a lógica dos
+  //     chips fixos é pulada quando há período customizado -- ver
+  //     `mesIniChip`/`mesFimChip` acima). Com o guard antigo, esse caso
+  //     disparava o clamp mesmo assim, jogando `dataInicioSituacao` pro
+  //     início do ano corrente -- que podia ficar DEPOIS da `data_final`
+  //     escolhida (ex.: "Data final" = ano passado), zerando o relatório
+  //     onde antes vinha dado real. Checar `mesFim` também garante que só
+  //     dispara quando NENHUM dos dois extremos foi definido pelo usuário
+  //     (nem chip fixo, nem "Data inicial", nem "Data final" isolada).
+  const dataInicioSituacao =
+    statusForcaAgregacao && dim !== 'forma_pgto' && !mesIni && !mesFim ? `${anoAtualStr}-01-01` : dataInicioFato
 
   // Movido pra cima do ponto onde era declarado antes (mais abaixo, junto do
   // Promise.all de matrizCrua/metaRow/opcoesRaw) -- síncrono, sem dependência
