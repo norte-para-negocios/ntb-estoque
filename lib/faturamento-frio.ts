@@ -8,6 +8,37 @@ import { TIPO_NOME } from '@/lib/omie/faturamento'
 
 export type LinhaFatAgregado = { rotulo: string; mes?: string; valor: number; qtde_itens: number }
 
+// Fix round 2 (Task 4, plano 2026-08-10-filtro-situacao-faturamento,
+// Important): `fat_cupom_pagamentos.tipo_doc` (Omie, cTipoDoc) usa códigos
+// crus, DIFERENTES do vocabulário amigável já usado em
+// `faturamento_importado.rotulo` (dimensão forma_pgto, vindo do import
+// manual do FAT_DRV) -- o mesmo dropdown "Forma de pagamento" da tela usa
+// esse segundo vocabulário. Sem este mapa, um filtro como
+// `?forma_pgto=Pix` nunca batia contra o rótulo cru `'PIX'` que este
+// branch gerava (`includes('Pix')` != `'PIX'`), zerando a aba inteira em
+// silêncio quando Situação + filtro de forma de pgto estavam ativos juntos.
+// Códigos confirmados ao vivo (2026-08-10, todas as lojas, `fat_cupom_
+// pagamentos`, jan/2025-dez/2026): CRC (90696 linhas), CRD (31385), PIX
+// (15190), CRT (14607), DIN (8265), 99999 (17), CRE (2). Rótulos amigáveis
+// confirmados via `faturamento_importado` (dimensao='forma_pgto'):
+// "Cartão de Crédito", "Cartão de Débito", "Dinheiro", "Pix", "Outros" (só
+// 5 valores, nenhum outro). Mapeados com confiança: CRC/CRD/PIX/DIN (juntos
+// ~90% das linhas -- Omie usa essas siglas de forma consistente pra
+// Cartão-Crédito/Cartão-Débito/Pix/Dinheiro em outros módulos financeiros).
+// `CRT`/`99999`/`CRE` (~9%, majoritariamente CRT) NÃO têm correspondência
+// confirmada com nenhum dos 5 rótulos amigáveis -- não presumido (poderia
+// ser uma 3ª rede de cartão, ou outra coisa); ficam com o código cru como
+// rótulo, degradando bem (aparecem na aba normalmente, só não respondem a
+// um filtro escrito no vocabulário amigável). Ver também o safety net em
+// `export/route.ts` (aba nunca desaparece silenciosamente mesmo se um
+// filtro não bater nada).
+const FORMA_PGTO_LABEL: Record<string, string> = {
+  PIX: 'Pix',
+  CRC: 'Cartão de Crédito',
+  CRD: 'Cartão de Débito',
+  DIN: 'Dinheiro',
+}
+
 export async function buscarFatAgregado(opts: {
   lojaId: number
   dataInicio: string
@@ -262,7 +293,10 @@ export async function buscarFatAgregadoPorSituacao(opts: {
       if (!cuponsOk.has(p.n_id_cupom)) continue
       const v = Number(p.valor) || 0
       if (!v) continue
-      const rotulo = p.tipo_doc || 'Não identificado'
+      // Rótulo amigável (fix round 2): FORMA_PGTO_LABEL[código] quando
+      // conhecido, senão o código cru como fallback (mesmo comportamento
+      // de antes pra CRT/99999/CRE/qualquer código novo não mapeado).
+      const rotulo = FORMA_PGTO_LABEL[p.tipo_doc ?? ''] ?? (p.tipo_doc || 'Não identificado')
       const mes = opts.group2 === 'mes' ? mesPorCupom.get(p.n_id_cupom) : undefined
       const chave = JSON.stringify([rotulo, mes])
       const ent = acc.get(chave) ?? { rotulo, mes, valor: 0, qtde_itens: 0 }

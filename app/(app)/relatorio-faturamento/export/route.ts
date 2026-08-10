@@ -156,29 +156,47 @@ export async function GET(request: Request) {
       // agregação -- mesmo efeito final de `p_rotulos` na RPC.
       const rotulosFiltro = rotulosPorDim[d.dim] ?? []
       const rowsFiltradas = rotulosFiltro.length ? rows.filter((r) => rotulosFiltro.includes(r.rotulo)) : rows
+
+      // Fix round 2 (revisão Task 4, Important): o fix do Important #3 acima
+      // introduziu um risco novo -- o vocabulário do filtro de `forma_pgto`
+      // (rótulos amigáveis de `faturamento_importado`, ex. "Pix") pode não
+      // bater 100% com o rótulo que este caminho gera (`FORMA_PGTO_LABEL` em
+      // `lib/faturamento-frio.ts` mapeia os códigos crus mais comuns, mas
+      // alguns ficam sem mapa confirmado -- ver comentário lá). Se um filtro
+      // não bater NENHUMA linha (`rows.length > 0` mas `rowsFiltradas.length
+      // === 0`), a aba NÃO desaparece em silêncio (2ª vez nesta task que essa
+      // classe de bug apareceria) -- fica com 0 linhas de dado, mas com um
+      // aviso explícito no subtítulo explicando por quê. `rows.length === 0`
+      // (sem dado NENHUM na dimensão/período, com ou sem filtro) continua
+      // omitindo a aba -- comportamento de sempre, não é o caso que este fix
+      // protege.
+      const filtroZerouTudo = rotulosFiltro.length > 0 && rows.length > 0 && rowsFiltradas.length === 0
+      if (!rows.length) continue
+
       const linhas: Linha[] = rowsFiltradas
         .filter((r) => r.mes)
         .map((r) => ({ rotulo: r.rotulo, mes: r.mes as string, valor: r.valor }))
-      if (linhas.length) {
-        // Excel não tem como mostrar um banner clicável -- mesmo padrão de
-        // relatorio-indicadores/export/route.ts (aviso embutido no
-        // subtítulo). Período SEMPRE explícito agora (fix Critical #2: com
-        // as 3 abas garantidamente no mesmo período pós-fix do clamp, isso é
-        // reforço de transparência, não correção de uma divergência real
-        // que ainda exista).
-        const truncou = group === 'forma' ? (cuponsTruncou || pagamentosTruncou) : (cuponsTruncou || itensTruncou)
-        const subtitulo = [
-          `Período: ${periodoLabel}`,
-          truncou ? 'ATENÇÃO: falha ao consultar o histórico do Contabo -- este total pode estar incompleto' : null,
-        ].filter(Boolean).join(' · ')
-        abas.push(abaMatrizMensal({
-          titulo: `Faturamento por ${d.label} (mês a mês) · Situação: ${STATUS_LABEL[statusParam] ?? statusParam}`,
-          dimLabel: d.label,
-          linhas,
-          nome: d.nome,
-          subtitulo,
-        }))
-      }
+      // Excel não tem como mostrar um banner clicável -- mesmo padrão de
+      // relatorio-indicadores/export/route.ts (aviso embutido no subtítulo).
+      // Período SEMPRE explícito agora (fix Critical #2: com as 3 abas
+      // garantidamente no mesmo período pós-fix do clamp, isso é reforço de
+      // transparência, não correção de uma divergência real que ainda
+      // exista).
+      const truncou = group === 'forma' ? (cuponsTruncou || pagamentosTruncou) : (cuponsTruncou || itensTruncou)
+      const subtitulo = [
+        `Período: ${periodoLabel}`,
+        filtroZerouTudo
+          ? `ATENÇÃO: o filtro de ${d.label} (${rotulosFiltro.join(', ')}) não bateu nenhuma linha nesta dimensão -- aba deixada vazia de propósito (rótulo do filtro pode não bater com o rótulo gerado aqui, ver lib/faturamento-frio.ts)`
+          : null,
+        truncou ? 'ATENÇÃO: falha ao consultar o histórico do Contabo -- este total pode estar incompleto' : null,
+      ].filter(Boolean).join(' · ')
+      abas.push(abaMatrizMensal({
+        titulo: `Faturamento por ${d.label} (mês a mês) · Situação: ${STATUS_LABEL[statusParam] ?? statusParam}`,
+        dimLabel: d.label,
+        linhas,
+        nome: d.nome,
+        subtitulo,
+      }))
     }
   } else {
     for (const d of DIMS) {
