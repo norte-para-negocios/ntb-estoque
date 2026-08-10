@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 // Seção "Movimentações de estoque geradas" da tela de detalhe de NF. Critério
 // confirmado na Task 17 da auditoria de retry Omie (task-17-report.md,
@@ -25,6 +26,22 @@ import { createClient } from '@/lib/supabase/server'
 // loja 4/cursor overshoot do sync-ajustes). Aqui não há `id_ajuste`
 // envolvido -- é produto+local+data direto -- então aquele caveat específico
 // NÃO se aplica a esta seção (ver Lição 4 do brief desta task).
+//
+// Fix round 1 (revisão desta task, 2026-08-09) -- ACHADO CRITICAL: a versão
+// original rodava um único `.select()` sem `.order()`/`.range()`/`.limit()`.
+// Este deploy tem `PGRST_DB_MAX_ROWS=1000` configurado -- exatamente o mesmo
+// bug Critical já corrigido em `NotaFiscalVinculadaOP.tsx` (Task 18),
+// reintroduzido aqui na direção oposta. Medido pela revisão em 250 NFs reais
+// com >=10 itens dos últimos 90 dias: 6 (2,4%) excedem 1000 linhas de
+// `movimentos` correspondentes, máximo 1.542 -- as linhas cortadas caíam no
+// mesmo estado vazio "Nenhuma movimentação encontrada... comum e esperado",
+// escondendo o corte atrás da MESMA frase que escondia o bug da Task 18.
+// Corrigido com paginação real via `buscarTodasLinhas` (helper compartilhado,
+// mesmo padrão de `app/(app)/relatorio-margem/page.tsx`), com `.order('id')`
+// explícito -- nunca trunca. Também passou a filtrar `codigo_local_estoque`
+// no servidor (além de `id_prod`), reduzindo o volume por página sem mudar o
+// resultado (o pareamento final continua exato por (id_prod,
+// codigo_local_estoque) em JS).
 type MovimentoRow = {
   id: number
   tipo: string
@@ -68,31 +85,45 @@ export async function MovimentacoesGeradasNF({
 
   const itensValidos = itens.filter((i) => i.n_id_produto != null)
   const produtoCodes = [...new Set(itensValidos.map((i) => i.n_id_produto))]
+  const locaisValidos = [...new Set(itensValidos.map((i) => i.codigo_local_estoque).filter((v): v is number => v != null))]
   const podeConsultar = produtoCodes.length > 0 && !!dataEmissao
-  let falhaConsulta = false
+  // Array (nao `let` reatribuido) de proposito -- `errosConsulta.push(...)`
+  // dentro do callback `onErro` do buscarTodasLinhas eh mutacao, nao
+  // reatribuicao de binding, o que evita o erro do eslint
+  // `react-hooks/immutability` ("Cannot reassign variable after render
+  // completes") que uma reatribuicao de `let` direto no callback dispara.
+  // Mesmo padrao ja usado em relatorio-margem/page.tsx (`errosConsulta`).
+  const errosConsultaMov: string[] = []
   const movsPorPar = new Map<string, MovimentoRow[]>() // chave: `${id_prod}:${codigo_local_estoque}`
 
   if (podeConsultar && dataEmissao) {
     const dtIni = addDias(dataEmissao, -7)
     const dtFim = addDias(dataEmissao, 7)
-    // Uma única query cobrindo todos os produtos da NF de uma vez -- movimentos
-    // não tem índice em (loja_id, id_prod), mas é uma tabela pequena o
-    // suficiente (~219 mil linhas na base inteira) pra um seq scan com esses
-    // filtros ser rápido (~150ms medido ao vivo, loja 5). Pareamento exato por
-    // (id_prod, codigo_local_estoque) é feito em JS depois -- evita trazer
-    // movimento de um LOCAL diferente do item da NF.
-    const { data, error } = await supabase
-      .from('movimentos')
-      .select('id, tipo, origem, motivo, id_prod, codigo_local_estoque, data, quan, valor')
-      .eq('loja_id', lojaId)
-      .in('id_prod', produtoCodes)
-      .gte('data', `${dtIni}T00:00:00`)
-      .lt('data', `${addDias(dtFim, 1)}T00:00:00`)
-    if (error) {
-      falhaConsulta = true
-      console.error('MovimentacoesGeradasNF: falha ao consultar movimentos', error.message)
-    }
-    for (const m of (data ?? []) as MovimentoRow[]) {
+    // Paginação real via helper compartilhado (`.order('id')` + `.range()`) --
+    // NUNCA truncar em silêncio (ver comentário no topo do arquivo, "Fix round
+    // 1"). Filtra também por `codigo_local_estoque` no servidor (além de
+    // `id_prod`) pra reduzir o volume; o pareamento final exato por
+    // (id_prod, codigo_local_estoque) continua em JS depois, evitando trazer
+    // movimento de um LOCAL diferente do item da NF quando a NF tem itens em
+    // locais distintos.
+    const rows = await buscarTodasLinhas<MovimentoRow>(
+      (from, to) => {
+        let q = supabase
+          .from('movimentos')
+          .select('id, tipo, origem, motivo, id_prod, codigo_local_estoque, data, quan, valor')
+          .eq('loja_id', lojaId)
+          .in('id_prod', produtoCodes)
+          .gte('data', `${dtIni}T00:00:00`)
+          .lt('data', `${addDias(dtFim, 1)}T00:00:00`)
+        if (locaisValidos.length) q = q.in('codigo_local_estoque', locaisValidos)
+        return q.order('id', { ascending: true }).range(from, to)
+      },
+      undefined,
+      () => {
+        errosConsultaMov.push('movimentos')
+      }
+    )
+    for (const m of rows) {
       const chave = `${m.id_prod}:${m.codigo_local_estoque}`
       const lista = movsPorPar.get(chave) ?? []
       lista.push(m)
@@ -116,7 +147,7 @@ export async function MovimentacoesGeradasNF({
             ? 'Nenhum item desta NF tem código de produto identificado para cruzar com movimentações.'
             : 'Sem data de emissão para calcular a janela de ±7 dias.'}
         </p>
-      ) : falhaConsulta ? (
+      ) : errosConsultaMov.length > 0 ? (
         <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
           Não foi possível consultar movimentações agora (falha de banco/rede) -- tente recarregar a página.
           Isto é diferente de &ldquo;nenhuma movimentação encontrada&rdquo;.

@@ -30,6 +30,18 @@
 -- ver components/movimentacoes/MovimentosTab.tsx) ou em N queries por código
 -- de produto (o custo medido acima). Uma função SQL simples resolve os dois
 -- problemas de uma vez.
+--
+-- Fix round 1 (revisão desta task, 2026-08-09) -- Important: a versão
+-- original não expunha a data de referência (coalesce(dt_conclusao_real,
+-- identificacao_d_dt_previsao)) como coluna própria -- o componente cliente
+-- dependia do `order by` INTERNO desta função sobreviver ao `.limit(100)`
+-- externo do PostgREST, sem garantia formal disso em SQL padrão (funciona
+-- hoje porque o `group by`+agregado impede o planner de subir a subquery,
+-- mas é frágil, e o corte é ROTINA aqui, não exceção -- medido: 1.402 linhas
+-- batendo só com 3 códigos numa loja). Corrigido adicionando `data_ref` ao
+-- retorno -- o componente cliente agora ordena explicitamente por ela antes
+-- de aplicar `.limit()`, sem depender de nenhuma garantia implícita de
+-- planner.
 create or replace function ops_relacionadas_por_produto(
   p_loja_id bigint,
   p_produto_codes bigint[],
@@ -47,7 +59,8 @@ returns table (
   dt_conclusao_real date,
   identificacao_d_dt_previsao date,
   concluida boolean,
-  insumos_batidos bigint[]
+  insumos_batidos bigint[],
+  data_ref date
 )
 language sql stable as $$
   select
@@ -61,7 +74,8 @@ language sql stable as $$
     op.dt_conclusao_real,
     op.identificacao_d_dt_previsao,
     op.concluida,
-    array_agg(distinct (item ->> 'nIdProdutoMalha')::bigint) as insumos_batidos
+    array_agg(distinct (item ->> 'nIdProdutoMalha')::bigint) as insumos_batidos,
+    coalesce(op.dt_conclusao_real, op.identificacao_d_dt_previsao) as data_ref
   from ordens_producao op,
        jsonb_array_elements(coalesce(op.full_object -> 'itensDetalhes', '[]'::jsonb)) as item
   where op.loja_id = p_loja_id
@@ -71,5 +85,5 @@ language sql stable as $$
   group by op.id, op.identificacao_n_cod_op, op.identificacao_c_num_op, op.num_ordem,
            op.identificacao_n_cod_produto, op.identificacao_n_qtde, op.identificacao_codigo_local_estoque,
            op.dt_conclusao_real, op.identificacao_d_dt_previsao, op.concluida
-  order by coalesce(op.dt_conclusao_real, op.identificacao_d_dt_previsao) desc
+  order by data_ref desc
 $$;

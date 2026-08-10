@@ -31,6 +31,17 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 // final do plano, conforme instrução do brief). Enquanto não aplicada, a
 // chamada de RPC falha e a seção mostra o banner de falha de consulta (não
 // quebra a página).
+//
+// Fix round 1 (revisão desta task, 2026-08-09) -- Important: a versão
+// original aplicava `.limit(LIMITE)` no `.rpc()` confiando que o `order by`
+// INTERNO da função sobreviveria ao corte externo do PostgREST, sem garantia
+// formal disso em SQL padrão (funciona hoje só porque o `group by`+agregado
+// da função impede o planner de subir a subquery -- mas o corte é ROTINA
+// aqui, não exceção: medido 1.402 linhas batendo só com 3 códigos numa
+// loja). Corrigido: a migration 107 passou a expor `data_ref`
+// (coalesce(dt_conclusao_real, identificacao_d_dt_previsao)) como coluna
+// própria, e o `.order('data_ref', ...)` agora é explícito do lado cliente,
+// antes do `.limit()` -- não depende de nenhuma garantia implícita.
 type OPRow = {
   id: number
   identificacao_n_cod_op: number | null
@@ -42,6 +53,7 @@ type OPRow = {
   identificacao_d_dt_previsao: string | null
   concluida: boolean | null
   insumos_batidos: number[] | null
+  data_ref: string | null
 }
 
 function fmtDataBR(d: string | null): string | null {
@@ -90,6 +102,7 @@ export async function OPsRelacionadasNF({
         p_data_ini: dataEmissao,
         p_data_fim: dtFim,
       })
+      .order('data_ref', { ascending: false })
       .limit(LIMITE)
     if (error) {
       falhaConsulta = true
@@ -109,11 +122,9 @@ export async function OPsRelacionadasNF({
   }
   const nomeProduto = new Map((produtos ?? []).map((p) => [p.codigo_produto, formatarNomeProduto(p.descricao)]))
 
-  const ordenadas = [...rows].sort((a, b) => {
-    const da = a.dt_conclusao_real ?? a.identificacao_d_dt_previsao ?? ''
-    const db = b.dt_conclusao_real ?? b.identificacao_d_dt_previsao ?? ''
-    return db.localeCompare(da)
-  })
+  // Já vem ordenado pelo `.order('data_ref', ...)` explícito da query acima --
+  // este sort é só defesa extra (idempotente se já estiver ordenado).
+  const ordenadas = [...rows].sort((a, b) => (b.data_ref ?? '').localeCompare(a.data_ref ?? ''))
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
@@ -144,7 +155,7 @@ export async function OPsRelacionadasNF({
         <div className="space-y-2">
           {ordenadas.map((r) => {
             const numOP = r.identificacao_c_num_op || r.num_ordem || `#${r.id}`
-            const dataRef = r.dt_conclusao_real ?? r.identificacao_d_dt_previsao
+            const dataRef = r.data_ref
             return (
               <a
                 key={r.id}

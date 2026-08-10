@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { SELO_CLASSE } from '@/lib/status-cor'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 // Seção "Histórico de status/manifestação" -- mescla `webhooks` (eventos reais
 // da Omie pra este recebimento) com `audit_log` (ações manuais no app), numa
@@ -80,27 +81,43 @@ export async function HistoricoStatusNF({
   // usado um filtro `.eq('message->event->cabecalho->>nIdReceb', ...)` com
   // dois níveis de seta encadeados no servidor -- essa forma nunca foi
   // testada de ponta a ponta contra o PostgREST real nesta sessão (só
-  // validada a tradução SQL equivalente via psql direto), e o volume real
-  // torna o filtro em JS trivialmente barato: `RecebimentoProduto.*` soma só
-  // 1.614 linhas em TODA a tabela (76.761 linhas), confirmado ao vivo -- não
-  // precisa de paginação nem de um filtro mais fino no servidor.
-  const { data: webhooksRaw, error: webhooksErro } = nIdReceb
-    ? await supabase
-        .from('webhooks')
-        .select('id, message, created_at')
-        .eq('loja_id', lojaId)
-        .ilike('message->>topic', 'RecebimentoProduto%')
-        .order('created_at', { ascending: false })
-    : { data: [], error: null }
-  if (webhooksErro) {
-    errosConsulta.push('eventos do Omie (webhooks)')
-    console.error('HistoricoStatusNF: falha ao consultar webhooks', webhooksErro.message)
-  }
-  const webhooksDoRecebimento = (webhooksRaw ?? [])
+  // validada a tradução SQL equivalente via psql direto).
+  //
+  // Fix round 1 (revisão desta task, 2026-08-09) -- Important: a versão
+  // original buscava com `.order('created_at')` mas SEM `.limit()`/`.range()`,
+  // confiando em "hoje o volume é pequeno" (1.614 linhas em TODA a tabela).
+  // Isso não protege contra o teto SILENCIOSO de `PGRST_DB_MAX_ROWS=1000`
+  // deste deploy -- hoje o máximo real por loja é 557 (confirmado pela
+  // revisão), mas se a retenção ou o volume crescerem além de 1000/loja, o
+  // corte vira silencioso e a UI atribuiria a ausência ao prune de 05/07 já
+  // documentado (mensagem convincente, mas errada -- exatamente o tipo de
+  // misatribuição que a Lição 4 desta task pede pra evitar). Corrigido com
+  // paginação real via `buscarTodasLinhas` (mesmo helper usado em
+  // `MovimentacoesGeradasNF.tsx`), buscando TODOS os webhooks de
+  // `RecebimentoProduto.*` da loja antes de filtrar por `nIdReceb` -- só
+  // então corta pra `LIMITE` (100) na exibição.
+  const webhooksTodos = nIdReceb
+    ? await buscarTodasLinhas<{ id: number; message: unknown; created_at: string }>(
+        (from, to) =>
+          supabase
+            .from('webhooks')
+            .select('id, message, created_at')
+            .eq('loja_id', lojaId)
+            .ilike('message->>topic', 'RecebimentoProduto%')
+            .order('id', { ascending: true })
+            .range(from, to),
+        undefined,
+        () => {
+          errosConsulta.push('eventos do Omie (webhooks)')
+        }
+      )
+    : []
+  const webhooksDoRecebimento = webhooksTodos
     .filter((w) => {
       const msg = w.message as { event?: { cabecalho?: { nIdReceb?: number | string } } }
       return String(msg.event?.cabecalho?.nIdReceb ?? '') === nIdReceb
     })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, LIMITE)
 
   const { data: auditRaw, error: auditErro } = numeroNFe
