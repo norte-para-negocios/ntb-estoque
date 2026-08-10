@@ -172,6 +172,14 @@ export default async function RelatorioIndicadoresPage({
     .from('faturamento_import_meta').select('importado_em').eq('loja_id', lojaId).maybeSingle()
 
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte).
+  // `frioFalhou` (achado real, auditoria 2026-08-09, Task 14 fix round 1):
+  // buscarItensNFFrio -> buscarFrio engole qualquer falha da API do Contabo
+  // (timeout/proxy caído -- já aconteceu de verdade no incidente do rebuild
+  // do Hestia, 2026-07-18) e devolve [], indistinguível de "sem NF antiga
+  // de verdade". Sem sinalizar isso, uma falha ao vivo não deixa o card em
+  // branco -- ela ENCOLHE o lado de Compras em silêncio, fazendo a loja
+  // parecer estar batendo a meta quando só faltou dado.
+  let frioFalhou = false
   if (compIni < corte) {
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
@@ -182,7 +190,7 @@ export default async function RelatorioIndicadoresPage({
     // paralelo -- as duas buscas sao independentes entre si.
     const [{ count: totalProdutos }, itensFrios] = await Promise.all([
       supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
-      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl }),
+      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl, onErro: () => { frioFalhou = true } }),
     ])
     const PAGE = 1000
     const numPaginas = Math.ceil((totalProdutos ?? 0) / PAGE)
@@ -305,6 +313,14 @@ export default async function RelatorioIndicadoresPage({
           </span>
         )}
       </div>
+
+      {frioFalhou && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar o histórico do Contabo (NFs anteriores a ~90 dias) — Compras
+          pode estar subcontado para os meses mais antigos deste período. Recarregue a
+          página; se persistir, avise o suporte.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full min-w-[600px] border-collapse text-sm">

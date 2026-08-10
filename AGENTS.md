@@ -554,19 +554,52 @@ tinha o complemento frio (Contabo) de Compras que `page.tsx` já tem desde
 2026-07-17. Mesma classe de bug já corrigida antes em
 `relatorio-compras/page.tsx` (ver comentário no `exportParams` de lá,
 "produto e local ficavam de fora"), nunca replicada aqui. Confirmado ao
-vivo o tamanho do problema (loja 3, família "DRINKS"): Faturamento
-filtrado = R$89.268,07 contra R$4.516.364,14 sem filtro (1,98% do total);
-Compras filtradas = R$0 (nenhuma NF de entrada classificada em DRINKS no
-período) contra R$3.137.500,09 sem filtro — ou seja, um usuário filtrando
-por família na tela via ~0% de Compras÷Faturamento mas, ao clicar
-"Baixar", recebia o Excel com a razão da loja INTEIRA (~69,5%), sem
-nenhum aviso de que o filtro foi ignorado. Corrigido: `page.tsx` agora
-inclui `produto`/`familia` no `exportParams`; `export/route.ts` foi
-reescrito pra espelhar `page.tsx` em tudo — mesma seleção de dimensão
-(produto > família > tipo), mesmos parâmetros nas duas RPCs, e o mesmo
-complemento frio de Compras (paginação de `produtos` + `buscarItensNFFrio`
-+ `filtrarItensCompras`/`agregarComprasMatriz`) para o pedaço anterior aos
-~90 dias.
+vivo o tamanho do problema (loja 3, família "DRINKS", período padrão real
+do app sem filtro de data — `compIni` cai em 2026-01-01, primeiro mês com
+faturamento importado nesta loja): Faturamento filtrado = R$89.268,07
+contra R$4.516.364,14 sem filtro (1,98% do total); Compras filtradas = R$0
+(nenhuma NF de entrada classificada em DRINKS no período) contra
+R$1.666.753,61 sem filtro (já excluindo Ativo Imobilizado, igual à tela)
+— ou seja, um usuário filtrando por família na tela via ~0% de
+Compras÷Faturamento mas, ao clicar "Baixar", recebia o Excel com a razão
+da loja INTEIRA (~36,9%), sem nenhum aviso de que o filtro foi ignorado.
+Corrigido: `page.tsx` agora inclui `produto`/`familia` no `exportParams`;
+`export/route.ts` foi reescrito pra espelhar `page.tsx` em tudo — mesma
+seleção de dimensão (produto > família > tipo), mesmos parâmetros nas
+duas RPCs, e o mesmo complemento frio de Compras (paginação de `produtos`
++ `buscarItensNFFrio` + `filtrarItensCompras`/`agregarComprasMatriz`) para
+o pedaço anterior aos ~90 dias.
+
+**Fix round 1 (revisão independente, 2026-08-09)** — 3 achados Important:
+
+1. **Chamada ao vivo pro Contabo (`buscarItensNFFrio` → `buscarFrio`)
+   engolia falha em silêncio, encolhendo Compras** — não é o card
+   financeiro removido (ver achado documental abaixo), é ESTE mesmo
+   relatório: sempre que o período cruza o corte de ~90 dias (o caso
+   comum), `page.tsx`/`export/route.ts` chamam a API do Contabo ao vivo
+   pra completar o lado de Compras. `buscarFrio` (`lib/historico-contabo.ts:
+   113-115`) engole timeout/erro de rede e devolve `null`, que
+   `buscarComPaginacaoPorData` convertia direto em `[]` — indistinguível de
+   "sem NF antiga de verdade". Uma falha ao vivo (já aconteceu de verdade:
+   incidente do rebuild do Hestia, 2026-07-18, documentado mais acima)
+   não deixava a tela em branco, ela ENCOLHIA o lado de Compras da razão em
+   silêncio, fazendo a loja parecer bater a meta quando só faltou dado.
+   Corrigido de forma aditiva (sem tocar `lib/historico-contabo.ts`, usado
+   por muitos outros relatórios fora de escopo): `buscarComPaginacaoPorData`/
+   `buscarItensNFFrio` (`lib/relatorio-frio-nf.ts`) ganharam um `onErro?`
+   opcional (mesmo padrão do `onErro` de `rpcTodos`); `page.tsx` mostra um
+   banner de aviso (mesmo estilo dos banners de RPC das Tasks 11-13) e
+   `export/route.ts` acrescenta o aviso no subtítulo da planilha (Excel não
+   tem como mostrar um banner clicável).
+2. **Causa raiz errada no achado incidental do ~0,14%** (ver correção
+   abaixo) — não é drift entre cópias, é o limite conhecido de backfill.
+3. **Magnitude do achado principal estava ~2x inflada** — a comparação
+   original usava `p_ini='2025-06-01'` manual (nunca acontece sob os
+   defaults reais do app) e esqueceu de excluir Ativo Imobilizado do RPC
+   bruto. Sob o período padrão real (`compIni=2026-01-01` pra loja 3) e já
+   excluindo Ativo Imobilizado, o número pré-fix é ~36,9%, não ~69,5% — a
+   direção do achado (export ignorava o filtro) sempre esteve certa, só o
+   número registrado estava errado. Números corrigidos acima.
 
 **Achado documental (não é bug de código, mas confundiu a auditoria)**: a
 seção "Card financeiro 'hoje'" registrada mais acima neste arquivo
@@ -588,20 +621,33 @@ Compras÷Faturamento, editável em "Minha loja") — 4 das 6 lojas ativas
 fallback, sem `NaN`/`undefined` em nenhum dos dois casos) — confirmado
 direto no Postgres de produção.
 
-**Achado incidental (não corrigido, magnitude pequena)**: a comparação
-entre a RPC `relatorio_compras_matriz` chamada com o período INTEIRO
-direto (o que `export/route.ts` fazia antes desta correção) e o mesmo
-período via o par clamp-90-dias + complemento frio que `page.tsx` sempre
-usou mostrou uma diferença de ~0,14% pra loja 3 (R$2.535.024,48 direto da
-RPC contra R$2.530.788,50 somando o espelho frio do Contabo pro mesmo
-intervalo) — o Supabase self-hosted já cobre esse período por inteiro
-(mesmo achado do Task 1 da auditoria de 2026-08-04, que já tinha
-simplificado 2 outros callers de NF por causa disso), então o número que a
-TELA mostra fica ligeiramente desatualizado em relação ao que uma consulta
-direta à RPC traria. Não corrigido agora porque manter `page.tsx` e
-`export/route.ts` calculando exatamente do MESMO jeito (mesmo se ambos
-carregam uma pequena defasagem) é mais seguro do que os dois discordarem
-entre si — simplificar as duas rotas pra parar de clampar e de usar o
-complemento frio (deixando a RPC direto cobrir o período inteiro, como o
-Task 1 já fez em `nota-fiscal/relatorio` e `nota-fiscal/export`) é
-candidato a follow-up dedicado, fora do escopo desta task.
+**Achado incidental (não corrigido, benigno hoje, causa raiz corrigida na
+revisão)**: a comparação entre a RPC `relatorio_compras_matriz` chamada
+com o período INTEIRO direto (o que `export/route.ts` fazia antes desta
+correção) e o mesmo período via o par clamp-90-dias + complemento frio que
+`page.tsx` sempre usou mostrou uma diferença de ~0,14% pra loja 3
+(R$2.535.024,48 direto da RPC contra R$2.530.788,50 somando o espelho
+frio do Contabo pro mesmo intervalo, 2025-06-01 a 2026-05-10). A causa
+real não é drift entre cópias (descrição original desta seção estava
+errada) — é o limite de backfill já documentado no topo deste arquivo: o
+histórico no Contabo (`ntb_frio`) só começa em 2025-07-01. Confirmado
+direto no Postgres: `notas_fiscais` na base fria começa em 2025-07-01 em
+todas as 6 lojas (`min(d_emissao_nfe)`), enquanto o Supabase self-hosted
+(quente) já tinha dado de junho/2025 pra loja 3 (R$4.250,61 em Compras
+nesse mês, contra R$0,00 no espelho frio) — bate quase exato com a
+diferença de R$4.236 observada. Ou seja: qualquer período pedido antes de
+01/07/2025 perde a fatia de junho/2025 por completo no complemento frio
+(mesmo mecanismo silencioso do "Fix round 1" logo acima, mas aqui é um
+limite de dado conhecido, não uma falha transiente). Benigno hoje porque
+nenhum filtro padrão do app cruza essa data (o período default sempre
+começa no primeiro mês com faturamento importado, que pra todas as 6
+lojas ativas é 2026 ou depois) — só afetaria alguém filtrando manualmente
+uma `data_inicio` anterior a 01/07/2025. Mesmo mecanismo compartilhado com
+Compras e Auditoria Fiscal (os outros 2 relatórios que usam
+`buscarItensNFFrio`). Não corrigido agora (fora de escopo desta task) --
+candidato a follow-up: simplificar as 3 rotas (aqui, `relatorio-compras`,
+auditoria fiscal) pra não clampar mais e ler a RPC quente direto no
+período inteiro quando ele não cruza 01/07/2025 (mesmo padrão já aplicado
+em `nota-fiscal/relatorio`/`nota-fiscal/export` pelo Task 1 da auditoria
+de 2026-08-04), com um aviso explícito se o filtro cruzar o limite de
+backfill.

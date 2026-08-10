@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   const produtoTermo = searchParams.get('produto')?.trim() || null
   const localParam = searchParams.get('local')
   const localCod = localParam && !Number.isNaN(Number(localParam)) ? Number(localParam) : null
+  const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
 
   const supabase = createServiceClient()
   // RPC de faturamento não aceita período (removido na migration 057); o filtro
@@ -51,7 +52,15 @@ export async function GET(request: Request) {
   } else {
     fat = await rpcTodos<Linha>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
   }
-  if (!fat.length) return new Response('Sem faturamento importado', { status: 404 })
+  // Achado real (revisão da Task 14, fix round 1): antes do fix desta rodada
+  // o export nunca filtrava `fat` (sempre dim='tipo', nunca vazio a menos que
+  // a loja não tivesse NENHUM faturamento importado), então este 404 genérico
+  // era sempre correto. Agora que produto/família chegam de verdade, um
+  // filtro que não bate com nada também zera `fat` -- devolver "Sem
+  // faturamento importado" nesse caso seria enganoso (a loja TEM faturamento,
+  // só o filtro não achou nada). Espelha o guard de page.tsx: só é a mensagem
+  // "sem import" quando não há filtro nenhum ativo.
+  if (!fat.length && !filtroAtivo) return new Response('Sem faturamento importado', { status: 404 })
 
   const fatPorMesTudo: Record<string, number> = {}
   for (const r of fat) fatPorMesTudo[r.mes] = (fatPorMesTudo[r.mes] ?? 0) + (Number(r.valor) || 0)
@@ -63,8 +72,12 @@ export async function GET(request: Request) {
     Object.entries(fatPorMesTudo).filter(([m]) => (!iniYM || m >= iniYM) && (!fimYM || m <= fimYM))
   )
 
-  const anoIni = todosMeses[0].slice(0, 4)
-  const anoFim = todosMeses[todosMeses.length - 1].slice(0, 4)
+  // `todosMeses` pode vir vazio agora (filtro ativo sem nenhum resultado) --
+  // sem esse fallback, `todosMeses[0]` explodia (TypeError), regressão nova
+  // introduzida pelo fix acima. Mesmo fallback de page.tsx.
+  const anoAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 4)
+  const anoIni = todosMeses.length ? todosMeses[0].slice(0, 4) : anoAtual
+  const anoFim = todosMeses.length ? todosMeses[todosMeses.length - 1].slice(0, 4) : anoAtual
   const compIni = filtroIni ?? `${anoIni}-01-01`
   const compFim = filtroFim ?? `${anoFim}-12-31`
 
@@ -90,12 +103,16 @@ export async function GET(request: Request) {
   }
 
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte) -- igual a page.tsx.
+  // `frioFalhou` (mesmo achado/fix de page.tsx, ver comentário lá): sem isso,
+  // uma falha na API do Contabo encolhia o lado de Compras do Excel em
+  // silêncio, sem nenhuma diferença visível de "sem NF antiga de verdade".
+  let frioFalhou = false
   if (compIni < corte) {
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     type ProdMeta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null }
     const [{ count: totalProdutos }, itensFrios] = await Promise.all([
       supabase.from('produtos').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId),
-      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl }),
+      buscarItensNFFrio({ lojaId, dataInicio: compIni, dataFinal: corteExcl, onErro: () => { frioFalhou = true } }),
     ])
     const PAGE = 1000
     const numPaginas = Math.ceil((totalProdutos ?? 0) / PAGE)
@@ -147,9 +164,16 @@ export async function GET(request: Request) {
     localCod !== null ? `local: ${localCod}` : null,
   ].filter(Boolean).join(' · ')
 
+  // Excel não tem como mostrar um banner clicável -- o aviso vira parte do
+  // subtítulo, bem visível na primeira linha da planilha (mesmo raciocínio
+  // do banner de page.tsx, só que no formato que o Excel suporta).
+  const avisoFrio = frioFalhou
+    ? ' · ATENÇÃO: falha ao consultar o histórico do Contabo (NFs anteriores a ~90 dias) -- Compras pode estar subcontado para os meses mais antigos'
+    : ''
+
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Indicadores · Faturamento × Compras',
-    subtitulo: `${compIni} a ${compFim} · Meta: Compras ÷ Faturamento abaixo de 40% (ideal 35%)${filtrosDesc ? ` · Filtros: ${filtrosDesc}` : ''}`,
+    subtitulo: `${compIni} a ${compFim} · Meta: Compras ÷ Faturamento abaixo de 40% (ideal 35%)${filtrosDesc ? ` · Filtros: ${filtrosDesc}` : ''}${avisoFrio}`,
     autoFiltro: true,
   })
   return planilhaResponse('indicadores-fat-compras', buffer)

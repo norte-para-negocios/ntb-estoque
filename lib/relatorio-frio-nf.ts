@@ -58,21 +58,34 @@ const addDia = (d: string): string => new Date(Date.parse(d) + 86400000).toISOSt
  * silêncio). Mesma classe de bug do teto de 1000 linhas do PostgREST, só que
  * no endpoint do Contabo.
  */
+// `onErro` (opcional, mesmo padrão do `onErro` de rpcTodos): `buscarFrio`
+// engole qualquer falha (timeout/rede/proxy caído -- ver incidente do
+// rebuild do Hestia em 2026-07-18 no AGENTS.md) e devolve `null`, que aqui
+// virava `[]` sem distinção nenhuma de "vazio de verdade" -- pra quem
+// chama, os dois pareciam idênticos. Sem isso, uma falha na API do Contabo
+// não deixa o relatório em branco: ela ENCOLHE o lado de Compras em
+// silêncio (o período fica truncado só na janela quente), fazendo a loja
+// parecer estar bem na meta quando só faltou dado. Achado real (auditoria
+// 2026-08-09, Task 14, fix round 1) -- callers que precisam distinguir os
+// dois casos passam `onErro` pra saber quando avisar o usuário.
 export async function buscarComPaginacaoPorData<T>(
   caminho: string,
   lojaId: number,
   dataInicio: string,
   dataFinal: string,
-  teto: number
+  teto: number,
+  onErro?: () => void
 ): Promise<T[]> {
-  const rows = (await buscarFrio<T>(caminho, { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal })) ?? []
+  const resultado = await buscarFrio<T>(caminho, { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal })
+  if (resultado === null) onErro?.()
+  const rows = resultado ?? []
   if (rows.length < teto || dataInicio >= dataFinal) return rows
   const meio = new Date((Date.parse(dataInicio) + Date.parse(dataFinal)) / 2).toISOString().slice(0, 10)
   const inicioSegunda = addDia(meio)
   if (meio < dataInicio || inicioSegunda > dataFinal) return rows // intervalo de 1 dia, não dá pra dividir mais
   const [a, b] = await Promise.all([
-    buscarComPaginacaoPorData<T>(caminho, lojaId, dataInicio, meio, teto),
-    buscarComPaginacaoPorData<T>(caminho, lojaId, inicioSegunda, dataFinal, teto),
+    buscarComPaginacaoPorData<T>(caminho, lojaId, dataInicio, meio, teto, onErro),
+    buscarComPaginacaoPorData<T>(caminho, lojaId, inicioSegunda, dataFinal, teto, onErro),
   ])
   return [...a, ...b]
 }
@@ -86,10 +99,11 @@ export async function buscarItensNFFrio(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
+  onErro?: () => void
 }): Promise<ItemNFFrio[]> {
   const [itens, headers] = await Promise.all([
-    buscarComPaginacaoPorData<ItemNFFrio>('/nota_fiscal_items', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_ITENS),
-    buscarComPaginacaoPorData<HeaderNFFrio>('/notas_fiscais', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_HEADERS),
+    buscarComPaginacaoPorData<ItemNFFrio>('/nota_fiscal_items', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_ITENS, opts.onErro),
+    buscarComPaginacaoPorData<HeaderNFFrio>('/notas_fiscais', opts.lojaId, opts.dataInicio, opts.dataFinal, TETO_HEADERS, opts.onErro),
   ])
   const porId = new Map(headers.map((h) => [h.id, h]))
   for (const it of itens) {
