@@ -9,6 +9,9 @@ import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/his
 import { statusNF } from '@/lib/nf-status'
 import { DetalhesFiscaisNF } from '@/components/nota-fiscal/DetalhesFiscaisNF'
 import { AcoesNF } from '@/components/nota-fiscal/AcoesNF'
+import { OPsRelacionadasNF } from '@/components/nota-fiscal/OPsRelacionadasNF'
+import { MovimentacoesGeradasNF } from '@/components/nota-fiscal/MovimentacoesGeradasNF'
+import { HistoricoStatusNF } from '@/components/nota-fiscal/HistoricoStatusNF'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -43,7 +46,7 @@ export default async function NotaFiscalItensPage({
   const [{ data: itensRaw }, { data: categorias }] = await Promise.all([
     supabase
       .from('nota_fiscal_items')
-      .select('id, n_id_receb, n_sequencia, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id, full_object')
+      .select('id, n_id_receb, n_sequencia, n_id_produto, c_codigo_produto, c_descricao_produto, c_cfop, n_qtde_nfe, c_unidade_nfe, n_preco_unit, v_total_item, quantidade, categoria_contabil_id, full_object')
       .eq('nota_fiscal_id', id)
       .eq('loja_id', lojaId)
       .order('n_sequencia'),
@@ -58,6 +61,29 @@ export default async function NotaFiscalItensPage({
   const itens = nfSupabase
     ? itensRaw
     : await complementarNotaFiscalItems(itensRaw ?? [], { lojaId, notaFiscalId: Number(id) })
+
+  // Dados derivados pras 3 secoes novas (Task 19): produto da NF -> OPs
+  // relacionadas / movimentacoes geradas. n_id_produto e o mesmo espaco de
+  // codigo Omie que ordens_producao.full_object.itensDetalhes[].nIdProdutoMalha
+  // e movimentos.id_prod (confirmado na Task 17 -- ver task-17-report.md,
+  // "Pergunta 2"/"Pergunta 3"). codigo_local_estoque vem de
+  // full_object.itensAjustes.codigo_local_estoque, POR ITEM (nao por NF --
+  // confirmado ao vivo que cada linha de nota_fiscal_items tem seu proprio
+  // full_object.itensAjustes com o local daquele item especifico).
+  type ItemComFullObject = { n_id_produto: number | null; c_descricao_produto: string | null; full_object: unknown }
+  const itensParaCruzamento = (itens ?? []) as unknown as ItemComFullObject[]
+  const produtoCodes = [...new Set(itensParaCruzamento.map((i) => i.n_id_produto).filter((v): v is number => v != null))]
+  const itensComLocal = itensParaCruzamento
+    .filter((i): i is ItemComFullObject & { n_id_produto: number } => i.n_id_produto != null)
+    .map((i) => {
+      const ajustes = (i.full_object as { itensAjustes?: { codigo_local_estoque?: number | string } } | null)?.itensAjustes
+      const localRaw = ajustes?.codigo_local_estoque
+      return {
+        n_id_produto: i.n_id_produto,
+        codigo_local_estoque: localRaw != null ? Number(localRaw) : null,
+        descricao: i.c_descricao_produto,
+      }
+    })
 
   // Mesma fonte unica de status usada no selo abaixo (lib/nf-status.ts):
   // c_etapa === '60' sozinho NAO significa "concluida" de verdade -- uma nota
@@ -149,6 +175,12 @@ export default async function NotaFiscalItensPage({
       />
       <DetalhesFiscaisNF fullObject={nf.full_object} />
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} />
+
+      <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
+
+      <MovimentacoesGeradasNF lojaId={lojaId} itens={itensComLocal} dataEmissao={nf.d_emissao_nfe ?? null} />
+
+      <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} />
     </div>
   )
 }
