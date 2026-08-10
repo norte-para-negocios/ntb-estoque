@@ -185,6 +185,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       for (const c of r.cupons ?? []) {
         const cab = c.cabecalhoCupom
         const cancelado = cab?.info?.cCupomCancelado === 'S'
+        const devolvido = cab?.info?.cCupomDevolvido === 'S'
 
         // Achado real (revisão final do plano de filtro de Situação,
         // 2026-08-10): antes o `continue` pulava ANTES deste push, então um
@@ -206,7 +207,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
           id_vendedor: cab?.idVendedor != null ? Number(cab.idVendedor) : null,
           valor: Number(cab?.nValorCupom) || 0,
           cancelado,
-          devolvido: cab?.info?.cCupomDevolvido === 'S',
+          devolvido,
         })
 
         if (cancelado) continue // segue excluindo itens/pagamentos/acc, não mais o cabeçalho
@@ -239,6 +240,18 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
             Number(it.vItem ?? 0) ||
             Number(it.vUnit ?? 0) * Number(it.nQuant ?? 0) - Number(it.vDesc ?? 0) + Number(it.vAcresc ?? 0)
           if (!v) continue
+
+          // Achado real (2026-08-10): cupom devolvido continuava entrando no
+          // acumulador pré-agregado (`faturamento_importado`, base do
+          // Faturamento x Compras e da visão padrão do Faturamento) -- só
+          // `cancelado` era excluído. Hoje não gera número errado (produção
+          // não tem nenhum cupom devolvido=true), mas é a mesma classe de
+          // guard-clause incompleto já corrigida acima nesta função. Mantém
+          // devolvido no fato granular (`itensBulk`, já gravado acima) pra
+          // quem usa o filtro de Situação=Devolvido -- só exclui do
+          // pré-agregado, que deve refletir apenas venda Normal.
+          if (devolvido) continue
+
           const info = it.idProduto != null ? mapProd.get(Number(it.idProduto)) : undefined
           const tipoLabel = info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado'
           const familiaLabel = info?.familia || 'Sem família'
