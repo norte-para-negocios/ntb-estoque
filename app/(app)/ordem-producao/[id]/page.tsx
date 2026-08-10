@@ -45,7 +45,22 @@ export default async function OrdemProducaoDetalhePage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: opSupabase } = await supabase
+  // errosConsulta: mesmo padrao de errosConsulta/banner ja estabelecido nas
+  // Tasks 12-16 desta auditoria (AGENTS.md) -- acumula falha de query num
+  // array em vez de deixar a pagina renderizar dado incompleto em silencio
+  // (achado real: nenhuma das 4 consultas desta pagina checava `error`,
+  // reintroduzindo a MESMA classe de bug que aquelas tasks passaram o dia
+  // fechando, num arquivo novo).
+  const errosConsulta: string[] = []
+  function logErro(rotulo: string) {
+    return (error: { message: string } | null) => {
+      if (!error) return
+      errosConsulta.push(rotulo)
+      console.error(`ordem-producao/[id]: consulta "${rotulo}" falhou -- dado pode estar incompleto`, error.message)
+    }
+  }
+
+  const { data: opSupabase, error: opErro } = await supabase
     .from('ordens_producao')
     .select(
       'id, loja_id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, conclusao_status, conclusao_erro_msg, conclusao_tentativas, conclusao_ultima_tentativa_em, conclusao_qtde_desejada, conclusao_data_desejada, full_object'
@@ -56,11 +71,35 @@ export default async function OrdemProducaoDetalhePage({
 
   // Mesmo padrao de app/(app)/nota-fiscal/[id]/page.tsx: se nao achou no
   // Supabase quente, tenta o Contabo (historico completo) antes de dar 404.
-  const op = opSupabase ?? (await complementarOrdensProducao([], { lojaId, id: Number(id) }))[0] ?? null
+  // opFonte importa pro HistoricoSyncOP abaixo: os campos conclusao_* (Task 1
+  // desta auditoria) so existem na tabela `ordens_producao` do Supabase --
+  // confirmado ao vivo (`\d ordens_producao` no Postgres `ntb_frio` do
+  // Contabo) que essas 6 colunas NUNCA foram migradas pro banco frio. Uma OP
+  // vinda do fallback frio mostraria "sem pendencia" mesmo quando o dado
+  // simplesmente nao existe ali -- precisa de uma mensagem diferente.
+  let opFonte: 'quente' | 'frio' = 'quente'
+  let op = opSupabase
+  if (!op) {
+    const frias = await complementarOrdensProducao([], { lojaId, id: Number(id) })
+    op = frias[0] ?? null
+    opFonte = 'frio'
+  }
 
-  if (!op) notFound()
+  if (!op) {
+    // opErro real (falha transitoria de banco/rede) e diferente de "OP nao
+    // existe" -- nao confundir os dois com um 404 enganoso.
+    if (opErro) {
+      return (
+        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">
+          Não foi possível consultar esta ordem de produção agora (falha de banco/rede: {opErro.message}). Tente
+          recarregar a página.
+        </p>
+      )
+    }
+    notFound()
+  }
 
-  const [{ data: produto }, { data: local }] = await Promise.all([
+  const [{ data: produto, error: produtoErro }, { data: local, error: localErro }] = await Promise.all([
     op.identificacao_n_cod_produto
       ? supabase
           .from('produtos')
@@ -68,7 +107,7 @@ export default async function OrdemProducaoDetalhePage({
           .eq('loja_id', lojaId)
           .eq('codigo_produto', op.identificacao_n_cod_produto)
           .maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
     op.identificacao_codigo_local_estoque
       ? supabase
           .from('local_estoques')
@@ -76,8 +115,10 @@ export default async function OrdemProducaoDetalhePage({
           .eq('loja_id', lojaId)
           .eq('codigo_local_estoque', op.identificacao_codigo_local_estoque)
           .maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ])
+  logErro('produto')(produtoErro)
+  logErro('local de estoque')(localErro)
 
   // Ingredientes: mesmo padrao de app/(app)/ordem-producao/page.tsx (le
   // full_object.itensDetalhes, resolve nome/unidade via produtos).
@@ -85,13 +126,14 @@ export default async function OrdemProducaoDetalhePage({
   const itensDetalhes =
     ((op.full_object as { itensDetalhes?: ItemDetalhe[] } | null)?.itensDetalhes) ?? []
   const insumoCodes = [...new Set(itensDetalhes.filter((i) => i.nIdProdutoMalha).map((i) => i.nIdProdutoMalha))]
-  const { data: insumoProds } = insumoCodes.length
+  const { data: insumoProds, error: insumoProdsErro } = insumoCodes.length
     ? await supabase
         .from('produtos')
         .select('codigo_produto, descricao, unidade')
         .eq('loja_id', lojaId)
         .in('codigo_produto', insumoCodes)
-    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[] }
+    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[], error: null }
+  logErro('produtos dos insumos')(insumoProdsErro)
   const insumoMap = new Map((insumoProds ?? []).map((p) => [p.codigo_produto, p]))
   const ingredientes = itensDetalhes
     .filter((i) => i.nIdProdutoMalha)
@@ -148,6 +190,13 @@ export default async function OrdemProducaoDetalhePage({
         }
       />
 
+      {errosConsulta.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+          dados abaixo podem estar incompletos.
+        </p>
+      )}
+
       {/* Dados basicos: replica o que ja existe hoje na linha expandida da lista
           (OrdemProducaoRow.tsx) -- produto, quantidade, ingredientes, validade. */}
       <div className="rounded-lg border border-border bg-surface p-4">
@@ -188,6 +237,7 @@ export default async function OrdemProducaoDetalhePage({
 
       <HistoricoSyncOP
         info={{
+          fonte: opFonte,
           concluida,
           conclusaoStatus: op.conclusao_status ?? null,
           conclusaoErroMsg: op.conclusao_erro_msg ?? null,

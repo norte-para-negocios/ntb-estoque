@@ -16,6 +16,16 @@ import { createClient } from '@/lib/supabase/server'
 // menos 2 das 3 causas são permanentes (loja 4 excluída por desenho do cron;
 // cursor do sync-ajustes que já passou por cima do ajuste). Por isso a ausência
 // de match aqui nunca é tratada como erro -- é o comportamento normal.
+//
+// IMPORTANTE (achado da revisão desta task): o caveat de loja 4/cursor
+// overshoot é sobre esse ENRIQUECIMENTO por `id_ajuste` (inventario_items <->
+// movimentos) -- um caminho que só existe DEPOIS que já achamos uma linha de
+// inventário candidata. `inventario_items` em si é gravado pelo próprio fluxo
+// de inventário do app, totalmente independente do `sync-ajustes` -- cursor
+// overshoot/exclusão da loja 4 NUNCA podem ser a causa de uma LISTA VAZIA de
+// inventários (rows.length === 0). Esse caveat fica só na nota por linha
+// (quando o item tem id_ajuste mas nenhum movimento correspondente), nunca na
+// mensagem de "nenhum inventário encontrado".
 type InventarioRow = {
   id: number
   quan: number | null
@@ -51,6 +61,14 @@ export async function InventariosRelacionadosOP({
 
   let rows: InventarioRow[] = []
   let consultou = false
+  // errosConsulta: mesmo padrão já estabelecido nas Tasks 12-16 desta auditoria
+  // (ver AGENTS.md) -- nenhuma das 3 queries deste componente checava `error`
+  // antes desta correção. `falhaConsultaPrincipal` distingue as 2 queries que
+  // DEFINEM a lista (inventarios/inventario_items) da 3ª, que é só
+  // enriquecimento opcional (movimentos) -- uma falha nela não impede mostrar
+  // as linhas já achadas, só perde o detalhe extra.
+  const errosConsulta: string[] = []
+  let falhaConsultaPrincipal = false
 
   if (produtoCodigoProduto != null && codigoLocalEstoque != null && dataReferencia) {
     consultou = true
@@ -66,13 +84,18 @@ export async function InventariosRelacionadosOP({
     // filtro no lado embedado deixa o plano do Postgres instável sob o role
     // autenticado (às vezes rápido, às vezes timeout), mesmo repetindo a MESMA
     // query. Buscar `inventarios` primeiro e casar em JS evita o mesmo risco.
-    const { data: invsCandidatos } = await supabase
+    const { data: invsCandidatos, error: errInv } = await supabase
       .from('inventarios')
       .select('id, data, status')
       .eq('loja_id', lojaId)
       .eq('codigo_local_estoque', codigoLocalEstoque)
       .gte('data', `${dtIni}T00:00:00`)
       .lt('data', `${addDias(dtFim, 1)}T00:00:00`)
+    if (errInv) {
+      errosConsulta.push('inventários (janela de data)')
+      falhaConsultaPrincipal = true
+      console.error('InventariosRelacionadosOP: falha ao consultar inventarios', errInv.message)
+    }
 
     const invMap = new Map((invsCandidatos ?? []).map((i) => [i.id, { data: i.data, status: i.status }]))
     const invIds = [...invMap.keys()]
@@ -86,25 +109,36 @@ export async function InventariosRelacionadosOP({
       inventario_id: number
     }[] = []
     if (invIds.length) {
-      const { data: itens } = await supabase
+      const { data: itens, error: errItens } = await supabase
         .from('inventario_items')
         .select('id, quan, produto_descricao, status, id_ajuste, inventario_id')
         .eq('loja_id', lojaId)
         .eq('produto_codigo_produto', produtoCodigoProduto)
         .in('inventario_id', invIds)
+      if (errItens) {
+        errosConsulta.push('itens de inventário')
+        falhaConsultaPrincipal = true
+        console.error('InventariosRelacionadosOP: falha ao consultar inventario_items', errItens.message)
+      }
       candidatos = itens ?? []
     }
 
     // Enriquecimento opcional via id_ajuste (join com movimentos, mesma loja).
-    // Só cobre uma fração dos casos -- ver comentário no topo do arquivo.
+    // Só cobre uma fração dos casos -- ver comentário no topo do arquivo. Uma
+    // falha aqui NÃO vira falhaConsultaPrincipal (as linhas já achadas acima
+    // continuam válidas e são mostradas, só sem o detalhe extra).
     const idsAjuste = [...new Set(candidatos.map((c) => c.id_ajuste).filter((v): v is number => v != null))]
     const movMap = new Map<number, { id: number; tipo: string | null; data: string | null }>()
     if (idsAjuste.length) {
-      const { data: movs } = await supabase
+      const { data: movs, error: errMov } = await supabase
         .from('movimentos')
         .select('id, tipo, data, id_ajuste')
         .eq('loja_id', lojaId)
         .in('id_ajuste', idsAjuste)
+      if (errMov) {
+        errosConsulta.push('movimentos (enriquecimento por id_ajuste)')
+        console.error('InventariosRelacionadosOP: falha ao consultar movimentos', errMov.message)
+      }
       for (const m of movs ?? []) {
         if (m.id_ajuste != null) movMap.set(m.id_ajuste, { id: m.id, tipo: m.tipo, data: m.data })
       }
@@ -138,28 +172,30 @@ export async function InventariosRelacionadosOP({
         grava vínculo direto entre ordem de produção e inventário -- isto é um cruzamento, não um registro.
       </p>
 
+      {errosConsulta.length > 0 && (
+        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+          dados abaixo podem estar incompletos.
+        </p>
+      )}
+
       {!consultou ? (
         <p className="text-[13px] text-text-muted">
           Sem produto, local de estoque ou data de referência suficientes para cruzar com inventário.
         </p>
+      ) : falhaConsultaPrincipal ? (
+        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+          Não foi possível consultar inventários agora (falha de banco/rede) -- tente recarregar a página. Isto é
+          diferente de &ldquo;nenhum inventário encontrado&rdquo;.
+        </p>
       ) : rows.length === 0 ? (
-        <div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
-          {lojaId === 4 ? (
-            <>
-              Nenhum inventário encontrado nessa janela. A loja 4 é excluída por desenho do sync de ajustes
-              (proteção deliberada contra escrita/consulta ao vivo) -- o enriquecimento por <code>id_ajuste</code> nunca
-              vai aparecer para ela, mesmo depois de qualquer correção futura do cron.
-            </>
-          ) : (
-            <>
-              Nenhum inventário encontrado nessa janela. Isso normalmente significa apenas que não houve
-              contagem de estoque perto dessa data -- mas também pode ser um caso permanente de &ldquo;cursor
-              overshoot&rdquo; do sync de ajustes (o cursor já passou por cima do ajuste correspondente antes dele
-              ser capturado, em ~1.786 linhas conhecidas espalhadas por 3 lojas): religar o cron não traz
-              essas linhas de volta. Ausência aqui não é evidência de que nada aconteceu no estoque.
-            </>
-          )}
-        </div>
+        // Mensagem corrigida (revisão desta task): loja 4/cursor overshoot são
+        // causas do ENRIQUECIMENTO por id_ajuste, não de inventario_items em si
+        // -- não podem ser a causa de uma lista vazia. Ver comentário no topo.
+        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px] text-text-muted">
+          Nenhuma contagem de estoque encontrada perto dessa data, nesse local (aproximação por produto + local +
+          tempo, ±3 dias -- não é um cruzamento exato).
+        </p>
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
@@ -181,7 +217,10 @@ export async function InventariosRelacionadosOP({
               ) : r.id_ajuste != null ? (
                 <p className="mt-1 text-[11px] text-text-muted">
                   Este item tem <code>id_ajuste</code> ({r.id_ajuste}) mas nenhum movimento correspondente foi
-                  encontrado -- comum, cobre só ~20% dos casos na base (ver aviso acima).
+                  encontrado em Movimentações -- cobre só ~20% dos casos na base inteira. Se a loja é a 4, isto é
+                  permanente (excluída por desenho do sync de ajustes); mesmo fora dela, pode ser um caso de
+                  &ldquo;cursor overshoot&rdquo; do sync (~1.786 linhas conhecidas em 3 lojas) -- religar o cron não
+                  traz essas de volta.
                 </p>
               ) : null}
             </div>

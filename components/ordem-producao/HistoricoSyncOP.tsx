@@ -7,6 +7,14 @@ import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
 // (o que a próxima tentativa vai usar). Puramente informativo -- não é
 // interativo (a ação de reenvio já existe na listagem, via finishOP).
 export type SyncOPInfo = {
+  // Achado real (revisão desta task): as 6 colunas conclusao_* (Task 1 desta
+  // auditoria) só existem na tabela `ordens_producao` do Supabase -- confirmado
+  // ao vivo (`\d ordens_producao` no Postgres `ntb_frio` do Contabo) que NUNCA
+  // foram migradas pro banco frio. Uma OP fora da janela quente (fallback via
+  // complementarOrdensProducao) sempre chega aqui com esses 6 campos ausentes
+  // -- sem essa flag, a seção mostraria "sem pendência" quando na verdade é
+  // "não sabemos" (dado não disponível nessa fonte).
+  fonte: 'quente' | 'frio'
   concluida: boolean
   conclusaoStatus: string | null
   conclusaoErroMsg: string | null
@@ -41,7 +49,13 @@ export function HistoricoSyncOP({ info }: { info: SyncOPInfo }) {
     <div className="rounded-lg border border-border bg-surface p-4">
       <h2 className="mb-3 text-[13px] font-medium text-text-muted">Histórico de sync com a Omie</h2>
 
-      {semPendencia ? (
+      {info.fonte === 'frio' ? (
+        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[13px] text-text-muted">
+          Dado não disponível para esta OP. Ela é mais antiga que a janela do banco quente (Supabase) e veio do
+          histórico do Contabo -- os campos de sync (status/tentativas/erro) nunca foram migrados pra lá, então
+          isto NÃO significa &ldquo;sem erro&rdquo;, só que não dá pra saber a partir daqui.
+        </p>
+      ) : semPendencia ? (
         <p className="text-[13px] text-text-muted">
           {info.concluida
             ? 'Concluída no Omie sem nenhum erro de sincronização registrado.'
