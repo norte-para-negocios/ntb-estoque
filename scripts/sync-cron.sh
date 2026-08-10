@@ -24,6 +24,15 @@ bloco=$(( 10#$min / 10 ))
 hit /api/cron/sync-nfs
 hit /api/cron/sync-ops
 hit /api/cron/retry-op-conclusao
+# Retry automatico de ajuste de estoque (inventario/movimentacao/transferencia)
+# sem estourar cota da Omie -- achado real (auditoria 2026-08-09): as 3
+# chamadas de IncluirAjusteEstoque nao tinham retry nenhum, so reenvio manual.
+hit /api/cron/retry-ajustes-inventario
+hit /api/cron/retry-ajustes-movimentos
+# Achado real (Task 17 da auditoria 2026-08-09): sync-ajustes nunca foi
+# migrado pro crontab do Contabo -- so existia no vercel.json (inativo desde
+# que producao saiu do Vercel), morto ha 7+ dias sem nenhum sinal de erro.
+hit /api/cron/sync-ajustes
 hit /api/cron/sync-posicao
 # Achado real (usuario reportou 01/08: ficava excluindo OP direto no Omie e o
 # NTB Estoque nao sumia com ela) -- reconciliarOPsFantasmas agora tambem cobre
