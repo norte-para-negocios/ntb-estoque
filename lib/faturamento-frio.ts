@@ -233,8 +233,20 @@ export async function buscarFatAgregadoPorSituacao(opts: {
   status: string
   metaPorCodigo?: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
   onTruncado?: () => void
+  // Fix round 1 (Task 4, plano 2026-08-10-filtro-situacao-faturamento,
+  // Important #4): permite ao caller passar `cupons`/`itens`/`pagamentos` já
+  // buscados pra ESSE MESMO `lojaId`/`dataInicio`/`dataFinal`, pulando o
+  // fetch interno -- necessário quando o caller precisa de mais de um
+  // `group` pro MESMO período/status (ex.: o export do relatório de
+  // Faturamento, que gera abas Tipo E Família a partir do mesmo fato; sem
+  // isso, cada chamada refazia o MESMO fetch de `/fat_cupons`+
+  // `/fat_cupom_itens`). Omitido (comportamento de hoje, sem mudança pra
+  // nenhum caller existente): busca internamente como sempre.
+  cuponsPreFetch?: CupomFat[]
+  itensPreFetch?: ItemFat[]
+  pagamentosPreFetch?: PagamentoFat[]
 }): Promise<LinhaFatAgregado[]> {
-  const cupons = await buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
+  const cupons = opts.cuponsPreFetch ?? await buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
   const cuponsValidos = cupons.filter((c) => cupomBateSituacao(c, opts.status))
   const cuponsOk = new Set(cuponsValidos.map((c) => c.n_id_cupom))
   const mesPorCupom = new Map(cuponsValidos.map((c) => [c.n_id_cupom, c.data.slice(0, 7)]))
@@ -243,7 +255,7 @@ export async function buscarFatAgregadoPorSituacao(opts: {
   const acc = new Map<string, LinhaFatAgregado>()
 
   if (opts.group === 'forma') {
-    const pagamentos = await buscarFatCupomPagamentosPeriodo({
+    const pagamentos = opts.pagamentosPreFetch ?? await buscarFatCupomPagamentosPeriodo({
       lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado,
     })
     for (const p of pagamentos) {
@@ -261,7 +273,7 @@ export async function buscarFatAgregadoPorSituacao(opts: {
     return [...acc.values()]
   }
 
-  const itens = await buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
+  const itens = opts.itensPreFetch ?? await buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
 
   if (opts.group === 'tipo' || opts.group === 'familia') {
     for (const it of itens) {

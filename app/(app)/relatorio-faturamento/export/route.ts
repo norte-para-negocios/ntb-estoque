@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { gerarPlanilhaMulti, planilhaResponse, abaMatrizMensal, type AbaPlanilha } from '@/lib/excel'
-import { buscarFatAgregadoPorSituacao } from '@/lib/faturamento-frio'
+import { buscarFatAgregadoPorSituacao, buscarFatCupons, buscarFatCupomItens, buscarFatCupomPagamentosPeriodo } from '@/lib/faturamento-frio'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,44 +84,93 @@ export async function GET(request: Request) {
     // query-time -- então usa `buscarFatAgregadoPorSituacao` (Task 2), que
     // agrega em JS sobre o fato linha-a-linha do Contabo.
     const mesAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
-    const anoAtualStr = mesAtual.slice(0, 4)
     const dataInicioFato = dataIni ? `${dataIni}-01` : ''
     const dataFinalFato = fimDoMes(dataFim ?? mesAtual)
-    const temPeriodoExplicito = !!(dataIni || dataFim)
 
-    // Mesmo clamp condicional de page.tsx (dataInicioSituacao): sem período
-    // explícito, tipo/família clampam pro ano corrente (mesmo raciocínio de
-    // custo -- buscar todo o histórico sem filtro de data leva 10-15s+ por
-    // dimensão, medido ao vivo na Task 3); forma_pgto nunca clampa, porque
-    // "Todos" sempre significou all-time nessa aba (mesmo incidente real já
-    // documentado em page.tsx -- clampar ali seria uma regressão, não uma
-    // melhoria).
+    // Fix round 1 (revisão Task 4, Critical #1/#2): DIFERENTE de page.tsx,
+    // este endpoint só recebe `data_inicio`/`data_final` -- nunca o chip de
+    // período (`periodo`, ex. "Ano passado") que a tela resolve internamente
+    // pra `mesIni`/`mesFim` antes de decidir o clamp. Repetir o mesmo clamp
+    // condicional de page.tsx aqui (tipo/família pro ano corrente quando
+    // "sem período explícito") seria ERRADO: um usuário com o chip "Ano
+    // passado" ativo (2025) nunca manda `data_inicio`/`data_final` na URL de
+    // export (`exportParams` em page.tsx só carrega esses dois campos, não o
+    // chip) -- essa rota enxergaria "sem período nenhum" e clamparia
+    // Tipo/Família pro ano CORRENTE (2026), devolvendo um Excel vazio de
+    // 2025 pra quem esperava ver exatamente 2025. Achado real medido ao
+    // vivo pelo revisor (loja 3): Tipo/Família clampadas = R$4.525.708,53
+    // (só 2026) contra R$7.959.457,39 (all-time, o que Forma de pgto já
+    // buscava sem clamp) -- 76% de diferença, e as 3 abas do MESMO arquivo
+    // ficavam em períodos diferentes sem nenhum aviso.
+    //
+    // Correção: SEM clamp nenhum aqui -- as 3 dimensões usam sempre o MESMO
+    // período (o explícito, se houver; sem piso de data, se não), igual ao
+    // que a aba Forma de pgto já fazia. Nunca fica menor que o que a RPC
+    // (branch `else` abaixo) já devolvia pro mesmo clique sem Situação --
+    // era sempre um superset (sem noção nenhuma de período fora do
+    // explícito), nunca um subconjunto que pudesse faltar dado que a tela
+    // mostrava. Custo aceito conscientemente (mesmo raciocínio do brief:
+    // "Baixar" é uma ação explícita de download, sem timeout de serverless
+    // nesta infra self-hosted) -- mais barato ainda depois do fix do
+    // Important #4 abaixo (fetch único reusado pelas 3 abas, não 1 por aba).
     const metaPorCodigo = await buscarMetaPorCodigo(supabase, lojaId)
 
+    // Fix round 1 (Important #4): tipo e família usam EXATAMENTE os mesmos
+    // parâmetros de busca agora (mesmo período pras 3, sem clamp por
+    // dimensão) -- sem isso, cada uma das 3 dimensões refaria o mesmo fetch
+    // de `/fat_cupons` (as 3) e `/fat_cupom_itens` (tipo e família)
+    // integralmente. Busca uma vez só aqui fora do loop e repassa via
+    // `cuponsPreFetch`/`itensPreFetch`/`pagamentosPreFetch` (Task 4,
+    // `buscarFatAgregadoPorSituacao`) -- 3 fetches no total em vez de 6.
+    let cuponsTruncou = false
+    let itensTruncou = false
+    let pagamentosTruncou = false
+    const [cuponsPreFetch, itensPreFetch, pagamentosPreFetch] = await Promise.all([
+      buscarFatCupons({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato, onTruncado: () => { cuponsTruncou = true } }),
+      buscarFatCupomItens({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato, onTruncado: () => { itensTruncou = true } }),
+      buscarFatCupomPagamentosPeriodo({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato, onTruncado: () => { pagamentosTruncou = true } }),
+    ])
+
+    const periodoLabel = dataInicioFato ? `${dataInicioFato} a ${dataFinalFato}` : `até ${dataFinalFato} (sem piso de data)`
+
     for (const d of DIMS) {
-      const dataInicioSituacao =
-        d.dim !== 'forma_pgto' && !temPeriodoExplicito ? `${anoAtualStr}-01-01` : dataInicioFato
       const group: 'forma' | 'tipo' | 'familia' = d.dim === 'forma_pgto' ? 'forma' : d.dim === 'tipo' ? 'tipo' : 'familia'
-      let dimErrou = false
       const rows = await buscarFatAgregadoPorSituacao({
         lojaId,
-        dataInicio: dataInicioSituacao,
+        dataInicio: dataInicioFato,
         dataFinal: dataFinalFato,
         group,
         group2: 'mes',
         status: statusParam,
         metaPorCodigo: d.dim === 'forma_pgto' ? undefined : metaPorCodigo,
-        onTruncado: () => { dimErrou = true },
+        cuponsPreFetch,
+        itensPreFetch,
+        pagamentosPreFetch,
       })
-      const linhas: Linha[] = rows
+      // Fix round 1 (Important #3): `rotulosPorDim` (filtro de tipo/família/
+      // forma de pgto vindo da URL) só era aplicado no branch `else` (via
+      // `p_rotulos` da RPC) -- ficava mudo aqui, então `?familia=DRINKS&
+      // status=NORMAL` devolvia TODAS as famílias em vez de só DRINKS.
+      // `buscarFatAgregadoPorSituacao` não tem filtro de rótulo em
+      // query-time (agrega tudo em JS), então aplica aqui, depois da
+      // agregação -- mesmo efeito final de `p_rotulos` na RPC.
+      const rotulosFiltro = rotulosPorDim[d.dim] ?? []
+      const rowsFiltradas = rotulosFiltro.length ? rows.filter((r) => rotulosFiltro.includes(r.rotulo)) : rows
+      const linhas: Linha[] = rowsFiltradas
         .filter((r) => r.mes)
         .map((r) => ({ rotulo: r.rotulo, mes: r.mes as string, valor: r.valor }))
       if (linhas.length) {
         // Excel não tem como mostrar um banner clicável -- mesmo padrão de
-        // relatorio-indicadores/export/route.ts (aviso embutido no subtítulo).
-        const subtitulo = dimErrou
-          ? 'ATENÇÃO: falha ao consultar o histórico do Contabo -- este total pode estar incompleto'
-          : undefined
+        // relatorio-indicadores/export/route.ts (aviso embutido no
+        // subtítulo). Período SEMPRE explícito agora (fix Critical #2: com
+        // as 3 abas garantidamente no mesmo período pós-fix do clamp, isso é
+        // reforço de transparência, não correção de uma divergência real
+        // que ainda exista).
+        const truncou = group === 'forma' ? (cuponsTruncou || pagamentosTruncou) : (cuponsTruncou || itensTruncou)
+        const subtitulo = [
+          `Período: ${periodoLabel}`,
+          truncou ? 'ATENÇÃO: falha ao consultar o histórico do Contabo -- este total pode estar incompleto' : null,
+        ].filter(Boolean).join(' · ')
         abas.push(abaMatrizMensal({
           titulo: `Faturamento por ${d.label} (mês a mês) · Situação: ${STATUS_LABEL[statusParam] ?? statusParam}`,
           dimLabel: d.label,
