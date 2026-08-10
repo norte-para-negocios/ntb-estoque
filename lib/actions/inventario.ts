@@ -500,6 +500,7 @@ export async function forceSyncInventario(inventarioId: number) {
 
 const SEM_CMC_MAX_TENTATIVAS = 20
 const SEM_CMC_STALE_HORAS = 1
+const PROCESSANDO_STALE_HORAS = 1
 
 type InventarioItemRetryRow = {
   id: number
@@ -530,6 +531,20 @@ type InventarioHeader = Omit<InventarioComItens, 'items'>
  * acima -- nao todos os "pendentes" do inventario. Processamento sequencial (sem
  * paralelizar), mesmo espirito comedido do resto deste arquivo agora que existe
  * retry automatico.
+ *
+ * Reclaim de 'Processando' (Important #2, auditoria 2026-08-09/10): achado real
+ * (itens 5066/5259/7033/7035, loja 4) -- itens presos em 'Processando' ha semanas,
+ * sem nenhum caminho de recuperacao automatica (nenhuma query de retry selecionava
+ * esse status). `processarItemInventario` marca 'Processando' ANTES de chamar o
+ * Omie (linha ~322) sem gravar `ultima_tentativa_em` nesse instante -- um
+ * crash/timeout do processo entre esse update e o proximo (sucesso/erro/sem CMC)
+ * deixa a linha travada pra sempre, invisivel aos 2 filtros acima. Reclamada
+ * quando `ultima_tentativa_em` (gravado por uma tentativa ANTERIOR que gerou Erro/
+ * Sem CMC antes de virar Processando de novo, ou por este mesmo retry ao marcar
+ * 'Processando' num ciclo anterior) esta mais velha que `PROCESSANDO_STALE_HORAS` --
+ * tratada com a mesma prioridade/sem teto de 'Erro' (nota: `maxDuration=300` do
+ * Next.js NAO tem efeito nesta infra self-hosted no Contabo -- e so um hint do
+ * Vercel -- entao nao serve de mitigacao real contra travamento).
  */
 export async function retryAjustesInventarioPendentes(
   lojas: LojaOmie[],
@@ -559,18 +574,30 @@ export async function retryAjustesInventarioPendentes(
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
+    // Reclaim de item travado em 'Processando' (Important #2): ver docstring da
+    // funcao. Mesma prioridade/sem teto de 'Erro'.
+    const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
+    const { data: processandoTravados, error: erroProcessando } = await supabase
+      .from('inventario_items')
+      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
+      .eq('loja_id', loja.id)
+      .eq('status', 'Processando')
+      .lt('ultima_tentativa_em', processandoCutoff)
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
     // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
     // de parse do .or()), reportar explicitamente por loja em vez de tratar como
     // "0 pendentes" -- mesmo padrao de bug ja visto 3x neste repo (AGENTS.md: RPC
     // que engolia erro escondeu 90 dias de Compras, buscarFrio devolvendo [],
     // buscarTudoPaginado tratando erro como fim de pagina).
-    if (erroErros || erroSemCmc) {
+    if (erroErros || erroSemCmc || erroProcessando) {
       resultados.push({
         loja_id: loja.id,
         tentadas: 0,
         sucesso: 0,
         falhas: 0,
-        erro: (erroErros ?? erroSemCmc)!.message,
+        erro: (erroErros ?? erroSemCmc ?? erroProcessando)!.message,
       })
       continue
     }
@@ -579,7 +606,7 @@ export async function retryAjustesInventarioPendentes(
     // finishInventario/forceSyncInventario): nunca reprocessar item que ja tem
     // id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan (seria
     // DELETADO por processarItemInventario em vez de processado).
-    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? [])]
+    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? []), ...(processandoTravados ?? [])]
       .filter((i) => i.id_ajuste === null && i.quan !== null)
       .slice(0, limitePorLoja) as InventarioItemRetryRow[]
 

@@ -12,9 +12,18 @@ SECRET=$(grep '^CRON_SECRET=' .env.local | head -1 | cut -d'=' -f2- | tr -d '"')
 BASE="http://127.0.0.1:3002"
 LOG=/opt/ntb-estoque/sync-cron.log
 
+# -m 120 -> -m 240 (Important #3, auditoria 2026-08-09/10): os 3 crons novos de
+# retry/sync-ajustes estouravam o timeout de 120s EM TODO CICLO desde o deploy
+# (log sempre "000ERR", indistinguivel de falha real -- cegava o log e quase
+# colidia com o proximo ciclo de 10 min). `hit()` usa um -m fixo pra todas as
+# chamadas deste script; diferenciar por endpoint exigiria reescrever a funcao
+# (ex.: um segundo parametro de timeout) so pra 3 das ~20 chamadas -- optou-se por
+# subir o timeout global em vez disso (mitigacao complementar a reducao de
+# limitePorLoja 30->10 nos 2 crons de retry, que ja deve encurtar a maioria dos
+# ciclos bem abaixo de 120s de qualquer forma).
 hit() {
   local codigo
-  codigo=$(curl -s -m 120 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SECRET" "$BASE$1" || echo "ERR")
+  codigo=$(curl -s -m 240 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SECRET" "$BASE$1" || echo "ERR")
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') $1 -> $codigo" >> "$LOG"
 }
 

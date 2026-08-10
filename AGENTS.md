@@ -727,6 +727,15 @@ status de `onErro` a partir de 2026-08-09:
   `auditoria-fiscal/export/route.ts`) -- corrigido, Task 15.
 - **Pendências de Classificação** (`pendencias-classificacao/page.tsx`,
   `pendencias-classificacao/export/route.ts`) -- corrigido, Task 16.
+- **Notas Fiscais** (`nota-fiscal/page.tsx:191`, via `buscarNotaIdsFrio` em
+  `lib/relatorio-frio-nf.ts:139`, usado pra resolver o filtro de produto/
+  família/local que cruza os 90 dias) -- era o 4º call site sem `onErro`,
+  esquecido no rollup original (a lista abaixo só cobria os 3 relatórios de
+  auditoria dedicada, Tasks 11/14/15/16, mas `buscarItensNFFrio` também é
+  chamado indiretamente por `nota-fiscal/page.tsx`). Corrigido na fix wave
+  final (2026-08-09/10): `buscarNotaIdsFrio` ganhou `onErro?`, repassado a
+  `buscarItensNFFrio`; a tela ganhou `errosConsulta`/banner (mesmo padrão
+  dos 3 relatórios acima).
 - **Compras** (`relatorio-compras`) -- **ainda falta**, 3 call sites:
   `page.tsx:220`, `export/route.ts:153`, `export-completo/route.ts:139`.
   Já mencionado como achado (fora de escopo) nas Tasks 11/14/15/16 sem
@@ -787,3 +796,156 @@ auditoria (que já vai mexer nesse script pra ligar os crons de retry). O
 redesign do cursor (pra não conflitar com escrita direta do app) é mais
 envolvido -- registrado aqui como candidato a follow-up separado, fora do
 escopo de hoje.
+
+## Fix wave final da auditoria de retry Omie (Critical + Importants #2-5, 2026-08-09/10)
+
+Revisão final de todo o branch da auditoria de retry Omie (36 commits,
+`827bddd..b96cb65`) achou 1 Critical ativo em produção AGORA + 4 Important.
+Corrigidos todos numa única dispatch (ver
+`.superpowers/sdd/2026-08-09-retry-omie-auditoria-detalhes/final-review-fix-report.md`
+pro relatório completo, antes/depois de cada trecho).
+
+**Critical -- loop infinito de reenvio `TRF` pro Omie**:
+`retryMovimentosManuaisPendentes` (`lib/actions/movimentacoes.ts`) filtrava
+elegibilidade só por `status`/`transferencia_id IS NULL`, sem checar `tipo`.
+Qualquer linha `TRF` (ou qualquer tipo fora de ENT/SAI) com
+`transferencia_id NULL` era reenviada pra sempre a cada 10 min: o payload
+manual não tem `codigo_local_estoque_destino` (só o fluxo de transferência
+preenche), o Omie recusa 100% das vezes, e `status='Erro'` genérico não tem
+teto de tentativas por design -- ~2 chamadas Omie por linha a cada ciclo,
+indefinidamente, contra um ERP de produção. Corrigido adicionando
+`.in('tipo', TIPOS_MANUAIS_ARR)` (ENT/SAI) às 3 queries de elegibilidade da
+função. Linhas `TRF`/`transferencia_id NULL` presas em `status='Erro'` antes
+deste fix são **órfãs estruturalmente** -- não têm o dado que o fluxo de
+transferência precisaria pra reenviar por lá também, e não devem ser
+reprocessadas por nenhum caminho sem investigação dedicada. **A query real de
+produção pra contar/localizar essas linhas (achado citado no brief: pelo
+menos ids 126-155 na loja 4, e também loja 3) não foi executada por este
+agente** -- SSH em produção ficou explicitamente fora do escopo desta
+dispatch (mesma restrição do passo de deploy, ver relatório). Query pronta
+pro controller rodar via `docker exec -i supabase-db psql -U supabase_admin
+-d postgres`:
+```sql
+select loja_id, id, status, tentativas, ultima_tentativa_em
+from movimentos
+where transferencia_id is null and tipo = 'TRF' and status = 'Erro'
+order by loja_id, id;
+```
+Depois de confirmar a contagem/lista, considerar mover essas linhas pra um
+`status` que não apareça mais no filtro de retry (ex.: `'Erro - órfã'`) --
+sem apagar nem reprocessar por outro caminho sem decisão explícita do
+usuário.
+
+**Important #2 -- `'Processando'` travado sem reclaim**: as 3 funções de
+retry (`retryAjustesInventarioPendentes` em `inventario.ts`,
+`retryMovimentosTransferenciaPendentes` em `transferencia.ts`,
+`retryMovimentosManuaisPendentes` em `movimentacoes.ts`) marcam a linha como
+`'Processando'` antes de chamar o Omie, mas um crash/timeout nesse meio
+tempo deixava a linha travada nesse status pra sempre -- nenhuma query de
+retry selecionava `'Processando'`. Achado real: `inventario_items` ids 5066,
+5259, 7033, 7035 (loja 4) presos desde 24/07, 27/07 e 08/08. Corrigido nas
+3 funções: uma query adicional reclama linhas
+`status='Processando' AND ultima_tentativa_em < now() - interval '1 hour'`,
+tratadas com a mesma prioridade/sem teto de `'Erro'`. `maxDuration=300`
+(Next.js) **não** protege contra isso nesta infra self-hosted -- é só um
+hint do Vercel, sem efeito no servidor Contabo.
+
+**Important #3 -- timeout de 120s do `curl` estourado em todo ciclo**: os 3
+crons novos (`retry-ajustes-inventario`, `retry-ajustes-movimentos`,
+`sync-ajustes`) batiam no timeout de `-m 120` de `scripts/sync-cron.sh` em
+todo ciclo desde o deploy (log sempre `000ERR`). Corrigido reduzindo
+`limitePorLoja` de 30 pra 10 nas 3 funções de retry (`retryAjustesInventarioPendentes`,
+`retryMovimentosTransferenciaPendentes`, `retryMovimentosManuaisPendentes`)
+e subindo o timeout global de `hit()` em `sync-cron.sh` pra `-m 240`
+(`hit()` usa um `-m` fixo pra todas as ~20 chamadas do script; diferenciar
+por endpoint exigiria reescrever a função só pra 3 delas -- optou-se pelo
+aumento global, complementar à redução de `limitePorLoja`).
+
+**Important #4 -- crons de retry sempre 200, mesmo com falha total**:
+`app/api/cron/retry-ajustes-inventario/route.ts` e
+`.../retry-ajustes-movimentos/route.ts` respondiam 200 incondicionalmente.
+Corrigido com o mesmo padrão de `snapshot-margem-diario`/
+`sync-preco-movimentacao` (Tasks 9/13): 502 quando houve trabalho de
+verdade (algo pendente ou erro de query em qualquer loja) e nenhum sucesso
+real -- um ciclo sem nada pendente continua 200 (é o caso saudável mais
+comum, não pode virar alarme falso).
+
+**Important #5 -- 142 notas fiscais ausentes só documentadas em doc
+gitignored**: ver seção nova abaixo.
+
+**Minor corrigido**: `buscarNotaIdsFrio` (`nota-fiscal/page.tsx`) era o 4º
+call site de `buscarItensNFFrio` sem `onErro` -- ver rollup atualizado
+acima.
+
+**Minor documentado, não corrigido (comportamento pré-existente, não
+regressão desta wave)**: os 2 crons novos de retry (`retry-ajustes-
+inventario`, `retry-ajustes-movimentos`) escrevem de verdade na loja 4 --
+`getLojasAtivas()` não exclui essa loja, ao contrário de `sync-ajustes`
+(que exclui por desenho, "nunca testar escrita ao vivo" -- ver seção acima).
+Isso é o **mesmo padrão que `retry-op-conclusao` já tinha** antes desta
+auditoria (também sem exclusão de loja 4) -- não é uma regressão nova, mas
+também nunca foi uma decisão explícita, só aconteceu por a exclusão de
+`sync-ajustes` nunca ter sido replicada nos crons de retry. Registrado aqui
+pra virar decisão reconhecida em vez de acidente: se a loja 4 precisar
+voltar a ficar 100% livre de escrita automática, os 3 crons de retry
+(`retry-op-conclusao`, `retry-ajustes-inventario`, `retry-ajustes-
+movimentos`) precisam da mesma exclusão, não só `sync-ajustes`.
+
+**Minor confirmado, sem ação**: `tentativas` compartilhado entre `Erro`/
+`Sem CMC` (já documentado como minor deferido em revisões anteriores desta
+auditoria) continua registrado como tal -- nenhuma mudança de comportamento
+nesta wave.
+
+### As 142 notas fiscais ausentes no espelho do Contabo (Important #5, 2026-08-09/10)
+
+Achado documentado até agora só no cabeçalho de
+`scripts/reconcile-notas-fiscais-frio.sql` (seção "GAP MAIOR") e no
+relatório gitignored da Task 11 -- nunca chegou a este arquivo. Registrando
+aqui pra não se perder:
+
+**O quê**: 142 notas fiscais existem no Supabase (quente, sempre correto) e
+**não existem de jeito nenhum** no espelho do Contabo (`ntb_frio`) -- não é
+`c_etapa` desatualizado (isso é o achado MENOR do mesmo script, as 134 notas
+já corrigidas em 2026-08-09, ver `reconcile-notas-fiscais-frio.sql`), é
+**linha totalmente ausente**. 141 das 142 já estão dentro da janela fria
+hoje (fora dos ~90 dias quentes) -- só 1 ainda está na janela quente.
+
+**Magnitude, medida ao vivo em 2026-08-09**: ~R$161.067,94 já ausentes do
+total "Concluída" da tela de Compras **hoje**, somando as 141 notas já
+frias em todas as lojas. Maior concentração: loja 5, 105 notas emitidas em
+março/2026, R$131.897,55 sozinhas.
+
+**Telas afetadas**: qualquer relatório que dependa do complemento frio de
+NF pra período que cruza os 90 dias -- principalmente **Compras**
+(`relatorio-compras`), mas também Auditoria Fiscal e o lado Compras de
+Indicadores (Faturamento × Compras), já que os 3 leem `notas_fiscais`/
+`nota_fiscal_items` do Contabo via o mesmo `lib/relatorio-frio-nf.ts`
+(`buscarItensNFFrio`). O sumiço é silencioso -- não aparece como erro, só
+como um total menor do que deveria.
+
+**Por que o script já executado (as 134 notas de `c_etapa` desatualizado)
+NÃO resolve isso**: aquele script é um `UPDATE` -- só corrige `c_etapa` de
+linhas que **já existem** no Contabo mas com status errado. As 142 notas
+deste achado não têm linha nenhuma pra atualizar; a causa raiz é a mesma
+(dual-write de `gravarNotaFiscalNoFrio`, `lib/omie/nota-fiscal.ts`, é
+fire-and-forget sem retry -- qualquer falha transitória na chamada, ex.: o
+incidente do rebuild do Hestia documentado acima neste arquivo em
+2026-07-18, perde a nota permanentemente), só que na chamada de **INSERT**
+em vez de UPDATE. Um `UPDATE ... WHERE (loja_id, n_id_receb) IN (...)`
+não cria linha nenhuma quando a chave não existe -- por design, não é bug
+do script, é escopo diferente do problema.
+
+**Mecanismo proposto (não implementado nesta wave, fora de escopo -- é
+achado documental, não código)**: mesmo padrão de retry já usado nos outros
+3 fluxos desta auditoria (`retry-ajustes-inventario`, `retry-ajustes-
+movimentos`, `retry-op-conclusao`) -- um cron dedicado que varre
+`notas_fiscais`/`nota_fiscal_items` do Supabase (quente) num período
+recente, verifica quais chaves `(loja_id, n_id_receb)` **não existem** no
+Contabo (via `GET /notas_fiscais?loja_id=...` na `ntb-frio-api`, comparando
+o conjunto de ids) e reenvia via `POST` (endpoint de INSERT teria que ser
+adicionado à API, ou reusar `gravarNotaFiscalNoFrio` chamando-o de novo
+pras chaves faltantes). Diferente dos retries de ajuste (que reenviam pro
+Omie), este reenvio é só entre Supabase e Contabo -- ambos já têm o dado
+completo, só falta copiar. Candidato a follow-up dedicado; também vale medir
+de novo a magnitude antes de implementar (o achado é de 2026-08-09, pode ter
+crescido).

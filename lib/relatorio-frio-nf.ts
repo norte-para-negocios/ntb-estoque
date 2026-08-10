@@ -135,8 +135,14 @@ export async function buscarNotaIdsFrio(opts: {
   codigosProduto: string[] | null
   produtoBusca: string | null
   localCod: number | null
+  // Rollup do achado das Tasks 11/14/15/16 (AGENTS.md, "Rollup: buscarItensNFFrio
+  // sem onErro"): este era o 4o call site de buscarItensNFFrio sem onErro (usado
+  // por nota-fiscal/page.tsx via buscarNotaIdsFrio) -- sem ele, uma falha do
+  // Contabo aqui encolhia silenciosamente o filtro por produto/familia/local em
+  // Notas Fiscais pra periodo que cruza os 90 dias, igual aos outros 3 relatorios.
+  onErro?: () => void
 }): Promise<Set<number>> {
-  const itens = await buscarItensNFFrio({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  const itens = await buscarItensNFFrio({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onErro: opts.onErro })
   const termo = opts.produtoBusca?.toLowerCase() || null
   const ids = new Set<number>()
   for (const it of itens) {

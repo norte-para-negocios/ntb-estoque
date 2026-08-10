@@ -94,6 +94,12 @@ export default async function NotaFiscalPage({
   // so aqui e os dois ignoravam esse filtro silenciosamente).
   const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
 
+  // Minor da auditoria de retry Omie (2026-08-09/10, rollup em AGENTS.md
+  // "buscarItensNFFrio sem onErro"): este era o 4o call site sem onErro (via
+  // buscarNotaIdsFrio abaixo) -- mesmo padrao de errosConsulta/banner ja usado em
+  // relatorio-indicadores/auditoria-fiscal/pendencias-classificacao.
+  const errosConsulta: string[] = []
+
   // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
   // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
   // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items -> notas_fiscais.id in (...).
@@ -182,7 +188,15 @@ export default async function NotaFiscalPage({
   // fria nem e buscada) E algum filtro que dependa de produto/local esta ativo.
   const temFiltroProdLocal = tiposArr.length > 0 || familiasArr.length > 0 || !!params.produto || localCod !== null
   const notaIdsFrioSet = temFiltroProdLocal && dataInicio < limiteJanelaQuente()
-    ? await buscarNotaIdsFrio({ lojaId, dataInicio, dataFinal, codigosProduto: codigos, produtoBusca: params.produto || null, localCod })
+    ? await buscarNotaIdsFrio({
+        lojaId,
+        dataInicio,
+        dataFinal,
+        codigosProduto: codigos,
+        produtoBusca: params.produto || null,
+        localCod,
+        onErro: () => errosConsulta.push('histórico do Contabo (NF > ~90 dias)'),
+      })
     : null
 
   const SELECT_LISTAGEM = 'id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object'
@@ -572,6 +586,14 @@ export default async function NotaFiscalPage({
         />
         <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final', 'status']} persistirEm="/nota-fiscal" />
       </ListaHeader>
+
+      {errosConsulta.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — o
+          filtro por produto/família/local pode estar incompleto para o período antigo. Recarregue a página; se
+          persistir, avise o suporte.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">

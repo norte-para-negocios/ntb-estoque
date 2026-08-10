@@ -515,6 +515,7 @@ export async function forceSyncTransferencia(transferenciaId: number) {
 
 const SEM_CMC_MAX_TENTATIVAS = 20
 const SEM_CMC_STALE_HORAS = 1
+const PROCESSANDO_STALE_HORAS = 1
 
 type MovimentoTransferenciaRetryRow = {
   id: number
@@ -546,6 +547,12 @@ type TransferenciaHeader = Omit<TransferenciaComMovimentos, 'movimentos'>
  * a cada 10 min, payload multi-MB desnecessario), processando so os movimentos que
  * bateram no filtro de retry acima -- nao todos os "pendentes" da transferencia.
  * Processamento sequencial (sem paralelizar).
+ *
+ * Reclaim de 'Processando' (Important #2, auditoria 2026-08-09/10, mesmo padrao
+ * aplicado em `retryAjustesInventarioPendentes`/`retryMovimentosManuaisPendentes`):
+ * um crash/timeout no meio de `processarMovimento` pode deixar o movimento em
+ * 'Processando' sem nunca voltar pra 'Erro' -- invisivel aos 2 filtros acima pra
+ * sempre. Tratado com a mesma prioridade/sem teto de 'Erro'.
  */
 export async function retryMovimentosTransferenciaPendentes(
   lojas: LojaOmie[],
@@ -577,18 +584,31 @@ export async function retryMovimentosTransferenciaPendentes(
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
+    // Reclaim de movimento travado em 'Processando' (Important #2): ver docstring
+    // da funcao. Mesma prioridade/sem teto de 'Erro'.
+    const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
+    const { data: processandoTravados, error: erroProcessando } = await supabase
+      .from('movimentos')
+      .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan')
+      .eq('loja_id', loja.id)
+      .not('transferencia_id', 'is', null)
+      .eq('status', 'Processando')
+      .lt('ultima_tentativa_em', processandoCutoff)
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
     // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
     // de parse do .or()), reportar explicitamente por loja em vez de tratar como
     // "0 pendentes" -- mesmo padrao de bug ja visto 3x neste repo (AGENTS.md: RPC
     // que engolia erro escondeu 90 dias de Compras, buscarFrio devolvendo [],
     // buscarTudoPaginado tratando erro como fim de pagina).
-    if (erroErros || erroSemCmc) {
+    if (erroErros || erroSemCmc || erroProcessando) {
       resultados.push({
         loja_id: loja.id,
         tentadas: 0,
         sucesso: 0,
         falhas: 0,
-        erro: (erroErros ?? erroSemCmc)!.message,
+        erro: (erroErros ?? erroSemCmc ?? erroProcessando)!.message,
       })
       continue
     }
@@ -597,7 +617,7 @@ export async function retryMovimentosTransferenciaPendentes(
     // finishTransferencia/forceSyncTransferencia): nunca reprocessar movimento que
     // ja tem id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan/quan
     // <= 0 (seria DELETADO ou nunca deveria ter sido enviado por processarMovimento).
-    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? [])]
+    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? []), ...(processandoTravados ?? [])]
       .filter((m) => m.id_ajuste === null && m.quan !== null && m.quan > 0)
       .slice(0, limitePorLoja) as MovimentoTransferenciaRetryRow[]
 

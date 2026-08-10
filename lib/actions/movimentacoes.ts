@@ -214,6 +214,8 @@ export async function criarAjusteManual(input: {
 
 const SEM_CMC_MAX_TENTATIVAS = 20
 const SEM_CMC_STALE_HORAS = 1
+const PROCESSANDO_STALE_HORAS = 1
+const TIPOS_MANUAIS_ARR = [...TIPOS_MANUAIS]
 
 type MovimentoManualRetryRow = {
   id: number
@@ -245,6 +247,27 @@ type MovimentoManualElegivel = {
  * revisada em 3 rounds): 'Erro' reenvia sempre, sem teto; 'Sem CMC' tem teto de
  * tentativas + throttle de 1h.
  *
+ * CRITICO (auditoria de retry Omie, 2026-08-09/10): as 3 queries de elegibilidade
+ * filtram por `tipo` (`TIPOS_MANUAIS_ARR` = ENT/SAI) alem de `transferencia_id IS
+ * NULL`. Sem isso, linhas `TRF` (transferencia_id preenchido em outro fluxo, mas
+ * que por algum motivo ficaram com `transferencia_id NULL` -- ou qualquer outro
+ * tipo fora de ENT/SAI) eram reenviadas aqui em loop infinito: `reenviarMovimentoManual`
+ * monta o payload do jeito manual (sem `codigo_local_estoque_destino`, que so o
+ * fluxo de transferencia preenche), o Omie SEMPRE recusa, e como `status='Erro'`
+ * generico nao tem teto de tentativas por design (falha transitoria se resolve
+ * sozinha reenviando), essas linhas nunca saiam do loop -- gastando ~2 chamadas
+ * Omie por linha a cada 10 min, pra sempre, 100% rejeitadas desde o deploy. Linhas
+ * `TRF`/`transferencia_id NULL` presas em 'Erro' antes deste fix sao orfas
+ * estruturalmente (nao tem `codigo_local_estoque_destino` pra reenviar por este
+ * caminho nem pelo de transferencia.ts) -- ver AGENTS.md.
+ *
+ * Tambem reclama linhas travadas em 'Processando' ha mais de `PROCESSANDO_STALE_HORAS`
+ * (crash/timeout no meio do envio anterior deixaria a linha invisivel pro filtro
+ * de 'Erro'/'Sem CMC' pra sempre, sem esse reclaim) -- tratadas com a mesma
+ * prioridade/sem teto de 'Erro' (achado Important #2 da mesma auditoria, replicado
+ * aqui alem de `retryAjustesInventarioPendentes`/`retryMovimentosTransferenciaPendentes`
+ * porque as 3 funcoes compartilham o mesmo padrao de trava 'Processando').
+ *
  * Diferente de inventario/transferencia, o movimento manual NAO tem um "pai" com
  * itens -- a propria linha de `movimentos` ja tem tudo que `reenviarMovimentoManual`
  * precisa, so falta a `loja` (que ja vem no parametro `lojas`). Ainda assim, apos
@@ -268,6 +291,7 @@ export async function retryMovimentosManuaisPendentes(
       .select('id, loja_id, status, tentativas, id_ajuste, quan')
       .eq('loja_id', loja.id)
       .is('transferencia_id', null)
+      .in('tipo', TIPOS_MANUAIS_ARR)
       .eq('status', 'Erro')
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
@@ -278,29 +302,48 @@ export async function retryMovimentosManuaisPendentes(
       .select('id, loja_id, status, tentativas, id_ajuste, quan')
       .eq('loja_id', loja.id)
       .is('transferencia_id', null)
+      .in('tipo', TIPOS_MANUAIS_ARR)
       .eq('status', 'Sem CMC')
       .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
+    // Reclaim de linha travada em 'Processando' (Important #2, mesma auditoria):
+    // um crash/timeout no meio de `reenviarMovimentoManual` (chamado tambem por
+    // `criarAjusteManual`, fora do cron) pode deixar a linha em 'Processando' sem
+    // nunca voltar pra 'Erro' -- invisivel aos 2 filtros acima pra sempre. Tratada
+    // com a mesma prioridade/sem teto de 'Erro' (nao e um caso "sem CMC" que
+    // precisa de acao humana, e sim uma tentativa que nunca terminou).
+    const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
+    const { data: processandoTravados, error: erroProcessando } = await supabase
+      .from('movimentos')
+      .select('id, loja_id, status, tentativas, id_ajuste, quan')
+      .eq('loja_id', loja.id)
+      .is('transferencia_id', null)
+      .in('tipo', TIPOS_MANUAIS_ARR)
+      .eq('status', 'Processando')
+      .lt('ultima_tentativa_em', processandoCutoff)
+      .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
+      .limit(limitePorLoja)
+
     // Nao engolir erro de query: mesmo padrao de bug ja visto 3x neste repo
     // (AGENTS.md) -- reportar explicitamente por loja em vez de tratar como "0
     // pendentes".
-    if (erroErros || erroSemCmc) {
+    if (erroErros || erroSemCmc || erroProcessando) {
       resultados.push({
         loja_id: loja.id,
         tentadas: 0,
         sucesso: 0,
         falhas: 0,
-        erro: (erroErros ?? erroSemCmc)!.message,
+        erro: (erroErros ?? erroSemCmc ?? erroProcessando)!.message,
       })
       continue
     }
 
     // Segunda camada de protecao: nunca reprocessar linha que ja tem id_ajuste
     // (duplicaria o lancamento no Omie) ou que ficou sem quan.
-    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? [])]
+    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? []), ...(processandoTravados ?? [])]
       .filter((m) => m.id_ajuste === null && m.quan !== null)
       .slice(0, limitePorLoja) as MovimentoManualRetryRow[]
 
