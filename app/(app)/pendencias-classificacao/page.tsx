@@ -33,6 +33,26 @@ export default async function PendenciasClassificacaoPage({
   const sp = await searchParams
   const { dataIni: ini12m, dataFim: dataFimPendencias } = periodoPendencias(sp)
 
+  // Achado real (auditoria 2026-08-09, Task 16): mesma classe de bug já
+  // corrigida em Compras/Margem/Indicadores/Auditoria Fiscal -- nenhuma das
+  // consultas abaixo checava `.error`, e a chamada a `buscarItensNFFrio`
+  // (bloco 3, itens de NF antigos no Contabo) não passava o `onErro` que a
+  // Task 14 adicionou especificamente pra sinalizar quando o histórico frio
+  // falha (`buscarFrio` engole timeout/erro de rede e devolve `null`, que
+  // virava `[]` idêntico a "sem NF antiga de verdade"). Confirmado ao vivo
+  // que o pedaço frio carrega valor real e substancial pra esta tela (join
+  // direto no Postgres do Contabo, itens de NF concluída no período
+  // [ini12m, corte): loja 2 R$1.908.580, loja 3 R$2.324.772, loja 5
+  // R$2.976.430 -- se essa chamada falhar em silêncio, os 3 blocos de "R$
+  // associado" (sem família/sem tipo/sem cadastro) encolhem sem aviso.
+  const errosConsulta: string[] = []
+  function logErro(rotulo: string) {
+    return (error: { message: string }) => {
+      errosConsulta.push(rotulo)
+      console.error(`pendencias-classificacao: consulta "${rotulo}" falhou -- dado pode estar incompleto`, error.message)
+    }
+  }
+
   // Blocos 1 e 2: cadastro incompleto.
   type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; tipo_item: string | null; descricao_familia: string | null; inativo: boolean | null }
   // PostgREST corta em 1000 linhas por padrão, sem erro -- lojas com catálogo
@@ -44,12 +64,13 @@ export default async function PendenciasClassificacaoPage({
   async function carregarTodosProdutos(): Promise<Prod[]> {
     const acc: Prod[] = []
     for (let p = 0; ; p++) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('produtos')
         .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia, inativo')
         .eq('loja_id', lojaId)
         .order('codigo_produto')
         .range(p * 1000, p * 1000 + 999)
+      if (error) { logErro('catálogo de produtos')(error); break }
       if (!data?.length) break
       acc.push(...(data as Prod[]))
       if (data.length < 1000) break
@@ -75,7 +96,7 @@ export default async function PendenciasClassificacaoPage({
   async function carregarQuentes(): Promise<QuenteRaw[]> {
     const acc: QuenteRaw[] = []
     for (let p = 0; ; p++) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('nota_fiscal_items')
         .select('id, n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome, c_etapa, full_object)')
         .eq('loja_id', lojaId)
@@ -85,6 +106,7 @@ export default async function PendenciasClassificacaoPage({
         .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
         .order('id')
         .range(p * 1000, p * 1000 + 999)
+      if (error) { logErro('itens de NF (janela quente)')(error); break }
       if (!data?.length) break
       acc.push(...(data as unknown as QuenteRaw[]))
       if (data.length < 1000) break
@@ -100,7 +122,7 @@ export default async function PendenciasClassificacaoPage({
   const [todos, quentesRaw, friosRaw] = await Promise.all([
     carregarTodosProdutos(),
     carregarQuentes(),
-    buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria }),
+    buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria, onErro: () => errosConsulta.push('histórico do Contabo (NF > ~90 dias)') }),
   ])
   // Achado real (usuário 2026-07-22): produto inativo não precisa de
   // classificação (não vai mais ser comprado/vendido) -- estava aparecendo
@@ -176,7 +198,7 @@ export default async function PendenciasClassificacaoPage({
   const valorSemCadastro = semCadastroLinhas.reduce((s, l) => s + l.valor, 0)
 
   // Bloco 4: cupons do Faturamento (PDV) sem produto identificado, por mes.
-  const { data: naoIdentRows } = await supabase
+  const { data: naoIdentRows, error: erroNaoIdent } = await supabase
     .from('faturamento_importado')
     .select('mes, valor')
     .eq('loja_id', lojaId)
@@ -185,6 +207,7 @@ export default async function PendenciasClassificacaoPage({
     .gte('mes', ini12m.slice(0, 7))
     .lte('mes', dataFimPendencias.slice(0, 7))
     .order('mes', { ascending: false })
+  if (erroNaoIdent) logErro('cupons sem produto identificado')(erroNaoIdent)
   const valorNaoIdent = (naoIdentRows ?? []).reduce((s, r) => s + Number(r.valor), 0)
 
   const campos: CampoFiltro[] = [
@@ -226,6 +249,13 @@ export default async function PendenciasClassificacaoPage({
         />
         <ChipsFiltrosAtivos basePath="/pendencias-classificacao" campos={campos} persistirEm="/pendencias-classificacao" />
       </ListaHeader>
+
+      {errosConsulta.length > 0 && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+          números abaixo podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
+        </p>
+      )}
 
       <Bloco titulo={`Produtos sem família (${semFamilia.length})`} valor={valorSemFamilia} exportBloco="sem-familia">
         {!semFamilia.length ? (

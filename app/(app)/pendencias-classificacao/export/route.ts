@@ -18,9 +18,25 @@ export async function GET(req: Request) {
   })
   const supabase = createServiceClient()
 
+  // Achado real (auditoria 2026-08-09, Task 16): mesmo bug de `page.tsx` --
+  // nenhuma consulta checava `.error` e `buscarItensNFFrio` (histórico do
+  // Contabo) rodava sem `onErro`, encolhendo o CSV em silêncio quando o
+  // Contabo falha. Este export não tem "subtítulo de planilha" (é CSV puro,
+  // não xlsx) -- o aviso vira uma linha extra antes do cabeçalho.
+  const errosConsulta: string[] = []
+  function logErro(rotulo: string) {
+    return (error: { message: string }) => {
+      errosConsulta.push(rotulo)
+      console.error(`pendencias-classificacao/export: consulta "${rotulo}" falhou -- dado pode estar incompleto`, error.message)
+    }
+  }
+
   const csv = (linhas: string[][]): Response => {
     const esc = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-    const corpo = '﻿' + linhas.map((l) => l.map(esc).join(';')).join('\r\n')
+    const avisoLinhas: string[][] = errosConsulta.length
+      ? [[`AVISO: falha ao consultar ${[...new Set(errosConsulta)].join(', ')} -- valores abaixo podem estar incompletos`]]
+      : []
+    const corpo = '﻿' + [...avisoLinhas, ...linhas].map((l) => l.map(esc).join(';')).join('\r\n')
     return new Response(corpo, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -34,12 +50,13 @@ export async function GET(req: Request) {
   // tudo (mesmo fix da página; ver comentário lá).
   const todos: Prod[] = []
   for (let p = 0; ; p++) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('produtos')
       .select('codigo_produto, codigo, descricao, tipo_item, descricao_familia')
       .eq('loja_id', lojaId)
       .order('codigo_produto')
       .range(p * 1000, p * 1000 + 999)
+    if (error) { logErro('catálogo de produtos')(error); break }
     if (!data?.length) break
     todos.push(...(data as Prod[]))
     if (data.length < 1000) break
@@ -49,7 +66,7 @@ export async function GET(req: Request) {
     // Sugestão do cliente (Ramon): CFOP de entrada mais frequente ajuda a
     // decidir a classificação sem família cadastrada — mesma lógica da página.
     const corte = limiteJanelaQuente()
-    const { data: quentesCfop } = await supabase
+    const { data: quentesCfop, error: erroQuentesCfop } = await supabase
       .from('nota_fiscal_items')
       .select('n_id_produto, c_cfop, full_object, notas_fiscais!inner(deleted_at, d_emissao_nfe)')
       .eq('loja_id', lojaId)
@@ -57,11 +74,12 @@ export async function GET(req: Request) {
       .gte('notas_fiscais.d_emissao_nfe', corte)
       .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
       .limit(50000)
+    if (erroQuentesCfop) logErro('itens de NF (janela quente, CFOP)')(erroQuentesCfop)
     const corteExcl = new Date(Date.parse(corte) - 86400000).toISOString().slice(0, 10)
     // Trava no menor entre corteExcl e o teto escolhido pelo usuário -- ver
     // comentário equivalente em pendencias-classificacao/page.tsx (Task 7).
     const dataFinalFriaCfop = corteExcl < dataFimPendencias ? corteExcl : dataFimPendencias
-    const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFriaCfop })
+    const friosCfop = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFriaCfop, onErro: () => errosConsulta.push('histórico do Contabo (NF > ~90 dias)') })
     const cfopPorProduto = new Map<number, Map<string, number>>()
     const somar = (codProd: number | null, cfop: string | null) => {
       if (codProd == null || !cfop) return
@@ -95,7 +113,7 @@ export async function GET(req: Request) {
     ])
   }
   if (bloco === 'cupom-nao-identificado') {
-    const { data } = await supabase
+    const { data, error: erroNaoIdent } = await supabase
       .from('faturamento_importado')
       .select('mes, valor')
       .eq('loja_id', lojaId)
@@ -104,6 +122,7 @@ export async function GET(req: Request) {
       .gte('mes', ini12m.slice(0, 7))
       .lte('mes', dataFimPendencias.slice(0, 7))
       .order('mes', { ascending: false })
+    if (erroNaoIdent) logErro('cupons sem produto identificado')(erroNaoIdent)
     return csv([
       ['mes', 'valor'],
       ...(data ?? []).map((r) => [r.mes as string, Number(r.valor).toFixed(2).replace('.', ',')]),
@@ -117,7 +136,7 @@ export async function GET(req: Request) {
   // (pendencias-classificacao/page.tsx) e de Compras/Auditoria (migration 083).
   // Achado real (auditoria 2026-07-26): este export somava R$ de NF pendente
   // e cancelada, diferente do que a própria tela mostra.
-  const { data: quentesRaw } = await supabase
+  const { data: quentesRaw, error: erroQuentesRaw } = await supabase
     .from('nota_fiscal_items')
     .select('n_id_produto, c_descricao_produto, c_codigo_produto, n_qtde_nfe, n_preco_unit, notas_fiscais!inner(deleted_at, d_emissao_nfe, c_razao_social, c_nome, full_object)')
     .eq('loja_id', lojaId)
@@ -126,6 +145,7 @@ export async function GET(req: Request) {
     .gte('notas_fiscais.d_emissao_nfe', corte)
     .lte('notas_fiscais.d_emissao_nfe', dataFimPendencias)
     .limit(50000)
+  if (erroQuentesRaw) logErro('itens de NF (janela quente)')(erroQuentesRaw)
   const quentes: ItemNF[] = ((quentesRaw ?? []) as unknown as (ItemNF & { notas_fiscais: { c_razao_social: string | null; c_nome: string | null; full_object: { infoCadastro?: { cCancelada?: string } } | null } })[])
     .filter((r) => (r.notas_fiscais?.full_object?.infoCadastro?.cCancelada ?? 'N') !== 'S')
     .map((r) => ({
@@ -137,7 +157,7 @@ export async function GET(req: Request) {
   // Trava no menor entre corteExcl e o teto escolhido pelo usuário -- ver
   // comentário equivalente em pendencias-classificacao/page.tsx (Task 7).
   const dataFinalFria = corteExcl < dataFimPendencias ? corteExcl : dataFimPendencias
-  const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria })
+  const friosRaw = await buscarItensNFFrio({ lojaId, dataInicio: ini12m, dataFinal: dataFinalFria, onErro: () => errosConsulta.push('histórico do Contabo (NF > ~90 dias)') })
   const frios: ItemNF[] = friosRaw
     .filter((it) => it.nf_c_etapa === '60' && !it.nf_cancelada)
     .map((it) => ({
