@@ -606,7 +606,10 @@ export async function retryAjustesInventarioPendentes(
     // finishInventario/forceSyncInventario): nunca reprocessar item que ja tem
     // id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan (seria
     // DELETADO por processarItemInventario em vez de processado).
-    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? []), ...(processandoTravados ?? [])]
+    // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
+    // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
+    // presa (achado real da revisao final, 2026-08-10).
+    const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
       .filter((i) => i.id_ajuste === null && i.quan !== null)
       .slice(0, limitePorLoja) as InventarioItemRetryRow[]
 
@@ -621,7 +624,15 @@ export async function retryAjustesInventarioPendentes(
     // sem isso, duas execucoes concorrentes reenviariam os MESMOS itens (double-send
     // no Omie).
     const idsSelecionados = pendentes.map((i) => i.id)
-    await supabase.from('inventario_items').update({ status: 'Processando' }).in('id', idsSelecionados)
+    // ultima_tentativa_em precisa ser atualizada AQUI tambem -- sem isso, uma linha
+    // 'Sem CMC' selecionada (que so entra elegivel quando ja tem >1h de idade) fica
+    // reclamavel pelo reclaim de 'Processando' travado enquanto ainda esta em voo,
+    // reabrindo o double-send que este marcador existe pra evitar (achado real da
+    // revisao final, 2026-08-10).
+    await supabase
+      .from('inventario_items')
+      .update({ status: 'Processando', ultima_tentativa_em: new Date().toISOString() })
+      .in('id', idsSelecionados)
 
     let sucesso = 0
     let falhas = 0

@@ -617,7 +617,10 @@ export async function retryMovimentosTransferenciaPendentes(
     // finishTransferencia/forceSyncTransferencia): nunca reprocessar movimento que
     // ja tem id_ajuste (duplicaria o lancamento no Omie) ou que ficou sem quan/quan
     // <= 0 (seria DELETADO ou nunca deveria ter sido enviado por processarMovimento).
-    const pendentes = [...(errosGenericos ?? []), ...(semCmc ?? []), ...(processandoTravados ?? [])]
+    // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
+    // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
+    // presa (achado real da revisao final, 2026-08-10).
+    const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
       .filter((m) => m.id_ajuste === null && m.quan !== null && m.quan > 0)
       .slice(0, limitePorLoja) as MovimentoTransferenciaRetryRow[]
 
@@ -631,9 +634,14 @@ export async function retryMovimentosTransferenciaPendentes(
     // que comece antes desta terminar -- sem isso, duas execucoes concorrentes
     // reenviariam os MESMOS movimentos (double-send no Omie).
     const idsSelecionados = pendentes.map((m) => m.id)
+    // ultima_tentativa_em precisa ser atualizada AQUI tambem -- sem isso, uma linha
+    // 'Sem CMC' selecionada (que so entra elegivel quando ja tem >1h de idade) fica
+    // reclamavel pelo reclaim de 'Processando' travado enquanto ainda esta em voo,
+    // reabrindo o double-send que este marcador existe pra evitar (achado real da
+    // revisao final, 2026-08-10).
     const { error: erroMarcar } = await supabase
       .from('movimentos')
-      .update({ status: 'Processando' })
+      .update({ status: 'Processando', ultima_tentativa_em: new Date().toISOString() })
       .in('id', idsSelecionados)
     if (erroMarcar) {
       resultados.push({
