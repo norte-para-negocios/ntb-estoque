@@ -176,6 +176,10 @@ export default async function RelatorioFaturamentoPage({
 
   const mesAtual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' }).slice(0, 7)
   const anoAtualNum = Number(mesAtual.slice(0, 4))
+  // Movido pra cima do ponto onde era declarado antes (mais abaixo, junto de
+  // `cruzaAnoAnterior`) -- precisa estar disponível aqui em cima também pro
+  // clamp de período do filtro de Situação (`dataInicioSituacao`, mais abaixo).
+  const anoAtualStr = mesAtual.slice(0, 4)
   // "Ano passado" é o único chip que fixa um TETO explícito (os outros 3 vão
   // implicitamente até o mês atual) -- por isso mesFimChip existe só pra este caso.
   const mesIniChip =
@@ -247,11 +251,51 @@ export default async function RelatorioFaturamentoPage({
   const dataInicioFato = mesIni ? `${mesIni}-01` : ''
   const dataFinalFato = fimDoMes(mesFim ?? mesAtual)
 
+  // Fix round 1 (revisão independente, 2026-08-10, achado Important #2):
+  // diferente de `buscarFatAgregado` (agregação SERVER-SIDE de
+  // `/fat_agregado` -- barata mesmo sem piso de data, quem faz o group by é
+  // o Postgres do Contabo, não o client), `buscarFatAgregadoPorSituacao`
+  // busca TODO o fato cru (cupons + itens/pagamentos) e agrega em JS aqui --
+  // caro pra histórico ilimitado (medido ao vivo: ~26 mil cupons + ~163 mil
+  // itens só na loja 3, ~10-15s de fetch sequencial + reduce, sem cache).
+  // Mesmo tipo de custo que já levou esta página a reverter uma agregação JS
+  // parecida no período padrão "Todos" pro caminho `cruzaAnoAnterior` (ver
+  // comentário logo abaixo, "'Todos' volta a significar ano corrente").
+  // Aplica o mesmo raciocínio aqui: quando o usuário NÃO escolheu um período
+  // explícito (chip "Todos", `mesIni` null), o filtro de Situação clampa a
+  // busca pro ano corrente em vez de buscar histórico ilimitado -- um
+  // período explícito (chip fixo tipo "6 meses"/"Ano passado", ou datas
+  // customizadas) continua respeitado como pedido, mesmo que isso seja caro,
+  // porque é uma ação deliberada do usuário, não o estado padrão da tela.
+  const dataInicioSituacao = statusForcaAgregacao && !mesIni ? `${anoAtualStr}-01-01` : dataInicioFato
+
   // Movido pra cima do ponto onde era declarado antes (mais abaixo, junto do
   // Promise.all de matrizCrua/metaRow/opcoesRaw) -- síncrono, sem dependência
   // de nada calculado entre um ponto e outro, e agora também precisa estar
   // disponível aqui em cima pra `buscarMetaPorCodigo` (filtro de Situação).
   const supabase = createServiceClient()
+
+  // Fix round 1 (Important #3): `buscarFatCupons`/`buscarFatCupomItens`/
+  // `buscarFatCupomPagamentosPeriodo` paginam via `buscarFrioTudo`, que pode
+  // truncar em silêncio se 3 tentativas se esgotarem no meio do histórico
+  // (Contabo fora do ar, timeout). Mesmo padrão de `errosConsulta`/banner já
+  // usado em Compras/Margem/Auditoria Fiscal/Indicadores/Pendências de
+  // Classificação (ver AGENTS.md) -- só populado quando o filtro de Situação
+  // dispara `buscarFatAgregadoPorSituacao` (o único caminho novo desta
+  // página que busca o fato cru sem paginação já auditada em outro lugar).
+  const errosConsulta: string[] = []
+
+  // Dimensão de agrupamento usada só pelo caminho NOVO
+  // (`buscarFatAgregadoPorSituacao`, filtro de Situação ativo) -- essa
+  // função aceita `group:'tipo'|'familia'` (fix round 1, achado Critical:
+  // ver comentário completo em lib/faturamento-frio.ts) pra manter o MESMO
+  // resumo por Tipo/Família que a aba já mostra, em vez de reagrupar por
+  // produto individual. Deliberadamente SEPARADO do `group` usado por
+  // `buscarFatAgregado` logo abaixo (esse continua só 'forma'|'produto' --
+  // o endpoint `/fat_agregado` do servidor não suporta group=tipo/familia,
+  // ver AGENTS.md -- não é escopo desta task mudar o caminho sem Situação).
+  const groupSituacao: 'forma' | 'tipo' | 'familia' | 'produto' =
+    dim === 'forma_pgto' ? 'forma' : dim === 'tipo' || dim === 'familia' ? dim : 'produto'
 
   const statusCupomSel = sp.status || 'NORMAL'
   const [matrizFato, cuponsFatoTodos]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
@@ -259,21 +303,24 @@ export default async function RelatorioFaturamentoPage({
       ? statusForcaAgregacao
         ? (async () => {
             // metaPorCodigo só é necessário quando o rótulo vem de
-            // id_produto cru (group === 'produto', ou seja, dim !==
+            // id_produto cru (group !== 'forma', ou seja, dim !==
             // 'forma_pgto') -- decisão da Task 3: passar sempre que
             // aplicável, pra corrigir o bug pré-existente (Task 1) de rótulo
-            // cru de produto vazando nas abas Tipo/Família quando o fato é
-            // usado. Custo é reusar o mesmo padrão de fetch já existente
-            // logo abaixo, no bloco `cruzaAnoAnterior`.
+            // cru de produto vazando na aba Produto quando o fato é usado
+            // (e, com `groupSituacao`, também usado pra resolver
+            // tipo/família nas abas Tipo/Família). Custo é reusar o mesmo
+            // padrão de fetch já existente logo abaixo, no bloco
+            // `cruzaAnoAnterior`.
             const metaPorCodigo = dim === 'forma_pgto' ? undefined : await buscarMetaPorCodigo(supabase, lojaId)
             return buscarFatAgregadoPorSituacao({
               lojaId,
-              dataInicio: dataInicioFato,
+              dataInicio: dataInicioSituacao,
               dataFinal: dataFinalFato,
-              group: dim === 'forma_pgto' ? 'forma' : 'produto',
+              group: groupSituacao,
               group2: 'mes',
               status: sp.status!,
               metaPorCodigo,
+              onTruncado: () => errosConsulta.push('histórico do Contabo (fato de faturamento, filtro de Situação)'),
             })
           })()
         : buscarFatAgregado({
@@ -373,7 +420,8 @@ export default async function RelatorioFaturamentoPage({
   // -- a busca histórica só dispara quando o usuário escolhe explicitamente
   // um período (chip fixo ou customizado) cujo início é anterior ao ano
   // corrente, uma ação deliberada, não o estado padrão da tela.
-  const anoAtualStr = mesAtual.slice(0, 4)
+  // (`anoAtualStr` já foi declarado mais acima -- mesmo raciocínio de custo
+  // aplicado ao filtro de Situação, ver `dataInicioSituacao`.)
   const cruzaAnoAnterior = !usarFato && !verCupons && !!mesIni && mesIni < `${anoAtualStr}-01`
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
@@ -549,6 +597,13 @@ export default async function RelatorioFaturamentoPage({
               <span className="text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
             )}
           </div>
+
+          {errosConsulta.length > 0 && (
+            <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+              Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+              números acima podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-2.5">
             {pares.length === 0 ? (

@@ -33,24 +33,24 @@ export type CupomFat = {
 // 31038 cupons e 213669 itens desde 01/07/2025 (so ~16%/9% vinha antes do
 // fix). Servidor ganhou suporte a `offset` (mesmo padrao de /notas_fiscais);
 // client agora pagina igual aos outros dominios frios.
-export async function buscarFatCupons(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<CupomFat[]> {
+export async function buscarFatCupons(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void }): Promise<CupomFat[]> {
   const rows = await buscarFrioTudo<CupomFat & { valor: string | number }>('/fat_cupons', {
     loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal,
-  }, 5000)
+  }, 5000, opts.onTruncado)
   return rows.map((r) => ({ ...r, valor: Number(r.valor) || 0 }))
 }
 
-export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<ItemFat[]> {
+export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void }): Promise<ItemFat[]> {
   const rows = await buscarFrioTudo<ItemFat & { quant: string | number; v_unit: string | number; v_desc: string | number; v_item: string | number }>(
-    '/fat_cupom_itens', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000,
+    '/fat_cupom_itens', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000, opts.onTruncado,
   )
   return rows.map((i) => ({ ...i, quant: Number(i.quant) || 0, v_unit: Number(i.v_unit) || 0, v_desc: Number(i.v_desc) || 0, v_item: Number(i.v_item) || 0 }))
 }
 
 // Busca em lote (nao 1 cupom por vez) -- mesmo padrao de buscarFatCupomItens.
-export async function buscarFatCupomPagamentosPeriodo(opts: { lojaId: number; dataInicio: string; dataFinal: string }): Promise<PagamentoFat[]> {
+export async function buscarFatCupomPagamentosPeriodo(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void }): Promise<PagamentoFat[]> {
   const rows = await buscarFrioTudo<PagamentoFat & { valor: string | number }>(
-    '/fat_cupom_pagamentos', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000,
+    '/fat_cupom_pagamentos', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000, opts.onTruncado,
   )
   return rows.map((p) => ({ ...p, valor: Number(p.valor) || 0 }))
 }
@@ -178,34 +178,63 @@ function cupomBateSituacao(c: CupomFat, status: string): boolean {
 // `buscarFatCupomItens`/`buscarFatCupomPagamentosPeriodo`, já existentes),
 // filtrando pelas linhas cujo cupom bate a situação escolhida.
 //
+// `group` inclui `'tipo'|'familia'` (fix round 1 da Task 3, revisão
+// independente 2026-08-10, achado Critical): a decisão de design confirmada
+// com o usuário no brainstorming original deste plano é que escolher uma
+// Situação continua mostrando o MESMO resumo por Tipo/Família/Forma de pgto
+// que a aba já mostra -- não pular pra uma lista diferente (mesma lógica já
+// aplicada à decisão de "Ver cupons" nunca virar o padrão). A primeira versão
+// desta função só aceitava `'dia'|'forma'|'produto'` e o caller
+// (`page.tsx`) sempre forçava `group:'produto'` fora da aba Forma de pgto --
+// nas abas Tipo/Família isso reagrupava por PRODUTO INDIVIDUAL (medido ao
+// vivo: 689 produtos distintos, loja 3, contra as ~25 linhas do resumo por
+// Tipo), quebrando a decisão do usuário. Agora `group:'tipo'|'familia'`
+// delega pro MESMO cálculo de rótulo que `agregarFaturamentoPorTipoFamilia`
+// (acima) já usa -- só que filtrando `itens` pelos cupons que já bateram
+// `cupomBateSituacao` (`cuponsOk`, abaixo), em vez de reusar aquela função
+// literalmente (ela não tem como saber quais cupons passaram no filtro de
+// situação sem recalcular tudo -- mais simples replicar a MESMA regra de
+// rótulo aqui, sobre o `itens` já filtrado).
+//
 // Achado real da Task 1 deste plano: `agregarFaturamentoPorTipoFamilia` (logo
-// acima) NÃO serve direto aqui -- ela só aceita `dim` em
+// acima) não serve pra REUTILIZAÇÃO LITERAL aqui -- ela só aceita `dim` em
 // tipo/familia/tipo>familia/familia>produto, não um `group` solto no mesmo
-// shape de `buscarFatAgregado` (dia/forma/produto). Por isso esta é uma
-// lógica paralela, seguindo o MESMO MOLDE (mapa `Map<string, LinhaFatAgregado>`,
-// chave via `JSON.stringify([rotulo, mes])`, valor explícito vindo do fato) --
-// não uma reutilização literal daquela função.
+// shape de `buscarFatAgregado` (dia/forma/produto/tipo/familia). Por isso
+// esta é uma lógica paralela, seguindo o MESMO MOLDE (mapa
+// `Map<string, LinhaFatAgregado>`, chave via `JSON.stringify([rotulo, mes])`,
+// valor explícito vindo do fato) -- não uma chamada direta àquela função.
 //
 // Cuidado deliberado (Task 1 achou um bug pré-existente a não reproduzir): o
-// caminho principal de `page.tsx` (`usarFato && !verCupons`) usa o resultado
-// de `buscarFatAgregado({ group: 'produto' })` DIRETO, sem segunda etapa de
-// resolução -- `rotulo` fica com o `id_produto` numérico cru sempre que
-// `group === 'produto'`. Aqui, quando `metaPorCodigo` é passado, `id_produto`
-// é resolvido pro nome do produto (mesmo padrão de
+// caminho principal de `page.tsx` (`usarFato && !verCupons`, SEM filtro de
+// Situação) usa o resultado de `buscarFatAgregado({ group: 'produto' })`
+// DIRETO, sem segunda etapa de resolução -- `rotulo` fica com o `id_produto`
+// numérico cru sempre que `group === 'produto'`. Aqui, quando `metaPorCodigo`
+// é passado, `id_produto` é resolvido pro nome do produto (mesmo padrão de
 // `buscarFaturamentoFrioHistorico`, dim `'produto'`, e de
 // `agregarFaturamentoPorTipoFamilia` pro rótulo de produto) -- sem
 // `metaPorCodigo`, cai no mesmo comportamento cru de `buscarFatAgregado`
-// (drop-in compatível, não piora nada que já não fosse verdade hoje).
+// (drop-in compatível, não piora nada que já não fosse verdade hoje). Pra
+// `group:'tipo'|'familia'`, `metaPorCodigo` ausente cai no mesmo fallback de
+// `agregarFaturamentoPorTipoFamilia` ("Não classificado"/"Sem família").
+//
+// `onTruncado` (fix round 1, Important #3): repassado pras 3 buscas
+// internas (`buscarFatCupons`/`buscarFatCupomItens`/
+// `buscarFatCupomPagamentosPeriodo`) -- sem isso, uma falha de paginação no
+// meio do histórico (Contabo fora do ar, timeout) truncava o resultado em
+// silêncio, encolhendo o total exibido sem nenhum aviso pro usuário (mesma
+// classe de bug já corrigida em Compras/Margem/Auditoria Fiscal/Indicadores/
+// Pendências de Classificação, ver AGENTS.md).
 export async function buscarFatAgregadoPorSituacao(opts: {
   lojaId: number
   dataInicio: string
   dataFinal: string
-  group: 'dia' | 'forma' | 'produto'
+  group: 'dia' | 'forma' | 'produto' | 'tipo' | 'familia'
   group2?: 'mes'
   status: string
   metaPorCodigo?: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
+  onTruncado?: () => void
 }): Promise<LinhaFatAgregado[]> {
-  const cupons = await buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  const cupons = await buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
   const cuponsValidos = cupons.filter((c) => cupomBateSituacao(c, opts.status))
   const cuponsOk = new Set(cuponsValidos.map((c) => c.n_id_cupom))
   const mesPorCupom = new Map(cuponsValidos.map((c) => [c.n_id_cupom, c.data.slice(0, 7)]))
@@ -215,7 +244,7 @@ export async function buscarFatAgregadoPorSituacao(opts: {
 
   if (opts.group === 'forma') {
     const pagamentos = await buscarFatCupomPagamentosPeriodo({
-      lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal,
+      lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado,
     })
     for (const p of pagamentos) {
       if (!cuponsOk.has(p.n_id_cupom)) continue
@@ -232,7 +261,29 @@ export async function buscarFatAgregadoPorSituacao(opts: {
     return [...acc.values()]
   }
 
-  const itens = await buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  const itens = await buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal, onTruncado: opts.onTruncado })
+
+  if (opts.group === 'tipo' || opts.group === 'familia') {
+    for (const it of itens) {
+      if (!cuponsOk.has(it.n_id_cupom)) continue
+      // Mesmo fallback de agregarFaturamentoPorTipoFamilia/lib/omie/faturamento.ts.
+      const v = it.v_item || (it.v_unit * it.quant - it.v_desc)
+      if (!v) continue
+      const info = it.id_produto != null ? opts.metaPorCodigo?.get(Number(it.id_produto)) : undefined
+      // Mesmos rótulos de fallback de agregarFaturamentoPorTipoFamilia (acima).
+      const rotulo = opts.group === 'tipo'
+        ? (info?.tipo ? (TIPO_NOME[info.tipo] ?? `Tipo ${info.tipo}`) : 'Não classificado')
+        : (info?.familia || 'Sem família')
+      const mes = opts.group2 === 'mes' ? mesPorCupom.get(it.n_id_cupom) : undefined
+      const chave = JSON.stringify([rotulo, mes])
+      const ent = acc.get(chave) ?? { rotulo, mes, valor: 0, qtde_itens: 0 }
+      ent.valor += v
+      ent.qtde_itens += 1
+      acc.set(chave, ent)
+    }
+    return [...acc.values()]
+  }
+
   for (const it of itens) {
     if (!cuponsOk.has(it.n_id_cupom)) continue
     // Mesmo fallback de agregarFaturamentoPorTipoFamilia/lib/omie/faturamento.ts:
