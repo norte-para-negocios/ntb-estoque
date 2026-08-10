@@ -735,3 +735,55 @@ status de `onErro` a partir de 2026-08-09:
   dedicado**: aplicar o mesmo padrão de `errosConsulta`/banner (páginas)
   e aviso embutido no export (subtítulo de planilha nos xlsx,
   `export-completo` incluso) já usado nos 3 relatórios acima.
+
+### `sync-ajustes` nunca foi migrado pro crontab real do Contabo -- `movimentos` parado desde ~02/08 (Task 17 da auditoria de retry Omie, 2026-08-09)
+
+Achado incidental durante a Task 17 (investigação pura de vínculos
+produto↔inventário↔NF↔OP -- ver
+`.superpowers/sdd/2026-08-09-retry-omie-auditoria-detalhes/task-17-report.md`
+pro relatório completo). Ao medir a cobertura do join
+`inventario_items.id_ajuste = movimentos.id_ajuste` (só 19,6%, 883/4.514),
+apareceram 3 causas distintas pra lacuna, e uma delas é um cron morto:
+
+`/api/cron/sync-ajustes` (`lib/omie/sync-ajustes.ts`, popula `movimentos` a
+partir de `ListarAjusteEstoque` do Omie) só está agendado em
+`vercel.json` (`"30 4 * * *"`). Mas a produção não roda mais no Vercel --
+o cron real é `scripts/sync-cron.sh`, chamado pelo crontab do sistema no
+Contabo. Confirmado ao vivo (`crontab -l` no servidor: só `sync-cron.sh` a
+cada 10min + `sync-auth-standby.mjs` a cada 15min) e lendo
+`scripts/sync-cron.sh` por completo: ele chama `sync-nfs`, `sync-ops`,
+`retry-op-conclusao`, `sync-posicao`, `sync-reconciliar-op`,
+`sync-locais`, `sync-produtos`, `sync-previsao`, `sync-movimentos`,
+`sync-faturamento`, `sync-preco-movimentacao`, `snapshot-margem-diario`,
+`snapshot-op-planejada` -- **`sync-ajustes` nunca aparece**. Ou seja: desde
+a migração do cron do Vercel/GitHub Actions pro crontab real do Contabo
+(já documentada acima neste arquivo), `sync-ajustes` ficou pra trás e
+nunca foi incluído. `movimentos` não recebe ajuste novo do Omie há mais
+de uma semana (consistente com os itens de inventário sem match cujo
+`created_at` chega até hoje) -- afeta as telas de Movimentações, o
+relatório de Movimentação, o Resumo do dia, e qualquer view que dependa
+de `movimentos` tipo SLD atualizado.
+
+**Outras 2 causas da mesma lacuna, essas permanentes (não é só religar o
+cron que resolve)**: (a) `app/api/cron/sync-ajustes/route.ts:18-19` exclui
+a loja 4 por desenho (`// Exclui loja 4 (O SERTAO VAI VIRAR MAR -
+produção protegida)`) -- ajustes dessa loja nunca entram em `movimentos`
+via cron, ponto; (b) o cursor do `sync-ajustes` (`MAX(id_ajuste)` de toda
+`movimentos` da loja) não distingue "id_ajuste que o cron buscou da API"
+de "id_ajuste que o próprio app gravou direto" -- `lib/actions/
+movimentacoes.ts:98-111` (ajuste manual de saldo) e `lib/actions/
+transferencia.ts:377-390` (envio de transferência) também fazem
+`.update({ id_ajuste: res.id_ajuste, ... })` em `movimentos` depois de
+chamar `IncluirAjusteEstoque` direto, fora do sync. Um ajuste manual de
+hoje (id alto) empurra o cursor pra frente na hora, e qualquer ajuste de
+inventário mais antigo com id MENOR que nunca foi buscado pelo cron fica
+permanentemente "abaixo do cursor" -- reiniciar o cron não traz essas
+linhas de volta.
+
+**Não corrigido nesta task** (Task 17 é investigação pura, sem código) --
+plano de ação: o fix de crontab (adicionar `sync-ajustes` em
+`scripts/sync-cron.sh`) entra como parte do escopo da Task 6 desta mesma
+auditoria (que já vai mexer nesse script pra ligar os crons de retry). O
+redesign do cursor (pra não conflitar com escrita direta do app) é mais
+envolvido -- registrado aqui como candidato a follow-up separado, fora do
+escopo de hoje.
