@@ -150,6 +150,115 @@ export async function buscarFaturamentoFrioHistorico(opts: {
   return agregarFaturamentoPorTipoFamilia(itens, mesPorCupom, opts.metaPorCodigo, opts.dim)
 }
 
+// Filtro de Situação (plano 2026-08-10-filtro-situacao-faturamento, Task 2).
+// '' (vazio, default do painel principal) preserva o comportamento de hoje:
+// Normal + Devolvido combinados -- cupom cancelado já nunca chega em
+// `fat_cupons` pela ingestão (lib/omie/faturamento.ts, `cCupomCancelado ===
+// 'S'` pula o push do cupom inteiro), então basta excluir cancelado aqui
+// também, defensivamente. 'NORMAL'/'DEVOLVIDO'/'CANCELADO'/'TODOS' são os
+// mesmos 4 valores não-default que `cupomBateStatus` (page.tsx, usado só
+// dentro de "Ver cupons") já reconhece -- confirmado na Task 1 do plano, sem
+// precisar tocar naquela função. Única diferença deliberada: o fallback do
+// vazio aqui é "Normal + Devolvido" (o default do painel), não "Normal
+// isolado" como em `cupomBateStatus` -- ambiguidade já documentada na Task 1
+// (o valor vazio significa coisas diferentes nos dois modos hoje), não um bug
+// novo introduzido por esta função.
+function cupomBateSituacao(c: CupomFat, status: string): boolean {
+  if (status === 'TODOS') return true
+  if (status === 'CANCELADO') return c.cancelado
+  if (status === 'DEVOLVIDO') return c.devolvido
+  if (status === 'NORMAL') return !c.cancelado && !c.devolvido
+  return !c.cancelado // '' (vazio) = Normal + Devolvido
+}
+
+// Mesmo propósito de `buscarFatAgregado` (mesmos parâmetros + mesmo formato de
+// retorno), mas filtrado por situação do cupom -- o endpoint pré-agregado do
+// servidor (`/fat_agregado`) não tem noção de status, então aqui a agregação
+// acontece em JS sobre o fato linha-a-linha (`buscarFatCupons` +
+// `buscarFatCupomItens`/`buscarFatCupomPagamentosPeriodo`, já existentes),
+// filtrando pelas linhas cujo cupom bate a situação escolhida.
+//
+// Achado real da Task 1 deste plano: `agregarFaturamentoPorTipoFamilia` (logo
+// acima) NÃO serve direto aqui -- ela só aceita `dim` em
+// tipo/familia/tipo>familia/familia>produto, não um `group` solto no mesmo
+// shape de `buscarFatAgregado` (dia/forma/produto). Por isso esta é uma
+// lógica paralela, seguindo o MESMO MOLDE (mapa `Map<string, LinhaFatAgregado>`,
+// chave via `JSON.stringify([rotulo, mes])`, valor explícito vindo do fato) --
+// não uma reutilização literal daquela função.
+//
+// Cuidado deliberado (Task 1 achou um bug pré-existente a não reproduzir): o
+// caminho principal de `page.tsx` (`usarFato && !verCupons`) usa o resultado
+// de `buscarFatAgregado({ group: 'produto' })` DIRETO, sem segunda etapa de
+// resolução -- `rotulo` fica com o `id_produto` numérico cru sempre que
+// `group === 'produto'`. Aqui, quando `metaPorCodigo` é passado, `id_produto`
+// é resolvido pro nome do produto (mesmo padrão de
+// `buscarFaturamentoFrioHistorico`, dim `'produto'`, e de
+// `agregarFaturamentoPorTipoFamilia` pro rótulo de produto) -- sem
+// `metaPorCodigo`, cai no mesmo comportamento cru de `buscarFatAgregado`
+// (drop-in compatível, não piora nada que já não fosse verdade hoje).
+export async function buscarFatAgregadoPorSituacao(opts: {
+  lojaId: number
+  dataInicio: string
+  dataFinal: string
+  group: 'dia' | 'forma' | 'produto'
+  group2?: 'mes'
+  status: string
+  metaPorCodigo?: Map<number, { tipo: string | null; familia: string | null; nome?: string }>
+}): Promise<LinhaFatAgregado[]> {
+  const cupons = await buscarFatCupons({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  const cuponsValidos = cupons.filter((c) => cupomBateSituacao(c, opts.status))
+  const cuponsOk = new Set(cuponsValidos.map((c) => c.n_id_cupom))
+  const mesPorCupom = new Map(cuponsValidos.map((c) => [c.n_id_cupom, c.data.slice(0, 7)]))
+  const diaPorCupom = new Map(cuponsValidos.map((c) => [c.n_id_cupom, c.data]))
+
+  const acc = new Map<string, LinhaFatAgregado>()
+
+  if (opts.group === 'forma') {
+    const pagamentos = await buscarFatCupomPagamentosPeriodo({
+      lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal,
+    })
+    for (const p of pagamentos) {
+      if (!cuponsOk.has(p.n_id_cupom)) continue
+      const v = Number(p.valor) || 0
+      if (!v) continue
+      const rotulo = p.tipo_doc || 'Não identificado'
+      const mes = opts.group2 === 'mes' ? mesPorCupom.get(p.n_id_cupom) : undefined
+      const chave = JSON.stringify([rotulo, mes])
+      const ent = acc.get(chave) ?? { rotulo, mes, valor: 0, qtde_itens: 0 }
+      ent.valor += v
+      ent.qtde_itens += 1
+      acc.set(chave, ent)
+    }
+    return [...acc.values()]
+  }
+
+  const itens = await buscarFatCupomItens({ lojaId: opts.lojaId, dataInicio: opts.dataInicio, dataFinal: opts.dataFinal })
+  for (const it of itens) {
+    if (!cuponsOk.has(it.n_id_cupom)) continue
+    // Mesmo fallback de agregarFaturamentoPorTipoFamilia/lib/omie/faturamento.ts:
+    // v_item cru às vezes vem zerado do Omie; recalcula via unit*qtde-desconto.
+    const v = it.v_item || (it.v_unit * it.quant - it.v_desc)
+    if (!v) continue
+    let rotulo: string
+    if (opts.group === 'dia') {
+      const dia = diaPorCupom.get(it.n_id_cupom)
+      if (!dia) continue
+      rotulo = dia
+    } else {
+      // group === 'produto'
+      const info = opts.metaPorCodigo && it.id_produto != null ? opts.metaPorCodigo.get(Number(it.id_produto)) : undefined
+      rotulo = info?.nome || (it.id_produto != null ? String(it.id_produto) : 'Produto não identificado')
+    }
+    const mes = opts.group2 === 'mes' ? mesPorCupom.get(it.n_id_cupom) : undefined
+    const chave = JSON.stringify([rotulo, mes])
+    const ent = acc.get(chave) ?? { rotulo, mes, valor: 0, qtde_itens: 0 }
+    ent.valor += v
+    ent.qtde_itens += 1
+    acc.set(chave, ent)
+  }
+  return [...acc.values()]
+}
+
 export async function buscarFatCupomDetalhe(
   lojaId: number,
   nIdCupom: number,
