@@ -198,6 +198,27 @@ export default async function RelatorioFaturamentoPage({
     return `/relatorio-faturamento${parts.length ? '?' + parts.join('&') : ''}`
   }
 
+  // Fix Important #2 (revisão final da fix wave, 2026-08-10): os toggles
+  // "Ver cupons"/"Descontos" usavam um href relativo literal (`'?ver=cupons'`)
+  // ou o path nu (`'/relatorio-faturamento'`) pra voltar -- um href relativo
+  // SUBSTITUI toda a query string em vez de mesclar, então clicar em "Ver
+  // cupons" com Situação=Cancelado ativo perdia o `status` inteiro, e a
+  // lista de cupons abria no próprio default dela (`statusCupomSel = sp.status
+  // || 'NORMAL'`), mostrando Normal em vez de Cancelado -- quebrava a
+  // premissa da Task 1 de reusar o mesmo parâmetro `status` pra sincronizar
+  // os dois modos "de graça". Preserva os searchParams atuais, mesmo padrão
+  // de `hrefComDrill` (lib/drill.ts) -- só troca (ou remove) `ver`.
+  const hrefComVer = (ver: string | null) => {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(sp)) {
+      if (k === 'ver' || k === 'page' || !v) continue
+      qs.set(k, v)
+    }
+    if (ver) qs.set('ver', ver)
+    const s = qs.toString()
+    return `/relatorio-faturamento${s ? `?${s}` : ''}`
+  }
+
   // faturamento_importado já vem pré-agregado em 3 pivots separados (um por
   // dimensão), sem uma linha de fato por cupom -- então não dá pra cruzar
   // "família X" com "tipo Y" ao mesmo tempo. Por isso o filtro de rótulos
@@ -497,8 +518,25 @@ export default async function RelatorioFaturamentoPage({
       : semSobreposicao
   }
 
+  // Fix Important #1 parte 2 (revisão final da fix wave, 2026-08-10): o
+  // caminho `usarFato` (sempre ativo quando o filtro de Situação está
+  // setado, ver `usarFato` acima) nunca aplicava `rotulosFiltro` -- diferente
+  // do export (`export/route.ts`, fix round 1 da Task 4), que já filtra por
+  // rótulo depois de agregar em JS. Resultado real: `?familia=DRINKS&
+  // status=NORMAL` mostrava TODAS as famílias na tela mas só DRINKS no
+  // Excel, mesma URL. Aplica aqui o mesmo filtro, restrito a tipo/familia
+  // (vocabulário confirmado idêntico ao de `faturamento_importado` nesta
+  // mesma investigação -- `TIPO_NOME`/`descricao_familia` batem exato) e
+  // guardado com `!prefixo` (mesmo padrão já usado no branch `historico`
+  // acima) pra não interferir com drill. `forma_pgto` fica de fora por ora
+  // -- vocabulário ainda diverge lá (ver `FORMA_PGTO_LABEL` em
+  // lib/faturamento-frio.ts), achado separado.
+  const matrizFatoFiltrada =
+    !prefixo && (dim === 'tipo' || dim === 'familia') && rotulosFiltro.length
+      ? matrizFato.filter((r) => rotulosFiltro.includes(r.rotulo))
+      : matrizFato
   const matrizFinal: LinhaMatriz[] =
-    usarFato && !verCupons ? matrizFato.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : [...matriz, ...historico]
+    usarFato && !verCupons ? matrizFatoFiltrada.filter((r): r is LinhaFatAgregado & { mes: string } => !!r.mes) : [...matriz, ...historico]
   const opcoesPorDim = (opcoesRaw ?? []) as OpcaoDim[]
   const opcoesDe = (d: string) =>
     opcoesPorDim.filter((o) => o.dimensao === d).map((o) => ({ value: o.rotulo, label: o.rotulo }))
@@ -546,8 +584,23 @@ export default async function RelatorioFaturamentoPage({
   ]
 
   const exportParams = new URLSearchParams()
-  if (dataIni) exportParams.set('data_inicio', dataIni)
-  if (dataFim) exportParams.set('data_final', dataFim)
+  // Fix Important #1 parte 1 (revisão final da fix wave, 2026-08-10): com
+  // Situação ativa, sempre propaga o período REALMENTE usado pela tela
+  // (`dataInicioSituacao`/`dataFinalFato`, já incluindo o clamp de ano
+  // corrente quando aplicável) -- antes só repassava `dataIni`/`dataFim`
+  // (as datas digitadas manualmente pelo usuário na gaveta), então um
+  // período resolvido só por CHIP (ex. "Todos", sem data customizada) nunca
+  // chegava no export, que ficava sem nenhum piso de data e divergia da
+  // tela em até 76% (medido ao vivo, loja 3: R$4,52M na tela x R$7,96M no
+  // Excel pro mesmo clique). Fora do caminho de Situação, comportamento
+  // inalterado (só as datas digitadas, como sempre).
+  if (statusForcaAgregacao) {
+    if (dataInicioSituacao) exportParams.set('data_inicio', dataInicioSituacao)
+    exportParams.set('data_final', dataFinalFato)
+  } else {
+    if (dataIni) exportParams.set('data_inicio', dataIni)
+    if (dataFim) exportParams.set('data_final', dataFim)
+  }
   if (tipoFiltro.length) exportParams.set('tipo', tipoFiltro.join(','))
   if (familiaFiltro.length) exportParams.set('familia', familiaFiltro.join(','))
   if (formaPgtoFiltro.length) exportParams.set('forma_pgto', formaPgtoFiltro.join(','))
@@ -657,10 +710,10 @@ export default async function RelatorioFaturamentoPage({
                 rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
               />
             )}
-            <Link href={verCupons ? '/relatorio-faturamento' : '?ver=cupons'} className={verCupons ? chipAtivo : chipInativo}>
+            <Link href={verCupons ? hrefComVer(null) : hrefComVer('cupons')} className={verCupons ? chipAtivo : chipInativo}>
               {verCupons ? 'Ver resumo' : 'Ver cupons'}
             </Link>
-            <Link href={verDescontos ? '/relatorio-faturamento' : '?ver=descontos'} className={verDescontos ? chipAtivo : chipInativo}>
+            <Link href={verDescontos ? hrefComVer(null) : hrefComVer('descontos')} className={verDescontos ? chipAtivo : chipInativo}>
               Descontos
             </Link>
           </div>
@@ -723,10 +776,20 @@ export default async function RelatorioFaturamentoPage({
                 </div>
               )}
               {!cuponsFato.length ? (
+              // Fix Important #3 (revisão final da fix wave, 2026-08-10):
+              // nenhum cupom em toda a base de produção tem `devolvido=true`
+              // (0 de 115.637, medido ao vivo) -- a opção "Devolvido" existe
+              // no filtro mas sempre retorna vazio, sem explicação nenhuma
+              // (parecia recurso quebrado). Mensagem específica só pra esse
+              // caso, distinta da genérica de "sem dados no período".
               <EmptyState
                 icon={DollarSign}
-                title="Sem cupons no período"
-                hint="Tente ampliar o período ou o filtro de situação."
+                title={statusCupomSel === 'DEVOLVIDO' ? 'Nenhum cupom devolvido' : 'Sem cupons no período'}
+                hint={
+                  statusCupomSel === 'DEVOLVIDO'
+                    ? 'Nenhum cupom devolvido registrado nesta base — verifique se sua operação registra devolução na Omie.'
+                    : 'Tente ampliar o período ou o filtro de situação.'
+                }
               />
             ) : (
               <>

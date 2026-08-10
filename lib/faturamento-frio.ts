@@ -183,10 +183,12 @@ export async function buscarFaturamentoFrioHistorico(opts: {
 
 // Filtro de Situação (plano 2026-08-10-filtro-situacao-faturamento, Task 2).
 // '' (vazio, default do painel principal) preserva o comportamento de hoje:
-// Normal + Devolvido combinados -- cupom cancelado já nunca chega em
-// `fat_cupons` pela ingestão (lib/omie/faturamento.ts, `cCupomCancelado ===
-// 'S'` pula o push do cupom inteiro), então basta excluir cancelado aqui
-// também, defensivamente. 'NORMAL'/'DEVOLVIDO'/'CANCELADO'/'TODOS' são os
+// Normal + Devolvido combinados -- exclui cancelado no fallback abaixo,
+// defensivamente. (Nota da revisão final, 2026-08-10: a versão anterior
+// deste comentário afirmava que cupom cancelado "já nunca chega em
+// `fat_cupons` pela ingestão" -- essa afirmação está INCORRETA; achado
+// separado, fora do escopo desta função, não investigado/corrigido aqui.)
+// 'NORMAL'/'DEVOLVIDO'/'CANCELADO'/'TODOS' são os
 // mesmos 4 valores não-default que `cupomBateStatus` (page.tsx, usado só
 // dentro de "Ver cupons") já reconhece -- confirmado na Task 1 do plano, sem
 // precisar tocar naquela função. Única diferença deliberada: o fallback do
