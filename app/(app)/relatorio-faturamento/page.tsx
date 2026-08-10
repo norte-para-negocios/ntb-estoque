@@ -531,8 +531,15 @@ export default async function RelatorioFaturamentoPage({
   // acima) pra não interferir com drill. `forma_pgto` fica de fora por ora
   // -- vocabulário ainda diverge lá (ver `FORMA_PGTO_LABEL` em
   // lib/faturamento-frio.ts), achado separado.
+  // Guarda `statusForcaAgregacao` é OBRIGATÓRIA aqui (achado real da revisão
+  // final, 2026-08-10): sem ela, este filtro também disparava no caminho
+  // pré-existente `dimensoesAtivas > 1` (2+ filtros de dimensão ativos, sem
+  // Situação nenhuma) -- onde `matrizFato` vem de `buscarFatAgregado` e
+  // `rotulo` é um `id_produto` numérico cru, não um nome de tipo/família.
+  // Comparar id contra nome nunca bate -> zerava a tela em silêncio numa
+  // combinação de filtro que já existia antes desta feature.
   const matrizFatoFiltrada =
-    !prefixo && (dim === 'tipo' || dim === 'familia') && rotulosFiltro.length
+    statusForcaAgregacao && !prefixo && (dim === 'tipo' || dim === 'familia') && rotulosFiltro.length
       ? matrizFato.filter((r) => rotulosFiltro.includes(r.rotulo))
       : matrizFato
   const matrizFinal: LinhaMatriz[] =
