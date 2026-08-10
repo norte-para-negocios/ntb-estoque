@@ -18,7 +18,7 @@ import { AlertTriangle, DollarSign, Download } from 'lucide-react'
 import { parseDrill, hrefComDrill } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
-import { buscarFatAgregado, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
+import { buscarFatAgregado, buscarFatAgregadoPorSituacao, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import { calcularDescontoPorProduto, calcularDescontoPorFormaPgto, type DescontoRanking } from '@/lib/faturamento-descontos'
 
@@ -40,6 +40,24 @@ function cupomBateStatus(c: CupomFat, status: string): boolean {
   if (status === 'DEVOLVIDO') return c.devolvido
   return !c.cancelado && !c.devolvido // Normal (padrao)
 }
+
+// Filtro "Situação" no painel principal (plano 2026-08-10-filtro-situacao-
+// faturamento, Task 3; esquema de valores confirmado na Task 1, sem
+// ambiguidade com o `status` de "Ver cupons" acima). Reusa o MESMO parâmetro
+// de URL (`status`) -- os 3 valores abaixo já são reconhecidos corretamente
+// por `cupomBateStatus`/`buscarFatAgregadoPorSituacao` sem tocar em nenhum
+// dos dois. Não inclui 'TODOS' (isso é específico de "Ver cupons", fora do
+// escopo deste filtro) nem uma opção pro valor vazio -- o próprio <select> da
+// FiltrosGaveta já injeta "Todos" pro valor vazio (FiltrosGaveta.tsx:179,
+// componente compartilhado, não alterado por esta task); aqui o vazio
+// significa "Normal + Devolvido" (comportamento de hoje, ver
+// buscarFatAgregadoPorSituacao).
+const OPCOES_SITUACAO = [
+  { value: 'NORMAL', label: 'Normal' },
+  { value: 'DEVOLVIDO', label: 'Devolvido' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+]
+const VALORES_SITUACAO_FORCAM_FATO = new Set(['NORMAL', 'DEVOLVIDO', 'CANCELADO'])
 
 const DIMS = [
   { value: 'tipo', label: 'Tipo' },
@@ -86,6 +104,37 @@ function mesOffset(refMes: string, n: number): string {
 
 type LinhaMatriz = { rotulo: string; mes: string; valor: number }
 type OpcaoDim = { dimensao: string; rotulo: string }
+
+// Extraído do bloco `cruzaAnoAnterior` (já existia inline ali) pra ser
+// reusado também pelo filtro de Situação (Task 3, plano
+// 2026-08-10-filtro-situacao-faturamento) -- mesma paginação (e mesmo achado
+// de >1000 produtos por loja) documentada em lib/omie/faturamento.ts. `nome`
+// é usado pela dim 'produto' (resolve o id numérico cru do fato pro nome
+// exibido); tipo/familia são usados pelas outras dims.
+async function buscarMetaPorCodigo(
+  supabase: ReturnType<typeof createServiceClient>,
+  lojaId: number
+): Promise<Map<number, { tipo: string | null; familia: string | null; nome?: string }>> {
+  const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null; nome?: string }>()
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * 1000
+    const { data } = await supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
+      .eq('loja_id', lojaId)
+      .range(from, from + 999)
+    if (!data?.length) break
+    for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[]) {
+      metaPorCodigo.set(Number(p.codigo_produto), {
+        tipo: p.tipo_item,
+        familia: p.descricao_familia,
+        nome: p.descricao || p.codigo || String(p.codigo_produto),
+      })
+    }
+    if (data.length < 1000) break
+  }
+  return metaPorCodigo
+}
 
 export default async function RelatorioFaturamentoPage({
   searchParams,
@@ -170,7 +219,14 @@ export default async function RelatorioFaturamentoPage({
   // dimensão só entram em ação quando o usuário troca de aba, ver comentário
   // acima em rotulosFiltro). Se disparasse só pelo filtro, a tabela mostraria
   // linhas de forma de pagamento (PIX/CRD/...) sob o cabeçalho "Tipo".
-  const usarFato = dim === 'forma_pgto' || dimensoesAtivas > 1 || verCupons
+  // Gatilho 4 (Task 3, plano 2026-08-10-filtro-situacao-faturamento): filtro
+  // de Situação no painel principal com um dos 3 valores que exigem grão de
+  // cupom (o pré-agregado nunca teve noção de status -- cancelado já não
+  // entra nele por construção, devolvido vem misturado em normal, sem
+  // filtro possível em query-time). Vazio (`''`, "Todos" no <select>)
+  // continua sem forçar nada -- comportamento de hoje inalterado.
+  const statusForcaAgregacao = VALORES_SITUACAO_FORCAM_FATO.has(sp.status ?? '')
+  const usarFato = dim === 'forma_pgto' || dimensoesAtivas > 1 || verCupons || statusForcaAgregacao
 
   // 'YYYY-MM' -> 'YYYY-MM-DD' do ultimo dia do mes.
   function fimDoMes(mesISO: string): string {
@@ -191,16 +247,42 @@ export default async function RelatorioFaturamentoPage({
   const dataInicioFato = mesIni ? `${mesIni}-01` : ''
   const dataFinalFato = fimDoMes(mesFim ?? mesAtual)
 
+  // Movido pra cima do ponto onde era declarado antes (mais abaixo, junto do
+  // Promise.all de matrizCrua/metaRow/opcoesRaw) -- síncrono, sem dependência
+  // de nada calculado entre um ponto e outro, e agora também precisa estar
+  // disponível aqui em cima pra `buscarMetaPorCodigo` (filtro de Situação).
+  const supabase = createServiceClient()
+
   const statusCupomSel = sp.status || 'NORMAL'
   const [matrizFato, cuponsFatoTodos]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
     usarFato && !verCupons
-      ? buscarFatAgregado({
-          lojaId,
-          dataInicio: dataInicioFato,
-          dataFinal: dataFinalFato,
-          group: dim === 'forma_pgto' ? 'forma' : 'produto',
-          group2: 'mes',
-        })
+      ? statusForcaAgregacao
+        ? (async () => {
+            // metaPorCodigo só é necessário quando o rótulo vem de
+            // id_produto cru (group === 'produto', ou seja, dim !==
+            // 'forma_pgto') -- decisão da Task 3: passar sempre que
+            // aplicável, pra corrigir o bug pré-existente (Task 1) de rótulo
+            // cru de produto vazando nas abas Tipo/Família quando o fato é
+            // usado. Custo é reusar o mesmo padrão de fetch já existente
+            // logo abaixo, no bloco `cruzaAnoAnterior`.
+            const metaPorCodigo = dim === 'forma_pgto' ? undefined : await buscarMetaPorCodigo(supabase, lojaId)
+            return buscarFatAgregadoPorSituacao({
+              lojaId,
+              dataInicio: dataInicioFato,
+              dataFinal: dataFinalFato,
+              group: dim === 'forma_pgto' ? 'forma' : 'produto',
+              group2: 'mes',
+              status: sp.status!,
+              metaPorCodigo,
+            })
+          })()
+        : buscarFatAgregado({
+            lojaId,
+            dataInicio: dataInicioFato,
+            dataFinal: dataFinalFato,
+            group: dim === 'forma_pgto' ? 'forma' : 'produto',
+            group2: 'mes',
+          })
       : Promise.resolve([]),
     usarFato && verCupons
       ? buscarFatCupons({ lojaId, dataInicio: dataInicioFato, dataFinal: dataFinalFato })
@@ -244,7 +326,6 @@ export default async function RelatorioFaturamentoPage({
       ])
     : [[], []]
 
-  const supabase = createServiceClient()
   const [matrizCrua, { data: metaRow }, opcoesRaw] = await Promise.all([
     rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', {
       p_loja_id: lojaId,
@@ -296,27 +377,11 @@ export default async function RelatorioFaturamentoPage({
   const cruzaAnoAnterior = !usarFato && !verCupons && !!mesIni && mesIni < `${anoAtualStr}-01`
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
-    // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts.
-    // `nome` é usado pela dim 'produto' (resolve o id numérico cru do fato pro
-    // nome exibido); tipo/familia são usados pelas outras 2 dims.
-    const metaPorCodigo = new Map<number, { tipo: string | null; familia: string | null; nome?: string }>()
-    for (let pagina = 0; ; pagina++) {
-      const from = pagina * 1000
-      const { data } = await supabase
-        .from('produtos')
-        .select('codigo_produto, tipo_item, descricao_familia, codigo, descricao')
-        .eq('loja_id', lojaId)
-        .range(from, from + 999)
-      if (!data?.length) break
-      for (const p of data as { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; codigo: string | null; descricao: string | null }[]) {
-        metaPorCodigo.set(Number(p.codigo_produto), {
-          tipo: p.tipo_item,
-          familia: p.descricao_familia,
-          nome: p.descricao || p.codigo || String(p.codigo_produto),
-        })
-      }
-      if (data.length < 1000) break
-    }
+    // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts,
+    // extraída pra `buscarMetaPorCodigo` (topo do arquivo) na Task 3 do plano
+    // 2026-08-10-filtro-situacao-faturamento, pra ser reusada também pelo
+    // filtro de Situação, sem duplicar a paginação em 2 lugares.
+    const metaPorCodigo = await buscarMetaPorCodigo(supabase, lojaId)
     const anoAnteriorFim = `${Number(anoAtualStr) - 1}-12-31`
     const dataFinalHistorico = mesFim && mesFim < `${anoAtualStr}-01` ? fimDoMes(mesFim) : anoAnteriorFim
     // cruzaAnoAnterior já exige !usarFato, e usarFato é sempre true quando
@@ -398,6 +463,7 @@ export default async function RelatorioFaturamentoPage({
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: opcoesDe('tipo') },
     { tipo: 'multi-select', nome: 'familia', label: 'Família', opcoes: opcoesDe('familia') },
     { tipo: 'multi-select', nome: 'forma_pgto', label: 'Forma de pagamento', opcoes: opcoesDe('forma_pgto') },
+    { tipo: 'select', nome: 'status', label: 'Situação', opcoes: OPCOES_SITUACAO },
   ]
 
   const exportParams = new URLSearchParams()
@@ -437,6 +503,13 @@ export default async function RelatorioFaturamentoPage({
                   tipo: sp.tipo ?? '',
                   familia: sp.familia ?? '',
                   forma_pgto: sp.forma_pgto ?? '',
+                  // Só reflete no <select> um dos 3 valores que este campo
+                  // conhece -- 'TODOS' (o 4º valor do MESMO parâmetro `status`,
+                  // usado só dentro de "Ver cupons" via ChipsStatus) não tem
+                  // opção correspondente aqui e cairia no "Todos" (vazio) do
+                  // <select> de qualquer forma; normalizado aqui pra evitar
+                  // estado visualmente inconsistente.
+                  status: statusForcaAgregacao ? sp.status! : '',
                 }}
                 persistirEm="/relatorio-faturamento"
               />
