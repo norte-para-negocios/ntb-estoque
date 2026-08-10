@@ -551,6 +551,10 @@ export default async function RelatorioFaturamentoPage({
   if (tipoFiltro.length) exportParams.set('tipo', tipoFiltro.join(','))
   if (familiaFiltro.length) exportParams.set('familia', familiaFiltro.join(','))
   if (formaPgtoFiltro.length) exportParams.set('forma_pgto', formaPgtoFiltro.join(','))
+  // Task 4 (plano 2026-08-10-filtro-situacao-faturamento): export/route.ts
+  // agora entende `status` -- sem isso aqui, a nova capacidade ficaria
+  // inalcançável a partir do botão "Baixar" (só via edição manual da URL).
+  if (statusForcaAgregacao) exportParams.set('status', sp.status!)
   const exportHref = `/relatorio-faturamento/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
