@@ -183,8 +183,17 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       })
       totPag = r.nTotPaginas ?? 1
       for (const c of r.cupons ?? []) {
-        if (c.cabecalhoCupom?.info?.cCupomCancelado === 'S') continue
         const cab = c.cabecalhoCupom
+        const cancelado = cab?.info?.cCupomCancelado === 'S'
+
+        // Achado real (revisão final do plano de filtro de Situação,
+        // 2026-08-10): antes o `continue` pulava ANTES deste push, então um
+        // cupom cancelado nunca entrava em cuponsBulk -- nunca era reenviado
+        // pro upsert do fato, ficando travado com o snapshot da primeira
+        // sincronização (sempre "Normal") pra sempre, mesmo cancelado de
+        // verdade na Omie depois. Movido o push pra antes do continue --
+        // agora o UPSERT do servidor (ON CONFLICT (loja_id, n_id_cupom) DO
+        // UPDATE) consegue corrigir o status na próxima sync.
         cuponsBulk.push({
           n_id_cupom: Number(cab?.nIdCupom),
           chave: cab?.cChaveCupom ?? null,
@@ -196,9 +205,12 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
           id_cliente: cab?.idCliente != null ? Number(cab.idCliente) : null,
           id_vendedor: cab?.idVendedor != null ? Number(cab.idVendedor) : null,
           valor: Number(cab?.nValorCupom) || 0,
-          cancelado: cab?.info?.cCupomCancelado === 'S',
+          cancelado,
           devolvido: cab?.info?.cCupomDevolvido === 'S',
         })
+
+        if (cancelado) continue // segue excluindo itens/pagamentos/acc, não mais o cabeçalho
+
         for (const p of c.pagamentosCupom ?? []) {
           pagamentosBulk.push({
             n_id_cupom: Number(cab?.nIdCupom),
