@@ -312,13 +312,51 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     // é best-effort, igual gravarFatoNoFrio.
     try {
       const existentes = await buscarFatCupons({ lojaId: loja.id, dataInicio: `${mesISO}-01`, dataFinal: `${mesISO}-${String(ultimoDia(ano, mes)).padStart(2, '0')}` })
-      const idsRetornados = new Set(cuponsBulk.map((c) => c.n_id_cupom))
-      const sumidos = existentes.filter((c) => !c.cancelado && !idsRetornados.has(c.n_id_cupom))
-      for (const c of sumidos) {
-        await atualizarCanceladoNoFrio(loja.id, c.n_id_cupom)
-      }
-      if (sumidos.length) {
-        console.warn(`[faturamento] loja ${loja.id}, ${mesISO}: ${sumidos.length} cupom(ns) sumiram da Omie, marcados cancelado`)
+
+      // Achado real (revisão final do plano, 2026-08-10): `omieRequest`
+      // (lib/omie/client.ts) converte a fault "Não existem registros" da Omie
+      // em `return {} as T` -- se isso acontecer numa página do MEIO da
+      // paginação (não só a primeira), `r.nTotPaginas ?? 1` vira `1` e o
+      // `do...while` acima encerra cedo, deixando `cuponsBulk` com só as
+      // páginas já lidas -- um snapshot TRUNCADO do mês, não o mês completo.
+      // Sem este guard, cada cupom não lido (por truncamento, não por sumir
+      // de verdade) seria incorretamente marcado `cancelado=true`. Mesma
+      // classe de bug que quase gerou dezenas de milhares de falsos positivos
+      // no script de auditoria ad-hoc desta mesma sessão -- aqui é o código
+      // de produção que roda de hora em hora e ESCREVE de verdade, então
+      // aplica a mesma proteção: se voltou pouco/nada da Omie mas já existe
+      // volume relevante gravado pra esse loja+mês, é sinal de falha técnica
+      // (resposta vazia/truncada), não de mês genuinamente sem venda -- pula
+      // a reconciliação inteira e não marca nada.
+      if (cuponsBulk.length === 0 && existentes.length > 10) {
+        console.error(
+          `[faturamento] loja ${loja.id}, ${mesISO}: reconciliação abortada -- Omie devolveu ${cuponsBulk.length} cupom(ns) mas já existem ${existentes.length} gravados neste mês (provável resposta vazia/truncada, não mês sem venda). Nenhum cupom marcado cancelado nesta run.`
+        )
+      } else {
+        const idsRetornados = new Set(cuponsBulk.map((c) => c.n_id_cupom))
+        const sumidos = existentes.filter((c) => !c.cancelado && !idsRetornados.has(c.n_id_cupom))
+
+        // Achado real (revisão final do plano, 2026-08-10): cupom sumir de
+        // verdade é raro (achado na auditoria desta sessão: 5 casos em ~13
+        // meses de histórico, numa base de dezenas de milhares de cupons).
+        // Um `sumidos` grande é o mesmo sintoma de truncamento do guard
+        // acima, só que com ALGUMA página lida -- teto de sanidade evita
+        // marcar cancelado em massa por uma falha técnica; melhor não
+        // corrigir nada neste ciclo do que corrigir errado em massa (a
+        // próxima run tenta de novo, com dado novo da Omie).
+        const tetoSumidos = Math.max(20, Math.ceil(existentes.length * 0.05))
+        if (sumidos.length > tetoSumidos) {
+          console.error(
+            `[faturamento] loja ${loja.id}, ${mesISO}: reconciliação abortada -- ${sumidos.length} cupom(ns) sumido(s) excede o teto de sanidade (${tetoSumidos}, de ${existentes.length} existentes). Provável falha técnica na Omie, não sumiço real. Nenhum cupom marcado cancelado nesta run.`
+          )
+        } else {
+          for (const c of sumidos) {
+            await atualizarCanceladoNoFrio(loja.id, c.n_id_cupom)
+          }
+          if (sumidos.length) {
+            console.warn(`[faturamento] loja ${loja.id}, ${mesISO}: ${sumidos.length} cupom(ns) sumiram da Omie, marcados cancelado`)
+          }
+        }
       }
     } catch (e) {
       console.error('faturamento: falha na reconciliação de cupons sumidos', e)
