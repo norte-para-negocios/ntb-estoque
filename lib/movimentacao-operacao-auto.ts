@@ -28,6 +28,7 @@ export type LinhaOperAuto = {
   local: string
   tipo_sped: string
   familia: string
+  produto: string
   mes: string
   inventario: boolean
   qtde: number
@@ -166,7 +167,8 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     const sentido: 'E' | 'S' = cat === 'Devolução' ? 'S' : 'E'
     add({
       origem, sentido, local: nomeLocal(localDeNF(it)), tipo_sped: tipoSpedLabel(meta?.tipo ?? null),
-      familia: meta?.familia || 'N/D', mes: data.slice(0, 7), inventario: false,
+      familia: meta?.familia || 'N/D', produto: meta?.descricao || meta?.codigo || String(it.n_id_produto ?? ''),
+      mes: data.slice(0, 7), inventario: false,
       qtde: Number(it.n_qtde_nfe) || 0, valor,
     })
   }
@@ -220,8 +222,15 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     add({
       origem: 'Movimento Gerado pelo PDV', sentido: 'S', local: nomeLocal(localMaisComumPdv(it.id_produto)),
       tipo_sped: tipoSpedLabel(meta?.tipo ?? null), familia: meta?.familia || 'N/D',
+      produto: meta?.descricao || meta?.codigo || String(it.id_produto ?? ''),
       mes: cupom.data.slice(0, 7), inventario: false,
-      qtde: Number(it.quant) || 0, valor: Number(it.v_item) || 0,
+      qtde: Number(it.quant) || 0,
+      // Achado real (2026-08-11, feedback Ramon via WhatsApp): v_item cru às
+      // vezes vem zerado do Omie; sem o fallback abaixo o card "Movimento
+      // Gerado pelo PDV" ficava R$1.701,35 mais baixo que o valor correto pra
+      // loja 2/2026 -- mesma fórmula já usada em lib/faturamento-frio.ts
+      // (buscarFatAgregadoPorSituacao) e lib/omie/faturamento.ts.
+      valor: (Number(it.v_item) || (Number(it.v_unit) * Number(it.quant) - Number(it.v_desc))) || 0,
     })
   }
 
@@ -249,6 +258,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     add({
       origem: 'Movimento Manual de Estoque', sentido, local: nomeLocal(a.codigo_local_estoque),
       tipo_sped: tipoSpedLabel(meta?.tipo ?? null), familia: meta?.familia || 'N/D',
+      produto: meta?.descricao || meta?.codigo || String(a.id_prod ?? ''),
       mes: data.slice(0, 7), inventario: a.motivo === 'INV',
       qtde: Number(a.quan) || 0, valor: Number(a.valor) || 0,
     })
