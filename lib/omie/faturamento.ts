@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest } from './client'
 import type { LojaOmie } from './client'
+import { buscarFatCupons } from '@/lib/faturamento-frio'
 
 // Faturamento via API (cupom fiscal / NFC-e do PDV) -> faturamento_importado.
 // Mesma lógica de scripts/sync-faturamento-api.mjs, compartilhada entre a rota
@@ -108,6 +109,36 @@ async function gravarFatoNoFrio(lojaId: number, cupons: CupomBulkRow[], itens: I
     } catch (e) {
       console.error('faturamento: falha ao gravar fato no Contabo', e)
     }
+  }
+}
+
+// Marca 1 cupom como cancelado no fato do Contabo (UPDATE pontual, não bulk
+// upsert). Endpoint novo na ntb-frio-api (server.js, fora deste repo git):
+// `POST /fat_cupons_marcar_cancelado`, aceita `{ loja_id, n_id_cupom }`, faz
+// exatamente `UPDATE fat_cupons SET cancelado=true WHERE loja_id=$1 AND
+// n_id_cupom=$2 AND cancelado=false` e responde `{ ok: true, atualizado:
+// boolean }` -- já testado manualmente (cupom inexistente => atualizado:
+// false, sem erro). Usado pela reconciliação de cupom sumido dentro do loop
+// de meses de syncFaturamento (achado real 2026-08-10, ver comentário lá).
+// Mesma filosofia de gravarFatoNoFrio: nunca lança exceção, só loga --
+// falha de rede/timeout no lado do Contabo não pode quebrar a sync.
+async function atualizarCanceladoNoFrio(lojaId: number, nIdCupom: number): Promise<void> {
+  const url = process.env.NTB_FRIO_API_URL
+  const key = process.env.NTB_FRIO_API_KEY
+  if (!url) return
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const resp = await fetch(`${url}/fat_cupons_marcar_cancelado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key ?? '' },
+      body: JSON.stringify({ loja_id: lojaId, n_id_cupom: nIdCupom }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (!resp.ok) throw new Error(`Contabo respondeu ${resp.status}`)
+  } catch (e) {
+    console.error('faturamento: falha ao marcar cupom sumido como cancelado', e)
   }
 }
 
@@ -269,6 +300,30 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
       // Rate limit do Omie: respeita ~300ms entre leituras.
       if (pagina <= totPag) await sleep(340)
     } while (pagina <= totPag)
+
+    // Reconciliação (achado real 2026-08-10): cupom que some INTEIRAMENTE da
+    // consulta da Omie (nem aparece como cancelado -- só não vem mais) fica
+    // "fantasma" no fato pra sempre, contando como Normal. syncFaturamento já
+    // busca TODOS os cupons do mês a cada run -- reusa esse mesmo fetch
+    // (cuponsBulk) pra detectar sumiço sem nenhuma chamada extra à Omie:
+    // qualquer n_id_cupom que já existia como não-cancelado no fato desse
+    // MESMO loja+mês (mesmo range de datas de/ate acima, nunca ampliado) mas
+    // não veio nesta resposta é candidato a sumido. Nunca lança -- reconciliação
+    // é best-effort, igual gravarFatoNoFrio.
+    try {
+      const existentes = await buscarFatCupons({ lojaId: loja.id, dataInicio: `${mesISO}-01`, dataFinal: `${mesISO}-${String(ultimoDia(ano, mes)).padStart(2, '0')}` })
+      const idsRetornados = new Set(cuponsBulk.map((c) => c.n_id_cupom))
+      const sumidos = existentes.filter((c) => !c.cancelado && !idsRetornados.has(c.n_id_cupom))
+      for (const c of sumidos) {
+        await atualizarCanceladoNoFrio(loja.id, c.n_id_cupom)
+      }
+      if (sumidos.length) {
+        console.warn(`[faturamento] loja ${loja.id}, ${mesISO}: ${sumidos.length} cupom(ns) sumiram da Omie, marcados cancelado`)
+      }
+    } catch (e) {
+      console.error('faturamento: falha na reconciliação de cupons sumidos', e)
+    }
+
     await gravarFatoNoFrio(loja.id, cuponsBulk, itensBulk, pagamentosBulk)
   }
 
