@@ -989,3 +989,104 @@ impede que sejam selecionadas de novo pelo retry (mesmo filtro de `tipo`
 as exclui) -- são inofensivas agora, só resíduo visual/histórico. Causa
 raiz de como viraram `TRF` sem `transferencia_id` vinculado não foi
 investigada; candidato a follow-up se reaparecer.
+
+## Nomenclatura SEFAZ + auditoria completa do Faturamento (2 bugs, reconciliação automática, 2026-08-10)
+
+Sessão que corrigiu 2 bugs reais no fato granular do Faturamento
+(`fat_cupons`/`fat_cupom_itens`/`fat_cupom_pagamentos`, Postgres nativo
+do Contabo, `ntb_frio` -- ver seção "Fato de faturamento por cupom"
+mais acima), auditou o histórico de 2025 contra a Omie ao vivo, e
+blindou `syncFaturamento` com reconciliação automática pra esse tipo de
+"dado lixo" nunca mais precisar de correção manual.
+
+**Bug 1 -- cupom cancelado depois da 1ª sync nunca atualizava no fato**:
+`syncFaturamento` (`lib/omie/faturamento.ts`) reprocessa o ano corrente
+inteiro a cada run (1x/hora, sem cursor), mas tinha um `continue` que
+pulava o cupom cancelado ANTES de gravá-lo em `cuponsBulk` -- ou seja,
+um cupom que virava `cancelado='S'` na Omie DEPOIS de já ter sido
+gravado como Normal ficava preso assim pra sempre, porque nunca mais
+entrava no `POST /fat_cupons_bulk` pra o UPSERT corrigir. Corrigido
+(commit `437bf7c`) movendo o `push` em `cuponsBulk` pra antes do
+`continue`, com `cancelado`/`devolvido` calculados uma vez no topo do
+loop -- o `continue` continua existindo e correto pro que sempre fez
+(excluir cancelado de itens/pagamentos/agregado), só deixou de excluir
+também o cabeçalho do fato bruto. Deployado e confirmado com dado real:
+disparando `/api/cron/sync-faturamento` manualmente, 8 cupons foram
+corrigidos (loja 2: 1/R$437,03; loja 3: 6/R$1.113,30; loja 5:
+1/R$240,20).
+
+**Bug 2 -- cupom "fantasma" que some INTEIRAMENTE da Omie**: diferente
+do Bug 1, esse cupom não aparece nem como cancelado na consulta da
+Omie -- simplesmente deixa de vir na resposta. Como `syncFaturamento`
+só sabe atualizar o que a Omie retorna, um cupom fantasma fica contando
+como Normal pra sempre, sem nenhum sinal de erro. Achados e corrigidos
+manualmente 5 casos (confirmados via busca ao vivo na Omie, maio-agosto
+de 2026, 64 páginas consultadas, nenhum rastro do cupom em nenhuma
+delas, antes de cada `UPDATE fat_cupons SET cancelado=true WHERE
+loja_id=X AND n_id_cupom=Y AND cancelado=false`): loja 2, R$2.597,50 (2
+cupons); loja 3, R$207,78 (2 cupons); loja 6, R$178,90 (1 cupom) --
+total R$2.984,18. Achados batendo exatamente com o gap entre
+`faturamento_importado` (pré-agregado, sempre correto porque é
+recalculado direto da Omie) e o fato granular recalculado, comparação
+feita pras 6 lojas × todos os meses de 2026 (jan-ago).
+
+**Buraco de junho/2026, loja 2**: investigado à parte -- `faturamento_
+importado` e `fat_cupons` não tinham nenhuma linha pra loja 2 no mês
+inteiro. Consultada a Omie ao vivo (`CuponsFiscais`, período completo
+do mês): `nTotPaginas: 0`, zero cupons. **Dado real, não é bug** -- a
+loja genuinamente não teve nenhuma venda registrada naquele mês (motivo
+de negócio não investigado, só confirmado que não é falha de
+sincronização).
+
+**Auditoria do histórico 2025 (2025-07 a 2025-12, 6 lojas ativas: 2, 3,
+4, 5, 6, 7)**: sem pré-agregado pra comparar nesses meses (ele só cobre
+2026), a checagem foi direta contra a Omie -- comparado o conjunto de
+`id_item` que a Omie retorna AGORA pra cada combinação loja+mês contra
+`fat_cupom_itens` gravado localmente (cupons `cancelado=false`/
+`devolvido=false`). **36 combinações checadas, ZERO cupons órfãos
+encontrados em todo o histórico de 2025** -- os 5 casos do Bug 2 ficaram
+isolados a julho/agosto de 2026, consistente com a hipótese de que o
+backfill original (2026-07-18) capturou 2025 corretamente na foto
+daquele momento, e o fenômeno de sumiço só afetou meses tocados pela
+sync buggy depois do backfill. Achado incidental no próprio script de
+auditoria (corrigido antes de rodar em produção, nenhum `UPDATE`
+afetado): uma falha de paginação silenciosa no meio de um mês teria
+zerado a lista de válidos da Omie e marcado TODOS os itens locais como
+órfãos -- corrigido com retry por página, captura explícita de exceção,
+e uma checagem de sanidade que trata "0 válidos na Omie com >10 no
+banco" como falha técnica, não achado real.
+
+**Reconciliação automática (proteção daqui pra frente)**: em vez de um
+cron novo (que gastaria chamadas extras à Omie), `syncFaturamento`
+(`lib/omie/faturamento.ts`) foi estendido pra reaproveitar o fetch
+mensal que ELE JÁ FAZ a cada run (commit `7699432`). Depois de montar
+`cuponsBulk` pro mês (o conjunto de cupons que a Omie retornou AGORA),
+compara contra os `n_id_cupom` que já existem em `fat_cupons` pra esse
+MESMO loja+mês com `cancelado=false` (via `buscarFatCupons`, `lib/
+faturamento-frio.ts`); qualquer `n_id_cupom` que estava no banco mas
+não veio nesta resposta é marcado `cancelado=true` por um helper novo
+(`atualizarCanceladoNoFrio`, POST com timeout de 10s, nunca lança --
+falha vira só `console.error`). Isso não custa nenhuma chamada extra à
+Omie e roda automaticamente a cada sync (cron horário) -- qualquer
+cupom que sumir no futuro é pego e corrigido em no máximo 1 hora, sem
+intervenção manual. **Cuidado de design preservado**: a comparação só
+roda pro loja+mês que está SENDO reprocessado no loop atual (nunca
+meses fora do range que `syncFaturamento` já processa), então nunca
+marca como sumido um cupom de mês antigo só por ele não aparecer numa
+busca que nunca o incluiu. Endpoint novo na `ntb-frio-api` (fora deste
+repo git, só no servidor): `POST /fat_cupons_marcar_cancelado`, aceita
+`{loja_id, n_id_cupom}`, faz `UPDATE fat_cupons SET cancelado=true
+WHERE loja_id=$1 AND n_id_cupom=$2 AND cancelado=false` (mesma regra de
+ouro de todo este achado: só UPDATE pontual de um campo, nunca INSERT/
+DELETE). Validado ao vivo: sync manual disparada pras 6 lojas, resultado
+`{"total":6,"ok":6,"falhas":0}`, zero erros/avisos de reconciliação nos
+logs (esperado -- a auditoria de 2025 já tinha confirmado zero órfãos
+pendentes) -- reconciliação automática funcionando sem falso-positivo.
+
+**Nomenclatura SEFAZ**: o filtro "Situação" do Relatório de Faturamento
+(`relatorio-faturamento/page.tsx` e `export/route.ts`) trocou os
+rótulos exibidos de Normal/Cancelado/Devolvido pra
+Autorizada/Cancelada/Devolvida (vocabulário oficial da SEFAZ pra NFC-e)
+-- só o texto mudou, o valor interno do parâmetro de URL (`sp.status`:
+`NORMAL`/`CANCELADO`/`DEVOLVIDO`/`TODOS`) ficou intacto, sem quebrar
+link salvo nem comportamento de filtro (commit `084032f`).
