@@ -1083,6 +1083,30 @@ DELETE). Validado ao vivo: sync manual disparada pras 6 lojas, resultado
 logs (esperado -- a auditoria de 2025 já tinha confirmado zero órfãos
 pendentes) -- reconciliação automática funcionando sem falso-positivo.
 
+**Fix da revisão final (commit `3f85c00`, mesmo dia)**: a revisão de
+branch inteiro achou que a reconciliação tratava `cuponsBulk` como
+sempre completo, mas a Omie pode truncar a paginação em silêncio no meio
+de um mês (`omieRequest` converte a fault "Não existem registros" em
+`{}`, zerando `nTotPaginas` e encerrando o loop cedo) -- a mesma classe
+de bug que quase gerou falsos-positivos em massa no script de auditoria
+da Task 3, só que aqui seria escrito de verdade em produção a cada hora.
+Corrigido com 2 guards antes de qualquer `atualizarCanceladoNoFrio`: (1)
+pula a reconciliação se `cuponsBulk` vier vazio mas o histórico já
+gravado (`existentes`) for grande (`> 10`) -- sinal de falha técnica, não
+de mês sem venda nenhuma; (2) teto de sanidade em `sumidos.length`
+(maior entre 20 e 5% do histórico) -- sumiço real é fenômeno de unidades
+(5 casos em ~13 meses), nunca de dezenas; se estourar, não escreve nada
+nesse ciclo. Os dois usam `console.error` (diferente do `console.warn`
+do caso normal de sumiço real), pra diferenciar falha técnica de achado
+esperado no log.
+
+**Follow-up não corrigido (achado incidental da mesma revisão)**: a
+chamada a `buscarFatCupons` dentro da reconciliação não passa
+`onTruncado` -- se a LEITURA do histórico no Contabo truncar (silencioso,
+`buscarFrioTudo`), `existentes` fica subestimado, enfraquecendo (não
+quebrando) os 2 guards acima. Candidato a follow-up, não é uma falha
+ativa hoje.
+
 **Nomenclatura SEFAZ**: o filtro "Situação" do Relatório de Faturamento
 (`relatorio-faturamento/page.tsx` e `export/route.ts`) trocou os
 rótulos exibidos de Normal/Cancelado/Devolvido pra
