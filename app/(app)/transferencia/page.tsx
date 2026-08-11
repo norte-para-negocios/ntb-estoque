@@ -26,6 +26,9 @@ import { escapeIlikeOr } from '@/lib/utils-busca'
 
 const POR_PAGINA = 50
 
+const COLUNAS_SORT = ['data', 'status', 'codigo_local_origem'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 export default async function TransferenciaPage({
   searchParams,
 }: {
@@ -39,6 +42,8 @@ export default async function TransferenciaPage({
     local?: string
     page?: string
     produto?: string
+    ord?: string
+    dir?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -51,6 +56,9 @@ export default async function TransferenciaPage({
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
+  const ordRaw = sp.ord ?? 'data'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'data'
+  const dir = sp.dir === 'asc' ? 'asc' : 'desc'
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
 
   // Familias distintas para o select. PostgREST limita a 1000 linhas por
@@ -150,7 +158,7 @@ export default async function TransferenciaPage({
       'id, data, codigo_local_origem, codigo_local_destino, status, motivo, user_id, movimentos(count), movStatus:movimentos(status)'
     )
     .eq('loja_id', lojaId)
-    .order('data', { ascending: false })
+    .order(ord, { ascending: dir === 'asc' })
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)
@@ -203,6 +211,23 @@ export default async function TransferenciaPage({
   function fmtData(d: string | null): string {
     if (!d) return ''
     return new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
+  }
+
+  // Mantem todos os searchParams existentes ao trocar a ordenacao (mesma lista de
+  // campos que relatorioParams/exportParams ja preservam, mesmo padrao de inventario/page.tsx).
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (sp.data_inicio) p.set('data_inicio', sp.data_inicio)
+    if (sp.data_final) p.set('data_final', sp.data_final)
+    if (sp.familia) p.set('familia', sp.familia)
+    if (sp.tipo) p.set('tipo', sp.tipo)
+    if (sp.produto) p.set('produto', sp.produto)
+    if (sp.local) p.set('local', sp.local)
+    if (sp.status) p.set('status', sp.status)
+    if (sp.motivo) p.set('motivo', sp.motivo)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/transferencia?${p.toString()}`
   }
 
   // Ambos os exports (PDF e Excel) precisam levar TODOS os filtros ativos na
@@ -334,10 +359,14 @@ export default async function TransferenciaPage({
       <Lista
         linhas={transferencias ?? []}
         chaveLinha={(t) => t.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Estoque',
             primaria: true,
+            sort: 'codigo_local_origem',
             render: (t) => {
               const origem = localMap.get(t.codigo_local_origem) || t.codigo_local_origem
               const destino = localMap.get(t.codigo_local_destino) || t.codigo_local_destino
@@ -351,7 +380,7 @@ export default async function TransferenciaPage({
               )
             },
           },
-          { label: 'Data', larguraDesktop: 'w-28', render: (t) => <span className="num text-text-muted">{fmtData(t.data)}</span> },
+          { label: 'Data', larguraDesktop: 'w-28', sort: 'data', render: (t) => <span className="num text-text-muted">{fmtData(t.data)}</span> },
           {
             label: 'Responsável',
             larguraDesktop: 'w-40',
@@ -375,7 +404,7 @@ export default async function TransferenciaPage({
               )
             },
           },
-          { label: 'Status', larguraDesktop: 'w-32', render: (t) => <StatusPill status={t.status} /> },
+          { label: 'Status', larguraDesktop: 'w-32', sort: 'status', render: (t) => <StatusPill status={t.status} /> },
         ]}
         acao={(t) => {
           const movStatus = Array.isArray(t.movStatus) ? t.movStatus : []

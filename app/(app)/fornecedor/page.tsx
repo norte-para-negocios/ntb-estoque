@@ -20,6 +20,9 @@ import { Truck } from 'lucide-react'
 
 const PER_PAGE = 50
 
+const COLUNAS_SORT = ['razao_social', 'cnpj_cpf', 'origem', 'inativo'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
   return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
@@ -67,13 +70,16 @@ function toValues(p: ParceiroRow): ParceiroFormValues {
 export default async function FornecedorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; page?: string; ord?: string; dir?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores'))) notFound()
 
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
+  const ordRaw = params.ord ?? 'razao_social'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'razao_social'
+  const dir = params.dir === 'desc' ? 'desc' : 'asc'
   const supabase = await createClient()
   // Puxar do Omie (sync) virou admin-only.
   const podeSync = await isAdmin()
@@ -94,7 +100,7 @@ export default async function FornecedorPage({
       { count: 'exact' }
     )
     .eq('loja_id', lojaId)
-    .order('razao_social')
+    .order(ord, { ascending: dir === 'asc' })
     .range((page - 1) * PER_PAGE, page * PER_PAGE - 1)
 
   if (params.q) {
@@ -105,6 +111,15 @@ export default async function FornecedorPage({
   const { data: fornecedores, count } = await query
   const total = count ?? 0
   const temProxima = page * PER_PAGE < total
+
+  // Mantem os searchParams existentes ao trocar a ordenacao (mesmo padrao de inventario/page.tsx).
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (params.q) p.set('q', params.q)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/fornecedor?${p.toString()}`
+  }
 
   return (
     <div className="space-y-4">
@@ -139,11 +154,15 @@ export default async function FornecedorPage({
       <Lista<ParceiroRow>
         linhas={(fornecedores ?? []) as ParceiroRow[]}
         chaveLinha={(p) => p.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Razão social',
             primaria: true,
             flexivel: true,
+            sort: 'razao_social',
             render: (p) => (
               <div className="min-w-0">
                 <div className="truncate text-text">{p.razao_social}</div>
@@ -158,7 +177,11 @@ export default async function FornecedorPage({
               </div>
             ),
           },
-          { label: 'CNPJ/CPF', render: (p) => <span className="num text-text-muted">{p.cnpj_cpf || '-'}</span> },
+          {
+            label: 'CNPJ/CPF',
+            sort: 'cnpj_cpf',
+            render: (p) => <span className="num text-text-muted">{p.cnpj_cpf || '-'}</span>,
+          },
           {
             label: 'Cidade/UF',
             render: (p) => (
@@ -169,6 +192,7 @@ export default async function FornecedorPage({
           },
           {
             label: 'Origem',
+            sort: 'origem',
             render: (p) => (
               <span className="text-[12px] text-text-muted">{p.origem === 'omie' ? 'Omie' : 'Local'}</span>
             ),
@@ -176,6 +200,7 @@ export default async function FornecedorPage({
           {
             label: 'Situação',
             alinhar: 'right',
+            sort: 'inativo',
             render: (p) => <StatusPill status={p.inativo ? 'Inativo' : 'Ativo'} />,
           },
         ]}
