@@ -20,15 +20,22 @@ function fmtTimestamp(d: string | null): string {
   return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 }
 
+const COLUNAS_SORT = ['descricao', 'codigo_local_estoque', 'codigo', 'inativo'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 export default async function LocalEstoquePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; situacao?: string }>
+  searchParams: Promise<{ q?: string; situacao?: string; ord?: string; dir?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque'))) notFound()
 
   const params = await searchParams
+  const ordRaw = params.ord ?? 'descricao'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'descricao'
+  const dir = params.dir === 'desc' ? 'desc' : 'asc' // default hoje é descrição A-Z (asc)
+
   const supabase = await createClient()
   // Sync (Sincronizar com Omie) virou admin-only.
   const podeSync = await isAdmin()
@@ -46,7 +53,7 @@ export default async function LocalEstoquePage({
     .from('local_estoques')
     .select('id, codigo_local_estoque, codigo, descricao, inativo')
     .eq('loja_id', lojaId)
-    .order('descricao')
+    .order(ord, { ascending: dir === 'asc' })
     .limit(200)
 
   if (params.q) query = query.ilike('descricao', `%${escapeIlike(params.q)}%`)
@@ -55,6 +62,15 @@ export default async function LocalEstoquePage({
   else if (params.situacao === 'inativos') query = query.eq('inativo', 'S')
 
   const { data: locais } = await query
+
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (params.q) p.set('q', params.q)
+    if (params.situacao) p.set('situacao', params.situacao)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/local-estoque?${p.toString()}`
+  }
 
   return (
     <div className="space-y-4">
@@ -114,14 +130,27 @@ export default async function LocalEstoquePage({
       <Lista
         linhas={locais ?? []}
         chaveLinha={(l) => l.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
-          { label: 'Descrição', primaria: true, render: (l) => l.descricao || '-' },
-          { label: 'Código local', render: (l) => <span className="num text-text-muted">{l.codigo_local_estoque || '-'}</span> },
-          { label: 'Código', larguraDesktop: 'w-28', render: (l) => <span className="num text-text-muted">{l.codigo || '-'}</span> },
+          { label: 'Descrição', primaria: true, sort: 'descricao', render: (l) => l.descricao || '-' },
+          {
+            label: 'Código local',
+            sort: 'codigo_local_estoque',
+            render: (l) => <span className="num text-text-muted">{l.codigo_local_estoque || '-'}</span>,
+          },
+          {
+            label: 'Código',
+            larguraDesktop: 'w-28',
+            sort: 'codigo',
+            render: (l) => <span className="num text-text-muted">{l.codigo || '-'}</span>,
+          },
           {
             label: 'Situação',
             alinhar: 'right',
             larguraDesktop: 'w-32',
+            sort: 'inativo',
             render: (l) => <StatusPill status={l.inativo === 'S' ? 'Inativo' : 'Ativo'} />,
           },
         ]}

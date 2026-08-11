@@ -28,15 +28,22 @@ type FamiliaRow = {
   origem: string
 }
 
+const COLUNAS_SORT = ['nome', 'origem', 'codigo_familia', 'inativo'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 export default async function FamiliaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; situacao?: string }>
+  searchParams: Promise<{ q?: string; situacao?: string; ord?: string; dir?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias'))) notFound()
 
   const params = await searchParams
+  const ordRaw = params.ord ?? 'nome'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'nome'
+  const dir = params.dir === 'desc' ? 'desc' : 'asc' // default hoje é nome A-Z (asc)
+
   const supabase = await createClient()
   // Puxar do Omie (sync) virou admin-only.
   const podeSync = await isAdmin()
@@ -54,7 +61,7 @@ export default async function FamiliaPage({
     .from('familias')
     .select('id, codigo_familia, codigo, nome, inativo, origem')
     .eq('loja_id', lojaId)
-    .order('nome')
+    .order(ord, { ascending: dir === 'asc' })
     .limit(500)
 
   if (params.q) query = query.ilike('nome', `%${escapeIlike(params.q)}%`)
@@ -62,6 +69,15 @@ export default async function FamiliaPage({
   else if (params.situacao === 'inativos') query = query.eq('inativo', true)
 
   const { data: familias } = await query
+
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (params.q) p.set('q', params.q)
+    if (params.situacao) p.set('situacao', params.situacao)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/familia?${p.toString()}`
+  }
 
   return (
     <div className="space-y-4">
@@ -117,10 +133,14 @@ export default async function FamiliaPage({
       <Lista<FamiliaRow>
         linhas={(familias ?? []) as FamiliaRow[]}
         chaveLinha={(f) => f.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
-          { label: 'Nome', primaria: true, flexivel: true, render: (f) => f.nome || '-' },
+          { label: 'Nome', primaria: true, flexivel: true, sort: 'nome', render: (f) => f.nome || '-' },
           {
             label: 'Origem',
+            sort: 'origem',
             render: (f) => (
               <span className="text-[12px] text-text-muted">
                 {f.origem === 'omie' ? 'Omie' : 'Local'}
@@ -129,11 +149,13 @@ export default async function FamiliaPage({
           },
           {
             label: 'Código Omie',
+            sort: 'codigo_familia',
             render: (f) => <span className="num text-text-muted">{f.codigo_familia ?? '-'}</span>,
           },
           {
             label: 'Situação',
             alinhar: 'right',
+            sort: 'inativo',
             render: (f) => <StatusPill status={f.inativo ? 'Inativa' : 'Ativa'} />,
           },
         ]}

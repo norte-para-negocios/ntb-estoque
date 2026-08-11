@@ -12,9 +12,21 @@ import { Tags } from 'lucide-react'
 
 type CategoriaRow = { id: number; nome: string; ativa: boolean }
 
-export default async function CategoriaContabilPage() {
+const COLUNAS_SORT = ['nome', 'ativa'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
+export default async function CategoriaContabilPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ord?: string; dir?: string }>
+}) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Categorias Contabeis'))) notFound()
+
+  const sp = await searchParams
+  const ordRaw = sp.ord ?? 'nome'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'nome'
+  const dir = sp.dir === 'desc' ? 'desc' : 'asc' // default hoje é nome A-Z (asc)
 
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Categorias Contabeis - Criar')
@@ -25,7 +37,14 @@ export default async function CategoriaContabilPage() {
     .from('categorias_contabeis')
     .select('id, nome, ativa')
     .eq('loja_id', lojaId)
-    .order('nome')
+    .order(ord, { ascending: dir === 'asc' })
+
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/categoria-contabil?${p.toString()}`
+  }
 
   return (
     <div className="space-y-4">
@@ -42,11 +61,15 @@ export default async function CategoriaContabilPage() {
       <Lista<CategoriaRow>
         linhas={(categorias ?? []) as CategoriaRow[]}
         chaveLinha={(c) => c.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
-          { label: 'Nome', primaria: true, flexivel: true, render: (c) => c.nome },
+          { label: 'Nome', primaria: true, flexivel: true, sort: 'nome', render: (c) => c.nome },
           {
             label: 'Situação',
             alinhar: 'right',
+            sort: 'ativa',
             render: (c) => <StatusPill status={c.ativa ? 'Ativa' : 'Inativa'} />,
           },
         ]}
