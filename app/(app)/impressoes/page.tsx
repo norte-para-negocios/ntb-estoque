@@ -20,6 +20,9 @@ type Impressao = {
   created_at: string
 }
 
+const COLUNAS_SORT = ['created_at', 'origem', 'qtd_etiquetas', 'referencia_id'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 function fmtDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
     timeZone: 'America/Bahia',
@@ -34,7 +37,13 @@ function fmtDataHora(iso: string): string {
 export default async function ImpressoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; origem?: string }>
+  searchParams: Promise<{
+    data_inicio?: string
+    data_final?: string
+    origem?: string
+    ord?: string
+    dir?: string
+  }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Impressoes'))) notFound()
@@ -42,11 +51,15 @@ export default async function ImpressoesPage({
   const sp = await searchParams
   const supabase = await createClient()
 
+  const ordRaw = sp.ord ?? 'created_at'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'created_at'
+  const dir = sp.dir === 'asc' ? 'asc' : 'desc'
+
   let query = supabase
     .from('impressao_etiquetas')
     .select('id, origem, referencia_id, qtd_etiquetas, user_id, created_at')
     .eq('loja_id', lojaId)
-    .order('created_at', { ascending: false })
+    .order(ord, { ascending: dir === 'asc' })
     .limit(100)
 
   if (sp.data_inicio) query = query.gte('created_at', sp.data_inicio)
@@ -61,6 +74,17 @@ export default async function ImpressoesPage({
     ? await supabase.from('profiles').select('id, name').in('id', userIds)
     : { data: [] }
   const nomeMap = new Map((perfis ?? []).map((p) => [p.id, p.name]))
+
+  // Mantem todos os searchParams existentes ao trocar a ordenacao (mesmo padrao de inventario/page.tsx).
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (sp.data_inicio) p.set('data_inicio', sp.data_inicio)
+    if (sp.data_final) p.set('data_final', sp.data_final)
+    if (sp.origem) p.set('origem', sp.origem)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/impressoes?${p.toString()}`
+  }
 
   return (
     <div className="space-y-4">
@@ -100,10 +124,14 @@ export default async function ImpressoesPage({
       <Lista
         linhas={impressoes ?? []}
         chaveLinha={(imp) => imp.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Referência',
             primaria: true,
+            sort: 'referencia_id',
             render: (imp) => {
               if (imp.origem === 'PRODUTO') {
                 return <span className="font-medium text-text-muted">Etiqueta de produto</span>
@@ -120,11 +148,13 @@ export default async function ImpressoesPage({
           {
             label: 'Data/hora',
             larguraDesktop: 'w-44',
+            sort: 'created_at',
             render: (imp) => <span className="text-text-muted">{fmtDataHora(imp.created_at)}</span>,
           },
           {
             label: 'Origem',
             larguraDesktop: 'w-44',
+            sort: 'origem',
             render: (imp) => {
               const tom = imp.origem === 'NF' ? 'info' : imp.origem === 'PRODUTO' ? 'brand' : 'ok'
               const label = imp.origem === 'NF' ? 'Nota Fiscal' : imp.origem === 'PRODUTO' ? 'Produto' : 'Ordem de Produção'
@@ -145,6 +175,7 @@ export default async function ImpressoesPage({
           {
             label: 'Qtd',
             larguraDesktop: 'w-28',
+            sort: 'qtd_etiquetas',
             render: (imp) => imp.qtd_etiquetas,
           },
         ]}

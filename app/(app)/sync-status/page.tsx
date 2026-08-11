@@ -31,6 +31,9 @@ const STATUS_LOJA: { campo: string; label: string }[] = [
 
 const LIMITE_ERROS = 100
 
+const COLUNAS_SORT = ['model', 'created_at', 'code'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 type LojaStatus = {
   id: number
   nome: string
@@ -60,7 +63,7 @@ function formatarData(iso: string): string {
 export default async function SyncStatusPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; model?: string }>
+  searchParams: Promise<{ dias?: string; model?: string; ord?: string; dir?: string }>
 }) {
   const profile = await getProfile()
   const isAdmin = profile.perfil === 'Admin'
@@ -69,6 +72,9 @@ export default async function SyncStatusPage({
   const params = await searchParams
 
   const dias = Math.max(1, Number(params.dias) || 1)
+  const ordRaw = params.ord ?? 'created_at'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'created_at'
+  const dir = params.dir === 'asc' ? 'asc' : 'desc'
   const supabase = await createClient()
 
   // Escopo de lojas visiveis (mesma logica do layout do app).
@@ -117,7 +123,7 @@ export default async function SyncStatusPage({
     .eq('error', true)
     .in('loja_id', escopo)
     .gte('created_at', desdeFiltro)
-    .order('created_at', { ascending: false })
+    .order(ord, { ascending: dir === 'asc' })
     .limit(LIMITE_ERROS)
 
   if (params.model) errosQuery = errosQuery.eq('model', params.model)
@@ -159,6 +165,16 @@ export default async function SyncStatusPage({
   const defaults: Record<string, string> = {
     dias: String(dias),
     model: params.model ?? '',
+  }
+
+  // Mantem todos os searchParams existentes ao trocar a ordenacao (mesmo padrao de inventario/page.tsx).
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    p.set('dias', String(dias))
+    if (params.model) p.set('model', params.model)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/sync-status?${p.toString()}`
   }
 
   return (
@@ -220,16 +236,21 @@ export default async function SyncStatusPage({
       <Lista
         linhas={erros}
         chaveLinha={(erro) => erro.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Model',
             primaria: true,
             larguraDesktop: 'w-32',
+            sort: 'model',
             render: (erro) => <span className="font-medium">{erro.model ?? '-'}</span>,
           },
           {
             label: 'Data/hora',
             larguraDesktop: 'w-44',
+            sort: 'created_at',
             render: (erro) => (
               <span className="whitespace-nowrap text-text-muted">
                 {formatarData(erro.created_at)}
@@ -244,6 +265,7 @@ export default async function SyncStatusPage({
           {
             label: 'Code',
             larguraDesktop: 'w-20',
+            sort: 'code',
             render: (erro) => <span className="text-text-muted">{erro.code ?? '-'}</span>,
           },
           {
