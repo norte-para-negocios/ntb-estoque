@@ -29,9 +29,9 @@ import { calcularDescontoPorProduto, calcularDescontoPorFormaPgto, type Desconto
 // modo "Ver cupons" (o pre-agregado, modo padrao, nao carrega esse campo) --
 // o filtro so aparece e so se aplica nessa visao especifica.
 const OPCOES_STATUS_CUPOM = [
-  { value: '', label: 'Normal' },
-  { value: 'CANCELADO', label: 'Cancelado' },
-  { value: 'DEVOLVIDO', label: 'Devolvido' },
+  { value: '', label: 'Autorizada' },
+  { value: 'CANCELADO', label: 'Cancelada' },
+  { value: 'DEVOLVIDO', label: 'Devolvida' },
   { value: 'TODOS', label: 'Todos' },
 ]
 function cupomBateStatus(c: CupomFat, status: string): boolean {
@@ -53,9 +53,9 @@ function cupomBateStatus(c: CupomFat, status: string): boolean {
 // significa "Normal + Devolvido" (comportamento de hoje, ver
 // buscarFatAgregadoPorSituacao).
 const OPCOES_SITUACAO = [
-  { value: 'NORMAL', label: 'Normal' },
-  { value: 'DEVOLVIDO', label: 'Devolvido' },
-  { value: 'CANCELADO', label: 'Cancelado' },
+  { value: 'NORMAL', label: 'Autorizada' },
+  { value: 'DEVOLVIDO', label: 'Devolvida' },
+  { value: 'CANCELADO', label: 'Cancelada' },
 ]
 const VALORES_SITUACAO_FORCAM_FATO = new Set(['NORMAL', 'DEVOLVIDO', 'CANCELADO'])
 
@@ -734,7 +734,7 @@ export default async function RelatorioFaturamentoPage({
               feature nova -- so um texto) pra apontar onde o filtro mora. */}
           {!verCupons && !verDescontos && (
             <p className="text-[12px] text-text-muted">
-              Precisa separar notas canceladas ou devolvidas? Ative <strong className="text-text">Ver cupons</strong> para ver e filtrar por situação (Normal/Cancelado/Devolvido/Todos).
+              Precisa separar notas canceladas ou devolvidas? Ative <strong className="text-text">Ver cupons</strong> para ver e filtrar por situação (Autorizada/Cancelada/Devolvida/Todos).
             </p>
           )}
 
@@ -828,7 +828,7 @@ export default async function RelatorioFaturamentoPage({
                         <td className="px-3 py-2 text-text-muted">{c.hora ?? '-'}</td>
                         <td className="px-3 py-2 text-text-muted">{c.num ?? '-'}</td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(c.valor)}</td>
-                        <td className="px-3 py-2 text-text-muted">{c.cancelado ? 'Cancelado' : c.devolvido ? 'Devolvido' : 'Normal'}</td>
+                        <td className="px-3 py-2 text-text-muted">{c.cancelado ? 'Cancelada' : c.devolvido ? 'Devolvida' : 'Autorizada'}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -20,7 +20,7 @@ const DIMS: { dim: string; label: string; nome: string }[] = [
 // (vazio, ou 'TODOS', que só existe dentro de "Ver cupons" na tela) mantém
 // o comportamento de hoje, sem tocar na RPC.
 const VALORES_SITUACAO_FORCAM_FATO = new Set(['NORMAL', 'DEVOLVIDO', 'CANCELADO'])
-const STATUS_LABEL: Record<string, string> = { NORMAL: 'Normal', DEVOLVIDO: 'Devolvido', CANCELADO: 'Cancelado' }
+const STATUS_LABEL: Record<string, string> = { NORMAL: 'Autorizada', DEVOLVIDO: 'Devolvida', CANCELADO: 'Cancelada' }
 
 // 'YYYY-MM' -> 'YYYY-MM-DD' do último dia do mês. Mesmo helper de page.tsx.
 function fimDoMes(mesISO: string): string {
