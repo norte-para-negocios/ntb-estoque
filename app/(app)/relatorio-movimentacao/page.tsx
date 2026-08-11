@@ -185,7 +185,7 @@ export default async function RelatorioMovimentacaoPage({
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
-                href={`/relatorio-movimentacao/export?modo=operacao${sp.produto ? `&produto=${encodeURIComponent(sp.produto)}` : ''}${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
+                href={`/relatorio-movimentacao/export?modo=operacao${sp.produto ? `&produto=${encodeURIComponent(sp.produto)}` : ''}${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.dimOper ? `&dimOper=${encodeURIComponent(sp.dimOper)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Excel: operações + perdas + matriz (com filtros)"
               >
@@ -355,21 +355,21 @@ export default async function RelatorioMovimentacaoPage({
             tipo já restringe a exatamente 1 valor (redundante mostrar uma
             coluna com um único valor repetido em toda linha) -- Local fica
             mais perto da coluna fixa (família/produto). */}
+        {usarAutomatico && (
+          <SegmentLinks
+            basePath="/relatorio-movimentacao"
+            param="dimOper"
+            aria-label="Agrupar por"
+            opcoes={[
+              { value: '', label: 'Família' },
+              { value: 'produto', label: 'Produto' },
+            ]}
+          />
+        )}
         {linhasDim.length === 0 ? (
           <EmptyState icon={ArrowDownUp} title="Sem dados no recorte" hint="Ajuste os filtros de operação, local, família e tipo." />
         ) : (
           <div className="space-y-1.5">
-            {usarAutomatico && (
-              <SegmentLinks
-                basePath="/relatorio-movimentacao"
-                param="dimOper"
-                aria-label="Agrupar por"
-                opcoes={[
-                  { value: '', label: 'Família' },
-                  { value: 'produto', label: 'Produto' },
-                ]}
-              />
-            )}
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
               <table className="w-full min-w-[820px] border-collapse text-sm">
                 <thead>

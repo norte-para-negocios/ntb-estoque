@@ -11,7 +11,7 @@ import {
   limiteJanelaQuente,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
-import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
+import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,8 +56,12 @@ export async function GET(request: Request) {
     }
     const usarAutomatico = rowsImportadas.length === 0
     const produtoBusca = searchParams.get('produto') ?? undefined
-    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, produtoBusca) : rowsImportadas
+    const rows: (LinhaOper | LinhaOperAuto)[] = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, produtoBusca) : rowsImportadas
     if (!rows.length) return new Response('Sem movimentação por operação', { status: 404 })
+    // Toggle Família/Produto (feedback Ramon, ver page.tsx e AGENTS.md): só
+    // vale no modo automático, mesmo guard usado lá -- fora disso o export
+    // continua idêntico a antes (família/local/tipo).
+    const dimOper: 'familia' | 'produto' = searchParams.get('dimOper') === 'produto' && usarAutomatico ? 'produto' : 'familia'
 
     const abas: AbaPlanilha[] = []
 
@@ -98,20 +102,26 @@ export async function GET(request: Request) {
       (!mesFim || r.mes <= mesFim)
     )
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
-    const linhasDim = filtradas.map((r) => ({
-      rotulo: `${r.familia || 'N/D'} / ${r.local || 'N/D'} / ${r.tipo_sped || 'N/D'}`,
-      mes: r.mes,
-      valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0),
-    }))
+    const linhasDim = filtradas.map((r) => {
+      // `'produto' in r`: mesmo narrowing de page.tsx entre LinhaOper (import
+      // manual, sem produto) e LinhaOperAuto (automático, com produto).
+      const rotuloDim = (dimOper === 'produto' && 'produto' in r ? r.produto : r.familia) || 'N/D'
+      return {
+        rotulo: `${rotuloDim} / ${r.local || 'N/D'} / ${r.tipo_sped || 'N/D'}`,
+        mes: r.mes,
+        valor: soPdvSaida ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0),
+      }
+    })
     const recorte = [
       opsSel.length ? opsSel.join(', ') : 'Todas as operações',
       locsSel.length ? locsSel.join(', ') : 'Todos os locais',
       sentSel.length === 1 ? (sentSel[0] === 'E' ? 'Entrada' : 'Saída') : 'Entrada+Saída',
     ].join(' · ')
     if (linhasDim.length) {
+      const dimNome = dimOper === 'produto' ? 'Produto' : 'Família'
       abas.push(abaMatrizMensal({
-        titulo: `Matriz por família / local / tipo (${soPdvSaida ? 'quantidade' : 'R$'})`,
-        dimLabel: 'Família / Local / Tipo', linhas: linhasDim, subtitulo: recorte, nome: 'Família·Local·Tipo', moeda: !soPdvSaida,
+        titulo: `Matriz por ${dimNome.toLowerCase()} / local / tipo (${soPdvSaida ? 'quantidade' : 'R$'})`,
+        dimLabel: `${dimNome} / Local / Tipo`, linhas: linhasDim, subtitulo: recorte, nome: `${dimNome}·Local·Tipo`, moeda: !soPdvSaida,
       }))
     }
 

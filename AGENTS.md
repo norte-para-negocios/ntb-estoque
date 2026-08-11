@@ -1131,6 +1131,15 @@ com fallback pro id bruto) ao tipo `LinhaOperAuto`, populado nos 3 pontos
 de agregação (NF de entrada, PDV, ajustes manuais) -- pré-requisito do
 Achado 2.
 
+**Ressalva (revisão final, 2026-08-11)**: essa fórmula NÃO é 100% idêntica
+à de `lib/omie/faturamento.ts`, que soma um termo a mais
+(`+ Number(it.vAcresc ?? 0)`). As outras duas cópias (`lib/faturamento-frio.ts`
+e esta nova em `lib/movimentacao-operacao-auto.ts`) não têm esse termo
+porque `v_acresc` simplesmente não é gravado em `fat_cupom_itens` -- a
+coluna não existe nessa tabela. Não é uma divergência a "consertar": antes
+de tentar igualar as 3 fórmulas no futuro, primeiro seria preciso decidir
+se vale a pena gravar esse campo no fato.
+
 **Achado 2 -- toggle Família/Produto + coluna "Tipo (SPED)" some quando
 já filtrada (corrigido)**: `relatorio-movimentacao/page.tsx` (modo
 "Por operação (R$)") ganhou um toggle `SegmentLinks` (mesmo componente já
