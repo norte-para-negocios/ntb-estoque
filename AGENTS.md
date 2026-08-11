@@ -1114,3 +1114,65 @@ Autorizada/Cancelada/Devolvida (vocabulário oficial da SEFAZ pra NFC-e)
 -- só o texto mudou, o valor interno do parâmetro de URL (`sp.status`:
 `NORMAL`/`CANCELADO`/`DEVOLVIDO`/`TODOS`) ficou intacto, sem quebrar
 link salvo nem comportamento de filtro (commit `084032f`).
+
+## Feedback do Ramon sobre Movimentação (WhatsApp, 2026-08-10/11) — fórmula do PDV, toggle Família/Produto, e cupom físico ausente na origem
+
+**Achado 1 -- fórmula de valor do PDV subestimava a Movimentação
+(corrigido)**: `lib/movimentacao-operacao-auto.ts` calculava o valor de
+cada linha de venda (PDV) só com `Number(it.v_item) || 0`. Igual ao
+padrão já usado em `lib/faturamento-frio.ts`/`lib/omie/faturamento.ts`,
+`v_item` pode vir zerado/ausente enquanto o valor real está em
+`v_unit * quant - v_desc`. Achado real medido num dado momento: **loja
+2/2026, diferença de R$1.701,35** entre a soma antiga e a soma
+corrigida. Corrigido com fallback: `Number(it.v_item) || (Number(it.v_unit)
+* Number(it.quant) - Number(it.v_desc)) || 0` (commit `6b2711e`). O mesmo
+commit também adicionou o campo `produto` (descrição/código do cadastro,
+com fallback pro id bruto) ao tipo `LinhaOperAuto`, populado nos 3 pontos
+de agregação (NF de entrada, PDV, ajustes manuais) -- pré-requisito do
+Achado 2.
+
+**Achado 2 -- toggle Família/Produto + coluna "Tipo (SPED)" some quando
+já filtrada (corrigido)**: `relatorio-movimentacao/page.tsx` (modo
+"Por operação (R$)") ganhou um toggle `SegmentLinks` (mesmo componente já
+usado pelo toggle "Em quantidade"/"Por operação" da mesma página) pra
+alternar o agrupamento da matriz entre Família e Produto via searchParam
+`dimOper`, preservando os demais filtros da URL. Só aparece quando a
+fonte é o modo automático (`usarAutomatico === true`, que tem o campo
+`produto` do Achado 1) -- a tabela `movimentacao_operacao` (import manual
+via MOV_DRV, hoje só loja 3) é pré-agregada por família, sem grão de
+produto, então o toggle fica escondido nesse caso e `dimOper` é ignorado
+(força `'familia'`). Na mesma leva, a coluna "Tipo (SPED)" da tabela
+passou a esconder automaticamente quando o filtro `sp.tipo` já resolve
+pra 1 único valor (`esconderColTipo = tiposSel.length === 1`) -- reduz
+ruído visual quando o usuário já filtrou por um tipo específico; some
+também a célula da coluna e ajusta o `colSpan` do rodapé "Total" (commit
+`53d4326`).
+
+**Achado 3 -- cupom físico do Ramon (loja 3, Rio Vermelho, 16/06/2026,
+R$334,07) não existe em `fat_cupons`, mas o sync do NTB Estoque está
+correto -- causa raiz é externa, sem correção de código**: investigado
+até o fim (chave de acesso completa, data+valor, número -- 3 buscas,
+nenhuma encontrou o cupom em `fat_cupons`). O dia 16/06/2026 está
+totalmente ausente pra loja 3 (0 cupons, contra 33-100/dia nos dias
+vizinhos), parte de um padrão semanal de dias zerados só dessa loja
+(05/05, 12/05, 19/05, 26/05, 02/06, 09/06, **16/06**, 24/06, 29/06 --
+os 7 primeiros batem exatamente de 7 em 7 dias). Consultada a Omie AO
+VIVO (`CuponsFiscais`, loja 3) pra 3 dessas datas -- **09/06, 16/06 e
+24/06/2026: 0 cupons na própria Omie também**, idêntico ao nosso banco.
+Ou seja: `fat_cupons` reflete fielmente o que a Omie tem (mesma classe de
+achado já confirmada antes, loja 2/junho inteiro, ver seção "Nomenclatura
+SEFAZ" acima -- "buraco de junho/2026, loja 2"). **O cupom físico do
+Ramon é uma venda real que nunca chegou na Omie/SEFAZ** -- o gap está a
+montante do NTB Estoque, entre o PDV da loja e a Omie/SEFAZ (contingência
+nunca transmitida, falha pontual de conexão do PDV, ou outra causa do
+lado Omie/loja). Não é bug de código, não há nada no sync pra corrigir --
+o dado simplesmente não existe na fonte. **Ação recomendada (fora do
+código)**: conferir a chave de acesso do NFC-e
+(`29260642200741000166650010001714561002445643`) em
+sefaz.ba.gov.br/nfce/consulta e, se confirmado ausente lá também,
+contatar o suporte da Omie pra investigar a transmissão perdida daquele
+dia específico. **Padrão a vigiar**: "dia inteiro zerado pra 1 loja, mas
+confirmado igual na própria Omie" já apareceu 2 vezes (loja 2/junho
+inteiro, loja 3/dias específicos aqui) -- pode reaparecer com outras
+lojas/datas; nesses casos o diagnóstico correto não é reprocessar sync,
+é verificar a origem (Omie/SEFAZ/PDV).
