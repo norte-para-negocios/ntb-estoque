@@ -22,7 +22,7 @@ import {
   limiteJanelaQuente,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
-import { gerarMovimentacaoOperacaoAutomatica } from '@/lib/movimentacao-operacao-auto'
+import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
 import {
   buscarMovimentosManuais,
   buscarMetaProdutosMovManual,
@@ -63,7 +63,7 @@ export default async function RelatorioMovimentacaoPage({
 }: {
   searchParams: Promise<{
     data_inicio?: string; data_final?: string; sentido?: string; modo?: string
-    op?: string; loc?: string; sent?: string; dim?: string
+    op?: string; loc?: string; sent?: string; dim?: string; dimOper?: string
     produto?: string; tipo?: string; familia?: string; local?: string
     fonte?: string
     drill?: string
@@ -119,7 +119,14 @@ export default async function RelatorioMovimentacaoPage({
     // partir de NF (compra), fato de cupom (PDV) e ajustes (manual/inventário),
     // já sincronizados pra todas as lojas (ver lib/movimentacao-operacao-auto.ts).
     const usarAutomatico = rowsImportadas.length === 0
-    const rows = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, sp.produto) : rowsImportadas
+    const rows: (LinhaOper | LinhaOperAuto)[] = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, sp.produto) : rowsImportadas
+    // Toggle Família/Produto da matriz mês a mês (feedback Ramon, WhatsApp
+    // 2026-08-10): só faz sentido no modo automático -- a tabela importada do
+    // MOV_DRV (movimentacao_operacao) é pré-agregada por família, sem grão de
+    // produto (a coluna nem existe no select de `selTodos` acima). Fora do
+    // modo automático, o param na URL é ignorado e a matriz continua por
+    // família (comportamento de hoje, inalterado).
+    const dimOper: 'familia' | 'produto' = sp.dimOper === 'produto' && usarAutomatico ? 'produto' : 'familia'
 
     // Filtros (multi-select): operação, local, sentido, família, tipo.
     const opsSel = valoresMulti(sp.op)
@@ -127,6 +134,12 @@ export default async function RelatorioMovimentacaoPage({
     const sentSel = valoresMulti(sp.sent).filter((v): v is 'E' | 'S' => v === 'E' || v === 'S')
     const familiasSel = valoresMulti(sp.familia)
     const tiposSel = valoresMulti(sp.tipo)
+    // Esconde a coluna "Tipo (SPED)" da matriz mês a mês quando o filtro de
+    // Tipo já restringe a exatamente 1 valor -- redundante (toda linha
+    // repetiria o mesmo texto) e a tabela ganha espaço horizontal (Local fica
+    // mais perto da coluna fixa). 0 ou 2+ valores selecionados: mantém a
+    // coluna (comportamento de hoje).
+    const esconderColTipo = tiposSel.length === 1
     // Periodo: movimentacao_operacao guarda so 'YYYY-MM' (sem dia) — o filtro tem
     // granularidade de MES; o dia escolhido no seletor e ignorado de proposito.
     // Sem filtro explicito, escopo pedido pelo usuario 2026-07-19: só ano
@@ -241,18 +254,22 @@ export default async function RelatorioMovimentacaoPage({
     const soPdvSaida = filtradas.length > 0 && filtradas.every((r) => !valorConfiavel(r.origem, r.sentido, usarAutomatico))
     const usarQtde = soPdvSaida
     const meses = [...new Set(filtradas.map((r) => r.mes))].sort()
-    // Chave combinada (família, local, tipo) -- JSON.stringify em vez de
-    // concatenar com separador: rótulo de família/local vem de cadastro sem
-    // sanitização e pode conter qualquer caractere (achado real desta sessão
-    // em lib/omie/faturamento.ts, mesma classe de bug).
-    const porDim = new Map<string, { familia: string; local: string; tipo: string; total: number; meses: Record<string, number> }>()
+    // Chave combinada (rótulo, local, tipo) -- JSON.stringify em vez de
+    // concatenar com separador: rótulo de família/produto/local vem de
+    // cadastro sem sanitização e pode conter qualquer caractere (achado real
+    // desta sessão em lib/omie/faturamento.ts, mesma classe de bug).
+    // `rótulo` é família ou produto conforme o toggle (`dimOper`) -- `'produto'
+    // in r` narrowing entre LinhaOper (import manual, sem produto) e
+    // LinhaOperAuto (automático, com produto), coerente com o guard de
+    // `dimOper` acima (só vira 'produto' quando `usarAutomatico`).
+    const porDim = new Map<string, { rotulo: string; local: string; tipo: string; total: number; meses: Record<string, number> }>()
     for (const r of filtradas) {
-      const familia = r.familia || 'N/D'
+      const rotulo = (dimOper === 'produto' && 'produto' in r ? r.produto : r.familia) || 'N/D'
       const local = r.local || 'N/D'
       const tipo = r.tipo_sped || 'N/D'
-      const chave = JSON.stringify([familia, local, tipo])
+      const chave = JSON.stringify([rotulo, local, tipo])
       const v = usarQtde ? Number(r.qtde) : (valorConfiavel(r.origem, r.sentido, usarAutomatico) ? Number(r.valor) : 0)
-      const ent = porDim.get(chave) ?? { familia, local, tipo, total: 0, meses: {} }
+      const ent = porDim.get(chave) ?? { rotulo, local, tipo, total: 0, meses: {} }
       ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + v
       ent.total += v
       porDim.set(chave, ent)
@@ -332,37 +349,52 @@ export default async function RelatorioMovimentacaoPage({
           {metaRow?.importado_em && <> · Importado em {fmtQuando(metaRow.importado_em as string)}.</>}
         </p>
 
-        {/* Matriz mês a mês: família + local + tipo sempre juntos, sem precisar
-            clicar numa linha pra ver o resto -- estreita pelos filtros da gaveta. */}
+        {/* Matriz mês a mês: família (ou produto, via toggle) + local + tipo,
+            sem precisar clicar numa linha pra ver o resto -- estreita pelos
+            filtros da gaveta. Coluna "Tipo (SPED)" some quando o filtro de
+            tipo já restringe a exatamente 1 valor (redundante mostrar uma
+            coluna com um único valor repetido em toda linha) -- Local fica
+            mais perto da coluna fixa (família/produto). */}
         {linhasDim.length === 0 ? (
           <EmptyState icon={ArrowDownUp} title="Sem dados no recorte" hint="Ajuste os filtros de operação, local, família e tipo." />
         ) : (
           <div className="space-y-1.5">
+            {usarAutomatico && (
+              <SegmentLinks
+                basePath="/relatorio-movimentacao"
+                param="dimOper"
+                aria-label="Agrupar por"
+                opcoes={[
+                  { value: '', label: 'Família' },
+                  { value: 'produto', label: 'Produto' },
+                ]}
+              />
+            )}
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
               <table className="w-full min-w-[820px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Família</th>
+                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimOper === 'produto' ? 'Produto' : 'Família'}</th>
                     <th className={`text-left ${th}`}>Local</th>
-                    <th className={`text-left ${th}`}>Tipo (SPED)</th>
+                    {!esconderColTipo && <th className={`text-left ${th}`}>Tipo (SPED)</th>}
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                     <th className={`text-right ${th}`}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {linhasDim.slice(0, LIMITE_LINHAS).map((e) => {
-                    const opaco = explicarRotulo(e.familia)
-                    const chave = `${e.familia}|${e.local}|${e.tipo}`
+                    const opaco = explicarRotulo(e.rotulo)
+                    const chave = `${e.rotulo}|${e.local}|${e.tipo}`
                     return (
                     <tr key={chave} className="border-t border-border/60 hover:bg-surface-2/40">
-                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? e.familia}>
+                      <td className="sticky left-0 z-10 bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? e.rotulo}>
                         <div className="max-w-[160px] truncate">
-                          {opaco?.label ?? (formatarNomeProduto(e.familia) || e.familia)}
+                          {opaco?.label ?? (formatarNomeProduto(e.rotulo) || e.rotulo)}
                           {opaco && <span className="ml-1 text-text-muted" aria-hidden>ⓘ</span>}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.local}</div></td>
-                      <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.tipo}</div></td>
+                      {!esconderColTipo && <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.tipo}</div></td>}
                       {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(e.meses[m] ?? 0)}</td>))}
                       <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCel(e.total)}</td>
                     </tr>
@@ -371,7 +403,7 @@ export default async function RelatorioMovimentacaoPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
-                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text" colSpan={3}>Total</td>
+                    <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text" colSpan={esconderColTipo ? 2 : 3}>Total</td>
                     {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
                     <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalGeral)}</td>
                   </tr>
