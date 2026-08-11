@@ -12,7 +12,19 @@ import { Shuffle } from 'lucide-react'
 type VinculoRow = { id: number; n_cod_prod: number; substitui_n_cod_prod: number }
 type Produto = { n_cod_prod: number; descricao: string | null }
 
-export default async function ProdutoSubstituicaoPage() {
+const COLUNAS_SORT = ['n_cod_prod', 'substitui_n_cod_prod'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
+export default async function ProdutoSubstituicaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ord?: string; dir?: string }>
+}) {
+  const sp = await searchParams
+  const ordRaw = sp.ord ?? 'n_cod_prod'
+  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'n_cod_prod'
+  const dir = sp.dir === 'desc' ? 'desc' : 'asc'
+
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produto Substituicoes'))) notFound()
 
@@ -35,6 +47,22 @@ export default async function ProdutoSubstituicaoPage() {
   const nomeDe = (cod: number) =>
     (todosProdutos as Produto[] | null)?.find((p) => p.n_cod_prod === cod)?.descricao ?? `#${cod}`
 
+  // Sort em JS: ordena pelo NOME resolvido (não pelo código cru), já que é
+  // isso que o usuário vê na coluna. Dataset pequeno (cadastro manual de
+  // vínculos), sem paginação -- seguro ordenar em memória depois de buscar.
+  const vinculosOrdenados = [...(vinculos ?? [])].sort((a, b) => {
+    const campo = ord === 'n_cod_prod' ? 'n_cod_prod' : 'substitui_n_cod_prod'
+    const cmp = nomeDe(a[campo]).localeCompare(nomeDe(b[campo]), 'pt-BR')
+    return dir === 'asc' ? cmp : -cmp
+  })
+
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/produto-substituicao?${p.toString()}`
+  }
+
   return (
     <div className="space-y-4">
       <ListaHeader>
@@ -48,11 +76,25 @@ export default async function ProdutoSubstituicaoPage() {
       </ListaHeader>
 
       <Lista<VinculoRow>
-        linhas={(vinculos ?? []) as VinculoRow[]}
+        linhas={vinculosOrdenados as VinculoRow[]}
         chaveLinha={(v) => v.id}
+        sortAtual={ord}
+        dirAtual={dir}
+        sortHref={buildSortHref}
         colunas={[
-          { label: 'Produto sem histórico', primaria: true, flexivel: true, render: (v) => nomeDe(v.n_cod_prod) },
-          { label: 'Usa o histórico de', flexivel: true, render: (v) => nomeDe(v.substitui_n_cod_prod) },
+          {
+            label: 'Produto sem histórico',
+            primaria: true,
+            flexivel: true,
+            sort: 'n_cod_prod',
+            render: (v) => nomeDe(v.n_cod_prod),
+          },
+          {
+            label: 'Usa o histórico de',
+            flexivel: true,
+            sort: 'substitui_n_cod_prod',
+            render: (v) => nomeDe(v.substitui_n_cod_prod),
+          },
         ]}
         acao={(v) => (podeExcluir ? <ExcluirProdutoSubstituicao id={v.id} descricao={nomeDe(v.n_cod_prod)} /> : null)}
         vazio={
