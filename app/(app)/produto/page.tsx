@@ -366,6 +366,27 @@ export default async function ProdutoPage({
 
   const margemParams = new URLSearchParams(exportParams.toString())
 
+  // Bridge: o cabecalho clicavel controla o MESMO `ord` que o <select>
+  // "Ordenar por" da gaveta de filtros ja usa (4 valores fixos) -- sem
+  // remover o select, os dois refletem o mesmo estado. Diferente das outras
+  // telas (par sort/dir genérico), aqui os 4 valores já embutem a direção,
+  // então cada coluna alterna entre seus 2 valores fixos olhando o `ord` ATUAL.
+  function sortHrefProduto(coluna: 'descricao' | 'valor_unitario'): string {
+    const p = new URLSearchParams(exportParams.toString())
+    p.delete('page')
+    if (coluna === 'descricao') {
+      p.set('ord', ord === 'descricao_az' ? 'descricao_za' : 'descricao_az')
+    } else {
+      p.set('ord', ord === 'venda_asc' ? 'venda_desc' : 'venda_asc')
+    }
+    return `/produto?${p.toString()}`
+  }
+  // Adapta pro contrato genérico (key, dir) => string do <Lista>: o `dir`
+  // pedido é ignorado, quem decide a próxima direção é sortHrefProduto
+  // olhando o `ord` atual.
+  const sortHref = (key: string): string =>
+    sortHrefProduto(key === 'descricao' ? 'descricao' : 'valor_unitario')
+
   const campos: CampoFiltro[] = [
     { tipo: 'texto', nome: 'q', label: 'Nome ou código' },
     { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familiasOpcoes },
@@ -540,6 +561,9 @@ export default async function ProdutoPage({
       <Lista
         linhas={produtos ?? []}
         chaveLinha={(p) => p.id}
+        sortAtual={ord === 'descricao_za' ? 'descricao' : ord === 'venda_asc' || ord === 'venda_desc' ? 'valor_unitario' : 'descricao'}
+        dirAtual={ord === 'descricao_za' || ord === 'venda_desc' ? 'desc' : 'asc'}
+        sortHref={(key, _dir) => sortHref(key)}
         colunas={[
           {
             label: '',
@@ -558,6 +582,7 @@ export default async function ProdutoPage({
             label: 'Descrição',
             primaria: true,
             flexivel: true,
+            sort: 'descricao',
             render: (p) => (
               <span>
                 {formatarNomeProduto(p.descricao)}
@@ -579,7 +604,7 @@ export default async function ProdutoPage({
                     return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
                   },
                 },
-                { label: 'Venda', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (p: ProdutoLinha) => <Money value={p.valor_unitario} /> },
+                { label: 'Venda', alinhar: 'right' as const, larguraDesktop: 'w-28', sort: 'valor_unitario', render: (p: ProdutoLinha) => <Money value={p.valor_unitario} /> },
                 {
                   label: 'Margem',
                   alinhar: 'right' as const,
