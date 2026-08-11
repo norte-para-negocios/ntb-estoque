@@ -23,6 +23,9 @@ const LIMITE = 200
 // "7 dias" = vence de hoje ate +7. Cada um vira um chip de triagem com contagem.
 const PERIODOS = [0, 7, 15, 30, 60] as const
 
+const COLUNAS_SORT = ['validade', 'qtd', 'op'] as const
+type ColSort = (typeof COLUNAS_SORT)[number]
+
 // Retorna 'YYYY-MM-DD' de HOJE (em America/Bahia) + d dias. Ancorar em Bahia evita
 // o off-by-one que o new Date() do servidor (UTC na Vercel) causava à noite.
 function hojeMais(d: number): string {
@@ -46,7 +49,7 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string; ord?: string; dir?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Validade'))) notFound()
@@ -58,6 +61,12 @@ export default async function ValidadePage({
   const dias = PERIODOS.includes(Number(sp.dias) as (typeof PERIODOS)[number])
     ? Number(sp.dias)
     : 7
+  // Ordenacao clicavel: so sobrepoe o padrao (validade, direcao decidida pelo
+  // modo) quando o usuario clicou explicitamente num cabecalho (sp.ord presente
+  // e valido). Sem isso, o comportamento continua identico ao de hoje.
+  const ordRaw = sp.ord
+  const ord: ColSort | null = ordRaw && (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : null
+  const dir = sp.dir === 'asc' ? 'asc' : 'desc'
 
   const supabase = await createClient()
 
@@ -91,11 +100,31 @@ export default async function ValidadePage({
     .not('validade', 'is', null)
   if (localCod !== null) ordensQuery = ordensQuery.eq('identificacao_codigo_local_estoque', localCod)
   ordensQuery = vencidos
-    ? ordensQuery.lt('validade', hojeMais(0)).order('validade', { ascending: false })
-    : ordensQuery
-        .gte('validade', hojeMais(0))
-        .lte('validade', hojeMais(dias))
-        .order('validade', { ascending: true })
+    ? ordensQuery.lt('validade', hojeMais(0))
+    : ordensQuery.gte('validade', hojeMais(0)).lte('validade', hojeMais(dias))
+  // Ordenacao: so quando o usuario clicou num cabecalho (ord !== null) a coluna/
+  // direcao clicada sobrepoe o padrao do modo. Sem clique, mantem exatamente o
+  // que ja era: vencidos → validade desc; senao → validade asc.
+  if (ord === 'qtd') {
+    // Fallback: quantidade e o campo principal (nulls por ultimo), com
+    // identificacao_n_qtde como desempate — mesmo par usado na renderizacao (Qtd).
+    ordensQuery = ordensQuery
+      .order('quantidade', { ascending: dir === 'asc', nullsFirst: false })
+      .order('identificacao_n_qtde', { ascending: dir === 'asc' })
+  } else if (ord === 'op') {
+    // Fallback: identificacao_c_num_op e o campo principal (nulls por ultimo),
+    // com num_ordem como desempate — mesmo par usado na renderizacao (OP).
+    ordensQuery = ordensQuery
+      .order('identificacao_c_num_op', { ascending: dir === 'asc', nullsFirst: false })
+      .order('num_ordem', { ascending: dir === 'asc' })
+  } else if (ord === 'validade') {
+    ordensQuery = ordensQuery.order('validade', { ascending: dir === 'asc' })
+  } else {
+    // Comportamento de hoje, inalterado: direcao decidida pelo modo.
+    ordensQuery = vencidos
+      ? ordensQuery.order('validade', { ascending: false })
+      : ordensQuery.order('validade', { ascending: true })
+  }
   ordensQuery = ordensQuery.limit(LIMITE)
 
   if (codigosTipo !== null) {
@@ -218,6 +247,22 @@ export default async function ValidadePage({
     .join('&')
   const sufixo = extra ? `&${extra}` : ''
 
+  // Helper para construir URL de sort (preserva os mesmos filtros que sufixo/extra
+  // acima ja preservam, mais dias/modo — que sufixo nao inclui por serem os
+  // proprios params dos links de periodo/Vencidos, nao "extras").
+  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
+    const p = new URLSearchParams()
+    if (sp.dias) p.set('dias', sp.dias)
+    if (sp.tipo) p.set('tipo', sp.tipo)
+    if (sp.modo) p.set('modo', sp.modo)
+    if (sp.familia) p.set('familia', sp.familia)
+    if (sp.produto) p.set('produto', sp.produto)
+    if (sp.local) p.set('local', sp.local)
+    p.set('ord', key)
+    p.set('dir', newDir)
+    return `/validade?${p.toString()}`
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -286,6 +331,9 @@ export default async function ValidadePage({
       <Lista
         linhas={ordens ?? []}
         chaveLinha={(o) => o.id}
+        sortAtual={ord ?? 'validade'}
+        dirAtual={ord ? dir : (vencidos ? 'desc' : 'asc')}
+        sortHref={buildSortHref}
         colunas={[
           {
             label: 'Produto',
@@ -306,6 +354,7 @@ export default async function ValidadePage({
           },
           {
             label: 'Validade',
+            sort: 'validade',
             larguraDesktop: 'w-40',
             render: (o) => (
               <span className="inline-flex items-center gap-2">
@@ -318,6 +367,7 @@ export default async function ValidadePage({
           },
           {
             label: 'OP',
+            sort: 'op',
             larguraDesktop: 'w-40',
             render: (o) => (
               <span className="text-text-muted">
@@ -327,6 +377,7 @@ export default async function ValidadePage({
           },
           {
             label: 'Qtd',
+            sort: 'qtd',
             alinhar: 'right',
             larguraDesktop: 'w-28',
             render: (o) => {
