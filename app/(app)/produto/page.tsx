@@ -374,6 +374,16 @@ export default async function ProdutoPage({
   function sortHrefProduto(coluna: 'descricao' | 'valor_unitario'): string {
     const p = new URLSearchParams(exportParams.toString())
     p.delete('page')
+    // exportParams não carrega vista/margem/repor/janela (só os campos de
+    // filtro+ord) -- todo outro construtor de link deste arquivo (toggle
+    // Preços/Compras, "Só repor", janela, margemParams) re-adiciona esses 4
+    // por cima antes de montar o href. Sem isso, clicar num cabeçalho a
+    // partir da vista Compras (ex.: repor=1&janela=30) descartava a vista
+    // inteira e voltava pro default (achado da revisão de código).
+    if (params.vista) p.set('vista', params.vista)
+    if (params.margem) p.set('margem', params.margem)
+    if (params.repor) p.set('repor', params.repor)
+    if (params.janela) p.set('janela', params.janela)
     if (coluna === 'descricao') {
       p.set('ord', ord === 'descricao_az' ? 'descricao_za' : 'descricao_az')
     } else {
