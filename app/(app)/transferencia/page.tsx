@@ -159,6 +159,13 @@ export default async function TransferenciaPage({
     )
     .eq('loja_id', lojaId)
     .order(ord, { ascending: dir === 'asc' })
+    // Desempate por id: `status`/`codigo_local_origem` têm baixa
+    // cardinalidade e a tela pagina de verdade (.range()) -- sem um critério
+    // estável pra quebrar empate, o Postgres pode devolver ordem diferente
+    // por requisição entre linhas empatadas, duplicando ou sumindo linha
+    // entre páginas (mesma classe de bug já documentada em /produto,
+    // migration 087 "tiebreak de paginação").
+    .order('id', { ascending: true })
 
   if (sp.data_inicio) query = query.gte('data', sp.data_inicio)
   if (sp.data_final) query = query.lte('data', `${sp.data_final}T23:59:59`)

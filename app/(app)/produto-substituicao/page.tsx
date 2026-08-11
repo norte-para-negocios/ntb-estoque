@@ -20,13 +20,13 @@ export default async function ProdutoSubstituicaoPage({
 }: {
   searchParams: Promise<{ ord?: string; dir?: string }>
 }) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Produto Substituicoes'))) notFound()
+
   const sp = await searchParams
   const ordRaw = sp.ord ?? 'n_cod_prod'
   const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'n_cod_prod'
   const dir = sp.dir === 'desc' ? 'desc' : 'asc'
-
-  const lojaId = await getCurrentLojaId()
-  if (!(await requirePermissao(lojaId, 'Produto Substituicoes'))) notFound()
 
   const supabase = await createClient()
   const podeCriar = await requirePermissao(lojaId, 'Produto Substituicoes - Criar')
@@ -38,14 +38,40 @@ export default async function ProdutoSubstituicaoPage({
     .eq('loja_id', lojaId)
     .order('id')
 
+  // Produtos referenciados nos vínculos (pra resolver nome via nomeDe/nomeMap
+  // abaixo) -- query SEPARADA da de baixo (que alimenta o dropdown do form de
+  // criação e precisa continuar trazendo todos os produtos da loja). Sem essa
+  // separação, nomeDe() dependia só da busca de baixo: 5 das 6 lojas ativas
+  // têm 2313-2869 produtos, e o corte silencioso de 1000 linhas do PostgREST
+  // fazia a maioria dos vínculos cair no fallback `#${cod}` -- crítico agora
+  // que este campo virou o critério padrão de ordenação da tela (achado da
+  // revisão final).
+  const codigosReferenciados = [
+    ...new Set((vinculos ?? []).flatMap((v) => [v.n_cod_prod, v.substitui_n_cod_prod])),
+  ]
+  const { data: produtosReferenciados } = codigosReferenciados.length
+    ? await supabase
+        .from('produtos')
+        .select('n_cod_prod:codigo_produto, descricao')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigosReferenciados)
+    : { data: [] as Produto[] }
+
+  // Todos os produtos da loja, só pro dropdown de seleção do form de criar
+  // vínculo (ProdutoSubstituicaoForm) -- esse uso precisa continuar buscando
+  // o cadastro inteiro, não só os já vinculados.
   const { data: todosProdutos } = await supabase
     .from('produtos')
     .select('n_cod_prod:codigo_produto, descricao')
     .eq('loja_id', lojaId)
     .order('descricao')
 
-  const nomeDe = (cod: number) =>
-    (todosProdutos as Produto[] | null)?.find((p) => p.n_cod_prod === cod)?.descricao ?? `#${cod}`
+  // Map construído uma vez (em vez de .find() linear a cada chamada, 2x por
+  // comparação dentro do .sort() abaixo) -- mesmo mapa usado no sort e no render.
+  const nomeMap = new Map(
+    ((produtosReferenciados as Produto[] | null) ?? []).map((p) => [p.n_cod_prod, p.descricao ?? `#${p.n_cod_prod}`])
+  )
+  const nomeDe = (cod: number) => nomeMap.get(cod) ?? `#${cod}`
 
   // Sort em JS: ordena pelo NOME resolvido (não pelo código cru), já que é
   // isso que o usuário vê na coluna. Dataset pequeno (cadastro manual de

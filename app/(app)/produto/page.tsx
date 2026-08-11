@@ -385,7 +385,12 @@ export default async function ProdutoPage({
     if (params.repor) p.set('repor', params.repor)
     if (params.janela) p.set('janela', params.janela)
     if (coluna === 'descricao') {
-      p.set('ord', ord === 'descricao_az' ? 'descricao_za' : 'descricao_az')
+      // ord por padrao vem '' (tratado como descricao_az na query acima) --
+      // comparar contra 'descricao_za' (nao 'descricao_az') faz '' cair no
+      // valor NAO-padrao, senao o primeiro clique emitia a mesma ordem ja
+      // em vigor e so o segundo clique produzia Z-A de verdade (achado da
+      // revisao final).
+      p.set('ord', ord === 'descricao_za' ? 'descricao_az' : 'descricao_za')
     } else {
       p.set('ord', ord === 'venda_asc' ? 'venda_desc' : 'venda_asc')
     }

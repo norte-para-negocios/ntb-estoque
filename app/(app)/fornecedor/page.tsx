@@ -101,6 +101,13 @@ export default async function FornecedorPage({
     )
     .eq('loja_id', lojaId)
     .order(ord, { ascending: dir === 'asc' })
+    // Desempate por id: `origem`/`inativo` têm baixa cardinalidade (poucos
+    // valores distintos) e a tela pagina de verdade (.range()) -- sem um
+    // critério estável pra quebrar empate, o Postgres pode devolver ordem
+    // diferente por requisição entre linhas empatadas, duplicando ou
+    // sumindo linha entre páginas (mesma classe de bug já documentada em
+    // /produto, migration 087 "tiebreak de paginação").
+    .order('id', { ascending: true })
     .range((page - 1) * PER_PAGE, page * PER_PAGE - 1)
 
   if (params.q) {
