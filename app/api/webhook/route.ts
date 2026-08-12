@@ -24,13 +24,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const { data: loja } = await supabase
+  // is_test=false: webhook da Omie sempre pertence à loja real -- a gêmea de
+  // teste reusa a mesma omie_app_key (pra leitura), então sem esse filtro a
+  // query deixa de ser única (2 lojas com a mesma chave) e maybeSingle()
+  // falha, descartando o webhook em silêncio.
+  const { data: loja, error } = await supabase
     .from('lojas')
     .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('omie_app_key', body.appKey)
     .eq('ativo', true)
+    .eq('is_test', false)
     .maybeSingle<LojaOmie>()
 
+  if (error) {
+    console.error('Erro ao resolver loja do webhook Omie:', error)
+    return NextResponse.json({ ok: true })
+  }
   if (!loja) return NextResponse.json({ ok: true })
 
   // Deduplicacao por messageId
