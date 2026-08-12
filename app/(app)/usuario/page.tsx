@@ -40,11 +40,14 @@ export default async function UsuarioPage({
 
   const supabase = await createClient()
 
-  // Lojas que o ator pode gerir (Admin global: todas ativas; AdminLoja: as dele).
+  // Lojas que o ator pode gerir (Admin global: todas ativas; AdminLoja: as
+  // dele). Sem lojas de teste aqui de proposito -- nao faz sentido vincular
+  // um usuario comum a uma loja [TESTE] pelo formulario normal.
   const { data: lojasTodas } = await supabase
     .from('lojas')
     .select('id, nome, nome_fantasia')
     .eq('ativo', true)
+    .eq('is_test', false)
     .order('nome_fantasia')
   const lojas = (lojasTodas ?? []).filter((l) => ator.lojaIds.includes(l.id))
   const lojaIdsEscopo = lojas.map((l) => l.id)

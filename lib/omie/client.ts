@@ -41,8 +41,16 @@ function ehChamadaDeEscrita(call: string): boolean {
 // de verdade no código evita ter que mapear call -> campo
 // individualmente (cada função de escrita só lê o campo que espera, o
 // resto é ignorado).
+// Contador de processo -- garante ids distintos mesmo quando várias
+// chamadas simuladas acontecem no mesmo milissegundo (ex: laço de
+// transferência/ajuste em lote, que na loja de teste roda sem a
+// latência de rede real da Omie). Sem isso, ids repetidos batiam em
+// índices únicos reais (ex: movimentos(loja_id, id_ajuste)).
+let contadorSimulado = 0
+
 function respostaSimulada(): Record<string, unknown> {
-  const idFicticio = -Math.floor(Date.now() / 1000)
+  contadorSimulado = (contadorSimulado + 1) % 1_000_000
+  const idFicticio = -(Date.now() * 1000 + contadorSimulado)
   return {
     nCodOP: idFicticio,
     cCodIntOP: `TESTE-${idFicticio}`,

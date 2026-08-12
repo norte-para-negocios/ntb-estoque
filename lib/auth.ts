@@ -206,9 +206,17 @@ export async function getAtorGestao(): Promise<AtorGestao> {
   const isAdminGlobal = perfil === 'Admin'
   const isAdminLoja = perfil === 'AdminLoja'
 
+  // is_test NAO filtrado aqui de proposito: ator.lojaIds e usado por muito
+  // mais que a tela de usuario (minha-loja, resumo, cargo, convite,
+  // relatorios) -- filtrar aqui vazava pra esses consumidores e quebrava
+  // "loja de teste faz tudo que a loja real faz" (achado real: Admin
+  // dentro de uma loja [TESTE] recebia 404 em "Minha loja", e "Resumo"
+  // mostrava dado de outra loja REAL sem aviso). Quem precisa esconder
+  // lojas de teste (ex: formulario de vinculo de usuario) filtra na
+  // propria query, nao aqui.
   let lojaIds: number[] = []
   if (isAdminGlobal) {
-    const { data } = await supabase.from('lojas').select('id').eq('ativo', true).eq('is_test', false)
+    const { data } = await supabase.from('lojas').select('id').eq('ativo', true)
     lojaIds = (data ?? []).map((l) => l.id as number)
   } else if (isAdminLoja) {
     const { data } = await supabase
