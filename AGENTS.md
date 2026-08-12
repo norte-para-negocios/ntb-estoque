@@ -1185,3 +1185,58 @@ confirmado igual na própria Omie" já apareceu 2 vezes (loja 2/junho
 inteiro, loja 3/dias específicos aqui) -- pode reaparecer com outras
 lojas/datas; nesses casos o diagnóstico correto não é reprocessar sync,
 é verificar a origem (Omie/SEFAZ/PDV).
+
+## Contenção de RLS (Fase 0 + Fase 2a) e incidente de recursão infinita (2026-08-10/12)
+
+Achado incidental na revisão final do plano "Sertão Teste": a tabela
+`lojas` (e outras 33) estava com RLS desligada e grants totais
+(`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`) pra `anon`/`authenticated`
+desde a migration 061 -- qualquer operador logado conseguia ler
+`integracao_api_key`/`omie_app_key`/`omie_app_secret` de TODAS as lojas
+direto pelo navegador via PostgREST, e uma anon key pública conseguia
+`TRUNCATE lojas`, apagando o sistema inteiro via `ON DELETE CASCADE`.
+
+**Fase 0** (migrations 109/110): revogou `INSERT`/`UPDATE`/`DELETE`/
+`TRUNCATE` de `anon`/`authenticated` em 34 tabelas sem RLS, e fechou
+leitura das colunas sensíveis de `lojas` (incluindo `codigo_onboarding`,
+achado tardio -- é a credencial de auto-cadastro em
+`lib/actions/cadastro.ts`, não metadado inofensivo). 3 pontos de código
+que liam/escreviam essas colunas via client de sessão migraram pra
+`createServiceClient()` antes da migration rodar (`lib/actions/
+loja-selector.ts`, `components/movimentacoes/MovimentosTab.tsx`,
+`app/(app)/loja/page.tsx`).
+
+**Fase 2a** (migration 111): aplicou RLS de LINHA nas 29 tabelas restantes
+com `loja_id` direto + corrigiu um bug real no padrão já usado nas 14
+tabelas que já tinham RLS (a policy só checava `loja_user`, sem considerar
+Admin/super_admin -- contas como o QA de testes, sem vínculo em
+`loja_user`, já ficavam sem acesso a essas 14 silenciosamente).
+
+**Incidente real em produção, corrigido na hora (migration 112)**: a
+policy nova de `loja_user` fazia `EXISTS (select 1 from loja_user lu
+where ...)` -- uma self-reference dentro da própria condição `USING`.
+Como as OUTRAS 40 tabelas também fazem `EXISTS(loja_user)` dentro da
+própria policy, isso quebrou com `"infinite recursion detected in policy
+for relation loja_user"` **toda leitura via `authenticated` no sistema
+inteiro**, assim que a migration 111 foi aplicada (login continuou
+funcionando -- não depende dessas tabelas -- mas praticamente todas as
+telas de dado pararam). Corrigido substituindo as subqueries diretas por
+duas functions `security definer` (`usuario_tem_acesso_loja(p_loja_id)`,
+`usuario_e_admin()`) -- rodam com privilégio do dono, ignoram RLS na
+leitura interna de `loja_user`/`profiles`, quebrando a recursão. **Padrão
+a nunca repetir**: uma policy de RLS de uma tabela `X` nunca deve fazer
+`EXISTS (select ... from X ...)` referenciando a própria `X` dentro da
+condição `USING` -- mesmo que pareça inofensivo, qualquer OUTRA tabela
+cuja policy também consulte `X` herda a mesma recursão. Sempre que uma
+policy precisar consultar uma tabela de vínculo (tipo `loja_user`) a
+partir de QUALQUER policy (inclusive a dela mesma), usar uma function
+`security definer` em vez de subquery direta.
+
+Policy padrão final (idêntica nas 41 tabelas com `loja_id`, mais as 12
+que já tinham RLS antes desta rodada):
+`usuario_tem_acesso_loja(loja_id) or usuario_e_admin()`.
+
+**Fora de escopo, ainda pendente**: Fase 2b (5 tabelas sem `loja_id`
+direto -- `lojas`, `profiles`, `permissoes`, `outbox`, `arquivos_mortos`,
+cada uma precisa de política própria) e o Plano A do Sertão Teste (NTB
+Vendas, chave de teste já gerada no lado Estoque).
