@@ -1236,7 +1236,56 @@ Policy padrão final (idêntica nas 41 tabelas com `loja_id`, mais as 12
 que já tinham RLS antes desta rodada):
 `usuario_tem_acesso_loja(loja_id) or usuario_e_admin()`.
 
-**Fora de escopo, ainda pendente**: Fase 2b (5 tabelas sem `loja_id`
-direto -- `lojas`, `profiles`, `permissoes`, `outbox`, `arquivos_mortos`,
-cada uma precisa de política própria) e o Plano A do Sertão Teste (NTB
-Vendas, chave de teste já gerada no lado Estoque).
+**Fase 2b** (migrations 113-116, 2026-08-12, conclui a contenção de RLS
+das 5 tabelas sem `loja_id` direto): `profiles` (própria linha, Admin,
+ou loja em comum via `usuario_compartilha_loja(p_outro_user_id)`, function
+nova que consulta só `loja_user`, nunca `profiles` -- testada isolada
+ANTES das outras 4, lição direta do incidente acima); `lojas` (mesmo
+padrão das 41); `permissoes` (catálogo público, `role() = 'authenticated'`);
+`outbox`/`arquivos_mortos` (RLS ligada, ZERO policy -- bloqueio total,
+nenhum código do app as lê via sessão).
+
+**2 achados reais na revisão desta fase, corrigidos na hora**:
+1. (migration 115) A policy de `permissoes` usava `role()` sem qualificar
+   schema -- `authenticated`/`anon` não têm `auth` no `search_path` por
+   padrão (só `supabase_admin` tem), então em produção real (PostgREST)
+   isso falhava com `"function role() does not exist"`; só "passava" em
+   testes via `psql`/`supabase_admin`. Corrigido pra `auth.role()`, mesmo
+   padrão já usado em `cargos`/`cargo_permissao` (migration 046). **Ao
+   testar RLS via `SET ROLE`/JWT simulado, sempre incluir o claim `role`
+   no JSON e considerar rodar `SET search_path = "$user", public` (sem
+   `auth`) pra reproduzir fielmente o ambiente da role real** -- testar
+   como `supabase_admin` mascara esse tipo de bug.
+2. (migration 116) `profiles` com `status='pendente'` (cadastro sem loja
+   ainda) ficava invisível pra `AdminLoja` -- a policy só cobria
+   `usuario_e_admin()` (Admin global/super_admin), e pendente nunca tem
+   `loja_user` (então `usuario_compartilha_loja` sempre falha). Quebrava
+   o fluxo já documentado em `app/(app)/usuario/page.tsx` ("tanto Admin
+   global quanto AdminLoja... podem aprovar"). Corrigido com
+   `usuario_pode_aprovar_pendentes()` (mesma classe de function segura:
+   `security definer`, só lê a PRÓPRIA linha do usuário logado, sem
+   iterar outras linhas -- não reintroduz recursão).
+
+**Regra pra qualquer policy nova (não só desta fase)**: nunca aplicar
+`FORCE ROW LEVEL SECURITY` nas tabelas que as functions `usuario_*`
+tocam (`loja_user`, `profiles`), e nunca trocar o dono dessas functions
+pra um role não-superuser -- ambas as coisas reabririam o caminho pro
+mesmo incidente de recursão, já que a proteção real vem do owner delas
+(`supabase_admin`, superuser) bypassando RLS na leitura interna.
+
+**Achados menores, registrados sem ação nesta rodada**: (a) `outbox`/
+`arquivos_mortos` bloqueiam por RLS-sem-policy (0 linhas), não por
+`REVOKE SELECT` -- efeito de segurança idêntico, mas quem quiser reforço
+extra pode `revoke select ... from anon, authenticated` como
+defesa-em-profundidade; (b) `cargos`/`cargo_permissao`/`etiqueta_config`
+escaparam da lista de 34 tabelas da Fase 0 -- ainda têm grant de escrita
+residual pra `anon`/`authenticated`, mas não é explorável hoje (RLS com
+só policy de SELECT bloqueia, e `TRUNCATE` não é alcançável via REST) --
+candidato a fechamento numa rodada futura; (c) telas que mostram "quem
+fez" uma transferência/inventário (`impressoes`, `transferencia`,
+`inventario`, mais os respectivos `export`/`relatorio`) ficam com nome
+em branco se o autor for desvinculado de `loja_user` depois -- 0 casos
+reais hoje, registrado como observação.
+
+O Plano A do Sertão Teste (NTB Vendas, chave de teste já gerada no lado
+Estoque) segue pendente, sem relação com este projeto de RLS.
