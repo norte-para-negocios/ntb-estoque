@@ -208,7 +208,7 @@ export async function getAtorGestao(): Promise<AtorGestao> {
 
   let lojaIds: number[] = []
   if (isAdminGlobal) {
-    const { data } = await supabase.from('lojas').select('id').eq('ativo', true)
+    const { data } = await supabase.from('lojas').select('id').eq('ativo', true).eq('is_test', false)
     lojaIds = (data ?? []).map((l) => l.id as number)
   } else if (isAdminLoja) {
     const { data } = await supabase

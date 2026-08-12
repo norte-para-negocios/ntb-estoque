@@ -5,8 +5,9 @@ export async function getLojasAtivas(): Promise<LojaOmie[]> {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('ativo', true)
+    .eq('is_test', false)
     .not('omie_app_key', 'is', null)
   return (data ?? []) as LojaOmie[]
 }

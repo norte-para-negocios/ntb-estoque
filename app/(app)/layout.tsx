@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('ativo', true)
     .order('nome_fantasia')
 
-  // Nao-admin so enxerga as lojas que tem em loja_user.
+  // Nao-admin so enxerga as lojas que tem em loja_user, e nunca ve lojas de teste.
   if (!isAdmin) {
     const { data: vinculos } = await supabase
       .from('loja_user')
@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const lojaIds = [
       ...new Set((vinculos ?? []).map((v) => v.loja_id).filter((v): v is number => v != null)),
     ]
-    lojasQuery = lojasQuery.in('id', lojaIds.length ? lojaIds : [-1])
+    lojasQuery = lojasQuery.eq('is_test', false).in('id', lojaIds.length ? lojaIds : [-1])
   }
 
   const { data: lojas } = await lojasQuery
