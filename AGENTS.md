@@ -1289,3 +1289,94 @@ reais hoje, registrado como observação.
 
 O Plano A do Sertão Teste (NTB Vendas, chave de teste já gerada no lado
 Estoque) segue pendente, sem relação com este projeto de RLS.
+
+## Lojas de Teste (2026-08-12) — sandbox completo por loja, nunca escreve na Omie, e o incidente do webhook
+
+Cada uma das 6 lojas ativas ganhou uma gêmea de teste (`lojas.is_test`,
+`lojas.loja_origem_id`, migration 117): mesma `omie_app_key`/
+`omie_app_secret` da loja real (pra LEITURA trazer dado real -- catálogo,
+preços), mas NUNCA escreve de volta. Como o app inteiro já é escopado por
+`loja_id`, a loja de teste reusa 100% das tabelas/telas normais -- nenhum
+schema duplicado.
+
+**Gate central**: `omieRequest` (`lib/omie/client.ts`) recebe `is_test:
+boolean` OBRIGATÓRIO (tanto em `LojaOmie` quanto em
+`OmieRequestParams`) -- decisão de design que torna a propagação
+auto-verificável via `tsc` (compilador aponta todo call site que
+esquecer o campo). Quando `is_test && ehChamadaDeEscrita(call)` (regex
+`/^(Incluir|Alterar|Excluir|Concluir|Reverter)/`, convenção 100%
+consistente na base), a função NUNCA faz o `fetch` real -- devolve uma
+resposta sintética (`respostaSimulada()`, um objeto "shotgun" com todos
+os nomes de campo de ID usados de verdade no código, mais um contador de
+processo somado a `Date.now()*1000` pra nunca colidir mesmo em chamadas
+no mesmo milissegundo -- ver achado abaixo) e loga em
+`integration_attempts` com `model` prefixado `[SIMULADO]`.
+
+**Achado real, corrigido antes do `tsc` apontar**: `respostaSimulada()`
+inicialmente não cobria 3 campos (`codigo`, `codigo_cliente_omie`,
+`codigo_produto`) lidos por `incluirFamilia`/`incluirFornecedor`/criação
+de produto -- corrigido antes de qualquer deploy.
+
+**Achado real, `tsc`-invisível**: o cast `.single<LojaOmie>()`/
+`.maybeSingle<LojaOmie>()` do supabase-js **não é verificado contra a
+string do `.select()`** -- um `.select('id, omie_app_key,
+omie_app_secret')` sem `is_test` compila limpo, mas `loja.is_test` chega
+`undefined` (falsy) em runtime, fazendo o gate tratar QUALQUER loja como
+real. Achado em ~41 call sites no total (20 pegos pelo `tsc` por
+chamarem `omieRequest` com o objeto solto, ~21 que só o `tsc` não via
+por trás do cast) -- todos corrigidos, confirmado com `grep -rn
+"omie_app_key, omie_app_secret" app/ lib/ | grep -v is_test` vazio.
+**Se adicionar um novo call site na Omie no futuro, sempre confirmar que
+a query que busca a `loja` inclui `is_test` explicitamente no
+`.select()` -- o `tsc` não é garantia suficiente aqui.**
+
+**INCIDENTE REAL EM PRODUÇÃO, corrigido na hora (2026-08-12,
+~21:34–22:29 UTC)**: `app/api/webhook/route.ts` resolvia a loja de
+origem só por `omie_app_key` (`.eq('omie_app_key', body.appKey)`) --
+único ponto do sistema que faz isso (todo o resto resolve por `id`).
+Como a loja de teste reusa a MESMA `omie_app_key` da loja real, a query
+deixou de ser única assim que as 6 lojas teste foram criadas
+(`maybeSingle()` passou a ver 2 linhas por chave), e o `error` do
+Supabase não era checado -- **todo webhook recebido nesse intervalo foi
+descartado silenciosamente**, inclusive o dual-write pro Contabo
+(perda irrecuperável -- Omie não tem endpoint de "listar webhook
+antigo", e o `prune` some com o resto em 7 dias). Corrigido com
+`.eq('is_test', false)` na query (webhook é sempre da loja real, a
+gêmea não tem identidade própria na Omie) + checagem de `error`.
+Confirmado com dado real: primeiro webhook novo chegou minutos depois do
+deploy do fix. **Lição pro futuro**: qualquer query que resolva `lojas`
+por uma coluna que não seja `id` (`omie_app_key`, `cnpj`, etc.) precisa
+considerar que ela deixou de ser única desde que lojas de teste existem
+-- sempre incluir `.eq('is_test', false)` nesses casos.
+
+**Achado real, corrigido na revisão final**: `getAtorGestao()`
+(`lib/auth.ts`) inicialmente filtrava `is_test=false` na branch Admin
+global -- mas `ator.lojaIds` é consumido por muito mais que a tela de
+usuário (`minha-loja`, `resumo`, `convite`, `cargo`, todos os
+relatórios), e o filtro vazou pra esses consumidores, quebrando "loja de
+teste faz tudo que a loja real faz" (Admin dentro de uma loja `[TESTE]`
+recebia 404 em "Minha loja"; "Resumo" mostrava dado de OUTRA loja real
+sem nenhum aviso). Corrigido revertendo o filtro em `getAtorGestao()`
+(Admin volta a gerenciar lojas teste como qualquer outra) e movendo o
+filtro só pra `app/(app)/usuario/page.tsx` (lista de lojas do formulário
+de vínculo de usuário), onde a intenção original fazia sentido.
+
+**Exclusão da automação**: `getLojasAtivas()` (`lib/omie/sync-all.ts`,
+choke point de 20 dos 24 crons) ganhou `.eq('is_test', false)`. Colunas
+`is_test`/`loja_origem_id` precisaram de `GRANT SELECT` explícito pra
+`anon`/`authenticated` (achado do próprio QA: o grant column-level da
+Fase 0/migration 109 é um snapshot fixo, não reage a colunas novas --
+qualquer coluna adicionada em `lojas` DEPOIS da 109 nunca ganha grant
+sozinha, precisa de `GRANT SELECT (coluna) ON lojas TO anon,
+authenticated;` numa migration própria).
+
+**Limitação conhecida, documentada, não corrigida**: escrita é sempre
+simulada, mas releitura vai pra Omie real e não enxerga o objeto
+"criado" (ex: `ConsultarOrdemProducao` com o `nCodOP` negativo simulado
+não encontra nada de verdade). É esperado por desenho -- não confundir
+com bug ao fazer QA numa loja de teste. Lojas de teste também não têm
+produto/local sincronizado localmente (os crons as excluem por design)
+-- primeiro uso precisa disparar manualmente as rotas `/api/sync/*`
+(são leitura, funcionam normal) dentro da loja de teste antes de tentar
+qualquer fluxo de escrita simulada que dependa de um `codigo_produto`
+já cadastrado.
