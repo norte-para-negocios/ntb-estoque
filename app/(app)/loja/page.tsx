@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { CopyWebhook } from '@/components/loja/CopyWebhook'
@@ -22,7 +22,8 @@ export default async function LojaPage({
   const q = (params.q ?? '').trim()
 
   const supabase = await createClient()
-  let query = supabase
+  const supabaseService = createServiceClient()
+  let query = supabaseService
     .from('lojas')
     .select('*')
     .order('id')
