@@ -45,7 +45,7 @@ export default async function OrdemProducaoTestePage() {
 
   const supabase = await createClient()
 
-  const { data: opsData } = await supabase
+  const { data: opsData, error: erroOps } = await supabase
     .from('ordens_producao_teste')
     .select('id, loja_id, codigo_produto, codigo_produto_texto, quantidade, pedido_ref, criado_em')
     .order('criado_em', { ascending: false })
@@ -63,6 +63,11 @@ export default async function OrdemProducaoTestePage() {
 
   return (
     <div className="space-y-5">
+      {erroOps && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Erro ao carregar OPs de teste — tente novamente
+        </div>
+      )}
       <ListaHeader>
         <PageHeader
           title="Ordens de Produção · Teste"
