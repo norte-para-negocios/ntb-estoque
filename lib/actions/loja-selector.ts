@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getUser } from '@/lib/auth'
 
@@ -42,7 +42,8 @@ export async function setCurrentLoja(lojaId: number) {
     return { error: 'Voce nao tem acesso a essa loja' }
   }
 
-  await supabase.from('profiles').update({ current_loja_id: lojaId }).eq('id', user.id)
+  const supabaseService = createServiceClient()
+  await supabaseService.from('profiles').update({ current_loja_id: lojaId }).eq('id', user.id)
   revalidatePath('/', 'layout')
   return { ok: true }
 }
