@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { OrigemMovimento } from '@/components/movimentacoes/DetalheMovimentoSheet'
 import { requirePermissao } from '@/lib/auth'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
@@ -379,7 +379,8 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
       // Saldo inicial/final: so calculavel com local unico selecionado e produto
       // unico identificado (senao "saldo" nao tem um numero unico pra mostrar).
       if (localFiltro && produtoUnico) {
-        const { data: lojaRow } = await supabase
+        const supabaseService = createServiceClient()
+        const { data: lojaRow } = await supabaseService
           .from('lojas')
           .select('id, omie_app_key, omie_app_secret')
           .eq('id', lojaId)
