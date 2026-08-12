@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return NextResponse.json({ error: 'loja nao encontrada' }, { status: 404 })

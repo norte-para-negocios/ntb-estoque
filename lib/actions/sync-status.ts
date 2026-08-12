@@ -50,7 +50,7 @@ export async function reprocessarSync(
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .eq('ativo', true)
     .not('omie_app_key', 'is', null)

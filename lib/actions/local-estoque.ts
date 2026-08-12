@@ -48,7 +48,7 @@ export async function criarLocalEstoque(dados: { descricao: string; codigo?: str
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }
@@ -85,7 +85,7 @@ export async function editarLocalEstoque(dados: {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }

@@ -26,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const serviceSupabase = createServiceClient()
   const { data: loja } = await serviceSupabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
 

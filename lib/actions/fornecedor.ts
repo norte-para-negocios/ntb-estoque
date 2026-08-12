@@ -47,7 +47,7 @@ async function getLoja(lojaId: number) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   return data

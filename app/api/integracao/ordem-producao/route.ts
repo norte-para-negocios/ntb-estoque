@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
     .maybeSingle<LojaOmie>()

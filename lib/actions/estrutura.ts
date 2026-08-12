@@ -53,7 +53,7 @@ export async function verEstrutura(
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja?.omie_app_key || !loja?.omie_app_secret) return { error: 'Loja sem chave do Omie' }
@@ -168,7 +168,7 @@ export async function salvarEstrutura(
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase
-    .from('lojas').select('id, omie_app_key, omie_app_secret').eq('id', lojaId).single<LojaOmie>()
+    .from('lojas').select('id, omie_app_key, omie_app_secret, is_test').eq('id', lojaId).single<LojaOmie>()
   if (!loja?.omie_app_key || !loja?.omie_app_secret) return { error: 'Loja sem chave do Omie' }
 
   // Só acabado/em processo têm estrutura (regra do Omie + pedido do Ramon).

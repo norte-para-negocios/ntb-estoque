@@ -108,7 +108,7 @@ export async function criarProduto(dados: {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }
@@ -293,7 +293,7 @@ export async function editarProduto(
 
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) {
@@ -332,7 +332,7 @@ export async function excluirProduto(codigoProduto: number) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }
