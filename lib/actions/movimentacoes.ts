@@ -82,6 +82,7 @@ async function reenviarMovimentoManual(
       loja_id: lojaId,
       omie_app_key: loja.omie_app_key,
       omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
       endpoint: 'v1/estoque/ajuste',
       call: 'IncluirAjusteEstoque',
       data: param,
@@ -166,7 +167,7 @@ export async function criarAjusteManual(input: {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja nao encontrada' }

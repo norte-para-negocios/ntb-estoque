@@ -54,6 +54,7 @@ export async function incluirEstrutura(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/malha',
     call: 'IncluirEstrutura',
     data: {
@@ -77,6 +78,7 @@ export async function alterarEstrutura(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/malha',
     call: 'AlterarEstrutura',
     data: {
@@ -95,6 +97,7 @@ export async function excluirEstrutura(loja: LojaOmie, idProduto: number, idMalh
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/malha',
     call: 'ExcluirEstrutura',
     data: { idProduto, idMalha },
@@ -114,6 +117,7 @@ export async function consultarEstrutura(
       loja_id: loja.id,
       omie_app_key: loja.omie_app_key,
       omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
       endpoint: 'v1/geral/malha',
       call: 'ConsultarEstrutura',
       data: { idProduto },

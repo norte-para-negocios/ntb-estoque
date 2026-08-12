@@ -191,7 +191,7 @@ export async function criarOrdemProducao(input: {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }
@@ -250,7 +250,7 @@ export async function criarOrdensProducao(input: {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return { error: 'Loja não encontrada' }
@@ -380,7 +380,7 @@ export async function setDataOP(opId: number, dataISO: string) {
   const supabase = createServiceClient()
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
@@ -431,7 +431,7 @@ export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
   const supabase = createServiceClient()
   const { data: op } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_d_dt_previsao, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_d_dt_previsao, identificacao_codigo_local_estoque, concluida, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
@@ -646,7 +646,7 @@ export async function finishOP(
   const { data: op } = await supabase
     .from('ordens_producao')
     .select(
-      'id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, identificacao_n_cod_op, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
     )
     .eq('id', opId)
     .eq('loja_id', lojaId)
@@ -683,7 +683,7 @@ async function carregarOPdaLoja(opId: number, permissao: string) {
   const supabase = createServiceClient()
   const { data: op, error: dbError } = await supabase
     .from('ordens_producao')
-    .select('identificacao_n_cod_op, concluida, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('identificacao_n_cod_op, concluida, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', opId)
     .eq('loja_id', lojaId)
     .single<{
@@ -945,7 +945,7 @@ export async function finishOPsEmLote(
   const { data: linhas } = await supabase
     .from('ordens_producao')
     .select(
-      `id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret)`
+      `id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_n_cod_produto, identificacao_codigo_local_estoque, conclusao_tentativas, loja:lojas(id, omie_app_key, omie_app_secret, is_test)`
     )
     .eq('loja_id', lojaId)
     .eq('concluida', false)
@@ -999,7 +999,7 @@ export async function reverterOPsEmLote(
 
   const { data: linhas } = await supabase
     .from('ordens_producao')
-    .select('id, identificacao_n_cod_op, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, identificacao_n_cod_op, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('loja_id', lojaId)
     .eq('concluida', true)
     .in('id', opIds)

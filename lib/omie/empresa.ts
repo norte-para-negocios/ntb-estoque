@@ -60,6 +60,7 @@ export async function syncEmpresa(loja: LojaOmie): Promise<boolean> {
       loja_id: loja.id,
       omie_app_key: loja.omie_app_key,
       omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
       endpoint: 'v1/geral/empresas',
       call: 'ListarEmpresas',
       data: { pagina: 1, registros_por_pagina: 50 },

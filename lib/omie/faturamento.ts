@@ -208,6 +208,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
         loja_id: loja.id,
         omie_app_key: loja.omie_app_key,
         omie_app_secret: loja.omie_app_secret,
+        is_test: loja.is_test,
         endpoint: 'v1/produtos/cupomfiscalconsultar',
         call: 'CuponsFiscais',
         data: { dDtEmissaoDe: de, dDtEmissaoAte: ate, nPagina: pagina, nRegPorPagina: 50 },

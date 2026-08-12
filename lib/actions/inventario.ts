@@ -132,7 +132,7 @@ export async function enviarInventarioItem(
   const { data: item } = await supabase
     .from('inventario_items')
     .select(
-      'id, produto_codigo, produto_codigo_produto, id_ajuste, tentativas, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+      'id, produto_codigo, produto_codigo_produto, id_ajuste, tentativas, inventario:inventarios(id, codigo_local_estoque, tipo, origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret, is_test))'
     )
     .eq('id', itemId)
     .eq('loja_id', lojaId)
@@ -235,7 +235,7 @@ export async function removeInventarioItem(itemId: number) {
   // sistema. Vale para item de inventario finalizado tambem (editar pos-fato).
   const { data: item } = await supabase
     .from('inventario_items')
-    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', itemId)
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; loja: LojaOmie }>()
@@ -347,6 +347,7 @@ async function processarItemInventario(
       loja_id: lojaId,
       omie_app_key: inventario.loja.omie_app_key,
       omie_app_secret: inventario.loja.omie_app_secret,
+      is_test: inventario.loja.is_test,
       endpoint: 'v1/estoque/ajuste',
       call: 'IncluirAjusteEstoque',
       data: param,
@@ -418,7 +419,7 @@ export async function finishInventario(inventarioId: number) {
   const { data: inventario } = await supabase
     .from('inventarios')
     .select(
-      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
     )
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
@@ -462,7 +463,7 @@ export async function forceSyncInventario(inventarioId: number) {
   const { data: inventario } = await supabase
     .from('inventarios')
     .select(
-      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_estoque, tipo, origem, motivo, data, items:inventario_items(*), loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
     )
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
@@ -659,7 +660,7 @@ export async function retryAjustesInventarioPendentes(
       const { data: inventarioHeader, error: erroHeader } = await supabase
         .from('inventarios')
         .select(
-          'id, codigo_local_estoque, tipo, origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret)'
+          'id, codigo_local_estoque, tipo, origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
         )
         .eq('id', inventarioId)
         .eq('loja_id', loja.id)
@@ -833,7 +834,7 @@ export async function excluirInventario(inventarioId: number) {
 
   const { data: inventario } = await supabase
     .from('inventarios')
-    .select('id, items:inventario_items(id, id_ajuste), loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, items:inventario_items(id, id_ajuste), loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', inventarioId)
     .eq('loja_id', lojaId)
     .single<{
@@ -877,7 +878,7 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
 
   const { data: item } = await supabase
     .from('inventario_items')
-    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', itemId)
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; loja: LojaOmie }>()

@@ -69,6 +69,7 @@ export async function incluirProduto(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/produtos',
     call: 'IncluirProduto',
     data: {
@@ -124,6 +125,7 @@ export async function alterarProduto(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/produtos',
     call: 'AlterarProduto',
     data: {
@@ -150,6 +152,7 @@ export async function excluirProdutoOmie(loja: LojaOmie, codigoProduto: number) 
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/produtos',
     call: 'ExcluirProduto',
     data: { codigo_produto: codigoProduto },
@@ -198,6 +201,7 @@ export async function syncProdutos(loja: LojaOmie) {
         loja_id: loja.id,
         omie_app_key: loja.omie_app_key,
         omie_app_secret: loja.omie_app_secret,
+        is_test: loja.is_test,
         endpoint: 'v1/geral/produtos',
         call: 'ListarProdutos',
         data: {

@@ -50,7 +50,7 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
   const supabase = createServiceClient()
   const { data: nf, error: dbError } = await supabase
     .from('notas_fiscais')
-    .select('n_id_receb, c_etapa, c_numero_nfe, full_object, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('n_id_receb, c_etapa, c_numero_nfe, full_object, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', notaId)
     .eq('loja_id', lojaId)
     .is('deleted_at', null)

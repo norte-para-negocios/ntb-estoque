@@ -83,6 +83,7 @@ export async function syncMovimentos(loja: LojaOmie): Promise<number> {
           loja_id: loja.id,
           omie_app_key: loja.omie_app_key,
           omie_app_secret: loja.omie_app_secret,
+          is_test: loja.is_test,
           endpoint: 'v1/estoque/movestoque',
           call: 'ListarMovimentos',
           data: {

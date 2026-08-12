@@ -45,6 +45,7 @@ export async function incluirLocalEstoque(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/estoque/local',
     call: 'IncluirLocalEstoque',
     data: {
@@ -71,6 +72,7 @@ export async function alterarLocalEstoque(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/estoque/local',
     call: 'AlterarLocalEstoque',
     data: {
@@ -95,6 +97,7 @@ export async function syncLocaisEstoque(loja: LojaOmie) {
         loja_id: loja.id,
         omie_app_key: loja.omie_app_key,
         omie_app_secret: loja.omie_app_secret,
+        is_test: loja.is_test,
         endpoint: 'v1/estoque/local',
         call: 'ListarLocaisEstoque',
         data: { nPagina: pagina, nRegPorPagina: 1000 },

@@ -10,6 +10,7 @@ export async function excluirAjusteEstoque(loja: LojaOmie, idAjuste: number): Pr
       loja_id: loja.id,
       omie_app_key: loja.omie_app_key,
       omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
       endpoint: 'v1/estoque/ajuste',
       call: 'ExcluirAjusteEstoque',
       data: { id_ajuste: idAjuste },

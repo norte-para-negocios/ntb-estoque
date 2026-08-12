@@ -11,6 +11,7 @@ export async function obterLinksDfe(loja: LojaOmie, nIdNfe: number): Promise<Dfe
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/produtos/dfedocs',
     call: 'ObterNfe',
     data: { nIdNfe },

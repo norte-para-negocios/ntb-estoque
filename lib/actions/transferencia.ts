@@ -127,7 +127,7 @@ export async function enviarMovimento(
   const { data: mov } = await supabase
     .from('movimentos')
     .select(
-      'id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, id_ajuste, tentativas, transferencia:transferencias(id, codigo_local_origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret))'
+      'id, id_prod, codigo_local_estoque, codigo_local_estoque_destino, tipo, id_ajuste, tentativas, transferencia:transferencias(id, codigo_local_origem, motivo, data, status, loja:lojas(id, omie_app_key, omie_app_secret, is_test))'
     )
     .eq('id', movimentoId)
     .eq('loja_id', lojaId)
@@ -234,7 +234,7 @@ export async function removeMovimento(movimentoId: number) {
   // sistema. Vale para transferencia finalizada tambem (editar pos-fato).
   const { data: mov } = await supabase
     .from('movimentos')
-    .select('id, id_ajuste, transferencia:transferencias(loja:lojas(id, omie_app_key, omie_app_secret))')
+    .select('id, id_ajuste, transferencia:transferencias(loja:lojas(id, omie_app_key, omie_app_secret, is_test))')
     .eq('id', movimentoId)
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; transferencia: { loja: LojaOmie } | null }>()
@@ -357,6 +357,7 @@ async function processarMovimento(
       loja_id: lojaId,
       omie_app_key: trans.loja.omie_app_key,
       omie_app_secret: trans.loja.omie_app_secret,
+      is_test: trans.loja.is_test,
       endpoint: 'v1/estoque/ajuste',
       call: 'IncluirAjusteEstoque',
       data: param,
@@ -429,7 +430,7 @@ export async function finishTransferencia(transferenciaId: number) {
   const { data: trans } = await supabase
     .from('transferencias')
     .select(
-      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
     )
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
@@ -473,7 +474,7 @@ export async function forceSyncTransferencia(transferenciaId: number) {
   const { data: trans } = await supabase
     .from('transferencias')
     .select(
-      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret)'
+      'id, codigo_local_origem, motivo, data, movimentos(*), loja:lojas(id, omie_app_key, omie_app_secret, is_test)'
     )
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
@@ -673,7 +674,7 @@ export async function retryMovimentosTransferenciaPendentes(
     for (const [transferenciaId, movIds] of porTransferencia) {
       const { data: transHeader, error: erroHeader } = await supabase
         .from('transferencias')
-        .select('id, codigo_local_origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret)')
+        .select('id, codigo_local_origem, motivo, data, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
         .eq('id', transferenciaId)
         .eq('loja_id', loja.id)
         .single<TransferenciaHeader>()
@@ -872,7 +873,7 @@ export async function excluirTransferencia(transferenciaId: number) {
 
   const { data: trans } = await supabase
     .from('transferencias')
-    .select('id, movimentos(id, id_ajuste), loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, movimentos(id, id_ajuste), loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', transferenciaId)
     .eq('loja_id', lojaId)
     .single<{
@@ -916,7 +917,7 @@ export async function editQuantidadeMovimento(movId: number, quan: number | null
 
   const { data: mov } = await supabase
     .from('movimentos')
-    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret)')
+    .select('id, id_ajuste, loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
     .eq('id', movId)
     .eq('loja_id', lojaId)
     .single<{ id: number; id_ajuste: number | null; loja: LojaOmie }>()

@@ -29,6 +29,7 @@ export async function incluirFamilia(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/familias',
     call: 'IncluirFamilia',
     data: {
@@ -49,6 +50,7 @@ export async function alterarFamilia(
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/familias',
     call: 'AlterarFamilia',
     data: {
@@ -66,6 +68,7 @@ export async function excluirFamiliaOmie(loja: LojaOmie, codigo: number) {
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
     endpoint: 'v1/geral/familias',
     call: 'ExcluirFamilia',
     data: { codigo },
@@ -90,6 +93,7 @@ export async function syncFamilias(loja: LojaOmie) {
         loja_id: loja.id,
         omie_app_key: loja.omie_app_key,
         omie_app_secret: loja.omie_app_secret,
+        is_test: loja.is_test,
         endpoint: 'v1/geral/familias',
         call: 'PesquisarFamilias',
         data: { pagina, registros_por_pagina: 100 },
