@@ -430,13 +430,31 @@ export async function retryMovimentosManuaisPendentes(
     }
 
     for (const mov of (itensElegiveis ?? []) as MovimentoManualElegivel[]) {
-      if (mov.id_ajuste !== null || mov.quan === null) {
-        // Mudou de estado entre a selecao e agora (ex: id_ajuste preenchido por
-        // outro caminho enquanto esperava na fila) -- nao reprocessa, so estorna
-        // pra 'Erro' e deixa o proximo ciclo do cron reavaliar do zero.
+      if (mov.id_ajuste !== null) {
+        // Mudou de estado entre a selecao e agora: id_ajuste preenchido por
+        // outro caminho enquanto esperava na fila -- o movimento ja foi
+        // processado com sucesso. Nao reprocessa (duplicaria na Omie), mas o
+        // status precisa refletir isso: achado real em producao (2026-08-13,
+        // mesmo bug em lib/actions/transferencia.ts) em que esse ramo
+        // sobrescrevia um 'Concluido' legitimo com 'Erro' pra sempre (o cron
+        // nunca reprocessa de novo por ja ter id_ajuste, entao nunca se
+        // corrige sozinho). Corrige pra 'Concluido' em vez de estornar.
+        const { error: erroCorrecao } = await supabase.from('movimentos').update({ status: 'Concluido' }).eq('id', mov.id)
+        if (erroCorrecao) {
+          errosEstorno.push(`correcao de status p/ movimento ${mov.id} (ja tinha id_ajuste) falhou: ${erroCorrecao.message}`)
+          falhas++
+        } else {
+          sucesso++
+        }
+        continue
+      }
+      if (mov.quan === null) {
+        // quan anulada entre a selecao e agora -- estado realmente invalido
+        // pra reprocessar. So estorna pra 'Erro' e deixa o proximo ciclo do
+        // cron reavaliar do zero.
         const { error: erroEstorno } = await supabase.from('movimentos').update({ status: 'Erro' }).eq('id', mov.id)
         if (erroEstorno) {
-          errosEstorno.push(`estorno p/ movimento ${mov.id} (mudou de estado) falhou: ${erroEstorno.message}`)
+          errosEstorno.push(`estorno p/ movimento ${mov.id} (quan invalida) falhou: ${erroEstorno.message}`)
         }
         falhas++
         continue

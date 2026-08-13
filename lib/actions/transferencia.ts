@@ -739,21 +739,42 @@ export async function retryMovimentosTransferenciaPendentes(
       }
 
       for (const mov of (movsElegiveis ?? []) as MovimentoRow[]) {
-        if (mov.id_ajuste !== null || mov.quan === null || !(mov.quan > 0)) {
-          // Mudou de estado entre a selecao e agora (ex: enviarMovimento da tela de
-          // contagem, que nao tem trava de 'Processando', processou esse movimento
-          // nesse meio tempo e setou id_ajuste, ou zerou/negativou quan) -- nao
-          // reprocessa: processarMovimento duplicaria o lancamento no Omie se ja
-          // tem id_ajuste, ou DELETARIA a linha silenciosamente se quan for null
-          // (mesma guarda que ja existe no filtro de selecao, reaplicada aqui
-          // porque o estado pode ter mudado entre a selecao e o refetch). So
-          // estorna pra 'Erro' e deixa o proximo ciclo do cron reavaliar do zero.
+        if (mov.id_ajuste !== null) {
+          // Mudou de estado entre a selecao e agora: enviarMovimento da tela de
+          // contagem (sem trava de 'Processando') ja processou esse movimento
+          // com sucesso nesse meio tempo -- nao reprocessa (duplicaria o
+          // lancamento no Omie), mas o status precisa refletir isso: achado real
+          // em producao (2026-08-13) em que esse ramo sobrescrevia um
+          // 'Concluido' legitimo (ja tinha id_ajuste real da Omie) com 'Erro',
+          // fazendo o item aparecer como falha na UI pra sempre (o cron nunca
+          // reprocessa de novo por ja ter id_ajuste, entao nunca se corrige
+          // sozinho). Corrige pra 'Concluido' em vez de estornar pra 'Erro'.
+          const { error: erroCorrecao } = await supabase
+            .from('movimentos')
+            .update({ status: 'Concluido' })
+            .eq('id', mov.id)
+          if (erroCorrecao) {
+            errosEstorno.push(`correcao de status p/ movimento ${mov.id} (ja tinha id_ajuste) falhou: ${erroCorrecao.message}`)
+            falhas++
+          } else {
+            sucesso++
+          }
+          continue
+        }
+        if (mov.quan === null || !(mov.quan > 0)) {
+          // Mudou de estado entre a selecao e agora (quan zerada/negativada/
+          // anulada) -- esse caso e' realmente invalido pra reprocessar:
+          // processarMovimento DELETARIA a linha silenciosamente se quan for
+          // null (mesma guarda que ja existe no filtro de selecao, reaplicada
+          // aqui porque o estado pode ter mudado entre a selecao e o refetch).
+          // So estorna pra 'Erro' e deixa o proximo ciclo do cron reavaliar do
+          // zero.
           const { error: erroEstorno } = await supabase
             .from('movimentos')
             .update({ status: 'Erro' })
             .eq('id', mov.id)
           if (erroEstorno) {
-            errosEstorno.push(`estorno p/ movimento ${mov.id} (mudou de estado) falhou: ${erroEstorno.message}`)
+            errosEstorno.push(`estorno p/ movimento ${mov.id} (quan invalida) falhou: ${erroEstorno.message}`)
           }
           falhas++
           continue
