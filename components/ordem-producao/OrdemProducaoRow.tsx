@@ -55,6 +55,28 @@ export interface OPData {
   podeConcluir?: boolean // concluir OP aberta
   podeReverter?: boolean // reverter OP concluida
   ingredientes?: { cod: number; nome: string; unidade: string; qtd: number }[]
+  /** Só populado na loja de teste (ver lojaIsTest em page.tsx) — OP criada via
+   * a integração do ntb-vendas (app/api/integracao/ordem-producao/route.ts). */
+  origemNtbVendas?: boolean
+  ambienteVenda?: 'homologacao' | 'producao' | null
+}
+
+// Etiqueta "Origem: NTB Vendas (Homologação/Produção)" — só quando origemNtbVendas
+// é true (loja de teste, ver OPData acima). Fica na célula do produto pra não
+// precisar de uma coluna nova (a tabela desktop tem largura fixa por coluna).
+function OrigemBadge({ op }: { op: OPData }) {
+  if (!op.origemNtbVendas) return null
+  const homolog = op.ambienteVenda === 'homologacao'
+  return (
+    <span
+      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+        homolog ? 'bg-warn/10 text-warn' : op.ambienteVenda === 'producao' ? 'bg-err/10 text-err' : 'bg-info/10 text-info'
+      }`}
+      title="Ordem de Produção criada automaticamente pelo NTB Vendas"
+    >
+      NTB Vendas{op.ambienteVenda ? ` · ${homolog ? 'Homolog.' : 'Produção'}` : ''}
+    </span>
+  )
 }
 
 // Selo de status na listagem (4 estados). O botao "Concluir" some quando concluida.
@@ -785,14 +807,17 @@ export function OrdemProducaoRow({
           <StatusBadge status={op.status} />
         </td>
         <td className="max-w-xs align-middle">
-          <Link
-            href={`/ordem-producao/${op.id}`}
-            className="block truncate font-medium text-text hover:text-brand hover:underline"
-            title={op.produto}
-          >
-            {op.produto}
-            <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
-          </Link>
+          <div className="flex min-w-0 items-center">
+            <Link
+              href={`/ordem-producao/${op.id}`}
+              className="block min-w-0 truncate font-medium text-text hover:text-brand hover:underline"
+              title={op.produto}
+            >
+              {op.produto}
+              <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
+            </Link>
+            <OrigemBadge op={op} />
+          </div>
         </td>
         <td className="align-middle !px-0 overflow-hidden">
           <StepperQtdOP op={op} ctrl={ctrl} />
@@ -880,6 +905,7 @@ export function OrdemProducaoCard({
             <span className="num">{op.numOP}</span>
             {op.data && <span className="num" title="Data prevista">{op.data}</span>}
             {val && <span className="num" title="Validade">val {val}</span>}
+            <OrigemBadge op={op} />
           </div>
         </div>
 

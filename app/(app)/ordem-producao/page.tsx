@@ -53,6 +53,7 @@ export default async function OrdemProducaoPage({
     op_concluido?: string
     op_status?: string
     local?: string
+    origem?: string
     ord?: string
     page?: string
   }>
@@ -61,6 +62,12 @@ export default async function OrdemProducaoPage({
   if (!(await requirePermissao(lojaId, 'Ordens de Producao'))) notFound()
 
   const supabase = await createClient()
+
+  // Loja de teste (2026-08-16, pedido explícito do usuário): filtro/etiqueta de
+  // "veio do ntb-vendas" só faz sentido mostrar aqui — em loja real, toda OP
+  // é OP de verdade, não tem "origem" a distinguir.
+  const { data: lojaRow } = await supabase.from('lojas').select('is_test').eq('id', lojaId).maybeSingle()
+  const lojaIsTest = !!lojaRow?.is_test
 
   // Permissoes de acao por botao. Sync (Atualizar agora) virou admin-only.
   const podeSync = await isAdmin()
@@ -138,6 +145,7 @@ export default async function OrdemProducaoPage({
     quantidade: number | null
     concluida: boolean | null
     dt_conclusao_real: string | null
+    observacao: string | null
   }
 
   const ord = sp.ord ?? ''
@@ -151,9 +159,14 @@ export default async function OrdemProducaoPage({
     let q = supabase
       .from('ordens_producao')
       .select(
-        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real'
+        'id, identificacao_n_cod_op, num_ordem, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, observacao'
       )
       .eq('loja_id', lojaId)
+    // Origem "ntb-vendas" (2026-08-16) — só aplicado na loja de teste (ver
+    // lojaIsTest acima); a observação grava "Venda ntb-vendas #<pedido>
+    // [Homologação|Produção]" no momento da criação (ver
+    // app/api/integracao/ordem-producao/route.ts).
+    if (lojaIsTest && sp.origem === 'ntb-vendas') q = q.ilike('observacao', 'Venda ntb-vendas%')
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
     // Filtro de status granular: prevista / pendente / atrasada / concluida.
     // "pendente" = data = hoje (nao concluida); "prevista" = data futura; "atrasada" = data passada.
@@ -456,6 +469,7 @@ export default async function OrdemProducaoPage({
   if (sp.familia) exportParams.set('familia', sp.familia)
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
   if (sp.op_status) exportParams.set('op_status', sp.op_status)
+  if (sp.origem) exportParams.set('origem', sp.origem)
 
   // Ordenacao clicando no cabecalho da tabela (mantem os filtros atuais).
   const ordHref = (novoOrd: string) => {
@@ -483,6 +497,21 @@ export default async function OrdemProducaoPage({
       label: 'Família',
       opcoes: familias.map((f) => ({ value: f, label: f })),
     },
+    // Só na loja de teste (ver lojaIsTest acima) — em loja real toda OP é OP de
+    // verdade, não existe "origem" pra distinguir.
+    ...(lojaIsTest
+      ? ([
+          {
+            tipo: 'select',
+            nome: 'origem',
+            label: 'Origem',
+            opcoes: [
+              { value: '', label: 'Todas' },
+              { value: 'ntb-vendas', label: 'Só do NTB Vendas' },
+            ],
+          },
+        ] as CampoFiltro[])
+      : []),
     {
       tipo: 'select',
       nome: 'local',
@@ -537,6 +566,7 @@ export default async function OrdemProducaoPage({
                   familia: sp.familia ?? '',
                   op_status: sp.op_status ?? '',
                   local: sp.local ?? '',
+                  origem: sp.origem ?? '',
                   ord: sp.ord ?? '',
                 }}
                 persistirEm="/ordem-producao"
@@ -635,6 +665,20 @@ export default async function OrdemProducaoPage({
               podeConcluir,
               podeReverter,
               ingredientes: ingredientesMap.get(op.id) ?? [],
+              // Origem "ntb-vendas" (2026-08-16) — só relevante/mostrado na loja
+              // de teste (lojaIsTest), derivado do texto de observacao gravado
+              // em app/api/integracao/ordem-producao/route.ts no momento da
+              // criação. Loja real nunca recebe esses campos (undefined).
+              ...(lojaIsTest
+                ? {
+                    origemNtbVendas: !!op.observacao?.startsWith('Venda ntb-vendas'),
+                    ambienteVenda: op.observacao?.includes('[Homologação]')
+                      ? ('homologacao' as const)
+                      : op.observacao?.includes('[Produção]')
+                        ? ('producao' as const)
+                        : null,
+                  }
+                : {}),
             }
           })
           const cabecalhoDesktop = (

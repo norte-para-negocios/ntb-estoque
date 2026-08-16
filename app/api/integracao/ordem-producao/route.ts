@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Authorization: Bearer <chave> ausente' }, { status: 401 })
   }
 
-  const body = (await request.json().catch(() => null)) as { itens?: ItemPedido[]; pedidoRef?: string } | null
+  const body = (await request.json().catch(() => null)) as { itens?: ItemPedido[]; pedidoRef?: string; ambiente?: 'homologacao' | 'producao' | null } | null
   if (!body?.itens?.length) {
     return NextResponse.json({ error: 'Informe itens: [{ codigo, quantidade }]' }, { status: 400 })
   }
@@ -90,12 +90,20 @@ export async function POST(request: Request) {
 
     let nCodOP: number | undefined
     try {
+      // Ambiente vem do store_fiscal_config do PRÓPRIO ntb-vendas (2026-08-16,
+      // pedido explícito do usuário) — grava junto na observação, em formato
+      // fixo `[Homologação]`/`[Produção]` no final, pra a tela de Ordem de
+      // Produção conseguir detectar/filtrar sem precisar de coluna nova (a
+      // observação já é sincronizada do Omie pro banco local via o sync normal).
+      const sufixoAmbiente = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
+      const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
+
       const criada = await incluirOrdemProducao(loja, {
         cCodIntOP,
         nCodProduto: produto.codigo_produto,
         dData,
         nQtde: item.quantidade,
-        obs: body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas',
+        obs,
       })
 
       nCodOP = criada?.nCodOP
