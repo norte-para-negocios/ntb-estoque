@@ -1438,3 +1438,33 @@ que falta é só o outro lado** (o payload do `ntb-vendas` não diz qual
 `destination` o item teve, e a Ordem de Produção aqui não escolhe o local
 certo entre os já cadastrados) — o gap descrito no parágrafo acima continua
 válido, só a parte "criar o local em si" já está resolvida.
+
+## Pendente (2026-08-16, só anotado, ideia grande do usuário — pediu opinião, não é pra implementar sem pedido explícito): cadastro de produto unificado + "produto pai com variações"
+
+Duas ideias relacionadas, juntas numa mensagem só do usuário:
+
+1. **Cadastro de produto unificado entre `ntb-vendas` e `ntb-estoque`** —
+   mesmo espírito do bootstrap de loja feito nesta sessão (ver seção acima,
+   "Criar no NTB Vendas também"): cadastrar um produto de um lado já
+   cria/preenche o que for preciso do outro lado — os campos que cada
+   sistema exige apareceriam numa tela só, dependendo de onde o usuário
+   começa a cadastrar (aqui via `Omie`/ficha técnica, no `ntb-vendas` via
+   cardápio). Sem desenho ainda: não está claro se o vínculo
+   produto↔produto entre os dois sistemas usa o `omie_codigo` que já existe
+   no `ntb-vendas` (`products.omie_codigo`/`product_options.omie_codigo`,
+   migration 026 de lá) como chave, ou se precisa de algo novo.
+2. **"Produto pai com variações"** — o usuário quer que produtos parecidos
+   (ex.: várias moquecas separadas) apareçam agrupados num "produto pai" no
+   cardápio do cliente do `ntb-vendas`, com as variações (tamanho, sabor
+   etc.) escolhidas dentro. Ele mesmo esclareceu, e é importante registrar
+   aqui porque envolve este projeto diretamente: **isso é só uma camada de
+   UI/organização do lado do `ntb-vendas`** — o Omie continua sempre com
+   SKU plano (não tem "produto pai"), cada variação sempre vira um produto
+   Omie específico com código próprio pra consumo de estoque bater certo
+   (a Ordem de Produção continua resolvendo por `codigo_produto` normal,
+   sem mudança nenhuma esperada aqui). Ou seja: **este projeto
+   provavelmente não precisa de nenhuma mudança pra essa parte** — o
+   trabalho todo seria do lado do `ntb-vendas` (`product_option_groups`/
+   `product_options`, que já suportam exatamente esse modelo hoje). Mesma
+   nota espelhada no AGENTS.md do `ntb-vendas`, com mais detalhe técnico do
+   que já existe pronto lá.
