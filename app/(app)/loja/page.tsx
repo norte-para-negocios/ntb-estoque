@@ -34,7 +34,16 @@ export default async function LojaPage({
     query = query.or(`nome.ilike.%${t}%,nome_fantasia.ilike.%${t}%,cnpj.ilike.%${t}%`)
   }
 
-  const { data: lojas } = await query
+  const { data: lojasRaw } = await query
+
+  // integracao_api_key nunca pode chegar no client component (write-only,
+  // ver Fase 0 da contenção de RLS no AGENTS.md) -- computa o boolean aqui,
+  // no server component, e descarta o valor bruto antes de montar o objeto
+  // que desce pra LojaCard.
+  const lojas = lojasRaw?.map(({ integracao_api_key, ...resto }) => ({
+    ...resto,
+    integracao_ntb_vendas_configurada: !!integracao_api_key,
+  }))
 
   // Catalogo de permissoes para o convite por codigo (gerado direto da tela da loja).
   const { data: permissoes } = await supabase

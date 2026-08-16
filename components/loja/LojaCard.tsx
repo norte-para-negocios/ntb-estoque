@@ -9,6 +9,7 @@ import {
   Building2,
   ShieldCheck,
   KeyRound,
+  Share2,
   Users,
   CheckCircle2,
   AlertTriangle,
@@ -21,6 +22,7 @@ import { ForceSyncLoja } from '@/components/loja/ForceSyncLoja'
 import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
 import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
 import { CodigoOnboarding } from '@/components/loja/CodigoOnboarding'
+import { IntegracaoNtbVendas } from '@/components/loja/IntegracaoNtbVendas'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
@@ -74,6 +76,9 @@ export type LojaRow = {
   certificado_validade: string | null
   // onboarding
   codigo_onboarding: string | null
+  // integracao ntb-vendas -- boolean computado no server component, a chave
+  // em si (integracao_api_key) nunca chega no client (write-only)
+  integracao_ntb_vendas_configurada: boolean
 }
 
 export type PermissaoSimples = { id: number; nome: string }
@@ -445,6 +450,11 @@ export function LojaCard({
             triggerLabel="Convidar por código (com permissões)"
           />
         </div>
+      </Section>
+
+      {/* Seção: Integração com NTB Vendas */}
+      <Section icon={Share2} title="Integração com NTB Vendas">
+        <IntegracaoNtbVendas lojaId={loja.id} configurada={loja.integracao_ntb_vendas_configurada} />
       </Section>
 
       {/* Rodapé: ações de edição/exclusão */}
