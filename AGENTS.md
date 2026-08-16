@@ -1426,3 +1426,15 @@ chamada, ou se é sempre fixo — checar antes de desenhar. O payload que o
 não carrega nenhuma informação de destino (cozinha/bar) por item — precisa
 ganhar isso do lado de lá antes de poder escolher o local certo aqui. Mesma
 nota espelhada no AGENTS.md do `ntb-vendas`.
+
+**Esclarecido no mesmo dia (usuário perguntou "como eu crio locais tipo
+Cozinha 1 e 2, Bar 1 e 2 e qualquer outro nome que eu quiser" — isso já
+existe hoje**, não é gap nenhum: `/local-estoque` → botão "Novo local"
+(`components/local-estoque/NovoLocalEstoque.tsx` →
+`lib/actions/local-estoque.ts` → `criarLocalEstoque`) já aceita qualquer
+descrição livre (o placeholder do próprio campo já sugere "Depósito, Câmara
+fria, Bar...") e cria o local direto no Omie, sincronizado de volta. **O
+que falta é só o outro lado** (o payload do `ntb-vendas` não diz qual
+`destination` o item teve, e a Ordem de Produção aqui não escolhe o local
+certo entre os já cadastrados) — o gap descrito no parágrafo acima continua
+válido, só a parte "criar o local em si" já está resolvida.
