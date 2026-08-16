@@ -88,16 +88,16 @@ export async function POST(request: Request) {
 
     const cCodIntOP = `NTBV${Date.now()}${i}`.slice(0, 20)
 
+    // Ambiente vem do store_fiscal_config do PRÓPRIO ntb-vendas (2026-08-16,
+    // pedido explícito do usuário) — grava junto na observação, em formato
+    // fixo `[Homologação]`/`[Produção]` no final, pra a tela de Ordem de
+    // Produção conseguir detectar/filtrar. Declarado fora do try (não só dentro)
+    // porque o `finally` abaixo também precisa dele pra loja de teste.
+    const sufixoAmbiente = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
+    const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
+
     let nCodOP: number | undefined
     try {
-      // Ambiente vem do store_fiscal_config do PRÓPRIO ntb-vendas (2026-08-16,
-      // pedido explícito do usuário) — grava junto na observação, em formato
-      // fixo `[Homologação]`/`[Produção]` no final, pra a tela de Ordem de
-      // Produção conseguir detectar/filtrar sem precisar de coluna nova (a
-      // observação já é sincronizada do Omie pro banco local via o sync normal).
-      const sufixoAmbiente = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
-      const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
-
       const criada = await incluirOrdemProducao(loja, {
         cCodIntOP,
         nCodProduto: produto.codigo_produto,
@@ -139,7 +139,42 @@ export async function POST(request: Request) {
     } finally {
       // Reflete o estado real (concluida ou nao) no banco local do ntb-estoque
       // mesmo quando a conclusao falha, pra a OP nao ficar invisivel na tela.
-      if (nCodOP) await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+      if (nCodOP) {
+        if (loja.is_test) {
+          // Achado real (2026-08-16, "não sei se tá criando ordem de produção,
+          // não sei o que tá acontecendo" — o usuário estava certo): pra loja
+          // de teste a escrita é sempre SIMULADA (nunca existiu de verdade no
+          // Omie), então fetchOrdemProducao (que reconsulta o Omie REAL) nunca
+          // encontra nada e a linha local nunca era criada — a OP "existia" só
+          // na resposta HTTP, invisível em qualquer tela. Grava direto com o
+          // que já se sabe, sem depender de reconsulta nenhuma.
+          const [dd, mm, yyyy] = dData.split('/')
+          const hojeISO = `${yyyy}-${mm}-${dd}`
+          await supabase
+            .from('ordens_producao')
+            .upsert(
+              {
+                loja_id: loja.id,
+                identificacao_n_cod_op: nCodOP,
+                identificacao_c_cod_int_op: cCodIntOP,
+                identificacao_c_num_op: cCodIntOP,
+                identificacao_n_cod_produto: produto.codigo_produto,
+                identificacao_n_qtde: item.quantidade,
+                identificacao_d_dt_previsao: hojeISO,
+                observacao: obs,
+                concluida: true,
+                dt_conclusao_real: hojeISO,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'loja_id,identificacao_n_cod_op' }
+            )
+            .then(({ error }) => {
+              if (error) console.error('integracao/ordem-producao: falha ao gravar OP simulada local:', error.message)
+            })
+        } else {
+          await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+        }
+      }
     }
   }
 
