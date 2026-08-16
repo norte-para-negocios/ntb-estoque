@@ -1380,3 +1380,30 @@ produto/local sincronizado localmente (os crons as excluem por design)
 (são leitura, funcionam normal) dentro da loja de teste antes de tentar
 qualquer fluxo de escrita simulada que dependa de um `codigo_produto`
 já cadastrado.
+
+## Pendente (2026-08-16, pedido explícito do usuário, ainda não implementado): toggle de integração ntb-vendas ↔ ntb-estoque na criação de loja
+
+Hoje a integração entre os dois sistemas (`store_ntb_estoque_secrets` no
+`ntb-vendas` + `lojas.integracao_api_key` aqui, ver seção "Integração
+ntb-vendas ↔ ntb-estoque" no AGENTS.md do `ntb-vendas`) é ligada manual e
+separadamente em cada lado, depois que as duas lojas já existem — não tem
+nenhuma pergunta no formulário de cadastro de loja de nenhum dos dois
+projetos. O usuário quer: **ao criar uma loja nova (tanto aqui quanto no
+`ntb-vendas`), poder escolher no próprio formulário se essa loja deve ser
+integrada com a loja correspondente do outro sistema** — em vez do processo
+manual atual (gerar `integracao_api_key`, copiar pra
+`store_ntb_estoque_secrets` do outro lado à mão).
+
+Precisa de desenho antes de implementar (não é bounded — mexe nos dois
+repos, nos dois formulários de cadastro, e provavelmente precisa de alguma
+forma de as duas lojas "se acharem" uma na outra, hoje não existe nenhum
+identificador comum entre uma loja do `ntb-vendas` e uma loja daqui além do
+que foi ligado manualmente loja a loja): pontos em aberto pra próxima sessão
+que for desenhar isso — (1) o formulário mostra uma lista de lojas do outro
+sistema pra escolher (exigiria uma chamada cross-sistema já na tela de
+cadastro) ou só liga por CNPJ/nome depois; (2) quem inicia — criar a loja
+aqui já dispara a criação/config do lado do `ntb-vendas`, ou é sempre
+"aponta pra uma loja que já existe do outro lado"; (3) o que acontece se o
+toggle for ligado depois, numa loja já existente (edição, não só criação).
+Registrado aqui e no AGENTS.md do `ntb-vendas` — não agir sem pedido
+explícito de desenhar/implementar.
