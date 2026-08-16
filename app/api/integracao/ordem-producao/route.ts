@@ -97,6 +97,7 @@ export async function POST(request: Request) {
     const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
 
     let nCodOP: number | undefined
+    let cNumOP: string | undefined
     try {
       const criada = await incluirOrdemProducao(loja, {
         cCodIntOP,
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
         nQtde: item.quantidade,
         obs,
       })
+      cNumOP = criada?.cNumOP
 
       nCodOP = criada?.nCodOP
       if (!nCodOP) {
@@ -157,7 +159,11 @@ export async function POST(request: Request) {
                 loja_id: loja.id,
                 identificacao_n_cod_op: nCodOP,
                 identificacao_c_cod_int_op: cCodIntOP,
-                identificacao_c_num_op: cCodIntOP,
+                // varchar(15) no banco — cNumOP simulado da Omie normalmente já
+                // vem curto, mas o fallback (nCodOP em texto) precisa do slice
+                // pra nunca estourar (achado real: cCodIntOP de 20 chars aqui
+                // deu "value too long for type character varying(15)").
+                identificacao_c_num_op: (cNumOP ?? String(nCodOP)).slice(0, 15),
                 identificacao_n_cod_produto: produto.codigo_produto,
                 identificacao_n_qtde: item.quantidade,
                 identificacao_d_dt_previsao: hojeISO,
