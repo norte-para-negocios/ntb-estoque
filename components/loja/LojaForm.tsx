@@ -91,6 +91,7 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
   const editando = !!loja
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<LojaInput>(loja ? fromLoja(loja) : vazio())
+  const [criarNoVendas, setCriarNoVendas] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -104,14 +105,20 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
       return
     }
     startTransition(async () => {
-      const res = editando ? await editarLoja(loja!.id, form) : await criarLoja(form)
+      const res = editando ? await editarLoja(loja!.id, form) : await criarLoja(form, criarNoVendas)
       if (res?.error) {
         toast.error('Erro', { description: res.error })
         return
       }
       toast.success(editando ? 'Loja atualizada' : 'Loja criada')
+      const avisoVendas = (res as { avisoVendas?: string } | undefined)?.avisoVendas
+      if (!editando && avisoVendas) {
+        toast.error('Loja criada, mas o NTB Vendas ficou pendente', { description: avisoVendas })
+      } else if (!editando && criarNoVendas) {
+        toast.success('Loja criada no NTB Vendas também')
+      }
       setOpen(false)
-      if (!editando) setForm(vazio())
+      if (!editando) { setForm(vazio()); setCriarNoVendas(false) }
       router.refresh()
     })
   }
@@ -225,6 +232,17 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
             />
             Loja ativa
           </label>
+          {!editando && (
+            <label className="col-span-2 flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={criarNoVendas}
+                onChange={(e) => setCriarNoVendas(e.target.checked)}
+                className="accent-[var(--brand)]"
+              />
+              Criar no NTB Vendas também
+            </label>
+          )}
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>

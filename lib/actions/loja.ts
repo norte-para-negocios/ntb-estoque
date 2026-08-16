@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { syncEmpresa } from '@/lib/omie/empresa'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
+import { gerarChaveIntegracaoNtbVendas } from '@/lib/actions/integracao-ntb-vendas'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -44,20 +45,72 @@ function normalizarDados(dados: LojaInput) {
   }
 }
 
-export async function criarLoja(dados: LojaInput) {
+export async function criarLoja(dados: LojaInput, criarNoVendasTambem?: boolean) {
   if (!(await isAdmin())) return { error: 'Somente administradores' }
   if (!dados.cnpj.trim() || !dados.nome.trim()) {
     return { error: 'CNPJ e nome são obrigatórios' }
   }
 
   const supabase = createServiceClient()
-  const { error } = await supabase.from('lojas').insert(normalizarDados(dados))
+  const { data: loja, error } = await supabase
+    .from('lojas')
+    .insert(normalizarDados(dados))
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
 
   await registrarAuditoria('criar', 'loja', null, dados.nome.trim())
   revalidatePath('/loja')
+
+  if (!criarNoVendasTambem) return { ok: true }
+
+  const vendasResult = await criarLojaNoNtbVendas(loja.id, dados.nome.trim(), dados.cnpj.trim())
+  if (vendasResult.error) return { ok: true, avisoVendas: vendasResult.error }
   return { ok: true }
+}
+
+// Bootstrap cross-sistema (2026-08-16, pedido explícito do usuário): cria a
+// loja correspondente no ntb-vendas e já grava a chave de integração lá,
+// tudo num clique só ("Criar no NTB Vendas também" no formulário de loja) —
+// sem o operador ver/copiar chave nenhuma. Falha aqui não desfaz a loja já
+// criada de-este lado (mesmo princípio de "loja salva, mas..." já usado no
+// ntb-vendas pra fiscal/estoque) -- por isso nunca retorna `error` de verdade,
+// só um aviso separado (`avisoVendas`) que não bloqueia o resto do fluxo.
+async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string): Promise<{ error?: string }> {
+  const segredo = process.env.CROSS_SYSTEM_BOOTSTRAP_KEY
+  const vendasUrl = process.env.NTB_VENDAS_INTERNAL_URL
+  if (!segredo || !vendasUrl) return { error: 'Integração cross-sistema não configurada neste servidor.' }
+
+  let resposta: { ok?: boolean; storeId?: string; slug?: string; error?: string }
+  try {
+    const res = await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/lojas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${segredo}` },
+      body: JSON.stringify({ nome, cnpj }),
+    })
+    resposta = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar loja no NTB Vendas.' }
+  } catch (e) {
+    return { error: 'Não foi possível contatar o NTB Vendas: ' + (e instanceof Error ? e.message : String(e)) }
+  }
+
+  const chaveResult = await gerarChaveIntegracaoNtbVendas(lojaId)
+  if (chaveResult.error || !chaveResult.chave) return { error: chaveResult.error || 'Falha ao gerar chave de integração.' }
+
+  try {
+    const res = await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/configurar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storeId: resposta.storeId, url: chaveResult.url, apiKey: chaveResult.chave, ativo: true }),
+    })
+    const configResposta = await res.json().catch(() => ({ success: false }))
+    if (!res.ok || !configResposta.success) return { error: configResposta.message || 'Loja criada no NTB Vendas, mas falhou salvar a integração lá.' }
+  } catch (e) {
+    return { error: 'Loja criada no NTB Vendas, mas falhou salvar a integração lá: ' + (e instanceof Error ? e.message : String(e)) }
+  }
+
+  return {}
 }
 
 export async function editarLoja(lojaId: number, dados: LojaInput) {
