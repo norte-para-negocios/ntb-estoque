@@ -57,6 +57,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
   const [minimo, setMinimo] = useState('')
   const [pdv, setPdv] = useState(false)
   const [tipo, setTipo] = useState('')
+  const [criarNoNtbVendas, setCriarNoNtbVendas] = useState(false)
   const [familia, setFamilia] = useState('')
   const [origem, setOrigem] = useState('0')
   const [extra, setExtra] = useState({ ...EXTRA_VAZIO })
@@ -145,12 +146,20 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
         largura: num(extra.largura),
         profundidade: num(extra.profundidade),
         cest: extra.cest || undefined,
+        criarNoNtbVendas: pdv && criarNoNtbVendas,
       })
       if (res?.error) {
         toast.error('Erro ao criar', { description: res.error })
         return
       }
       toast.success('Produto criado no Omie')
+      if (pdv && criarNoNtbVendas) {
+        if (res?.avisoVendas) {
+          toast.error('Falhou criar no NTB Vendas', { description: res.avisoVendas })
+        } else {
+          toast.success('Produto criado no NTB Vendas também!')
+        }
+      }
       router.push('/produto')
     })
   }
@@ -252,6 +261,17 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
           <p className="text-[11px] text-text-muted">
             Só produtos marcados vão pro cardápio do NTB Vendas. Salvo localmente, não enviado ao Omie.
           </p>
+          {pdv && (
+            <label className="mt-2 flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={criarNoNtbVendas}
+                onChange={(e) => setCriarNoNtbVendas(e.target.checked)}
+                className="accent-[var(--brand)]"
+              />
+              Criar no NTB Vendas também
+            </label>
+          )}
         </Secao>
 
         {/* Fiscal */}

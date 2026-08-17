@@ -68,6 +68,45 @@ export async function sugerirProximoCodigo(tipo: string): Promise<string | null>
   return String(proximo)
 }
 
+// Cadastro de produto unificado, Direção 2 (2026-08-16, pedido explícito do
+// usuário): manda o produto recém-criado pro cardápio do NTB Vendas, num
+// clique só ("Criar no NTB Vendas também"). Espelha criarLojaNoNtbVendas
+// (lib/actions/loja.ts) mas com a chave JÁ pareada (lojas.integracao_api_key)
+// em vez do CROSS_SYSTEM_BOOTSTRAP_KEY -- essa loja já existe dos dois lados.
+// Só produtos de PDV fazem sentido no cardápio (mesmo texto já usado no form:
+// "Só produtos marcados vão pro cardápio do NTB Vendas"), por isso o chamador
+// só aciona isso quando pdv=true.
+async function enviarProdutoParaNtbVendas(
+  lojaId: number,
+  nome: string,
+  precoVenda: number,
+  omieCodigo: string
+): Promise<{ error?: string }> {
+  const vendasUrl = process.env.NTB_VENDAS_INTERNAL_URL
+  if (!vendasUrl) return { error: 'Integração cross-sistema não configurada neste servidor.' }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('integracao_api_key')
+    .eq('id', lojaId)
+    .maybeSingle()
+  if (!loja?.integracao_api_key) return { error: 'Loja sem integração com o NTB Vendas configurada.' }
+
+  try {
+    const res = await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${loja.integracao_api_key}` },
+      body: JSON.stringify({ nome, preco: precoVenda, omieCodigo }),
+    })
+    const resposta = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar produto no NTB Vendas.' }
+  } catch (e) {
+    return { error: 'Não foi possível contatar o NTB Vendas: ' + (e instanceof Error ? e.message : String(e)) }
+  }
+  return {}
+}
+
 /**
  * Cria um produto no Omie e grava no banco (Bloco 9.1). ESCREVE no Omie.
  * Disparo real apenas com o Ramon (regra: nao escrever no Omie em teste sozinho).
@@ -95,6 +134,7 @@ export async function criarProduto(dados: {
   largura?: number
   profundidade?: number
   cest?: string
+  criarNoNtbVendas?: boolean
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão' }
@@ -162,7 +202,19 @@ export async function criarProduto(dados: {
 
     await registrarAuditoria('criar', 'produto', codigoProduto ?? null, dados.descricao)
     revalidatePath('/produto')
-    return { ok: true, codigoProduto }
+
+    let avisoVendas: string | undefined
+    if (dados.criarNoNtbVendas && dados.pdv) {
+      const vendasResult = await enviarProdutoParaNtbVendas(
+        lojaId,
+        dados.descricao.trim(),
+        Number(dados.valorUnitario) || 0,
+        dados.codigo.trim()
+      )
+      avisoVendas = vendasResult.error
+    }
+
+    return { ok: true, codigoProduto, avisoVendas }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao criar o produto no Omie' }
   }

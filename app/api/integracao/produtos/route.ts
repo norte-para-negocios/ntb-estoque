@@ -9,9 +9,10 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 // lojas.integracao_api_key) e mesmo espirito da rota de Ordem de Producao --
 // ESCREVE de verdade no Omie da loja (cria o produto).
 //
-// Cadastro de produto unificado (2026-08-16, pedido explicito do usuario) --
-// so a Direcao 1 (ntb-vendas -> ntb-estoque) por enquanto; a volta
-// (ntb-estoque -> ntb-vendas) fica pra outra rodada.
+// Cadastro de produto unificado, Direcao 1 (ntb-vendas -> ntb-estoque),
+// (2026-08-16, pedido explicito do usuario). A volta (ntb-estoque ->
+// ntb-vendas, Direcao 2) fica em lib/actions/produto.ts
+// (enviarProdutoParaNtbVendas), chamando ntb-vendas:/api/integracao/produtos.
 
 interface RequestBody {
   nome?: string

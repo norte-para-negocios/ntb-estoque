@@ -1456,11 +1456,28 @@ Duas ideias relacionadas, juntas numa mensagem só do usuário:
    o produto direto em `produtos` (upsert), sem depender de `syncProdutos`
    reconsultar o Omie real (que nunca acharia um produto que só existiu na
    resposta simulada) — mesmo achado/fix já aplicado à Ordem de Produção
-   (`fetchOrdemProducao`) mais cedo nesta sessão. **Direção 2
-   (ntb-estoque → ntb-vendas) fica pra outra rodada**, por decisão
-   explícita do usuário — o vínculo usa `omie_codigo` como chave (já
-   existia em `products.omie_codigo`/`product_options.omie_codigo`,
-   migration 026 do `ntb-vendas`), não precisou de nada novo além disso.
+   (`fetchOrdemProducao`) mais cedo nesta sessão. **Resolvido, Direção 2
+   (ntb-estoque → ntb-vendas), mesma sessão (2026-08-16):** o inverso —
+   `criarProduto` (`lib/actions/produto.ts`) ganhou um parâmetro opcional
+   `criarNoNtbVendas`, acionado pelo checkbox "Criar no NTB Vendas também"
+   em `FormNovoProduto.tsx`, que só aparece quando "Produto de PDV" está
+   marcado (só produto de PDV faz sentido no cardápio, mesmo texto que já
+   existia no form). Depois de criar no Omie e salvar local, chama
+   `enviarProdutoParaNtbVendas` (mesmo arquivo) — espelha
+   `criarLojaNoNtbVendas` (`lib/actions/loja.ts`), mas com
+   `lojas.integracao_api_key` como Bearer (loja já pareada, não precisa do
+   `CROSS_SYSTEM_BOOTSTRAP_KEY`) e reaproveitando o `NTB_VENDAS_INTERNAL_URL`
+   global já configurado no servidor pro bootstrap de loja. Manda
+   `{nome, preco, omieCodigo: codigo}` (o `codigo`/SKU, não o
+   `codigo_produto` interno do Omie) pro novo
+   `ntb-vendas:/api/integracao/produtos`, que resolve a loja pela chave e
+   insere o produto lá com `available: false` (some do cardápio até o
+   lojista completar categoria/imagem/descrição, que não existem aqui).
+   Falha nessa etapa não desfaz o produto já criado aqui — só mostra um
+   aviso (`avisoVendas`), mesmo princípio não-bloqueante do bootstrap de
+   loja. O vínculo usa `omie_codigo` como chave (já existia em
+   `products.omie_codigo`/`product_options.omie_codigo`, migration 026 do
+   `ntb-vendas`), não precisou de nada novo além disso.
 2. **"Produto pai com variações"** — o usuário quer que produtos parecidos
    (ex.: várias moquecas separadas) apareçam agrupados num "produto pai" no
    cardápio do cliente do `ntb-vendas`, com as variações (tamanho, sabor
