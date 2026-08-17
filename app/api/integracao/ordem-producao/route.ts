@@ -12,6 +12,11 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 interface ItemPedido {
   codigo: string
   quantidade: number
+  // Cozinha/Bar (2026-08-16, pedido explicito do usuario) -- resolvido pro
+  // codigo_local_estoque certo via lojas.local_estoque_cozinha_codigo/
+  // local_estoque_bar_codigo (migration 120). Ausente ou destino sem
+  // mapeamento configurado: cai no local padrao do Omie, como sempre foi.
+  destination?: 'kitchen' | 'bar' | null
 }
 
 interface ResultadoItem {
@@ -53,10 +58,10 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test')
+    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<LojaOmie>()
+    .maybeSingle<LojaOmie & { local_estoque_cozinha_codigo: number | null; local_estoque_bar_codigo: number | null }>()
 
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
@@ -96,6 +101,13 @@ export async function POST(request: Request) {
     const sufixoAmbiente = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
     const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
 
+    const codigoLocalEstoque =
+      item.destination === 'kitchen'
+        ? loja.local_estoque_cozinha_codigo ?? undefined
+        : item.destination === 'bar'
+          ? loja.local_estoque_bar_codigo ?? undefined
+          : undefined
+
     let nCodOP: number | undefined
     let cNumOP: string | undefined
     try {
@@ -105,6 +117,7 @@ export async function POST(request: Request) {
         dData,
         nQtde: item.quantidade,
         obs,
+        codigoLocalEstoque,
       })
       cNumOP = criada?.cNumOP
 

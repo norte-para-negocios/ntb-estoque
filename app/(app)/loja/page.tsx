@@ -51,6 +51,23 @@ export default async function LojaPage({
     .select('id, nome')
     .order('id')
 
+  // Locais de estoque de cada loja, pro seletor de "qual local e' a Cozinha /
+  // o Bar" (mapeamento_local_estoque_ntb_vendas.sql, 2026-08-16) -- uma
+  // query so' pra todas as lojas, agrupada em memoria, em vez de N+1.
+  const lojaIds = (lojas ?? []).map((l) => l.id)
+  const { data: locaisRaw } = lojaIds.length
+    ? await supabaseService
+        .from('local_estoques')
+        .select('loja_id, codigo_local_estoque, descricao')
+        .in('loja_id', lojaIds)
+        .order('descricao')
+    : { data: [] }
+  const locaisPorLoja = new Map<number, { codigo_local_estoque: number; descricao: string }[]>()
+  for (const l of locaisRaw ?? []) {
+    if (!locaisPorLoja.has(l.loja_id)) locaisPorLoja.set(l.loja_id, [])
+    locaisPorLoja.get(l.loja_id)!.push({ codigo_local_estoque: l.codigo_local_estoque, descricao: l.descricao })
+  }
+
   // O app de verdade (o que o usuário usa no dia a dia) roda no Contabo, não
   // na Vercel -- NEXT_PUBLIC_APP_URL nunca foi configurado lá, então esse
   // fallback (usado quando a env var não está definida) tem que apontar pro
@@ -98,6 +115,7 @@ export default async function LojaPage({
               key={loja.id}
               loja={loja as LojaRow}
               permissoes={permissoes ?? []}
+              locaisEstoque={locaisPorLoja.get(loja.id) ?? []}
             />
           ))
         ) : (

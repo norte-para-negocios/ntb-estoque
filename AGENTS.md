@@ -1412,32 +1412,30 @@ a loja aqui já dispara a criação/config do lado do `ntb-vendas`, ou é
 sempre "aponta pra uma loja que já existe do outro lado". Não agir sem
 pedido explícito.
 
-## Pendente (2026-08-16, só anotado, pedido explícito do usuário): Ordem de Produção deveria usar o local de estoque certo (Cozinha vs. Bar)
+## Resolvido (2026-08-16): Ordem de Produção usa o local de estoque certo (Cozinha vs. Bar)
 
-A Ordem de Produção criada aqui a partir de uma venda do `ntb-vendas`
-deveria usar o **local de estoque conforme onde o item foi preparado** —
-pedido feito na Cozinha (KDS `destination='kitchen'` do lado do
-`ntb-vendas`) devia gerar/consumir no local de estoque "Cozinha", pedido
-feito no Bar (`destination='bar'`) no local "Bar", em vez de tudo cair num
-único local genérico. Não confirmado nesta sessão se `incluirOrdemProducao`
-(`lib/omie/ordem-producao.ts`) já suporta escolher o local de estoque por
-chamada, ou se é sempre fixo — checar antes de desenhar. O payload que o
-`app/api/integracao/ordem-producao/route.ts` recebe hoje do `ntb-vendas`
-não carrega nenhuma informação de destino (cozinha/bar) por item — precisa
-ganhar isso do lado de lá antes de poder escolher o local certo aqui. Mesma
-nota espelhada no AGENTS.md do `ntb-vendas`.
+A Ordem de Produção criada aqui a partir de uma venda do `ntb-vendas` agora
+usa o **local de estoque conforme onde o item foi preparado**. Migration
+120 (`lojas.local_estoque_cozinha_codigo`/`local_estoque_bar_codigo`,
+guardando o `codigo_local_estoque` do Omie, não um id local) + UI nova
+(`LojaCard` → seção "Integração com NTB Vendas" →
+`components/loja/MapeamentoLocalEstoque.tsx`, dois selects populados com os
+locais que a própria loja já cadastrou em `/local-estoque`) + server action
+`lib/actions/mapeamento-local-estoque.ts`. `app/api/integracao/ordem-producao/route.ts`
+recebe `destination?: 'kitchen'|'bar'|null` por item (novo campo no payload
+do `ntb-vendas`), resolve pro código certo e passa como `codigoLocalEstoque`
+pra `incluirOrdemProducao` — **achado técnico que destravou isso**:
+`incluirOrdemProducao`/`alterarOrdemProducao` (`lib/omie/ordem-producao.ts`)
+já aceitavam esse parâmetro opcional desde antes, só nunca tinha sido
+passado nesta chamada específica. Loja que não configurar o mapeamento
+continua caindo no local padrão do Omie, como sempre foi (comportamento
+aditivo, não quebra nada). `concluirOrdemProducao` não precisa do parâmetro
+— o local já fica fixado na criação da OP.
 
-**Esclarecido no mesmo dia (usuário perguntou "como eu crio locais tipo
-Cozinha 1 e 2, Bar 1 e 2 e qualquer outro nome que eu quiser" — isso já
-existe hoje**, não é gap nenhum: `/local-estoque` → botão "Novo local"
-(`components/local-estoque/NovoLocalEstoque.tsx` →
-`lib/actions/local-estoque.ts` → `criarLocalEstoque`) já aceita qualquer
-descrição livre (o placeholder do próprio campo já sugere "Depósito, Câmara
-fria, Bar...") e cria o local direto no Omie, sincronizado de volta. **O
-que falta é só o outro lado** (o payload do `ntb-vendas` não diz qual
-`destination` o item teve, e a Ordem de Produção aqui não escolhe o local
-certo entre os já cadastrados) — o gap descrito no parágrafo acima continua
-válido, só a parte "criar o local em si" já está resolvida.
+Criar locais com nome livre ("Cozinha 1 e 2, Bar 1 e 2 e qualquer outro
+nome") já era possível antes disso (`/local-estoque` → "Novo local") — essa
+parte nunca foi o gap, só faltava o mapeamento pra automação e o payload do
+`ntb-vendas` carregar o destino.
 
 ## Pendente (2026-08-16, só anotado, ideia grande do usuário — pediu opinião, não é pra implementar sem pedido explícito): cadastro de produto unificado + "produto pai com variações"
 

@@ -23,6 +23,7 @@ import { PuxarEmpresa } from '@/components/loja/PuxarEmpresa'
 import { CertificadoUpload } from '@/components/loja/CertificadoUpload'
 import { CodigoOnboarding } from '@/components/loja/CodigoOnboarding'
 import { IntegracaoNtbVendas } from '@/components/loja/IntegracaoNtbVendas'
+import { MapeamentoLocalEstoque } from '@/components/loja/MapeamentoLocalEstoque'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
@@ -79,7 +80,12 @@ export type LojaRow = {
   // integracao ntb-vendas -- boolean computado no server component, a chave
   // em si (integracao_api_key) nunca chega no client (write-only)
   integracao_ntb_vendas_configurada: boolean
+  // mapeamento "qual local de estoque e' a Cozinha / o Bar" (migration 120)
+  local_estoque_cozinha_codigo: number | null
+  local_estoque_bar_codigo: number | null
 }
+
+export type LocalEstoqueSimples = { codigo_local_estoque: number; descricao: string }
 
 export type PermissaoSimples = { id: number; nome: string }
 
@@ -288,9 +294,11 @@ function DadoLinha({
 export function LojaCard({
   loja,
   permissoes,
+  locaisEstoque,
 }: {
   loja: LojaRow
   permissoes: PermissaoSimples[]
+  locaisEstoque: LocalEstoqueSimples[]
 }) {
   const displayName = loja.nome_fantasia || loja.nome || '(sem nome)'
   const cidadeUf = [loja.cidade?.trim(), loja.uf?.trim().toUpperCase()]
@@ -455,6 +463,15 @@ export function LojaCard({
       {/* Seção: Integração com NTB Vendas */}
       <Section icon={Share2} title="Integração com NTB Vendas">
         <IntegracaoNtbVendas lojaId={loja.id} configurada={loja.integracao_ntb_vendas_configurada} />
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-[13px] font-medium text-text">Local de estoque por destino (Cozinha/Bar)</p>
+          <MapeamentoLocalEstoque
+            lojaId={loja.id}
+            locais={locaisEstoque}
+            cozinhaAtual={loja.local_estoque_cozinha_codigo}
+            barAtual={loja.local_estoque_bar_codigo}
+          />
+        </div>
       </Section>
 
       {/* Rodapé: ações de edição/exclusão */}
