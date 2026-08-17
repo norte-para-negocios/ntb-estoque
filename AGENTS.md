@@ -1437,20 +1437,30 @@ nome") já era possível antes disso (`/local-estoque` → "Novo local") — ess
 parte nunca foi o gap, só faltava o mapeamento pra automação e o payload do
 `ntb-vendas` carregar o destino.
 
-## Pendente (2026-08-16, só anotado, ideia grande do usuário — pediu opinião, não é pra implementar sem pedido explícito): cadastro de produto unificado + "produto pai com variações"
+## Cadastro de produto unificado + "produto pai com variações" (2026-08-16)
 
 Duas ideias relacionadas, juntas numa mensagem só do usuário:
 
-1. **Cadastro de produto unificado entre `ntb-vendas` e `ntb-estoque`** —
-   mesmo espírito do bootstrap de loja feito nesta sessão (ver seção acima,
-   "Criar no NTB Vendas também"): cadastrar um produto de um lado já
-   cria/preenche o que for preciso do outro lado — os campos que cada
-   sistema exige apareceriam numa tela só, dependendo de onde o usuário
-   começa a cadastrar (aqui via `Omie`/ficha técnica, no `ntb-vendas` via
-   cardápio). Sem desenho ainda: não está claro se o vínculo
-   produto↔produto entre os dois sistemas usa o `omie_codigo` que já existe
-   no `ntb-vendas` (`products.omie_codigo`/`product_options.omie_codigo`,
-   migration 026 de lá) como chave, ou se precisa de algo novo.
+1. **Cadastro de produto unificado entre `ntb-vendas` e `ntb-estoque` —
+   Resolvido, Direção 1 (ntb-vendas → ntb-estoque).** Mesmo espírito do
+   bootstrap de loja ("Criar no NTB Vendas também", seção acima): novo
+   endpoint `app/api/integracao/produtos/route.ts` (auth Bearer
+   `lojas.integracao_api_key`, mesma da rota de Ordem de Produção), recebe
+   `{nome, precoVenda, ncm?, unidade?}` do `ntb-vendas`, gera um `codigo`
+   (SKU) automático (`NTBV-<timestamp>`), usa `ncm` enviado ou fallback
+   genérico (`21069090`) e `unidade="UN"` como default, chama
+   `incluirProduto` (`lib/omie/produto.ts` — ESCREVE no Omie), devolve
+   `{codigo, codigoProduto}`. **Loja de teste**: como `IncluirProduto` é
+   uma chamada de escrita, `is_test=true` sempre simula (ver
+   `ehChamadaDeEscrita` em `lib/omie/client.ts`) — nesse caso a rota grava
+   o produto direto em `produtos` (upsert), sem depender de `syncProdutos`
+   reconsultar o Omie real (que nunca acharia um produto que só existiu na
+   resposta simulada) — mesmo achado/fix já aplicado à Ordem de Produção
+   (`fetchOrdemProducao`) mais cedo nesta sessão. **Direção 2
+   (ntb-estoque → ntb-vendas) fica pra outra rodada**, por decisão
+   explícita do usuário — o vínculo usa `omie_codigo` como chave (já
+   existia em `products.omie_codigo`/`product_options.omie_codigo`,
+   migration 026 do `ntb-vendas`), não precisou de nada novo além disso.
 2. **"Produto pai com variações"** — o usuário quer que produtos parecidos
    (ex.: várias moquecas separadas) apareçam agrupados num "produto pai" no
    cardápio do cliente do `ntb-vendas`, com as variações (tamanho, sabor
