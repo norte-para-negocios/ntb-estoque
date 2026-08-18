@@ -52,6 +52,13 @@ export async function GET(request: Request) {
     .eq('id', lojaId)
     .single<LojaOmie>()
   if (!loja) return NextResponse.json({ error: 'loja nao encontrada' }, { status: 404 })
+  // Loja de teste compartilha app_key/app_secret com a loja real (so
+  // ESCRITA e simulada, leitura sempre traz dado real -- ver AGENTS.md
+  // "Lojas de Teste"). Backfill mes a mes multiplica chamadas no mesmo
+  // app_key -- exatamente o padrao que ja gerou bloqueio MISUSE_API_PROCESS.
+  if (loja.is_test) {
+    return NextResponse.json({ error: 'Backfill nao e permitido em loja de teste (compartilha app_key com a loja real).' }, { status: 400 })
+  }
 
   const fn = modelo === 'nf' ? syncNotasFiscais : syncOrdensProducao
   const erros: string[] = []

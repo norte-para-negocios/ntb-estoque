@@ -26,6 +26,16 @@ export async function POST() {
   if (!loja?.omie_app_key) {
     return NextResponse.json({ error: 'Loja sem integracao Omie' }, { status: 400 })
   }
+  // Loja de teste compartilha app_key/app_secret com a loja real (so
+  // ESCRITA e simulada, leitura sempre traz dado real -- ver AGENTS.md
+  // "Lojas de Teste"). Sincronizar NF manualmente aqui soma trafego real
+  // no mesmo app_key, sem ganho nenhum pra loja fake.
+  if (loja.is_test) {
+    return NextResponse.json(
+      { error: 'Sincronizacao manual de notas fiscais nao e permitida em loja de teste (compartilha app_key com a loja real).' },
+      { status: 400 }
+    )
+  }
 
   try {
     const de = new Date(Date.now() - 7 * 86400000)

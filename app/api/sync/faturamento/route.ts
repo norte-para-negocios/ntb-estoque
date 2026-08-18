@@ -27,6 +27,18 @@ export async function POST() {
   if (!loja?.omie_app_key) {
     return NextResponse.json({ error: 'Loja sem integração Omie' }, { status: 400 })
   }
+  // Loja de teste compartilha o mesmo app_key/app_secret da loja real (só
+  // ESCRITA é simulada -- leitura sempre traz dado real, ver AGENTS.md
+  // "Lojas de Teste"). Um clique manual aqui soma tráfego real ao mesmo
+  // app_key já sob pressão do cron de 10min + risco de MISUSE_API_PROCESS
+  // documentado em "Estoque local independente da Omie" -- sem ganho
+  // nenhum, já que ninguém depende de faturamento "ao vivo" de loja fake.
+  if (loja.is_test) {
+    return NextResponse.json(
+      { error: 'Sincronização manual de faturamento não é permitida em loja de teste (compartilha app_key com a loja real).' },
+      { status: 400 }
+    )
+  }
 
   try {
     const user = await getUser()

@@ -46,43 +46,64 @@ export default async function EstoqueLocalTestePage({
   let movimentos: MovimentoRow[] = []
   let fichaTecnicaCobertos = 0
   let totalProdutosLoja = 0
+  let nomes = new Map<number, string | null>()
   if (lojaSelecionada) {
-    const [{ data: saldosData }, { data: movimentosData }, fichaCodigos, { count: produtosCount }] =
-      await Promise.all([
+    const [saldosData, { data: movimentosData }, fichaCodigos, produtosData] = await Promise.all([
+      // Paginado -- corte de 1000 linhas do PostgREST batia aqui (5 das 6
+      // lojas de teste têm mais de 1000 produtos), "Saldo atual (1000
+      // produtos)" mentia o total. Mesmo helper/tiebreak (`.order('id')`)
+      // já usado nas outras rotas deste plano.
+      buscarTodasLinhas<SaldoRow>((from, to) =>
         supabase
           .from('estoque_local_saldos')
           .select('codigo_produto, saldo, atualizado_em')
           .eq('loja_id', lojaSelecionada)
-          .order('codigo_produto')
-          .returns<SaldoRow[]>(),
+          .order('id')
+          .range(from, to)
+      ),
+      supabase
+        .from('movimentos_locais')
+        .select('id, codigo_produto, tipo, quantidade, saldo_apos, origem_n_cod_op, pedido_ref, criado_em')
+        .eq('loja_id', lojaSelecionada)
+        .order('criado_em', { ascending: false })
+        .limit(50)
+        .returns<MovimentoRow[]>(),
+      // Cobertura real da ficha técnica local -- ver AGENTS.md ("estoque
+      // local independente da Omie") pro porquê disto importa: a baixa de
+      // estoque é no-op silencioso pra qualquer produto sem BOM local
+      // aqui, e sem este indicador não havia nenhum lugar visível pro
+      // operador enxergar isso. Conta distinct em JS (via buscarTodasLinhas,
+      // paginado -- ficha_tecnica_local tem 1 linha por insumo, não por
+      // produto, então count(head:true) contaria linha, não produto).
+      buscarTodasLinhas<{ codigo_produto: number }>((from, to) =>
         supabase
-          .from('movimentos_locais')
-          .select('id, codigo_produto, tipo, quantidade, saldo_apos, origem_n_cod_op, pedido_ref, criado_em')
+          .from('ficha_tecnica_local')
+          .select('codigo_produto')
           .eq('loja_id', lojaSelecionada)
-          .order('criado_em', { ascending: false })
-          .limit(50)
-          .returns<MovimentoRow[]>(),
-        // Cobertura real da ficha técnica local -- ver AGENTS.md ("estoque
-        // local independente da Omie") pro porquê disto importa: a baixa de
-        // estoque é no-op silencioso pra qualquer produto sem BOM local
-        // aqui, e sem este indicador não havia nenhum lugar visível pro
-        // operador enxergar isso. Conta distinct em JS (via buscarTodasLinhas,
-        // paginado -- ficha_tecnica_local tem 1 linha por insumo, não por
-        // produto, então count(head:true) contaria linha, não produto).
-        buscarTodasLinhas<{ codigo_produto: number }>((from, to) =>
-          supabase
-            .from('ficha_tecnica_local')
-            .select('codigo_produto')
-            .eq('loja_id', lojaSelecionada)
-            .order('id')
-            .range(from, to)
-        ),
-        supabase.from('produtos').select('id', { count: 'exact', head: true }).eq('loja_id', lojaSelecionada),
-      ])
-    saldos = saldosData ?? []
+          .order('id')
+          .range(from, to)
+      ),
+      // Nome do produto -- mesmo padrão já usado em lib/movimentacao-manual.ts
+      // e relatorio-movimentacao/page.tsx (Map codigo_produto -> descricao,
+      // paginado pelo mesmo motivo do saldo acima).
+      buscarTodasLinhas<{ codigo_produto: number; descricao: string | null }>((from, to) =>
+        supabase
+          .from('produtos')
+          .select('codigo_produto, descricao')
+          .eq('loja_id', lojaSelecionada)
+          .order('id')
+          .range(from, to)
+      ),
+    ])
+    saldos = saldosData
     movimentos = movimentosData ?? []
     fichaTecnicaCobertos = new Set(fichaCodigos.map((f) => f.codigo_produto)).size
-    totalProdutosLoja = produtosCount ?? 0
+    totalProdutosLoja = produtosData.length
+    nomes = new Map(produtosData.map((p) => [p.codigo_produto, p.descricao]))
+  }
+
+  function nomeProduto(codigo: number) {
+    return nomes.get(codigo) || `Produto ${codigo}`
   }
 
   return (
@@ -121,7 +142,8 @@ export default async function EstoqueLocalTestePage({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
-              <th className="py-1">Código produto</th>
+              <th className="py-1">Produto</th>
+              <th className="py-1">Código</th>
               <th className="py-1">Saldo</th>
               <th className="py-1">Atualizado em</th>
             </tr>
@@ -129,7 +151,8 @@ export default async function EstoqueLocalTestePage({
           <tbody>
             {saldos.map((s) => (
               <tr key={s.codigo_produto} className="border-b">
-                <td className="py-1">{s.codigo_produto}</td>
+                <td className="py-1">{nomeProduto(s.codigo_produto)}</td>
+                <td className="py-1 text-muted-foreground">{s.codigo_produto}</td>
                 <td className={`py-1 ${s.saldo < 0 ? 'text-red-600 font-semibold' : ''}`}>{s.saldo}</td>
                 <td className="py-1">{new Date(s.atualizado_em).toLocaleString('pt-BR')}</td>
               </tr>
@@ -156,7 +179,9 @@ export default async function EstoqueLocalTestePage({
             {movimentos.map((m) => (
               <tr key={m.id} className="border-b">
                 <td className="py-1">{new Date(m.criado_em).toLocaleString('pt-BR')}</td>
-                <td className="py-1">{m.codigo_produto}</td>
+                <td className="py-1">
+                  {nomeProduto(m.codigo_produto)} <span className="text-muted-foreground">({m.codigo_produto})</span>
+                </td>
                 <td className="py-1">{m.tipo}</td>
                 <td className="py-1">{m.quantidade}</td>
                 <td className="py-1">{m.saldo_apos}</td>
