@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { consultarEstrutura } from '@/lib/omie/malha'
-import type { LojaOmie } from '@/lib/omie/client'
+import { OmieError, type LojaOmie } from '@/lib/omie/client'
 
 export const maxDuration = 300
 
@@ -37,11 +37,25 @@ export async function POST() {
 
   let sincronizados = 0
   let semEstrutura = 0
+  let falhas = 0
+  let abortadoPorBloqueioOmie = false
 
   for (const produto of produtos ?? []) {
-    const estrutura = await consultarEstrutura(loja, produto.codigo_produto)
+    let estrutura
+    try {
+      estrutura = await consultarEstrutura(loja, produto.codigo_produto)
+    } catch (e) {
+      if (e instanceof OmieError && e.faultCode === 'MISUSE_API_PROCESS') {
+        abortadoPorBloqueioOmie = true
+        break
+      }
+      falhas++
+      await new Promise((r) => setTimeout(r, 400))
+      continue
+    }
     if (!estrutura?.itens?.length) {
       semEstrutura++
+      await new Promise((r) => setTimeout(r, 400))
       continue
     }
     for (const item of estrutura.itens) {
@@ -60,7 +74,15 @@ export async function POST() {
       )
     }
     sincronizados++
+    await new Promise((r) => setTimeout(r, 400))
   }
 
-  return NextResponse.json({ ok: true, sincronizados, semEstrutura, totalProdutos: (produtos ?? []).length })
+  return NextResponse.json({
+    ok: true,
+    sincronizados,
+    semEstrutura,
+    falhas,
+    totalProdutos: (produtos ?? []).length,
+    abortadoPorBloqueioOmie,
+  })
 }

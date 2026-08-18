@@ -120,8 +120,13 @@ export async function omieRequest<T = unknown>({
 
       // Rate limit do Omie
       if (res.status === 429 || res.status === 425) {
-        await sleep(60_000)
-        continue
+        const json = (await res.json().catch(() => null)) as { faultstring?: string; faultcode?: string } | null
+        lastError = new OmieError(json?.faultstring || `Omie rate limit HTTP ${res.status}`, json?.faultcode, res.status)
+        if (attempt < 2) {
+          await sleep(60_000)
+          continue
+        }
+        throw lastError
       }
 
       const json = (await res.json().catch(() => null)) as
