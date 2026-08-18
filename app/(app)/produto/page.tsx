@@ -628,7 +628,7 @@ export default async function ProdutoPage({
                     const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
                     if (m == null) return <span className="text-text-muted">-</span>
                     return (
-                      <span className={`num font-medium ${TEXTO_CLASSE[corMargem(m)]}`}>
+                      <span className={`num font-medium ${TEXTO_CLASSE[corMargem(m, alvo)]}`}>
                         {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
                       </span>
                     )

@@ -76,9 +76,7 @@ export function urgenciaValidade(dias: number): CorToken {
   return 'neutro'
 }
 
-// Margem de lucro (0..1) -> token.
-export function corMargem(m: number): CorToken {
-  if (m <= 0) return 'err'
-  if (m < 0.2) return 'warn'
-  return 'ok'
+// Margem de lucro (0..1) vs. alvo (0..1) -> vermelho se abaixo, verde se atingiu.
+export function corMargem(m: number, alvo: number): CorToken {
+  return m < alvo ? 'err' : 'ok'
 }
