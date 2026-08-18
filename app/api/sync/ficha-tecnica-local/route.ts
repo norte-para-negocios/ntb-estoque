@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { consultarEstrutura } from '@/lib/omie/malha'
 import { OmieError, type LojaOmie } from '@/lib/omie/client'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const maxDuration = 300
 
@@ -29,18 +30,21 @@ export async function POST() {
     return NextResponse.json({ error: 'Esta ação só é permitida em loja de teste' }, { status: 400 })
   }
 
-  const { data: produtos } = await supabase
-    .from('produtos')
-    .select('codigo_produto')
-    .eq('loja_id', loja.id)
-    .returns<{ codigo_produto: number }[]>()
+  // Pagina a leitura de `produtos` -- o PostgREST corta em 1000 linhas por
+  // padrão, e a loja 12 sozinha tem 2553 produtos (mesmo padrão de bug já
+  // documentado várias vezes no AGENTS.md, ex. "bug do 1000-linhas do
+  // PostgREST"). Mesmo helper compartilhado já usado em outras telas pra
+  // paginar `.select()` de tabela (não-RPC).
+  const produtos = await buscarTodasLinhas<{ codigo_produto: number }>((from, to) =>
+    supabase.from('produtos').select('codigo_produto').eq('loja_id', loja.id).order('id').range(from, to)
+  )
 
   let sincronizados = 0
   let semEstrutura = 0
   let falhas = 0
   let abortadoPorBloqueioOmie = false
 
-  for (const produto of produtos ?? []) {
+  for (const produto of produtos) {
     let estrutura
     try {
       estrutura = await consultarEstrutura(loja, produto.codigo_produto)
@@ -82,7 +86,7 @@ export async function POST() {
     sincronizados,
     semEstrutura,
     falhas,
-    totalProdutos: (produtos ?? []).length,
+    totalProdutos: produtos.length,
     abortadoPorBloqueioOmie,
   })
 }
