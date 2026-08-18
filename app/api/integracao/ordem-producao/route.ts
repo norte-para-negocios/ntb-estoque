@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
+import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -190,6 +191,22 @@ export async function POST(request: Request) {
             .then(({ error }) => {
               if (error) console.error('integracao/ordem-producao: falha ao gravar OP simulada local:', error.message)
             })
+
+          try {
+            const baixa = await baixarEstoqueLocal(
+              supabase,
+              loja.id,
+              produto.codigo_produto,
+              item.quantidade,
+              nCodOP,
+              body.pedidoRef ?? null
+            )
+            if (!baixa.baixado) {
+              console.warn(`integracao/ordem-producao (teste): ${baixa.motivo} (loja ${loja.id}, produto ${produto.codigo_produto})`)
+            }
+          } catch (e) {
+            console.error('integracao/ordem-producao (teste): falha ao baixar estoque local:', e instanceof Error ? e.message : e)
+          }
         } else {
           await fetchOrdemProducao(loja, nCodOP).catch(() => {})
         }
