@@ -34,9 +34,17 @@ export async function POST() {
   // padrão, e a loja 12 sozinha tem 2553 produtos (mesmo padrão de bug já
   // documentado várias vezes no AGENTS.md, ex. "bug do 1000-linhas do
   // PostgREST"). Mesmo helper compartilhado já usado em outras telas pra
-  // paginar `.select()` de tabela (não-RPC).
-  const produtos = await buscarTodasLinhas<{ codigo_produto: number }>((from, to) =>
-    supabase.from('produtos').select('codigo_produto').eq('loja_id', loja.id).order('id').range(from, to)
+  // paginar `.select()` de tabela (não-RPC). `onErro` sinaliza truncamento
+  // no corpo da resposta em vez de silenciosamente processar só parte dos
+  // produtos.
+  let produtosTruncados = false
+  const produtos = await buscarTodasLinhas<{ codigo_produto: number }>(
+    (from, to) =>
+      supabase.from('produtos').select('codigo_produto').eq('loja_id', loja.id).order('id').range(from, to),
+    undefined,
+    () => {
+      produtosTruncados = true
+    }
   )
 
   let sincronizados = 0
@@ -62,8 +70,9 @@ export async function POST() {
       await new Promise((r) => setTimeout(r, 400))
       continue
     }
+    let falhouAlgumItem = false
     for (const item of estrutura.itens) {
-      await supabase.from('ficha_tecnica_local').upsert(
+      const { error } = await supabase.from('ficha_tecnica_local').upsert(
         {
           loja_id: loja.id,
           codigo_produto: produto.codigo_produto,
@@ -76,8 +85,16 @@ export async function POST() {
         },
         { onConflict: 'loja_id,codigo_produto,codigo_produto_insumo' }
       )
+      if (error) {
+        console.error('sync ficha-tecnica-local: upsert falhou', produto.codigo_produto, item.idProdMalha, error.message)
+        falhouAlgumItem = true
+      }
     }
-    sincronizados++
+    if (falhouAlgumItem) {
+      falhas++
+    } else {
+      sincronizados++
+    }
     await new Promise((r) => setTimeout(r, 400))
   }
 
@@ -88,5 +105,6 @@ export async function POST() {
     falhas,
     totalProdutos: produtos.length,
     abortadoPorBloqueioOmie,
+    produtosTruncados,
   })
 }
