@@ -1493,3 +1493,176 @@ Duas ideias relacionadas, juntas numa mensagem só do usuário:
    `product_options`, que já suportam exatamente esse modelo hoje). Mesma
    nota espelhada no AGENTS.md do `ntb-vendas`, com mais detalhe técnico do
    que já existe pronto lá.
+
+## Estoque local independente da Omie (lojas de teste) — revisão final e fix wave (2026-08-18)
+
+Plano de 8 tasks (`.superpowers/sdd/2026-08-18-estoque-independente-omie-lojas-teste/`)
+que dá às 6 lojas de teste um ledger de estoque próprio (`ficha_tecnica_local`,
+`estoque_local_saldos`, `movimentos_locais`, migrations 121-123), deduzido
+localmente via BOM (`ConsultarEstrutura` da Omie) sempre que uma Ordem de
+Produção chega da rota de integração — nunca toca a Omie de escrita nem
+qualquer loja `is_test=false`. A revisão final de branch inteiro achou 0
+Critical, 5 Important, 7 Minor; uma fix wave corrigiu o subconjunto ruled
+(I-2, I-3, M-1, registro do I-1) e este bloco documenta os 3 achados que
+qualificam pra convenção deste arquivo, mais a lista de limitações
+conhecidas e não corrigidas por decisão explícita (I-4, I-5, M-2, M-3, M-5).
+
+### `omieRequest` mascarava `MISUSE_API_PROCESS` atrás de um erro genérico — bug pré-existente, app-wide, não deste plano
+
+Até o commit `3849e3c` (18/08), o branch de rate-limit (429/425) de
+`omieRequest` (`lib/omie/client.ts`) fazia só `sleep(60_000); continue` sem
+nunca popular `lastError` — ao esgotar as 3 tentativas, o `throw lastError ??
+new Error('Falha desconhecida na chamada Omie')` do fim da função sempre
+caía no fallback genérico, porque `lastError` ficava `null` nesse caminho
+específico. Isso descartava o `faultstring`/`faultcode` reais da Omie **em
+todo call site do app que já usava `omieRequest`** (~20 lugares, não só
+código deste plano) — qualquer rate-lockout real virava só "Falha
+desconhecida na chamada Omie" no log, sem nenhuma pista de qual fault
+específico da Omie causou. Foi literalmente o motivo de o diagnóstico do
+lockout de `MISUSE_API_PROCESS` na Task 3 deste plano ter levado 3 rounds de
+fix — cada round via o erro genérico e tinha que reconstruir a causa por
+inferência. Corrigido: o branch 429/425 agora monta um `OmieError` real com
+o `faultstring`/`faultcode` reais antes de decidir dormir-e-retentar ou
+lançar (`e instanceof OmieError` nunca mais chega vazio de contexto). A
+revisão final confirmou que nenhum dos outros ~20 call sites quebra com essa
+mudança (nenhum faz `instanceof OmieError`, nenhum casa a string genérica
+antiga — todos só leem `e.message`, que agora só fica mais informativo).
+
+**`MISUSE_API_PROCESS` como fato operacional, não só como bug corrigido**:
+qualquer tentativa nova contra a Omie (mesmo uma única chamada limpa, de
+leitura) **reestende** o cooldown desse bloqueio — não é "espera passar e
+tenta de novo automaticamente", é "toda tentativa durante o lockout empurra
+o fim dele pra mais tarde". E o `app_key` é **compartilhado**: pra uma loja
+de teste é literalmente a mesma `omie_app_key`/`omie_app_secret` da loja real
+correspondente (ver seção "Lojas de Teste" acima), e esse mesmo `app_key`
+também é batido pelo cron de 10 minutos deste servidor (`scripts/sync-cron.sh`)
+fazendo chamadas de rotina. Ou seja: um sync manual na loja de teste pode
+levar um `MISUSE_API_PROCESS` reestendido pelo PRÓPRIO cron rodando em
+paralelo, sem nenhuma ação do operador. **A resposta correta ao ver esse
+fault é esperar uma janela quieta (fora do ciclo de 10 min do cron) antes de
+tentar de novo — retentar imediatamente só piora, nunca ajuda.**
+
+### A lição do tiebreak de paginação, reforçada pela 3ª vez
+
+`buscarTodasLinhas` (`lib/supabase/buscar-todas-linhas.ts`) pagina via
+`.range(from, to)` — OFFSET puro. Sem `.order(<coluna única>)`, o Postgres
+não garante a mesma ordem de linhas entre páginas sucessivas, e acima de
+1000 linhas (o corte padrão do PostgREST) isso pode **duplicar** linhas
+(contadas 2x numa soma) ou **pular** linhas (silenciosamente ausentes do
+resultado). Este repo já documentou essa classe de bug pelo menos duas vezes
+antes (auditoria de 2026-08-05, seção "Migrations: aplicadas à mão" logo
+acima) e mesmo assim ela reapareceu uma 3ª vez **dentro deste mesmo plano**:
+a Task 3 (`app/api/sync/ficha-tecnica-local/route.ts`) recebeu o
+`.order('id')` correto; a Task 4, escrita depois e cujo próprio comentário
+cita a Task 3 ("mesmo helper compartilhado que corrige o corte de 1000
+linhas do PostgREST (Task 3)"), herdou o helper mas esqueceu o `.order()` —
+`app/api/sync/estoque-local/route.ts` paginava `posicao_estoques` (2553
+linhas na loja 12) só com `.range()`, sem tiebreak. Corrigido nesta fix wave
+adicionando `.order('id')`. **A lição não propaga sozinha por proximidade
+de código ou por citar a correção anterior no comentário — precisa virar
+checklist mecânico**: todo novo uso de `.range()` (helper compartilhado ou
+cópia local) precisa vir acompanhado de `.order(<coluna única, normalmente
+`id`>)` na mesma query, sem exceção, revisado explicitamente nesse ponto
+antes de considerar a paginação correta.
+
+**Revalidação ao vivo desta fix wave (regra aplicada: comparar a origem
+contra o destino, nunca o destino contra si mesmo)** — `sum(saldo)` de
+`estoque_local_saldos` comparado contra `sum(n_saldo)` direto de
+`posicao_estoques` (mesma `loja_id`/`data_posicao`, 2026-08-13) pras 6 lojas
+de teste (8, 9, 10, 11, 12, 13): 5 batiam exato (8: R$324.296,83; 9:
+R$172.401,90; 10: -R$68.522,26; 11: R$284.138,93; 13: R$650.551,85). A loja
+12 divergia — R$397.465,69 no destino contra R$397.690,49 na origem
+(diferença de R$224,80, mesma contagem de produtos nos dois lados: 2553) —
+consistente com o efeito do bug (soma corrompida por página sem afetar a
+contagem de chaves distintas, já que o upsert final é por `codigo_produto`).
+Resincronizada via `/api/sync/estoque-local` (loja 12) já com o `.order('id')`
+aplicado; após o re-sync, `estoque_local_saldos` da loja 12 bateu exato com
+a origem.
+
+### Migrations 121–123 aplicadas no Postgres self-hosted
+
+`121_estoque_local_teste.sql` (as 3 tabelas: `ficha_tecnica_local`,
+`estoque_local_saldos`, `movimentos_locais`), `122_estoque_local_rls.sql`
+(RLS + policies no padrão canônico do repo, `usuario_tem_acesso_loja`/
+`usuario_e_admin`) e `123_baixar_saldo_local_rpc.sql` (a RPC atômica
+`baixar_saldo_local`) estão aplicadas em produção — confirmado com `\df
+baixar_saldo_local` direto no Postgres (não só o arquivo existir no repo,
+seguindo a convenção já estabelecida na seção "Migrations: aplicadas à mão,
+sem tracking" acima):
+
+```
+ Schema |        Name        | Result data type |                       Argument data types                       | Type
+--------+--------------------+------------------+-----------------------------------------------------------------+------
+ public | baixar_saldo_local | numeric          | p_loja_id bigint, p_codigo_produto bigint, p_quantidade numeric | func
+```
+
+### Cobertura real de `ficha_tecnica_local` por loja (o número que substitui o "6/6 OK" enganoso)
+
+Medido em 2026-08-18, `select loja_id, count(*), count(distinct codigo_produto)
+from ficha_tecnica_local group by loja_id`:
+
+| loja_id | nome | linhas | produtos c/ BOM | total produtos (`produtos`) | cobertura |
+|---|---|---|---|---|---|
+| 8  | [TESTE] DONANA VILAS DO ATLANTICO | 27 | 7 | 2706 | 0,26% |
+| 9  | [TESTE] VINHAS & VINHETOS DISTRIBUIDORAS LTDA | 0 | 0 | 694 | 0% |
+| 10 | [TESTE] DONANA PRAIA DO FORTE | 0 | 0 | 2543 | 0% |
+| 11 | [TESTE] DONANA BROTAS | 0 | 0 | 2885 | 0% |
+| 12 | [TESTE] O SERTAO VAI VIRAR MAR | 928 | 206 | 2553 | 8,07% |
+| 13 | [TESTE] DONANA RIO VERMELHO | 19 | 4 | 2330 | 0,17% |
+
+Isso é o estado real do plano — não "6/6 lojas OK" (esse critério media
+`estoque_local_saldos`, que é sempre cheio porque é Omie-independente e não
+diz nada sobre se a baixa de estoque de fato deduz alguma coisa). 4 das 6
+lojas (9, 10, 11) têm **zero** BOM sincronizado — qualquer venda nelas hoje
+é um no-op completo do ponto de vista do ledger local, por desenho (o sync
+de ficha técnica aborta cedo por `MISUSE_API_PROCESS`, ver seção acima) mas
+sem nenhum sinal visível disso até esta fix wave. Agora exposto na própria
+tela (`app/(app)/estoque-local-teste/page.tsx`, "Ficha técnica: X de Y
+produtos com estrutura sincronizada") — o operador não precisa mais ler log
+de servidor pra saber se o sistema está fazendo alguma coisa.
+
+### Limitações conhecidas, não corrigidas por esta fix wave (follow-up explícito, não abandonado em silêncio)
+
+- **(I-4) `is_test` depende de um único `if`, num único call site.** Nem
+  `baixarEstoqueLocal`, nem a RPC `baixar_saldo_local`, nem as 3 tabelas
+  novas têm qualquer verificação estrutural de `is_test` — a proteção hoje
+  é 100% de disciplina de código no único caminho de escrita existente
+  (`app/api/integracao/ordem-producao/route.ts`). Correto hoje, mas não é
+  uma propriedade do sistema — se um segundo call site for adicionado sem
+  repetir o guard, nada impede que ele alcance uma loja real. Opção mais
+  robusta: um trigger `BEFORE INSERT/UPDATE` nas 3 tabelas que rejeita
+  `loja_id` cujo `lojas.is_test` seja falso (fecha o caminho até contra SQL
+  manual/cron futuro); opção mais barata: guard explícito no topo de
+  `baixarEstoqueLocal`.
+- **(I-5) O sync de ficha técnica é upsert-only, nunca apaga.** Um insumo
+  removido da estrutura na Omie sobrevive pra sempre localmente e continua
+  sendo deduzido em toda venda — mesma classe de bug já documentada e
+  corrigida neste arquivo pra `atualizar_preco_recente` (migration 105,
+  seção "Migrations: aplicadas à mão" acima, "fazia só UPSERT, nunca
+  DELETE"), mas não aplicada aqui ainda. Fix natural: apagar as linhas
+  `(loja_id, codigo_produto)` cujo `sincronizado_em` seja anterior ao início
+  da rodada, só pros produtos efetivamente reconsultados nesta execução
+  (nunca em massa — o sync aborta parcial por desenho, e um DELETE global
+  apagaria BOM de produtos sequer visitados).
+- **(M-2) O ledger local não é idempotente contra retry da mesma venda.**
+  `movimentos_locais` não tem chave única amarrada a `pedido_ref`, e a baixa
+  roda no `finally` — um retry do NTB Vendas da mesma Ordem de Produção
+  deduz o estoque local de novo, em silêncio. O dado necessário pra fechar
+  (`pedido_ref`) já está sendo gravado, só falta a constraint/checagem.
+- **(M-3) `tipo='ENT'` é enum morto.** O CHECK da migration 121 aceita
+  `('SAI','ENT')`, mas nenhum caminho grava `'ENT'` — em particular,
+  `/api/sync/estoque-local` sobrescreve `estoque_local_saldos` sem registrar
+  nenhum movimento correspondente, então `sum(movimentos_locais)` nunca
+  explica `estoque_local_saldos` por completo. Gravar um movimento de reset
+  (`'ENT'` ou um tipo `'AJU'` novo) no momento do espelhamento fecharia o
+  ledger.
+- **(M-5) O sync de catálogo completo não é operável pela tela.** 2553
+  produtos × ~400ms de pacing ≈ 17+ minutos de execução; `export const
+  maxDuration = 300` (Next.js) **não** protege nada nesta infra self-hosted
+  (só um hint do Vercel, já documentado acima neste arquivo). Na prática o
+  `fetch` do botão morre no timeout do proxy reverso bem antes do backend
+  terminar, e a rota segue rodando desacoplada da UI. O método que funciona
+  de verdade: `curl` destacado direto no servidor (`nohup curl ... &` ou
+  equivalente), numa janela sem contenção do cron de 10 min (ver
+  `MISUSE_API_PROCESS` acima — rodar durante o ciclo do cron é convidar o
+  próprio cron a reestender o lockout).

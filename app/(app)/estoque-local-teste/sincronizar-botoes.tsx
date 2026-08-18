@@ -17,7 +17,6 @@ export function SincronizarBotoes() {
       setMensagem(`Erro em ${label}: ${e instanceof Error ? e.message : 'falha desconhecida'}`)
     } finally {
       setCarregando(null)
-      window.location.reload()
     }
   }
 
@@ -45,8 +44,19 @@ export function SincronizarBotoes() {
         >
           {carregando === 'Sincronizar saldo inicial' ? 'Sincronizando...' : 'Sincronizar saldo inicial'}
         </button>
-        {mensagem && <span className="text-sm">{mensagem}</span>}
       </div>
+      {mensagem && (
+        <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
+          <span className="flex-1 break-words">{mensagem}</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="shrink-0 border rounded px-2 py-0.5 text-xs whitespace-nowrap"
+          >
+            Atualizar página
+          </button>
+        </div>
+      )}
     </div>
   )
 }

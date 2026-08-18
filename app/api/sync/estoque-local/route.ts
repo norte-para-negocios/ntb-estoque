@@ -61,6 +61,7 @@ export async function POST() {
         .select('n_cod_prod, n_saldo')
         .eq('loja_id', loja.id)
         .eq('data_posicao', dataMaisRecente)
+        .order('id')
         .range(from, to),
     undefined,
     () => {
@@ -73,7 +74,9 @@ export async function POST() {
     somaPorProduto.set(p.n_cod_prod, (somaPorProduto.get(p.n_cod_prod) ?? 0) + p.n_saldo)
   }
 
+  const totalProdutos = somaPorProduto.size
   let copiados = 0
+  let falhas = 0
   for (const [codigoProduto, saldo] of somaPorProduto) {
     const { error } = await supabase.from('estoque_local_saldos').upsert(
       {
@@ -86,10 +89,11 @@ export async function POST() {
     )
     if (error) {
       console.error('sync estoque-local: upsert falhou', codigoProduto, error.message)
+      falhas++
       continue
     }
     copiados++
   }
 
-  return NextResponse.json({ ok: true, copiados, dataPosicao: dataMaisRecente, posicoesTruncadas })
+  return NextResponse.json({ ok: true, copiados, falhas, totalProdutos, dataPosicao: dataMaisRecente, posicoesTruncadas })
 }

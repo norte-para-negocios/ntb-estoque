@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { isAdmin } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { SincronizarBotoes } from './sincronizar-botoes'
 
 interface SaldoRow {
@@ -43,24 +44,45 @@ export default async function EstoqueLocalTestePage({
 
   let saldos: SaldoRow[] = []
   let movimentos: MovimentoRow[] = []
+  let fichaTecnicaCobertos = 0
+  let totalProdutosLoja = 0
   if (lojaSelecionada) {
-    const [{ data: saldosData }, { data: movimentosData }] = await Promise.all([
-      supabase
-        .from('estoque_local_saldos')
-        .select('codigo_produto, saldo, atualizado_em')
-        .eq('loja_id', lojaSelecionada)
-        .order('codigo_produto')
-        .returns<SaldoRow[]>(),
-      supabase
-        .from('movimentos_locais')
-        .select('id, codigo_produto, tipo, quantidade, saldo_apos, origem_n_cod_op, pedido_ref, criado_em')
-        .eq('loja_id', lojaSelecionada)
-        .order('criado_em', { ascending: false })
-        .limit(50)
-        .returns<MovimentoRow[]>(),
-    ])
+    const [{ data: saldosData }, { data: movimentosData }, fichaCodigos, { count: produtosCount }] =
+      await Promise.all([
+        supabase
+          .from('estoque_local_saldos')
+          .select('codigo_produto, saldo, atualizado_em')
+          .eq('loja_id', lojaSelecionada)
+          .order('codigo_produto')
+          .returns<SaldoRow[]>(),
+        supabase
+          .from('movimentos_locais')
+          .select('id, codigo_produto, tipo, quantidade, saldo_apos, origem_n_cod_op, pedido_ref, criado_em')
+          .eq('loja_id', lojaSelecionada)
+          .order('criado_em', { ascending: false })
+          .limit(50)
+          .returns<MovimentoRow[]>(),
+        // Cobertura real da ficha técnica local -- ver AGENTS.md ("estoque
+        // local independente da Omie") pro porquê disto importa: a baixa de
+        // estoque é no-op silencioso pra qualquer produto sem BOM local
+        // aqui, e sem este indicador não havia nenhum lugar visível pro
+        // operador enxergar isso. Conta distinct em JS (via buscarTodasLinhas,
+        // paginado -- ficha_tecnica_local tem 1 linha por insumo, não por
+        // produto, então count(head:true) contaria linha, não produto).
+        buscarTodasLinhas<{ codigo_produto: number }>((from, to) =>
+          supabase
+            .from('ficha_tecnica_local')
+            .select('codigo_produto')
+            .eq('loja_id', lojaSelecionada)
+            .order('id')
+            .range(from, to)
+        ),
+        supabase.from('produtos').select('id', { count: 'exact', head: true }).eq('loja_id', lojaSelecionada),
+      ])
     saldos = saldosData ?? []
     movimentos = movimentosData ?? []
+    fichaTecnicaCobertos = new Set(fichaCodigos.map((f) => f.codigo_produto)).size
+    totalProdutosLoja = produtosCount ?? 0
   }
 
   return (
@@ -87,6 +109,15 @@ export default async function EstoqueLocalTestePage({
 
       <section>
         <h2 className="font-semibold mb-2">Saldo atual ({saldos.length} produtos)</h2>
+        {lojaSelecionada && (
+          <p className="text-sm text-muted-foreground mb-2">
+            Ficha técnica: {fichaTecnicaCobertos} de {totalProdutosLoja} produtos com estrutura sincronizada
+            {totalProdutosLoja > 0 && (
+              <> ({((fichaTecnicaCobertos / totalProdutosLoja) * 100).toFixed(1)}%)</>
+            )}
+            {' '}-- produtos sem estrutura não deduzem estoque local numa venda (baixa vira no-op silencioso).
+          </p>
+        )}
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="text-left border-b">
