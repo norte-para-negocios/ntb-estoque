@@ -37,10 +37,23 @@ export async function POST() {
   // paginar `.select()` de tabela (não-RPC). `onErro` sinaliza truncamento
   // no corpo da resposta em vez de silenciosamente processar só parte dos
   // produtos.
+  //
+  // Só produtos ainda não checados (`ficha_tecnica_checada_em is null`,
+  // migration 124) -- sem isso, toda tentativa nova recomeçava do produto 1
+  // e, como o loop trava cedo em MISUSE_API_PROCESS quase sempre (ver
+  // AGENTS.md), nunca alcançava produtos novos. Pra forçar recheck de tudo
+  // de novo, resetar a coluna manualmente (`update produtos set
+  // ficha_tecnica_checada_em = null where loja_id = X`).
   let produtosTruncados = false
   const produtos = await buscarTodasLinhas<{ codigo_produto: number }>(
     (from, to) =>
-      supabase.from('produtos').select('codigo_produto').eq('loja_id', loja.id).order('id').range(from, to),
+      supabase
+        .from('produtos')
+        .select('codigo_produto')
+        .eq('loja_id', loja.id)
+        .is('ficha_tecnica_checada_em', null)
+        .order('id')
+        .range(from, to),
     undefined,
     () => {
       produtosTruncados = true
@@ -52,22 +65,38 @@ export async function POST() {
   let falhas = 0
   let abortadoPorBloqueioOmie = false
 
+  // 400ms (2,5 chamadas/s) se mostrou rápido demais na prática -- travou em
+  // MISUSE_API_PROCESS por volta da 11a chamada em sequência, em lojas
+  // diferentes (ver AGENTS.md). 3s é bem mais conservador; ainda pode
+  // precisar de ajuste conforme o limite real da Omie for confirmado.
+  const PACING_MS = 3000
+
   for (const produto of produtos) {
     let estrutura
     try {
       estrutura = await consultarEstrutura(loja, produto.codigo_produto)
     } catch (e) {
       if (e instanceof OmieError && e.faultCode === 'MISUSE_API_PROCESS') {
+        // Não marca ficha_tecnica_checada_em -- não tivemos resposta de
+        // verdade pra esse produto, ele deve ser a primeira tentativa da
+        // próxima rodada.
         abortadoPorBloqueioOmie = true
         break
       }
+      // Não marca ficha_tecnica_checada_em -- falha pode ser transitória
+      // (rede, instabilidade da Omie), não uma resposta de verdade.
       falhas++
-      await new Promise((r) => setTimeout(r, 400))
+      await new Promise((r) => setTimeout(r, PACING_MS))
       continue
     }
     if (!estrutura?.itens?.length) {
       semEstrutura++
-      await new Promise((r) => setTimeout(r, 400))
+      await supabase
+        .from('produtos')
+        .update({ ficha_tecnica_checada_em: new Date().toISOString() })
+        .eq('loja_id', loja.id)
+        .eq('codigo_produto', produto.codigo_produto)
+      await new Promise((r) => setTimeout(r, PACING_MS))
       continue
     }
     let falhouAlgumItem = false
@@ -94,8 +123,13 @@ export async function POST() {
       falhas++
     } else {
       sincronizados++
+      await supabase
+        .from('produtos')
+        .update({ ficha_tecnica_checada_em: new Date().toISOString() })
+        .eq('loja_id', loja.id)
+        .eq('codigo_produto', produto.codigo_produto)
     }
-    await new Promise((r) => setTimeout(r, 400))
+    await new Promise((r) => setTimeout(r, PACING_MS))
   }
 
   return NextResponse.json({
@@ -103,7 +137,7 @@ export async function POST() {
     sincronizados,
     semEstrutura,
     falhas,
-    totalProdutos: produtos.length,
+    totalProdutosPendentes: produtos.length,
     abortadoPorBloqueioOmie,
     produtosTruncados,
   })
