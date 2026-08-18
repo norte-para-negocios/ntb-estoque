@@ -45,27 +45,17 @@ export async function baixarEstoqueLocal(
   for (const linha of ficha) {
     const quantidadeBaixar = quantidadeVendida * linha.quantidade * (1 + linha.percentual_perda / 100)
 
-    const { data: saldoAtual } = await supabase
-      .from('estoque_local_saldos')
-      .select('saldo')
-      .eq('loja_id', lojaId)
-      .eq('codigo_produto', linha.codigo_produto_insumo)
-      .maybeSingle<{ saldo: number }>()
+    const { data: saldoApos, error: baixaError } = await supabase.rpc('baixar_saldo_local', {
+      p_loja_id: lojaId,
+      p_codigo_produto: linha.codigo_produto_insumo,
+      p_quantidade: quantidadeBaixar,
+    })
 
-    const saldoAnterior = saldoAtual?.saldo ?? 0
-    const saldoApos = saldoAnterior - quantidadeBaixar
+    if (baixaError) {
+      return { baixado: false, itens, motivo: `Falha ao baixar saldo local: ${baixaError.message}` }
+    }
 
-    await supabase.from('estoque_local_saldos').upsert(
-      {
-        loja_id: lojaId,
-        codigo_produto: linha.codigo_produto_insumo,
-        saldo: saldoApos,
-        atualizado_em: new Date().toISOString(),
-      },
-      { onConflict: 'loja_id,codigo_produto' }
-    )
-
-    await supabase.from('movimentos_locais').insert({
+    const { error: movimentoError } = await supabase.from('movimentos_locais').insert({
       loja_id: lojaId,
       codigo_produto: linha.codigo_produto_insumo,
       tipo: 'SAI',
@@ -74,6 +64,10 @@ export async function baixarEstoqueLocal(
       origem_n_cod_op: nCodOP,
       pedido_ref: pedidoRef,
     })
+
+    if (movimentoError) {
+      return { baixado: false, itens, motivo: `Saldo baixado mas falha ao gravar movimento: ${movimentoError.message}` }
+    }
 
     itens.push({ codigoProdutoInsumo: linha.codigo_produto_insumo, quantidadeBaixada: quantidadeBaixar, saldoApos })
   }
