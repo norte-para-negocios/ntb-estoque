@@ -3,11 +3,20 @@ import { getAtorGestao } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { btnClass } from '@/components/ui-kit/Button'
 import { FileBarChart, Download } from 'lucide-react'
+import { SincronizarEstruturaBotao } from './sincronizar-estrutura-botao'
 
 const MESES_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
+
+// Duplicado de ultimoDiaMes (lib/relatorio-mensal.ts) -- este arquivo é
+// server component (async), mas o botão que consome essas datas é client
+// component e não pode importar de um arquivo que usa next/server.
+function ultimoDiaMes(ano: number, mes: number): string {
+  const dia = new Date(ano, mes, 0).getDate()
+  return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+}
 
 // Últimos 14 meses fechados (o mês corrente ainda não tem faturamento
 // completo, então nem entra na lista -- evita gerar relatório de mês em
@@ -59,6 +68,12 @@ export default async function RelatorioMensalPage() {
             Gerar relatório do mês
           </button>
         </form>
+        <div className="mt-4 border-t border-border pt-4">
+          <SincronizarEstruturaBotao
+            dataIni={`${opcoes[0].ano}-${String(opcoes[0].mes).padStart(2, '0')}-01`}
+            dataFim={ultimoDiaMes(opcoes[0].ano, opcoes[0].mes)}
+          />
+        </div>
       </div>
     </div>
   )

@@ -238,7 +238,28 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   }
   n++
 
-  // --- Slides 7-8: Pontos de Melhoria e Recomendações (texto fixo) ---
+  // --- Slide 7: Baixas de Estoque (consumo de Ordem de Produção) ---
+  {
+    const slide = pptx.addSlide()
+    tituloSlide(
+      slide,
+      'Dashboard — Baixas de Estoque: Revenda vs. Matéria-Prima',
+      `Consumo de Ordem de Produção · ${periodoLabel} · top 5 de cada tipo · valorizado ao custo atual`
+    )
+    const b = dados.baixasEstoque
+    graficoBarraRanking(slide, b.revendaTop5, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 4.6, titulo: 'Material de Revenda' })
+    graficoBarraRanking(slide, b.materiaPrimaTop5, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 4.6, titulo: 'Matéria-Prima' })
+    if (b.totalOps > 0 && b.opsSemEstrutura > 0) {
+      slide.addText(
+        `${b.opsSemEstrutura} de ${b.totalOps} Ordens de Produção do período sem ficha técnica sincronizada -- valores abaixo do real. Sincronize antes de enviar o relatório.`,
+        { x: 0.4, y: 6.1, w: 12.5, h: 0.5, fontSize: 10, color: 'B5342A', italic: true }
+      )
+    }
+    rodape(slide, loja, mesLabel, n)
+  }
+  n++
+
+  // --- Slides 8-9: Pontos de Melhoria e Recomendações (texto fixo) ---
   const pontosMelhoria: [string, string[]][] = [
     ['1. Padronização e Precisão dos Inventários', [
       'Inventários realizados diretamente pelo NTB garantem contagem padronizada, eliminando divergências entre físico e Omie.',
@@ -311,7 +332,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   slideDePontos('1/2', pontosMelhoria)
   slideDePontos('2/2', pontosMelhoria2)
 
-  // --- Slide 9: Recomendações — NTB Estoque (operacional) ---
+  // --- Slide 10: Recomendações — NTB Estoque (operacional) ---
   {
     const slide = pptx.addSlide()
     tituloSlide(slide, 'Recomendações — NTB Estoque')

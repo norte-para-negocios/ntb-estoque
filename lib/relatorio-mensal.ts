@@ -9,6 +9,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { descreverCFOP } from '@/lib/cfop'
+import { gerarBaixasDeOrdemProducao } from './baixa-op'
 import {
   type MatrizRow,
   type RankingItem,
@@ -63,6 +64,12 @@ export type RelatorioMensal = {
     valorNotasAno: number
     perdaMateriaPrimaPctMes: number | null
     perdaRevendaPctMes: number | null
+  }
+  baixasEstoque: {
+    revendaTop5: RankingItem[]
+    materiaPrimaTop5: RankingItem[]
+    opsSemEstrutura: number
+    totalOps: number
   }
 }
 
@@ -246,6 +253,15 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     percRevenda: mesesChart.map((m) => percRevendaPorMes.get(m) ?? null),
   }
 
+  // --- Baixas de Estoque (slide 7) ---
+  const { linhas: baixasOp, opsSemEstrutura, totalOps } = await gerarBaixasDeOrdemProducao(lojaId, dataIniAno, dataFimGrafico)
+  const revendaBaixaMapa = new Map<string, number>()
+  const mpBaixaMapa = new Map<string, number>()
+  for (const linha of baixasOp) {
+    if (linha.tipo_sped.startsWith('00-')) revendaBaixaMapa.set(linha.produto, (revendaBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
+    else if (linha.tipo_sped.startsWith('01-')) mpBaixaMapa.set(linha.produto, (mpBaixaMapa.get(linha.produto) ?? 0) + linha.valor)
+  }
+
   return {
     loja: { id: lojaId, nome: nomeLoja },
     ano,
@@ -280,6 +296,12 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
       valorNotasAno: Number((comprasTotalAno.data as ComprasTotalRow[] | null)?.[0]?.valor ?? 0),
       perdaMateriaPrimaPctMes: percMPPorMes.get(mesRelChave) ?? null,
       perdaRevendaPctMes: percRevendaPorMes.get(mesRelChave) ?? null,
+    },
+    baixasEstoque: {
+      revendaTop5: topNDoMapa(revendaBaixaMapa, 5),
+      materiaPrimaTop5: topNDoMapa(mpBaixaMapa, 5),
+      opsSemEstrutura,
+      totalOps,
     },
   }
 }
