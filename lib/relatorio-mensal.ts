@@ -8,6 +8,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { labelTipoItem } from '@/lib/constants-omie'
+import { descreverCFOP } from '@/lib/cfop'
 import {
   type MatrizRow,
   type RankingItem,
@@ -24,8 +25,14 @@ type RejeitoRow = { categoria: string; valor_total: number | null; qtd_movimento
 
 // Compras de Ativo Imobilizado não entram no "Compras/Faturamento" (fórmula
 // real do Ramon, achada no relatório R06: (TC-CA)/TF -- Total Compras menos
-// Compras de Ativo, sobre Total Faturamento).
-const TIPO_ATIVO_IMOBILIZADO = '08'
+// Compras de Ativo, sobre Total Faturamento). Classificação por CFOP
+// (descreverCFOP, `lib/cfop.ts`), não por tipo_item -- mesmo critério já
+// usado em app/(app)/relatorio-indicadores/page.tsx:213 (achado na varredura
+// de 2026-08-19: usar tipo_item='08' aqui divergia do CFOP de lá, dando %
+// levemente diferente pro mesmo período/loja nas duas telas).
+function ehAtivoImobilizadoPorCfop(cfop: string): boolean {
+  return descreverCFOP(cfop).cat === 'Ativo imobilizado'
+}
 
 export type SerieMensal = { meses: string[]; series: { nome: string; valores: number[] }[] }
 
@@ -129,6 +136,7 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     familiaAno,
     fornecedorAno,
     comprasPorTipoAno,
+    comprasPorCfopAno,
     comprasTotalMes,
     comprasTotalAno,
     tipoPorDescricao,
@@ -149,6 +157,13 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     }),
     rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId, p_ini: dataIniAno, p_fim: dataFimGrafico, p_dim: 'tipo',
+      p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
+    }),
+    // Só pra excluir Ativo Imobilizado do denominador de Compras/Faturamento
+    // (ver ehAtivoImobilizadoPorCfop acima) -- dimensão separada da de "tipo"
+    // porque o critério real é fiscal (CFOP), não o tipo_item interno do Omie.
+    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+      p_loja_id: lojaId, p_ini: dataIniAno, p_fim: dataFimGrafico, p_dim: 'cfop',
       p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
     }),
     supabase.rpc('relatorio_compras_total', {
@@ -178,7 +193,7 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
   const faturamentoAno = Array.from(porTipoMapaAno.values()).reduce((s, v) => s + v, 0)
   const faturamentoMes = faturamentoPorTipoAno.filter((r) => r.mes === mesRelChave).reduce((s, r) => s + Number(r.valor), 0)
 
-  const comprasSemAtivo = comprasPorTipoAno.filter((r) => r.rotulo !== TIPO_ATIVO_IMOBILIZADO)
+  const comprasSemAtivo = comprasPorCfopAno.filter((r) => !ehAtivoImobilizadoPorCfop(r.rotulo))
   const faturamentoPorMes = new Map<string, number>()
   for (const r of faturamentoPorTipoAno) faturamentoPorMes.set(r.mes, (faturamentoPorMes.get(r.mes) ?? 0) + Number(r.valor))
   const comprasPorMes = new Map<string, number>()
