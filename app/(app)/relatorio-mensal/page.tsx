@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getAtorGestao } from '@/lib/auth'
+import { getAtorGestao, isAdmin } from '@/lib/auth'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { btnClass } from '@/components/ui-kit/Button'
 import { FileBarChart, Download } from 'lucide-react'
@@ -33,6 +33,10 @@ function mesesDisponiveis(): { ano: number; mes: number; label: string }[] {
 
 export default async function RelatorioMensalPage() {
   if (!(await getAtorGestao()).podeGerir) notFound()
+  // Sync de ficha técnica bate na Omie de verdade (rate-limit risk) --
+  // gate mais restrito que o resto da página (podeGerir, acima), igual
+  // ao app/api/sync/estrutura-produto/route.ts que o botão dispara.
+  const podeSincronizarEstrutura = await isAdmin()
 
   const opcoes = mesesDisponiveis()
 
@@ -68,12 +72,14 @@ export default async function RelatorioMensalPage() {
             Gerar relatório do mês
           </button>
         </form>
-        <div className="mt-4 border-t border-border pt-4">
-          <SincronizarEstruturaBotao
-            dataIni={`${opcoes[0].ano}-${String(opcoes[0].mes).padStart(2, '0')}-01`}
-            dataFim={ultimoDiaMes(opcoes[0].ano, opcoes[0].mes)}
-          />
-        </div>
+        {podeSincronizarEstrutura && (
+          <div className="mt-4 border-t border-border pt-4">
+            <SincronizarEstruturaBotao
+              dataIni={`${opcoes[0].ano}-${String(opcoes[0].mes).padStart(2, '0')}-01`}
+              dataFim={ultimoDiaMes(opcoes[0].ano, opcoes[0].mes)}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

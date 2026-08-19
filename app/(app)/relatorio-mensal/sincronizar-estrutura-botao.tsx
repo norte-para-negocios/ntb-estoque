@@ -15,7 +15,12 @@ export function SincronizarEstruturaBotao({ dataIni, dataFim }: { dataIni: strin
     setStatus('Buscando produtos pendentes...')
     try {
       const resPendentes = await fetch(`/api/relatorio-mensal/estrutura-pendente?dataIni=${dataIni}&dataFim=${dataFim}`)
-      const { pendentes } = await resPendentes.json()
+      const dadosPendentes = await resPendentes.json()
+      if (!resPendentes.ok) {
+        setStatus(`Erro: ${dadosPendentes?.error ?? 'falha ao buscar produtos pendentes'}`)
+        return
+      }
+      const { pendentes } = dadosPendentes
       if (!pendentes?.length) {
         setStatus('Nada pendente -- ficha técnica já sincronizada pra este período.')
         return
@@ -27,6 +32,10 @@ export function SincronizarEstruturaBotao({ dataIni, dataFim }: { dataIni: strin
         body: JSON.stringify({ codigosProduto: pendentes }),
       })
       const dados = await res.json()
+      if (!res.ok) {
+        setStatus(`Erro: ${dados?.error ?? 'falha ao sincronizar'}`)
+        return
+      }
       setStatus(
         `Sincronizados: ${dados.sincronizados} · Sem estrutura: ${dados.semEstrutura} · Falhas: ${dados.falhas}` +
           (dados.abortadoPorBloqueioOmie ? ' · BLOQUEADO PELA OMIE, tente de novo mais tarde.' : '')

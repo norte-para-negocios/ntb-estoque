@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
+import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 // Produtos com OP concluída no período pedido que AINDA não têm ficha
 // técnica em cache -- o botão da tela usa essa lista pra saber o que
 // mandar pra app/api/sync/estrutura-produto (não sincroniza o catálogo
-// inteiro, só quem teve OP de verdade no mês do relatório).
+// inteiro, só quem teve OP de verdade no mês do relatório). Gate em
+// isAdmin() (não getAtorGestao().podeGerir) pra ficar consistente com
+// app/api/sync/estrutura-produto/route.ts -- este endpoint só existe em
+// função de disparar aquela sync (que bate na Omie de verdade), então
+// não faz sentido ficar mais permissivo que ela.
 export async function GET(request: Request) {
   const lojaId = await getCurrentLojaId()
-  if (!(await getAtorGestao()).podeGerir) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
   const { searchParams } = new URL(request.url)
