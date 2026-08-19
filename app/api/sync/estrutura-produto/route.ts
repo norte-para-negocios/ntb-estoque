@@ -32,6 +32,21 @@ export async function POST(request: Request) {
   if (!loja?.omie_app_key) {
     return NextResponse.json({ error: 'Loja sem integração Omie' }, { status: 400 })
   }
+  // Loja de teste compartilha o mesmo app_key/app_secret da loja real (só
+  // ESCRITA é simulada -- leitura sempre bate na Omie real, ver AGENTS.md
+  // "Lojas de Teste"). Uma sync de estrutura aqui é dezenas/centenas de
+  // ConsultarEstrutura pausadas de 10s no MESMO app_key já sob pressão do
+  // cron de 10min -- risco direto de reestender um MISUSE_API_PROCESS
+  // (AGENTS.md, "Estoque local independente da Omie") sem nenhum ganho:
+  // relatório mensal de loja de teste não usa esta feature, e as lojas de
+  // teste têm o mecanismo próprio (ficha_tecnica_local, migration 121).
+  // Mesmo guard de /api/sync/faturamento e /api/sync/notas-fiscais.
+  if (loja.is_test) {
+    return NextResponse.json(
+      { error: 'Sincronização manual de estrutura de produto não é permitida em loja de teste (compartilha app_key com a loja real).' },
+      { status: 400 }
+    )
+  }
 
   const PACING_MS = 10_000
 
