@@ -27,29 +27,29 @@ export type DashboardGerencial = {
   topPorQuantidade: RankingItem[]
 }
 
-type MatrizRow = { rotulo: string; mes: string; valor: number }
+export type MatrizRow = { rotulo: string; mes: string; valor: number }
 type ComprasTotalRow = { valor: number; n_notas: number }
 
 // Rotulos EXATOS gravados por lib/omie/faturamento.ts (TIPO_NOME) -- nao usar
 // os labels de PRODUTO_TIPO_ITEM (case/acentuacao diferentes: "Produto acabado"
 // aqui vs "Produto Acabado" la).
-const ROTULO_FATURAMENTO_ACABADO = 'Produto acabado'
-const ROTULO_FATURAMENTO_REVENDA = 'Mercadoria p/ revenda'
+export const ROTULO_FATURAMENTO_ACABADO = 'Produto acabado'
+export const ROTULO_FATURAMENTO_REVENDA = 'Mercadoria p/ revenda'
 
-function somarPorRotulo(rows: MatrizRow[]): Map<string, number> {
+export function somarPorRotulo(rows: MatrizRow[]): Map<string, number> {
   const mapa = new Map<string, number>()
   for (const r of rows) mapa.set(r.rotulo, (mapa.get(r.rotulo) ?? 0) + Number(r.valor))
   return mapa
 }
 
-function topNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
+export function topNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
   return Array.from(mapa.entries())
     .map(([label, valor]) => ({ label, valor }))
     .sort((a, b) => b.valor - a.valor)
     .slice(0, n)
 }
 
-function bottomNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
+export function bottomNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
   return Array.from(mapa.entries())
     .filter(([, valor]) => valor > 0) // exclui produto sem venda no periodo, nao e "pior desempenho"
     .map(([label, valor]) => ({ label, valor }))
@@ -62,7 +62,7 @@ function bottomNDoMapa(mapa: Map<string, number>, n: number): RankingItem[] {
 // mais faturados" em Produto Acabado, nao mistura com revenda). Paginado:
 // lojas com catalogo grande (>1000 produtos) truncariam sem isso (mesma
 // classe de bug ja corrigida varias vezes nesta sessao).
-async function buscarTipoPorDescricao(
+export async function buscarTipoPorDescricao(
   supabase: ReturnType<typeof createServiceClient>,
   lojaId: number
 ): Promise<Map<string, string>> {

@@ -3,7 +3,7 @@ import { getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import {
-  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory,
+  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart,
 } from 'lucide-react'
 
 type Rel = {
@@ -15,6 +15,12 @@ type Rel = {
 }
 
 const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
+  {
+    grupo: 'Gerencial',
+    itens: [
+      { href: '/relatorio-mensal', titulo: 'Relatório mensal (PowerPoint)', icon: FileBarChart, descricao: 'Faturamento, vendas, família/fornecedores, compras/perdas e baixas de estoque num único PPTX -- mesmo formato já enviado pra consultoria.', pergunta: 'Como foi o mês, pronto pra mandar pro cliente?' },
+    ],
+  },
   {
     grupo: 'Dia a dia',
     itens: [
