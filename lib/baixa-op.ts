@@ -104,6 +104,7 @@ export async function gerarBaixasDeOrdemProducao(
     )
     const acumPorCod = new Map<number, { somaValor: number; somaSaldo: number }>()
     for (const p of posicoes) {
+      if (!(Number(p.n_cmc) > 0)) continue // sem CMC nesta linha -- exclui do numerador E denominador, mesmo guard de relatorio-margem/page.tsx:303-304
       const acc = acumPorCod.get(p.n_cod_prod) ?? { somaValor: 0, somaSaldo: 0 }
       acc.somaValor += Number(p.n_cmc) * Number(p.n_saldo)
       acc.somaSaldo += Number(p.n_saldo)
