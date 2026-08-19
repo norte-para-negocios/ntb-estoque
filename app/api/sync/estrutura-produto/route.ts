@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { consultarEstrutura } from '@/lib/omie/malha'
 import { OmieError, type LojaOmie } from '@/lib/omie/client'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const maxDuration = 300
 
@@ -46,11 +47,16 @@ export async function POST(request: Request) {
 
   // Mapa código_produto -> tipo_item, pra gravar o tipo do INSUMO junto
   // (a estrutura da Omie não devolve tipo_item do insumo, só descrição).
-  const { data: produtosRows } = await supabase
-    .from('produtos')
-    .select('codigo_produto, tipo_item')
-    .eq('loja_id', loja.id)
-  const tipoPorCodigo = new Map((produtosRows ?? []).map((p) => [Number(p.codigo_produto), p.tipo_item as string | null]))
+  // Usa buscarTodasLinhas pra paginar corretamente (PostgREST default 1000-row cap).
+  const produtosRows = await buscarTodasLinhas<{ codigo_produto: number; tipo_item: string | null }>((from, to) =>
+    supabase
+      .from('produtos')
+      .select('codigo_produto, tipo_item')
+      .eq('loja_id', loja.id)
+      .order('id')
+      .range(from, to)
+  )
+  const tipoPorCodigo = new Map(produtosRows.map((p) => [Number(p.codigo_produto), p.tipo_item]))
 
   let sincronizados = 0
   let semEstrutura = 0
