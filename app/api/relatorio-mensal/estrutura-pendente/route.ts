@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,22 +26,51 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServiceClient()
-  const { data: ops } = await supabase
-    .from('ordens_producao')
-    .select('identificacao_n_cod_produto')
-    .eq('loja_id', lojaId)
-    .eq('concluida', true)
-    .gte('dt_conclusao_real', dataIni)
-    .lte('dt_conclusao_real', dataFim)
-  const codigosNoPeriodo = [...new Set((ops ?? []).map((o) => Number(o.identificacao_n_cod_produto)))]
+  // As duas consultas abaixo eram `.select()` cru, sem paginação nem checagem
+  // de erro -- cortavam em 1000 linhas pelo default do PostgREST (uma loja
+  // gera muito mais de 1000 OPs concluídas num mês, e o cache tem 1 linha por
+  // INSUMO) e uma falha virava silenciosamente "nada cacheado"/"nenhuma OP".
+  // Nos dois sentidos o estrago é real: subestimar o cacheado dispara uma
+  // sync gigante contra a Omie de um cliente pagante (risco de
+  // MISUSE_API_PROCESS); subestimar as OPs esconde produto pendente. Por isso
+  // qualquer erro aqui vira 502 explícito, nunca lista parcial.
+  const erros: string[] = []
+  const ops = await buscarTodasLinhas<{ identificacao_n_cod_produto: number }>(
+    (from, to) =>
+      supabase
+        .from('ordens_producao')
+        .select('identificacao_n_cod_produto')
+        .eq('loja_id', lojaId)
+        .eq('concluida', true)
+        .gte('dt_conclusao_real', dataIni)
+        .lte('dt_conclusao_real', dataFim)
+        .order('id')
+        .range(from, to),
+    undefined,
+    (e) => erros.push(e.message)
+  )
+  if (erros.length) {
+    return NextResponse.json({ error: `Falha ao consultar Ordens de Produção: ${erros[0]}` }, { status: 502 })
+  }
+  const codigosNoPeriodo = [...new Set(ops.map((o) => Number(o.identificacao_n_cod_produto)))]
   if (!codigosNoPeriodo.length) return NextResponse.json({ pendentes: [] })
 
-  const { data: jaCacheados } = await supabase
-    .from('estrutura_produto_cache')
-    .select('codigo_produto')
-    .eq('loja_id', lojaId)
-    .in('codigo_produto', codigosNoPeriodo)
-  const cacheados = new Set((jaCacheados ?? []).map((r) => Number(r.codigo_produto)))
+  const jaCacheados = await buscarTodasLinhas<{ codigo_produto: number }>(
+    (from, to) =>
+      supabase
+        .from('estrutura_produto_cache')
+        .select('codigo_produto')
+        .eq('loja_id', lojaId)
+        .in('codigo_produto', codigosNoPeriodo)
+        .order('id')
+        .range(from, to),
+    undefined,
+    (e) => erros.push(e.message)
+  )
+  if (erros.length) {
+    return NextResponse.json({ error: `Falha ao consultar ficha técnica em cache: ${erros[0]}` }, { status: 502 })
+  }
+  const cacheados = new Set(jaCacheados.map((r) => Number(r.codigo_produto)))
   const pendentes = codigosNoPeriodo.filter((c) => !cacheados.has(c))
 
   return NextResponse.json({ pendentes })

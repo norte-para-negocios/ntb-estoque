@@ -70,6 +70,9 @@ export type RelatorioMensal = {
     materiaPrimaTop5: RankingItem[]
     opsSemEstrutura: number
     totalOps: number
+    // Insumos distintos consumidos que ficaram fora do VALOR por não terem
+    // CMC conhecido -- exclusão silenciosa antes deste campo existir.
+    insumosSemCusto: number
   }
 }
 
@@ -254,7 +257,7 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
   }
 
   // --- Baixas de Estoque (slide 7) ---
-  const { linhas: baixasOp, opsSemEstrutura, totalOps } = await gerarBaixasDeOrdemProducao(lojaId, dataIniAno, dataFimGrafico)
+  const { linhas: baixasOp, opsSemEstrutura, totalOps, insumosSemCusto } = await gerarBaixasDeOrdemProducao(lojaId, dataIniAno, dataFimGrafico)
   const revendaBaixaMapa = new Map<string, number>()
   const mpBaixaMapa = new Map<string, number>()
   for (const linha of baixasOp) {
@@ -302,6 +305,7 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
       materiaPrimaTop5: topNDoMapa(mpBaixaMapa, 5),
       opsSemEstrutura,
       totalOps,
+      insumosSemCusto,
     },
   }
 }

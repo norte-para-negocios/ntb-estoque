@@ -249,11 +249,32 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
     const b = dados.baixasEstoque
     graficoBarraRanking(slide, b.revendaTop5, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 4.6, titulo: 'Material de Revenda' })
     graficoBarraRanking(slide, b.materiaPrimaTop5, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 4.6, titulo: 'Matéria-Prima' })
+    // Dois motivos DIFERENTES de subestimar o valor deste slide, os dois
+    // invisíveis pro leitor se não forem escritos aqui: (1) OP sem ficha
+    // técnica em cache (nenhuma linha gerada pra ela); (2) insumo consumido
+    // sem CMC conhecido (linha existe, mas é descartada por não ter como
+    // valorizar -- ver lib/baixa-op.ts). Ficam no MESMO bloco de aviso.
+    const avisos: string[] = []
     if (b.totalOps > 0 && b.opsSemEstrutura > 0) {
-      slide.addText(
-        `${b.opsSemEstrutura} de ${b.totalOps} Ordens de Produção do período sem ficha técnica sincronizada -- valores abaixo do real. Sincronize antes de enviar o relatório.`,
-        { x: 0.4, y: 6.1, w: 12.5, h: 0.5, fontSize: 10, color: 'B5342A', italic: true }
+      avisos.push(
+        `${b.opsSemEstrutura} de ${b.totalOps} Ordens de Produção do período sem ficha técnica sincronizada -- valores abaixo do real. Sincronize antes de enviar o relatório.`
       )
+    }
+    if (b.insumosSemCusto > 0) {
+      avisos.push(
+        `${avisos.length ? 'Além disso, ' : ''}${b.insumosSemCusto} insumo(s) sem custo conhecido (sem CMC na foto de estoque) não entraram no valor.`
+      )
+    }
+    if (avisos.length) {
+      slide.addText(avisos.join(' '), {
+        x: 0.4,
+        y: 6.1,
+        w: 12.5,
+        h: 0.5,
+        fontSize: 10,
+        color: 'B5342A',
+        italic: true,
+      })
     }
     rodape(slide, loja, mesLabel, n)
   }
