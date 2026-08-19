@@ -10,16 +10,10 @@
 // docs/superpowers/plans/2026-08-19-baixa-estoque-ordem-producao.md).
 import { createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
-import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { labelTipoItem } from '@/lib/constants-omie'
 import type { LinhaOperAuto } from './movimentacao-operacao-auto'
 
 type OpRow = {
-  // id/identificacao_n_cod_op não são usados no cálculo -- existem porque
-  // complementarOrdensProducao (histórico frio no Contabo) exige os dois no
-  // type bound e usa identificacao_n_cod_op como chave natural de dedupe.
-  id: number
-  identificacao_n_cod_op: number
   identificacao_n_cod_produto: number
   identificacao_n_qtde: number
   dt_conclusao_real: string
@@ -50,11 +44,22 @@ export async function gerarBaixasDeOrdemProducao(
   // buscarTodasLinhas não checavam error"). Todo `.range()` vem com
   // `.order('id')` (tiebreak obrigatório, ver AGENTS.md "A lição do tiebreak
   // de paginação").
-  const opsQuentes = await buscarTodasLinhas<OpRow>(
+  // Sem complemento frio (Contabo) aqui de propósito: `lib/historico-contabo.ts`
+  // documenta que a premissa que criava a distinção quente/frio (Supabase
+  // Cloud só guardava 90 dias) ficou obsoleta pra `ordens_producao` desde que
+  // o app passou a rodar 100% self-hosted no Contabo (o cron de poda nunca
+  // apaga essa tabela). Confirmado ao vivo nesta sessão: buscar
+  // `ordens_producao` só no self-hosted, paginado (buscarTodasLinhas), já
+  // devolve o total completo pro ano inteiro -- bater com o número que só
+  // aparecia antes somando o complemento frio (que existia pra compensar um
+  // bug de paginação já corrigido, não uma lacuna real de dado). Adicionar o
+  // complemento frio de novo só reintroduziria o risco de timeout de proxy
+  // (achado da revisão final) sem nenhum ganho de cobertura.
+  const ops = await buscarTodasLinhas<OpRow>(
     (from, to) =>
       supabase
         .from('ordens_producao')
-        .select('id, identificacao_n_cod_op, identificacao_n_cod_produto, identificacao_n_qtde, dt_conclusao_real, produto_descricao, concluida')
+        .select('identificacao_n_cod_produto, identificacao_n_qtde, dt_conclusao_real, produto_descricao')
         .eq('loja_id', lojaId)
         .eq('concluida', true)
         .gte('dt_conclusao_real', dataIni)
@@ -64,24 +69,6 @@ export async function gerarBaixasDeOrdemProducao(
     undefined,
     (e) => console.error('baixa-op: falha ao paginar ordens_producao', e.message)
   )
-
-  // Janela quente do Supabase = ~90 dias. O relatório mensal pede o ano
-  // inteiro, então quase toda execução cruza esse corte -- sem o complemento
-  // frio (Contabo), as OPs mais antigas somem em silêncio e a baixa de
-  // estoque fica subestimada (mesmo padrão de lib/resumo-dia.ts e de mais 9
-  // call sites deste repo).
-  let ops = opsQuentes
-  if (dataIni < limiteJanelaQuente()) {
-    const completas = await complementarOrdensProducao(opsQuentes, {
-      lojaId,
-      dataInicio: dataIni,
-      dataFinal: dataFim,
-    })
-    // O espelho frio não filtra `concluida` no servidor (só dt_conclusao_real,
-    // que já implica conclusão) -- guard defensivo pra nunca contar uma OP
-    // não concluída como consumo real.
-    ops = completas.filter((o) => !!o.dt_conclusao_real && o.concluida !== false)
-  }
   if (!ops.length) return { linhas: [], opsSemEstrutura: 0, totalOps: 0, insumosSemCusto: 0 }
 
   const codigosProduto = [...new Set(ops.map((o) => Number(o.identificacao_n_cod_produto)))]
