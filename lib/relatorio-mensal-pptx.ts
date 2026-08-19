@@ -1,17 +1,19 @@
 // Monta o arquivo .pptx do relatório gerencial mensal a partir dos dados de
-// lib/relatorio-mensal.ts -- mesmo formato do relatório que a NTB Consultoria
-// (Ramon) já monta manualmente todo mês (dashboards de faturamento, vendas,
-// família/fornecedores, compras/perdas, baixas de estoque), + as duas seções
-// finais de recomendação padrão que sempre vão junto (texto fixo, igual em
-// todo relatório mensal já enviado).
+// lib/relatorio-mensal.ts -- mira o formato do relatório R07 (o mais
+// recente e "mais profissional" segundo o próprio Ramon, ver memória
+// reference_relatorio_mensal_ramon_spec.md): gráfico de linha/barra nativo
+// em cada dashboard, não tabela. + as duas seções finais de recomendação
+// padrão que sempre acompanham o relatório (texto fixo).
 import PptxGenJS from 'pptxgenjs'
-import type { RelatorioMensal } from './relatorio-mensal'
+import type { RelatorioMensal, SerieMensal } from './relatorio-mensal'
 import type { RankingItem } from './dashboard-gerencial'
 
-const BRAND = '1C8D99'
-const BRAND_ESCURO = '0F5A63'
+const LARANJA = 'E8862B'
+const NAVY = '1B2A3A'
+const NAVY_CLARO = '3A5068'
 const CINZA_TEXTO = '3A3A3A'
-const CINZA_CLARO = 'F3FAFB'
+const CINZA_LINHA = 'E6E9EF'
+const PALETA = ['E8862B', '1B2A3A', '5B8AA6', '8FBF6B', 'C0533E']
 
 const W = 13.33
 const H = 7.5
@@ -32,35 +34,108 @@ function rodape(slide: PptxGenJS.Slide, loja: string, mesLabel: string, numero: 
 }
 
 function tituloSlide(slide: PptxGenJS.Slide, titulo: string, subtitulo?: string): void {
-  slide.addText(titulo, { x: 0.4, y: 0.25, w: W - 0.8, h: 0.5, fontSize: 22, bold: true, color: BRAND_ESCURO })
+  slide.addText(titulo, { x: 0.4, y: 0.25, w: W - 0.8, h: 0.5, fontSize: 22, bold: true, color: NAVY })
   if (subtitulo) {
-    slide.addText(subtitulo, { x: 0.4, y: 0.72, w: W - 0.8, h: 0.3, fontSize: 11, color: '777777', italic: true })
+    slide.addText(subtitulo, { x: 0.4, y: 0.72, w: W - 0.8, h: 0.3, fontSize: 10, color: '777777', italic: true })
   }
-}
-
-// Tabela de ranking (label + valor em R$), usada em quase todo slide de dados.
-function tabelaRanking(itens: RankingItem[], titulo: string): PptxGenJS.TableRow[] {
-  const cabecalho: PptxGenJS.TableCell[] = [
-    { text: titulo, options: { bold: true, fill: { color: BRAND }, color: 'FFFFFF', colspan: 2, fontSize: 11 } },
-  ]
-  const linhas: PptxGenJS.TableRow[] = [cabecalho]
-  if (!itens.length) {
-    linhas.push([{ text: 'Sem dados no período', options: { colspan: 2, color: '999999', italic: true, fontSize: 9 } }])
-    return linhas
-  }
-  itens.forEach((item, i) => {
-    linhas.push([
-      { text: item.label, options: { fontSize: 9, fill: { color: i % 2 ? CINZA_CLARO : 'FFFFFF' } } },
-      { text: fmtMoeda(item.valor), options: { fontSize: 9, align: 'right', fill: { color: i % 2 ? CINZA_CLARO : 'FFFFFF' } } },
-    ])
-  })
-  return linhas
 }
 
 function kpiBox(slide: PptxGenJS.Slide, x: number, y: number, w: number, valor: string, rotulo: string): void {
-  slide.addShape('roundRect', { x, y, w, h: 1.15, fill: { color: CINZA_CLARO }, line: { color: 'E6E9EF', width: 1 }, rectRadius: 0.08 })
-  slide.addText(valor, { x, y: y + 0.12, w, h: 0.55, fontSize: 20, bold: true, color: BRAND_ESCURO, align: 'center' })
-  slide.addText(rotulo, { x, y: y + 0.68, w, h: 0.4, fontSize: 10, color: CINZA_TEXTO, align: 'center' })
+  slide.addShape('roundRect', { x, y, w, h: 1.05, fill: { color: 'F3FAFB' }, line: { color: CINZA_LINHA, width: 1 }, rectRadius: 0.08 })
+  slide.addText(valor, { x, y: y + 0.1, w, h: 0.5, fontSize: 19, bold: true, color: NAVY, align: 'center' })
+  slide.addText(rotulo, { x, y: y + 0.63, w, h: 0.38, fontSize: 9, color: CINZA_TEXTO, align: 'center' })
+}
+
+// Gráfico de linha, várias séries (Faturamento por Tipo, Compras/Perdas...).
+function graficoLinha(
+  slide: PptxGenJS.Slide,
+  serie: { meses: string[]; series: { nome: string; valores: number[] }[] },
+  opts: { x: number; y: number; w: number; h: number; titulo: string; formatoPct?: boolean }
+): void {
+  slide.addText(opts.titulo, { x: opts.x, y: opts.y, w: opts.w, h: 0.3, fontSize: 12, bold: true, color: LARANJA })
+  const dados = serie.series.map((s) => ({
+    name: s.nome,
+    labels: serie.meses,
+    values: s.valores,
+  }))
+  slide.addChart('line' as PptxGenJS.CHART_NAME, dados, {
+    x: opts.x, y: opts.y + 0.35, w: opts.w, h: opts.h - 0.35,
+    chartColors: PALETA,
+    showLegend: true,
+    legendPos: 'b',
+    legendFontSize: 9,
+    catAxisLabelFontSize: 9,
+    valAxisLabelFontSize: 9,
+    valAxisLabelFormatCode: opts.formatoPct ? '0.00"%"' : '#,##0,"K"',
+    lineDataSymbol: 'circle',
+    lineDataSymbolSize: 4,
+    lineSmooth: false,
+    valGridLine: { color: CINZA_LINHA, style: 'solid', size: 0.75 },
+    catGridLine: { style: 'none' },
+  })
+}
+
+// Gráfico de barra horizontal (ranking) -- "Mais/Menos vendidos", "Família",
+// "Fornecedor". Ordena maior->menor de cima pra baixo (padrão do R07).
+function graficoBarraRanking(
+  slide: PptxGenJS.Slide,
+  itens: RankingItem[],
+  cor: string,
+  opts: { x: number; y: number; w: number; h: number; titulo: string }
+): void {
+  slide.addText(opts.titulo, { x: opts.x, y: opts.y, w: opts.w, h: 0.3, fontSize: 12, bold: true, color: LARANJA })
+  if (!itens.length) {
+    slide.addText('Sem dados no período', { x: opts.x, y: opts.y + 0.4, w: opts.w, h: 0.3, fontSize: 9, color: '999999', italic: true })
+    return
+  }
+  // addChart barDir='bar' desenha de baixo pra cima -- inverte a ordem pra o
+  // maior aparecer no topo da lista, igual ao R07.
+  const invertido = [...itens].reverse()
+  slide.addChart(
+    'bar' as PptxGenJS.CHART_NAME,
+    [{ name: opts.titulo, labels: invertido.map((i) => i.label), values: invertido.map((i) => i.valor) }],
+    {
+      x: opts.x, y: opts.y + 0.35, w: opts.w, h: opts.h - 0.35,
+      barDir: 'bar',
+      chartColors: [cor],
+      showLegend: false,
+      showValue: true,
+      dataLabelPosition: 'outEnd',
+      dataLabelFontSize: 8,
+      dataLabelFormatCode: '[>=1000]"R$"#,##0,"K";"R$"0.00',
+      catAxisLabelFontSize: 8,
+      valAxisHidden: true,
+      catGridLine: { style: 'none' },
+      valGridLine: { style: 'none' },
+      barGapWidthPct: 30,
+    }
+  )
+}
+
+// Gráfico de barra agrupada por mês (Baixas de Estoque) -- não usado hoje
+// (slide removido até resolver a divergência de fonte de dado, ver memória),
+// mas mantido pronto pro dia que a fonte de MOV_DV for confiável.
+export function graficoBarraMensal(
+  slide: PptxGenJS.Slide,
+  serie: SerieMensal,
+  opts: { x: number; y: number; w: number; h: number; titulo: string }
+): void {
+  slide.addText(opts.titulo, { x: opts.x, y: opts.y, w: opts.w, h: 0.3, fontSize: 12, bold: true, color: LARANJA })
+  slide.addChart(
+    'bar' as PptxGenJS.CHART_NAME,
+    serie.series.map((s) => ({ name: s.nome, labels: serie.meses, values: s.valores })),
+    {
+      x: opts.x, y: opts.y + 0.35, w: opts.w, h: opts.h - 0.35,
+      barDir: 'col',
+      chartColors: PALETA,
+      showLegend: true,
+      legendPos: 'b',
+      legendFontSize: 8,
+      catAxisLabelFontSize: 9,
+      valAxisLabelFontSize: 9,
+      barGapWidthPct: 40,
+    }
+  )
 }
 
 export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<Buffer> {
@@ -69,14 +144,15 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   pptx.layout = 'NTB_16_9'
   const loja = dados.loja.nome
   const mesLabel = dados.mesLabel
+  const periodoLabel = `jan–${dados.mesAtualLabel.split(' de ')[0].toLowerCase()} ${dados.ano}`
   let n = 1
 
   // --- Slide 1: Capa ---
   {
     const slide = pptx.addSlide()
-    slide.background = { color: BRAND_ESCURO }
+    slide.background = { color: NAVY }
     slide.addText('NTB Gestão de Estoque', { x: 0, y: 2.6, w: W, h: 0.7, fontSize: 30, bold: true, color: 'FFFFFF', align: 'center' })
-    slide.addText(`Relatório Gerencial — ${mesLabel}`, { x: 0, y: 3.35, w: W, h: 0.5, fontSize: 18, color: 'D5F0F3', align: 'center' })
+    slide.addText(`Relatório Gerencial — ${mesLabel}`, { x: 0, y: 3.35, w: W, h: 0.5, fontSize: 18, color: 'B7C6D6', align: 'center' })
     slide.addText(`Cliente: ${loja}`, { x: 0, y: 3.95, w: W, h: 0.4, fontSize: 14, color: 'FFFFFF', align: 'center' })
   }
   n++
@@ -84,16 +160,18 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 2: Faturamento Geral ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Faturamento Geral', `Venda PDV · ${mesLabel.split(' de ')[1]} · jan–${mesLabel.split(' de ')[0].slice(0, 3).toLowerCase()}`)
+    tituloSlide(slide, 'Dashboard — Faturamento Geral', `Venda PDV · ${periodoLabel}`)
     const g = dados.faturamentoGeral
-    kpiBox(slide, 0.4, 1.25, 2.8, fmtMoeda(g.faturamentoMes), `Faturamento ${mesLabel.split(' de ')[0]}`)
-    kpiBox(slide, 3.4, 1.25, 2.8, fmtMoeda(g.faturamentoAno), 'Total Geral (jan–mês)')
-    kpiBox(slide, 6.4, 1.25, 2.8, fmtPct(g.pctComprasFatMes), `Compras/Fat. — ${mesLabel.split(' de ')[0]}`)
-    kpiBox(slide, 9.4, 1.25, 2.8, fmtPct(g.pctComprasFatMediaAno), 'Média do Ano')
-    slide.addTable(tabelaRanking(g.porTipo, 'Faturamento por Tipo de Produto (jan–mês)'), {
-      x: 0.4, y: 2.7, w: 12.5, colW: [9.5, 3], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-      autoPage: false,
-    })
+    graficoLinha(slide, g.serieTipo, { x: 0.4, y: 1.15, w: 6.1, h: 3.1, titulo: 'Faturamento por Tipo de Produto' })
+    graficoLinha(
+      slide,
+      { meses: g.serieFatVsCompras.meses, series: [{ nome: 'Faturamento', valores: g.serieFatVsCompras.faturamento }, { nome: 'Compras', valores: g.serieFatVsCompras.compras }] },
+      { x: 6.8, y: 1.15, w: 6.1, h: 3.1, titulo: 'Faturamento vs. Compras' }
+    )
+    kpiBox(slide, 0.4, 4.55, 2.9, fmtMoeda(g.faturamentoMes), `Faturamento ${mesLabel.split(' de ')[0]}`)
+    kpiBox(slide, 3.5, 4.55, 2.9, fmtMoeda(g.faturamentoAno), `Total Geral (${periodoLabel})`)
+    kpiBox(slide, 6.6, 4.55, 2.9, fmtPct(g.pctComprasFatMes), `Compras/Fat. — ${mesLabel.split(' de ')[0]}`)
+    kpiBox(slide, 9.7, 4.55, 2.9, fmtPct(g.pctComprasFatMediaAno), 'Média do Período')
     rodape(slide, loja, mesLabel, n)
   }
   n++
@@ -101,13 +179,9 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 3: Vendas por Produto — Produto Acabado ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Vendas por Produto', 'Venda PDV · total jan–mês · Produto Acabado (top 10)')
-    slide.addTable(tabelaRanking(dados.vendasAcabado.mais, 'Mais Vendidos — Produto Acabado'), {
-      x: 0.4, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    slide.addTable(tabelaRanking(dados.vendasAcabado.menos, 'Menos Vendidos — Produto Acabado'), {
-      x: 6.8, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
+    tituloSlide(slide, 'Dashboard — Vendas por Produto', `Venda PDV · total ${periodoLabel} · Produto Acabado (top 10)`)
+    graficoBarraRanking(slide, dados.vendasAcabado.mais, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Mais Vendidos — Produto Acabado' })
+    graficoBarraRanking(slide, dados.vendasRevenda.menos, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Menos Vendidos — Mercadoria p/ Revenda' })
     rodape(slide, loja, mesLabel, n)
   }
   n++
@@ -115,13 +189,9 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 4: Vendas por Produto — Revenda ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Vendas por Produto (continuação)', 'Venda PDV · total jan–mês · Mercadoria p/ Revenda (top 10)')
-    slide.addTable(tabelaRanking(dados.vendasRevenda.mais, 'Mais Vendidos — Mercadoria p/ Revenda'), {
-      x: 0.4, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    slide.addTable(tabelaRanking(dados.vendasRevenda.menos, 'Menos Vendidos — Mercadoria p/ Revenda'), {
-      x: 6.8, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
+    tituloSlide(slide, 'Dashboard — Vendas por Produto (continuação)', `Venda PDV · total ${periodoLabel} · Mercadoria p/ Revenda (top 10)`)
+    graficoBarraRanking(slide, dados.vendasRevenda.mais, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Mais Vendidos — Mercadoria p/ Revenda' })
+    graficoBarraRanking(slide, dados.vendasAcabado.menos, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Menos Vendidos — Produto Acabado' })
     rodape(slide, loja, mesLabel, n)
   }
   n++
@@ -129,13 +199,9 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 5: Família e Fornecedores ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Família de Produto e Fornecedores', 'Total jan–mês')
-    slide.addTable(tabelaRanking(dados.familiaTop10, 'Faturamento por Família (top 10)'), {
-      x: 0.4, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    slide.addTable(tabelaRanking(dados.fornecedorTop10, 'Compras por Fornecedor (top 10)'), {
-      x: 6.8, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
+    tituloSlide(slide, 'Dashboard — Família de Produto e Fornecedores', `Total ${periodoLabel}`)
+    graficoBarraRanking(slide, dados.familiaTop10, LARANJA, { x: 0.4, y: 1.25, w: 6.1, h: 5.4, titulo: 'Faturamento por Família (top 10)' })
+    graficoBarraRanking(slide, dados.fornecedorTop10, NAVY_CLARO, { x: 6.8, y: 1.25, w: 6.1, h: 5.4, titulo: 'Compras por Fornecedor (top 10)' })
     rodape(slide, loja, mesLabel, n)
   }
   n++
@@ -143,46 +209,36 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 6: Compras e Perdas ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${mesLabel} · notas confirmadas`)
+    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${periodoLabel} · notas confirmadas`)
     const cp = dados.comprasPerdas
-    kpiBox(slide, 0.4, 1.25, 2.9, fmtMoeda(cp.valorNotasMes), `Notas em ${mesLabel.split(' de ')[0]}`)
-    kpiBox(slide, 3.5, 1.25, 2.9, fmtMoeda(cp.valorNotasAno), 'Total Geral (jan–mês)')
-    kpiBox(slide, 6.6, 1.25, 2.9, fmtPct(cp.perdaMateriaPrimaPct), '% Perda Matéria-Prima (limite 6%)')
-    kpiBox(slide, 9.7, 1.25, 2.9, fmtPct(cp.perdaRevendaPct), '% Perda Revenda')
-    slide.addTable(tabelaRanking(cp.entradaNfPorTipo, 'Entrada de Notas Fiscais por Tipo (jan–mês)'), {
-      x: 0.4, y: 2.7, w: 12.5, colW: [9.5, 3], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    const excedeuMP = cp.perdaMateriaPrimaPct != null && cp.perdaMateriaPrimaPct > 6
+    graficoLinha(slide, cp.serieEntradaNf, { x: 0.4, y: 1.15, w: 6.1, h: 3.1, titulo: 'Entrada de Notas Fiscais por Tipo' })
+    graficoLinha(
+      slide,
+      { meses: cp.seriePerda.meses, series: [
+        { nome: '% Perda Mat. Prima', valores: cp.seriePerda.percMateriaPrima.map((v) => v ?? 0) },
+        { nome: '% Perda Revenda', valores: cp.seriePerda.percRevenda.map((v) => v ?? 0) },
+      ] },
+      { x: 6.8, y: 1.15, w: 6.1, h: 3.1, titulo: '% Perda sobre Faturamento', formatoPct: true }
+    )
+    kpiBox(slide, 0.4, 4.55, 2.9, fmtMoeda(cp.valorNotasMes), `Notas em ${mesLabel.split(' de ')[0]}`)
+    kpiBox(slide, 3.5, 4.55, 2.9, fmtMoeda(cp.valorNotasAno), `Total Geral (${periodoLabel})`)
+    const excedeuMP = cp.perdaMateriaPrimaPctMes != null && cp.perdaMateriaPrimaPctMes > 6
     const textoLimite =
-      cp.perdaMateriaPrimaPct == null
+      cp.perdaMateriaPrimaPctMes == null
         ? 'Sem movimento de perda de Matéria-Prima registrado neste mês.'
         : excedeuMP
-          ? `Limite operacional de Matéria-Prima: 6%. ${mesLabel.split(' de ')[0]} segue acima do limite (${fmtPct(cp.perdaMateriaPrimaPct)}).`
-          : 'Perda de Matéria-Prima dentro do limite operacional de 6% neste mês.'
+          ? `Limite operacional de Matéria-Prima: 6%. ${mesLabel.split(' de ')[0]} segue acima do limite (${fmtPct(cp.perdaMateriaPrimaPctMes)}).`
+          : `Perda de Matéria-Prima dentro do limite operacional de 6% em ${mesLabel.split(' de ')[0]} (${fmtPct(cp.perdaMateriaPrimaPctMes)}).`
     slide.addText(textoLimite, {
-      x: 0.4, y: 6.5, w: 12.5, h: 0.4, fontSize: 10,
-      color: cp.perdaMateriaPrimaPct == null ? '888888' : excedeuMP ? 'B5342A' : '3A7A3E',
+      x: 6.6, y: 4.6, w: 6.3, h: 0.9, fontSize: 10, valign: 'top',
+      color: cp.perdaMateriaPrimaPctMes == null ? '888888' : excedeuMP ? 'B5342A' : '3A7A3E',
       italic: true,
     })
     rodape(slide, loja, mesLabel, n)
   }
   n++
 
-  // --- Slide 7: Baixas de Estoque ---
-  {
-    const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Baixas de Estoque: Revenda vs. Matéria-Prima', 'Movimento Manual de Estoque · Saída · jan–mês · top 5 de cada tipo')
-    slide.addTable(tabelaRanking(dados.baixasEstoque.revendaTop5, 'Material de Revenda'), {
-      x: 0.4, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    slide.addTable(tabelaRanking(dados.baixasEstoque.materiaPrimaTop5, 'Matéria-Prima'), {
-      x: 6.8, y: 1.3, w: 6.1, colW: [4.5, 1.6], fontSize: 9, border: { type: 'solid', color: 'E6E9EF', pt: 0.5 },
-    })
-    rodape(slide, loja, mesLabel, n)
-  }
-  n++
-
-  // --- Slides 8-9: Pontos de Melhoria e Recomendações (texto fixo) ---
+  // --- Slides 7-8: Pontos de Melhoria e Recomendações (texto fixo) ---
   const pontosMelhoria: [string, string[]][] = [
     ['1. Padronização e Precisão dos Inventários', [
       'Inventários realizados diretamente pelo NTB garantem contagem padronizada, eliminando divergências entre físico e Omie.',
@@ -244,7 +300,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
       const linha = Math.floor(i / 2)
       const x = 0.4 + col * (colW + 0.3)
       const y = 1.25 + linha * 2.85
-      slide.addText(titulo, { x, y, w: colW, h: 0.35, fontSize: 12, bold: true, color: BRAND_ESCURO })
+      slide.addText(titulo, { x, y, w: colW, h: 0.35, fontSize: 12, bold: true, color: LARANJA })
       slide.addText(itens.map((t) => ({ text: t, options: { bullet: true, fontSize: 9, color: CINZA_TEXTO, breakLine: true } })), {
         x, y: y + 0.4, w: colW, h: 2.35, valign: 'top',
       })
@@ -255,7 +311,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   slideDePontos('1/2', pontosMelhoria)
   slideDePontos('2/2', pontosMelhoria2)
 
-  // --- Slide 10: Recomendações — NTB Estoque (operacional) ---
+  // --- Slide 9: Recomendações — NTB Estoque (operacional) ---
   {
     const slide = pptx.addSlide()
     tituloSlide(slide, 'Recomendações — NTB Estoque')
@@ -288,7 +344,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
       const linha = Math.floor(i / 2)
       const x = 0.4 + col * (colW + 0.3)
       const y = 1.25 + linha * 2.85
-      slide.addText(titulo, { x, y, w: colW, h: 0.35, fontSize: 12, bold: true, color: BRAND_ESCURO })
+      slide.addText(titulo, { x, y, w: colW, h: 0.35, fontSize: 12, bold: true, color: LARANJA })
       slide.addText(itens.map((t) => ({ text: t, options: { bullet: true, fontSize: 9, color: CINZA_TEXTO, breakLine: true } })), {
         x, y: y + 0.4, w: colW, h: 2.35, valign: 'top',
       })
