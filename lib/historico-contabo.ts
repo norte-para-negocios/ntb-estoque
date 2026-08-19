@@ -47,14 +47,28 @@ const JANELA_QUENTE_DIAS = 90
 // essas 2 rotas usam so o Supabase agora -- consistente com o mesmo achado.
 // Retestado ao vivo (ver task-1-report.md, secao "Fix round 1").
 //
-// NAO testado (e por isso NAO alterado) neste achado: `movimentos`,
-// `movimentos_historico` e `ordens_producao` -- `complementarMovimentos`,
-// `complementarMovimentosHistorico` e `complementarOrdensProducao` continuam
-// gateados por `foraDaJanelaQuente` como antes. Essas tabelas tem achados
-// proprios documentados abaixo (duplicatas reais em `movimentos_historico`,
-// gap estatico conhecido em `movimentos`) que precisam de verificacao propria
-// antes de aplicar a mesma simplificacao -- ver Tasks 5 (Producao) e 6
-// (Movimentacoes) do mesmo plano de auditoria.
+// NAO testado (e por isso NAO alterado) neste achado: `movimentos` e
+// `movimentos_historico` -- `complementarMovimentos` e
+// `complementarMovimentosHistorico` continuam gateados por
+// `foraDaJanelaQuente` como antes. Essas tabelas tem achados proprios
+// documentados abaixo (duplicatas reais em `movimentos_historico`, gap
+// estatico conhecido em `movimentos`) que precisam de verificacao propria
+// antes de aplicar a mesma simplificacao -- ver Task 6 (Movimentacoes) do
+// mesmo plano de auditoria.
+//
+// `ordens_producao` VERIFICADO em 2026-08-19 (plano
+// docs/superpowers/plans/2026-08-19-baixa-estoque-ordem-producao.md):
+// mesma redundancia confirmada. `lib/baixa-op.ts` buscava so no Supabase
+// self-hosted, paginado com buscarTodasLinhas, pro periodo jan-jul/2026
+// da loja 2 -- bateu exatamente com o numero que so aparecia antes somando
+// `complementarOrdensProducao` (27.530 = 27.530). O "gap" medido numa
+// tentativa anterior (23.364 vs 27.530) era um bug de paginacao sem
+// tratamento de erro na propria query quente, ja corrigido -- nao uma
+// lacuna real de dado. `complementarOrdensProducao` foi removido de
+// `lib/baixa-op.ts` por isso. Os outros 9 call sites deste repo que ainda
+// chamam `complementarOrdensProducao` (ex. lib/resumo-dia.ts) NAO foram
+// re-testados -- nao assumir que a mesma simplificacao vale pra eles sem
+// verificar cada um.
 //
 // Data mais antiga que ainda fica no Supabase apos a poda. Qualquer consulta
 // que peca algo mais velho que isso precisa completar com o Contabo.
