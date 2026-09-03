@@ -25,6 +25,15 @@ SENHA=$(grep '^POSTGRES_PASSWORD=' /opt/ntb-estoque-standby/.env | cut -d= -f2)
 
 mkdir -p "$DEST_DIR"
 
+# retencao ANTES do dump (nao so depois): incidente real 2026-09-03 -- disco
+# encheu, o pg_dump/gzip abaixo falhou por falta de espaco e, com set -e,
+# a limpeza que rodava so depois NUNCA executava -- ciclo vicioso onde o
+# proprio mecanismo que liberaria espaco ficava preso atras do passo que
+# precisa do espaco pra funcionar. Rodar a limpeza aqui primeiro quebra esse
+# ciclo (libera o que puder antes de tentar o dump nao dependente de espaco
+# extra), e ela roda de novo no fim como estava, agora dublado.
+find "$DEST_DIR" -name 'ntb-estoque-*.sql.gz' -mtime +14 -delete 2>/dev/null || true
+
 docker exec -e PGPASSWORD="$SENHA" supabase-db \
   pg_dump -U postgres -d postgres --schema=public --schema=auth --schema=storage \
   | gzip > "$DEST_DIR/ntb-estoque-$DATA.sql.gz"
