@@ -62,6 +62,7 @@ function montarDetItem(item: IncluirNfceItem, seqItem: number) {
 
 export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
   const vProdTotal = payload.itens.reduce((acc, i) => acc + Number((i.qCom * i.vUnCom).toFixed(2)), 0)
+  const vTaxa = Math.max(0, Number((payload.vNF - vProdTotal).toFixed(2)))
 
   return omieRequest<{ status: string }>({
     loja_id: loja.id,
@@ -88,7 +89,7 @@ export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
           vAcresc: 0,
           vICMS: 0,
           vCF: 0,
-          vTaxa: 0,
+          vTaxa,
           vTotTrib: 0,
         },
       },

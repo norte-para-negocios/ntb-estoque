@@ -37,6 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ skipped: true, reason: 'Loja sem Omie configurada' })
   }
 
+  if (!loja.is_test && body.tpAmb === 2) {
+    return NextResponse.json({ skipped: true, reason: 'NFC-e de homologação não é registrada em loja real' })
+  }
+
   try {
     const resultado = await incluirNfce(loja, body)
     await logIntegrationAttempt({
