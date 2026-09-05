@@ -33,7 +33,7 @@ export class OmieError extends Error {
 // Convenção Omie 100% consistente (confirmada em toda a base hoje, sem
 // exceção): calls de escrita sempre começam com um destes verbos.
 function ehChamadaDeEscrita(call: string): boolean {
-  return /^(Incluir|Alterar|Excluir|Concluir|Reverter)/.test(call)
+  return /^(Incluir|Alterar|Excluir|Concluir|Reverter|Importar)/.test(call)
 }
 
 // omieRequest<T> já faz um cast (json as T), não valida shape em
