@@ -78,6 +78,12 @@ export async function POST(request: Request) {
     // produto. Mesmo achado/fix já aplicado pra Ordem de Produção
     // (fetchOrdemProducao): grava direto com o que já se sabe, sem
     // depender de reconsulta nenhuma.
+    // Produto veio do cardapio do ntb-vendas -- por definicao e' PDV, sempre.
+    // `pdv` e `campos_editados` sao locais (nunca voltam do Omie/syncProdutos),
+    // entao precisam ser gravados aqui explicitamente nos dois caminhos abaixo,
+    // senao qualquer sync/upsert subsequente devolve a coluna pro default
+    // (false) -- exatamente o bug reportado (produto criado via ntb-vendas
+    // chegava aqui sem marcar "Produto de PDV").
     if (loja.is_test) {
       await supabase
         .from('produtos')
@@ -90,6 +96,7 @@ export async function POST(request: Request) {
             unidade,
             ncm,
             valor_unitario: body.precoVenda,
+            pdv: true,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'loja_id,codigo_produto' }
@@ -101,8 +108,19 @@ export async function POST(request: Request) {
       // Re-sincroniza pra o produto novo aparecer no banco local (mesmo padrao
       // ja usado em criarLocalEstoque) -- sem isso, uma Ordem de Producao pra
       // esse produto (via /api/integracao/ordem-producao) nao acharia ele na
-      // tabela `produtos` local até o proximo cron.
+      // tabela `produtos` local até o proximo cron. syncProdutos sempre grava
+      // pdv=false (coluna nao existe na resposta do Omie) -- corrige por cima
+      // logo em seguida, sempre, mesmo se o sync falhar parcialmente (o
+      // produto especifico ja foi criado no Omie com sucesso acima).
       await syncProdutos(loja).catch(() => {})
+      await supabase
+        .from('produtos')
+        .update({ pdv: true })
+        .eq('loja_id', loja.id)
+        .eq('codigo_produto', criado.codigo_produto)
+        .then(({ error }) => {
+          if (error) console.error('integracao/produtos: falha ao marcar pdv=true:', error.message)
+        })
     }
 
     await logIntegrationAttempt({
