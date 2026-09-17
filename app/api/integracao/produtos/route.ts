@@ -27,6 +27,54 @@ function gerarCodigo(): string {
   return 'NTBV-' + Date.now().toString(36).toUpperCase()
 }
 
+// Busca (2026-09-17, pedido explicito do usuario): permite ao ntb-vendas
+// pesquisar produtos JA cadastrados aqui por nome, pro caso "Vincular a um
+// codigo Omie ja existente" -- sem isso, o operador tinha que saber o codigo
+// de cor pra digitar. So' leitura, mesma autenticacao Bearer das outras
+// rotas desta pasta. Nao filtra por `pdv` de proposito -- o produto pode ja
+// existir aqui sem nunca ter sido marcado PDV, e vincular no ntb-vendas
+// tambem deveria funcionar nesse caso (nao muda `pdv` aqui, so' leitura).
+export async function GET(request: Request) {
+  const auth = request.headers.get('authorization') ?? ''
+  const apiKey = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Authorization: Bearer <chave> ausente' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const q = url.searchParams.get('q')?.trim() ?? ''
+  if (q.length < 2) {
+    return NextResponse.json({ error: 'Informe ao menos 2 caracteres em ?q=' }, { status: 400 })
+  }
+
+  const supabase = createServiceClient()
+  const { data: loja } = await supabase
+    .from('lojas')
+    .select('id')
+    .eq('integracao_api_key', apiKey)
+    .eq('ativo', true)
+    .maybeSingle<{ id: number }>()
+
+  if (!loja) {
+    return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
+  }
+
+  const { data: produtos, error } = await supabase
+    .from('produtos')
+    .select('codigo, codigo_produto, descricao, valor_unitario')
+    .eq('loja_id', loja.id)
+    .eq('inativo', false)
+    .ilike('descricao', `%${q}%`)
+    .order('descricao')
+    .limit(20)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, produtos: produtos ?? [] })
+}
+
 export async function POST(request: Request) {
   const auth = request.headers.get('authorization') ?? ''
   const apiKey = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
