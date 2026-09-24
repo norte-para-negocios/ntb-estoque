@@ -177,6 +177,11 @@ export async function omieRequest<T = unknown>({
       lastError = e as Error
       // erro de rede: backoff progressivo; faltas de negocio Omie nao retentam
       if (e instanceof OmieError) throw e
+      // Timeout (30s) nao retenta: 3x30s passaria do corte de 60s do nginx e,
+      // numa escrita, o Omie pode ter gravado mesmo sem responder.
+      if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+        throw new OmieError(`Omie não respondeu em 30s (${call}). Tente novamente.`, 'TIMEOUT')
+      }
       if (attempt < 2) await sleep(2000 * (attempt + 1))
     }
   }
