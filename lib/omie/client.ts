@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { msRestantesBloqueio, registrarBloqueio, segundosBloqueio } from './erros-omie'
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/'
 
@@ -101,6 +102,16 @@ export async function omieRequest<T = unknown>({
     return simulada as T
   }
 
+  // Disjuntor (2026-09-24): o Omie bloqueou esta chave por consumo indevido --
+  // chamar de novo reinicia a contagem do bloqueio. Falha rapido em vez de bater.
+  const restante = msRestantesBloqueio(omie_app_key)
+  if (restante > 0) {
+    throw new OmieError(
+      `API do Omie bloqueada para esta loja por consumo indevido (libera em ~${Math.ceil(restante / 60000)} min). Tente novamente depois.`,
+      'BLOQUEIO_LOCAL'
+    )
+  }
+
   const body = JSON.stringify({
     app_key: omie_app_key,
     app_secret: omie_app_secret,
@@ -116,6 +127,8 @@ export async function omieRequest<T = unknown>({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
+        // Sem timeout, uma chamada pendurada segurava a tela ate o nginx cortar (60s).
+        signal: AbortSignal.timeout(30_000),
       })
 
       // Rate limit do Omie
@@ -140,6 +153,11 @@ export async function omieRequest<T = unknown>({
         // O Laravel tratava como objeto vazio. Retornamos {} para o sync encerrar limpo.
         if (/n.o existem registros/i.test(msg)) {
           return {} as T
+        }
+        const seg = segundosBloqueio(msg)
+        if (seg != null) {
+          registrarBloqueio(omie_app_key, seg)
+          throw new OmieError(msg, faultCode, res.status)
         }
         // Limite de concorrencia / consumo redundante do Omie: vem como faultstring,
         // nao HTTP 429. Aguarda (honrando "Aguarde N segundos" quando informado) e retenta.
