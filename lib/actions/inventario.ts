@@ -507,6 +507,12 @@ export async function forceSyncInventario(inventarioId: number) {
 const SEM_CMC_MAX_TENTATIVAS = 20
 const SEM_CMC_STALE_HORAS = 1
 const PROCESSANDO_STALE_HORAS = 1
+// Teto/throttle p/ 'Erro' e 'Processando' travado (2026-09-24): sem isso itens com
+// erro permanente eram reenviados a cada 10 min pra sempre (ate 4.850 tentativas),
+// queimando a cota e fazendo o Omie bloquear a chave da loja ("consumo indevido").
+// O botao manual "Reenviar pendentes" (forceSyncInventario) ignora o teto.
+const ERRO_MAX_TENTATIVAS = 30
+const ERRO_STALE_MIN = 30
 
 type InventarioItemRetryRow = {
   id: number
@@ -566,6 +572,8 @@ export async function retryAjustesInventarioPendentes(
       .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
       .eq('loja_id', loja.id)
       .eq('status', 'Erro')
+      .lt('tentativas', ERRO_MAX_TENTATIVAS)
+      .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${new Date(Date.now() - ERRO_STALE_MIN * 60_000).toISOString()}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
@@ -589,6 +597,7 @@ export async function retryAjustesInventarioPendentes(
       .eq('loja_id', loja.id)
       .eq('status', 'Processando')
       .lt('ultima_tentativa_em', processandoCutoff)
+      .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
