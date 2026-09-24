@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { precisaEnviar } from '@/lib/inventario/contagem-regras'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation' // ainda usado no finalizar
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
@@ -69,6 +70,10 @@ export function ContagemInventario({
   // exclui o ajuste antigo no Omie e relanca a nova quantidade).
   const [editando, setEditando] = useState(false)
   const [pending, startTransition] = useTransition()
+  // Itens com envio ao Omie em andamento. Antes era um `pending` unico que
+  // desabilitava TODOS os campos enquanto qualquer item processava -- com o Omie
+  // lento/bloqueado a tela inteira travava (2026-09-24). Agora so trava a linha.
+  const [enviando, setEnviando] = useState<Set<number>>(() => new Set())
   const router = useRouter()
   // Controles de quantidade/remocao liberados: durante a contagem (nao finalizado)
   // ou quando o usuario clica em "Editar itens" num inventario finalizado.
@@ -136,6 +141,8 @@ export function ContagemInventario({
     // VAZIO (null) fica pendente como 'Vazio' (rotulo "Sem quantidade") e e
     // descartado ao finalizar — nao trava o inventario nem conta no placar.
     setTextos((prev) => ({ ...prev, [itemId]: formatNumBR(num) }))
+    if (enviando.has(itemId) || !precisaEnviar(itens.find((i) => i.id === itemId), num)) return
+    setEnviando((prev) => new Set(prev).add(itemId))
     setItens((prev) =>
       prev.map((i) =>
         i.id === itemId
@@ -143,8 +150,21 @@ export function ContagemInventario({
           : i
       )
     )
-    startTransition(async () => {
-      const res = await enviarInventarioItem(itemId, num)
+    void (async () => {
+      let res: Awaited<ReturnType<typeof enviarInventarioItem>>
+      try {
+        res = await enviarInventarioItem(itemId, num)
+      } catch {
+        setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Erro' } : i)))
+        toast.error('Falha ao integrar item', { description: 'Sem resposta do servidor. Tente reenviar.' })
+        return
+      } finally {
+        setEnviando((prev) => {
+          const novo = new Set(prev)
+          novo.delete(itemId)
+          return novo
+        })
+      }
       const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
         prev.map((i) => (i.id === itemId ? { ...i, status: statusUi } : i))
@@ -160,7 +180,7 @@ export function ContagemInventario({
       } else if (res.status === 'Concluido') {
         toast.success('Item integrado ao Omie')
       }
-    })
+    })()
   }
 
   function remover(itemId: number) {
@@ -250,7 +270,7 @@ export function ContagemInventario({
           </span>
           <span className="inline-flex items-center gap-2">
             {temPendentes && (
-              <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
+              <button onClick={reenviar} disabled={pending || enviando.size > 0} className={btnClass('outline')}>
                 {pending && <Spinner />}
                 {pending ? 'Reenviando...' : 'Reenviar pendentes'}
               </button>
@@ -370,7 +390,7 @@ export function ContagemInventario({
                     <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
                         onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base) - 1))}
-                        disabled={pending}
+                        disabled={enviando.has(item.id)}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
                       >
@@ -380,7 +400,7 @@ export function ContagemInventario({
                         type="text"
                         inputMode="decimal"
                         value={texto}
-                        disabled={pending}
+                        disabled={enviando.has(item.id)}
                         onChange={(e) => {
                           // Guarda a string CRUA (a virgula fica enquanto digita).
                           const limpo = e.target.value.replace(/[^\d.,]/g, '')
@@ -397,7 +417,7 @@ export function ContagemInventario({
                       />
                       <button
                         onClick={() => salvarQtd(item.id, stepBase(texto, base) + 1)}
-                        disabled={pending}
+                        disabled={enviando.has(item.id)}
                         className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"
                       >
@@ -423,7 +443,7 @@ export function ContagemInventario({
           <div className="flex justify-end">
             <button
               onClick={finalizar}
-              disabled={pending}
+              disabled={pending || enviando.size > 0}
               className={`${btnClass('primary')} w-full sm:w-auto`}
             >
               {pending ? <Spinner /> : <CheckCircle className="size-4" />}
