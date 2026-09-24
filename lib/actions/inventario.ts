@@ -4,7 +4,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
-import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
+import { omieRequest, logIntegrationAttempt, OmieError, type LojaOmie } from '@/lib/omie/client'
+import { decidirErroItemInventario } from '@/lib/omie/erros-omie'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -379,15 +380,19 @@ async function processarItemInventario(
       .eq('id', item.id)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    // Classificacao do erro (2026-09-24): ajuste ja existente vira Concluido com o
+    // ID recuperado, CMC em calculo vira 'Sem CMC', bloqueio do Omie nao queima
+    // tentativa -- ver decidirErroItemInventario.
+    const decisao = decidirErroItemInventario(msg, e instanceof OmieError ? e.faultCode : undefined, item.tentativas)
     await supabase
       .from('inventario_items')
       .update({
-        status: 'Erro',
+        ...decisao,
         response: msg,
-        tentativas: (item.tentativas ?? 0) + 1,
         ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', item.id)
+    if (decisao.status === 'Concluido') return
     await logIntegrationAttempt({
       loja_id: lojaId,
       model: 'InventarioItem',

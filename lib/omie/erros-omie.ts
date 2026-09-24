@@ -34,3 +34,38 @@ export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now()
   }
   return ate - agoraMs
 }
+
+export type DecisaoErroItem = {
+  status: 'Concluido' | 'Sem CMC' | 'Erro'
+  id_ajuste: number | null
+  tentativas: number
+  descricao_status: string
+}
+
+/**
+ * O que gravar num item de inventario quando o IncluirAjusteEstoque falha
+ * (achado 2026-09-24: o retry reenviava itens com erro permanente a cada 10 min
+ * pra sempre -- ate 4.850 tentativas -- e o Omie bloqueava a chave da loja).
+ */
+export function decidirErroItemInventario(
+  msg: string,
+  faultCode: string | undefined,
+  tentativas: number | null
+): DecisaoErroItem {
+  // Ajuste JA lancado com este cod_int_ajuste (id perdido num timeout anterior):
+  // adota o ID em vez de reenviar pra sempre.
+  const idExistente = idAjusteExistente(msg)
+  if (idExistente) {
+    return { status: 'Concluido', id_ajuste: idExistente, tentativas: 0, descricao_status: 'Ajuste já existia no Omie (ID recuperado)' }
+  }
+  const atual = tentativas ?? 0
+  // Bloqueio do Omie nao e culpa do item: nao queima tentativa.
+  const bloqueio = faultCode === 'BLOQUEIO_LOCAL' || segundosBloqueio(msg) != null
+  return {
+    // CMC ainda em calculo: mesma natureza de 'Sem CMC' (throttle 1h + teto).
+    status: ehCmcPendente(msg) ? 'Sem CMC' : 'Erro',
+    id_ajuste: null,
+    tentativas: bloqueio ? atual : atual + 1,
+    descricao_status: msg.slice(0, 500),
+  }
+}
