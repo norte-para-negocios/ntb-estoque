@@ -35,9 +35,16 @@ export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now()
   return ate - agoraMs
 }
 
+// Bloqueio do Omie numa resposta: segundos informados na mensagem ou, se vier so o
+// faultcode MISUSE_API_PROCESS sem tempo, um padrao conservador de 15 min.
+export function bloqueioDaResposta(msg: string, faultCode: string | undefined): number | null {
+  const seg = segundosBloqueio(msg)
+  if (seg != null) return seg
+  return faultCode === 'MISUSE_API_PROCESS' ? 900 : null
+}
+
 export type DecisaoErroItem = {
-  status: 'Concluido' | 'Sem CMC' | 'Erro'
-  id_ajuste: number | null
+  status: 'Sem CMC' | 'Erro'
   tentativas: number
   descricao_status: string
 }
@@ -46,25 +53,32 @@ export type DecisaoErroItem = {
  * O que gravar num item de inventario quando o IncluirAjusteEstoque falha
  * (achado 2026-09-24: o retry reenviava itens com erro permanente a cada 10 min
  * pra sempre -- ate 4.850 tentativas -- e o Omie bloqueava a chave da loja).
+ * Nao grava id_ajuste: o item nunca teve ajuste confirmado por este caminho.
  */
 export function decidirErroItemInventario(
   msg: string,
   faultCode: string | undefined,
-  tentativas: number | null
+  tentativas: number | null,
+  tetoTentativas: number
 ): DecisaoErroItem {
-  // Ajuste JA lancado com este cod_int_ajuste (id perdido num timeout anterior):
-  // adota o ID em vez de reenviar pra sempre.
+  // "Ja existe um ajuste ... com o ID [X]": NAO adotar X. Em producao (2026-09-24)
+  // 8 de 10 desses IDs eram de OUTRO item/produto -- adotar marcaria Concluido com
+  // o ajuste errado, em silencio. Fica Erro com o motivo e sai do retry automatico
+  // (teto); precisa conferencia manual no Omie.
   const idExistente = idAjusteExistente(msg)
   if (idExistente) {
-    return { status: 'Concluido', id_ajuste: idExistente, tentativas: 0, descricao_status: 'Ajuste já existia no Omie (ID recuperado)' }
+    return {
+      status: 'Erro',
+      tentativas: Math.max(tentativas ?? 0, tetoTentativas),
+      descricao_status: `O Omie diz que já existe um ajuste com este código (ID ${idExistente}), mas não dá pra confirmar que é deste item. Confira no Omie antes de reenviar.`,
+    }
   }
   const atual = tentativas ?? 0
   // Bloqueio do Omie nao e culpa do item: nao queima tentativa.
-  const bloqueio = faultCode === 'BLOQUEIO_LOCAL' || segundosBloqueio(msg) != null
+  const bloqueio = bloqueioDaResposta(msg, faultCode) != null
   return {
     // CMC ainda em calculo: mesma natureza de 'Sem CMC' (throttle 1h + teto).
     status: ehCmcPendente(msg) ? 'Sem CMC' : 'Erro',
-    id_ajuste: null,
     tentativas: bloqueio ? atual : atual + 1,
     descricao_status: msg.slice(0, 500),
   }

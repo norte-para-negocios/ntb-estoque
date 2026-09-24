@@ -216,6 +216,11 @@ export async function criarAjusteManual(input: {
 const SEM_CMC_MAX_TENTATIVAS = 20
 const SEM_CMC_STALE_HORAS = 1
 const PROCESSANDO_STALE_HORAS = 1
+// Teto/throttle p/ 'Erro' e 'Processando' travado (2026-09-24): mesmo loop sem teto
+// do inventario -- reenvio a cada 10 min pra sempre queimava a cota da mesma app_key
+// e fazia o Omie bloquear a loja ("consumo indevido").
+const ERRO_MAX_TENTATIVAS = 30
+const ERRO_STALE_MIN = 30
 const TIPOS_MANUAIS_ARR = [...TIPOS_MANUAIS]
 
 type MovimentoManualRetryRow = {
@@ -294,6 +299,8 @@ export async function retryMovimentosManuaisPendentes(
       .is('transferencia_id', null)
       .in('tipo', TIPOS_MANUAIS_ARR)
       .eq('status', 'Erro')
+      .lt('tentativas', ERRO_MAX_TENTATIVAS)
+      .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${new Date(Date.now() - ERRO_STALE_MIN * 60_000).toISOString()}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 
@@ -325,6 +332,7 @@ export async function retryMovimentosManuaisPendentes(
       .in('tipo', TIPOS_MANUAIS_ARR)
       .eq('status', 'Processando')
       .lt('ultima_tentativa_em', processandoCutoff)
+      .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
       .limit(limitePorLoja)
 

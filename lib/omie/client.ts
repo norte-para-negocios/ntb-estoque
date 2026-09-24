@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { msRestantesBloqueio, registrarBloqueio, segundosBloqueio } from './erros-omie'
+import { bloqueioDaResposta, msRestantesBloqueio, registrarBloqueio } from './erros-omie'
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/'
 
@@ -108,10 +108,13 @@ export async function omieRequest<T = unknown>({
   if (restante > 0) {
     throw new OmieError(
       `API do Omie bloqueada para esta loja por consumo indevido (libera em ~${Math.ceil(restante / 60000)} min). Tente novamente depois.`,
-      'BLOQUEIO_LOCAL'
+      // Mesmo faultcode do bloqueio real: rotas que param o laco em
+      // MISUSE_API_PROCESS (sync de estrutura/ficha tecnica) continuam parando.
+      'MISUSE_API_PROCESS'
     )
   }
 
+  const escrita = ehChamadaDeEscrita(call)
   const body = JSON.stringify({
     app_key: omie_app_key,
     app_secret: omie_app_secret,
@@ -128,13 +131,20 @@ export async function omieRequest<T = unknown>({
         headers: { 'Content-Type': 'application/json' },
         body,
         // Sem timeout, uma chamada pendurada segurava a tela ate o nginx cortar (60s).
-        signal: AbortSignal.timeout(30_000),
+        // Escrita: 30s e nao retenta (ver catch). Leitura: 60s e retenta (seguro).
+        signal: AbortSignal.timeout(escrita ? 30_000 : 60_000),
       })
 
       // Rate limit do Omie
       if (res.status === 429 || res.status === 425) {
         const json = (await res.json().catch(() => null)) as { faultstring?: string; faultcode?: string } | null
         lastError = new OmieError(json?.faultstring || `Omie rate limit HTTP ${res.status}`, json?.faultcode, res.status)
+        const segBloqueio = bloqueioDaResposta(json?.faultstring ?? '', json?.faultcode)
+        if (segBloqueio != null) {
+          // Bloqueio por consumo indevido: esperar 60s e retentar so reinicia a contagem.
+          registrarBloqueio(omie_app_key, segBloqueio)
+          throw lastError
+        }
         if (attempt < 2) {
           await sleep(60_000)
           continue
@@ -154,7 +164,7 @@ export async function omieRequest<T = unknown>({
         if (/n.o existem registros/i.test(msg)) {
           return {} as T
         }
-        const seg = segundosBloqueio(msg)
+        const seg = bloqueioDaResposta(msg, faultCode)
         if (seg != null) {
           registrarBloqueio(omie_app_key, seg)
           throw new OmieError(msg, faultCode, res.status)
@@ -177,9 +187,9 @@ export async function omieRequest<T = unknown>({
       lastError = e as Error
       // erro de rede: backoff progressivo; faltas de negocio Omie nao retentam
       if (e instanceof OmieError) throw e
-      // Timeout (30s) nao retenta: 3x30s passaria do corte de 60s do nginx e,
-      // numa escrita, o Omie pode ter gravado mesmo sem responder.
-      if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      // Timeout de ESCRITA nao retenta: o Omie pode ter gravado mesmo sem
+      // responder, e 3x30s passaria do corte de 60s do nginx. Leitura retenta.
+      if (escrita && e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
         throw new OmieError(`Omie não respondeu em 30s (${call}). Tente novamente.`, 'TIMEOUT')
       }
       if (attempt < 2) await sleep(2000 * (attempt + 1))

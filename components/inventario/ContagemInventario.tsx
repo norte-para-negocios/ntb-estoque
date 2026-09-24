@@ -372,7 +372,7 @@ export function ContagemInventario({
                   {editavel && (
                     <button
                       onClick={() => remover(item.id)}
-                      disabled={pending}
+                      disabled={pending || enviando.has(item.id)}
                       className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err disabled:opacity-50 lg:order-last lg:size-8"
                       aria-label="Remover"
                     >

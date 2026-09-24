@@ -380,10 +380,10 @@ async function processarItemInventario(
       .eq('id', item.id)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    // Classificacao do erro (2026-09-24): ajuste ja existente vira Concluido com o
-    // ID recuperado, CMC em calculo vira 'Sem CMC', bloqueio do Omie nao queima
+    // Classificacao do erro (2026-09-24): ajuste ja existente sai do retry (sem
+    // adotar o ID), CMC em calculo vira 'Sem CMC', bloqueio do Omie nao queima
     // tentativa -- ver decidirErroItemInventario.
-    const decisao = decidirErroItemInventario(msg, e instanceof OmieError ? e.faultCode : undefined, item.tentativas)
+    const decisao = decidirErroItemInventario(msg, e instanceof OmieError ? e.faultCode : undefined, item.tentativas, ERRO_MAX_TENTATIVAS)
     await supabase
       .from('inventario_items')
       .update({
@@ -392,7 +392,6 @@ async function processarItemInventario(
         ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', item.id)
-    if (decisao.status === 'Concluido') return
     await logIntegrationAttempt({
       loja_id: lojaId,
       model: 'InventarioItem',
