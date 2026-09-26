@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 const inputClass =
-  'h-9 rounded-md border border-border bg-surface px-2 text-sm text-text outline-none transition-colors focus:border-brand'
+  'h-9 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40'
 
 // Soma dias a uma data YYYY-MM-DD (parsing local, sem fuso).
 function addDias(iso: string, d: number): string {

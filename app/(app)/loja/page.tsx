@@ -89,7 +89,7 @@ export default async function LojaPage({
       <BuscaSimples basePath="/loja" placeholder="Buscar por nome, nome fantasia ou CNPJ" defaultValue={q} />
 
       {/* Aviso do webhook do Omie */}
-      <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
         <div className="mb-2 text-sm font-semibold text-text">Webhook do Omie</div>
         <p className="text-[13px] text-text-muted">
           Importante: cadastre o webhook abaixo nos seus aplicativos Omie no endereço{' '}

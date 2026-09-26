@@ -78,7 +78,7 @@ export default async function SaudeBancoPage() {
         />
       </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+      <div className="mt-4 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
         <div className="mb-2 flex items-center justify-between text-[13px]">
           <span className="font-medium text-text">
             <Num value={saude.total_mb} frac={1} /> MB de {LIMITE_FREE_MB} MB
@@ -95,8 +95,8 @@ export default async function SaudeBancoPage() {
         )}
       </div>
 
-      <div className="mt-4 overflow-clip rounded-lg border border-border bg-surface">
-        <div className="border-b border-border bg-surface-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+      <div className="mt-4 overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
+        <div className="border-b border-border bg-surface-2 px-4 py-2 text-[13px] font-semibold text-text-muted">
           Maiores tabelas
         </div>
         <table className="w-full text-[13px]">

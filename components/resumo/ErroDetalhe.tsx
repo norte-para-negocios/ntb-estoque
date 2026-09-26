@@ -39,7 +39,7 @@ export function ErroDetalhe({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-lg rounded-xl border border-border bg-surface p-5 text-left shadow-lg"
+            className="w-full max-w-lg rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 text-left shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">

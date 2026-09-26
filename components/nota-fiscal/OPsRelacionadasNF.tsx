@@ -127,7 +127,7 @@ export async function OPsRelacionadasNF({
   const ordenadas = [...rows].sort((a, b) => (b.data_ref ?? '').localeCompare(a.data_ref ?? ''))
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Ordens de produção relacionadas</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Correlação fraca: OPs que consomem, como insumo, algum produto desta NF, na mesma loja, até 30 dias

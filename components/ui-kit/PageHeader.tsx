@@ -3,7 +3,8 @@ import { ArrowLeft, type LucideIcon } from 'lucide-react'
 
 export function PageHeader({
   title,
-  icon: Icon,
+  // icon: aceito por compatibilidade, não é mais desenhado (estilo Apple).
+  icon: _icon,
   description,
   actions,
   voltarHref,
@@ -17,25 +18,20 @@ export function PageHeader({
   voltarHref?: string
 }) {
   return (
-    <div className="mb-3 flex flex-col gap-2.5 sm:mb-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <div className="flex items-center gap-2.5">
+    <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         {voltarHref && (
           <Link
             href={voltarHref}
             aria-label="Voltar"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-text sm:size-9"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press hover:bg-[var(--border)] hover:text-text"
           >
             <ArrowLeft className="size-[18px]" strokeWidth={2} />
           </Link>
         )}
-        {Icon && (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand sm:size-9">
-            <Icon className="size-[18px]" strokeWidth={2} />
-          </span>
-        )}
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold leading-tight tracking-[-0.01em] text-text sm:text-xl">{title}</h1>
-          {description && <p className="mt-0.5 hidden text-[13px] text-text-muted sm:block">{description}</p>}
+          <h1 className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-text sm:text-[30px]">{title}</h1>
+          {description && <p className="mt-1 hidden text-[15px] text-text-muted sm:block">{description}</p>}
         </div>
       </div>
       {actions && (

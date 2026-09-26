@@ -43,8 +43,7 @@ export interface DetailHeaderProps {
 export function DetailHeader({ href, title, breadcrumb, meta, actions }: DetailHeaderProps) {
   return (
     <div
-      className="
-        sticky top-14 z-20
+      className="sticky top-14 z-20
         lg:static lg:top-auto lg:z-auto
         -mx-4 mb-5 px-4
         lg:mx-0 lg:px-0
@@ -52,8 +51,7 @@ export function DetailHeader({ href, title, breadcrumb, meta, actions }: DetailH
         bg-surface/95 backdrop-blur
         lg:border-none lg:bg-transparent lg:backdrop-blur-none
         pt-3 pb-3
-        lg:pt-0 lg:pb-0 lg:mb-5
-      "
+        lg:pt-0 lg:pb-0 lg:mb-5"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -86,15 +84,13 @@ export function DetailHeader({ href, title, breadcrumb, meta, actions }: DetailH
           {/* Linha de voltar */}
           <Link
             href={href}
-            className="
-              mb-1.5 inline-flex items-center gap-1
+            className="mb-1.5 inline-flex items-center gap-1
               text-[13px] text-text-muted
               transition-colors hover:text-text
               min-h-[40px] -ml-1 pl-1 pr-2
               rounded-md
               u-motion
-              active:bg-surface-2
-            "
+              active:bg-surface-2"
             aria-label="Voltar"
           >
             <ArrowLeft className="size-3.5 shrink-0" aria-hidden />
@@ -102,7 +98,7 @@ export function DetailHeader({ href, title, breadcrumb, meta, actions }: DetailH
           </Link>
 
           {/* Titulo */}
-          <h1 className="truncate text-lg font-semibold tracking-tight text-text leading-tight">
+          <h1 className="truncate text-[26px] font-bold tracking-[-0.02em] text-text leading-tight sm:text-[30px]">
             {title}
           </h1>
 

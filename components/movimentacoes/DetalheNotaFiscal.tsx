@@ -23,11 +23,11 @@ export function DetalheNotaFiscal({ dados }: { dados: DetalheNotaFiscalData }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">NFe</p>
+        <p className="text-[13px] font-semibold text-text-muted">NFe</p>
         <p className="text-sm text-text">{dados.numero ?? '-'}</p>
       </div>
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Fornecedor</p>
+        <p className="text-[13px] font-semibold text-text-muted">Fornecedor</p>
         <p className="text-sm text-text">{dados.razaoSocial ?? '-'}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -39,7 +39,7 @@ export function DetalheNotaFiscal({ dados }: { dados: DetalheNotaFiscalData }) {
       </div>
       {dados.chaveNfe && (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Chave de acesso</p>
+          <p className="text-[13px] font-semibold text-text-muted">Chave de acesso</p>
           <p className="num break-all text-[12px] text-text-muted">{dados.chaveNfe}</p>
         </div>
       )}

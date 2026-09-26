@@ -73,10 +73,10 @@ export function Lista<T>({
       {/* Desktop: tabela. overflow-clip (NAO -hidden): corta o fundo quadrado do
           thead na curva do card SEM virar scroll container, entao o cabecalho fixo
           (sticky) continua funcionando ao rolar, igual Excel. */}
-      <div className="hidden lg:block overflow-clip rounded-lg border border-border bg-surface">
+      <div className="hidden lg:block overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <table className="w-full text-sm">
           <thead
-            className="sticky z-20 border-b border-border bg-surface-2 shadow-[0_1px_0_var(--border)]"
+            className="sticky z-20 border-b border-border bg-surface"
             style={{
               // Desktop: fica logo abaixo do ListaHeader (top-0 do ListaHeader).
               // Mobile: fica abaixo do MobileNav (56px) + ListaHeader.
@@ -89,7 +89,7 @@ export function Lista<T>({
               {colunas.map((c, i) => (
                 <th
                   key={i}
-                  className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
+                  className={`px-4 py-2 text-[13px] font-semibold text-text-muted ${
                     c.alinhar === 'right' ? 'text-right' : 'text-left'
                   } ${c === flexivel ? '' : 'whitespace-nowrap'} ${i === 0 ? 'rounded-tl-lg' : ''} ${
                     i === colunas.length - 1 && !acao ? 'rounded-tr-lg' : ''
@@ -106,7 +106,7 @@ export function Lista<T>({
               <tr
                 key={chaveLinha(row)}
                 style={stagger(i)}
-                className="border-b border-border/60 last:border-0 u-motion u-stagger even:bg-surface-2/30 hover:bg-surface-2/60"
+                className="border-b border-border/60 last:border-0 u-motion u-stagger hover:bg-surface-2/60"
               >
                 {colunas.map((c, i) => (
                   <td
@@ -128,22 +128,22 @@ export function Lista<T>({
       {/* Mobile: linhas estilo extrato — finas, padding enxuto. Titulo + dados
           secundarios a esquerda; numeros (colunas .alinhar=right) na borda
           direita; acao por ultimo. Alvo de toque min 38px. */}
-      <div className="lg:hidden divide-y divide-border rounded-lg border border-border bg-surface">
+      <div className="lg:hidden divide-y divide-border/60 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         {linhas.map((row, i) => (
           <div
             key={chaveLinha(row)}
             style={stagger(i)}
-            className="u-stagger flex min-h-[38px] items-center gap-2.5 px-3 py-2 first:rounded-t-lg last:rounded-b-lg"
+            className="u-stagger flex min-h-[44px] items-center gap-2.5 px-4 py-2.5 first:rounded-t-[var(--r-lg)] last:rounded-b-[var(--r-lg)]"
           >
             {/* Esquerda: titulo + dados secundarios em linha */}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium text-text leading-snug">
+              <div className="truncate text-[15px] font-medium text-text leading-snug">
                 {primaria.render(row)}
               </div>
               {subColunas.length > 0 && (
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   {subColunas.map((c, idx) => (
-                    <span key={idx} className="text-[11px] text-text-muted leading-none">
+                    <span key={idx} className="text-[12px] text-text-muted leading-none">
                       {c.render(row)}
                     </span>
                   ))}

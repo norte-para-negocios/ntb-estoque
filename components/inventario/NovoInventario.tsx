@@ -118,7 +118,7 @@ export function NovoInventario({
               value={data}
               max={hojeBahia}
               onChange={(e) => setData(e.target.value)}
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
             <p className="text-[11px] text-text-muted">
               Costuma-se considerar o dia anterior (D-1) quando a contagem é feita de manhã.
@@ -145,7 +145,7 @@ export function NovoInventario({
             {mostrarFiltros && (
               <div className="space-y-3 rounded-md border border-border bg-surface-subtle p-3">
                 <div className="space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                  <p className="text-[13px] font-medium text-text-muted">
                     Tipo de produto
                   </p>
                   <div className="grid grid-cols-2 gap-1">
@@ -164,7 +164,7 @@ export function NovoInventario({
                 </div>
                 {familias.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                    <p className="text-[13px] font-medium text-text-muted">
                       Família
                     </p>
                     <div className="max-h-40 space-y-1 overflow-y-auto pr-1">

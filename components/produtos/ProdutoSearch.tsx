@@ -8,7 +8,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 
 const selectClass =
-  'min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-brand'
+  'min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1.5 text-xs text-text outline-none focus:ring-2 focus:ring-brand/40'
 
 export function ProdutoSearch({
   onSelect,

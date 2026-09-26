@@ -303,7 +303,7 @@ export function ContagemTransferencia({
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             placeholder="Filtrar itens da lista"
-            className="w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
           />
         </div>
       )}
@@ -318,7 +318,7 @@ export function ContagemTransferencia({
             return (
               <li
                 key={item.id}
-                className={`rounded-lg border border-border bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2${
+                className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2${
                   item.id === novoId ? ' u-flash-in' : ''
                 }`}
               >
@@ -405,7 +405,7 @@ export function ContagemTransferencia({
                           salvarQtd(item.id, val)
                         }}
                         onWheel={(e) => e.currentTarget.blur()}
-                        className="num h-12 w-20 rounded-md border border-border bg-surface px-2 text-center text-2xl font-semibold text-text outline-none focus:border-brand lg:h-8 lg:w-16 lg:text-base"
+                        className="num h-12 w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-2xl font-semibold text-text outline-none focus:ring-2 focus:ring-brand/40 lg:h-8 lg:w-16 lg:text-base"
                         placeholder="0"
                       />
                       <button

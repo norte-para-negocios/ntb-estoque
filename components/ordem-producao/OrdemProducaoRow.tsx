@@ -69,7 +69,7 @@ function OrigemBadge({ op }: { op: OPData }) {
   const homolog = op.ambienteVenda === 'homologacao'
   return (
     <span
-      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
         homolog ? 'bg-warn/10 text-warn' : op.ambienteVenda === 'producao' ? 'bg-err/10 text-err' : 'bg-info/10 text-info'
       }`}
       title="Ordem de Produção criada automaticamente pelo NTB Vendas"
@@ -418,7 +418,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         onBlur={ctrl.salvarValidade}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -460,7 +460,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -498,7 +498,7 @@ function StepperData({ op, ctrl }: StepperProps) {
         onBlur={() => ctrl.salvarDataOP(ctrl.dataOP)}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -539,7 +539,7 @@ function StepperQtdOP({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-6"
+        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
       />
       <button
         type="button"
@@ -582,7 +582,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
                 onWheel={(e) => e.currentTarget.blur()}
                 disabled={ctrl.pending}
                 placeholder="0"
-                className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+                className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
               />
               <span className="shrink-0 text-sm text-text-muted">{op.unidade}</span>
             </div>
@@ -601,7 +601,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
               max={ctrl.hojeISO}
               onChange={(e) => ctrl.setDataConclusao(e.target.value)}
               disabled={ctrl.pending}
-              className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
             />
             <p className="mt-1 text-[11px] text-text-muted">
               Padrão: data prevista da OP (o Omie não aceita concluir com data
@@ -847,7 +847,7 @@ export function OrdemProducaoRow({
       {expandido && temIng && (
         <tr className="bg-surface-2/30">
           <td colSpan={colSpanIngredientes} className="px-4 py-2.5">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
+            <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1">
               {op.ingredientes!.map((i) => (
                 <span key={i.cod} className="text-[12px] text-text">
@@ -985,7 +985,7 @@ export function OrdemProducaoCard({
 
       {expandido && temIng && (
         <div className="border-t border-border bg-surface-2/30 px-3 pb-2.5 pt-2">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
+          <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
           <div className="flex flex-col gap-1">
             {op.ingredientes!.map((i) => (
               <div key={i.cod} className="flex items-baseline justify-between gap-2 text-[12px]">

@@ -56,7 +56,7 @@ export function ProducaoChart({
   const yTicks = Array.from(new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxTotal * f))))
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       {/* Legenda -- sempre visivel com 2+ series */}
       {funcionariosOrdenados.length > 1 && (
         <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5">

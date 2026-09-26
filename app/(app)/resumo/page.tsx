@@ -301,8 +301,8 @@ export default async function ResumoPage({
 
           {/* Barra de cobertura por período */}
           {coberturaData.length > 0 ? (
-            <div className="overflow-clip rounded-lg border border-border bg-surface">
-              <div className="border-b border-border bg-surface-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
+              <div className="border-b border-border bg-surface-2 px-4 py-2 text-[13px] font-semibold text-text-muted">
                 Cobertura de contagem ({labelJanela[periodo]})
               </div>
               <div className="divide-y divide-border">
@@ -343,16 +343,16 @@ export default async function ResumoPage({
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-surface px-4 py-6 text-center text-sm text-text-muted">
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-6 text-center text-sm text-text-muted">
               Nenhum inventário encontrado no período.
             </div>
           )}
 
           {/* Produtos sem contagem nos últimos 30 dias */}
           {totalSemContagem > 0 && (
-            <div className="overflow-clip rounded-lg border border-border bg-surface">
+            <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                <span className="text-[13px] font-semibold text-text-muted">
                   Sem contagem nos últimos 30 dias
                 </span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${totalSemContagem > 0 ? 'bg-err/10 text-err' : 'bg-ok/10 text-ok'}`}>
@@ -388,7 +388,7 @@ export default async function ResumoPage({
       )}
 
       {/* LISTA DA CATEGORIA SELECIONADA (detalhe) */}
-      <div className="overflow-clip rounded-lg border border-border bg-surface">
+      <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-text">
             {catLabel} <span className="text-text-muted">· {fmt(lista.total)}</span>
@@ -402,10 +402,10 @@ export default async function ResumoPage({
           <EmptyState icon={Inbox} title={`Nenhum registro de ${catLabel.toLowerCase()} neste dia`} hint="Troque a categoria, a data ou a loja acima." />
         ) : (
           <table data-sticky-table className="w-full text-sm">
-            <thead className="bg-surface-2">
+            <thead className="bg-surface">
               <tr>
                 {lista.colunas.map((col, i) => (
-                  <th key={i} className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted ${col.alinharDir ? 'text-right' : 'text-left'}`}>
+                  <th key={i} className={`px-4 py-2 text-[13px] font-semibold text-text-muted ${col.alinharDir ? 'text-right' : 'text-left'}`}>
                     {col.label}
                   </th>
                 ))}
@@ -414,7 +414,7 @@ export default async function ResumoPage({
             </thead>
             <tbody>
               {lista.linhas.map((linha, ri) => (
-                <tr key={ri} className="border-t border-border/60 even:bg-surface-2/30 hover:bg-surface-2/60">
+                <tr key={ri} className="border-t border-border/60 hover:bg-surface-2/60">
                   {linha.celulas.map((cel, ci) => (
                     <td key={ci} className={`px-4 py-2 ${lista.colunas[ci]?.alinharDir ? 'num text-right' : 'text-text'} ${ci === 3 && cat === 'erros' ? 'max-w-xs truncate text-text-muted' : ''}`}>
                       {cel ?? '-'}

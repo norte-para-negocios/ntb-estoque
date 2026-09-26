@@ -9,7 +9,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { UNIDADE_OP_LABEL, type UnidadeOP } from '@/lib/op-recorrencia'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 type Local = { codigo_local_estoque: number; descricao: string | null }

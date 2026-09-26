@@ -76,7 +76,7 @@ export default async function RelatorioMovimentacaoPage({
   const modo = sp.modo === 'operacao' ? 'operacao' : 'quantidade'
   const supabase = createServiceClient()
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   const seg = (
     <SegmentLinks
@@ -290,34 +290,34 @@ export default async function RelatorioMovimentacaoPage({
         {/* Cards executivos */}
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <div className={cardCls}>
-            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-err">
+            <p className="flex items-center gap-1 text-[13px] font-semibold text-err">
               <AlertTriangle className="size-3.5" /> Perdas reais
             </p>
             <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(perdasReais)}</p>
             <p className="text-[12px] text-text-muted">baixa manual (fora inventário)</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-warn">Ajuste por inventário</p>
+            <p className="text-[13px] font-semibold text-warn">Ajuste por inventário</p>
             <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(ajusteInv)}</p>
             <p className="text-[12px] text-text-muted">baixa manual por contagem</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-info">Compras (entrada)</p>
+            <p className="text-[13px] font-semibold text-info">Compras (entrada)</p>
             <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(compras)}</p>
             <p className="text-[12px] text-text-muted">entrada por nota</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Consumo de OP</p>
+            <p className="text-[13px] font-semibold text-text-muted">Consumo de OP</p>
             <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(consumoOP)}</p>
             <p className="text-[12px] text-text-muted">insumo consumido na produção</p>
           </div>
         </div>
 
         {/* Tabela por operação */}
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
-              <tr className="bg-surface-2">
+              <tr className="border-b border-border bg-surface">
                 <th className={`text-left ${th}`}>Operação{locsSel.length ? ` · ${locsSel.join(', ')}` : ''}</th>
                 <th className={`text-left ${th}`}>Sentido</th>
                 <th className={`text-right ${th}`}>Quantidade</th>
@@ -370,11 +370,11 @@ export default async function RelatorioMovimentacaoPage({
           <EmptyState icon={ArrowDownUp} title="Sem dados no recorte" hint="Ajuste os filtros de operação, local, família e tipo." />
         ) : (
           <div className="space-y-1.5">
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[820px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimOper === 'produto' ? 'Produto' : 'Família'}</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimOper === 'produto' ? 'Produto' : 'Família'}</th>
                     <th className={`text-left ${th}`}>Local</th>
                     {!esconderColTipo && <th className={`text-left ${th}`}>Tipo (SPED)</th>}
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
@@ -744,11 +744,11 @@ export default async function RelatorioMovimentacaoPage({
           <EmptyState icon={ArrowDownUp} title="Sem movimento manual no período" hint="Ajuste o período ou os filtros. Volte um nível na trilha se estiver detalhando por produto." />
         ) : (
           <div className="space-y-1.5">
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[600px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimLabelM}</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimLabelM}</th>
                     {mesesM.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                     <th className={`text-right ${th}`}>Total</th>
                   </tr>
@@ -805,10 +805,10 @@ export default async function RelatorioMovimentacaoPage({
             {linhasS.length === 0 ? (
               <EmptyState icon={ArrowDownUp} title="Sem contagem de inventário no período" />
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
                 <table className="w-full min-w-[420px] border-collapse text-sm">
                   <thead>
-                    <tr className="bg-surface-2">
+                    <tr className="border-b border-border bg-surface">
                       <th className={`text-left ${th}`}>{dimLabelM}</th>
                       <th className={`text-right ${th}`}>Contagens</th>
                       <th className={`text-right ${th}`}>Zeradas</th>
@@ -1024,11 +1024,11 @@ export default async function RelatorioMovimentacaoPage({
         <EmptyState icon={ArrowDownUp} title="Sem movimentação no período" hint="Ajuste o período. O histórico cobre cerca de 1 ano." />
       ) : (
         <div className="space-y-1.5">
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[600px] border-collapse text-sm">
               <thead>
-                <tr className="bg-surface-2">
-                  <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+                <tr className="border-b border-border bg-surface">
+                  <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
                   {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                   <th className={`text-right ${th}`}>Total</th>
                 </tr>

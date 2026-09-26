@@ -25,7 +25,7 @@ export default async function MinhaLojaPage() {
         <ListaHeader>
           <PageHeader title="Minha loja" icon={Store} description="Informações da loja e padrão da etiqueta" />
         </ListaHeader>
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-border bg-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-6 py-16 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-surface-2 text-text-muted">
             <Lock className="size-6" strokeWidth={2} />
           </div>

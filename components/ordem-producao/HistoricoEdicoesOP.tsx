@@ -64,7 +64,7 @@ export async function HistoricoEdicoesOP({
   const registros = data ?? []
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Histórico de edições</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Só aparecem criação, edição e exclusão individuais desta OP -- conclusão/reversão (mesmo individual) e

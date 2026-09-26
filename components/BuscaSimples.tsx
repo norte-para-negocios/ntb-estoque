@@ -30,7 +30,7 @@ export function BuscaSimples({
           name="q"
           defaultValue={defaultValue}
           placeholder={placeholder}
-          className="w-full rounded-md border border-border bg-surface py-1.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+          className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-1.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
         />
       </div>
       <button type="submit" className={`${btnClass('primary')} shrink-0`}>

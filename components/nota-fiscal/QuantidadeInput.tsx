@@ -64,7 +64,7 @@ export function QuantidadeInput({
         onWheel={(e) => e.currentTarget.blur()}
         disabled={pending}
         placeholder="0"
-        className="h-11 w-16 rounded-md border border-border bg-surface px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:border-brand disabled:opacity-60 lg:h-8"
+        className="h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8"
       />
       <button
         type="button"

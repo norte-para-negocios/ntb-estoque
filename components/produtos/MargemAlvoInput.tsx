@@ -42,7 +42,7 @@ export function MargemAlvoInput({
 
   return (
     <div className="flex items-center gap-2 text-[12px] text-text-muted">
-      <span className="uppercase tracking-wider">Margem alvo</span>
+      <span className="">Margem alvo</span>
       <div className="flex h-11 items-center gap-1 rounded-md border border-border bg-surface px-2 lg:h-8">
         <input
           type="number"

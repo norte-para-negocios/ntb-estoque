@@ -30,15 +30,17 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          // Estilo iOS: cartão branco sem contorno, raio 18, sombra difusa.
+          "--normal-bg": "var(--surface)",
+          "--normal-text": "var(--text)",
+          "--normal-border": "transparent",
+          "--border-radius": "18px",
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast !shadow-[var(--shadow-md)] !text-[15px] !font-medium",
+          description: "!text-[13px] !text-[var(--text-muted)]",
         },
       }}
       {...props}

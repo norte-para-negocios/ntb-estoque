@@ -12,7 +12,7 @@ export function DetalheInventario({ dados }: { dados: DetalheInventarioData }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Local</p>
+        <p className="text-[13px] font-semibold text-text-muted">Local</p>
         <p className="text-sm text-text">{dados.local}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">

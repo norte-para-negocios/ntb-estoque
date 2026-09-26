@@ -32,7 +32,7 @@ function DialogOverlay({
       data-slot="dialog-overlay"
       className={cn(
         // A5: overlay com fade puro, mesmos tokens do Sheet (Base UI data-*-style).
-        "fixed inset-0 isolate z-50 bg-black/10 transition-opacity duration-[var(--dur)] ease-[var(--ease-out)] data-starting-style:opacity-0 data-ending-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs",
+        "fixed inset-0 isolate z-50 bg-black/30 transition-opacity duration-[var(--dur)] ease-[var(--ease-out)] data-starting-style:opacity-0 data-ending-style:opacity-0 supports-backdrop-filter:backdrop-blur-sm",
         className
       )}
       {...props}
@@ -57,7 +57,7 @@ function DialogContent({
           // A5: entrada/saida com fade + scale leve (0.98->1). Tokens de movimento
           // (--dur, --ease-out) iguais ao resto do sistema. O scale 0.98 e discreto:
           // sugere "surgir" sem o zoom exagerado do padrao antigo (zoom-95).
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm transition-[opacity,scale] duration-[var(--dur)] ease-[var(--ease-out)] data-starting-style:scale-[0.98] data-starting-style:opacity-0 data-ending-style:scale-[0.98] data-ending-style:opacity-0",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[22px] bg-popover p-5 text-[15px] text-popover-foreground shadow-[var(--shadow-md)] outline-none sm:max-w-sm transition-[opacity,scale,translate] duration-[350ms] ease-[cubic-bezier(0.32,0.72,0,1)] data-starting-style:scale-[0.96] data-starting-style:opacity-0 data-ending-style:scale-[0.96] data-ending-style:opacity-0 max-sm:top-auto max-sm:bottom-0 max-sm:max-w-full max-sm:translate-y-0 max-sm:rounded-b-none max-sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-sm:data-starting-style:translate-y-full max-sm:data-starting-style:scale-100 max-sm:data-starting-style:opacity-100 max-sm:data-ending-style:translate-y-full max-sm:data-ending-style:scale-100 max-sm:data-ending-style:opacity-100 max-sm:max-h-[92dvh] max-sm:overflow-y-auto",
           className
         )}
         {...props}
@@ -69,7 +69,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                className="absolute top-3.5 right-3.5 size-8 rounded-full bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text"
                 size="icon-sm"
               />
             }
@@ -106,7 +106,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-[22px] p-5 pt-2 sm:flex-row sm:justify-end max-sm:rounded-b-none",
         className
       )}
       {...props}
@@ -126,7 +126,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "font-heading text-base leading-none font-medium",
+        "text-[17px] leading-snug font-semibold tracking-[-0.01em]",
         className
       )}
       {...props}

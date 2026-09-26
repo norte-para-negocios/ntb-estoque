@@ -11,7 +11,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
 
 const ORIGENS = [
   { value: '0', label: '0 - Nacional' },
@@ -41,8 +41,8 @@ function Campo({ label, children }: { label: string; children: ReactNode }) {
 
 function Secao({ titulo, span, children }: { titulo: string; span?: boolean; children: ReactNode }) {
   return (
-    <section className={`rounded-lg border border-border bg-surface p-5 ${span ? 'lg:col-span-2' : ''}`}>
-      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{titulo}</h2>
+    <section className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 ${span ? 'lg:col-span-2' : ''}`}>
+      <h2 className="mb-4 text-[13px] font-semibold text-text-muted">{titulo}</h2>
       {children}
     </section>
   )

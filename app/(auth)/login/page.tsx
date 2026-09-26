@@ -7,7 +7,7 @@ import { login } from '@/lib/actions/auth'
 import { btnClass } from '@/components/ui-kit/Button'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 export default function LoginPage() {
@@ -16,7 +16,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md">
       <div
-        className="rounded-lg border border-border bg-surface p-8"
+        className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-8"
         style={{ boxShadow: 'var(--shadow-md)' }}
       >
         <div className="mb-8 flex justify-center">

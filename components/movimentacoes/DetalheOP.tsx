@@ -33,42 +33,42 @@ export function DetalheOP({ dados, onRevertido }: { dados: DetalheOPData; onReve
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">OP</p>
+        <p className="text-[13px] font-semibold text-text-muted">OP</p>
         <p className="text-sm text-text">{dados.numOP}</p>
       </div>
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produto</p>
+        <p className="text-[13px] font-semibold text-text-muted">Produto</p>
         <p className="text-sm text-text">{dados.produto} ({dados.unidade})</p>
       </div>
       <div className="flex gap-6">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Qtd. planejada</p>
+          <p className="text-[13px] font-semibold text-text-muted">Qtd. planejada</p>
           <p className="num text-sm text-text">{dados.qtdPlanejada ?? '-'}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Qtd. produzida</p>
+          <p className="text-[13px] font-semibold text-text-muted">Qtd. produzida</p>
           <p className="num text-sm text-text">{dados.qtdProduzida ?? '-'}</p>
         </div>
       </div>
       <div className="flex gap-6">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Previsão</p>
+          <p className="text-[13px] font-semibold text-text-muted">Previsão</p>
           <p className="text-sm text-text">{fmtData(dados.dataPrevisao)}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Conclusão real</p>
+          <p className="text-[13px] font-semibold text-text-muted">Conclusão real</p>
           <p className="text-sm text-text">{fmtData(dados.dataConclusao)}</p>
         </div>
       </div>
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Status</p>
+        <p className="text-[13px] font-semibold text-text-muted">Status</p>
         <p className={`text-sm font-medium ${dados.concluida ? 'text-ok' : 'text-text-muted'}`}>
           {dados.concluida ? 'Concluída' : 'Em andamento'}
         </p>
       </div>
       {dados.ingredientes.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Ingredientes</p>
+          <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
           <ul className="space-y-1 rounded-md border border-border bg-surface-2 p-2.5">
             {dados.ingredientes.map((i) => (
               <li key={i.cod} className="flex items-center justify-between text-[13px]">

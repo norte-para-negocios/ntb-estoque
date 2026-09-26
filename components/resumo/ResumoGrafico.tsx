@@ -13,7 +13,7 @@ export function ResumoGrafico({ grafico }: { grafico: Grafico }) {
   const max = Math.max(...itens.map((i) => i.valor), 1)
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
       <div className="eyebrow mb-4">{grafico.titulo}</div>
       <div className="space-y-3">
         {itens.map((it, i) => (

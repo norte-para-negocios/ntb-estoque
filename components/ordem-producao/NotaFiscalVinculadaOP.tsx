@@ -132,7 +132,7 @@ export async function NotaFiscalVinculadaOP({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Nota fiscal vinculada</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Correlação fraca: NFs de entrada dos insumos da ficha técnica desta OP, na mesma loja, nos 30 dias

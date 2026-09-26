@@ -178,7 +178,7 @@ export function MobileNav({
                   type="button"
                   onClick={() => setGrupoAberto((atual) => (atual === g ? null : g))}
                   aria-expanded={aberto}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 u-motion active:bg-surface-2"
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[13px] font-bold text-text-muted/70 u-motion active:bg-surface-2"
                 >
                   <span className="flex items-center gap-1.5">
                     {g}

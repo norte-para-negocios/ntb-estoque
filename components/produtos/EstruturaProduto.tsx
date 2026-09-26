@@ -131,7 +131,7 @@ export function EstruturaProduto({
     })
   }
 
-  const th = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'px-3 py-2 text-left text-[13px] font-semibold text-text-muted'
 
   return (
     <Dialog open={open} onOpenChange={abrir}>
@@ -192,7 +192,7 @@ export function EstruturaProduto({
                 ) : (
                   <div className="overflow-hidden rounded-md border border-border">
                     <table className="w-full text-sm">
-                      <thead className="bg-surface-2">
+                      <thead className="bg-surface">
                         <tr>
                           <th className={th}>Componente</th>
                           <th className={`${th} text-right`}>Qtde</th>
@@ -203,7 +203,7 @@ export function EstruturaProduto({
                       </thead>
                       <tbody>
                         {linhas.map((l) => (
-                          <tr key={l.idProdMalha} className="border-t border-border/60 even:bg-surface-2/30">
+                          <tr key={l.idProdMalha} className="border-t border-border/60">
                             <td className="px-3 py-2">
                               <div className="text-text">{l.descricao}</div>
                               <div className="num text-[11px] text-text-muted">{l.codigo}</div>
@@ -214,7 +214,7 @@ export function EstruturaProduto({
                                   value={l.quantidade}
                                   onChange={(e) => setQt(l.idProdMalha, e.target.value.replace(/[^\d.,]/g, ''))}
                                   inputMode="decimal"
-                                  className="num w-20 rounded-md border border-border bg-surface px-2 py-1 text-right text-sm text-text outline-none focus:border-brand"
+                                  className="num w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                                 />
                               ) : (
                                 <span className="num font-medium text-text">{fmtQt(parseNumBR(l.quantidade) ?? 0)}</span>
@@ -228,7 +228,7 @@ export function EstruturaProduto({
                                   onChange={(e) => setPerda(l.idProdMalha, e.target.value.replace(/[^\d.,]/g, ''))}
                                   inputMode="decimal"
                                   placeholder="0"
-                                  className="num w-16 rounded-md border border-border bg-surface px-2 py-1 text-right text-sm text-text outline-none focus:border-brand"
+                                  className="num w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                                 />
                               ) : (
                                 <span className="num text-text-muted">{l.perda ? fmtQt(parseNumBR(l.perda) ?? 0) : '-'}</span>
@@ -260,12 +260,12 @@ export function EstruturaProduto({
                   </div>
                   <div className="overflow-hidden rounded-md border border-border">
                     <table className="w-full text-sm">
-                      <thead className="bg-surface-2">
+                      <thead className="bg-surface">
                         <tr><th className={th}>Elemento consumido</th><th className={`${th} text-right`}>Qtde</th><th className={th}>Do estoque</th></tr>
                       </thead>
                       <tbody>
                         {view.consumoOP.itens.map((c, idx) => (
-                          <tr key={idx} className="border-t border-border/60 even:bg-surface-2/30">
+                          <tr key={idx} className="border-t border-border/60">
                             <td className="px-3 py-2 text-text">{c.descricao}</td>
                             <td className="px-3 py-2 text-right num font-medium text-text">{fmtQt(c.quantidade)}</td>
                             <td className="px-3 py-2 text-text-muted">{c.doEstoque ? 'Sim' : 'Não'}</td>

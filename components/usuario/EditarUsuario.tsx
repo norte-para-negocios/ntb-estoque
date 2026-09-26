@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
@@ -376,7 +376,7 @@ export function EditarUsuario({
                       const isPersonalizado = !!cargoId && temIndividuaisNestaLoja
                       return (
                         <>
-                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                          <p className="flex items-center gap-1.5 text-[13px] font-medium text-text-muted">
                             <IdCard className="size-3" /> Cargo
                             {isPersonalizado && (
                               <span className="rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-brand">
@@ -408,7 +408,7 @@ export function EditarUsuario({
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                    <p className="text-[13px] font-medium text-text-muted">
                       Permissões
                     </p>
                     {(() => {
@@ -481,7 +481,7 @@ export function EditarUsuario({
                   </div>
 
                   <div className="space-y-2">
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                    <p className="flex items-center gap-1.5 text-[13px] font-medium text-text-muted">
                       <Warehouse className="size-3" /> Locais de estoque
                     </p>
                     {locaisLoja.length ? (

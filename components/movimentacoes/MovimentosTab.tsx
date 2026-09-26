@@ -447,7 +447,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
       {totalOmie && (
         <div className="rounded-lg border border-brand/30 bg-brand-soft/30 px-3.5 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-brand">Movimentação bruta (Omie)</p>
+          <p className="text-[13px] font-semibold text-brand">Movimentação bruta (Omie)</p>
           <p className="mt-0.5 text-sm text-text">
             Entradas <span className="num font-semibold text-ok">{fmtQtd(totalOmie.entradas)}</span>
             {' · '}

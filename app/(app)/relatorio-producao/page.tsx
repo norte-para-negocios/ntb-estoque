@@ -212,16 +212,16 @@ export default async function RelatorioProducaoPage({
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total no período</p>
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+          <p className="text-[13px] font-semibold text-text-muted">Total no período</p>
           <p className="num mt-0.5 text-xl font-semibold text-text">{total}</p>
         </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Média nos dias com produção</p>
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+          <p className="text-[13px] font-semibold text-text-muted">Média nos dias com produção</p>
           <p className="num mt-0.5 text-xl font-semibold text-text">{media}</p>
         </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Melhor período</p>
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+          <p className="text-[13px] font-semibold text-text-muted">Melhor período</p>
           <p className="num mt-0.5 text-xl font-semibold text-text">
             {melhor.rotulo} ({melhor.total})
           </p>
@@ -235,17 +235,17 @@ export default async function RelatorioProducaoPage({
       )}
 
       {/* Tabela de detalhe -- par acessivel do grafico (skill dataviz: sempre precisa existir) */}
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+      <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <table className="w-full min-w-[500px] border-collapse text-sm">
           <thead>
-            <tr className="bg-surface-2">
-              <th className="whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            <tr className="border-b border-border bg-surface">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-[13px] font-semibold text-text-muted">
                 Período
               </th>
-              <th className="whitespace-nowrap px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <th className="whitespace-nowrap px-3 py-2 text-right text-[13px] font-semibold text-text-muted">
                 Total
               </th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Por funcionário</th>
+              <th className="px-3 py-2 text-left text-[13px] font-semibold text-text-muted">Por funcionário</th>
             </tr>
           </thead>
           <tbody>
@@ -269,16 +269,16 @@ export default async function RelatorioProducaoPage({
         <p className="px-1 text-[11px] text-text-muted">Esta seção sempre mostra todas as OPs do mês, sem os filtros de tipo/família/produto/local acima.</p>
         {divergencias.length > 0 ? (
           <>
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[680px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">OP</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produto</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted">Conclusão</th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Previsto</th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produzido</th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Diferença</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className="px-3 py-2 text-left text-[13px] font-semibold text-text-muted">OP</th>
+                    <th className="px-3 py-2 text-left text-[13px] font-semibold text-text-muted">Produto</th>
+                    <th className="px-3 py-2 text-left text-[13px] font-semibold text-text-muted">Conclusão</th>
+                    <th className="px-3 py-2 text-right text-[13px] font-semibold text-text-muted">Previsto</th>
+                    <th className="px-3 py-2 text-right text-[13px] font-semibold text-text-muted">Produzido</th>
+                    <th className="px-3 py-2 text-right text-[13px] font-semibold text-text-muted">Diferença</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -307,7 +307,7 @@ export default async function RelatorioProducaoPage({
             </p>
           </>
         ) : (
-          <div className="rounded-lg border border-border bg-surface p-3.5">
+          <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
             <p className="text-[13px] text-text-muted">
               {capturaDesde ? (
                 <>

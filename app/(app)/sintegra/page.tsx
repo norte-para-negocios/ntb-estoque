@@ -19,7 +19,7 @@ export default async function SintegraPage() {
         />
       </ListaHeader>
 
-      <div className="rounded-lg border border-border bg-surface p-4 text-[13px] text-text-muted">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 text-[13px] text-text-muted">
         Informe um CNPJ ou CPF para buscar o cadastro no Omie (leitura). Se existir, você pode
         importar os dados para o cadastro local de fornecedor. A consulta acha o que já está
         cadastrado no Omie.

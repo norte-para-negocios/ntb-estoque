@@ -46,7 +46,7 @@ export function HistoricoSyncOP({ info }: { info: SyncOPInfo }) {
   const semPendencia = !info.conclusaoStatus && (info.conclusaoTentativas ?? 0) === 0
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-3 text-[13px] font-medium text-text-muted">Histórico de sync com a Omie</h2>
 
       {info.fonte === 'frio' ? (

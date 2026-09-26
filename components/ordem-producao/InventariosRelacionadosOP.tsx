@@ -165,7 +165,7 @@ export async function InventariosRelacionadosOP({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Inventários relacionados</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Correlação aproximada por produto + local + data (±3 dias da conclusão/previsão). O sistema não

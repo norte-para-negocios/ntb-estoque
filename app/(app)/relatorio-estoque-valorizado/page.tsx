@@ -183,7 +183,7 @@ export default async function RelatorioEstoqueValorizadoPage({
     },
   ]
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   return (
     <div className="space-y-4">
@@ -234,17 +234,17 @@ export default async function RelatorioEstoqueValorizadoPage({
         <>
           {/* Cards de resumo */}
           <div className="flex flex-wrap gap-3">
-            <div className="rounded-xl border border-border bg-surface px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total valorizado</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+              <p className="text-[13px] font-semibold text-text-muted">Total valorizado</p>
               <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValor)}</p>
             </div>
-            <div className="rounded-xl border border-border bg-surface px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Produtos no estoque</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+              <p className="text-[13px] font-semibold text-text-muted">Produtos no estoque</p>
               <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutos}</p>
             </div>
             {dataFoto && (
-              <div className="rounded-xl border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Foto do estoque</p>
+              <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+                <p className="text-[13px] font-semibold text-text-muted">Foto do estoque</p>
                 <p className="mt-0.5 text-sm font-semibold text-text">{fmtData(dataFoto)}</p>
               </div>
             )}
@@ -257,11 +257,11 @@ export default async function RelatorioEstoqueValorizadoPage({
               hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[700px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
                     <th className={`text-left ${th} hidden md:table-cell`}>Familia</th>
                     <th className={`text-left ${th} hidden lg:table-cell`}>Tipo</th>
                     <th className={`text-right ${th}`}>Saldo</th>
@@ -351,12 +351,12 @@ export default async function RelatorioEstoqueValorizadoPage({
       ) : (
         <>
           <div className="flex flex-wrap gap-3">
-            <div className="rounded-xl border border-border bg-surface px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total valorizado</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+              <p className="text-[13px] font-semibold text-text-muted">Total valorizado</p>
               <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValorLocal)}</p>
             </div>
-            <div className="rounded-xl border border-border bg-surface px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Linhas (produto x local)</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
+              <p className="text-[13px] font-semibold text-text-muted">Linhas (produto x local)</p>
               <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutosLocal}</p>
             </div>
           </div>
@@ -368,11 +368,11 @@ export default async function RelatorioEstoqueValorizadoPage({
               hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[700px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
                     <th className={`text-left ${th}`}>Local</th>
                     <th className={`text-right ${th}`}>Saldo</th>
                     <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>

@@ -253,13 +253,13 @@ export default async function HomePage() {
           style={{ background: 'radial-gradient(120% 80% at 85% -20%, rgba(46,181,195,0.18), transparent 60%)' }}
         />
         <div className="relative">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-white/50">
             <span className="inline-block size-1.5 rounded-full bg-brand" />
             {lojaNome}
           </div>
           <div className="mt-6 flex items-end justify-between gap-6 flex-wrap">
             <div>
-              <p className="text-[12px] uppercase tracking-[0.16em] text-white/45 mb-2">Produtos em estoque</p>
+              <p className="text-[12px] text-white/45 mb-2">Produtos em estoque</p>
               <div className="num text-[4.5rem] leading-[0.85] font-bold tracking-tight">
                 <CountUp value={produtos.count ?? 0} duration={750} />
               </div>
@@ -285,7 +285,7 @@ export default async function HomePage() {
 
       {/* Precisa de atenção */}
       <section>
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">
+        <h2 className="text-[13px] font-semibold text-text-muted mb-3">
           Precisa de atenção
         </h2>
         {alertas.length ? (
@@ -293,7 +293,7 @@ export default async function HomePage() {
             {alertas.map((a, i) => (
               <div
                 key={i}
-                className="group flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-3 u-motion hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
+                className="group flex items-center gap-3.5 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3 u-motion hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
               >
                 <Link href={a.href} className="flex min-w-0 flex-1 items-center gap-3.5 u-press">
                   <span className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}>
@@ -309,7 +309,7 @@ export default async function HomePage() {
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
+          <div className="flex items-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3.5">
             <span className="flex size-8 items-center justify-center rounded-md bg-ok/10 text-ok shrink-0">
               <CheckCircle2 className="size-4" strokeWidth={2} />
             </span>
@@ -325,10 +325,10 @@ export default async function HomePage() {
             <Link
               key={k.label}
               href={k.href}
-              className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 u-motion u-card hover:border-brand/40"
+              className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 u-motion u-card hover:border-brand/40"
             >
               <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand u-motion" />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{k.label}</p>
+              <p className="text-[13px] font-semibold text-text-muted">{k.label}</p>
               <div className="mt-3 flex items-end gap-2">
                 <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
                   <CountUp value={k.value} duration={550} />
@@ -343,13 +343,13 @@ export default async function HomePage() {
       {/* Atalhos */}
       {atalhos.length > 0 && (
         <section>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted mb-3">Ações rápidas</h2>
+          <h2 className="text-[13px] font-semibold text-text-muted mb-3">Ações rápidas</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {atalhos.map((a) => (
               <Link
                 key={a.href}
                 href={a.href}
-                className="group flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-4 u-motion u-press hover:bg-ink hover:border-ink"
+                className="group flex items-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-4 u-motion u-press hover:bg-ink hover:border-ink"
               >
                 <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white u-motion shrink-0">
                   <a.icon className="size-4" strokeWidth={2} />
@@ -369,7 +369,7 @@ export default async function HomePage() {
       {qtdRepor > 0 && pode('Produtos') && (
         <section>
           <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Repor estoque</h2>
+            <h2 className="text-sm font-bold text-text">Repor estoque</h2>
             <Link href="/produto?vista=compras&repor=1" className="text-[13px] text-brand hover:underline">
               ver todos ({qtdRepor}) →
             </Link>

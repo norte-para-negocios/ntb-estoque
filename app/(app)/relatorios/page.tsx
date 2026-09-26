@@ -71,7 +71,7 @@ export default async function RelatoriosPage() {
 
       {RELATORIOS.map((secao) => (
         <section key={secao.grupo}>
-          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{secao.grupo}</h2>
+          <h2 className="mb-2 text-[13px] font-semibold text-text-muted">{secao.grupo}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {secao.itens.map((r) => {
               const Icon = r.icon
@@ -79,7 +79,7 @@ export default async function RelatoriosPage() {
                 <Link
                   key={r.href}
                   href={r.href}
-                  className="group relative overflow-hidden rounded-xl border border-border bg-surface p-4 u-motion hover:border-brand/50"
+                  className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 u-motion hover:border-brand/50"
                 >
                   <div className="flex items-start gap-3">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">

@@ -617,7 +617,7 @@ export default async function RelatorioFaturamentoPage({
   if (statusForcaAgregacao) exportParams.set('status', sp.status!)
   const exportHref = `/relatorio-faturamento/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
   const chipBase = 'rounded-full border px-3 py-1 text-[12px] font-medium transition-colors'
   const chipAtivo = `${chipBase} border-ink bg-ink text-white`
   const chipInativo = `${chipBase} border-border bg-surface text-text-muted hover:border-text/30 hover:text-text`
@@ -747,9 +747,9 @@ export default async function RelatorioFaturamentoPage({
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
                   <table className="w-full border-collapse text-sm">
-                    <thead><tr className="bg-surface-2"><th className={`text-left ${th}`}>Produto</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
+                    <thead><tr className="border-b border-border bg-surface"><th className={`text-left ${th}`}>Produto</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
                     <tbody>
                       {descontoPorProduto.map((d) => (
                         <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
@@ -757,9 +757,9 @@ export default async function RelatorioFaturamentoPage({
                     </tbody>
                   </table>
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+                <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
                   <table className="w-full border-collapse text-sm">
-                    <thead><tr className="bg-surface-2"><th className={`text-left ${th}`}>Forma de pagamento</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
+                    <thead><tr className="border-b border-border bg-surface"><th className={`text-left ${th}`}>Forma de pagamento</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
                     <tbody>
                       {descontoPorForma.map((d) => (
                         <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
@@ -810,10 +810,10 @@ export default async function RelatorioFaturamentoPage({
                   </span>
                 </div>
               )}
-              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
                 <table className="w-full min-w-[600px] border-collapse text-sm">
                   <thead>
-                    <tr className="bg-surface-2">
+                    <tr className="border-b border-border bg-surface">
                       <th className={`text-left ${th}`}>Data</th>
                       <th className={`text-left ${th}`}>Hora</th>
                       <th className={`text-left ${th}`}>Número</th>
@@ -844,11 +844,11 @@ export default async function RelatorioFaturamentoPage({
               hint="Tente ampliar o período ou remover filtros ativos."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[600px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
-                    <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{DIMS.find((d) => d.value === dimDoNivel)?.label ?? dimDoNivel}</th>
+                  <tr className="border-b border-border bg-surface">
+                    <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{DIMS.find((d) => d.value === dimDoNivel)?.label ?? dimDoNivel}</th>
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
                     <th className={`text-right ${th}`}>Total</th>
                     <th className={`text-right ${th}`}>%</th>

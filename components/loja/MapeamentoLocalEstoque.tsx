@@ -69,7 +69,7 @@ export function MapeamentoLocalEstoque({
           <select
             value={cozinha}
             onChange={(e) => setCozinha(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-brand"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
           >
             <option value="">— Não mapeado —</option>
             {locais.map((l) => (
@@ -84,7 +84,7 @@ export function MapeamentoLocalEstoque({
           <select
             value={bar}
             onChange={(e) => setBar(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-brand"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
           >
             <option value="">— Não mapeado —</option>
             {locais.map((l) => (

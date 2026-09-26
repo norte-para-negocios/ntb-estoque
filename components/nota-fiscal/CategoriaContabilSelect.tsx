@@ -38,7 +38,7 @@ export function CategoriaContabilSelect({
       value={valor}
       onChange={(e) => salvar(e.target.value)}
       disabled={pending}
-      className="h-9 w-full max-w-[200px] rounded-md border border-border bg-surface px-2 text-[13px] text-text outline-none transition-colors focus:border-brand disabled:opacity-60"
+      className="h-9 w-full max-w-[200px] rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
     >
       <option value="">Sem categoria</option>
       {categorias.map((c) => (

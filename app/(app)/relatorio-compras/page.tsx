@@ -333,7 +333,7 @@ export default async function RelatorioComprasPage({
   if (sp.status) exportParams.set('status', sp.status)
 
   // Cabeçalho de coluna (th) padrão.
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   return (
     <div className="space-y-4">
@@ -438,10 +438,10 @@ export default async function RelatorioComprasPage({
           <EmptyState icon={ShoppingCart} title="Sem itens neste recorte" hint="Ajuste o período ou volte um nível na trilha." />
         ) : (
           <div className="space-y-1.5">
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
               <table className="w-full min-w-[760px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-surface-2">
+                  <tr className="border-b border-border bg-surface">
                     <th className={`text-left ${th}`}>Data</th>
                     <th className={`text-left ${th}`}>NF</th>
                     <th className={`text-left ${th}`}>Fornecedor</th>
@@ -492,11 +492,11 @@ export default async function RelatorioComprasPage({
       ) : (
         <div className="space-y-1.5">
           {/* Matriz mês a mês: 1ª coluna fixa, meses rolam na horizontal */}
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[600px] border-collapse text-sm">
               <thead>
-                <tr className="bg-surface-2">
-                  <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>{dimLabel}</th>
+                <tr className="border-b border-border bg-surface">
+                  <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimLabel}</th>
                   {meses.map((m) => (
                     <th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>
                   ))}

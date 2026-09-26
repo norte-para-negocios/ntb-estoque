@@ -120,7 +120,7 @@ export function NovaTransferencia({ locais }: { locais: Local[] }) {
               value={data}
               max={hojeBahia}
               onChange={(e) => setData(e.target.value)}
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
           </div>
           <div className="space-y-2">

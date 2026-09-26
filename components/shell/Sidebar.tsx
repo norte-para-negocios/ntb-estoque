@@ -212,7 +212,7 @@ function FloatingToggle({ visivel, onClick }: { visivel: boolean; onClick: () =>
       onClick={onClick}
       aria-label="Abrir menu"
       title="Abrir menu"
-      className={`hidden lg:flex fixed left-4 top-4 z-40 items-center gap-2 rounded-2xl border border-border bg-surface/90 px-3 py-2.5 text-sm font-medium text-text shadow-[var(--shadow-md)] backdrop-blur will-change-transform hover:-translate-y-px hover:bg-surface hover:shadow-[var(--shadow-md)] active:scale-[var(--press)] ${
+      className={`hidden lg:flex fixed left-4 top-4 z-40 items-center gap-2 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface/90 px-3 py-2.5 text-sm font-medium text-text shadow-[var(--shadow-md)] backdrop-blur will-change-transform hover:-translate-y-px hover:bg-surface hover:shadow-[var(--shadow-md)] active:scale-[var(--press)] ${
         visivel
           ? 'translate-x-0 scale-100 opacity-100 pointer-events-auto'
           : '-translate-x-3 scale-95 opacity-0 pointer-events-none'
@@ -253,7 +253,7 @@ function GrupoSanfona({
         type="button"
         onClick={onToggle}
         aria-expanded={aberto}
-        className="group flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted/70 u-motion hover:bg-surface-2 hover:text-text-muted"
+        className="group flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] font-bold text-text-muted/70 u-motion hover:bg-surface-2 hover:text-text-muted"
       >
         <span className="flex items-center gap-1.5">
           {grupo}

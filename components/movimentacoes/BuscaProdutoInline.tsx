@@ -41,7 +41,7 @@ export function BuscaProdutoInline({ valorAtual }: { valorAtual: string }) {
           value={valor}
           onChange={(e) => setValor(e.target.value)}
           placeholder="Buscar produto (nome ou código)..."
-          className="num w-full rounded-md border border-border bg-surface py-1.5 pl-8 pr-8 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand"
+          className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-1.5 pl-8 pr-8 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
         />
         {valor && (
           <button

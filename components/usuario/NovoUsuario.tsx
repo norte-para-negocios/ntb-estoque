@@ -15,7 +15,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }

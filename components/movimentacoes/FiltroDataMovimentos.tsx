@@ -65,7 +65,7 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
           value={dataUnica}
           onChange={(e) => setDataUnica(e.target.value)}
           onBlur={(e) => navegar(e.target.value, e.target.value)}
-          className="num h-8 rounded-md border border-border bg-surface px-2 text-[13px] text-text outline-none transition-colors focus:border-brand"
+          className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
         />
       ) : (
         <>
@@ -74,7 +74,7 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
             value={inicio}
             onChange={(e) => setInicio(e.target.value)}
             onBlur={(e) => navegar(e.target.value, final)}
-            className="num h-8 rounded-md border border-border bg-surface px-2 text-[13px] text-text outline-none transition-colors focus:border-brand"
+            className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
           />
           <span className="text-[12px] text-text-muted">até</span>
           <input
@@ -82,7 +82,7 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
             value={final}
             onChange={(e) => setFinal(e.target.value)}
             onBlur={(e) => navegar(inicio, e.target.value)}
-            className="num h-8 rounded-md border border-border bg-surface px-2 text-[13px] text-text outline-none transition-colors focus:border-brand"
+            className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
           />
         </>
       )}

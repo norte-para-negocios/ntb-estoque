@@ -161,7 +161,7 @@ export async function HistoricoStatusNF({
   const falhaConsultaTotal = errosConsulta.length === 2 // as 2 fontes falharam -- nenhum dado confiável pra mostrar
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Histórico de status / manifestação</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Linha do tempo combinando eventos reais recebidos da Omie (webhooks) com ações manuais registradas no

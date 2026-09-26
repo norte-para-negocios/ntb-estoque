@@ -213,7 +213,7 @@ export function ItensNotaFiscal({
           return (
           <div
             key={item.id}
-            className={`rounded-lg border border-border bg-surface p-4 ${
+            className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 ${
               sel.has(item.id) ? 'bg-brand-soft/40' : ''
             }`}
           >
@@ -232,7 +232,7 @@ export function ItensNotaFiscal({
             </div>
 
             <div className="mt-3 text-sm">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <span className="text-[13px] font-semibold text-text-muted">
                 Qtd NFe{' '}
               </span>
               <Num value={item.n_qtde_nfe} frac={3} />{' '}
@@ -264,14 +264,14 @@ export function ItensNotaFiscal({
             )}
 
             <div className="mt-3">
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <div className="mb-1 text-[13px] font-semibold text-text-muted">
                 Qtd p/ etiqueta
               </div>
               <QuantidadeInput itemId={item.id} valorInicial={item.quantidade} />
             </div>
 
             <div className="mt-3">
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <div className="mb-1 text-[13px] font-semibold text-text-muted">
                 Categoria contábil
               </div>
               <CategoriaContabilSelect itemId={item.id} valorInicial={item.categoria_contabil_id} categorias={categorias} />

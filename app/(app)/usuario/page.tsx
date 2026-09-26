@@ -190,7 +190,7 @@ export default async function UsuarioPage({
       )}
 
       {/* Convites ativos (frente A) */}
-      <div className="rounded-lg border border-border bg-surface">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
           <Ticket className="size-4 text-text-muted" />
           <h2 className="text-[13px] font-semibold text-text">
@@ -243,7 +243,7 @@ export default async function UsuarioPage({
             return (
               <div
                 key={u.id}
-                className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5"
+                className="flex items-center gap-2.5 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-text">{u.name}</div>

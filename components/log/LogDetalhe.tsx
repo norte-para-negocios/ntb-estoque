@@ -49,12 +49,12 @@ function Detalhe({ log }: { log: LogRowData }) {
           <div className="mt-0.5 text-[13px] text-text">{exp.explicacao}</div>
         </div>
       )}
-      <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+      <div className="mb-1 text-[13px] font-medium text-text-muted">
         Detalhes técnicos
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+          <div className="mb-1 text-[13px] font-medium text-text-muted">
             Requisição
           </div>
           <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
@@ -62,7 +62,7 @@ function Detalhe({ log }: { log: LogRowData }) {
           </pre>
         </div>
         <div>
-          <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+          <div className="mb-1 text-[13px] font-medium text-text-muted">
             Resposta
           </div>
           <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">

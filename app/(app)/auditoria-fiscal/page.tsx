@@ -280,7 +280,7 @@ export default async function AuditoriaFiscalPage({
   if (sp.local) exportParams.set('local', sp.local)
   if (sp.status) exportParams.set('status', sp.status)
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   return (
     <div className="space-y-4">
@@ -341,8 +341,8 @@ export default async function AuditoriaFiscalPage({
           {/* Resumo por categoria */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {cats.map((c) => (
-              <div key={c.cat} className="rounded-lg border border-border bg-surface px-3.5 py-3">
-                <p className={`text-[11px] font-semibold uppercase tracking-wider ${CAT_COR[c.cat]}`}>{c.cat}</p>
+              <div key={c.cat} className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3.5 py-3">
+                <p className={`text-[13px] font-semibold ${CAT_COR[c.cat]}`}>{c.cat}</p>
                 <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(c.valor)}</p>
                 <p className="text-[12px] text-text-muted">{fmtN(c.itens)} itens · {totValor > 0 ? ((c.valor / totValor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0}%</p>
               </div>
@@ -350,10 +350,10 @@ export default async function AuditoriaFiscalPage({
           </div>
 
           {/* Matriz por par CFOP */}
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
-                <tr className="bg-surface-2">
+                <tr className="border-b border-border bg-surface">
                   <th className={`text-left ${th}`}>CFOP doc → entrada</th>
                   <th className={`text-left ${th}`}>O que é (entrada)</th>
                   <th className={`text-right ${th}`}>Itens</th>
@@ -418,7 +418,7 @@ export default async function AuditoriaFiscalPage({
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full min-w-[680px] border-collapse text-sm">
                   <thead>
-                    <tr className="bg-surface-2">
+                    <tr className="border-b border-border bg-surface">
                       <th className={`text-left ${th}`}>Data</th>
                       <th className={`text-left ${th}`}>Nota</th>
                       <th className={`text-left ${th}`}>Fornecedor</th>
@@ -470,10 +470,10 @@ export default async function AuditoriaFiscalPage({
                   </span>
                 )}
               </div>
-              <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
                 <table className="w-full min-w-[720px] border-collapse text-sm">
                   <thead>
-                    <tr className="bg-surface-2">
+                    <tr className="border-b border-border bg-surface">
                       <th className={`text-center ${th}`}>CST doc</th>
                       <th className={`text-center ${th}`}>CST entrada</th>
                       <th className={`text-left ${th}`}>CFOP entrada</th>

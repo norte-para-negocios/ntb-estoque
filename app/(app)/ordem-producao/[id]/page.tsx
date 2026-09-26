@@ -199,7 +199,7 @@ export default async function OrdemProducaoDetalhePage({
 
       {/* Dados basicos: replica o que ja existe hoje na linha expandida da lista
           (OrdemProducaoRow.tsx) -- produto, quantidade, ingredientes, validade. */}
-      <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
         <h2 className="mb-3 text-[13px] font-medium text-text-muted">Dados básicos</h2>
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Campo label="Produto">{produtoNome}</Campo>
@@ -219,7 +219,7 @@ export default async function OrdemProducaoDetalhePage({
         </dl>
         {ingredientes.length > 0 && (
           <div className="mt-3 border-t border-border pt-3">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Ingredientes</p>
+            <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1">
               {ingredientes.map((i) => (
                 <span key={i.cod} className="text-[12px] text-text">

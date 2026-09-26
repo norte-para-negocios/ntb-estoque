@@ -157,7 +157,7 @@ export function OrdemProducaoLista({
         </DataTable>
       </div>
       {/* Mobile: lista compacta (extrato); edição no dialog "Editar" */}
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface lg:hidden">
+      <div className="divide-y divide-border overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface lg:hidden">
         {linhas.map((op) => (
           <OrdemProducaoCard
             key={op.id}

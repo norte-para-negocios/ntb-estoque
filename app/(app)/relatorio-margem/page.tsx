@@ -89,11 +89,11 @@ function construirEvolucaoMensal(rowsFonte: Row[], codigosValidos: Set<string>):
 // ver migration 106) é bem menos confiável que um mês completo.
 function TabelaEvolucaoMensal({ linhas, meses, th, diasPorMes }: { linhas: LinhaEvolucao[]; meses: string[]; th: string; diasPorMes?: Record<string, number> }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+    <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
       <table className="w-full min-w-[600px] border-collapse text-sm">
         <thead>
-          <tr className="bg-surface-2">
-            <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Produto</th>
+          <tr className="border-b border-border bg-surface">
+            <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
             {meses.map((m) => (
               <th key={m} className={`text-right ${th}`} title={diasPorMes?.[m] != null ? `Média de ${diasPorMes[m]} dia(s) com snapshot` : undefined}>
                 {mesLabelEvolucao(m)}
@@ -370,7 +370,7 @@ export default async function RelatorioMargemPage({
     )
   }
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   if (!rows.length) {
     return (
@@ -568,10 +568,10 @@ export default async function RelatorioMargemPage({
           hint="Ajuste ou limpe os filtros."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="bg-surface-2">
+              <tr className="border-b border-border bg-surface">
                 <th className={`text-left ${th}`}>Família</th>
                 <th className={`text-left ${th}`}>Produto</th>
                 <th className={`text-right ${th}`}>PDV (venda)</th>
@@ -599,7 +599,7 @@ export default async function RelatorioMargemPage({
       )}
 
       {cmcInvalidos.length > 0 && (
-        <div className="rounded-lg border border-border bg-surface p-3.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
           <p className="flex items-center gap-1.5 text-sm font-medium text-text">
             <AlertTriangle className="size-4 text-err" /> {cmcInvalidos.length} produto(s) com CMC inválido no Omie
           </p>
@@ -617,7 +617,7 @@ export default async function RelatorioMargemPage({
       )}
 
       {semEstoque.length > 0 && (
-        <div className="rounded-lg border border-border bg-surface p-3.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
           <p className="text-[13px] text-text-muted">
             <span className="font-medium text-text">{semEstoque.length} produto(s) sem estoque na foto de hoje</span> — não têm
             saldo positivo em nenhum local agora, então não dá pra calcular um CMC ponderado (motivo normal: estoque zerado, não é
@@ -650,7 +650,7 @@ export default async function RelatorioMargemPage({
           {evolucaoSnapshot && evolucaoSnapshot.meses.length > 1 ? (
             <TabelaEvolucaoMensal linhas={evolucaoSnapshot.linhas} meses={evolucaoSnapshot.meses} th={th} diasPorMes={diasPorMes} />
           ) : (
-            <div className="rounded-lg border border-border bg-surface p-3.5">
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
               <p className="text-[13px] text-text-muted">
                 Evolução mensal real ainda não disponível pra esta loja — o sistema passou a arquivar o custo diário a
                 partir de <strong className="text-text">{primeiroSnapshotEm ? fmtDataSimples(primeiroSnapshotEm) : 'hoje'}</strong>.

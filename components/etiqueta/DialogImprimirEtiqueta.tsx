@@ -7,7 +7,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 
 const LS_LC = 'etq_lc'
 const LS_AC = 'etq_ac'
-const inputClass = 'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text num outline-none focus:border-brand'
+const inputClass = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text num outline-none focus:ring-2 focus:ring-brand/40'
 
 // Diálogo de impressão de etiqueta: o usuário escolhe o TAMANHO em cm (ou usa o
 // padrão da loja). Só o tamanho é do usuário; o resto (campos, cor, nome) é o

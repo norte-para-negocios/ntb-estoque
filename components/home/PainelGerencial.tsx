@@ -20,7 +20,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
   return (
     <section className="space-y-6 border-t border-border pt-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">Visão gerencial (ano corrente)</h2>
+        <h2 className="text-[13px] font-semibold text-text-muted">Visão gerencial (ano corrente)</h2>
         <Link href="/relatorios" className="text-[13px] text-brand hover:underline">
           ver todos os relatórios →
         </Link>
@@ -28,7 +28,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
 
       {/* Rejeitos por tipo */}
       <div>
-        <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Rejeitos / perdas por tipo</h3>
+        <h3 className="mb-2 text-sm font-bold text-text">Rejeitos / perdas por tipo</h3>
         {d.rejeitos.length === 0 ? (
           <EmptyState icon={AlertTriangle} title="Sem rejeitos registrados no período" hint="" />
         ) : (
@@ -72,7 +72,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
 
       {/* Relação compras/faturamento */}
       <div>
-        <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Relação compras/faturamento</h3>
+        <h3 className="mb-2 text-sm font-bold text-text">Relação compras/faturamento</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {d.ratioCompraFaturamento.map((r) => (
             <MeterRatio key={r.categoria} label={r.categoria} pct={r.pct} limite={30} />
@@ -85,7 +85,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           produto acabado com revenda no "top 10 mais faturados"). */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados (produto acabado)</h3>
+          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais faturados (produto acabado)</h3>
           {d.topFaturadosAcabado.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem faturamento no período" hint="" />
           ) : (
@@ -96,7 +96,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           </Link>
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais faturados (revenda)</h3>
+          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais faturados (revenda)</h3>
           {d.topFaturadosRevenda.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem faturamento de revenda no período" hint="" />
           ) : (
@@ -107,7 +107,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           </Link>
         </div>
         <div className="lg:col-span-2">
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais comprados</h3>
+          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais comprados</h3>
           {d.topComprados.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem compras no período" hint="" />
           ) : (
@@ -131,7 +131,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           (lib/resumo-dia.ts) -- 'reais' aqui daria simbolo de moeda errado. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">10 menos faturados</h3>
+          <h3 className="mb-2 text-sm font-bold text-text">10 menos faturados</h3>
           {d.bottomFaturados.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
           ) : (
@@ -139,7 +139,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           )}
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-[0.12em] text-text">Top 10 mais vendidos (quantidade)</h3>
+          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais vendidos (quantidade)</h3>
           {d.topPorQuantidade.length === 0 ? (
             <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
           ) : (
@@ -151,7 +151,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
       {/* Produtos parados */}
       <div>
         <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Produtos parados (30+ dias sem movimento)</h3>
+          <h3 className="text-sm font-bold text-text">Produtos parados (30+ dias sem movimento)</h3>
         </div>
         {d.produtosParados.length === 0 ? (
           <EmptyState icon={AlertTriangle} title="Nenhum produto parado" hint="Todos os produtos com saldo tiveram movimento recente." />

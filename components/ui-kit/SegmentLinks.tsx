@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { SegmentedControl } from './SegmentedControl'
 
 export type SegmentOpcao = { value: string; label: string }
 
@@ -36,31 +37,13 @@ export function SegmentLinks({
     router.push(qs ? `${basePath}?${qs}` : basePath)
   }
 
+  const valor = opcoes.some((o) => o.value === atual) ? atual : opcoes[0]?.value ?? ''
   return (
-    <div
-      role="tablist"
+    <SegmentedControl
       aria-label={ariaLabel}
-      className="inline-flex shrink-0 items-center rounded-md border border-border bg-surface-2 p-0.5"
-    >
-      {opcoes.map((o) => {
-        const ativo = atual === o.value || (!atual && o.value === opcoes[0].value)
-        return (
-          <button
-            key={o.value || '_'}
-            type="button"
-            role="tab"
-            aria-selected={ativo}
-            onClick={() => selecionar(o.value)}
-            className={`rounded-[5px] px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
-              ativo
-                ? 'bg-surface text-text shadow-sm'
-                : 'text-text-muted hover:text-text'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
+      opcoes={opcoes}
+      value={valor}
+      onChange={selecionar}
+    />
   )
 }

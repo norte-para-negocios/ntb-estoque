@@ -12,7 +12,7 @@ export async function AjustesOmieDetectados({ lojaId, tipo }: { lojaId: number; 
   return (
     <section className="space-y-2">
       <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-        <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-text">Feito direto na Omie ({itens.length})</h2>
+        <h2 className="text-sm font-bold text-text">Feito direto na Omie ({itens.length})</h2>
       </div>
       <p className="text-[12px] text-text-muted">
         Detectado automaticamente a partir dos ajustes de estoque sincronizados da Omie. A Omie não informa quem fez

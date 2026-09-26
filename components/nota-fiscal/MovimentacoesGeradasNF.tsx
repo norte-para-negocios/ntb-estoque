@@ -132,7 +132,7 @@ export async function MovimentacoesGeradasNF({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <h2 className="mb-1 text-[13px] font-medium text-text-muted">Movimentações de estoque geradas</h2>
       <p className="mb-3 text-[11px] text-text-muted">
         Correlação aproximada por produto + local de estoque + data (±7 dias da emissão). O recebimento de NF

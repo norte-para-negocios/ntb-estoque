@@ -18,7 +18,7 @@ import { useFiltrosPersistentes } from '@/hooks/use-filtros-persistentes'
 export type { CampoFiltro }
 
 const field =
-  'w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:border-brand focus:shadow-[0_0_0_3px_var(--brand-soft)]'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:ring-2 focus:ring-brand/40'
 const lab = 'mb-1 block text-[11px] font-medium text-text-muted'
 
 // Presets de período (boa prática: atalho em vez de digitar data toda vez).
@@ -121,7 +121,7 @@ export function FiltrosGaveta({
         className="w-[88vw] overflow-y-auto bg-surface p-0 sm:max-w-none sm:w-[360px]"
         showCloseButton
       >
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+        <div className="px-5 pt-5 pb-2 text-[20px] font-bold tracking-[-0.01em] text-text">
           Filtros
         </div>
 
@@ -139,7 +139,7 @@ export function FiltrosGaveta({
                         const [i, f] = p.calc()
                         aplicarPeriodo(i, f)
                       }}
-                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text-muted u-motion u-press-sm hover:border-brand hover:bg-surface-2 hover:text-text"
+                      className="rounded-full h-8 bg-surface-2 px-3.5 text-[13px] font-semibold text-text-muted u-motion u-press-sm hover:bg-[var(--border)] hover:text-text"
                     >
                       {p.label}
                     </button>

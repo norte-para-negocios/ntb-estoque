@@ -58,7 +58,7 @@ export function Combobox({ options, value, onChange, placeholder = 'Selecionar..
         type="button"
         id={id}
         onClick={abrir}
-        className="w-full flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:border-brand focus:shadow-[0_0_0_3px_var(--brand-soft)] hover:bg-surface-2"
+        className="w-full flex items-center justify-between gap-2 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-sm text-text outline-none u-motion focus:ring-2 focus:ring-brand/40 hover:bg-surface-2"
       >
         <span className={selected ? 'truncate text-left' : 'truncate text-left text-text-muted'}>
           {selected?.label ?? placeholder}

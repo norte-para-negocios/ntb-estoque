@@ -78,7 +78,7 @@ export function AppShell({
                 type="button"
                 onClick={() => setBuscaAberta(true)}
                 aria-label="Buscar"
-                className="lg:hidden flex size-9 items-center justify-center rounded-lg border border-border bg-surface text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+                className="lg:hidden flex size-9 items-center justify-center rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
               >
                 <Search className="size-4" aria-hidden />
               </button>
@@ -86,7 +86,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setBuscaAberta(true)}
-                className="hidden lg:inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+                className="hidden lg:inline-flex items-center gap-2 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
               >
                 <Search className="size-4" aria-hidden />
                 <span>Buscar</span>

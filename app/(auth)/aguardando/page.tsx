@@ -11,7 +11,7 @@ export default async function AguardandoPage() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="rounded-lg border border-border bg-surface p-8 text-center" style={{ boxShadow: 'var(--shadow-md)' }}>
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-8 text-center" style={{ boxShadow: 'var(--shadow-md)' }}>
         <div className="mb-8 flex justify-center">
           <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="h-14 w-auto dark:brightness-0 dark:invert" />
         </div>

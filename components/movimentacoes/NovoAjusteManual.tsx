@@ -147,7 +147,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
               placeholder="0"
-              className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
           </div>
           <div className="space-y-2">
@@ -157,7 +157,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={data}
               max={hojeBahia}
               onChange={(e) => setData(e.target.value)}
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
           </div>
           <div className="space-y-2">
@@ -167,7 +167,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="Ex: contagem física divergente, produto avariado..."
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-brand"
+              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
           </div>
         </div>

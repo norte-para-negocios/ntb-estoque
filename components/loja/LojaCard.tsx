@@ -316,7 +316,7 @@ export function LojaCard({
   const [aberta, setAberta] = useState(false)
 
   return (
-    <div className="rounded-lg border border-border bg-surface u-card overflow-hidden">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface u-card overflow-hidden">
       {/* Cabecalho compacto — clicar NA loja abre/fecha as secoes (master-detail). */}
       <button
         type="button"

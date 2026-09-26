@@ -18,7 +18,7 @@ import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { periodoPendencias } from '@/lib/pendencias-periodo'
 
-const th = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+const th = 'whitespace-nowrap px-3 py-2 text-left text-[13px] font-semibold text-text-muted'
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 
 export default async function PendenciasClassificacaoPage({
@@ -261,9 +261,9 @@ export default async function PendenciasClassificacaoPage({
         {!semFamilia.length ? (
           <EmptyState icon={ClipboardX} title="Nenhum" hint="Todos os produtos têm família." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[620px] text-sm">
-              <thead><tr className="bg-surface-2"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th><th className={th}>CFOP de entrada</th></tr></thead>
+              <thead><tr className="border-b border-border bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th><th className={th}>CFOP de entrada</th></tr></thead>
               <tbody>
                 {semFamilia.map((p) => {
                   const cfop = cfopMaisComum(Number(p.codigo_produto))
@@ -293,9 +293,9 @@ export default async function PendenciasClassificacaoPage({
         {!semTipo.length ? (
           <EmptyState icon={ClipboardX} title="Nenhum" hint="Todos os produtos têm tipo." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[480px] text-sm">
-              <thead><tr className="bg-surface-2"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Família</th></tr></thead>
+              <thead><tr className="border-b border-border bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Família</th></tr></thead>
               <tbody>
                 {semTipo.map((p) => (
                   <tr key={p.codigo_produto} className="border-t border-border/60">
@@ -314,10 +314,10 @@ export default async function PendenciasClassificacaoPage({
         {!semCadastroLinhas.length ? (
           <EmptyState icon={ClipboardX} title="Nenhum" hint="Todo item de NF dos últimos 12 meses tem produto no cadastro." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="bg-surface-2">
+                <tr className="border-b border-border bg-surface">
                   <th className={th}>Descrição na NF</th>
                   <th className={th}>Código na NF</th>
                   <th className={th}>Fornecedor</th>
@@ -348,9 +348,9 @@ export default async function PendenciasClassificacaoPage({
         {!naoIdentRows?.length ? (
           <EmptyState icon={ClipboardX} title="Nenhum" hint="Todo cupom tem produto identificado nos últimos 12 meses." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[320px] text-sm">
-              <thead><tr className="bg-surface-2"><th className={th}>Mês</th><th className={`${th} text-right`}>Valor</th></tr></thead>
+              <thead><tr className="border-b border-border bg-surface"><th className={th}>Mês</th><th className={`${th} text-right`}>Valor</th></tr></thead>
               <tbody>{(naoIdentRows ?? []).map((r) => (
                 <tr key={r.mes} className="border-t border-border/60">
                   <td className="px-3 py-2 text-text">{r.mes}</td>

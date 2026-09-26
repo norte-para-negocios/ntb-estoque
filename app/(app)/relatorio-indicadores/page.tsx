@@ -102,7 +102,7 @@ export default async function RelatorioIndicadoresPage({
     fat = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_faturamento_matriz', { p_loja_id: lojaId, p_dim: 'tipo' })
   }
 
-  const th = 'whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted'
+  const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
   if (!fat.length && !filtroAtivo) {
     return (
@@ -322,11 +322,11 @@ export default async function RelatorioIndicadoresPage({
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+      <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <table className="w-full min-w-[600px] border-collapse text-sm">
           <thead>
-            <tr className="bg-surface-2">
-              <th className={`sticky left-0 z-20 bg-surface-2 text-left ${th}`}>Indicador</th>
+            <tr className="border-b border-border bg-surface">
+              <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Indicador</th>
               {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
               <th className={`text-right ${th}`}>Total</th>
             </tr>

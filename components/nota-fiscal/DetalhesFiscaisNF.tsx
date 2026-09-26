@@ -89,7 +89,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {(cabec?.cCNPJ_CPF || cabec?.cNaturezaOperacao) && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Fornecedor / operação</h3>
           <dl className="space-y-1.5">
             {cabec?.cCNPJ_CPF && <Campo label="CNPJ/CPF"><span className="num">{cabec.cCNPJ_CPF}</span></Campo>}
@@ -100,7 +100,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {ic && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Situação no Omie</h3>
           <dl className="space-y-1.5">
             <Campo label="Recebido">
@@ -123,7 +123,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {transporte?.cNomeTransp && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Transporte</h3>
           <dl className="space-y-1.5">
             <Campo label="Transportadora">{transporte.cNomeTransp}</Campo>
@@ -146,7 +146,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {!!parcelas?.parcelasLista?.length && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Parcelas</h3>
           <ul className="space-y-1 text-[13px]">
             {parcelas.parcelasLista.map((p) => (
@@ -160,7 +160,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {totais && (totais.vAproxTributos != null || totais.nValIBS != null) && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Impostos (aproximados)</h3>
           <dl className="space-y-1.5">
             {totais.vAproxTributos != null && (
@@ -177,7 +177,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {infoAdicionais?.cCategCompra && (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <h3 className="mb-2 text-[12px] font-medium text-text-muted">Informações adicionais</h3>
           <dl className="space-y-1.5">
             <Campo label="Categoria de compra"><span className="num">{infoAdicionais.cCategCompra}</span></Campo>

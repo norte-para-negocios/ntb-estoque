@@ -8,7 +8,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 function mascaraCep(v: string): string {
@@ -59,7 +59,7 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <div className="mb-1 text-sm font-semibold text-text">Informações da loja</div>
       <p className="mb-3 text-[13px] text-text-muted">
         Dados de negócio e endereço. CNPJ, razão social e integração com o Omie ficam com o administrador geral.

@@ -18,27 +18,19 @@ export function StatCard({
   accent?: string
 }) {
   const inner = (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-surface p-4 u-card">
-      <div
-        className="absolute inset-x-0 top-0 h-[2px] opacity-60 u-motion group-hover:opacity-100"
-        style={{ background: accent }}
-      />
+    <div className="group relative overflow-hidden rounded-[var(--r-lg)] bg-surface p-4 u-card">
       <div className="flex items-center justify-between">
-        <span
-          className="flex size-8 items-center justify-center rounded-md"
-          style={{ background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
-        >
-          <Icon className="size-4" style={{ color: accent }} strokeWidth={2} />
-        </span>
+        {/* Estilo Apple: sem faixa colorida; `accent` fica aceito e ignorado. */}
+        <Icon className="size-[18px] text-text-muted" strokeWidth={1.75} data-accent={accent} />
         {href && (
           <ArrowUpRight className="size-4 text-text-muted/30 u-motion group-hover:translate-x-px group-hover:-translate-y-px group-hover:text-text-muted" />
         )}
       </div>
-      <div className="mt-3 text-[1.7rem] font-semibold leading-none text-text">
+      <div className="mt-3 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text num">
         <Num value={value} />
       </div>
       <div className="mt-1.5 text-[13px] font-medium text-text">{label}</div>
-      {hint && <div className="text-[11px] text-text-muted">{hint}</div>}
+      {hint && <div className="text-[12px] text-text-muted">{hint}</div>}
     </div>
   )
   return href ? <Link href={href}>{inner}</Link> : inner

@@ -50,15 +50,15 @@ export function ChipsStatus({
             type="button"
             aria-pressed={ativo}
             onClick={() => selecionar(o.value)}
-            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[13px] font-medium u-motion u-press-sm ${
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full h-8 px-3.5 text-[13px] font-semibold u-motion u-press-sm ${
               ativo
-                ? 'border-brand bg-brand/10 text-brand'
-                : 'border-border bg-surface text-text-muted hover:border-brand/50 hover:bg-surface-2 hover:text-text'
+                ? 'bg-brand text-white'
+                : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
             }`}
           >
             {o.label}
             {o.count != null && (
-              <span className={`num text-[12px] ${ativo ? 'text-brand' : 'text-text-muted'}`}>{o.count}</span>
+              <span className={`num text-[12px] ${ativo ? 'text-white/80' : 'text-text-muted'}`}>{o.count}</span>
             )}
           </button>
         )

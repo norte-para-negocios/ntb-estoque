@@ -201,7 +201,7 @@ export default async function SyncStatusPage({
       </div>
 
       {/* Status de sincronizacao por loja */}
-      <div className="rounded-lg border border-border bg-surface">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
         <div className="border-b border-border px-4 py-2.5">
           <h2 className="text-[13px] font-semibold text-text">Status de sincronização</h2>
         </div>

@@ -9,7 +9,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
 
 // Bloco 5.2: a propria loja sobe o certificado A1 (.pfx) + senha. A senha vai
 // criptografada; o arquivo, para o Storage privado. Tudo via server action.
@@ -78,7 +78,7 @@ export function CertificadoUpload({
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-[11px] uppercase tracking-wider text-text-muted">Arquivo (.pfx)</label>
+          <label className="mb-1 block text-[13px] text-text-muted">Arquivo (.pfx)</label>
           <input
             ref={fileRef}
             type="file"
@@ -87,7 +87,7 @@ export function CertificadoUpload({
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] uppercase tracking-wider text-text-muted">Senha</label>
+          <label className="mb-1 block text-[13px] text-text-muted">Senha</label>
           <input
             type="password"
             value={senha}
@@ -98,7 +98,7 @@ export function CertificadoUpload({
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] uppercase tracking-wider text-text-muted">Validade (opcional)</label>
+          <label className="mb-1 block text-[13px] text-text-muted">Validade (opcional)</label>
           <input type="date" value={validadeInput} onChange={(e) => setValidadeInput(e.target.value)} className={inputClass} />
         </div>
         <div className="flex items-end">

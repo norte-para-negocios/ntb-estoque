@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { CheckCircle2 } from 'lucide-react'
 
 const inputClass =
-  'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-brand'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 export default function CadastroPage() {
@@ -18,7 +18,7 @@ export default function CadastroPage() {
   return (
     <div className="w-full max-w-md">
       <div
-        className="rounded-lg border border-border bg-surface p-8"
+        className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-8"
         style={{ boxShadow: 'var(--shadow-md)' }}
       >
         <div className="mb-8 flex justify-center">
@@ -80,7 +80,7 @@ export default function CadastroPage() {
                   type="text"
                   autoCapitalize="characters"
                   placeholder="NTB-XXXXXXXX"
-                  className={`${inputClass} uppercase tracking-wider`}
+                  className={`${inputClass}`}
                 />
                 <p className="mt-1 text-[12px] text-text-muted">
                   Recebeu um código do responsável? Informe para já entrar com o acesso liberado.

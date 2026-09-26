@@ -148,7 +148,7 @@ export function QrScanner({
           Ler QR Code
         </button>
       ) : (
-        <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-medium text-text">
               {carregando ? 'Abrindo câmera...' : 'Leitura contínua, aponte para o QR'}

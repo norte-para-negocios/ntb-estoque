@@ -117,7 +117,7 @@ export function BuscaGlobal({
                   if (doGrupo.length === 0) return null
                   return (
                     <div key={tipo} className="py-1">
-                      <p className="px-3 py-1 text-xs font-medium tracking-wide text-text-muted uppercase">
+                      <p className="px-3 py-1 text-xs font-medium text-text-muted">
                         {titulo}
                       </p>
                       <ul>
