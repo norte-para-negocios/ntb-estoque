@@ -26,12 +26,12 @@ export function ExcluirProdutoBtn({ codigoProduto }: { codigoProduto: number }) 
 
   if (confirmando) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+      <span className="inline-flex items-center gap-2 whitespace-nowrap text-[13px]">
         <button
           type="button"
           onClick={excluir}
           disabled={pending}
-          className="font-medium text-err hover:underline disabled:opacity-60"
+          className="font-semibold text-err hover:underline disabled:opacity-60"
         >
           {pending ? '...' : 'Excluir'}
         </button>
@@ -51,7 +51,7 @@ export function ExcluirProdutoBtn({ codigoProduto }: { codigoProduto: number }) 
     <button
       type="button"
       onClick={() => setConfirmando(true)}
-      className="flex size-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err"
+      className="flex size-8 shrink-0 items-center justify-center rounded-full text-err u-motion u-press hover:bg-surface-2"
       aria-label="Excluir produto"
       title="Excluir produto no Omie"
     >

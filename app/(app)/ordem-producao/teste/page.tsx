@@ -64,9 +64,10 @@ export default async function OrdemProducaoTestePage() {
   return (
     <div className="space-y-5">
       {erroOps && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="flex items-center gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
           Erro ao carregar OPs de teste — tente novamente
-        </div>
+        </p>
       )}
       <ListaHeader>
         <PageHeader
@@ -87,7 +88,7 @@ export default async function OrdemProducaoTestePage() {
           },
           {
             label: 'Código',
-            render: (op) => op.codigo_produto_texto,
+            render: (op) => <span className="num">{op.codigo_produto_texto}</span>,
           },
           {
             label: 'Quantidade',
@@ -101,7 +102,7 @@ export default async function OrdemProducaoTestePage() {
           {
             label: 'Criado em',
             render: (op) => (
-              <span className="whitespace-nowrap text-text-muted">{formatarData(op.criado_em)}</span>
+              <span className="num whitespace-nowrap text-text-muted">{formatarData(op.criado_em)}</span>
             ),
           },
         ]}

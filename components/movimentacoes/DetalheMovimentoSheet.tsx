@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { AlertTriangle } from 'lucide-react'
 import { DetalheOP as DetalheOPView } from '@/components/movimentacoes/DetalheOP'
 import { DetalheTransferencia as DetalheTransferenciaView } from '@/components/movimentacoes/DetalheTransferencia'
 import { DetalheNotaFiscal as DetalheNotaFiscalView } from '@/components/movimentacoes/DetalheNotaFiscal'
@@ -25,9 +26,9 @@ export type OrigemMovimento =
   | { tipo: 'inventario'; id: number }
 
 const TITULOS: Record<OrigemMovimento['tipo'], string> = {
-  op: 'Ordem de Produção',
+  op: 'Ordem de produção',
   transferencia: 'Transferência',
-  nota_fiscal: 'Nota Fiscal',
+  nota_fiscal: 'Nota fiscal',
   inventario: 'Inventário',
 }
 
@@ -88,7 +89,10 @@ export function DetalheMovimentoSheet({
             <div className="flex items-center justify-center py-12"><Spinner /></div>
           )}
           {pronto?.status === 'erro' && (
-            <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">{pronto.mensagem}</p>
+            <p className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-err" />
+              <span>{pronto.mensagem}</span>
+            </p>
           )}
           {pronto?.status === 'op' && (
             <DetalheOPView dados={pronto.dados} onRevertido={() => onOpenChange(null)} />

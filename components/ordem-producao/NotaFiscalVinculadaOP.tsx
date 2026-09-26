@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
 // Seção "Nota fiscal vinculada" da tela de detalhe de OP. Confirmado na Task 17
@@ -132,13 +133,19 @@ export async function NotaFiscalVinculadaOP({
   }
 
   return (
-    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Nota fiscal vinculada</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
-        Correlação fraca: NFs de entrada dos insumos da ficha técnica desta OP, na mesma loja, nos 30 dias
-        antes da conclusão/previsão. O sistema não guarda nenhum vínculo real entre nota fiscal e ordem de
-        produção -- isto NÃO é rastreabilidade de lote, é só uma pista de &ldquo;de onde pode ter vindo o insumo&rdquo;.
-      </p>
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
+      <h2 className="mb-1 text-[17px] font-semibold text-text">Nota fiscal vinculada</h2>
+      <details className="group mb-3 text-[13px] text-text-muted">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 select-none hover:text-text [&::-webkit-details-marker]:hidden">
+          Detalhes técnicos
+          <ChevronDown aria-hidden className="size-3.5 transition-transform group-open:rotate-180" />
+        </summary>
+        <p className="mt-1.5">
+          Correlação fraca: NFs de entrada dos insumos da ficha técnica desta OP, na mesma loja, nos 30 dias
+          antes da conclusão/previsão. O sistema não guarda nenhum vínculo real entre nota fiscal e ordem de
+          produção -- isto NÃO é rastreabilidade de lote, é só uma pista de &ldquo;de onde pode ter vindo o insumo&rdquo;.
+        </p>
+      </details>
 
       {!podeConsultar ? (
         <p className="text-[13px] text-text-muted">
@@ -147,28 +154,29 @@ export async function NotaFiscalVinculadaOP({
             : 'Sem data de referência (a OP não tem conclusão real nem data prevista) para calcular a janela de 30 dias.'}
         </p>
       ) : falhaConsulta ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
+          <span aria-hidden className="mr-1.5 inline-block size-2 rounded-full bg-err align-[1px]" />
           Não foi possível consultar notas fiscais agora (falha de banco/rede) -- tente recarregar a página. Isto é
           diferente de &ldquo;nenhuma NF encontrada&rdquo;.
         </p>
       ) : rows.length === 0 ? (
-        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           Nenhuma NF de entrada encontrada com esses insumos nessa janela de 30 dias. Comum e esperado -- a
           correlação é fraca por natureza (compras não são fáceis de datar a partir da produção).
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="-mx-2 divide-y divide-border/60">
           {rows.map((r) => (
             <a
               key={r.id}
               href={`/nota-fiscal/${r.nota_fiscal_id}`}
-              className="block rounded-md border border-border bg-surface-2/40 px-3 py-2 transition-colors hover:border-brand"
+              className="block rounded-[var(--r-md)] px-2 py-2.5 u-motion hover:bg-surface-2"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[13px] font-medium text-text">NFe {r.c_numero_nfe ?? r.nota_fiscal_id}</span>
-                <span className="num text-[12px] text-text-muted">{fmtDataBR(r.d_emissao_nfe)}</span>
+                <span className="text-[15px] font-medium text-text">NFe {r.c_numero_nfe ?? r.nota_fiscal_id}</span>
+                <span className="num text-[13px] text-text-muted">{fmtDataBR(r.d_emissao_nfe)}</span>
               </div>
-              <div className="mt-1 text-[12px] text-text-muted">
+              <div className="mt-1 text-[13px] text-text-muted">
                 Insumo <span className="num">{r.n_id_produto}</span> ·{' '}
                 Qtde <span className="num">{r.n_qtde_nfe?.toLocaleString('pt-BR') ?? '-'}</span>
                 {r.n_id_fornecedor ? <> · Fornecedor <span className="num">{r.n_id_fornecedor}</span></> : null}

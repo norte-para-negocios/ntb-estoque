@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { excluirProdutoSubstituicao } from '@/lib/actions/produto-substituicao'
-import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 
 export function ExcluirProdutoSubstituicao({ id, descricao }: { id: number; descricao: string }) {
   const [pending, startTransition] = useTransition()
@@ -26,11 +25,11 @@ export function ExcluirProdutoSubstituicao({ id, descricao }: { id: number; desc
       type="button"
       onClick={excluir}
       disabled={pending}
-      className={btnLinhaClass('ghost')}
+      className="flex size-8 shrink-0 items-center justify-center rounded-full text-err u-motion u-press hover:bg-surface-2 disabled:opacity-60"
       aria-label="Remover"
       title="Remover"
     >
-      <Trash2 className="size-4" /> <RotuloAcao>Remover</RotuloAcao>
+      <Trash2 className="size-4" />
     </button>
   )
 }

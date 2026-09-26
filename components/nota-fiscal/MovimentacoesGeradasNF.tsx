@@ -133,13 +133,16 @@ export async function MovimentacoesGeradasNF({
 
   return (
     <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Movimentações de estoque geradas</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
+      <h2 className="text-[17px] font-semibold text-text">Movimentações de estoque geradas</h2>
+      <details className="mb-3 mt-1 text-[13px] text-text-muted">
+        <summary className="cursor-pointer select-none py-1 hover:text-text">Detalhes técnicos</summary>
+        <p className="mt-1">
         Correlação aproximada por produto + local de estoque + data (±7 dias da emissão). O recebimento de NF
-        normalmente NÃO gera linha em <code>movimentos</code> -- confirmado por leitura de código
+        normalmente NÃO gera linha em <code className="font-mono">movimentos</code> -- confirmado por leitura de código
         (concluirRecebimento nunca escreve nessa tabela); ausência de resultado aqui é o caso comum, não um
         erro.
-      </p>
+        </p>
+      </details>
 
       {!podeConsultar ? (
         <p className="text-[13px] text-text-muted">
@@ -148,34 +151,37 @@ export async function MovimentacoesGeradasNF({
             : 'Sem data de emissão para calcular a janela de ±7 dias.'}
         </p>
       ) : errosConsultaMov.length > 0 ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+<p className="flex items-start gap-2 text-[13px] text-text-muted">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-err" aria-hidden />
+          <span>
           Não foi possível consultar movimentações agora (falha de banco/rede) -- tente recarregar a página.
           Isto é diferente de &ldquo;nenhuma movimentação encontrada&rdquo;.
+          </span>
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="divide-y divide-border/60">
           {itensValidos.map((item, idx) => {
             const chave = `${item.n_id_produto}:${item.codigo_local_estoque}`
             const movs = (movsPorPar.get(chave) ?? []).sort((a, b) => a.data.localeCompare(b.data))
             return (
-              <div key={idx} className="rounded-md border border-border bg-surface-2/40 px-3 py-2">
-                <div className="text-[13px] text-text">
+              <div key={idx} className="py-3 first:pt-1 last:pb-0">
+                <div className="text-[15px] text-text">
                   {item.descricao ?? `Produto ${item.n_id_produto}`}{' '}
-                  <span className="text-[11px] text-text-muted">
-                    (local {item.codigo_local_estoque ?? '-'})
+                  <span className="text-[13px] text-text-muted">
+                    (local <span className="num">{item.codigo_local_estoque ?? '-'}</span>)
                   </span>
                 </div>
                 {movs.length === 0 ? (
-                  <p className="mt-1 text-[11px] text-text-muted">
+                  <p className="mt-0.5 text-[13px] text-text-muted">
                     Nenhuma movimentação encontrada perto dessa data, nesse local -- comum e esperado (ver nota
                     acima).
                   </p>
                 ) : (
                   <ul className="mt-1 space-y-1">
                     {movs.map((m) => (
-                      <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-text-muted">
+                      <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-text-muted">
                         <span>
-                          mov #{m.id} ({m.tipo}/{m.origem ?? '-'}/{m.motivo ?? '-'}) ·{' '}
+                          mov <span className="num">#{m.id}</span> ({m.tipo}/{m.origem ?? '-'}/{m.motivo ?? '-'}) ·{' '}
                           <span className="num">{m.quan?.toLocaleString('pt-BR') ?? '-'}</span>
                         </span>
                         <span className="num">{fmtDataHora(m.data)}</span>

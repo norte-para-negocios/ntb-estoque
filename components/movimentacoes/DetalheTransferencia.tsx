@@ -11,13 +11,13 @@ function fmtData(d: string): string {
 export function DetalheTransferencia({ dados }: { dados: DetalheTransferenciaData }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-text-muted">{dados.origem}</span>
+      <div className="flex flex-wrap items-center gap-2 text-[15px]">
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-text-muted">{dados.origem}</span>
         <span className="text-text-muted">→</span>
-        <span className="rounded bg-ok/15 px-1.5 py-0.5 font-medium text-ok">{dados.destino}</span>
+        <span className="rounded-full bg-surface-2 px-3 py-1 font-semibold text-text">{dados.destino}</span>
         <StatusPill status={dados.status} />
       </div>
-      <p className="text-[13px] text-text-muted">
+      <p className="num text-[13px] text-text-muted">
         {fmtData(dados.data)}{dados.responsavel && ` · por ${dados.responsavel}`}
       </p>
       <ContagemTransferencia

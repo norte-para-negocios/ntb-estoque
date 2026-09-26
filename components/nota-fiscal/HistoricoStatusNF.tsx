@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { SELO_CLASSE } from '@/lib/status-cor'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 
 // Seção "Histórico de status/manifestação" -- mescla `webhooks` (eventos reais
@@ -162,25 +161,34 @@ export async function HistoricoStatusNF({
 
   return (
     <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Histórico de status / manifestação</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
+      <h2 className="text-[17px] font-semibold text-text">Histórico de status / manifestação</h2>
+      <details className="mb-3 mt-1 text-[13px] text-text-muted">
+        <summary className="cursor-pointer select-none py-1 hover:text-text">Detalhes técnicos</summary>
+        <p className="mt-1">
         Linha do tempo combinando eventos reais recebidos da Omie (webhooks) com ações manuais registradas no
         app (concluir/reverter/excluir -- a nota em si é criada pelo webhook, nunca por ação manual, então não
         existe &ldquo;criar&rdquo;/&ldquo;editar&rdquo; aqui). Webhooks de antes de 05/07/2026 foram perdidos
         por um prune antigo (ver AGENTS.md) -- ausência de eventos numa NF antiga pode ser esse limite, não
         falta de atividade real.
-      </p>
+        </p>
+      </details>
 
       {errosConsulta.length > 0 && (
-        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
-          Falha ao consultar: <strong className="text-warn">{errosConsulta.join(', ')}</strong> — os dados
+        <p className="mb-3 flex items-start gap-2 text-[13px] text-text-muted">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
+          <span>
+          Falha ao consultar: <strong className="font-semibold text-text">{errosConsulta.join(', ')}</strong> — os dados
           abaixo podem estar incompletos.
+          </span>
         </p>
       )}
 
       {falhaConsultaTotal ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+<p className="flex items-start gap-2 text-[13px] text-text-muted">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-err" aria-hidden />
+          <span>
           Não foi possível consultar o histórico agora (falha de banco/rede) -- tente recarregar a página.
+          </span>
         </p>
       ) : eventos.length === 0 ? (
         <p className="text-[13px] text-text-muted">
@@ -190,27 +198,28 @@ export async function HistoricoStatusNF({
         </p>
       ) : (
         <>
-          <ul className="space-y-2">
+          {/* Linha do tempo discreta: ponto + trilho fino, sem selos coloridos. */}
+          <ul>
             {eventos.map((e) => (
-              <li key={e.key} className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-2 last:border-none last:pb-0">
-                <div>
-                  <span className="text-[13px] text-text">{e.label}</span>
-                  <span
-                    className={`ml-2 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                      SELO_CLASSE[e.origem === 'omie' ? 'info' : 'brand']
-                    }`}
-                  >
-                    {e.origem === 'omie' ? 'Omie' : 'Ação no app'}
-                  </span>
+              <li key={e.key} className="relative flex flex-wrap items-start justify-between gap-x-3 gap-y-0.5 pb-4 pl-6 last:pb-0">
+                <span className="absolute left-[3px] top-[18px] bottom-0 w-px bg-border [li:last-child>&]:hidden" aria-hidden />
+                <span
+                  className={`absolute left-0 top-[7px] size-2 rounded-full ${e.origem === 'app' ? 'bg-brand' : 'bg-text-muted'}`}
+                  aria-hidden
+                />
+                <div className="min-w-0">
+                  <span className="text-[15px] text-text">{e.label}</span>
                   {e.detalhe && <span className="text-[13px] text-text-muted"> · {e.detalhe}</span>}
-                  <div className="text-[11px] text-text-muted">{e.autor ?? 'Desconhecido'}</div>
+                  <div className="text-[13px] text-text-muted">
+                    {e.origem === 'omie' ? 'Omie' : 'Ação no app'} · {e.autor ?? 'Desconhecido'}
+                  </div>
                 </div>
-                <span className="num shrink-0 text-[12px] text-text-muted">{fmtDataHora(e.ts)}</span>
+                <span className="num shrink-0 text-[13px] text-text-muted">{fmtDataHora(e.ts)}</span>
               </li>
             ))}
           </ul>
           {(webhooksDoRecebimento.length === LIMITE || auditRaw?.length === LIMITE) && (
-            <p className="mt-2 text-[11px] text-text-muted">Mostrando até {LIMITE} eventos mais recentes de cada fonte.</p>
+            <p className="mt-3 text-[13px] text-text-muted">Mostrando até {LIMITE} eventos mais recentes de cada fonte.</p>
           )}
         </>
       )}

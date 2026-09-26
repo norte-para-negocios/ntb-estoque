@@ -5,7 +5,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { dataOmieBR } from '@/lib/data-bahia'
 import type { LojaOmie } from '@/lib/omie/client'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
-import { ArrowLeftRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 import { FiltroDataMovimentos } from '@/components/movimentacoes/FiltroDataMovimentos'
 import { FiltroLocalMovimentos } from '@/components/movimentacoes/FiltroLocalMovimentos'
@@ -423,46 +423,53 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Mesma ordem de sempre. Celular: busca numa linha e filtros numa linha só
+          com rolagem horizontal (em vez de quebrar em 4-5 linhas). */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
         <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
-        <FiltroDataMovimentos ini={ini} fim={fim} />
-        <FiltroLocalMovimentos locais={locais} valorAtual={sp.local ?? ''} />
-        <FiltroFamiliaMovimentos familias={familias} valorAtual={sp.familia ?? ''} />
-        <FiltroTipoMovimentos valorAtual={sp.tipo ?? ''} />
-        {podeCriar && produtoUnico && (
-          <NovoAjusteManual locais={locais} produto={produtoUnico} />
-        )}
+        <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+          <FiltroDataMovimentos ini={ini} fim={fim} />
+          <FiltroLocalMovimentos locais={locais} valorAtual={sp.local ?? ''} />
+          <FiltroFamiliaMovimentos familias={familias} valorAtual={sp.familia ?? ''} />
+          <FiltroTipoMovimentos valorAtual={sp.tipo ?? ''} />
+          {podeCriar && produtoUnico && (
+            <NovoAjusteManual locais={locais} produto={produtoUnico} />
+          )}
+        </div>
       </div>
 
       {(saldoInicial != null || saldoFinal != null) && (
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Saldo inicial (antes de {fmtDataDetalhe(ini)}) <span className="num font-semibold text-text">{fmtQtd(saldoInicial ?? 0)}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-surface px-3.5 py-1.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+            Saldo inicial (antes de <span className="num">{fmtDataDetalhe(ini)}</span>) <span className="num font-semibold text-text">{fmtQtd(saldoInicial ?? 0)}</span>
           </span>
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Saldo final (até {fmtDataDetalhe(fim)}) <span className="num font-semibold text-text">{fmtQtd(saldoFinal ?? 0)}</span>
+          <span className="rounded-full bg-surface px-3.5 py-1.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+            Saldo final (até <span className="num">{fmtDataDetalhe(fim)}</span>) <span className="num font-semibold text-text">{fmtQtd(saldoFinal ?? 0)}</span>
           </span>
         </div>
       )}
 
       {totalOmie && (
-        <div className="rounded-lg border border-brand/30 bg-brand-soft/30 px-3.5 py-2.5">
-          <p className="text-[13px] font-semibold text-brand">Movimentação bruta (Omie)</p>
-          <p className="mt-0.5 text-sm text-text">
+        <div className="rounded-[var(--r-lg)] bg-surface px-4 py-3.5 shadow-[var(--shadow-sm)]">
+          <p className="text-[15px] font-semibold text-text">Movimentação bruta (Omie)</p>
+          <p className="mt-1 text-[15px] text-text-muted">
             Entradas <span className="num font-semibold text-ok">{fmtQtd(totalOmie.entradas)}</span>
             {' · '}
             Saídas <span className="num font-semibold text-err">{fmtQtd(totalOmie.saidas)}</span>
           </p>
-          <p className="mt-1 text-[12px] text-text-muted">
-            Vem direto do sync do Omie (mesma fonte da aba Histórico). <strong>Inclui transferências entre locais
-            desta mesma loja</strong> — a Omie conta a saída do local de origem sem compensar com a entrada no
-            destino, então um dia com transferência grande infla este número mesmo sem o produto ter saído de
-            verdade da loja (achado real: transferência interna de 60.000 ml apareceu aqui como &quot;saída&quot;
-            sem queda equivalente no saldo). Pra saber quanto realmente sobrou/faltou no estoque, use{' '}
-            <strong>Saldo inicial/final</strong> acima — vem direto de `posicao_estoques` e não é afetado por
-            transferência interna. A tabela abaixo é uma reconstrução local (ajustes + OP + NF + inventário) pra
-            explicar <em>o que</em> causou a movimentação; pode não bater 1:1 com o total acima.
-          </p>
+          <div className="mt-2.5 flex items-start gap-2.5 text-[13px] leading-relaxed text-text-muted">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
+            <p>
+              Vem direto do sync do Omie (mesma fonte da aba Histórico). <strong className="font-semibold text-text">Inclui transferências entre locais
+              desta mesma loja</strong> — a Omie conta a saída do local de origem sem compensar com a entrada no
+              destino, então um dia com transferência grande infla este número mesmo sem o produto ter saído de
+              verdade da loja (achado real: transferência interna de 60.000 ml apareceu aqui como &quot;saída&quot;
+              sem queda equivalente no saldo). Pra saber quanto realmente sobrou/faltou no estoque, use{' '}
+              <strong className="font-semibold text-text">Saldo inicial/final</strong> acima — vem direto de `posicao_estoques` e não é afetado por
+              transferência interna. A tabela abaixo é uma reconstrução local (ajustes + OP + NF + inventário) pra
+              explicar <em>o que</em> causou a movimentação; pode não bater 1:1 com o total acima.
+            </p>
+          </div>
         </div>
       )}
 

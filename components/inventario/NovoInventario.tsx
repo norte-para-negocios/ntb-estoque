@@ -120,7 +120,7 @@ export function NovoInventario({
               onChange={(e) => setData(e.target.value)}
               className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
             />
-            <p className="text-[11px] text-text-muted">
+            <p className="text-[12px] text-text-muted">
               Costuma-se considerar o dia anterior (D-1) quando a contagem é feita de manhã.
             </p>
           </div>
@@ -137,13 +137,13 @@ export function NovoInventario({
               )}
               Pré-popular com produtos
               {totalFiltros > 0 && (
-                <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-semibold text-white">
                   {totalFiltros}
                 </span>
               )}
             </button>
             {mostrarFiltros && (
-              <div className="space-y-3 rounded-md border border-border bg-surface-subtle p-3">
+              <div className="space-y-3 rounded-[var(--r-md)] bg-surface-2 p-3">
                 <div className="space-y-1.5">
                   <p className="text-[13px] font-medium text-text-muted">
                     Tipo de produto
@@ -182,7 +182,7 @@ export function NovoInventario({
                     </div>
                   </div>
                 )}
-                <p className="text-[11px] text-text-muted">
+                <p className="text-[12px] text-text-muted">
                   {totalFiltros > 0
                     ? 'Apenas produtos dos tipos/famílias selecionados serão incluídos.'
                     : 'Selecione tipos ou famílias para incluir produtos automaticamente.'}

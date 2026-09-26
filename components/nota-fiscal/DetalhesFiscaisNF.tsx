@@ -73,8 +73,8 @@ function SimNao({ v }: { v: string | undefined }) {
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[11px] text-text-muted">{label}</dt>
-      <dd className="text-[13px] text-text">{children}</dd>
+      <dt className="text-[13px] text-text-muted">{label}</dt>
+      <dd className="text-[15px] text-text">{children}</dd>
     </div>
   )
 }
@@ -89,9 +89,9 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {(cabec?.cCNPJ_CPF || cabec?.cNaturezaOperacao) && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Fornecedor / operação</h3>
-          <dl className="space-y-1.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Fornecedor / operação</h3>
+          <dl className="space-y-2.5">
             {cabec?.cCNPJ_CPF && <Campo label="CNPJ/CPF"><span className="num">{cabec.cCNPJ_CPF}</span></Campo>}
             {cabec?.cInscricao && <Campo label="Inscrição estadual"><span className="num">{cabec.cInscricao}</span></Campo>}
             {cabec?.cNaturezaOperacao && <Campo label="Natureza da operação">{cabec.cNaturezaOperacao}</Campo>}
@@ -100,19 +100,19 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {ic && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Situação no Omie</h3>
-          <dl className="space-y-1.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Situação no Omie</h3>
+          <dl className="space-y-2.5">
             <Campo label="Recebido">
               <SimNao v={ic.cRecebido} />
               {ic.cRecebido === 'S' && fmtDataHora(ic.dRec, ic.hRec) && (
-                <span className="text-text-muted"> · {fmtDataHora(ic.dRec, ic.hRec)}</span>
+                <span className="num text-text-muted"> · {fmtDataHora(ic.dRec, ic.hRec)}</span>
               )}
             </Campo>
             <Campo label="Faturado">
               <SimNao v={ic.cFaturado} />
               {ic.cFaturado === 'S' && fmtDataHora(ic.dFat, ic.hFat) && (
-                <span className="text-text-muted"> · {fmtDataHora(ic.dFat, ic.hFat)}</span>
+                <span className="num text-text-muted"> · {fmtDataHora(ic.dFat, ic.hFat)}</span>
               )}
             </Campo>
             <Campo label="Cancelada"><SimNao v={ic.cCancelada} /></Campo>
@@ -123,9 +123,9 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {transporte?.cNomeTransp && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Transporte</h3>
-          <dl className="space-y-1.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Transporte</h3>
+          <dl className="space-y-2.5">
             <Campo label="Transportadora">{transporte.cNomeTransp}</Campo>
             {transporte.cTipoFrete && (
               <Campo label="Frete">{FRETE_LABEL[transporte.cTipoFrete] ?? transporte.cTipoFrete}</Campo>
@@ -146,12 +146,12 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {!!parcelas?.parcelasLista?.length && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Parcelas</h3>
-          <ul className="space-y-1 text-[13px]">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Parcelas</h3>
+          <ul className="divide-y divide-border/60 text-[15px]">
             {parcelas.parcelasLista.map((p) => (
-              <li key={p.nSequencia} className="flex justify-between">
-                <span className="text-text-muted">{p.nSequencia}ª · vence {p.dVencimento}</span>
+              <li key={p.nSequencia} className="flex justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                <span className="text-text-muted"><span className="num">{p.nSequencia}ª</span> · vence <span className="num">{p.dVencimento}</span></span>
                 <span className="num font-medium">{fmtMoeda(p.vParcela)}</span>
               </li>
             ))}
@@ -160,9 +160,9 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {totais && (totais.vAproxTributos != null || totais.nValIBS != null) && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Impostos (aproximados)</h3>
-          <dl className="space-y-1.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Impostos (aproximados)</h3>
+          <dl className="space-y-2.5">
             {totais.vAproxTributos != null && (
               <Campo label="Total aproximado de tributos"><span className="num">{fmtMoeda(totais.vAproxTributos)}</span></Campo>
             )}
@@ -177,11 +177,11 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
       )}
 
       {infoAdicionais?.cCategCompra && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3">
-          <h3 className="mb-2 text-[12px] font-medium text-text-muted">Informações adicionais</h3>
-          <dl className="space-y-1.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Informações adicionais</h3>
+          <dl className="space-y-2.5">
             <Campo label="Categoria de compra"><span className="num">{infoAdicionais.cCategCompra}</span></Campo>
-            {infoAdicionais.dRegistro && <Campo label="Data de registro">{infoAdicionais.dRegistro}</Campo>}
+            {infoAdicionais.dRegistro && <Campo label="Data de registro"><span className="num">{infoAdicionais.dRegistro}</span></Campo>}
           </dl>
         </div>
       )}

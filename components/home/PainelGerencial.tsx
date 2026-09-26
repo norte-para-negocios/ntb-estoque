@@ -18,19 +18,19 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
   const d = await carregarDashboardGerencial(lojaId, dataIni, dataFim, 10)
 
   return (
-    <section className="space-y-6 border-t border-border pt-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[13px] font-semibold text-text-muted">Visão gerencial (ano corrente)</h2>
-        <Link href="/relatorios" className="text-[13px] text-brand hover:underline">
+    <section className="space-y-7 pt-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[20px] font-bold tracking-[-0.01em] text-text">Visão gerencial (ano corrente)</h2>
+        <Link href="/relatorios" className="shrink-0 text-[15px] text-brand hover:underline">
           ver todos os relatórios →
         </Link>
       </div>
 
       {/* Rejeitos por tipo */}
       <div>
-        <h3 className="mb-2 text-sm font-bold text-text">Rejeitos / perdas por tipo</h3>
+        <h3 className="mb-2.5 text-[17px] font-semibold text-text">Rejeitos / perdas por tipo</h3>
         {d.rejeitos.length === 0 ? (
-          <EmptyState icon={AlertTriangle} title="Sem rejeitos registrados no período" hint="" />
+          <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem rejeitos registrados no período" hint="" /></div>
         ) : (
           <>
             <ResumoGrafico
@@ -40,7 +40,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
                 itens: d.rejeitos.map((r) => ({ label: r.categoria, valor: r.valorTotal })),
               }}
             />
-            <div className="mt-2 flex flex-wrap gap-3 text-[12px] text-text-muted">
+            <div className="mt-2 flex flex-wrap gap-3 text-[13px] text-text-muted">
               {d.rejeitos.map((r) => (
                 <span key={r.categoria}>
                   {r.categoria}: {fmtMoeda(r.valorTotal)}
@@ -63,7 +63,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
                 </span>
               ))}
             </div>
-            <Link href="/transferencia?motivo=TPQ" className="mt-1 inline-block text-[12px] text-brand hover:underline">
+            <Link href="/transferencia?motivo=TPQ" className="mt-1 inline-block text-[13px] text-brand hover:underline">
               ver lançamentos de perda →
             </Link>
           </>
@@ -72,7 +72,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
 
       {/* Relação compras/faturamento */}
       <div>
-        <h3 className="mb-2 text-sm font-bold text-text">Relação compras/faturamento</h3>
+        <h3 className="mb-2.5 text-[17px] font-semibold text-text">Relação compras/faturamento</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {d.ratioCompraFaturamento.map((r) => (
             <MeterRatio key={r.categoria} label={r.categoria} pct={r.pct} limite={30} />
@@ -85,36 +85,36 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           produto acabado com revenda no "top 10 mais faturados"). */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais faturados (produto acabado)</h3>
+          <h3 className="mb-2.5 text-[17px] font-semibold text-text">Top 10 mais faturados (produto acabado)</h3>
           {d.topFaturadosAcabado.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title="Sem faturamento no período" hint="" />
+            <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem faturamento no período" hint="" /></div>
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosAcabado }} />
           )}
-          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[12px] text-brand hover:underline">
+          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[13px] text-brand hover:underline">
             ver evolução mensal →
           </Link>
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais faturados (revenda)</h3>
+          <h3 className="mb-2.5 text-[17px] font-semibold text-text">Top 10 mais faturados (revenda)</h3>
           {d.topFaturadosRevenda.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title="Sem faturamento de revenda no período" hint="" />
+            <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem faturamento de revenda no período" hint="" /></div>
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topFaturadosRevenda }} />
           )}
-          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[12px] text-brand hover:underline">
+          <Link href="/relatorio-faturamento?dim=produto" className="mt-1 inline-block text-[13px] text-brand hover:underline">
             ver evolução mensal →
           </Link>
         </div>
         <div className="lg:col-span-2">
-          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais comprados</h3>
+          <h3 className="mb-2.5 text-[17px] font-semibold text-text">Top 10 mais comprados</h3>
           {d.topComprados.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title="Sem compras no período" hint="" />
+            <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem compras no período" hint="" /></div>
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.topComprados }} />
           )}
           {d.maiorFornecedor && (
-            <p className="mt-2 text-[12px] text-text-muted">
+            <p className="mt-2 text-[13px] text-text-muted">
               Maior fornecedor: <span className="font-medium text-text">{d.maiorFornecedor.label}</span> ({fmtMoeda(d.maiorFornecedor.valor)})
             </p>
           )}
@@ -131,17 +131,17 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
           (lib/resumo-dia.ts) -- 'reais' aqui daria simbolo de moeda errado. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-2 text-sm font-bold text-text">10 menos faturados</h3>
+          <h3 className="mb-2.5 text-[17px] font-semibold text-text">10 menos faturados</h3>
           {d.bottomFaturados.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
+            <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" /></div>
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'reais', itens: d.bottomFaturados }} />
           )}
         </div>
         <div>
-          <h3 className="mb-2 text-sm font-bold text-text">Top 10 mais vendidos (quantidade)</h3>
+          <h3 className="mb-2.5 text-[17px] font-semibold text-text">Top 10 mais vendidos (quantidade)</h3>
           {d.topPorQuantidade.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" />
+            <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Sem dado suficiente no período" hint="" /></div>
           ) : (
             <ResumoGrafico grafico={{ titulo: '', unidade: 'num', itens: d.topPorQuantidade }} />
           )}
@@ -150,17 +150,17 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
 
       {/* Produtos parados */}
       <div>
-        <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-          <h3 className="text-sm font-bold text-text">Produtos parados (30+ dias sem movimento)</h3>
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <h3 className="text-[17px] font-semibold text-text">Produtos parados (30+ dias sem movimento)</h3>
         </div>
         {d.produtosParados.length === 0 ? (
-          <EmptyState icon={AlertTriangle} title="Nenhum produto parado" hint="Todos os produtos com saldo tiveram movimento recente." />
+          <div className="rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]"><EmptyState icon={AlertTriangle} title="Nenhum produto parado" hint="Todos os produtos com saldo tiveram movimento recente." /></div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="overflow-clip rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] divide-y divide-border/60">
             {d.produtosParados.slice(0, 8).map((p) => (
-              <li key={p.codigoProduto} className="flex items-center gap-3 py-2.5 text-sm">
+              <li key={p.codigoProduto} className="flex items-center gap-3 px-4 py-3 text-[15px]">
                 <span className="min-w-0 flex-1 truncate text-text">{p.descricao}</span>
-                <span className="num text-[12px] text-text-muted">
+                <span className="num shrink-0 text-[13px] text-text-muted">
                   {p.diasSemMovimento >= 9999 ? 'sem registro' : `${p.diasSemMovimento}d parado`}
                 </span>
               </li>

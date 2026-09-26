@@ -7,7 +7,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 
 const LS_LC = 'etq_lc'
 const LS_AC = 'etq_ac'
-const inputClass = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text num outline-none focus:ring-2 focus:ring-brand/40'
+const inputClass = 'h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text num outline-none focus:ring-2 focus:ring-brand/40 max-sm:h-11 max-sm:text-base'
 
 // Diálogo de impressão de etiqueta: o usuário escolhe o TAMANHO em cm (ou usa o
 // padrão da loja). Só o tamanho é do usuário; o resto (campos, cor, nome) é o
@@ -64,16 +64,16 @@ export function DialogImprimirEtiqueta({
       <DialogTrigger
         render={
           (trigger as React.ReactElement) ?? (
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text">
+            <button type="button" className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-3.5 text-[13px] font-semibold text-text u-motion u-press hover:bg-[var(--border)] max-sm:h-9">
               <Printer className="size-3.5" strokeWidth={2} /> {label}
             </button>
           )
         }
       />
       <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-sm" showCloseButton={false}>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">Imprimir etiqueta</div>
-        <div className="px-4 py-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
+        <div className="px-5 pt-5 pb-1 text-[20px] font-bold tracking-[-0.01em] text-text">Imprimir etiqueta</div>
+        <div className="px-5 py-3">
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-[15px] text-text">
             <input type="checkbox" checked={personalizar} onChange={(e) => setPersonalizar(e.target.checked)} className="size-4 accent-[var(--brand)]" />
             Personalizar o tamanho (cm)
           </label>
@@ -92,7 +92,7 @@ export function DialogImprimirEtiqueta({
             <p className="mt-2 text-[13px] text-text-muted">Vai usar o tamanho padrão definido pela loja.</p>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 px-5 pt-2 pb-5">
           <button type="button" onClick={() => setOpen(false)} className={btnClass('outline')}>Cancelar</button>
           <button type="button" onClick={imprimir} className={btnClass('primary')}>
             <Printer className="size-4" /> Imprimir

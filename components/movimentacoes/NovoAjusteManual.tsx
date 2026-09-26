@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui-kit/Spinner'
-import { Plus } from 'lucide-react'
+import { Info, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarAjusteManual } from '@/lib/actions/movimentacoes'
 
@@ -103,9 +103,12 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
           <p className="text-[13px] text-text-muted">
             <span className="num">{produto.codigo}</span> {produto.descricao}
           </p>
-          <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
+          <p className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-warn" />
+            <span>
             Só para correção de saldo num local só. Perda/quebra ou transferência entre locais: use a tela de{' '}
             <span className="font-medium text-text">Transferência</span>.
+            </span>
           </p>
           <div className="space-y-2">
             <Label>Tipo</Label>
@@ -147,7 +150,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
               placeholder="0"
-              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
             />
           </div>
           <div className="space-y-2">
@@ -157,7 +160,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={data}
               max={hojeBahia}
               onChange={(e) => setData(e.target.value)}
-              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
             />
           </div>
           <div className="space-y-2">
@@ -167,7 +170,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="Ex: contagem física divergente, produto avariado..."
-              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+              className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
             />
           </div>
         </div>

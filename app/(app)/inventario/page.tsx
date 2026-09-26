@@ -272,9 +272,8 @@ export default async function InventarioPage({
         <PageHeader
           title="Inventários"
           icon={ClipboardList}
-          description="Contagens de estoque por local"
           actions={
-            <>
+            <div className="-my-1 flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto py-1 [scrollbar-width:none] sm:w-auto sm:flex-wrap sm:justify-end sm:overflow-visible [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               <FiltrosGaveta
                 basePath="/inventario"
                 campos={campos}
@@ -307,7 +306,7 @@ export default async function InventarioPage({
               </a>
               <CopiarLinkRelatorio href={`/inventario/relatorio?${filtrosParams.toString()}`} />
               {podeCriar ? <NovoInventario locais={locais ?? []} familias={familias} /> : null}
-            </>
+            </div>
           }
         />
         <ChipsStatus

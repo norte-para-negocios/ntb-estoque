@@ -12,7 +12,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors max-sm:text-base placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 export type ProdutoEditavel = {
@@ -114,7 +114,7 @@ export function EditarProdutoForm({
         render={
           <button
             type="button"
-            className="flex size-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-brand"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
             aria-label="Editar produto"
             title="Editar produto"
           >
@@ -123,11 +123,11 @@ export function EditarProdutoForm({
         }
       />
       <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+        <div className="px-5 pt-5 pb-2 text-[20px] font-bold tracking-[-0.01em] text-text">
           Editar produto
           {produto.codigo && <span className="ml-2 text-[13px] font-normal text-text-muted">#{produto.codigo}</span>}
         </div>
-        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-4 py-3">
+        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-5 py-3">
           <div className="col-span-2">
             <label className={labelClass}>Descrição</label>
             <input
@@ -218,7 +218,7 @@ export function EditarProdutoForm({
             protegidos da sincronização automática.
           </p>
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
           <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
             {pending && <Spinner />}
             {pending ? 'Salvando...' : 'Salvar'}

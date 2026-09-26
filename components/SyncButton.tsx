@@ -1,5 +1,7 @@
 'use client'
 
+import { btnClass } from '@/components/ui-kit/Button'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
@@ -50,7 +52,7 @@ export function SyncButton({
       onClick={handleSync}
       disabled={loading}
       title={title}
-      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-sm font-medium text-white u-motion u-press hover:bg-[var(--brand-strong)] disabled:opacity-60 disabled:active:scale-100 sm:px-3"
+      className={btnClass('primary')}
     >
       <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
       <span className="hidden sm:inline">{loading ? 'Sincronizando...' : label}</span>

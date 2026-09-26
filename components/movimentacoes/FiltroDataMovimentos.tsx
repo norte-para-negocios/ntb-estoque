@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { SegmentedControl } from '@/components/ui-kit/SegmentedControl'
 
 interface Props {
   ini: string
@@ -39,25 +40,16 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center rounded-lg border border-border bg-surface-2 p-0.5">
-        <button
-          onClick={() => trocarModo('unica')}
-          className={`rounded-md px-3 py-1 text-[12px] transition-colors ${
-            modo === 'unica' ? 'bg-surface font-medium text-text shadow-sm' : 'text-text-muted hover:text-text'
-          }`}
-        >
-          Data única
-        </button>
-        <button
-          onClick={() => trocarModo('periodo')}
-          className={`rounded-md px-3 py-1 text-[12px] transition-colors ${
-            modo === 'periodo' ? 'bg-surface font-medium text-text shadow-sm' : 'text-text-muted hover:text-text'
-          }`}
-        >
-          Período
-        </button>
-      </div>
+    <div className="flex shrink-0 flex-nowrap items-center gap-2">
+      <SegmentedControl
+        aria-label="Tipo de data"
+        opcoes={[
+          { value: 'unica', label: 'Data única' },
+          { value: 'periodo', label: 'Período' },
+        ]}
+        value={modo}
+        onChange={(v) => trocarModo(v as 'unica' | 'periodo')}
+      />
 
       {modo === 'unica' ? (
         <input
@@ -65,7 +57,7 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
           value={dataUnica}
           onChange={(e) => setDataUnica(e.target.value)}
           onBlur={(e) => navegar(e.target.value, e.target.value)}
-          className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+          className="num h-9 shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:text-base"
         />
       ) : (
         <>
@@ -74,15 +66,15 @@ export function FiltroDataMovimentos({ ini, fim }: Props) {
             value={inicio}
             onChange={(e) => setInicio(e.target.value)}
             onBlur={(e) => navegar(e.target.value, final)}
-            className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+            className="num h-9 shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:text-base"
           />
-          <span className="text-[12px] text-text-muted">até</span>
+          <span className="shrink-0 text-[13px] text-text-muted">até</span>
           <input
             type="date"
             value={final}
             onChange={(e) => setFinal(e.target.value)}
             onBlur={(e) => navegar(inicio, e.target.value)}
-            className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+            className="num h-9 shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:text-base"
           />
         </>
       )}

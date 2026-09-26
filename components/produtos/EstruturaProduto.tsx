@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { verEstrutura, salvarEstrutura, type EstruturaView, type ItemEstruturaInput } from '@/lib/actions/estrutura'
 import { ProdutoSearch } from '@/components/produtos/ProdutoSearch'
 import type { ProdutoBusca } from '@/lib/actions/produtos-search'
-import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
+import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { parseNumBR, formatNumBR } from '@/lib/num-br'
 
@@ -137,16 +137,21 @@ export function EstruturaProduto({
     <Dialog open={open} onOpenChange={abrir}>
       <DialogTrigger
         render={
-          <button type="button" className={btnLinhaClass('ghost')} title="Ficha técnica" aria-label="Estrutura">
-            <Layers className="size-4" /> <RotuloAcao>Estrutura</RotuloAcao>
+          <button
+            type="button"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+            title="Ficha técnica"
+            aria-label="Estrutura"
+          >
+            <Layers className="size-4" />
           </button>
         }
       />
       <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-2xl" showCloseButton={false}>
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-2">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-base font-semibold text-text">
-              <Layers className="size-4 text-brand" /> Ficha técnica
+            <div className="text-[20px] font-bold tracking-[-0.01em] text-text">
+              Ficha técnica
             </div>
             <div className="mt-0.5 truncate text-[13px] text-text-muted">{descricao}</div>
           </div>
@@ -157,13 +162,13 @@ export function EstruturaProduto({
           )}
         </div>
 
-        <div className="max-h-[65vh] space-y-4 overflow-y-auto px-4 py-4">
+        <div className="max-h-[65vh] space-y-5 overflow-y-auto px-5 py-3">
           {pending && !view && <div className="py-6 text-center text-sm text-text-muted">Carregando estrutura do Omie...</div>}
 
           {view && (
             <>
               {!editando && (
-                <div className="flex items-start gap-2 rounded-md border border-border bg-surface-2/40 p-3 text-[12px] text-text-muted">
+                <div className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface-2 p-3 text-[13px] text-text-muted">
                   <Info className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {editavel
@@ -177,7 +182,7 @@ export function EstruturaProduto({
 
               {/* COMPONENTES */}
               <div>
-                <div className="mb-2 text-[13px] font-semibold text-text">Componentes ({linhas.length})</div>
+                <div className="mb-2 text-[17px] font-semibold text-text">Componentes ({linhas.length})</div>
 
                 {editando && (
                   <div className="mb-3">
@@ -186,13 +191,13 @@ export function EstruturaProduto({
                 )}
 
                 {linhas.length === 0 ? (
-                  <div className="rounded-md border border-border bg-surface p-4 text-[13px] text-text-muted">
+                  <div className="rounded-[var(--r-md)] bg-surface-2 p-4 text-[13px] text-text-muted">
                     {editando ? 'Adicione os componentes (insumos) que entram neste produto.' : 'Este produto não tem ficha técnica cadastrada no Omie.'}
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-md border border-border">
-                    <table className="w-full text-sm">
-                      <thead className="bg-surface">
+                  <div className="overflow-x-auto rounded-[var(--r-md)] bg-surface-2/50">
+                    <table className="w-full min-w-[420px] text-sm">
+                      <thead>
                         <tr>
                           <th className={th}>Componente</th>
                           <th className={`${th} text-right`}>Qtde</th>
@@ -206,7 +211,7 @@ export function EstruturaProduto({
                           <tr key={l.idProdMalha} className="border-t border-border/60">
                             <td className="px-3 py-2">
                               <div className="text-text">{l.descricao}</div>
-                              <div className="num text-[11px] text-text-muted">{l.codigo}</div>
+                              <div className="num text-[12px] text-text-muted">{l.codigo}</div>
                             </td>
                             <td className="px-3 py-2 text-right">
                               {editando ? (
@@ -236,7 +241,7 @@ export function EstruturaProduto({
                             </td>
                             {editando && (
                               <td className="px-2 py-2 text-right">
-                                <button onClick={() => remover(l.idProdMalha)} className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-err" aria-label="Remover">
+                                <button onClick={() => remover(l.idProdMalha)} className="flex size-8 items-center justify-center rounded-full text-err u-motion u-press hover:bg-surface" aria-label="Remover">
                                   <Trash2 className="size-4" />
                                 </button>
                               </td>
@@ -252,15 +257,15 @@ export function EstruturaProduto({
               {/* CONSUMO REAL (somente leitura, fora do modo edição) */}
               {!editando && view.consumoOP?.itens?.length ? (
                 <div>
-                  <div className="mb-2 text-[13px] font-semibold text-text">
+                  <div className="mb-2 text-[17px] font-semibold text-text">
                     Consumo na última produção
                     {view.consumoOP.numero && (
-                      <span className="ml-2 font-normal text-text-muted">OP {view.consumoOP.numero} · {fmtData(view.consumoOP.data)}</span>
+                      <span className="ml-2 text-[13px] font-normal text-text-muted">OP {view.consumoOP.numero} · {fmtData(view.consumoOP.data)}</span>
                     )}
                   </div>
-                  <div className="overflow-hidden rounded-md border border-border">
-                    <table className="w-full text-sm">
-                      <thead className="bg-surface">
+                  <div className="overflow-x-auto rounded-[var(--r-md)] bg-surface-2/50">
+                    <table className="w-full min-w-[420px] text-sm">
+                      <thead>
                         <tr><th className={th}>Elemento consumido</th><th className={`${th} text-right`}>Qtde</th><th className={th}>Do estoque</th></tr>
                       </thead>
                       <tbody>
@@ -280,7 +285,7 @@ export function EstruturaProduto({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
           {editando ? (
             <>
               <button type="button" onClick={() => { setEditando(false); carregar() }} disabled={pending} className={btnClass('outline')}>

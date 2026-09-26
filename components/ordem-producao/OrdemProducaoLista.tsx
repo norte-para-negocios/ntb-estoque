@@ -100,7 +100,7 @@ export function OrdemProducaoLista({
   return (
     <>
       {temSelecao && (
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           {podeConcluir && (
             <button
               type="button"
@@ -157,7 +157,7 @@ export function OrdemProducaoLista({
         </DataTable>
       </div>
       {/* Mobile: lista compacta (extrato); edição no dialog "Editar" */}
-      <div className="divide-y divide-border overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface lg:hidden">
+      <div className="divide-y divide-border/60 overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface lg:hidden">
         {linhas.map((op) => (
           <OrdemProducaoCard
             key={op.id}

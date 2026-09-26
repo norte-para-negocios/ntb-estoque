@@ -8,7 +8,7 @@ import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
-import { SELO_CLASSE } from '@/lib/status-cor'
+import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { Printer } from 'lucide-react'
 
 type Impressao = {
@@ -139,7 +139,7 @@ export default async function ImpressoesPage({
               const isNF = imp.origem === 'NF'
               const refHref = isNF ? `/nota-fiscal/${imp.referencia_id}` : `/ordem-producao`
               return (
-                <Link href={refHref} className="font-medium text-brand hover:underline">
+                <Link href={refHref} className="num font-semibold text-brand hover:underline">
                   #{imp.referencia_id}
                 </Link>
               )
@@ -149,7 +149,7 @@ export default async function ImpressoesPage({
             label: 'Data/hora',
             larguraDesktop: 'w-44',
             sort: 'created_at',
-            render: (imp) => <span className="text-text-muted">{fmtDataHora(imp.created_at)}</span>,
+            render: (imp) => <span className="num text-text-muted">{fmtDataHora(imp.created_at)}</span>,
           },
           {
             label: 'Origem',
@@ -159,7 +159,8 @@ export default async function ImpressoesPage({
               const tom = imp.origem === 'NF' ? 'info' : imp.origem === 'PRODUTO' ? 'brand' : 'ok'
               const label = imp.origem === 'NF' ? 'Nota Fiscal' : imp.origem === 'PRODUTO' ? 'Produto' : 'Ordem de Produção'
               return (
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[tom]}`}>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text">
+                  <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[tom]}`} aria-hidden />
                   {label}
                 </span>
               )
@@ -176,7 +177,7 @@ export default async function ImpressoesPage({
             label: 'Qtd',
             larguraDesktop: 'w-28',
             sort: 'qtd_etiquetas',
-            render: (imp) => imp.qtd_etiquetas,
+            render: (imp) => <span className="num">{imp.qtd_etiquetas}</span>,
           },
         ]}
         acao={(imp) => {

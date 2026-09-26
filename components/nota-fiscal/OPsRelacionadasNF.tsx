@@ -128,12 +128,15 @@ export async function OPsRelacionadasNF({
 
   return (
     <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Ordens de produção relacionadas</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
+      <h2 className="text-[17px] font-semibold text-text">Ordens de produção relacionadas</h2>
+      <details className="mb-3 mt-1 text-[13px] text-text-muted">
+        <summary className="cursor-pointer select-none py-1 hover:text-text">Detalhes técnicos</summary>
+        <p className="mt-1">
         Correlação fraca: OPs que consomem, como insumo, algum produto desta NF, na mesma loja, até 30 dias
         depois da emissão. O sistema não guarda nenhum vínculo real entre nota fiscal e ordem de produção --
         isto NÃO é rastreabilidade de lote, é só uma pista de &ldquo;pra onde pode ter ido esse insumo&rdquo;.
-      </p>
+        </p>
+      </details>
 
       {!podeConsultar ? (
         <p className="text-[13px] text-text-muted">
@@ -142,17 +145,20 @@ export async function OPsRelacionadasNF({
             : 'Sem data de emissão para calcular a janela de 30 dias.'}
         </p>
       ) : falhaConsulta ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+<p className="flex items-start gap-2 text-[13px] text-text-muted">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-err" aria-hidden />
+          <span>
           Não foi possível consultar ordens de produção agora (falha de banco/rede) -- tente recarregar a
           página. Isto é diferente de &ldquo;nenhuma OP encontrada&rdquo;.
+          </span>
         </p>
       ) : ordenadas.length === 0 ? (
-        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           Nenhuma OP encontrada consumindo produtos desta NF como insumo nessa janela de 30 dias. Comum e
           esperado -- a correlação é fraca por natureza (produção não é fácil de datar a partir da compra).
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="-mx-4 divide-y divide-border/60">
           {ordenadas.map((r) => {
             const numOP = r.identificacao_c_num_op || r.num_ordem || `#${r.id}`
             const dataRef = r.data_ref
@@ -160,13 +166,13 @@ export async function OPsRelacionadasNF({
               <a
                 key={r.id}
                 href={`/ordem-producao/${r.id}`}
-                className="block rounded-md border border-border bg-surface-2/40 px-3 py-2 transition-colors hover:border-brand"
+                className="block px-4 py-3 u-motion hover:bg-surface-2/60"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[13px] font-medium text-text">OP {numOP}</span>
-                  <span className="num text-[12px] text-text-muted">{fmtDataBR(dataRef)}</span>
+                  <span className="text-[15px] font-semibold text-text">OP <span className="num">{numOP}</span></span>
+                  <span className="num text-[13px] text-text-muted">{fmtDataBR(dataRef)}</span>
                 </div>
-                <div className="mt-1 text-[12px] text-text-muted">
+                <div className="mt-1 text-[13px] text-text-muted">
                   Produz{' '}
                   <span className="text-text">
                     {r.identificacao_n_cod_produto != null
@@ -175,10 +181,13 @@ export async function OPsRelacionadasNF({
                   </span>{' '}
                   · Qtde <span className="num">{r.identificacao_n_qtde != null ? Number(r.identificacao_n_qtde).toLocaleString('pt-BR') : '-'}</span>
                   {' · '}
-                  {r.concluida ? <span className="text-ok">Concluída</span> : <span className="text-warn">Não concluída</span>}
+                  <span className="inline-flex items-center gap-1.5 text-text">
+                    <span className={`size-2 shrink-0 rounded-full ${r.concluida ? 'bg-ok' : 'bg-warn'}`} aria-hidden />
+                    {r.concluida ? 'Concluída' : 'Não concluída'}
+                  </span>
                 </div>
                 {r.insumos_batidos && r.insumos_batidos.length > 0 && (
-                  <div className="mt-0.5 text-[11px] text-text-muted">
+                  <div className="mt-0.5 text-[13px] text-text-muted">
                     Insumo(s) desta NF usado(s): <span className="num">{r.insumos_batidos.join(', ')}</span>
                   </div>
                 )}
@@ -188,7 +197,7 @@ export async function OPsRelacionadasNF({
         </div>
       )}
       {ordenadas.length === LIMITE && (
-        <p className="mt-2 text-[11px] text-text-muted">Mostrando as {LIMITE} OPs mais recentes na janela.</p>
+        <p className="mt-2 text-[13px] text-text-muted">Mostrando as {LIMITE} OPs mais recentes na janela.</p>
       )}
     </div>
   )

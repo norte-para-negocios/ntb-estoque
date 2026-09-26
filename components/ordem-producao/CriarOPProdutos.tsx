@@ -158,7 +158,7 @@ export function CriarOPProdutos({
 
   return (
     <div className="pb-28 lg:pb-20">
-      <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+      <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border/60 bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-[var(--r-lg)] sm:border-0 sm:bg-surface/95 sm:px-3 sm:shadow-[var(--shadow-sm)]">
         <ProdutoSearch onSelect={adicionar} codigosAdicionados={itens.map((i) => i.produto.codigo)} />
         <QrScanner onLeitura={onLeituraQr} />
       </div>
@@ -171,7 +171,7 @@ export function CriarOPProdutos({
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             placeholder="Filtrar itens da lista"
-            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:text-base"
           />
         </div>
       )}
@@ -184,12 +184,12 @@ export function CriarOPProdutos({
               <li key={item.produto.codigo_produto} className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5 lg:flex lg:items-center lg:gap-4 lg:py-2 lg:pl-3.5 lg:pr-2">
                 <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-text">{item.produto.descricao}</div>
-                    <div className="num mt-0.5 text-xs text-text-muted">{item.produto.codigo}</div>
+                    <div className="line-clamp-2 break-words text-[15px] font-medium leading-snug text-text">{item.produto.descricao}</div>
+                    <div className="num mt-0.5 text-[12px] text-text-muted">{item.produto.codigo}</div>
                   </div>
                   <button
                     onClick={() => remover(item.produto.codigo_produto)}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err lg:order-last lg:size-8"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-muted u-motion hover:bg-surface-2 hover:text-err lg:order-last lg:size-8"
                     aria-label="Remover"
                   >
                     <Trash2 className="size-4" />
@@ -198,11 +198,11 @@ export function CriarOPProdutos({
 
                 <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end">
                   <span className="eyebrow lg:hidden">Quantidade{item.produto.unidade ? ` (${item.produto.unidade})` : ''}</span>
-                  <span className="hidden text-xs text-text-muted lg:inline">{item.produto.unidade || ''}</span>
-                  <div className="flex items-center gap-2 lg:gap-1.5">
+                  <span className="hidden text-[12px] text-text-muted lg:inline">{item.produto.unidade || ''}</span>
+                  <div className="flex items-center gap-1 rounded-full bg-surface-2 p-1 transition-shadow focus-within:ring-2 focus-within:ring-brand/40 lg:gap-0.5 lg:p-0.5">
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, -1)}
-                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 lg:size-8"
+                      className="flex size-10 items-center justify-center rounded-full bg-surface text-text shadow-[var(--shadow-sm)] u-motion u-press hover:text-brand lg:size-7"
                       aria-label="Diminuir"
                     >
                       <Minus className="size-4 lg:size-3.5" />
@@ -213,12 +213,12 @@ export function CriarOPProdutos({
                       value={q}
                       onChange={(e) => setQtd(item.produto.codigo_produto, e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
-                      className="num h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-lg font-semibold text-text outline-none focus:ring-2 focus:ring-brand/40 lg:h-8 lg:w-14 lg:text-base"
+                      className="num h-10 w-16 border-0 bg-transparent px-1 text-center text-lg font-semibold text-text outline-none lg:h-7 lg:w-14 lg:text-base"
                       placeholder="0"
                     />
                     <button
                       onClick={() => ajustarQtd(item.produto.codigo_produto, 1)}
-                      className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 lg:size-8"
+                      className="flex size-10 items-center justify-center rounded-full bg-surface text-text shadow-[var(--shadow-sm)] u-motion u-press hover:text-brand lg:size-7"
                       aria-label="Aumentar"
                     >
                       <Plus className="size-4 lg:size-3.5" />
@@ -228,10 +228,10 @@ export function CriarOPProdutos({
 
                 <div className="mt-3 flex items-center justify-between gap-3 lg:mt-0 lg:shrink-0 lg:justify-end lg:gap-2">
                   <span className="eyebrow lg:hidden">Validade (dias)</span>
-                  <span className="hidden text-xs text-text-muted lg:inline">Validade</span>
+                  <span className="hidden text-[12px] text-text-muted lg:inline">Validade</span>
                   <div className="flex items-center gap-2">
                     {item.validadeDias && Number(item.validadeDias) > 0 && datas[0] && (
-                      <span className="text-xs text-text-muted">
+                      <span className="text-[12px] text-text-muted">
                         vence {previewValidadeBR(datas[0], Number(item.validadeDias))}
                         {datas.length > 1 ? ' (1ª)' : ''}
                       </span>
@@ -244,7 +244,7 @@ export function CriarOPProdutos({
                       onChange={(e) => setValidadeDias(item.produto.codigo_produto, e.target.value)}
                       onWheel={(e) => e.currentTarget.blur()}
                       placeholder="dias"
-                      className="num h-11 w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 lg:h-8 lg:w-16"
+                      className="num h-11 w-20 rounded-full border-0 bg-surface-2 px-2 text-center text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base lg:h-8 lg:w-16"
                     />
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export function CriarOPProdutos({
       )}
 
       {itens.length > 0 && (
-        <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
+        <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border/60 bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[13px] text-text-muted">
               {totalOPs} ordem(ns){datas.length > 1 ? ` (${itens.length} × ${datas.length})` : ''}

@@ -113,7 +113,7 @@ export function ProdutoSearch({
       </div>
 
       {aberto && (buscando || resultados.length > 0 || termo.trim().length >= 2 || tipo || familia) && (
-        <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-72 overflow-y-auto rounded-[var(--r-md)] bg-surface shadow-[var(--shadow-md)]">
           {buscando ? (
             <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
               <Loader2 className="size-4 animate-spin" />
@@ -134,7 +134,7 @@ export function ProdutoSearch({
                 onClick={() => selecionar(p)}
                 disabled={jaAdicionado}
                 aria-disabled={jaAdicionado}
-                className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-3 border-b border-border/60 px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-text">{p.descricao}</div>

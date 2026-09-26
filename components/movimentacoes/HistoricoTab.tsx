@@ -7,7 +7,7 @@ import { formatQtdResumo } from '@/lib/num-br'
 import { Money } from '@/components/ui-kit/Money'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { AlertTriangle, ArrowLeftRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, Info } from 'lucide-react'
 import { BuscaProdutoInline } from '@/components/movimentacoes/BuscaProdutoInline'
 import { FiltroDataInline } from '@/components/movimentacoes/FiltroDataInline'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
@@ -301,7 +301,7 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
   const semCmc = linhas.filter((l) => !l.temCmc && (l.entradas > 0 || l.saidas > 0)).length
 
   const colValor = (n: number, temCmc: boolean) => {
-    if (!temCmc) return <span className="text-text-muted text-[11px]">sem CMC</span>
+    if (!temCmc) return <span className="text-[12px] text-text-muted">sem CMC</span>
     if (n <= 0) return <span className="text-text-muted">-</span>
     return <Money value={n} className="font-medium" />
   }
@@ -313,74 +313,80 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
     <div className="space-y-4">
       <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <SegmentLinks
-          basePath="/movimentacoes"
-          param="modo"
-          opcoes={[
-            { value: '', label: 'Por mês' },
-            { value: 'data', label: 'Por data' },
-          ]}
-        />
-        <SegmentLinks
-          basePath="/movimentacoes"
-          param="mov"
-          opcoes={[
-            { value: '', label: 'Tudo' },
-            { value: 'entrada', label: 'Entradas' },
-            { value: 'saida', label: 'Saídas' },
-          ]}
-        />
+      {/* Celular: um grupo por linha (sem quebrar o período no meio); desktop: tudo numa linha. */}
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SegmentLinks
+            basePath="/movimentacoes"
+            param="modo"
+            opcoes={[
+              { value: '', label: 'Por mês' },
+              { value: 'data', label: 'Por data' },
+            ]}
+          />
+          <SegmentLinks
+            basePath="/movimentacoes"
+            param="mov"
+            opcoes={[
+              { value: '', label: 'Tudo' },
+              { value: 'entrada', label: 'Entradas' },
+              { value: 'saida', label: 'Saídas' },
+            ]}
+          />
+        </div>
         <FiltroDataInline ini={ini} fim={fim} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3.5 py-1.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Entradas <span className="num font-semibold text-ok">{formatQtdResumo(totalEntradas)}</span>
           {MOSTRAR_VALORES && totalValEntradas > 0 && (
-            <span className="ml-1.5 text-ok/70">(<Money value={totalValEntradas} />)</span>
+            <span className="text-text-muted">(<Money value={totalValEntradas} />)</span>
           )}
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3.5 py-1.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Saídas <span className="num font-semibold text-err">{formatQtdResumo(totalSaidas)}</span>
           {MOSTRAR_VALORES && totalValSaidas > 0 && (
-            <span className="ml-1.5 text-err/70">(<Money value={totalValSaidas} />)</span>
+            <span className="text-text-muted">(<Money value={totalValSaidas} />)</span>
           )}
         </span>
       </div>
 
-      <div className="flex items-start gap-2 rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
+      <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
         <span>
-          Entradas/Saídas somam a loja inteira e <strong>incluem transferências entre locais desta mesma loja</strong> —
+          Entradas/Saídas somam a loja inteira e <strong className="font-semibold text-text">incluem transferências entre locais desta mesma loja</strong> —
           a Omie conta a saída do local de origem sem compensar com a entrada no destino, então um dia com
           transferência grande infla este número mesmo sem o produto ter saído de verdade do estoque. Pra ver
-          quanto realmente sobrou/faltou num local específico, use o filtro de local na aba <strong>Movimentos</strong>{' '}
+          quanto realmente sobrou/faltou num local específico, use o filtro de local na aba <strong className="font-semibold text-text">Movimentos</strong>{' '}
           (mostra Saldo inicial/final, que não é afetado por transferência interna).
         </span>
       </div>
 
       {MOSTRAR_VALORES && temCmcAbsurdo && (
-        <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
+        <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
           <span>
-            <strong className="text-warn">CMC suspeito detectado</strong> — um ou mais produtos têm custo médio
+            <strong className="font-semibold text-text">CMC suspeito detectado</strong> — um ou mais produtos têm custo médio
             unitário acima de R$ {CMC_ALERTA_UNITARIO.toLocaleString('pt-BR')} no Omie.
           </span>
         </div>
       )}
 
       {MOSTRAR_VALORES && semCmc > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[12px] text-text-muted">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
+        <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
           <span>{semCmc} produto{semCmc > 1 ? 's' : ''} sem CMC nesta página.</span>
         </div>
       )}
 
-      <p className="rounded-md border border-border bg-surface/50 px-3 py-2 text-[12px] text-text-muted">
-        <strong>Valores em R$ ocultos por enquanto</strong> (o custo do Omie está furado). A tela mostra só a
-        quantidade movimentada, agregada por produto/dia.
-      </p>
+      <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
+        <Info className="mt-0.5 size-3.5 shrink-0 text-warn" />
+        <p>
+          <strong className="font-semibold text-text">Valores em R$ ocultos por enquanto</strong> (o custo do Omie está furado). A tela mostra só a
+          quantidade movimentada, agregada por produto/dia.
+        </p>
+      </div>
 
       <Lista
         linhas={linhas}

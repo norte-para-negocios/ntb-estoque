@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { Printer } from 'lucide-react'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
+import { btnClass } from '@/components/ui-kit/Button'
 import { ContagemInventario, type ItemContagem } from '@/components/inventario/ContagemInventario'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 
@@ -113,7 +114,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
             href={`/inventario/${inventario.id}/imprimir`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
+            className={`${btnClass('outline')} shrink-0 whitespace-nowrap`}
           >
             <Printer className="size-4" /> Imprimir PDF
           </a>

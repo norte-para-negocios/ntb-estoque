@@ -8,18 +8,18 @@ import {
   ClipboardList,
   ArrowLeftRight,
   FileText,
-  ArrowRight,
   TrendingUp,
   CalendarClock,
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   type LucideIcon,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { SyncButton } from '@/components/SyncButton'
 import { CountUp } from '@/components/ui-kit/CountUp'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
-import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { TEXTO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { limiteJanelaQuente, contarOrdensProducaoAntigas, complementarOrdensProducao } from '@/lib/historico-contabo'
 import { PainelGerencial } from '@/components/home/PainelGerencial'
 
@@ -246,37 +246,28 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-ink text-white p-7 lg:p-9">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.5]"
-          style={{ background: 'radial-gradient(120% 80% at 85% -20%, rgba(46,181,195,0.18), transparent 60%)' }}
-        />
+      {/* Hero: cartão da marca (mesma superfície azul do menu lateral) */}
+      <section className="sidebar-blue relative overflow-hidden rounded-[22px] p-7 shadow-[var(--shadow-sm)] lg:p-9">
         <div className="relative">
-          <div className="flex items-center gap-2 text-[13px] font-semibold text-white/50">
-            <span className="inline-block size-1.5 rounded-full bg-brand" />
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-text-muted">
+            <span className="inline-block size-2 rounded-full bg-white/80" />
             {lojaNome}
           </div>
           <div className="mt-6 flex items-end justify-between gap-6 flex-wrap">
             <div>
-              <p className="text-[12px] text-white/45 mb-2">Produtos em estoque</p>
-              <div className="num text-[4.5rem] leading-[0.85] font-bold tracking-tight">
+              <p className="mb-2 text-[13px] text-text-muted">Produtos em estoque</p>
+              <div className="num text-[4.5rem] leading-[0.85] font-bold tracking-[-0.03em] text-white">
                 <CountUp value={produtos.count ?? 0} duration={750} />
               </div>
-              <div className="mt-4 h-1 w-24 rounded-full bg-brand" />
             </div>
-            {/* A.3.3: badge de sync com data+hora e aviso se atrasado */}
-            <div className="flex flex-col items-end gap-1.5">
-              <div
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] ring-1 ${
-                  syncAtraso ? 'bg-warn/20 ring-warn/30 text-warn' : 'bg-white/5 ring-white/10 text-white/70'
-                }`}
-              >
-                <TrendingUp className={`size-3.5 ${syncAtraso ? 'text-warn' : 'text-brand'}`} />
-                sync {ultimaSync}
+            {/* A.3.3: selo de sync com data+hora e aviso se atrasado */}
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2 text-[13px] font-medium text-white">
+                <span className={`size-2 shrink-0 rounded-full ${syncAtraso ? 'bg-[#ffb340]' : 'bg-white/80'}`} />
+                <span className="num">sync {ultimaSync}</span>
               </div>
               {syncAtraso && (
-                <span className="text-[11px] text-warn/70">atrasado (+24h)</span>
+                <span className="text-[12px] text-text-muted">atrasado (+24h)</span>
               )}
             </div>
           </div>
@@ -285,23 +276,16 @@ export default async function HomePage() {
 
       {/* Precisa de atenção */}
       <section>
-        <h2 className="text-[13px] font-semibold text-text-muted mb-3">
-          Precisa de atenção
-        </h2>
+        <h2 className="mb-3 text-[20px] font-bold tracking-[-0.01em] text-text">Precisa de atenção</h2>
         {alertas.length ? (
-          <div className="space-y-2">
+          <div className="overflow-clip rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] divide-y divide-border/60">
             {alertas.map((a, i) => (
-              <div
-                key={i}
-                className="group flex items-center gap-3.5 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3 u-motion hover:border-text/20 hover:shadow-[var(--shadow-sm)]"
-              >
-                <Link href={a.href} className="flex min-w-0 flex-1 items-center gap-3.5 u-press">
-                  <span className={`flex size-8 items-center justify-center rounded-md shrink-0 ${SELO_CLASSE[a.token]}`}>
-                    <a.icon className="size-4" strokeWidth={2} />
-                  </span>
-                  <span className="min-w-0 flex-1 text-sm text-text">{a.texto}</span>
+              <div key={i} className="group flex items-center gap-3 px-4 py-3 max-sm:min-h-[52px]">
+                <Link href={a.href} className="flex min-w-0 flex-1 items-center gap-3 u-press">
+                  <a.icon className={`size-[18px] shrink-0 ${TEXTO_CLASSE[a.token]}`} strokeWidth={2} />
+                  <span className="min-w-0 flex-1 text-[15px] text-text">{a.texto}</span>
                   {!a.action && (
-                    <ArrowRight className="size-4 shrink-0 text-text-muted/40 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
+                    <ChevronRight className="size-4 shrink-0 text-text-muted/50 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
                   )}
                 </Link>
                 {a.action && <SyncButton endpoint={a.action.endpoint} label={a.action.label} />}
@@ -309,11 +293,9 @@ export default async function HomePage() {
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3.5">
-            <span className="flex size-8 items-center justify-center rounded-md bg-ok/10 text-ok shrink-0">
-              <CheckCircle2 className="size-4" strokeWidth={2} />
-            </span>
-            <span className="text-sm text-text">Tudo em ordem. Nada pendente na loja.</span>
+          <div className="flex items-center gap-3 rounded-[var(--r-lg)] bg-surface px-4 py-3.5 shadow-[var(--shadow-sm)]">
+            <CheckCircle2 className="size-[18px] shrink-0 text-ok" strokeWidth={2} />
+            <span className="text-[15px] text-text">Tudo em ordem. Nada pendente na loja.</span>
           </div>
         )}
       </section>
@@ -325,15 +307,14 @@ export default async function HomePage() {
             <Link
               key={k.label}
               href={k.href}
-              className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 u-motion u-card hover:border-brand/40"
+              className="group rounded-[var(--r-lg)] bg-surface p-5 shadow-[var(--shadow-sm)] u-motion u-card"
             >
-              <span className="absolute left-0 top-0 h-full w-1 bg-brand/0 group-hover:bg-brand u-motion" />
-              <p className="text-[13px] font-semibold text-text-muted">{k.label}</p>
-              <div className="mt-3 flex items-end gap-2">
-                <span className="num text-[2.4rem] leading-none font-bold tracking-tight text-text">
+              <p className="text-[13px] text-text-muted">{k.label}</p>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="num text-[28px] leading-none font-bold tracking-[-0.02em] text-text">
                   <CountUp value={k.value} duration={550} />
                 </span>
-                <span className="mb-1 text-[12px] text-text-muted">{k.hint}</span>
+                <span className="text-[13px] text-text-muted">{k.hint}</span>
               </div>
             </Link>
           ))}
@@ -343,22 +324,22 @@ export default async function HomePage() {
       {/* Atalhos */}
       {atalhos.length > 0 && (
         <section>
-          <h2 className="text-[13px] font-semibold text-text-muted mb-3">Ações rápidas</h2>
+          <h2 className="mb-3 text-[20px] font-bold tracking-[-0.01em] text-text">Ações rápidas</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {atalhos.map((a) => (
               <Link
                 key={a.href}
                 href={a.href}
-                className="group flex items-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-4 u-motion u-press hover:bg-ink hover:border-ink"
+                className="group flex items-center gap-3 rounded-[var(--r-lg)] bg-surface px-4 py-3.5 shadow-[var(--shadow-sm)] u-motion u-press u-card"
               >
-                <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand group-hover:bg-brand group-hover:text-white u-motion shrink-0">
-                  <a.icon className="size-4" strokeWidth={2} />
+                <span className="flex size-9 items-center justify-center rounded-full bg-brand-soft text-brand shrink-0">
+                  <a.icon className="size-[18px]" strokeWidth={2} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-text group-hover:text-white u-motion">{a.label}</div>
-                  <div className="text-[11px] text-text-muted group-hover:text-white/50 u-motion truncate">{a.desc}</div>
+                  <div className="text-[15px] font-semibold text-text">{a.label}</div>
+                  <div className="truncate text-[13px] text-text-muted">{a.desc}</div>
                 </div>
-                <ArrowRight className="size-4 text-text-muted/30 group-hover:text-brand group-hover:translate-x-0.5 u-motion shrink-0" />
+                <ChevronRight className="size-4 shrink-0 text-text-muted/50 u-motion group-hover:text-text-muted group-hover:translate-x-0.5" />
               </Link>
             ))}
           </div>
@@ -368,29 +349,27 @@ export default async function HomePage() {
       {/* A.3.4: Repor estoque com saldo e mínimo lado a lado */}
       {qtdRepor > 0 && pode('Produtos') && (
         <section>
-          <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-            <h2 className="text-sm font-bold text-text">Repor estoque</h2>
-            <Link href="/produto?vista=compras&repor=1" className="text-[13px] text-brand hover:underline">
-              ver todos ({qtdRepor}) →
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className="text-[20px] font-bold tracking-[-0.01em] text-text">Repor estoque</h2>
+            <Link href="/produto?vista=compras&repor=1" className="text-[15px] text-brand hover:underline">
+              ver todos (<span className="num">{qtdRepor}</span>) →
             </Link>
           </div>
-          <ul className="divide-y divide-border">
+          <ul className="overflow-clip rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] divide-y divide-border/60">
             {prodsRepor.map((p) => {
               const pos = saldoMap.get(p.codigo_produto)
               return (
-                <li key={p.codigo_produto} className="flex items-center gap-3 py-3">
-                  <span className="flex size-7 items-center justify-center rounded-md bg-err/10 text-err shrink-0">
-                    <AlertTriangle className="size-3.5" strokeWidth={2} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-text">{formatarNomeProduto(p.descricao)}</span>
+                <li key={p.codigo_produto} className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="size-4 shrink-0 text-err" strokeWidth={2} />
+                  <span className="min-w-0 flex-1 truncate text-[15px] text-text">{formatarNomeProduto(p.descricao)}</span>
                   {pos && (
-                    <span className="flex items-center gap-1 shrink-0 text-[12px]">
+                    <span className="flex items-center gap-1 shrink-0 text-[13px]">
                       <span className="num text-err font-medium" title="Saldo atual">{fmtQtd(pos.saldo)}</span>
                       <span className="text-text-muted">/</span>
                       <span className="num text-text-muted" title="Estoque mínimo">{fmtQtd(pos.minimo)}</span>
                     </span>
                   )}
-                  <span className="num text-[12px] text-text-muted shrink-0">{p.codigo}</span>
+                  <span className="num text-[13px] text-text-muted shrink-0">{p.codigo}</span>
                 </li>
               )
             })}

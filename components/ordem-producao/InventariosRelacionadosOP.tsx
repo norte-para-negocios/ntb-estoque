@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
 // Seção "Inventários relacionados" da tela de detalhe de OP. NÃO existe vínculo
@@ -165,15 +166,22 @@ export async function InventariosRelacionadosOP({
   }
 
   return (
-    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Inventários relacionados</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
-        Correlação aproximada por produto + local + data (±3 dias da conclusão/previsão). O sistema não
-        grava vínculo direto entre ordem de produção e inventário -- isto é um cruzamento, não um registro.
-      </p>
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
+      <h2 className="mb-1 text-[17px] font-semibold text-text">Inventários relacionados</h2>
+      <details className="group mb-3 text-[13px] text-text-muted">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 select-none hover:text-text [&::-webkit-details-marker]:hidden">
+          Detalhes técnicos
+          <ChevronDown aria-hidden className="size-3.5 transition-transform group-open:rotate-180" />
+        </summary>
+        <p className="mt-1.5">
+          Correlação aproximada por produto + local + data (±3 dias da conclusão/previsão). O sistema não
+          grava vínculo direto entre ordem de produção e inventário -- isto é um cruzamento, não um registro.
+        </p>
+      </details>
 
       {errosConsulta.length > 0 && (
-        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+        <p className="mb-3 text-[13px] text-text-muted">
+          <span aria-hidden className="mr-1.5 inline-block size-2 rounded-full bg-warn align-[1px]" />
           Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
           dados abaixo podem estar incompletos.
         </p>
@@ -184,7 +192,8 @@ export async function InventariosRelacionadosOP({
           Sem produto, local de estoque ou data de referência suficientes para cruzar com inventário.
         </p>
       ) : falhaConsultaPrincipal ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
+          <span aria-hidden className="mr-1.5 inline-block size-2 rounded-full bg-err align-[1px]" />
           Não foi possível consultar inventários agora (falha de banco/rede) -- tente recarregar a página. Isto é
           diferente de &ldquo;nenhum inventário encontrado&rdquo;.
         </p>
@@ -192,36 +201,42 @@ export async function InventariosRelacionadosOP({
         // Mensagem corrigida (revisão desta task): loja 4/cursor overshoot são
         // causas do ENRIQUECIMENTO por id_ajuste, não de inventario_items em si
         // -- não podem ser a causa de uma lista vazia. Ver comentário no topo.
-        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           Nenhuma contagem de estoque encontrada perto dessa data, nesse local (aproximação por produto + local +
           tempo, ±3 dias -- não é um cruzamento exato).
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-border/60">
           {rows.map((r) => (
-            <div key={r.id} className="rounded-md border border-border bg-surface-2/40 px-3 py-2">
+            <div key={r.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[13px] text-text">{r.produto_descricao ?? 'Produto'}</span>
-                <span className="num text-[12px] text-text-muted">{fmtDataHora(r.data_inventario)}</span>
+                <span className="text-[15px] text-text">{r.produto_descricao ?? 'Produto'}</span>
+                <span className="num text-[13px] text-text-muted">{fmtDataHora(r.data_inventario)}</span>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[12px] text-text-muted">
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[13px] text-text-muted">
                 <span>Contagem: <span className="num font-medium text-text">{r.quan?.toLocaleString('pt-BR') ?? '-'}</span></span>
                 <span>Status do item: {r.status ?? '-'}</span>
                 <span>Status do inventário: {r.status_inventario}</span>
               </div>
               {r.movimento_id ? (
-                <p className="mt-1 text-[11px] text-ok">
+                <p className="mt-1 text-[13px] text-ok">
                   Ajuste correspondente encontrado em Movimentações: mov #{r.movimento_id} ({r.movimento_tipo}),{' '}
                   {fmtDataHora(r.movimento_data)}.
                 </p>
               ) : r.id_ajuste != null ? (
-                <p className="mt-1 text-[11px] text-text-muted">
+                <details className="group mt-1 text-[13px] text-text-muted">
+                  <summary className="inline-flex cursor-pointer list-none items-center gap-1 select-none hover:text-text [&::-webkit-details-marker]:hidden">
+                    Detalhes técnicos
+                    <ChevronDown aria-hidden className="size-3.5 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <p className="mt-1.5">
                   Este item tem <code>id_ajuste</code> ({r.id_ajuste}) mas nenhum movimento correspondente foi
                   encontrado em Movimentações -- cobre só ~20% dos casos na base inteira. Se a loja é a 4, isto é
                   permanente (excluída por desenho do sync de ajustes); mesmo fora dela, pode ser um caso de
                   &ldquo;cursor overshoot&rdquo; do sync (~1.786 linhas conhecidas em 3 lojas) -- religar o cron não
                   traz essas de volta.
-                </p>
+                  </p>
+                </details>
               ) : null}
             </div>
           ))}

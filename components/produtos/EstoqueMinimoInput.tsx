@@ -60,7 +60,7 @@ export function EstoqueMinimoInput({
           ? 'Mínimo definido no nosso sistema (não altera no Omie)'
           : 'Mínimo vindo do Omie. Ao editar, vale só no nosso sistema (não volta pro Omie).'
       }
-      className={`num h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-right text-sm outline-none focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8 ${
+      className={`num h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-right text-sm outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8 ${
         ehManual ? 'font-semibold text-brand' : 'text-text'
       }`}
     />

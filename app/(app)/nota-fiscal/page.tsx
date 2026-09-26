@@ -14,7 +14,7 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
-import { SELO_CLASSE } from '@/lib/status-cor'
+import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr, buscarTudoPaginado, buscarTodosPorIds } from '@/lib/utils-busca'
@@ -535,7 +535,9 @@ export default async function NotaFiscalPage({
           title="Notas Fiscais"
           icon={FileText}
           actions={
-            <>
+            // Uma linha só: no celular rola na horizontal (mesma ordem de botões)
+            // em vez de quebrar e deixar o Atualizar sozinho numa linha.
+            <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               <FiltrosGaveta
                 basePath="/nota-fiscal"
                 naoContar={['data_inicio', 'data_final']}
@@ -570,7 +572,7 @@ export default async function NotaFiscalPage({
                 <Download className="size-4" /> Excel
               </a>
               {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />}
-            </>
+            </div>
           }
         />
         <ChipsStatus
@@ -588,26 +590,33 @@ export default async function NotaFiscalPage({
       </ListaHeader>
 
       {errosConsulta.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
+          <span>
           Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — o
           filtro por produto/família/local pode estar incompleto para o período antigo. Recarregue a página; se
           persistir, avise o suporte.
+          </span>
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
-          <span className="font-semibold text-text">{qtdNotas}</span> {qtdNotas === 1 ? 'nota' : 'notas'} de {fmtData(dataInicio)} a {fmtData(dataFinal)}
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 px-1 text-[15px] text-text-muted">
+        <span>
+          <span className="num font-semibold text-text">{qtdNotas}</span> {qtdNotas === 1 ? 'nota' : 'notas'} de{' '}
+          <span className="num">{fmtData(dataInicio)}</span> a <span className="num">{fmtData(dataFinal)}</span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1 text-[13px] text-text-muted">
+        <span>
           Total <Money value={totalValor} className="font-semibold text-text" />
         </span>
       </div>
 
       {totaisParciais && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
+          <span>
           Período muito longo: a contagem e o total acima podem estar abaixo do real (falha temporária ao
           buscar o histórico completo). Tente recarregar a página ou use um período mais curto.
+          </span>
         </p>
       )}
 
@@ -626,7 +635,7 @@ export default async function NotaFiscalPage({
               <div className="min-w-0">
                 <div className="truncate text-text">{nf.c_razao_social || nf.c_nome || '-'}</div>
                 {nf.c_natureza_operacao && (
-                  <div className="truncate text-[11px] text-text-muted" title={nf.c_natureza_operacao}>{nf.c_natureza_operacao}</div>
+                  <div className="truncate text-[13px] text-text-muted" title={nf.c_natureza_operacao}>{nf.c_natureza_operacao}</div>
                 )}
               </div>
             ),
@@ -640,7 +649,8 @@ export default async function NotaFiscalPage({
             render: (nf) => {
               const { label, tom } = statusNF(nf.c_etapa, nf.full_object)
               return (
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[tom]}`}>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text">
+                  <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[tom]}`} aria-hidden />
                   {label}
                 </span>
               )
@@ -649,7 +659,7 @@ export default async function NotaFiscalPage({
           { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe == null ? null : Number(nf.n_valor_nfe)} /> },
         ]}
         acao={(nf) => (
-          <Link href={`/nota-fiscal/${nf.id}`} className="text-brand hover:underline whitespace-nowrap">
+          <Link href={`/nota-fiscal/${nf.id}`} className="whitespace-nowrap font-semibold text-brand hover:underline">
             Ver
           </Link>
         )}

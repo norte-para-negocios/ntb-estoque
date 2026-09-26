@@ -9,7 +9,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { UNIDADE_OP_LABEL, type UnidadeOP } from '@/lib/op-recorrencia'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
+  'h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:h-11 max-sm:text-base'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 type Local = { codigo_local_estoque: number; descricao: string | null }
@@ -62,14 +62,14 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
         }
       />
       <DialogContent className="bg-surface p-0" showCloseButton={false}>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+        <div className="px-5 pt-5 text-[20px] font-bold tracking-[-0.01em] text-text">
           Nova(s) ordem(ns) de produção
         </div>
-        <div className="space-y-4 px-4 py-4">
+        <div className="space-y-4 px-5 py-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Data de produção</label>
-              <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={inputClass} />
+              <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={`num ${inputClass}`} />
             </div>
             <div>
               <label className={labelClass}>Repetir</label>
@@ -93,7 +93,7 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
                   onChange={(e) => setIntervalo(e.target.value)}
                   className={inputClass}
                 />
-                <p className="mt-1 text-[11px] text-text-muted">
+                <p className="mt-1.5 text-[12px] text-text-muted">
                   {unidade === 'dia' ? 'Ex.: 15 = de 15 em 15 dias' : unidade === 'semana' ? 'Ex.: 2 = a cada 2 semanas' : 'Ex.: 1 = todo mês'}
                 </p>
               </div>
@@ -125,11 +125,11 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
             <input value={obs} onChange={(e) => setObs(e.target.value)} className={inputClass} placeholder="Ex.: lote, cupom..." />
           </div>
 
-          <p className="text-[12px] text-text-muted">
+          <p className="text-[13px] text-text-muted">
             No próximo passo você escolhe os produtos e a validade de cada um. A data vai ao Omie como início, conclusão e previsão.
           </p>
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 px-5 pb-5 pt-1">
           <button type="button" onClick={avancar} className={btnClass('primary')}>
             Escolher produtos <ArrowRight className="size-4" />
           </button>

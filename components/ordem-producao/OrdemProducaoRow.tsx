@@ -14,22 +14,28 @@ import {
   excluirOP,
 } from '@/lib/actions/ordem-producao'
 import type { OpStatus } from '@/lib/op-status'
-import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { FUNDO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { parseNumBR, formatNumBR } from '@/lib/num-br'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 
+// Stepper em pilula: trilho bg-surface-2 com botoes circulares brancos nas pontas
+// e o campo transparente no meio (foco no trilho inteiro).
+const stepWrapClass =
+  'flex w-full min-w-0 items-center gap-1 rounded-full bg-surface-2 p-1 transition-shadow focus-within:ring-2 focus-within:ring-brand/40 lg:gap-0.5 lg:p-0.5'
 const stepBtnClass =
-  'flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors hover:bg-surface-2 hover:text-brand disabled:opacity-60 lg:size-5'
+  'flex size-10 shrink-0 items-center justify-center rounded-full bg-surface text-text-muted shadow-[var(--shadow-sm)] u-motion u-press hover:text-brand disabled:opacity-60 disabled:active:scale-100 lg:size-6'
+const stepInputClass =
+  'num h-10 min-w-0 flex-1 border-0 bg-transparent px-1 text-center text-text outline-none disabled:opacity-60 max-sm:text-base sm:text-sm lg:h-6 lg:text-[13px]'
 
-// Botao de acao da LINHA da OP no mobile: so icone, alvo de toque 32px.
+// Botao de acao da LINHA da OP no mobile: so icone, circular 32px.
 const acaoIconeClass =
-  'flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-60'
+  'flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted u-motion hover:bg-surface-2 disabled:opacity-60'
 
-// Botao de acao na tabela desktop: icone compacto size-7, sem texto.
+// Botao de acao na tabela desktop: icone compacto size-7 circular, sem texto.
 const acaoDesktopClass =
-  'flex size-7 shrink-0 items-center justify-center rounded-md transition-colors disabled:opacity-60'
+  'flex size-7 shrink-0 items-center justify-center rounded-full u-motion disabled:opacity-60'
 
 // Validade -> DD/MM (compacto) para o subtitulo da linha.
 function fmtValidade(v: string | null | undefined): string | null {
@@ -64,16 +70,17 @@ export interface OPData {
 // Etiqueta "Origem: NTB Vendas (Homologação/Produção)" — só quando origemNtbVendas
 // é true (loja de teste, ver OPData acima). Fica na célula do produto pra não
 // precisar de uma coluna nova (a tabela desktop tem largura fixa por coluna).
-function OrigemBadge({ op }: { op: OPData }) {
+function OrigemBadge({ op, className = '' }: { op: OPData; className?: string }) {
   if (!op.origemNtbVendas) return null
   const homolog = op.ambienteVenda === 'homologacao'
+  // Texto cinza 12px numa linha, com ponto: laranja = homologação, verde = produção.
+  const ponto = homolog ? 'bg-warn' : op.ambienteVenda === 'producao' ? 'bg-ok' : 'bg-info'
   return (
     <span
-      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-        homolog ? 'bg-warn/10 text-warn' : op.ambienteVenda === 'producao' ? 'bg-err/10 text-err' : 'bg-info/10 text-info'
-      }`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] leading-none text-text-muted ${className}`}
       title="Ordem de Produção criada automaticamente pelo NTB Vendas"
     >
+      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${ponto}`} />
       NTB Vendas{op.ambienteVenda ? ` · ${homolog ? 'Homolog.' : 'Produção'}` : ''}
     </span>
   )
@@ -87,10 +94,16 @@ const STATUS_INFO: Record<OpStatus, { label: string; token: CorToken }> = {
   pendente: { label: 'Pendente', token: 'warn' },
 }
 
-function StatusBadge({ status }: { status: OpStatus }) {
+// Ponto 8px na cor do status + texto neutro (sem bloco colorido).
+function StatusBadge({ status, compact = false }: { status: OpStatus; compact?: boolean }) {
   const { label, token } = STATUS_INFO[status]
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SELO_CLASSE[token]}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text ${
+        compact ? 'text-[12px] leading-none' : 'text-[13px]'
+      }`}
+    >
+      <span aria-hidden className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[token]}`} />
       {label}
     </span>
   )
@@ -401,7 +414,7 @@ type StepperProps = {
 function StepperValidade({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar
   return (
-    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+    <div className={stepWrapClass}>
       <button
         type="button"
         onClick={() => ctrl.ajustarValidade(-1)}
@@ -409,7 +422,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         aria-label="Diminuir validade"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5 lg:size-3" />
+        <Minus className="size-4 lg:size-3" />
       </button>
       <input
         type="date"
@@ -418,7 +431,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         onBlur={ctrl.salvarValidade}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
+        className={stepInputClass}
       />
       <button
         type="button"
@@ -427,7 +440,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
         aria-label="Aumentar validade"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5 lg:size-3" />
+        <Plus className="size-4 lg:size-3" />
       </button>
     </div>
   )
@@ -440,7 +453,7 @@ function StepperValidade({ op, ctrl }: StepperProps) {
 function StepperQuantidade({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar
   return (
-    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+    <div className={stepWrapClass}>
       <button
         type="button"
         onClick={() => ctrl.ajustarQuantidade(-1)}
@@ -448,7 +461,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         aria-label="Diminuir quantidade"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5 lg:size-3" />
+        <Minus className="size-4 lg:size-3" />
       </button>
       <input
         type="text"
@@ -460,7 +473,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
+        className={stepInputClass}
       />
       <button
         type="button"
@@ -469,7 +482,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
         aria-label="Aumentar quantidade"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5 lg:size-3" />
+        <Plus className="size-4 lg:size-3" />
       </button>
     </div>
   )
@@ -481,7 +494,7 @@ function StepperQuantidade({ op, ctrl }: StepperProps) {
 function StepperData({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar || op.concluida
   return (
-    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+    <div className={stepWrapClass}>
       <button
         type="button"
         onClick={() => ctrl.ajustarDataOP(-1)}
@@ -489,7 +502,7 @@ function StepperData({ op, ctrl }: StepperProps) {
         aria-label="Dia anterior"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5 lg:size-3" />
+        <Minus className="size-4 lg:size-3" />
       </button>
       <input
         type="date"
@@ -498,7 +511,7 @@ function StepperData({ op, ctrl }: StepperProps) {
         onBlur={() => ctrl.salvarDataOP(ctrl.dataOP)}
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
-        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
+        className={stepInputClass}
       />
       <button
         type="button"
@@ -507,7 +520,7 @@ function StepperData({ op, ctrl }: StepperProps) {
         aria-label="Próximo dia"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5 lg:size-3" />
+        <Plus className="size-4 lg:size-3" />
       </button>
     </div>
   )
@@ -519,7 +532,7 @@ function StepperData({ op, ctrl }: StepperProps) {
 function StepperQtdOP({ op, ctrl }: StepperProps) {
   const bloqueado = !op.podeEditar || op.concluida
   return (
-    <div className="w-full flex items-center gap-1.5 lg:gap-1 lg:justify-center">
+    <div className={stepWrapClass}>
       <button
         type="button"
         onClick={() => ctrl.ajustarQtdPlanejada(-1)}
@@ -527,7 +540,7 @@ function StepperQtdOP({ op, ctrl }: StepperProps) {
         aria-label="Diminuir quantidade planejada"
         className={stepBtnClass}
       >
-        <Minus className="size-3.5 lg:size-3" />
+        <Minus className="size-4 lg:size-3" />
       </button>
       <input
         type="text"
@@ -539,7 +552,7 @@ function StepperQtdOP({ op, ctrl }: StepperProps) {
         disabled={ctrl.pending || bloqueado}
         readOnly={bloqueado}
         placeholder="0"
-        className="h-11 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-6"
+        className={stepInputClass}
       />
       <button
         type="button"
@@ -548,7 +561,7 @@ function StepperQtdOP({ op, ctrl }: StepperProps) {
         aria-label="Aumentar quantidade planejada"
         className={stepBtnClass}
       >
-        <Plus className="size-3.5 lg:size-3" />
+        <Plus className="size-4 lg:size-3" />
       </button>
     </div>
   )
@@ -582,11 +595,11 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
                 onWheel={(e) => e.currentTarget.blur()}
                 disabled={ctrl.pending}
                 placeholder="0"
-                className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
+                className="num h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 max-sm:h-11 max-sm:text-base"
               />
               <span className="shrink-0 text-sm text-text-muted">{op.unidade}</span>
             </div>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1.5 text-[12px] text-text-muted">
               OP de {ctrl.qtdConcluirDefault.toLocaleString('pt-BR', { maximumFractionDigits: 12 })} {op.unidade}.
               Pode concluir com quantidade diferente da prevista, pra mais ou pra menos.
             </p>
@@ -601,14 +614,15 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
               max={ctrl.hojeISO}
               onChange={(e) => ctrl.setDataConclusao(e.target.value)}
               disabled={ctrl.pending}
-              className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
+              className="num h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 max-sm:h-11 max-sm:text-base"
             />
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1.5 text-[12px] text-text-muted">
               Padrão: data prevista da OP (o Omie não aceita concluir com data
               futura). Altere se a produção foi em outro dia.
             </p>
           </div>
-          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+          <p className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text-muted">
+            <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
             A conclusão será gravada no Omie. O estoque produzido será incrementado
             pela quantidade informada acima.
           </p>
@@ -657,7 +671,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Data da OP</label>
             <StepperData op={op} ctrl={ctrl} />
             {op.concluida && (
-              <p className="mt-1 text-[11px] text-text-muted">
+              <p className="mt-1.5 text-[12px] text-text-muted">
                 OP concluída — reverta a conclusão para poder remarcar a data.
               </p>
             )}
@@ -666,7 +680,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
             <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Qtd OP (planejada)</label>
             <StepperQtdOP op={op} ctrl={ctrl} />
             {op.concluida && (
-              <p className="mt-1 text-[11px] text-text-muted">
+              <p className="mt-1.5 text-[12px] text-text-muted">
                 OP concluída — reverta a conclusão para poder mudar a quantidade planejada.
               </p>
             )}
@@ -681,7 +695,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
             </label>
             <StepperQuantidade op={op} ctrl={ctrl} />
           </div>
-          <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-text-muted">
+          <p className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text-muted">
             A <strong>data</strong> e a <strong>quantidade planejada</strong> da OP são gravadas
             no Omie. Já a validade e a quantidade de etiquetas ficam só no nosso sistema — a
             etiqueta é só quantas etiquetas imprimir, sem relação com a produção da OP.
@@ -800,35 +814,34 @@ export function OrdemProducaoRow({
         <td className="num font-medium text-text align-middle">
           {op.numOP}
         </td>
-        <td className="align-middle !px-0 overflow-hidden">
+        <td className="align-middle !px-1">
           <StepperData op={op} ctrl={ctrl} />
         </td>
         <td className="align-middle">
           <StatusBadge status={op.status} />
         </td>
-        <td className="max-w-xs align-middle">
-          <div className="flex min-w-0 items-center">
-            <Link
-              href={`/ordem-producao/${op.id}`}
-              className="block min-w-0 truncate font-medium text-text hover:text-brand hover:underline"
-              title={op.produto}
-            >
-              {op.produto}
-              <span className="ml-1.5 text-[11px] font-normal text-text-muted">{op.unidade}</span>
-            </Link>
-            <OrigemBadge op={op} />
-          </div>
+        <td className="align-middle">
+          {/* Nome em até 2 linhas (nunca corta em poucas letras); origem numa linha abaixo. */}
+          <Link
+            href={`/ordem-producao/${op.id}`}
+            className="line-clamp-2 break-words font-medium leading-snug text-text hover:text-brand hover:underline"
+            title={op.produto}
+          >
+            {op.produto}
+            <span className="ml-1.5 text-[12px] font-normal text-text-muted">{op.unidade}</span>
+          </Link>
+          <OrigemBadge op={op} className="mt-1" />
         </td>
-        <td className="align-middle !px-0 overflow-hidden">
+        <td className="align-middle !px-1">
           <StepperQtdOP op={op} ctrl={ctrl} />
         </td>
-        <td className="align-middle !px-0 overflow-hidden">
+        <td className="align-middle !px-1">
           <StepperValidade op={op} ctrl={ctrl} />
         </td>
-        <td className="align-middle !px-0 overflow-hidden">
+        <td className="align-middle !px-1">
           <StepperQuantidade op={op} ctrl={ctrl} />
         </td>
-        <td className="text-right align-middle pl-3">
+        <td className="text-right align-middle !px-2">
           <div className="flex items-center justify-end gap-1">
             {temIng && (
               <button
@@ -895,13 +908,13 @@ export function OrdemProducaoCard({
         <div className="min-w-0 flex-1">
           <Link
             href={`/ordem-producao/${op.id}`}
-            className="block truncate text-[13px] font-medium leading-snug text-text hover:text-brand hover:underline"
+            className="line-clamp-2 break-words text-[14px] font-medium leading-snug text-text hover:text-brand hover:underline"
             title={op.produto}
           >
             {op.produto}
           </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
-            <StatusBadge status={op.status} />
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12px] leading-none text-text-muted">
+            <StatusBadge status={op.status} compact />
             <span className="num">{op.numOP}</span>
             {op.data && <span className="num" title="Data prevista">{op.data}</span>}
             {val && <span className="num" title="Validade">val {val}</span>}
@@ -910,7 +923,7 @@ export function OrdemProducaoCard({
         </div>
 
         <div className="shrink-0 whitespace-nowrap text-right text-[13px] text-text">
-          <QtdOP value={op.qtdOP} /> <span className="text-[11px] text-text-muted">{op.unidade}</span>
+          <QtdOP value={op.qtdOP} /> <span className="text-[12px] text-text-muted">{op.unidade}</span>
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
@@ -984,7 +997,7 @@ export function OrdemProducaoCard({
       </div>
 
       {expandido && temIng && (
-        <div className="border-t border-border bg-surface-2/30 px-3 pb-2.5 pt-2">
+        <div className="border-t border-border/60 bg-surface-2/40 px-3 pb-2.5 pt-2">
           <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
           <div className="flex flex-col gap-1">
             {op.ingredientes!.map((i) => (

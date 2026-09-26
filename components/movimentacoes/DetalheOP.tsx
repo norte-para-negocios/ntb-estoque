@@ -6,12 +6,23 @@ import { toast } from 'sonner'
 import { reverterOP } from '@/lib/actions/ordem-producao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
+import { FUNDO_CLASSE } from '@/lib/status-cor'
 import type { DetalheOP as DetalheOPData } from '@/lib/actions/detalhe-movimento'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
   const [y, m, dia] = d.slice(0, 10).split('-')
   return `${dia}/${m}/${y}`
+}
+
+// Linha de lista agrupada (estilo Ajustes): rótulo à esquerda, valor à direita.
+function Linha({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-4 px-4 py-2.5">
+      <span className="shrink-0 text-[15px] text-text-muted">{label}</span>
+      <span className="min-w-0 text-right text-[15px] text-text">{children}</span>
+    </div>
+  )
 }
 
 export function DetalheOP({ dados, onRevertido }: { dados: DetalheOPData; onRevertido: () => void }) {
@@ -32,48 +43,28 @@ export function DetalheOP({ dados, onRevertido }: { dados: DetalheOPData; onReve
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-[13px] font-semibold text-text-muted">OP</p>
-        <p className="text-sm text-text">{dados.numOP}</p>
-      </div>
-      <div>
-        <p className="text-[13px] font-semibold text-text-muted">Produto</p>
-        <p className="text-sm text-text">{dados.produto} ({dados.unidade})</p>
-      </div>
-      <div className="flex gap-6">
-        <div>
-          <p className="text-[13px] font-semibold text-text-muted">Qtd. planejada</p>
-          <p className="num text-sm text-text">{dados.qtdPlanejada ?? '-'}</p>
-        </div>
-        <div>
-          <p className="text-[13px] font-semibold text-text-muted">Qtd. produzida</p>
-          <p className="num text-sm text-text">{dados.qtdProduzida ?? '-'}</p>
-        </div>
-      </div>
-      <div className="flex gap-6">
-        <div>
-          <p className="text-[13px] font-semibold text-text-muted">Previsão</p>
-          <p className="text-sm text-text">{fmtData(dados.dataPrevisao)}</p>
-        </div>
-        <div>
-          <p className="text-[13px] font-semibold text-text-muted">Conclusão real</p>
-          <p className="text-sm text-text">{fmtData(dados.dataConclusao)}</p>
-        </div>
-      </div>
-      <div>
-        <p className="text-[13px] font-semibold text-text-muted">Status</p>
-        <p className={`text-sm font-medium ${dados.concluida ? 'text-ok' : 'text-text-muted'}`}>
-          {dados.concluida ? 'Concluída' : 'Em andamento'}
-        </p>
+      <div className="rounded-[var(--r-lg)] bg-surface-2 divide-y divide-border/60">
+        <Linha label="OP"><span className="num">{dados.numOP}</span></Linha>
+        <Linha label="Produto">{dados.produto} ({dados.unidade})</Linha>
+        <Linha label="Qtd. planejada"><span className="num">{dados.qtdPlanejada ?? '-'}</span></Linha>
+        <Linha label="Qtd. produzida"><span className="num">{dados.qtdProduzida ?? '-'}</span></Linha>
+        <Linha label="Previsão"><span className="num">{fmtData(dados.dataPrevisao)}</span></Linha>
+        <Linha label="Conclusão real"><span className="num">{fmtData(dados.dataConclusao)}</span></Linha>
+        <Linha label="Status">
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <span className={`size-2 shrink-0 rounded-full ${dados.concluida ? FUNDO_CLASSE.ok : FUNDO_CLASSE.neutro}`} />
+            {dados.concluida ? 'Concluída' : 'Em andamento'}
+          </span>
+        </Linha>
       </div>
       {dados.ingredientes.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
-          <ul className="space-y-1 rounded-md border border-border bg-surface-2 p-2.5">
+          <p className="mb-1.5 px-4 text-[13px] font-semibold text-text-muted">Ingredientes</p>
+          <ul className="rounded-[var(--r-lg)] bg-surface-2 divide-y divide-border/60">
             {dados.ingredientes.map((i) => (
-              <li key={i.cod} className="flex items-center justify-between text-[13px]">
-                <span className="text-text">{i.nome}</span>
-                <span className="num text-text-muted">{i.qtd} {i.unidade}</span>
+              <li key={i.cod} className="flex min-h-11 items-center justify-between gap-4 px-4 py-2.5 text-[15px]">
+                <span className="min-w-0 text-text">{i.nome}</span>
+                <span className="num shrink-0 text-text-muted">{i.qtd} {i.unidade}</span>
               </li>
             ))}
           </ul>

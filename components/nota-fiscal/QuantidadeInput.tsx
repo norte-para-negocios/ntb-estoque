@@ -50,7 +50,7 @@ export function QuantidadeInput({
         type="button"
         onClick={() => ajustar(-1)}
         disabled={pending}
-        className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-60 lg:size-8"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press hover:bg-[var(--border)] hover:text-text disabled:opacity-60 lg:size-8"
         aria-label="Diminuir"
       >
         <Minus className="size-4" />
@@ -64,13 +64,13 @@ export function QuantidadeInput({
         onWheel={(e) => e.currentTarget.blur()}
         disabled={pending}
         placeholder="0"
-        className="h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num tabular-nums outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8"
+        className="h-11 w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-sm text-text num max-sm:text-base outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8"
       />
       <button
         type="button"
         onClick={() => ajustar(1)}
         disabled={pending}
-        className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border text-text-muted transition-colors hover:bg-surface-2 disabled:opacity-60 lg:size-8"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press hover:bg-[var(--border)] hover:text-text disabled:opacity-60 lg:size-8"
         aria-label="Aumentar"
       >
         <Plus className="size-4" />

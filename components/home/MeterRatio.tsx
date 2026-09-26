@@ -32,7 +32,7 @@ export function MeterRatio({
         />
         <div className="absolute top-0 h-full w-px bg-text/40" style={{ left: `${larguraLimite}%` }} />
       </div>
-      <p className="mt-1 text-[11px] text-text-muted">Referência: até {limite}%</p>
+      <p className="mt-1 text-[12px] text-text-muted">Referência: até {limite}%</p>
     </div>
   )
 }

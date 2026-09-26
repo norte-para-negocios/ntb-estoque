@@ -2,15 +2,15 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
-import { carregarResumoDia, carregarPainelAcao, hojeBahia, type CategoriaKey, type Contagem, type Tom } from '@/lib/resumo-dia'
+import { carregarResumoDia, carregarPainelAcao, hojeBahia, type CategoriaKey, type Contagem } from '@/lib/resumo-dia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ResumoFiltros } from '@/components/resumo/ResumoFiltros'
 import { ResumoGrafico } from '@/components/resumo/ResumoGrafico'
 import { ErroDetalhe } from '@/components/resumo/ErroDetalhe'
-import { SELO_CLASSE } from '@/lib/status-cor'
-import { LayoutDashboard, Download, Inbox } from 'lucide-react'
+import { FUNDO_CLASSE } from '@/lib/status-cor'
+import { LayoutDashboard, Download, Inbox, AlertTriangle, ChevronRight } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PRODUTO_TIPO_ITEM, labelTipoItem } from '@/lib/constants-omie'
@@ -34,6 +34,13 @@ const CATS: { key: CategoriaKey; label: string; valor: (c: Contagem) => string; 
   { key: 'auditoria', label: 'Auditoria', valor: (c) => fmt(c.auditoria), sub: () => 'alterações' },
 ]
 const KEYS = CATS.map((c) => c.key)
+
+// Item de controle segmentado (mesmo visual do SegmentedControl do kit), em Link
+// pra manter a navegação por URL igual à de antes.
+const SEG_ITEM = (ativo: boolean) =>
+  `inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold u-motion max-sm:h-9 ${
+    ativo ? 'bg-surface text-text shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-text-muted hover:text-text'
+  }`
 
 type PeriodoCob = 'dia' | 'semana' | 'mes'
 type RowCobertura = { periodo_inicio: string; qtd_inventarios: number; produtos_contados: number; total_produtos: number }
@@ -89,7 +96,6 @@ export default async function ResumoPage({
   const pdfHref = `/resumo/imprimir?data=${data}&loja=${lojaParam}&cat=${cat}&periodo=${periodo}`
 
   const temStatus = lista.linhas.some((l) => l.status)
-  const tomClasse: Record<Tom, string> = SELO_CLASSE as Record<Tom, string>
 
   let coberturaData: RowCobertura[] = []
   let produtosSemContagem: ProdutoSemContagem[] = []
@@ -211,18 +217,18 @@ export default async function ResumoPage({
 
       {painelAcao.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-[15px] font-semibold text-text">Precisa de ação</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="text-[17px] font-semibold text-text">Precisa de ação</h2>
+          <div className="overflow-clip rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)] divide-y divide-border/60">
             {painelAcao.map((it) => (
               <Link
                 key={it.titulo}
                 href={it.href}
-                className={`flex items-center justify-between rounded-lg border p-3 text-sm hover:opacity-80 ${
-                  it.tom === 'err' ? 'border-err/30 bg-err/10 text-err' : it.tom === 'warn' ? 'border-warn/30 bg-warn/10 text-warn' : 'border-info/30 bg-info/10 text-info'
-                }`}
+                className="group flex items-center gap-3 px-4 py-3 text-[15px] text-text u-motion hover:bg-surface-2/60 max-sm:min-h-[52px]"
               >
-                <span>{it.titulo}</span>
-                <span className="num text-lg font-bold">{it.contagem}</span>
+                <AlertTriangle className="size-[18px] shrink-0 text-warn" strokeWidth={2} />
+                <span className="min-w-0 flex-1">{it.titulo}</span>
+                <span className="num shrink-0 text-[15px] font-semibold text-text-muted">{it.contagem}</span>
+                <ChevronRight className="size-4 shrink-0 text-text-muted/50 u-motion group-hover:text-text-muted" />
               </Link>
             ))}
           </div>
@@ -232,20 +238,20 @@ export default async function ResumoPage({
       {/* Período GERAL: afeta todos os cards e a lista abaixo, não só a auditoria
           (pedido reuniao 09/07 -- Augusto, gerente regional, quer ver semanal/mensal). */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] text-text-muted">Período:</span>
-        {(['dia', 'semana', 'mes'] as const).map((p) => (
-          <Link
-            key={p}
-            href={linkPeriodoResumo(p)}
-            className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
-              periodo === p
-                ? 'border-brand bg-brand/10 text-brand'
-                : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
-            }`}
-          >
-            {labelPeriodoResumo[p]}
-          </Link>
-        ))}
+        <span className="text-[13px] text-text-muted">Período:</span>
+        <div role="tablist" aria-label="Período" className="inline-flex items-center rounded-[10px] bg-surface-2 p-0.5">
+          {(['dia', 'semana', 'mes'] as const).map((p) => (
+            <Link
+              key={p}
+              href={linkPeriodoResumo(p)}
+              role="tab"
+              aria-selected={periodo === p}
+              className={SEG_ITEM(periodo === p)}
+            >
+              {labelPeriodoResumo[p]}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* FILTRO POR CATEGORIA: cada tile mostra a contagem e seleciona a lista */}
@@ -258,15 +264,15 @@ export default async function ResumoPage({
               key={c.key}
               href={linkCat(c.key)}
               aria-current={sel ? 'true' : undefined}
-              className={`rounded-lg border px-4 py-3 u-motion u-press-sm ${
-                sel ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+              className={`rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)] u-motion u-press-sm ${
+                sel ? 'ring-2 ring-brand' : 'hover:bg-surface-2/60'
               }`}
             >
-              <div className="eyebrow">{c.label}</div>
-              <div className={`num mt-1 text-2xl font-semibold tracking-tight ${sel ? 'text-brand' : 'text-text'}`}>
+              <div className="truncate text-[13px] text-text-muted">{c.label}</div>
+              <div className={`num mt-1 text-[24px] font-bold tracking-[-0.02em] ${sel ? 'text-brand' : 'text-text'}`}>
                 {c.valor(contagem)}
               </div>
-              {sub && <div className="mt-0.5 truncate text-[11px] text-text-muted">{sub}</div>}
+              {sub && <div className="mt-0.5 truncate text-[12px] text-text-muted">{sub}</div>}
             </Link>
           )
         })}
@@ -280,20 +286,20 @@ export default async function ResumoPage({
         <div className="space-y-3">
           {/* Chips de período (mesmo controle global do topo -- filtram tambem a lista "Sem contagem") */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] text-text-muted">Cobertura:</span>
-            {(['dia', 'semana', 'mes'] as const).map((p) => (
-              <Link
-                key={p}
-                href={linkPeriodoResumo(p)}
-                className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
-                  periodo === p
-                    ? 'border-brand bg-brand/10 text-brand'
-                    : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
-                }`}
-              >
-                {labelPeriodoResumo[p]}
-              </Link>
-            ))}
+            <span className="text-[13px] text-text-muted">Cobertura:</span>
+            <div role="tablist" aria-label="Cobertura" className="inline-flex items-center rounded-[10px] bg-surface-2 p-0.5">
+              {(['dia', 'semana', 'mes'] as const).map((p) => (
+                <Link
+                  key={p}
+                  href={linkPeriodoResumo(p)}
+                  role="tab"
+                  aria-selected={periodo === p}
+                  className={SEG_ITEM(periodo === p)}
+                >
+                  {labelPeriodoResumo[p]}
+                </Link>
+              ))}
+            </div>
             <span className="mx-1 h-4 w-px bg-border" />
             <FiltrosGaveta basePath="/resumo" campos={auditoriaCampos} defaults={auditoriaDefaults} naoContar={['data', 'loja', 'cat', 'periodo']} />
           </div>
@@ -302,10 +308,10 @@ export default async function ResumoPage({
           {/* Barra de cobertura por período */}
           {coberturaData.length > 0 ? (
             <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <div className="border-b border-border bg-surface-2 px-4 py-2 text-[13px] font-semibold text-text-muted">
-                Cobertura de contagem ({labelJanela[periodo]})
+              <div className="px-4 pt-3.5 pb-2 text-[17px] font-semibold text-text">
+                Cobertura de contagem <span className="font-normal text-text-muted">({labelJanela[periodo]})</span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border/60">
                 {coberturaData.map((row) => {
                   const pct = row.total_produtos > 0
                     ? Math.round((Number(row.produtos_contados) / Number(row.total_produtos)) * 100)
@@ -319,7 +325,7 @@ export default async function ResumoPage({
                       : d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                   return (
                     <div key={row.periodo_inicio} className="flex items-center gap-3 px-4 py-2">
-                      <span className="w-40 shrink-0 text-[13px] capitalize text-text-muted">{label}</span>
+                      <span className="num w-28 shrink-0 text-[13px] capitalize text-text-muted sm:w-40">{label}</span>
                       <div className="min-w-0 flex-1">
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
                           <div
@@ -334,7 +340,7 @@ export default async function ResumoPage({
                       <span className={`w-10 shrink-0 text-right num text-[12px] font-medium ${pct >= 80 ? 'text-ok' : pct >= 40 ? 'text-warn' : 'text-err'}`}>
                         {pct}%
                       </span>
-                      <span className="hidden w-20 shrink-0 text-right text-[11px] text-text-muted sm:block">
+                      <span className="num hidden w-20 shrink-0 text-right text-[12px] text-text-muted sm:block">
                         {row.qtd_inventarios} {Number(row.qtd_inventarios) === 1 ? 'inv.' : 'invs.'}
                       </span>
                     </div>
@@ -351,15 +357,16 @@ export default async function ResumoPage({
           {/* Produtos sem contagem nos últimos 30 dias */}
           {totalSemContagem > 0 && (
             <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2">
-                <span className="text-[13px] font-semibold text-text-muted">
+              <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2">
+                <span className="text-[17px] font-semibold text-text">
                   Sem contagem nos últimos 30 dias
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${totalSemContagem > 0 ? 'bg-err/10 text-err' : 'bg-ok/10 text-ok'}`}>
-                  {totalSemContagem} produto{totalSemContagem !== 1 ? 's' : ''}
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-text">
+                  <span className={`size-2 rounded-full ${totalSemContagem > 0 ? 'bg-err' : 'bg-ok'}`} />
+                  <span className="num">{totalSemContagem}</span> produto{totalSemContagem !== 1 ? 's' : ''}
                 </span>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border/60">
                 {produtosSemContagem.map((p) => (
                   <div key={p.codigo_produto} className="flex items-center gap-3 px-4 py-2">
                     <div className="min-w-0 flex-1">
@@ -372,13 +379,13 @@ export default async function ResumoPage({
                       </div>
                     </div>
                     {p.tipo_item && (
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted">{labelTipoItem(p.tipo_item)}</span>
+                      <span className="shrink-0 text-[12px] text-text-muted">{labelTipoItem(p.tipo_item)}</span>
                     )}
                   </div>
                 ))}
               </div>
               {totalSemContagem > 100 && (
-                <div className="border-t border-border px-4 py-2 text-center text-[12px] text-text-muted">
+                <div className="border-t border-border/60 px-4 py-2.5 text-center text-[13px] text-text-muted">
                   Mostrando 100 de {totalSemContagem}. Acesse a tela de Inventários para ver todos.
                 </div>
               )}
@@ -389,19 +396,20 @@ export default async function ResumoPage({
 
       {/* LISTA DA CATEGORIA SELECIONADA (detalhe) */}
       <div className="overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-          <span className="text-sm font-semibold text-text">
-            {catLabel} <span className="text-text-muted">· {fmt(lista.total)}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
+          <span className="text-[17px] font-semibold text-text">
+            {catLabel} <span className="num font-normal text-text-muted">· {fmt(lista.total)}</span>
           </span>
           {lista.linhas.length < lista.total && (
-            <span className="text-[11px] text-text-muted">mostrando {fmt(lista.linhas.length)} de {fmt(lista.total)}</span>
+            <span className="num text-[12px] text-text-muted">mostrando {fmt(lista.linhas.length)} de {fmt(lista.total)}</span>
           )}
         </div>
 
         {lista.linhas.length === 0 ? (
           <EmptyState icon={Inbox} title={`Nenhum registro de ${catLabel.toLowerCase()} neste dia`} hint="Troque a categoria, a data ou a loja acima." />
         ) : (
-          <table data-sticky-table className="w-full text-sm">
+          <div className="max-sm:overflow-x-auto">
+          <table data-sticky-table className="w-full text-sm max-sm:min-w-[560px]">
             <thead className="bg-surface">
               <tr>
                 {lista.colunas.map((col, i) => (
@@ -426,12 +434,13 @@ export default async function ResumoPage({
                         cat === 'erros' && linha.detalhe ? (
                           <ErroDetalhe
                             label={linha.status.label}
-                            tomClasse={tomClasse[linha.status.tom]}
+                            tomClasse={FUNDO_CLASSE[linha.status.tom]}
                             mensagem={linha.detalhe}
                             titulo={linha.celulas[2] ?? 'Detalhe do erro'}
                           />
                         ) : (
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tomClasse[linha.status.tom]}`}>
+                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text">
+                            <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[linha.status.tom]}`} />
                             {linha.status.label}
                           </span>
                         )
@@ -442,6 +451,7 @@ export default async function ResumoPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

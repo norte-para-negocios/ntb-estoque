@@ -253,20 +253,45 @@ export function ContagemInventario({
   const comIniciado = comQtd.filter((i) => i.status === 'Iniciado' || i.status === 'Processando').length
   const temPendentes = comErro > 0 || semCusto > 0 || (finalizado && comIniciado > 0)
   // Cor do aviso: vermelho so com erro real; amarelo com sem-custo/pendente; verde ok.
-  const tomBanner = comErro > 0 ? 'border-err/40 bg-err/5' : semCusto > 0 || (finalizado && comIniciado > 0) ? 'border-warn/40 bg-warn/10' : 'border-ok/40 bg-ok/5'
+  const tomBanner = comErro > 0 ? 'bg-err' : semCusto > 0 || (finalizado && comIniciado > 0) ? 'bg-warn' : 'bg-ok'
 
   return (
     <div className="pb-28 lg:pb-20">
       {total > 0 && (integrados > 0 || temPendentes || finalizado) && (
         <div
-          className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 ${tomBanner}`}
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]"
         >
-          <span className="text-sm font-medium text-text">
-            <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
-            {comErro > 0 && <span className="text-err"> · {comErro} com erro</span>}
-            {semCusto > 0 && <span className="text-warn"> · {semCusto} sem custo (aguardando o Omie)</span>}
-            {comIniciado > 0 && <span className="text-warn"> · {comIniciado} pendente{comIniciado > 1 ? 's' : ''}</span>}
-            {vazios > 0 && <span className="text-text-muted"> · {vazios} sem quantidade (ignorado{vazios > 1 ? 's' : ''})</span>}
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[15px] font-semibold text-text">
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden className={`size-2 shrink-0 rounded-full ${tomBanner}`} />
+              <span>
+                <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
+              </span>
+            </span>
+            {comErro > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-err" />
+                <span className="num">{comErro}</span> com erro
+              </span>
+            )}
+            {semCusto > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
+                <span className="num">{semCusto}</span> sem custo (aguardando o Omie)
+              </span>
+            )}
+            {comIniciado > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
+                <span className="num">{comIniciado}</span> pendente{comIniciado > 1 ? 's' : ''}
+              </span>
+            )}
+            {vazios > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-text-muted/50" />
+                <span className="num">{vazios}</span> sem quantidade (ignorado{vazios > 1 ? 's' : ''})
+              </span>
+            )}
           </span>
           <span className="inline-flex items-center gap-2">
             {temPendentes && (
@@ -297,14 +322,16 @@ export function ContagemInventario({
       )}
 
       {editando && (
-        <p className="mb-4 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="mb-4 flex items-start gap-2 px-1 text-[13px] text-text-muted">
+          <span aria-hidden className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" />
+          <span>
           Editando um inventário finalizado. Ao alterar a quantidade ou excluir um item, o ajuste já
-          lançado no Omie é refeito ou removido na hora.
+          lançado no Omie é refeito ou removido na hora.</span>
         </p>
       )}
 
       {editavel && (
-        <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-3">
+        <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border/60 bg-bg/85 px-4 py-3 backdrop-blur-xl sm:mx-0 sm:rounded-[var(--r-lg)] sm:border-0 sm:bg-surface/85 sm:px-3 sm:shadow-[var(--shadow-sm)]">
           {/* Busca manual ACIMA do QR (padrao em todas as contagens). Liberado tambem
               ao "Editar itens" num inventario finalizado: adicionar produto pos-fato. */}
           <ProdutoSearch
@@ -323,13 +350,13 @@ export function ContagemInventario({
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             placeholder="Filtrar itens da lista"
-            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-text outline-none max-sm:text-base transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40"
           />
         </div>
       )}
 
       {visiveis.length ? (
-        <ul className="space-y-2 lg:space-y-1.5">
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
           {visiveis.map((item) => {
             const q = item.quan
             const texto = textos[item.id] ?? ''
@@ -340,28 +367,28 @@ export function ContagemInventario({
             return (
               <li
                 key={item.id}
-                className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5 lg:flex lg:items-center lg:gap-3 lg:py-2 lg:pl-3.5 lg:pr-2${
+                className={`px-4 py-3 lg:flex lg:items-center lg:gap-3 lg:py-2.5 lg:pl-4 lg:pr-3${
                   item.id === novoId ? ' u-flash-in' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-text">{item.produto_descricao}</span>
+                      <span className="truncate text-[15px] font-medium text-text">{item.produto_descricao}</span>
                       {item.status && (
                         <span className="hidden shrink-0 lg:inline">
                           <StatusPill status={item.status} />
                         </span>
                       )}
                     </div>
-                    <div className="num mt-0.5 flex items-center gap-2 text-xs text-text-muted">
-                      <span>{item.produto_codigo}</span>
+                    <div className="mt-0.5 flex items-center gap-2 text-[13px] text-text-muted">
+                      <span className="num">{item.produto_codigo}</span>
                       {item.produto_familia && (
-                        <span className="hidden truncate text-[11px] text-text-muted lg:inline">{item.produto_familia}</span>
+                        <span className="hidden truncate text-[12px] text-text-muted lg:inline">· {item.produto_familia}</span>
                       )}
                     </div>
                     {item.produto_familia && (
-                      <div className="mt-1 text-[11px] text-text-muted lg:hidden">{item.produto_familia}</div>
+                      <div className="mt-0.5 text-[12px] text-text-muted lg:hidden">{item.produto_familia}</div>
                     )}
                     {item.status && (
                       <div className="mt-1.5 lg:hidden">
@@ -373,7 +400,7 @@ export function ContagemInventario({
                     <button
                       onClick={() => remover(item.id)}
                       disabled={pending || enviando.has(item.id)}
-                      className="flex size-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-err disabled:opacity-50 lg:order-last lg:size-8"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-text-muted u-motion u-press hover:bg-surface-2 hover:text-err disabled:opacity-50 lg:order-last lg:size-8"
                       aria-label="Remover"
                     >
                       <Trash2 className="size-4" />
@@ -385,13 +412,13 @@ export function ContagemInventario({
                   <span className="eyebrow lg:hidden">Quantidade{item.unidade ? ` (${item.unidade})` : ''}</span>
                   <span className="hidden text-xs text-text-muted lg:inline">{item.unidade || ''}</span>
                   {!editavel ? (
-                    <span className="num text-lg font-semibold text-text lg:text-base">{formatNumBR(q ?? 0)}</span>
+                    <span className="num text-[17px] font-semibold text-text lg:text-[15px]">{formatNumBR(q ?? 0)}</span>
                   ) : (
                     <div className="flex items-center gap-2 lg:gap-1.5">
                       <button
                         onClick={() => salvarQtd(item.id, Math.max(0, stepBase(texto, base) - 1))}
                         disabled={enviando.has(item.id)}
-                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text u-motion u-press hover:bg-[var(--border)] disabled:opacity-50 lg:size-8"
                         aria-label="Diminuir"
                       >
                         <Minus className="size-4 lg:size-3.5" />
@@ -412,13 +439,13 @@ export function ContagemInventario({
                           salvarQtd(item.id, val)
                         }}
                         onWheel={(e) => e.currentTarget.blur()}
-                        className="num h-12 w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-2xl font-semibold text-text outline-none focus:ring-2 focus:ring-brand/40 lg:h-8 lg:w-16 lg:text-base"
+                        className="num h-11 w-20 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-center text-[22px] font-semibold text-text outline-none focus:ring-2 focus:ring-brand/40 disabled:opacity-60 lg:h-8 lg:w-16 lg:text-[15px]"
                         placeholder="0"
                       />
                       <button
                         onClick={() => salvarQtd(item.id, stepBase(texto, base) + 1)}
                         disabled={enviando.has(item.id)}
-                        className="flex size-11 items-center justify-center rounded-md border border-border bg-surface text-text transition-colors hover:bg-surface-2 disabled:opacity-50 lg:size-8"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text u-motion u-press hover:bg-[var(--border)] disabled:opacity-50 lg:size-8"
                         aria-label="Aumentar"
                       >
                         <Plus className="size-4 lg:size-3.5" />
@@ -439,12 +466,12 @@ export function ContagemInventario({
       )}
 
       {podeEditar && !finalizado && itens.length > 0 && (
-        <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:bottom-0">
+        <div className="sticky bottom-16 z-20 -mx-4 mt-4 border-t border-border bg-surface/85 px-4 py-3 backdrop-blur-xl lg:bottom-0">
           <div className="flex justify-end">
             <button
               onClick={finalizar}
               disabled={pending || enviando.size > 0}
-              className={`${btnClass('primary')} w-full sm:w-auto`}
+              className={`${btnClass('primary')} h-11 w-full sm:h-10 sm:w-auto`}
             >
               {pending ? <Spinner /> : <CheckCircle className="size-4" />}
               {pending ? 'Processando...' : 'Concluir inventário'}

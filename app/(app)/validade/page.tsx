@@ -280,23 +280,26 @@ export default async function ValidadePage({
 
       <ChipsFiltrosAtivos basePath="/validade" campos={campos} />
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* Pílulas do kit (mesmo visual de ChipsStatus): uma linha só no celular,
+          rolando na horizontal; quebra normal a partir de sm. */}
+      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
         <Link
           href={`/validade?modo=vencidos${sufixo}`}
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+          aria-current={vencidos ? 'page' : undefined}
+          className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
             vencidos
-              ? 'border-err bg-err/10 text-err'
-              : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+              ? 'bg-err text-white'
+              : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
           }`}
         >
           Vencidos
           <span
-            className={`num text-[12px] tabular-nums ${
-              cVencidos === 0
-                ? 'opacity-40'
-                : vencidos
-                  ? 'font-semibold'
-                  : 'font-semibold text-err'
+            className={`num text-[12px] ${
+              vencidos
+                ? 'text-white/80'
+                : cVencidos === 0
+                  ? 'opacity-50'
+                  : 'text-err'
             }`}
           >
             {cVencidos}
@@ -309,16 +312,17 @@ export default async function ValidadePage({
             <Link
               key={p}
               href={`/validade?dias=${p}${sufixo}`}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+              aria-current={ativo ? 'page' : undefined}
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
                 ativo
-                  ? 'border-brand bg-brand-soft text-brand'
-                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+                  ? 'bg-brand text-white'
+                  : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
               }`}
             >
               {p === 0 ? 'Vence hoje' : `${p} dias`}
               <span
-                className={`num text-[12px] tabular-nums ${
-                  n === 0 ? 'opacity-40' : ativo ? 'font-semibold' : 'font-semibold text-text'
+                className={`num text-[12px] ${
+                  ativo ? 'text-white/80' : n === 0 ? 'opacity-50' : 'text-text'
                 }`}
               >
                 {n}
@@ -346,7 +350,7 @@ export default async function ValidadePage({
                     {formatarNomeProduto(prod?.descricao) || `Produto ${o.identificacao_n_cod_produto}`}
                   </span>
                   {prod?.codigo && (
-                    <span className="ml-1.5 text-[12px] text-text-muted">{prod.codigo}</span>
+                    <span className="num ml-1.5 text-[13px] text-text-muted">{prod.codigo}</span>
                   )}
                 </span>
               )
@@ -370,7 +374,7 @@ export default async function ValidadePage({
             sort: 'op',
             larguraDesktop: 'w-40',
             render: (o) => (
-              <span className="text-text-muted">
+              <span className="num text-text-muted">
                 {o.identificacao_c_num_op || o.num_ordem || '-'}
               </span>
             ),
@@ -386,7 +390,7 @@ export default async function ValidadePage({
                 <>
                   <Num value={o.quantidade ?? o.identificacao_n_qtde} frac={0} />
                   {prod?.unidade && (
-                    <span className="ml-1 text-[12px] text-text-muted">{prod.unidade}</span>
+                    <span className="ml-1 text-[13px] text-text-muted">{prod.unidade}</span>
                   )}
                 </>
               )

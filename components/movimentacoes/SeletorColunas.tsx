@@ -69,9 +69,10 @@ export function SeletorColunas({
         <SheetHeader>
           <SheetTitle>Colunas visíveis</SheetTitle>
         </SheetHeader>
-        <div className="space-y-2 px-4 pb-6">
+        <div className="px-4 pb-6">
+          <div className="divide-y divide-border/60 rounded-[var(--r-lg)] bg-surface-2">
           {colunas.map((col) => (
-            <label key={col} className="flex items-center gap-2 text-sm text-text">
+            <label key={col} className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-[15px] text-text">
               <input
                 type="checkbox"
                 checked={visiveis.has(col)}
@@ -79,9 +80,10 @@ export function SeletorColunas({
                 onChange={() => toggle(col)}
                 className="size-4 accent-[var(--brand)]"
               />
-              {col}{col === COLUNA_OBRIGATORIA && <span className="text-[11px] text-text-muted"> (sempre visível)</span>}
+              {col}{col === COLUNA_OBRIGATORIA && <span className="text-[13px] text-text-muted"> (sempre visível)</span>}
             </label>
           ))}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

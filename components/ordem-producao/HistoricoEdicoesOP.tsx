@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
 // Seção "Histórico de edições" -- lê `audit_log`. Achado real durante a Task 18
@@ -64,15 +65,22 @@ export async function HistoricoEdicoesOP({
   const registros = data ?? []
 
   return (
-    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-1 text-[13px] font-medium text-text-muted">Histórico de edições</h2>
-      <p className="mb-3 text-[11px] text-text-muted">
-        Só aparecem criação, edição e exclusão individuais desta OP -- conclusão/reversão (mesmo individual) e
-        ações em lote não gravam um vínculo com uma OP específica nesta trilha.
-      </p>
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
+      <h2 className="mb-1 text-[17px] font-semibold text-text">Histórico de edições</h2>
+      <details className="group mb-3 text-[13px] text-text-muted">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 select-none hover:text-text [&::-webkit-details-marker]:hidden">
+          Detalhes técnicos
+          <ChevronDown aria-hidden className="size-3.5 transition-transform group-open:rotate-180" />
+        </summary>
+        <p className="mt-1.5">
+          Só aparecem criação, edição e exclusão individuais desta OP -- conclusão/reversão (mesmo individual) e
+          ações em lote não gravam um vínculo com uma OP específica nesta trilha.
+        </p>
+      </details>
 
       {error ? (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
+          <span aria-hidden className="mr-1.5 inline-block size-2 rounded-full bg-err align-[1px]" />
           Não foi possível consultar o histórico de edições agora (falha de banco/rede) -- tente recarregar a
           página. Isto é diferente de &ldquo;nenhuma edição registrada&rdquo;.
         </p>
@@ -80,20 +88,20 @@ export async function HistoricoEdicoesOP({
         <p className="text-[13px] text-text-muted">Nenhuma edição registrada para esta OP.</p>
       ) : (
         <>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border/60">
             {registros.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-2 last:border-none last:pb-0">
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
                 <div>
-                  <span className="text-[13px] text-text">{ACAO_LABEL[r.acao] ?? r.acao}</span>
-                  {r.descricao && <span className="text-[13px] text-text-muted"> · {r.descricao}</span>}
-                  <div className="text-[11px] text-text-muted">{r.user_nome ?? 'Usuário desconhecido'}</div>
+                  <span className="text-[15px] text-text">{ACAO_LABEL[r.acao] ?? r.acao}</span>
+                  {r.descricao && <span className="text-[15px] text-text-muted"> · {r.descricao}</span>}
+                  <div className="mt-0.5 text-[13px] text-text-muted">{r.user_nome ?? 'Usuário desconhecido'}</div>
                 </div>
-                <span className="num shrink-0 text-[12px] text-text-muted">{fmtDataHora(r.created_at)}</span>
+                <span className="num shrink-0 text-[13px] text-text-muted">{fmtDataHora(r.created_at)}</span>
               </li>
             ))}
           </ul>
           {registros.length === LIMITE && (
-            <p className="mt-2 text-[11px] text-text-muted">Mostrando as {LIMITE} edições mais recentes.</p>
+            <p className="mt-2 text-[13px] text-text-muted">Mostrando as {LIMITE} edições mais recentes.</p>
           )}
         </>
       )}

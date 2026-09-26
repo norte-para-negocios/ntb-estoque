@@ -6,7 +6,7 @@ import { complementarOrdensProducao } from '@/lib/historico-contabo'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { isOpConcluida, opStatus, type OpStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { FUNDO_CLASSE, type CorToken } from '@/lib/status-cor'
 import { InventariosRelacionadosOP } from '@/components/ordem-producao/InventariosRelacionadosOP'
 import { NotaFiscalVinculadaOP } from '@/components/ordem-producao/NotaFiscalVinculadaOP'
 import { HistoricoSyncOP } from '@/components/ordem-producao/HistoricoSyncOP'
@@ -28,8 +28,8 @@ function fmtDataBR(d: string | null | undefined): string | null {
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[11px] text-text-muted">{label}</dt>
-      <dd className="text-[13px] text-text">{children}</dd>
+      <dt className="text-[12px] text-text-muted">{label}</dt>
+      <dd className="mt-0.5 text-[15px] text-text">{children}</dd>
     </div>
   )
 }
@@ -90,7 +90,8 @@ export default async function OrdemProducaoDetalhePage({
     // existe" -- nao confundir os dois com um 404 enganoso.
     if (opErro) {
       return (
-        <p className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span aria-hidden className="mr-1.5 inline-block size-2 rounded-full bg-err align-[1px]" />
           Não foi possível consultar esta ordem de produção agora (falha de banco/rede: {opErro.message}). Tente
           recarregar a página.
         </p>
@@ -166,8 +167,8 @@ export default async function OrdemProducaoDetalhePage({
         breadcrumb={[{ label: 'Ordens de Produção', href: '/ordem-producao' }, { label: `OP ${numOP}` }]}
         meta={
           <div className="space-y-1">
-            <p className="text-[13px] text-text-muted">{produtoNome}</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-text-muted">
+            <p className="text-[15px] text-text-muted">{produtoNome}</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text-muted">
               {(op.dt_conclusao_real || op.identificacao_d_dt_previsao) && (
                 <span>
                   {concluida ? 'Concluída' : 'Prevista'}:{' '}
@@ -180,9 +181,8 @@ export default async function OrdemProducaoDetalhePage({
                   {produto?.unidade ?? ''}
                 </span>
               )}
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[STATUS_INFO[status].token]}`}
-              >
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text">
+                <span aria-hidden className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[STATUS_INFO[status].token]}`} />
                 {STATUS_INFO[status].label}
               </span>
             </div>
@@ -191,17 +191,20 @@ export default async function OrdemProducaoDetalhePage({
       />
 
       {errosConsulta.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
+          <span>
           Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
           dados abaixo podem estar incompletos.
+          </span>
         </p>
       )}
 
       {/* Dados basicos: replica o que ja existe hoje na linha expandida da lista
           (OrdemProducaoRow.tsx) -- produto, quantidade, ingredientes, validade. */}
-      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-        <h2 className="mb-3 text-[13px] font-medium text-text-muted">Dados básicos</h2>
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
+        <h2 className="mb-3 text-[17px] font-semibold text-text">Dados básicos</h2>
+        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Campo label="Produto">{produtoNome}</Campo>
           <Campo label="Quantidade planejada">
             <span className="num">
@@ -212,17 +215,17 @@ export default async function OrdemProducaoDetalhePage({
           <Campo label="Local de produção">
             {local?.descricao ?? (op.identificacao_codigo_local_estoque ? `#${op.identificacao_codigo_local_estoque}` : '-')}
           </Campo>
-          <Campo label="Validade">{fmtDataBR(op.validade) ?? '-'}</Campo>
-          <Campo label="Quantidade de etiqueta">{op.quantidade ?? '-'}</Campo>
-          <Campo label="Data prevista">{fmtDataBR(op.identificacao_d_dt_previsao) ?? '-'}</Campo>
-          <Campo label="Data de conclusão">{fmtDataBR(op.dt_conclusao_real) ?? '-'}</Campo>
+          <Campo label="Validade"><span className="num">{fmtDataBR(op.validade) ?? '-'}</span></Campo>
+          <Campo label="Quantidade de etiqueta"><span className="num">{op.quantidade ?? '-'}</span></Campo>
+          <Campo label="Data prevista"><span className="num">{fmtDataBR(op.identificacao_d_dt_previsao) ?? '-'}</span></Campo>
+          <Campo label="Data de conclusão"><span className="num">{fmtDataBR(op.dt_conclusao_real) ?? '-'}</span></Campo>
         </dl>
         {ingredientes.length > 0 && (
-          <div className="mt-3 border-t border-border pt-3">
+          <div className="mt-4 border-t border-border/60 pt-3">
             <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
             <div className="flex flex-wrap gap-x-5 gap-y-1">
               {ingredientes.map((i) => (
-                <span key={i.cod} className="text-[12px] text-text">
+                <span key={i.cod} className="text-[13px] text-text">
                   {i.nome}{' '}
                   <span className="num text-text-muted">
                     {i.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}

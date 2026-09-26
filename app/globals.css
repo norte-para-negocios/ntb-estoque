@@ -61,18 +61,19 @@
   --text: #1d1d1f;
   --text-muted: #6e6e73;
   --border: rgba(60, 60, 67, 0.14);
-  /* Marca Norte (só ação/seleção) */
-  --brand: #484DB5;
-  --brand-strong: #3A3E91;
-  --brand-soft: #eceefb;
+  /* Marca do Estoque: teal (identidade própria, diferente do azul do Vendas).
+     Um tom mais fundo que o #2eb5c3 original pra texto branco ficar legível. */
+  --brand: #168e9a;
+  --brand-strong: #107883;
+  --brand-soft: #e2f4f6;
   /* Semânticas (tons Apple, AA) */
   --ok: #248a3d;
   --warn: #b25000;
   --err: #d70015;
   --info: #0066cc;
-  /* Menu lateral azul da marca */
-  --sidebar-bg: #484DB5;
-  --sidebar-bg-2: #3A3E91;
+  /* Menu lateral na cor da marca (teal) */
+  --sidebar-bg: #1a9aa7;
+  --sidebar-bg-2: #106e78;
   /* Paleta categorica p/ graficos (dashboard de producao, por funcionario).
      7 primeiros slots da paleta de referencia validada da skill dataviz
      (references/palette.md) -- CVD deltaE >= 8, contraste ok claro/escuro.
@@ -85,7 +86,7 @@
   --series-6: #008300;
   --series-7: #4a3aa7;
   /* Tinta: superfície escura de destaque (hero, atalhos). Era hex órfão #10151c. */
-  --ink: #1E1B4B;
+  --ink: #0f3d43;
   /* Raios: 8/12/18, janela 22 */
   --r-sm: 0.5rem;
   --r-md: 0.75rem;
@@ -130,15 +131,15 @@
   --text: #f5f5f7;
   --text-muted: #98989d;
   --border: rgba(84, 84, 88, 0.45);
-  --brand: #8b90ea;
-  --brand-strong: #a6aaf0;
-  --brand-soft: rgba(139, 144, 234, 0.18);
+  --brand: #3fc6d4;
+  --brand-strong: #6fd6e0;
+  --brand-soft: rgba(63, 198, 212, 0.18);
   --ok: #30d158;
   --warn: #ffb340;
   --err: #ff6961;
   --info: #409cff;
-  --sidebar-bg: #23256b;
-  --sidebar-bg-2: #16174a;
+  --sidebar-bg: #0f4f57;
+  --sidebar-bg-2: #0a353b;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -417,7 +418,7 @@
    Todos os <thead> dentro de [data-sticky-table] ficam colados ABAIXO
    do ListaHeader. Fallback 0px: telas sem ListaHeader o thead gruda no topo.
    ----------------------------------------------------------------------- */
-/* Menu lateral azul da marca (mesmo do NTB Vendas). */
+/* Menu lateral na cor da marca (mesmo desenho do NTB Vendas, cor do Estoque). */
 .sidebar-blue {
   background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-2) 100%);
   color: #fff;

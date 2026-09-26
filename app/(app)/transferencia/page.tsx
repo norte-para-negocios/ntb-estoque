@@ -312,9 +312,8 @@ export default async function TransferenciaPage({
         <PageHeader
           title="Transferências"
           icon={ArrowLeftRight}
-          description="Movimentações entre locais de estoque"
           actions={
-            <>
+            <div className="-my-1 flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto py-1 [scrollbar-width:none] sm:w-auto sm:flex-wrap sm:justify-end sm:overflow-visible [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               <FiltrosGaveta
                 basePath="/transferencia"
                 campos={campos}
@@ -347,7 +346,7 @@ export default async function TransferenciaPage({
                 <FileText className="size-4" /> Relatório PDF
               </a>
               {podeCriar ? <NovaTransferencia locais={locais ?? []} /> : null}
-            </>
+            </div>
           }
         />
         <ChipsStatus
@@ -380,9 +379,9 @@ export default async function TransferenciaPage({
               return (
                 <span className="inline-flex flex-wrap items-center gap-1.5">
                   <span className="num text-text-muted">#{t.id}</span>
-                  <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[12px] text-text-muted">{origem}</span>
+                  <span className="text-text-muted">{origem}</span>
                   <span className="text-text-muted">→</span>
-                  <span className="rounded bg-ok/15 px-1.5 py-0.5 text-[12px] font-medium text-ok">{destino}</span>
+                  <span className="font-medium text-text">{destino}</span>
                 </span>
               )
             },

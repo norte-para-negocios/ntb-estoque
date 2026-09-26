@@ -41,9 +41,9 @@ export function MargemAlvoInput({
   }
 
   return (
-    <div className="flex items-center gap-2 text-[12px] text-text-muted">
-      <span className="">Margem alvo</span>
-      <div className="flex h-11 items-center gap-1 rounded-md border border-border bg-surface px-2 lg:h-8">
+    <label className="flex items-center gap-2 whitespace-nowrap text-[13px] text-text-muted">
+      <span>Margem alvo</span>
+      <span className="flex h-9 items-center gap-1 rounded-[var(--r-md)] bg-surface-2 px-2.5 focus-within:ring-2 focus-within:ring-brand/40 max-sm:h-11">
         <input
           type="number"
           min={1}
@@ -51,10 +51,11 @@ export function MargemAlvoInput({
           defaultValue={valor}
           onChange={(e) => onChange(e.target.value)}
           onWheel={(e) => e.currentTarget.blur()}
-          className="num w-10 bg-transparent text-center text-sm font-medium text-text outline-none"
+          aria-label="Margem alvo (%)"
+          className="num w-9 border-0 bg-transparent text-center text-[15px] font-semibold text-text outline-none max-sm:text-base"
         />
         <span className="text-text-muted">%</span>
-      </div>
-    </div>
+      </span>
+    </label>
   )
 }

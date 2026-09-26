@@ -22,7 +22,7 @@ export function LinhaMovimentoTipo({
     <span>
       <span className={`font-medium text-[13px] ${cor}`}>{label}</span>
       {obs && (
-        <span className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-text-muted">
+        <span className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-text-muted">
           {obs}
         </span>
       )}
@@ -33,7 +33,7 @@ export function LinhaMovimentoTipo({
 
   return (
     <>
-      <button type="button" onClick={() => setAberto(origem)} className="text-left hover:opacity-80">
+      <button type="button" onClick={() => setAberto(origem)} className="text-left u-motion hover:opacity-70">
         {conteudo}
       </button>
       <DetalheMovimentoSheet

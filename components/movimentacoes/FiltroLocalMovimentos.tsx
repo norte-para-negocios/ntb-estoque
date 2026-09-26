@@ -19,7 +19,7 @@ export function FiltroLocalMovimentos({ locais, valorAtual }: { locais: Local[];
     <select
       value={valorAtual}
       onChange={(e) => trocar(e.target.value)}
-      className="h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+      className="h-9 max-w-[220px] shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 text-[13px] max-sm:h-10 max-sm:text-base text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
     >
       <option value="">Todos os locais</option>
       {locais.map((l) => (

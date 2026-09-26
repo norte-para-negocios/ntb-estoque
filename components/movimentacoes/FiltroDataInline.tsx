@@ -29,22 +29,22 @@ export function FiltroDataInline({ ini, fim }: Props) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[12px] text-text-muted">Período:</span>
+    <div className="flex min-w-0 flex-nowrap items-center gap-2">
+      <span className="shrink-0 text-[13px] text-text-muted">Período:</span>
       <input
         type="date"
         value={inicio}
         onChange={(e) => setInicio(e.target.value)}
         onBlur={(e) => aplicar(e.target.value, final)}
-        className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+        className="num h-9 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 sm:w-[140px] sm:flex-none max-sm:h-10 max-sm:text-base"
       />
-      <span className="text-[12px] text-text-muted">até</span>
+      <span className="shrink-0 text-[13px] text-text-muted">até</span>
       <input
         type="date"
         value={final}
         onChange={(e) => setFinal(e.target.value)}
         onBlur={(e) => aplicar(inicio, e.target.value)}
-        className="num h-8 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40"
+        className="num h-9 min-w-0 flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 text-[13px] text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 sm:w-[140px] sm:flex-none max-sm:h-10 max-sm:text-base"
       />
     </div>
   )

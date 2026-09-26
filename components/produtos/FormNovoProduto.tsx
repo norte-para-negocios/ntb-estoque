@@ -11,7 +11,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2.5 text-sm text-text outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:text-base'
 
 const ORIGENS = [
   { value: '0', label: '0 - Nacional' },
@@ -32,8 +32,8 @@ const EXTRA_VAZIO = {
 
 function Campo({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="space-y-1">
-      <label className="text-[12px] font-medium text-text-muted">{label}</label>
+    <div className="space-y-1.5">
+      <label className="block text-[13px] font-medium text-text-muted">{label}</label>
       {children}
     </div>
   )
@@ -41,9 +41,10 @@ function Campo({ label, children }: { label: string; children: ReactNode }) {
 
 function Secao({ titulo, span, children }: { titulo: string; span?: boolean; children: ReactNode }) {
   return (
-    <section className={`rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 ${span ? 'lg:col-span-2' : ''}`}>
-      <h2 className="mb-4 text-[13px] font-semibold text-text-muted">{titulo}</h2>
-      {children}
+    // Estilo Ajustes: título da seção fora, grupo de campos num cartão branco sem borda.
+    <section className={`flex flex-col ${span ? 'lg:col-span-2' : ''}`}>
+      <h2 className="mb-2 px-1 text-[17px] font-semibold tracking-[-0.01em] text-text">{titulo}</h2>
+      <div className="flex-1 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)] sm:p-5">{children}</div>
     </section>
   )
 }
@@ -166,7 +167,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
 
   return (
     <div className="space-y-4 pb-24">
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-x-4 gap-y-6 lg:grid-cols-2">
         {/* Tipo PRIMEIRO: define a faixa do codigo sugerido (reuniao 18/06) */}
         <Secao titulo="Tipo do produto" span>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -179,7 +180,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
               </select>
             </Campo>
             <div className="flex items-end">
-              <p className="text-[12px] text-text-muted">
+              <p className="text-[13px] text-text-muted">
                 {sugerindo
                   ? 'Sugerindo código pela faixa...'
                   : 'Escolha o tipo primeiro: o código é sugerido pela faixa (matéria-prima ~80 mil, revenda ~90 mil, acabado ~91 mil, processo/consumo ~70 mil, ativo ~50 mil).'}
@@ -199,7 +200,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
                 placeholder={tipo ? 'Sugerido pelo tipo' : 'Escolha o tipo acima'}
               />
               {codigoSugerido && (
-                <p className="text-[11px] text-brand">Código sugerido pela faixa do tipo. Pode editar.</p>
+                <p className="text-[12px] text-brand">Código sugerido pela faixa do tipo. Pode editar.</p>
               )}
             </Campo>
             <Campo label="Unidade *">
@@ -251,23 +252,23 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
                 className={inputClass}
                 placeholder="0"
               />
-              <p className="text-[11px] text-text-muted">Salvo localmente, não enviado ao Omie.</p>
+              <p className="text-[12px] text-text-muted">Salvo localmente, não enviado ao Omie.</p>
             </Campo>
           </div>
-          <label className="mt-3 flex items-center gap-2 text-sm text-text">
-            <input type="checkbox" checked={pdv} onChange={(e) => setPdv(e.target.checked)} className="accent-[var(--brand)]" />
+          <label className="mt-4 flex min-h-[44px] items-center gap-2.5 text-[15px] text-text sm:min-h-0">
+            <input type="checkbox" checked={pdv} onChange={(e) => setPdv(e.target.checked)} className="size-4 accent-[var(--brand)]" />
             Produto de PDV (frente de loja)
           </label>
-          <p className="text-[11px] text-text-muted">
+          <p className="mt-1 text-[12px] text-text-muted">
             Só produtos marcados vão pro cardápio do NTB Vendas. Salvo localmente, não enviado ao Omie.
           </p>
           {pdv && (
-            <label className="mt-2 flex items-center gap-2 text-sm text-text">
+            <label className="mt-2 flex min-h-[44px] items-center gap-2.5 text-[15px] text-text sm:min-h-0">
               <input
                 type="checkbox"
                 checked={criarNoNtbVendas}
                 onChange={(e) => setCriarNoNtbVendas(e.target.checked)}
-                className="accent-[var(--brand)]"
+                className="size-4 accent-[var(--brand)]"
               />
               Criar no NTB Vendas também
             </label>
@@ -318,9 +319,9 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
       </div>
 
       {/* Barra de acoes fixa */}
-      <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/95 px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8">
-        <span className="text-[12px] text-text-muted">Obrigatórios: tipo, código, descrição, unidade, NCM e família.</span>
-        <div className="flex items-center gap-2">
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-border bg-surface/85 px-4 py-3 backdrop-blur-xl max-lg:bottom-[calc(55px+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:gap-3 lg:-mx-8 lg:px-8">
+        <span className="text-[12px] text-text-muted sm:text-[13px]">Obrigatórios: tipo, código, descrição, unidade, NCM e família.</span>
+        <div className="flex items-center gap-2 max-sm:[&>*]:flex-1">
           <Link href="/produto" className={btnClass('outline')}>Cancelar</Link>
           <button onClick={criar} disabled={pending} className={btnClass('primary')}>
             {pending && <Spinner />}

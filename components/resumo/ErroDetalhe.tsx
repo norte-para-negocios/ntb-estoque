@@ -25,9 +25,10 @@ export function ErroDetalhe({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className={`cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-semibold u-motion u-press-sm hover:opacity-80 ${tomClasse}`}
+        className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text underline-offset-2 u-motion u-press-sm hover:underline"
         title="Ver o erro completo"
       >
+        <span className={`size-2 shrink-0 rounded-full ${tomClasse}`} />
         {label}
       </button>
 
@@ -39,12 +40,12 @@ export function ErroDetalhe({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-lg rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 text-left shadow-lg"
+            className="w-full max-w-lg rounded-[22px] bg-surface p-5 text-left shadow-[var(--shadow-md)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
-              <h3 className="text-sm font-semibold text-text">{titulo ?? 'Detalhe do erro'}</h3>
-              <button onClick={() => setAberto(false)} className="text-text-muted hover:text-text" aria-label="Fechar">
+              <h3 className="text-[17px] font-semibold text-text">{titulo ?? 'Detalhe do erro'}</h3>
+              <button onClick={() => setAberto(false)} className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion hover:text-text" aria-label="Fechar">
                 <X className="size-4" />
               </button>
             </div>

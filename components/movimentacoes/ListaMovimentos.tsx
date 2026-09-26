@@ -3,6 +3,7 @@
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { ArrowLeftRight } from 'lucide-react'
+import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { LinhaMovimentoTipo } from '@/components/movimentacoes/LinhaMovimentoTipo'
 import { SeletorColunas, useColunasVisiveis } from '@/components/movimentacoes/SeletorColunas'
 import type { LinhaDetalhe } from '@/components/movimentacoes/MovimentosTab'
@@ -41,7 +42,7 @@ export function ListaMovimentos({
     {
       label: 'Data',
       larguraDesktop: 'w-36',
-      render: (m: LinhaDetalhe) => <span className="num text-[12px] text-text-muted">{fmtDataDetalhe(m.data)}</span>,
+      render: (m: LinhaDetalhe) => <span className="num text-[13px] text-text-muted">{fmtDataDetalhe(m.data)}</span>,
     },
     {
       label: 'Tipo',
@@ -71,7 +72,7 @@ export function ListaMovimentos({
         const nomeOrig = locaisMap.get(m.local) ?? String(m.local)
         const nomeDest = m.destino != null ? (locaisMap.get(m.destino) ?? String(m.destino)) : null
         return (
-          <span className="text-[12px] text-text-muted">
+          <span className="text-[13px] text-text-muted">
             {nomeOrig}
             {nomeDest && <span> → {nomeDest}</span>}
           </span>
@@ -81,10 +82,8 @@ export function ListaMovimentos({
     {
       label: 'Status',
       larguraDesktop: 'w-28',
-      render: (m: LinhaDetalhe) => {
-        const cor = m.status === 'Erro' ? 'text-err' : m.status === 'Concluido' ? 'text-ok' : 'text-text-muted'
-        return <span className={`text-[11px] ${cor}`}>{m.status ?? '-'}</span>
-      },
+      render: (m: LinhaDetalhe) =>
+        m.status ? <StatusPill status={m.status} /> : <span className="text-text-muted">-</span>,
     },
   ]
 

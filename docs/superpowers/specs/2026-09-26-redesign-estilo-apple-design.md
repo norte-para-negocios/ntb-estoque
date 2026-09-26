@@ -41,8 +41,9 @@ inventário/transferência da loja 6, modo leitura). Achados:
 14. **Mobile**: barras de ferramentas em 3–4 linhas, chips de período cortados
     sem indicação, busca ocupando uma linha inteira no topo, tabelas largas
     sem rolagem visível (Faturamento/Margem/Estoque valorizado).
-15. **Marca**: hoje o Estoque é teal `#2eb5c3` com menu branco. Pedido do
-    dono: mesma marca do Vendas (`#484DB5`) e menu lateral azul.
+15. **Marca**: o Estoque é teal (`#2eb5c3`) com menu branco. Decisão do dono
+    (2026-09-26): continua teal — identidade própria, não o azul do Vendas.
+    Menu lateral na cor da marca (teal), texto branco.
 
 Não são do redesign (registrado pra não culpar depois): entidades HTML cruas
 em nomes de produto ("DANIEL&amp;apos;S" — dado), textos sem acento em
@@ -57,11 +58,11 @@ Idêntica à do Vendas, com o menu azul que o dono pediu:
   `tabular-nums`. Mono só em código (chave de NF, JSON de log, XML).
 - **Claro:** fundo `#f5f5f7`, superfície `#fff`, superfície 2 `#f2f2f7`,
   texto `#1d1d1f`, secundário `#6e6e73`, separador `rgba(60,60,67,.14)`,
-  marca `#484DB5` (só ação/seleção), ok `#248a3d`, aviso `#b25000`, erro
+  marca teal `#168e9a` (tom mais fundo do `#2eb5c3` original, pra texto branco ficar legível; só ação/seleção), ok `#248a3d`, aviso `#b25000`, erro
   `#d70015`, info `#0066cc`.
 - **Escuro:** fundo `#000`, superfície `#1c1c1e`, superfície 2 `#2c2c2e`,
   texto `#f5f5f7`, secundário `#98989d`, separador `rgba(84,84,88,.45)`,
-  marca `#8b90ea`. Só via tokens (`.dark`), nunca utilitário `dark:`.
+  marca `#3fc6d4`. Só via tokens (`.dark`), nunca utilitário `dark:`.
 - **Raios** 8/12/18, modal 22 (folha no celular). Botões e chips pílula
   (32/38/44px).
 - **Cartões** sem borda, sombra `0 1px 2px rgba(0,0,0,.04), 0 2px 12px rgba(0,0,0,.04)`.
@@ -74,7 +75,7 @@ Idêntica à do Vendas, com o menu azul que o dono pediu:
 - **Tabelas**: separador fino, cabeçalho frase normal cinza 13px sem fundo,
   números à direita com `tabular-nums`, hover suave, sem zebra; rolagem
   horizontal visível no celular.
-- **Menu lateral** azul da marca (gradiente `#484DB5→#3A3E91`), texto branco,
+- **Menu lateral** na cor da marca (gradiente teal `#1a9aa7→#106e78`), texto branco,
   item ativo em pílula branca translúcida; grupos em frase normal.
 - **Movimento**: molas sem quique (bounce 0, ~0.35s), press 0.97, pílula do
   menu deslizando, troca de aba suave, folhas de baixo arrastáveis no

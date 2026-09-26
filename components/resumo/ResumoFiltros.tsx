@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 
 const inputClass =
-  'h-9 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40'
+  'h-9 rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:text-base'
 
 // Soma dias a uma data YYYY-MM-DD (parsing local, sem fuso).
 function addDias(iso: string, d: number): string {
@@ -43,7 +44,7 @@ export function ResumoFiltros({
           type="button"
           aria-label="Dia anterior"
           onClick={() => ir(addDias(data, -1), lojaParam)}
-          className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text-muted u-motion hover:bg-surface-2 hover:text-text"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press-sm hover:text-text max-sm:size-10"
         >
           <ChevronLeft className="size-4" />
         </button>
@@ -59,7 +60,7 @@ export function ResumoFiltros({
           aria-label="Próximo dia"
           disabled={data >= hoje}
           onClick={() => ir(addDias(data, 1), lojaParam)}
-          className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-text-muted u-motion hover:bg-surface-2 hover:text-text disabled:opacity-40"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press-sm hover:text-text max-sm:size-10 disabled:opacity-40"
         >
           <ChevronRight className="size-4" />
         </button>
@@ -83,7 +84,7 @@ export function ResumoFiltros({
         <button
           type="button"
           onClick={() => ir(hoje, lojaParam)}
-          className="h-9 rounded-md border border-border bg-surface px-3 text-sm font-medium text-brand u-motion hover:bg-surface-2"
+          className={btnClass('outline')}
         >
           Hoje
         </button>

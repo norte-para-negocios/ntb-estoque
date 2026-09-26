@@ -7,6 +7,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { FileText, Download } from 'lucide-react'
 import { complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 import { statusNF } from '@/lib/nf-status'
+import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { DetalhesFiscaisNF } from '@/components/nota-fiscal/DetalhesFiscaisNF'
 import { AcoesNF } from '@/components/nota-fiscal/AcoesNF'
 import { OPsRelacionadasNF } from '@/components/nota-fiscal/OPsRelacionadasNF'
@@ -111,23 +112,29 @@ export default async function NotaFiscalItensPage({
         meta={
           <div className="space-y-1">
             {(nf.c_razao_social || nf.c_nome) && (
-              <p className="text-[13px] text-text-muted">{nf.c_razao_social || nf.c_nome}</p>
+              <p className="text-[15px] text-text-muted">{nf.c_razao_social || nf.c_nome}</p>
             )}
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-text-muted">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-text-muted">
               {nf.d_emissao_nfe && <span>Emissão: <span className="num">{fmtData(nf.d_emissao_nfe)}</span></span>}
               {nf.n_valor_nfe != null && (
                 <span>Valor: <span className="num font-medium text-text">{Number(nf.n_valor_nfe).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>
               )}
               {statusInfo && (
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusInfo.tom === 'ok' ? 'text-ok bg-ok/10' : statusInfo.tom === 'err' ? 'text-err bg-err/10' : 'text-warn bg-warn/10'}`}
-                >
-                  {statusInfo.label} <span className="num ml-1 opacity-70">({nf.c_etapa})</span>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text">
+                  <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[statusInfo.tom]}`} aria-hidden />
+                  {statusInfo.label} <span className="num font-normal text-text-muted">({nf.c_etapa})</span>
                 </span>
               )}
             </div>
             {nf.c_chave_nfe && (
-              <p className="num text-[11px] text-text-muted break-all">{nf.c_chave_nfe}</p>
+              // Chave de acesso = código: continua em mono, quebrada em grupos de 4
+              // só visualmente (spans inline-block, sem espaço real no texto --
+              // copiar a chave continua dando os 44 dígitos colados).
+              <p className="font-mono text-[12px] leading-relaxed text-text-muted" title="Chave de acesso">
+                {(nf.c_chave_nfe.match(/.{1,4}/g) ?? [nf.c_chave_nfe]).map((g: string, i: number) => (
+                  <span key={i} className="mr-[0.5em] inline-block">{g}</span>
+                ))}
+              </p>
             )}
             {nf.n_id_receb && (
               <div className="flex flex-wrap gap-2 pt-1">

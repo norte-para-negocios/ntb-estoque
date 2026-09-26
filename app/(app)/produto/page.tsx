@@ -1,9 +1,9 @@
+import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SyncButton } from '@/components/SyncButton'
-import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
@@ -28,6 +28,7 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
 import { Package, Download, Plus, Printer } from 'lucide-react'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
+import { SegmentedHrefs } from '@/components/produtos/SegmentedHrefs'
 
 const POR_PAGINA = 100
 
@@ -439,77 +440,149 @@ export default async function ProdutoPage({
     },
   ]
 
+  // Renderizadores das células de valor: usados na coluna (desktop) e no
+  // resumo compacto abaixo do nome (celular), pra o nome ganhar a largura.
+  const celCusto = (p: ProdutoLinha) => {
+    const c = custoDe(p.codigo_produto)
+    return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
+  }
+  const celVenda = (p: ProdutoLinha) => <Money value={p.valor_unitario} />
+  const celMargem = (p: ProdutoLinha) => {
+    const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
+    if (m == null) return <span className="text-text-muted">-</span>
+    return (
+      <span className={`num font-medium ${TEXTO_CLASSE[corMargem(m, alvo)]}`}>
+        {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+      </span>
+    )
+  }
+  const celSugerido = (p: ProdutoLinha) => {
+    // Sem preco de venda nao da sugestao (pedido do fundador 17/06).
+    const s = Number(p.valor_unitario) > 0 ? precoSugerido(custoDe(p.codigo_produto), alvo) : null
+    return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
+  }
+  const celAtual = (p: ProdutoLinha) => {
+    const saldo = saldoDe(p.codigo_produto)
+    if (saldo == null) return <span className="text-text-muted">-</span>
+    const min = minEfetivo(p)
+    // Vermelho quando: passou do minimo (saldo <= min, com min>0) OU saldo
+    // NEGATIVO (sempre errado, mesmo sem minimo definido — Omie traz min=0
+    // como "sem politica"; negativo passou do minimo de qualquer jeito).
+    const baixo = saldo < 0 || (min != null && min > 0 && saldo <= min)
+    // Quantidade EXATA do Omie (sem arredondar): 0,0139203299 aparece inteiro.
+    return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}>{formatQtdExata(saldo)}</span>
+  }
+  const celPrevVenda = (p: ProdutoLinha) => {
+    const pv = prevVendaDe(p.codigo_produto)
+    if (pv == null) return <span className="text-text-muted">-</span>
+    return <span className="num text-text-muted">{formatQtdExata(pv)}</span>
+  }
+  const celRepor = (p: ProdutoLinha) => {
+    const saldo = saldoDe(p.codigo_produto)
+    const min = minEfetivo(p)
+    // sem minimo (null) ou minimo 0 = nao sugere compra (evita poluir a base nao configurada).
+    if (saldo == null || min == null || min <= 0) return <span className="text-text-muted">-</span>
+    // compra = minimo + previsao de venda - estoque atual
+    const prev = prevVendaDe(p.codigo_produto) ?? 0
+    const comprar = Math.max(0, min + prev - saldo)
+    if (comprar <= 0) return <span className="text-ok">ok</span>
+    return <span className="num font-semibold text-brand">{formatQtdExata(comprar)}</span>
+  }
+  const celUltCompra = (p: ProdutoLinha) => {
+    const c = custoDe(p.codigo_produto)
+    if (c == null) return <span className="text-text-muted">-</span>
+    const data = custoDataDe(p.codigo_produto)
+    const titulo = `Custo médio contábil (CMC)${data ? ` · atualizado em ${fmtDataCurta(data)}` : ''}`
+    return (
+      <span title={titulo}>
+        <Money value={c} />
+      </span>
+    )
+  }
+  // Resumo compacto do celular: rótulo curto + valor, em texto menor.
+  const resumoMobile: { label: string; render: (p: ProdutoLinha) => ReactNode }[] =
+    vista === 'precos'
+      ? [
+          { label: 'Custo', render: celCusto },
+          { label: 'Venda', render: celVenda },
+          { label: 'Margem', render: celMargem },
+          { label: `Sugerido (${alvoPct}%)`, render: celSugerido },
+        ]
+      : [
+          { label: 'Atual', render: celAtual },
+          { label: 'Prev. venda', render: celPrevVenda },
+          { label: 'Repor', render: celRepor },
+          { label: 'Preço (últ. compra)', render: celUltCompra },
+        ]
+
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader
-          title="Produtos"
-          icon={Package}
-          actions={
-            <>
-              <FiltrosGaveta
-                basePath="/produto"
-                campos={campos}
-                defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', fornecedor: params.fornecedor ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
-                persistirEm="/produto"
+        {/* Cabeçalho próprio (em vez do PageHeader) pra garantir: título numa
+            linha só e as 6 ações SEMPRE numa linha, sem quebrar. Se não couber
+            (desktop estreito / celular), a linha rola na horizontal, mesma ordem. */}
+        <div className="mb-3 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+          <h1 className="shrink-0 whitespace-nowrap text-[26px] font-bold leading-tight tracking-[-0.02em] text-text sm:text-[30px]">
+            Produtos
+          </h1>
+          <div className="-mx-4 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+            <FiltrosGaveta
+              basePath="/produto"
+              campos={campos}
+              defaults={{ q: params.q ?? '', familia: params.familia ?? '', tipo: params.tipo ?? '', fornecedor: params.fornecedor ?? '', situacao: params.situacao ?? 'ativos', ord: params.ord ?? '' }}
+              persistirEm="/produto"
+            />
+            <button type="submit" form="form-etiquetas-produto" formTarget="_blank" className={btnClass('outline')}>
+              <Printer className="size-4" /> Imprimir etiquetas selecionadas
+            </button>
+            <button
+              type="submit"
+              form="form-etiquetas-produto"
+              formAction="/produto/imprimir-catalogo"
+              formTarget="_blank"
+              className={btnClass('outline')}
+            >
+              <Printer className="size-4" /> Imprimir catálogo A4
+            </button>
+            {podeCriar && (
+              <Link href="/produto/novo" className={btnClass('primary')}>
+                <Plus className="size-4" /> Novo produto
+              </Link>
+            )}
+            <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
+              <Download className="size-4" /> Excel
+            </a>
+            {podeSync && (
+              <SyncButton
+                endpoints={['/api/sync/produtos', '/api/sync/posicao', '/api/sync/previsao-venda']}
+                label="Atualizar tudo"
               />
-              <button type="submit" form="form-etiquetas-produto" formTarget="_blank" className={btnClass('outline')}>
-                <Printer className="size-4" /> Imprimir etiquetas selecionadas
-              </button>
-              <button
-                type="submit"
-                form="form-etiquetas-produto"
-                formAction="/produto/imprimir-catalogo"
-                formTarget="_blank"
-                className={btnClass('outline')}
-              >
-                <Printer className="size-4" /> Imprimir catálogo A4
-              </button>
-              {podeCriar && (
-                <Link href="/produto/novo" className={btnClass('primary')}>
-                  <Plus className="size-4" /> Novo produto
-                </Link>
-              )}
-              <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>
-                <Download className="size-4" /> Excel
-              </a>
-              {podeSync && (
-                <SyncButton
-                  endpoints={['/api/sync/produtos', '/api/sync/posicao', '/api/sync/previsao-venda']}
-                  label="Atualizar tudo"
-                />
-              )}
-            </>
-          }
-        />
+            )}
+          </div>
+        </div>
         <ChipsFiltrosAtivos basePath="/produto" campos={campos} naoMostrar={['ord']} persistirEm="/produto" />
       </ListaHeader>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-[13px] text-text-muted">
-          <span>Atualizado em {fmtTimestamp(lojaSync?.produto_ultima_atualizacao ?? null)}</span>
+          <span>
+            Atualizado em <span className="num">{fmtTimestamp(lojaSync?.produto_ultima_atualizacao ?? null)}</span>
+          </span>
           <span>·</span>
           <StatusPill status={lojaSync?.produto_status ?? null} />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="-mx-4 flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
           {/* Modo da tabela: precos x compras (evita estourar a largura) */}
-          <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-[13px]">
-            {(['precos', 'compras'] as const).map((v) => {
+          <SegmentedHrefs
+            aria-label="Modo da tabela"
+            value={vista}
+            opcoes={(['precos', 'compras'] as const).map((v) => {
               const sp = new URLSearchParams(exportParams.toString())
               if (params.margem) sp.set('margem', params.margem)
               sp.set('vista', v)
-              const ativo = v === vista
-              return (
-                <Link
-                  key={v}
-                  href={`/produto?${sp.toString()}`}
-                  className={`rounded px-3 py-1 font-medium transition-colors ${ativo ? 'bg-brand text-white' : 'text-text-muted hover:text-text'}`}
-                >
-                  {v === 'precos' ? 'Preços' : 'Compras'}
-                </Link>
-              )
+              return { value: v, label: v === 'precos' ? 'Preços' : 'Compras', href: `/produto?${sp.toString()}` }
             })}
-          </div>
+          />
           {vista === 'precos' && (
             <MargemAlvoInput valor={alvoPct} baseParams={margemParams.toString()} naUrl={!!params.margem} />
           )}
@@ -521,10 +594,11 @@ export default async function ProdutoPage({
               return (
                 <Link
                   href={`/produto?${sp.toString()}`}
-                  className={`rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                  aria-pressed={repor}
+                  className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
                     repor
-                      ? 'border-brand bg-brand text-white'
-                      : 'border-border bg-surface text-text-muted hover:text-text'
+                      ? 'bg-brand text-white'
+                      : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
                   }`}
                 >
                   Só repor
@@ -532,24 +606,21 @@ export default async function ProdutoPage({
               )
             })()}
           {vista === 'compras' && (
-            <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-[13px]">
-              {([7, 15, 30] as const).map((dias) => {
+            <SegmentedHrefs
+              aria-label="Janela da previsão de venda"
+              value={String(janelaAtual)}
+              opcoes={([7, 15, 30] as const).map((dias) => {
                 const spJanela = new URLSearchParams(exportParams.toString())
                 if (params.margem) spJanela.set('margem', params.margem)
                 spJanela.set('vista', 'compras')
                 spJanela.set('janela', String(dias))
-                const ativo = janelaAtual === dias
-                return (
-                  <Link
-                    key={dias}
-                    href={`/produto?${spJanela.toString()}`}
-                    className={`rounded px-3 py-1 font-medium transition-colors ${ativo ? 'bg-brand text-white' : 'text-text-muted hover:text-text'}`}
-                  >
-                    {dias === 7 ? '1 semana' : dias === 15 ? '15 dias' : '1 mês'}
-                  </Link>
-                )
+                return {
+                  value: String(dias),
+                  label: dias === 7 ? '1 semana' : dias === 15 ? '15 dias' : '1 mês',
+                  href: `/produto?${spJanela.toString()}`,
+                }
               })}
-            </div>
+            />
           )}
         </div>
       </div>
@@ -599,54 +670,49 @@ export default async function ProdutoPage({
             flexivel: true,
             sort: 'descricao',
             render: (p) => (
-              <span>
-                {formatarNomeProduto(p.descricao)}
-                {p.ean && <span className="ml-1.5 num text-[11px] text-text-muted">{p.ean}</span>}
-                {p.pdv && (
-                  <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">PDV</span>
-                )}
-              </span>
+              <>
+                {/* Desktop: linha única, igual antes */}
+                <span className="hidden lg:inline">
+                  {formatarNomeProduto(p.descricao)}
+                  {p.ean && <span className="ml-1.5 num text-[12px] text-text-muted">{p.ean}</span>}
+                  {p.pdv && (
+                    <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand">PDV</span>
+                  )}
+                </span>
+                {/* Celular: nome com prioridade (até 2 linhas) e valores agrupados
+                    abaixo em texto menor, em vez de espremer o nome à esquerda. */}
+                <span className="block whitespace-normal lg:hidden">
+                  <span className="line-clamp-2 break-words">{formatarNomeProduto(p.descricao)}</span>
+                  {(p.ean || p.pdv) && (
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] font-normal text-text-muted">
+                      {p.ean && <span className="num">{p.ean}</span>}
+                      {p.pdv && (
+                        <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[11px] font-semibold leading-none text-brand">PDV</span>
+                      )}
+                    </span>
+                  )}
+                  <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] font-normal leading-tight text-text-muted">
+                    {resumoMobile.map((r) => (
+                      <span key={r.label} className="inline-flex items-baseline gap-1 whitespace-nowrap">
+                        <span>{r.label}</span>
+                        <span className="num text-text">{r.render(p)}</span>
+                      </span>
+                    ))}
+                  </span>
+                </span>
+              </>
             ),
           },
           ...(vista === 'precos'
             ? [
-                {
-                  label: 'Custo',
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-28',
-                  render: (p: ProdutoLinha) => {
-                    const c = custoDe(p.codigo_produto)
-                    return c != null ? <Money value={c} /> : <span className="text-text-muted">-</span>
-                  },
-                },
-                { label: 'Venda', alinhar: 'right' as const, larguraDesktop: 'w-28', sort: 'valor_unitario', render: (p: ProdutoLinha) => <Money value={p.valor_unitario} /> },
-                {
-                  label: 'Margem',
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-24',
-                  render: (p: ProdutoLinha) => {
-                    const m = margem(p.valor_unitario, custoDe(p.codigo_produto))
-                    if (m == null) return <span className="text-text-muted">-</span>
-                    return (
-                      <span className={`num font-medium ${TEXTO_CLASSE[corMargem(m, alvo)]}`}>
-                        {(m * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
-                      </span>
-                    )
-                  },
-                },
-                {
-                  label: `Sugerido (${alvoPct}%)`,
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-32',
-                  render: (p: ProdutoLinha) => {
-                    // Sem preco de venda nao da sugestao (pedido do fundador 17/06).
-                    const s = Number(p.valor_unitario) > 0 ? precoSugerido(custoDe(p.codigo_produto), alvo) : null
-                    return s != null ? <span className="text-text-muted"><Money value={s} /></span> : <span className="text-text-muted">-</span>
-                  },
-                },
+                { label: 'Custo', alinhar: 'right' as const, larguraDesktop: 'w-28', ocultarMobile: true, render: celCusto },
+                { label: 'Venda', alinhar: 'right' as const, larguraDesktop: 'w-28', ocultarMobile: true, sort: 'valor_unitario', render: celVenda },
+                { label: 'Margem', alinhar: 'right' as const, larguraDesktop: 'w-24', ocultarMobile: true, render: celMargem },
+                { label: `Sugerido (${alvoPct}%)`, alinhar: 'right' as const, larguraDesktop: 'w-32', ocultarMobile: true, render: celSugerido },
               ]
             : [
                 {
+                  // Único campo editável: continua à direita no celular (1 só instância do input).
                   label: 'Mínimo',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-24',
@@ -659,48 +725,9 @@ export default async function ProdutoPage({
                     />
                   ),
                 },
-                {
-                  label: 'Atual',
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-20',
-                  render: (p: ProdutoLinha) => {
-                    const saldo = saldoDe(p.codigo_produto)
-                    if (saldo == null) return <span className="text-text-muted">-</span>
-                    const min = minEfetivo(p)
-                    // Vermelho quando: passou do minimo (saldo <= min, com min>0) OU saldo
-                    // NEGATIVO (sempre errado, mesmo sem minimo definido — Omie traz min=0
-                    // como "sem politica"; negativo passou do minimo de qualquer jeito).
-                    const baixo = saldo < 0 || (min != null && min > 0 && saldo <= min)
-                    // Quantidade EXATA do Omie (sem arredondar): 0,0139203299 aparece inteiro.
-                    return <span className={`num ${baixo ? 'font-semibold text-err' : 'text-text'}`}>{formatQtdExata(saldo)}</span>
-                  },
-                },
-                {
-                  label: 'Prev. venda',
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-24',
-                  render: (p: ProdutoLinha) => {
-                    const pv = prevVendaDe(p.codigo_produto)
-                    if (pv == null) return <span className="text-text-muted">-</span>
-                    return <span className="num text-text-muted">{formatQtdExata(pv)}</span>
-                  },
-                },
-                {
-                  label: 'Repor',
-                  alinhar: 'right' as const,
-                  larguraDesktop: 'w-20',
-                  render: (p: ProdutoLinha) => {
-                    const saldo = saldoDe(p.codigo_produto)
-                    const min = minEfetivo(p)
-                    // sem minimo (null) ou minimo 0 = nao sugere compra (evita poluir a base nao configurada).
-                    if (saldo == null || min == null || min <= 0) return <span className="text-text-muted">-</span>
-                    // compra = minimo + previsao de venda - estoque atual
-                    const prev = prevVendaDe(p.codigo_produto) ?? 0
-                    const comprar = Math.max(0, min + prev - saldo)
-                    if (comprar <= 0) return <span className="text-ok">ok</span>
-                    return <span className="num font-semibold text-brand">{formatQtdExata(comprar)}</span>
-                  },
-                },
+                { label: 'Atual', alinhar: 'right' as const, larguraDesktop: 'w-20', ocultarMobile: true, render: celAtual },
+                { label: 'Prev. venda', alinhar: 'right' as const, larguraDesktop: 'w-24', ocultarMobile: true, render: celPrevVenda },
+                { label: 'Repor', alinhar: 'right' as const, larguraDesktop: 'w-20', ocultarMobile: true, render: celRepor },
                 {
                   // Achado real (reunião 2026-07-27): esta coluna vinha do preço unitário
                   // BRUTO da NF do fornecedor (RPC evolucao_preco_produtos), que não bate
@@ -711,17 +738,8 @@ export default async function ProdutoPage({
                   label: 'Preço (últ. compra)',
                   alinhar: 'right' as const,
                   larguraDesktop: 'w-40',
-                  render: (p: ProdutoLinha) => {
-                    const c = custoDe(p.codigo_produto)
-                    if (c == null) return <span className="text-text-muted">-</span>
-                    const data = custoDataDe(p.codigo_produto)
-                    const titulo = `Custo médio contábil (CMC)${data ? ` · atualizado em ${fmtDataCurta(data)}` : ''}`
-                    return (
-                      <span title={titulo}>
-                        <Money value={c} />
-                      </span>
-                    )
-                  },
+                  ocultarMobile: true,
+                  render: celUltCompra,
                 },
               ]),
         ]}

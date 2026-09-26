@@ -1,4 +1,4 @@
-import { SELO_CLASSE, type CorToken } from '@/lib/status-cor'
+import { FUNDO_CLASSE, type CorToken } from '@/lib/status-cor'
 
 // Seção "Histórico de sync com a Omie" -- expõe os campos gravados pela Task 1
 // desta mesma auditoria (retry Omie) em `ordens_producao`: conclusao_status,
@@ -46,11 +46,11 @@ export function HistoricoSyncOP({ info }: { info: SyncOPInfo }) {
   const semPendencia = !info.conclusaoStatus && (info.conclusaoTentativas ?? 0) === 0
 
   return (
-    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <h2 className="mb-3 text-[13px] font-medium text-text-muted">Histórico de sync com a Omie</h2>
+    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5">
+      <h2 className="mb-3 text-[17px] font-semibold text-text">Histórico de sync com a Omie</h2>
 
       {info.fonte === 'frio' ? (
-        <p className="rounded-md border border-border bg-surface-2/40 px-3 py-2 text-[13px] text-text-muted">
+        <p className="text-[13px] text-text-muted">
           Dado não disponível para esta OP. Ela é mais antiga que a janela do banco quente (Supabase) e veio do
           histórico do Contabo -- os campos de sync (status/tentativas/erro) nunca foram migrados pra lá, então
           isto NÃO significa &ldquo;sem erro&rdquo;, só que não dá pra saber a partir daqui.
@@ -62,43 +62,44 @@ export function HistoricoSyncOP({ info }: { info: SyncOPInfo }) {
             : 'Nenhuma tentativa de conclusão automática registrada ainda.'}
         </p>
       ) : (
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <dt className="text-[11px] text-text-muted">Status da fila de reenvio</dt>
+            <dt className="text-[12px] text-text-muted">Status da fila de reenvio</dt>
             <dd className="mt-0.5">
               {info.conclusaoStatus ? (
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${SELO_CLASSE[STATUS_TOKEN[info.conclusaoStatus] ?? 'neutro']}`}>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[15px] font-medium text-text">
+                  <span aria-hidden className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[STATUS_TOKEN[info.conclusaoStatus] ?? 'neutro']}`} />
                   {info.conclusaoStatus}
                 </span>
               ) : (
-                <span className="text-[13px] text-ok">Sem pendência</span>
+                <span className="text-[15px] text-ok">Sem pendência</span>
               )}
             </dd>
           </div>
           <div>
-            <dt className="text-[11px] text-text-muted">Tentativas</dt>
-            <dd className="num text-[13px] text-text">{info.conclusaoTentativas ?? 0}</dd>
+            <dt className="text-[12px] text-text-muted">Tentativas</dt>
+            <dd className="num mt-0.5 text-[15px] text-text">{info.conclusaoTentativas ?? 0}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-text-muted">Última tentativa</dt>
-            <dd className="num text-[13px] text-text">{fmtDataHora(info.conclusaoUltimaTentativaEm) ?? '-'}</dd>
+            <dt className="text-[12px] text-text-muted">Última tentativa</dt>
+            <dd className="num mt-0.5 text-[15px] text-text">{fmtDataHora(info.conclusaoUltimaTentativaEm) ?? '-'}</dd>
           </div>
           {info.conclusaoQtdeDesejada != null && (
             <div>
-              <dt className="text-[11px] text-text-muted">Quantidade desejada (próxima tentativa)</dt>
-              <dd className="num text-[13px] text-text">{info.conclusaoQtdeDesejada.toLocaleString('pt-BR')}</dd>
+              <dt className="text-[12px] text-text-muted">Quantidade desejada (próxima tentativa)</dt>
+              <dd className="num mt-0.5 text-[15px] text-text">{info.conclusaoQtdeDesejada.toLocaleString('pt-BR')}</dd>
             </div>
           )}
           {info.conclusaoDataDesejada != null && (
             <div>
-              <dt className="text-[11px] text-text-muted">Data desejada (próxima tentativa)</dt>
-              <dd className="num text-[13px] text-text">{fmtDataBR(info.conclusaoDataDesejada)}</dd>
+              <dt className="text-[12px] text-text-muted">Data desejada (próxima tentativa)</dt>
+              <dd className="num mt-0.5 text-[15px] text-text">{fmtDataBR(info.conclusaoDataDesejada)}</dd>
             </div>
           )}
           {info.conclusaoErroMsg && (
             <div className="sm:col-span-2 lg:col-span-3">
-              <dt className="text-[11px] text-text-muted">Última mensagem de erro</dt>
-              <dd className="mt-0.5 rounded-md border border-err/30 bg-err/10 px-3 py-2 text-[12px] text-text">
+              <dt className="text-[12px] text-text-muted">Última mensagem de erro</dt>
+              <dd className="mt-1 rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-err">
                 {info.conclusaoErroMsg}
               </dd>
             </div>

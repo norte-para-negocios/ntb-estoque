@@ -549,11 +549,12 @@ export default async function OrdemProducaoPage({
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader
-          title="Ordens de Produção"
-          icon={Factory}
-          actions={
-            <>
+        {/* Título numa linha própria; ações na linha de baixo (mesma ordem). No celular
+            a barra rola na horizontal (com fade nas pontas) em vez de quebrar/estourar. */}
+        <div className="[&>div:first-child]:!mb-3">
+          <PageHeader title="Ordens de Produção" icon={Factory} />
+        </div>
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-24px),transparent)] max-lg:px-3 max-lg:-mx-3 lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               <FiltrosGaveta
                 basePath="/ordem-producao"
                 campos={campos}
@@ -600,9 +601,8 @@ export default async function OrdemProducaoPage({
               </a>
               {podeSync && <SyncButton endpoint="/api/sync/ordens-producao" label="Atualizar agora" />}
               {podeCriar && <CriarOrdemProducao locais={locais ?? []} />}
-            </>
-          }
-        />
+        </div>
+        <div className="max-sm:-mx-3 max-sm:px-3 max-sm:[mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-24px),transparent)]">
         <ChipsStatus
           basePath="/ordem-producao"
           param="op_status"
@@ -614,7 +614,10 @@ export default async function OrdemProducaoPage({
             { value: 'concluida', label: 'Concluídas', count: totConcluidasFinal },
           ]}
         />
-        <ChipsPeriodo basePath="/ordem-producao" opcoes={chipsPeriodo} />
+        </div>
+        <div className="max-sm:-mx-3 max-sm:px-3 max-sm:[mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-24px),transparent)]">
+          <ChipsPeriodo basePath="/ordem-producao" opcoes={chipsPeriodo} />
+        </div>
         <ChipsFiltrosAtivos
           basePath="/ordem-producao"
           campos={campos}
@@ -624,17 +627,17 @@ export default async function OrdemProducaoPage({
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: {fmtDataBR(dataInicio)} a {fmtDataBR(dataFinal)}</span>
+        <span className="text-[13px] text-text-muted">Período: <span className="num">{fmtDataBR(dataInicio)}</span> a <span className="num">{fmtDataBR(dataFinal)}</span></span>
       </div>
 
       {truncado && (
-        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]"><span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
           Há muitas ordens. Mostrando uma parte. Use o filtro de data para refinar e ver tudo.
         </p>
       )}
 
       {totaisParciais && (
-        <p className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]"><span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
           Período muito longo: os contadores acima (Previstas/Pendentes/Atrasadas/Concluídas) podem estar
           abaixo do real. Use um período mais curto para ver os números exatos.
         </p>
@@ -683,26 +686,26 @@ export default async function OrdemProducaoPage({
           })
           const cabecalhoDesktop = (
             <>
-              <th className="w-32">OP</th>
-              <th className="w-36 !text-center">Data</th>
-              <th className="w-28">Status</th>
+              <th className="w-28">OP</th>
+              <th className="w-[172px] !text-center">Data</th>
+              <th className="w-[108px]">Status</th>
               <th>
                 <Link href={ordHref(ord === 'produto_az' ? 'produto_za' : 'produto_az')} className="inline-flex items-center gap-1 hover:text-text">
                   Produto {setaIcone('produto_az', 'produto_za')}
                 </Link>
               </th>
-              <th className="w-28 !text-center">
+              <th className="w-[104px] !text-center">
                 <Link href={ordHref(ord === 'qtd_asc' ? 'qtd_desc' : 'qtd_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
                   Qtd OP {setaIcone('qtd_asc', 'qtd_desc')}
                 </Link>
               </th>
-              <th className="w-36 !text-center">
+              <th className="w-[172px] !text-center">
                 <Link href={ordHref(ord === 'validade_asc' ? 'validade_desc' : 'validade_asc')} className="inline-flex items-center justify-center gap-1 hover:text-text">
                   Validade {setaIcone('validade_asc', 'validade_desc')}
                 </Link>
               </th>
-              <th className="w-28 !text-center">Quantidade</th>
-              <th className="w-36"></th>
+              <th className="w-[104px] !text-center">Quantidade</th>
+              <th className="w-[140px]"></th>
             </>
           )
           return (
