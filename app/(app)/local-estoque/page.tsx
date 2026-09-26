@@ -117,7 +117,7 @@ export default async function LocalEstoquePage({
               href={`/local-estoque${qs ? `?${qs}` : ''}`}
               className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
                 ativo
-                  ? 'bg-brand text-white'
+                  ? 'bg-brand-fill text-white'
                   : 'bg-surface-2 text-text-muted hover:text-text'
               }`}
             >

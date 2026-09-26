@@ -31,7 +31,7 @@ export function SincronizarBotoes() {
         seletor do menu lateral antes de sincronizar.
         </span>
       </div>
-      <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={carregando !== null}

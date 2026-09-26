@@ -201,7 +201,7 @@ export function ConvidarUsuario({
                         >
                           <span
                             className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
-                              on ? 'border-brand bg-brand text-white' : 'border-border bg-surface'
+                              on ? 'border-brand-fill bg-brand-fill text-white' : 'border-border bg-surface'
                             }`}
                           >
                             {on && <span className="text-[10px] leading-none">✓</span>}
@@ -310,7 +310,7 @@ export function ConvidarUsuario({
                                   onClick={() => togglePerm(p.nome)}
                                   className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                                     on
-                                      ? 'bg-brand text-white'
+                                      ? 'bg-brand-fill text-white'
                                       : 'bg-surface text-text-muted hover:text-text'
                                   }`}
                                 >
@@ -342,7 +342,7 @@ export function ConvidarUsuario({
                       onClick={() => setValidadeDias(o.d)}
                       className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                         validadeDias === o.d
-                          ? 'bg-brand text-white'
+                          ? 'bg-brand-fill text-white'
                           : 'bg-surface text-text-muted hover:text-text'
                       }`}
                     >

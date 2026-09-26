@@ -537,7 +537,7 @@ export default async function NotaFiscalPage({
           actions={
             // Uma linha só: no celular rola na horizontal (mesma ordem de botões)
             // em vez de quebrar e deixar o Atualizar sozinho numa linha.
-            <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <FiltrosGaveta
                 basePath="/nota-fiscal"
                 naoContar={['data_inicio', 'data_final']}

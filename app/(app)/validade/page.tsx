@@ -288,7 +288,7 @@ export default async function ValidadePage({
           aria-current={vencidos ? 'page' : undefined}
           className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
             vencidos
-              ? 'bg-err text-white'
+              ? 'bg-err-fill text-white'
               : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
           }`}
         >
@@ -315,7 +315,7 @@ export default async function ValidadePage({
               aria-current={ativo ? 'page' : undefined}
               className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
                 ativo
-                  ? 'bg-brand text-white'
+                  ? 'bg-brand-fill text-white'
                   : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
               }`}
             >

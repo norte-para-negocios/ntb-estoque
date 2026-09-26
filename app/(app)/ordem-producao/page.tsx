@@ -552,7 +552,7 @@ export default async function OrdemProducaoPage({
         {/* Título numa linha própria; ações na linha de baixo (mesma ordem). No celular
             a barra rola na horizontal (com fade nas pontas) em vez de quebrar/estourar. */}
         <PageHeader title="Ordens de Produção" icon={Factory} />
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-24px),transparent)] max-lg:px-3 max-lg:-mx-3 lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
               <FiltrosGaveta
                 basePath="/ordem-producao"
                 campos={campos}

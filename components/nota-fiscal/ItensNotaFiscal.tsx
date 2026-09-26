@@ -93,7 +93,7 @@ export function ItensNotaFiscal({
             horizontal: com 11 colunas o table-fixed espremia o nome do produto
             em ~5 letras. Aqui o produto quebra linha e nada é cortado. */}
         <div className="u-stagger overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
-        <table className="w-full min-w-[1100px] text-sm [&_th]:whitespace-nowrap [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
+        <table className="w-full min-w-[960px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
           <thead>
             <tr>
               <th className="w-10">

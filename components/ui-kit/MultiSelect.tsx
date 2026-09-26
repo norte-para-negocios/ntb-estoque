@@ -111,7 +111,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Todos', c
                       sel ? 'text-brand font-medium' : 'text-text'
                     }`}
                   >
-                    <span className={`flex size-4 shrink-0 items-center justify-center rounded border ${sel ? 'border-brand bg-brand text-white' : 'border-border'}`}>
+                    <span className={`flex size-4 shrink-0 items-center justify-center rounded border ${sel ? 'border-brand-fill bg-brand-fill text-white' : 'border-border'}`}>
                       {sel && <Check className="size-3" />}
                     </span>
                     <span className="truncate">{opt.label}</span>

@@ -109,7 +109,7 @@ export function FiltrosGaveta({
           <button type="button" className={`${btnClass('outline')} shrink-0`}>
             <SlidersHorizontal className="size-4" /> Filtros
             {ativos > 0 && (
-              <span className="ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold leading-none text-white">
+              <span className="ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-brand-fill px-1.5 text-[11px] font-semibold leading-none text-white">
                 {ativos}
               </span>
             )}

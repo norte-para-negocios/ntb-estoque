@@ -260,7 +260,7 @@ function GrupoSanfona({
         <span className="flex items-center gap-1.5">
           {grupo}
           {temAtivoFechado && (
-            <span className="size-1.5 rounded-full bg-brand" aria-hidden />
+            <span className="size-1.5 rounded-full bg-brand-fill" aria-hidden />
           )}
         </span>
         <ChevronDown

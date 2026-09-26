@@ -215,7 +215,7 @@ export function AprovarUsuario({
                       >
                         <span
                           className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                            on ? 'border-brand bg-brand text-white' : 'border-border bg-surface'
+                            on ? 'border-brand-fill bg-brand-fill text-white' : 'border-border bg-surface'
                           }`}
                         >
                           {on && <span className="text-[10px] leading-none">✓</span>}
@@ -298,7 +298,7 @@ export function AprovarUsuario({
                                 type="button"
                                 onClick={() => togglePerm(p.id)}
                                 className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-                                  on ? 'bg-brand text-white' : 'bg-surface text-text-muted hover:text-text'
+                                  on ? 'bg-brand-fill text-white' : 'bg-surface text-text-muted hover:text-text'
                                 }`}
                               >
                                 {p.label}

@@ -76,9 +76,10 @@ export function CountUp({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-    // Intencional: roda só no mount. `value` posterior cai no early-return acima.
+    // Anima só na 1ª vez; depois disso, qualquer valor novo (troca de loja,
+    // reprocessar) cai no early-return acima e aparece na hora.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [target])
 
   // Arredonda na exibição: frac=0 mostra inteiros enquanto conta.
   const shown = frac === 0 ? Math.round(display) : display

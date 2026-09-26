@@ -254,7 +254,7 @@ export default async function UsuarioPage({
                     </span>
                     {u.perfil === 'Usuario' && cargoPersonalizado && (
                       <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text">
-                        <span className="size-2 shrink-0 rounded-full bg-brand" />
+                        <span className="size-2 shrink-0 rounded-full bg-brand-fill" />
                         personalizado
                       </span>
                     )}

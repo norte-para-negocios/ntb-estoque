@@ -11,10 +11,10 @@ export default function Loading() {
     <div className="space-y-4">
       {/* Cabecalho: titulo + acoes */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="u-skeleton h-7 w-52 rounded-md" />
+        <div className="u-skeleton h-7 w-52 rounded-full" />
         <div className="flex gap-2">
-          <div className="u-skeleton h-9 w-24 rounded-md" />
-          <div className="u-skeleton h-9 w-28 rounded-md" />
+          <div className="u-skeleton h-9 w-24 rounded-full" />
+          <div className="u-skeleton h-9 w-28 rounded-full" />
         </div>
       </div>
 
@@ -24,7 +24,7 @@ export default function Loading() {
       {/* Lista / tabela */}
       <div className="space-y-2.5">
         {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="u-skeleton h-14 rounded-lg border border-border" />
+          <div key={i} className="u-skeleton h-14 rounded-[var(--r-lg)]" />
         ))}
       </div>
     </div>

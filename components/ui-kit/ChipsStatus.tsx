@@ -52,7 +52,7 @@ export function ChipsStatus({
             onClick={() => selecionar(o.value)}
             className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full h-8 px-3.5 text-[13px] font-semibold u-motion u-press-sm ${
               ativo
-                ? 'bg-brand text-white'
+                ? 'bg-brand-fill text-white'
                 : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
             }`}
           >

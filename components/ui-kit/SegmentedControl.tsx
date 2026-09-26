@@ -28,7 +28,7 @@ export function SegmentedControl({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={`inline-flex max-w-full shrink-0 items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
+      className={`inline-flex max-w-full shrink-0 self-start items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
     >
       {opcoes.map((o) => {
         const ativo = value === o.value

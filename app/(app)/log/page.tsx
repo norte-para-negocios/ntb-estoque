@@ -128,7 +128,7 @@ export default async function LogPage({
           actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} persistirEm="/log" />}
         />
         {/* Visual de SegmentedControl, mas com os mesmos links de antes (não preservam filtros). */}
-        <div className="inline-flex max-w-full items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="inline-flex max-w-full self-start items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filtros.map((f) => (
             <Link
               key={f.label}

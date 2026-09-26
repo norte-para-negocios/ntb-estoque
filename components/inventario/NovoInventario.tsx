@@ -137,7 +137,7 @@ export function NovoInventario({
               )}
               Pré-popular com produtos
               {totalFiltros > 0 && (
-                <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[12px] font-semibold text-white">
+                <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-brand-fill px-1.5 text-[12px] font-semibold text-white">
                   {totalFiltros}
                 </span>
               )}

@@ -619,7 +619,7 @@ export default async function RelatorioFaturamentoPage({
 
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
-  const chipAtivo = `${chipBase} bg-brand text-white`
+  const chipAtivo = `${chipBase} bg-brand-fill text-white`
   const chipInativo = `${chipBase} bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text`
   // Colunas Total/% presas à direita no desktop: com muitos meses a matriz rola
   // na horizontal e a coluna de total nunca fica escondida fora da tela.
@@ -705,7 +705,7 @@ export default async function RelatorioFaturamentoPage({
             </p>
           )}
 
-          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
+          <div className="flex flex-wrap items-center gap-2">
             {pares.length === 0 ? (
               <SegmentLinks
                 basePath="/relatorio-faturamento"

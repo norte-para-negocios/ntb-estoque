@@ -35,7 +35,7 @@ export function PageHeader({
         </div>
       </div>
       {actions && (
-        <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:shrink-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {actions}
         </div>
       )}

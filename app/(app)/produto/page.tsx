@@ -525,7 +525,7 @@ export default async function ProdutoPage({
           <h1 className="shrink-0 whitespace-nowrap text-[26px] font-bold leading-tight tracking-[-0.02em] text-text sm:text-[30px]">
             Produtos
           </h1>
-          <div className="-mx-4 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             <FiltrosGaveta
               basePath="/produto"
               campos={campos}
@@ -597,7 +597,7 @@ export default async function ProdutoPage({
                   aria-pressed={repor}
                   className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm max-sm:h-9 ${
                     repor
-                      ? 'bg-brand text-white'
+                      ? 'bg-brand-fill text-white'
                       : 'bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text'
                   }`}
                 >

@@ -91,7 +91,7 @@ export function ChipsFiltrosAtivos({
       {chips.map((ch) => (
         <span
           key={ch.nome}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface py-1 pl-2.5 pr-1 text-[12px] text-text-muted"
+          className="inline-flex items-center gap-1 rounded-full bg-surface-2 py-1 pl-3 pr-1 text-[13px] text-text-muted"
         >
           <span>{ch.campoLabel}:</span>
           <span className="font-medium text-text">{ch.valorLabel}</span>

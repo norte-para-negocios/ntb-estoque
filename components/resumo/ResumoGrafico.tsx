@@ -21,7 +21,7 @@ export function ResumoGrafico({ grafico }: { grafico: Grafico }) {
             <span className="truncate text-[13px] text-text" title={it.label}>{it.label}</span>
             <div className="h-2 overflow-hidden rounded-full bg-surface-2">
               <div
-                className="h-full rounded-full bg-brand u-motion"
+                className="h-full rounded-full bg-brand-fill u-motion"
                 style={{ width: `${Math.max(3, (it.valor / max) * 100)}%` }}
               />
             </div>

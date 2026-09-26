@@ -204,7 +204,7 @@ export async function HistoricoStatusNF({
               <li key={e.key} className="relative flex flex-wrap items-start justify-between gap-x-3 gap-y-0.5 pb-4 pl-6 last:pb-0">
                 <span className="absolute left-[3px] top-[18px] bottom-0 w-px bg-border [li:last-child>&]:hidden" aria-hidden />
                 <span
-                  className={`absolute left-0 top-[7px] size-2 rounded-full ${e.origem === 'app' ? 'bg-brand' : 'bg-text-muted'}`}
+                  className={`absolute left-0 top-[7px] size-2 rounded-full ${e.origem === 'app' ? 'bg-brand-fill' : 'bg-text-muted'}`}
                   aria-hidden
                 />
                 <div className="min-w-0">

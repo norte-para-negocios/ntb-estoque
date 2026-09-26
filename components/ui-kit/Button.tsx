@@ -1,8 +1,8 @@
 const VARIANTS = {
-  primary: 'bg-brand text-white hover:bg-[var(--brand-strong)]',
+  primary: 'bg-brand-fill text-white hover:bg-[var(--brand-fill-hover)]',
   // Estilo Apple: secundário preenchido, sem borda.
   outline: 'bg-surface-2 text-text hover:bg-[var(--border)]',
-  danger: 'bg-err text-white hover:opacity-90',
+  danger: 'bg-err-fill text-white hover:opacity-90',
   // Ação destrutiva secundária: pílula cinza com texto vermelho.
   dangerSoft: 'bg-surface-2 text-err hover:bg-[var(--border)]',
   ghost: 'text-text-muted hover:bg-surface-2 hover:text-text',

@@ -273,7 +273,7 @@ export default async function InventarioPage({
           title="Inventários"
           icon={ClipboardList}
           actions={
-            <div className="-my-1 flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto py-1 [scrollbar-width:none] sm:w-auto sm:flex-wrap sm:justify-end sm:overflow-visible [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end w-full sm:w-auto">
               <FiltrosGaveta
                 basePath="/inventario"
                 campos={campos}

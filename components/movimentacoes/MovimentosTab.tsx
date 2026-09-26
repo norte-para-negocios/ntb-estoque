@@ -427,7 +427,7 @@ export async function MovimentosTab({ sp, lojaId }: { sp: SP; lojaId: number }) 
           com rolagem horizontal (em vez de quebrar em 4-5 linhas). */}
       <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
         <BuscaProdutoInline valorAtual={sp.produto ?? ''} />
-        <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap items-center gap-2">
           <FiltroDataMovimentos ini={ini} fim={fim} />
           <FiltroLocalMovimentos locais={locais} valorAtual={sp.local ?? ''} />
           <FiltroFamiliaMovimentos familias={familias} valorAtual={sp.familia ?? ''} />

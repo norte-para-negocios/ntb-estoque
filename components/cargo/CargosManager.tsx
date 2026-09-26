@@ -153,7 +153,7 @@ function EditorCargo({
                                 key={p.nome}
                                 type="button"
                                 onClick={() => toggle(id)}
-                                className={`rounded-full px-3 py-1.5 text-[13px] u-motion ${on ? 'bg-brand text-white' : 'bg-surface text-text-muted hover:text-text'}`}
+                                className={`rounded-full px-3 py-1.5 text-[13px] u-motion ${on ? 'bg-brand-fill text-white' : 'bg-surface text-text-muted hover:text-text'}`}
                               >
                                 {p.label}
                               </button>
