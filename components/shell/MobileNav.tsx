@@ -15,6 +15,8 @@ import {
   Package,
   Search,
 } from 'lucide-react'
+import { motion } from 'motion/react'
+import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from './NavItems'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
@@ -273,12 +275,20 @@ export function MobileNav({
             <Link
               key={b.href}
               href={b.href}
-              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium u-motion u-press-sm active:text-brand ${
+              className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium u-motion u-press-sm active:text-brand ${
                 active ? 'text-brand' : 'text-text-muted'
               }`}
             >
-              <Icon className="size-5" />
-              {b.label}
+              {/* Pílula suave que desliza entre as abas (estilo iOS). */}
+              {active && (
+                <motion.span
+                  layoutId="tab-ativa"
+                  transition={SPRING_UI}
+                  className="absolute inset-x-3 inset-y-1 rounded-[12px] bg-brand-soft"
+                />
+              )}
+              <Icon className="relative size-5" />
+              <span className="relative">{b.label}</span>
             </Link>
           )
         })}

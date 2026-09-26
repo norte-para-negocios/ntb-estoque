@@ -62,6 +62,7 @@ function DialogContent({
         )}
         {...props}
       >
+        <AlcaArrastar />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
@@ -81,6 +82,59 @@ function DialogContent({
         )}
       </DialogPrimitive.Popup>
     </DialogPortal>
+  )
+}
+
+/**
+ * Alça da folha no celular (estilo iOS): arrastar pra baixo move a janela junto
+ * com o dedo; soltar depois de 120px (ou com um puxão rápido) fecha pelo mesmo
+ * botão de fechar do Base UI. Some no desktop.
+ */
+function AlcaArrastar() {
+  const fecharRef = React.useRef<HTMLButtonElement>(null)
+  const inicio = React.useRef<{ y: number; t: number; el: HTMLElement } | null>(null)
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const el = e.currentTarget.closest('[data-slot="dialog-content"]') as HTMLElement | null
+    if (!el) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    el.style.transition = 'none'
+    inicio.current = { y: e.clientY, t: e.timeStamp, el }
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const i = inicio.current
+    if (!i) return
+    const dy = Math.max(0, e.clientY - i.y)
+    i.el.style.transform = `translateY(${dy}px)`
+  }
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const i = inicio.current
+    if (!i) return
+    inicio.current = null
+    const dy = Math.max(0, e.clientY - i.y)
+    const vel = dy / Math.max(1, e.timeStamp - i.t) // px/ms
+    i.el.style.transition = ''
+    if (dy > 120 || vel > 0.5) {
+      fecharRef.current?.click()
+    } else {
+      i.el.style.transform = ''
+    }
+  }
+
+  return (
+    <div
+      aria-hidden
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className="-mt-2 -mb-1 flex h-5 cursor-grab touch-none items-center justify-center sm:hidden"
+    >
+      <span className="h-[5px] w-9 rounded-full bg-text-muted/30" />
+      <DialogPrimitive.Close ref={fecharRef} tabIndex={-1} className="sr-only">
+        Fechar
+      </DialogPrimitive.Close>
+    </div>
   )
 }
 

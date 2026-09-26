@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowUpRight, type LucideIcon } from 'lucide-react'
-import { Num } from './Num'
+import { CountUp } from './CountUp'
 
 export function StatCard({
   label,
@@ -27,7 +27,7 @@ export function StatCard({
         )}
       </div>
       <div className="mt-3 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text num">
-        <Num value={value} />
+        <CountUp value={value} duration={600} />
       </div>
       <div className="mt-1.5 text-[13px] font-medium text-text">{label}</div>
       {hint && <div className="text-[12px] text-text-muted">{hint}</div>}

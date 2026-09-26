@@ -94,8 +94,8 @@ export function AppShell({
                 nao "voa". */}
             <div
               key={pathname}
-              className="animate-in fade-in slide-in-from-bottom-[2px]"
-              style={{ animationDuration: 'var(--dur)', animationTimingFunction: 'var(--ease-out)' }}
+              className="animate-in fade-in slide-in-from-bottom-[8px]"
+              style={{ animationDuration: '220ms', animationTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
             >
               {children}
             </div>

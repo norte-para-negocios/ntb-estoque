@@ -812,7 +812,7 @@ export function OrdemProducaoRow({
           </td>
         )}
         <td className="num font-medium text-text align-middle">
-          {op.numOP}
+          <span className="block truncate" title={op.numOP}>{op.numOP}</span>
         </td>
         <td className="align-middle !px-1">
           <StepperData op={op} ctrl={ctrl} />
