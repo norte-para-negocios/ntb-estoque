@@ -64,22 +64,22 @@ export function IntegracaoNtbVendas({
         <Share2 className="size-4 text-text-muted" />
         <span className="text-[13px] font-medium text-text">Integração com NTB Vendas</span>
       </div>
-      <p className="mb-2 text-[12px] text-text-muted">
+      <p className="mb-2 text-[13px] text-text-muted">
         Gera a chave que autentica as chamadas do NTB Vendas pra esta loja (cada venda fechada por
         lá cria automaticamente uma Ordem de Produção aqui). Copie a URL e a chave e cole no
         formulário de loja do NTB Vendas — a chave só é mostrada uma vez, logo depois de gerar.
       </p>
 
       {revelado && (
-        <div className="mb-3 space-y-2 rounded-md border border-brand/30 bg-brand/5 p-3">
-          <p className="text-[12px] font-medium text-text">
+        <div className="mb-3 space-y-2 rounded-[var(--r-md)] bg-surface-2 p-3">
+          <p className="text-[13px] font-medium text-text">
             Copie agora — não será mostrada de novo:
           </p>
           <div className="flex flex-wrap gap-2">
             <input
               value={revelado.url}
               readOnly
-              className="num min-w-[12rem] flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text outline-none"
+              className="num min-w-[12rem] flex-1 rounded-[var(--r-md)] border-0 bg-surface px-3 py-2 text-[13px] text-text outline-none"
             />
             <button type="button" onClick={() => copiar(revelado.url, setCopiadoUrl)} className={`${btnClass('outline')} shrink-0`}>
               {copiadoUrl ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -90,7 +90,7 @@ export function IntegracaoNtbVendas({
             <input
               value={revelado.chave}
               readOnly
-              className="num min-w-[12rem] flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] tracking-wide text-text outline-none"
+              className="num min-w-[12rem] flex-1 rounded-[var(--r-md)] border-0 bg-surface px-3 py-2 text-[13px] tracking-wide text-text outline-none"
             />
             <button type="button" onClick={() => copiar(revelado.chave, setCopiadoChave)} className={`${btnClass('outline')} shrink-0`}>
               {copiadoChave ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -102,7 +102,8 @@ export function IntegracaoNtbVendas({
 
       {configurada ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-ok/10 px-2.5 py-1 text-[11px] font-semibold text-ok">
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text">
+            <span className="size-2 shrink-0 rounded-full bg-ok" />
             Chave configurada
           </span>
           <button type="button" onClick={gerar} disabled={pending} className={`${btnClass('outline')} shrink-0`}>
@@ -112,7 +113,7 @@ export function IntegracaoNtbVendas({
             type="button"
             onClick={remover}
             disabled={pending}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-err/40 px-3 py-1.5 text-sm font-medium text-err transition-colors hover:bg-err/10 disabled:opacity-60"
+            className={`${btnClass('dangerSoft')} shrink-0`}
           >
             <Trash2 className="size-4" /> Remover integração
           </button>

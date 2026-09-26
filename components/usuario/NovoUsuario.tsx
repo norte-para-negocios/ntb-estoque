@@ -15,8 +15,8 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { CATALOGO_PERMISSOES } from '@/lib/permissoes-catalogo'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
-const labelClass = 'mb-1.5 block text-[13px] font-medium text-text'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted max-sm:text-base focus:ring-2 focus:ring-brand/40'
+const labelClass = 'mb-1.5 block text-[13px] font-medium text-text-muted'
 
 type Loja = { id: number; nome: string; nome_fantasia: string | null }
 type Permissao = { id: number; nome: string }
@@ -151,8 +151,8 @@ export function NovoUsuario({
         className="flex max-h-[88vh] flex-col overflow-hidden bg-surface p-0 sm:max-w-lg"
         showCloseButton={false}
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+        <div className="flex items-center gap-2.5 px-5 pb-2 pt-5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-brand">
             <UserIcon className="size-4" strokeWidth={2} />
           </span>
           <div>
@@ -163,16 +163,16 @@ export function NovoUsuario({
 
         {senhaGerada ? (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6">
-            <div className="rounded-md border border-ok/30 bg-ok/10 px-3 py-2.5 text-[13px] text-text">
+            <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text">
               Acesso criado. Envie esta senha provisória ao usuário. Ele usa no primeiro login.
             </div>
             <div>
-              <label className="mb-1.5 block text-[13px] font-medium text-text">Senha provisória</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Senha provisória</label>
               <div className="flex flex-wrap gap-2">
                 <input
                   value={senhaGerada}
                   readOnly
-                  className="num min-w-[10rem] flex-1 rounded-md border border-border bg-surface-2/40 px-3 py-2 text-sm font-medium tracking-wider text-text outline-none"
+                  className="num min-w-[10rem] flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm font-medium tracking-wider text-text outline-none"
                 />
                 <button type="button" onClick={copiarSenha} className={`${btnClass('primary')} shrink-0`}>
                   {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -244,7 +244,7 @@ export function NovoUsuario({
           </div>
 
           {perfil === 'Admin' ? (
-            <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+            <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text">
               Administrador tem acesso a todas as lojas e a todos os módulos. Permissões e
               lojas são concedidas automaticamente.
             </div>
@@ -256,7 +256,7 @@ export function NovoUsuario({
                     <Store className="size-3.5 text-text-muted" /> Lojas com acesso
                   </span>
                 </label>
-                <div className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-surface-2/30 p-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1 rounded-[var(--r-md)] bg-surface-2 p-1.5 sm:grid-cols-2">
                   {lojas.map((l) => {
                     const on = lojaIds.includes(l.id)
                     return (
@@ -264,15 +264,15 @@ export function NovoUsuario({
                         key={l.id}
                         type="button"
                         onClick={() => toggleLoja(l.id)}
-                        className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                        className={`flex items-center gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-left text-[13px] transition-colors ${
                           on
-                            ? 'border-brand bg-brand-soft text-text'
-                            : 'border-border bg-surface text-text-muted hover:text-text'
+                            ? 'bg-surface text-text shadow-[var(--shadow-sm)]'
+                            : 'bg-surface text-text-muted hover:text-text'
                         }`}
                       >
                         <span
                           className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                            on ? 'border-brand bg-brand text-white' : 'border-border'
+                            on ? 'border-brand bg-brand text-white' : 'border-border bg-surface'
                           }`}
                         >
                           {on && <span className="text-[10px] leading-none">✓</span>}
@@ -285,7 +285,7 @@ export function NovoUsuario({
               </div>
 
               {perfil === 'AdminLoja' && (
-                <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+                <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text">
                   Admin da loja tem acesso total aos módulos das lojas marcadas acima. Não vê
                   outras lojas nem a administração global (Lojas, Logs, Saúde, Usuários).
                 </div>
@@ -328,7 +328,7 @@ export function NovoUsuario({
                     return (
                       <div
                         key={mod.modulo}
-                        className="rounded-md border border-border bg-surface-2/30 p-2.5"
+                        className="rounded-[var(--r-md)] bg-surface-2 p-3"
                       >
                         <button
                           type="button"
@@ -337,10 +337,10 @@ export function NovoUsuario({
                         >
                           <span className="text-[13px] font-medium text-text">{mod.modulo}</span>
                           <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            className={`num text-[12px] font-medium ${
                               marcados > 0
-                                ? 'bg-brand-soft text-brand'
-                                : 'bg-surface-2 text-text-muted'
+                                ? 'text-brand'
+                                : 'text-text-muted'
                             }`}
                           >
                             {marcados}/{ids.length}
@@ -354,10 +354,10 @@ export function NovoUsuario({
                                 key={p.id}
                                 type="button"
                                 onClick={() => togglePerm(p.id)}
-                                className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                                className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                                   on
-                                    ? 'border-brand bg-brand text-white'
-                                    : 'border-border bg-surface text-text-muted hover:text-text'
+                                    ? 'bg-brand text-white'
+                                    : 'bg-surface text-text-muted hover:text-text'
                                 }`}
                               >
                                 {p.label}
@@ -375,7 +375,7 @@ export function NovoUsuario({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -413,17 +413,17 @@ function PerfilOpcao({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
+      className={`flex flex-col gap-1 rounded-[var(--r-md)] p-3 text-left transition-colors ${
         ativo
-          ? 'border-brand bg-brand-soft'
-          : 'border-border bg-surface hover:bg-surface-2'
+          ? 'bg-surface-2 ring-2 ring-brand'
+          : 'bg-surface-2 hover:bg-[var(--border)]'
       }`}
     >
       <span className={`flex items-center gap-1.5 text-[13px] font-medium ${ativo ? 'text-brand' : 'text-text'}`}>
         {icon}
         {titulo}
       </span>
-      <span className="text-[11px] text-text-muted">{desc}</span>
+      <span className="text-[12px] text-text-muted">{desc}</span>
     </button>
   )
 }

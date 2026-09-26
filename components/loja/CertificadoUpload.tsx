@@ -9,7 +9,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
 
 // Bloco 5.2: a propria loja sobe o certificado A1 (.pfx) + senha. A senha vai
 // criptografada; o arquivo, para o Storage privado. Tudo via server action.
@@ -62,7 +62,7 @@ export function CertificadoUpload({
         <ShieldCheck className="size-4 text-text-muted" /> Certificado digital A1
       </div>
       {nome ? (
-        <p className="mb-3 text-[12px] text-text-muted">
+        <p className="mb-3 text-[13px] text-text-muted">
           Atual: <span className="text-text">{nome}</span>
           {validade && (
             <>
@@ -74,7 +74,7 @@ export function CertificadoUpload({
           )}
         </p>
       ) : (
-        <p className="mb-3 text-[12px] text-text-muted">Nenhum certificado enviado.</p>
+        <p className="mb-3 text-[13px] text-text-muted">Nenhum certificado enviado.</p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -83,7 +83,7 @@ export function CertificadoUpload({
             ref={fileRef}
             type="file"
             accept=".pfx,.p12"
-            className="block w-full text-[13px] text-text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:text-text hover:file:bg-surface-2"
+            className="block w-full text-[13px] text-text-muted file:mr-3 file:rounded-full file:border-0 file:bg-surface-2 file:px-4 file:py-1.5 file:text-sm file:font-semibold file:text-text hover:file:bg-[var(--border)]"
           />
         </div>
         <div>

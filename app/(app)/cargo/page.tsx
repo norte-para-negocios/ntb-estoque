@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { listarCargos } from '@/lib/actions/cargo'
-import { CargosManager } from '@/components/cargo/CargosManager'
+import { CargosManager, NovoCargo } from '@/components/cargo/CargosManager'
 import { IdCard } from 'lucide-react'
 
 export default async function CargosPage() {
@@ -24,6 +24,7 @@ export default async function CargosPage() {
           title="Cargos"
           icon={IdCard}
           description="Conjuntos de permissão reutilizáveis (Gerente, Estoquista...) — atribua um cargo ao funcionário no cadastro de Usuários"
+          actions={<NovoCargo permissoes={permissoes} />}
         />
       </ListaHeader>
       <CargosManager cargos={cargos} permissoes={permissoes} />

@@ -118,10 +118,10 @@ export default async function FamiliaPage({
             <Link
               key={s.v || 'todas'}
               href={`/familia${qs ? `?${qs}` : ''}`}
-              className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+              className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
                 ativo
-                  ? 'border-brand bg-brand-soft text-brand'
-                  : 'border-border bg-surface text-text-muted hover:bg-surface-2/60'
+                  ? 'bg-brand text-white'
+                  : 'bg-surface-2 text-text-muted hover:text-text'
               }`}
             >
               {s.label}
@@ -142,7 +142,7 @@ export default async function FamiliaPage({
             label: 'Origem',
             sort: 'origem',
             render: (f) => (
-              <span className="text-[12px] text-text-muted">
+              <span className="text-[13px] text-text-muted">
                 {f.origem === 'omie' ? 'Omie' : 'Local'}
               </span>
             ),

@@ -27,7 +27,7 @@ import { MapeamentoLocalEstoque } from '@/components/loja/MapeamentoLocalEstoque
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
-import type { CorToken } from '@/lib/status-cor'
+import { FUNDO_CLASSE, type CorToken } from '@/lib/status-cor'
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -186,22 +186,13 @@ const HEALTH_CONFIG: Record<
   vazio: { label: 'Nunca sincronizado', token: 'neutro', icon: RefreshCw },
 }
 
-const HEALTH_CLASSES: Record<HealthStatus, string> = {
-  ok: 'text-ok bg-ok/10',
-  warn: 'text-warn bg-warn/10',
-  err: 'text-err bg-err/10',
-  vazio: 'text-text-muted bg-surface-2',
-}
-
 function HealthBadge({ loja }: { loja: LojaRow }) {
   const h = calcHealth(loja)
   const cfg = HEALTH_CONFIG[h]
-  const Icon = cfg.icon
+  // Estilo Apple: ponto 8px na cor do estado + texto neutro (sem pílula colorida).
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${HEALTH_CLASSES[h]}`}
-    >
-      <Icon className="size-3.5" />
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text">
+      <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[cfg.token]}`} />
       {cfg.label}
     </span>
   )
@@ -227,7 +218,7 @@ function Section({
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="border-t border-border">
+    <div className="border-t border-border/60">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -235,7 +226,7 @@ function Section({
         aria-expanded={open}
       >
         <Icon className="size-4 shrink-0 text-text-muted" />
-        <span className="flex-1 text-[13px] font-medium text-text">{title}</span>
+        <span className="flex-1 text-[15px] font-medium text-text">{title}</span>
         {badge && <span className="shrink-0">{badge}</span>}
         <ChevronDown
           className="size-4 shrink-0 text-text-muted u-motion"
@@ -322,26 +313,27 @@ export function LojaCard({
         type="button"
         onClick={() => setAberta((a) => !a)}
         aria-expanded={aberta}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left u-motion hover:bg-surface-2/40"
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left u-motion hover:bg-surface-2/40"
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-semibold text-text">{displayName}</span>
+            <span className="truncate text-[15px] font-semibold text-text">{displayName}</span>
             {!loja.ativo && (
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-muted">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-muted">
+                <span className="size-2 shrink-0 rounded-full bg-text-muted" />
                 Inativa
               </span>
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             {cidadeUf && (
-              <span className="flex items-center gap-1 text-[12px] text-text-muted">
+              <span className="flex items-center gap-1 text-[13px] text-text-muted">
                 <MapPin className="size-3" />
                 {cidadeUf}
               </span>
             )}
             {loja.cnpj && (
-              <span className="num text-[12px] text-text-muted">{maskCnpj(loja.cnpj)}</span>
+              <span className="num text-[13px] text-text-muted">{maskCnpj(loja.cnpj)}</span>
             )}
           </div>
         </div>
@@ -365,9 +357,9 @@ export function LojaCard({
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {syncs.map((s) => (
-            <div key={s.label} className="rounded-md border border-border bg-surface-2/40 p-3">
+            <div key={s.label} className="rounded-[var(--r-md)] bg-surface-2 p-3">
               <div className="eyebrow">{s.label}</div>
-              <p className="num mt-1 text-[12px] font-medium text-text">{fmt(s.data)}</p>
+              <p className="num mt-1 text-[13px] font-medium text-text">{fmt(s.data)}</p>
               <div className="mt-1.5">
                 <StatusPill status={s.status} />
               </div>
@@ -375,7 +367,7 @@ export function LojaCard({
           ))}
         </div>
         {loja.empresa_ultima_atualizacao && (
-          <p className="mt-2 text-[12px] text-text-muted">
+          <p className="mt-2 text-[13px] text-text-muted">
             Dados empresa atualizados em{' '}
             <span className="text-text">{fmt(loja.empresa_ultima_atualizacao)}</span>
           </p>
@@ -388,7 +380,7 @@ export function LojaCard({
           <DadoLinha label="App Key" valor={maskSegredo(loja.omie_app_key)} mono />
           <DadoLinha label="App Secret" valor={maskSegredo(loja.omie_app_secret)} mono />
         </div>
-        <p className="mt-2 text-[11px] text-text-muted">
+        <p className="mt-2 text-[13px] text-text-muted">
           Para editar as chaves, use o botão &quot;Editar loja&quot; abaixo.
         </p>
       </Section>
@@ -444,12 +436,12 @@ export function LojaCard({
           <KeyRound className="size-4 text-text-muted" />
           <span className="text-[13px] font-medium text-text">Código de onboarding</span>
         </div>
-        <p className="mb-3 text-[12px] text-text-muted">
+        <p className="mb-3 text-[13px] text-text-muted">
           Quem tiver este código entra no cadastro já vinculado a esta loja (como usuário, sem
           permissões; ajuste depois). Regenerar invalida o código anterior.
         </p>
         <CodigoOnboarding lojaId={loja.id} codigo={loja.codigo_onboarding} />
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-4 border-t border-border/60 pt-4">
           <ConvidarUsuario
             lojas={[{ id: loja.id, nome: loja.nome ?? '', nome_fantasia: loja.nome_fantasia }]}
             permissoes={permissoes}
@@ -463,8 +455,8 @@ export function LojaCard({
       {/* Seção: Integração com NTB Vendas */}
       <Section icon={Share2} title="Integração com NTB Vendas">
         <IntegracaoNtbVendas lojaId={loja.id} configurada={loja.integracao_ntb_vendas_configurada} />
-        <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-2 text-[13px] font-medium text-text">Local de estoque por destino (Cozinha/Bar)</p>
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <p className="mb-2 text-[13px] font-semibold text-text">Local de estoque por destino (Cozinha/Bar)</p>
           <MapeamentoLocalEstoque
             lojaId={loja.id}
             locais={locaisEstoque}
@@ -475,7 +467,7 @@ export function LojaCard({
       </Section>
 
       {/* Rodapé: ações de edição/exclusão */}
-      <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border/60 px-4 py-3">
         <LojaForm loja={loja} />
         <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome || '(sem nome)'} />
       </div>

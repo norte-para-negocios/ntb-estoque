@@ -8,7 +8,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted max-sm:text-base focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 function mascaraCep(v: string): string {
@@ -59,12 +59,14 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
   }
 
   return (
-    <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-      <div className="mb-1 text-sm font-semibold text-text">Informações da loja</div>
-      <p className="mb-3 text-[13px] text-text-muted">
+    // Estilo Ajustes: título da seção fora do cartão, campos num cartão branco.
+    <section>
+      <h2 className="px-1 text-[17px] font-semibold text-text">Informações da loja</h2>
+      <p className="mb-3 mt-0.5 px-1 text-[13px] text-text-muted">
         Dados de negócio e endereço. CNPJ, razão social e integração com o Omie ficam com o administrador geral.
       </p>
 
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {/* Somente leitura: identidade fiscal */}
         <div className="col-span-2">
@@ -116,12 +118,13 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
         </div>
       </div>
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-4 flex justify-end">
         <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
           {pending && <Spinner />}
           {pending ? 'Salvando...' : 'Salvar informações'}
         </button>
       </div>
-    </div>
+      </div>
+    </section>
   )
 }

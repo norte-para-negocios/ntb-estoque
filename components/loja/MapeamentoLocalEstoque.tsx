@@ -59,7 +59,7 @@ export function MapeamentoLocalEstoque({
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-text-muted">
+      <p className="text-[13px] text-text-muted">
         Quando o ntb-vendas disparar uma Ordem de Produção, ela usa o local escolhido aqui conforme onde o item foi
         preparado (Cozinha ou Bar). Sem escolher, a OP cai no local padrão do Omie, como sempre foi.
       </p>
@@ -69,7 +69,7 @@ export function MapeamentoLocalEstoque({
           <select
             value={cozinha}
             onChange={(e) => setCozinha(e.target.value)}
-            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40"
           >
             <option value="">— Não mapeado —</option>
             {locais.map((l) => (
@@ -84,7 +84,7 @@ export function MapeamentoLocalEstoque({
           <select
             value={bar}
             onChange={(e) => setBar(e.target.value)}
-            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+            className="w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40"
           >
             <option value="">— Não mapeado —</option>
             {locais.map((l) => (

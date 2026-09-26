@@ -58,7 +58,7 @@ export function CodigoOnboarding({
         <KeyRound className="size-4 text-text-muted" />
         <span className="text-[13px] font-medium text-text">Código de onboarding</span>
       </div>
-      <p className="mb-2 text-[12px] text-text-muted">
+      <p className="mb-2 text-[13px] text-text-muted">
         Quem tiver este código entra no cadastro já vinculado a esta loja (como usuário, sem
         permissões; você ajusta depois). Regenerar invalida o código anterior.
       </p>
@@ -67,7 +67,7 @@ export function CodigoOnboarding({
           <input
             value={codigo}
             readOnly
-            className="num min-w-[10rem] flex-1 rounded-md border border-border bg-surface-2/40 px-3 py-1.5 text-sm font-medium tracking-wider text-text outline-none"
+            className="num min-w-[10rem] flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm font-medium tracking-wider text-text outline-none"
           />
           <button type="button" onClick={copiar} className={`${btnClass('outline')} shrink-0`}>
             {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -85,7 +85,7 @@ export function CodigoOnboarding({
             type="button"
             onClick={remover}
             disabled={pending}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-err/40 px-3 py-1.5 text-sm font-medium text-err transition-colors hover:bg-err/10 disabled:opacity-60"
+            className={`${btnClass('dangerSoft')} shrink-0`}
           >
             <Trash2 className="size-4" /> Remover
           </button>

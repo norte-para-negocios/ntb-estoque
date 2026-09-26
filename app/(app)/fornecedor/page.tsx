@@ -145,7 +145,7 @@ export default async function FornecedorPage({
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-muted">
-        <span>{total} fornecedor(es)</span>
+        <span><span className="num">{total}</span> fornecedor(es)</span>
         <span>·</span>
         <span>Atualizado em {fmtTimestamp(lojaSync?.fornecedor_ultima_atualizacao ?? null)}</span>
         <span>·</span>
@@ -174,10 +174,10 @@ export default async function FornecedorPage({
               <div className="min-w-0">
                 <div className="truncate text-text">{p.razao_social}</div>
                 {p.nome_fantasia && (
-                  <div className="truncate text-[12px] text-text-muted">{p.nome_fantasia}</div>
+                  <div className="truncate text-[13px] text-text-muted">{p.nome_fantasia}</div>
                 )}
                 {(p.email || p.telefone) && (
-                  <div className="truncate text-[11px] text-text-muted">
+                  <div className="truncate text-[12px] text-text-muted">
                     {[p.email, p.telefone].filter(Boolean).join(' · ')}
                   </div>
                 )}
@@ -201,7 +201,7 @@ export default async function FornecedorPage({
             label: 'Origem',
             sort: 'origem',
             render: (p) => (
-              <span className="text-[12px] text-text-muted">{p.origem === 'omie' ? 'Omie' : 'Local'}</span>
+              <span className="text-[13px] text-text-muted">{p.origem === 'omie' ? 'Omie' : 'Local'}</span>
             ),
           },
           {

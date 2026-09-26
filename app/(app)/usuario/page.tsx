@@ -152,21 +152,21 @@ export default async function UsuarioPage({
                   podeEscolherPerfilAlto={ator.isAdminGlobal}
                 />
               </div>
-              <p className="text-[11px] text-text-muted">Prefira convidar por código acima</p>
+              <p className="text-[12px] text-text-muted">Prefira convidar por código acima</p>
             </div>
           }
         />
       </ListaHeader>
 
       {pendentes.length > 0 && (
-        <div className="rounded-lg border border-brand/40 bg-brand-soft/40">
-          <div className="flex items-center gap-2 border-b border-brand/30 px-4 py-2.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
+          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
             <UserPlus className="size-4 text-brand" />
-            <h2 className="text-[13px] font-semibold text-text">
+            <h2 className="text-[17px] font-semibold text-text">
               Pediram acesso · aguardando aprovação ({pendentes.length})
             </h2>
           </div>
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60">
             {pendentes.map((u) => (
               <li
                 key={u.id}
@@ -174,7 +174,7 @@ export default async function UsuarioPage({
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-text">{u.name}</div>
-                  <div className="truncate text-[12px] text-text-muted">{u.email || '-'}</div>
+                  <div className="truncate text-[13px] text-text-muted">{u.email || '-'}</div>
                 </div>
                 <AprovarUsuario
                   userId={u.id}
@@ -191,9 +191,9 @@ export default async function UsuarioPage({
 
       {/* Convites ativos (frente A) */}
       <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
           <Ticket className="size-4 text-text-muted" />
-          <h2 className="text-[13px] font-semibold text-text">
+          <h2 className="text-[17px] font-semibold text-text">
             Convites ativos ({convites.length})
           </h2>
         </div>
@@ -243,23 +243,24 @@ export default async function UsuarioPage({
             return (
               <div
                 key={u.id}
-                className="flex items-center gap-2.5 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3 py-2.5"
+                className="flex items-center gap-3 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3.5"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-text">{u.name}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
+                  <div className="truncate text-[15px] font-semibold text-text">{u.name}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text-muted">
                     <StatusPill status={u.perfil} />
                     <span>
                       <span className="num text-text">{lojaUserVisivel.length}</span> loja(s)
                     </span>
                     {u.perfil === 'Usuario' && cargoPersonalizado && (
-                      <span className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text">
+                        <span className="size-2 shrink-0 rounded-full bg-brand" />
                         personalizado
                       </span>
                     )}
                     {u.perfil === 'Usuario' && lojaUserVisivel.length > 0 && permVisivel.length === 0 && !temPermissoesViaCargo && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn">
-                        <AlertTriangle className="size-3" />
+                      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-warn">
+                        <AlertTriangle className="size-3.5" />
                         sem permissões
                       </span>
                     )}

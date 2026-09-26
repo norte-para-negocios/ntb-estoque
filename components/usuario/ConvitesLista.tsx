@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Copy, Check, Trash2, Ticket, ShieldHalf, User as UserIcon } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 import { toast } from 'sonner'
 import { revogarConvite } from '@/lib/actions/convite'
 
@@ -25,7 +26,7 @@ export function ConvitesLista({ convites }: { convites: ConviteItem[] }) {
     )
   }
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-border/60">
       {convites.map((c) => (
         <ConviteRow key={c.id} convite={c} />
       ))}
@@ -71,7 +72,7 @@ function ConviteRow({ convite }: { convite: ConviteItem }) {
           <Ticket className="size-3.5 shrink-0 text-text-muted" />
           <span className="num text-sm font-medium tracking-wider text-text">{convite.codigo}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-muted">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-text-muted">
           <span className="inline-flex items-center gap-1">
             {isAdminLoja ? <ShieldHalf className="size-3" /> : <UserIcon className="size-3" />}
             {isAdminLoja ? 'Admin da loja' : 'Usuário'}
@@ -98,7 +99,7 @@ function ConviteRow({ convite }: { convite: ConviteItem }) {
         <button
           type="button"
           onClick={copiar}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[13px] font-medium text-text transition-colors hover:bg-surface-2"
+          className={btnClass('outline')}
         >
           {copiado ? <Check className="size-4" /> : <Copy className="size-4" />}
           {copiado ? 'Copiado' : 'Copiar'}
@@ -107,7 +108,7 @@ function ConviteRow({ convite }: { convite: ConviteItem }) {
           type="button"
           onClick={revogar}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-md border border-err/40 px-2.5 py-1.5 text-[13px] font-medium text-err transition-colors hover:bg-err/10 disabled:opacity-60"
+          className={btnClass('dangerSoft')}
         >
           <Trash2 className="size-4" /> Revogar
         </button>

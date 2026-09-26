@@ -3,6 +3,8 @@ const VARIANTS = {
   // Estilo Apple: secundário preenchido, sem borda.
   outline: 'bg-surface-2 text-text hover:bg-[var(--border)]',
   danger: 'bg-err text-white hover:opacity-90',
+  // Ação destrutiva secundária: pílula cinza com texto vermelho.
+  dangerSoft: 'bg-surface-2 text-err hover:bg-[var(--border)]',
   ghost: 'text-text-muted hover:bg-surface-2 hover:text-text',
 } as const
 

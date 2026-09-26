@@ -14,7 +14,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-1.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted max-sm:text-base focus:ring-2 focus:ring-brand/40'
 const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
 
 // Mascara de CNPJ: remove nao-digitos e formata XX.XXX.XXX/XXXX-XX
@@ -139,10 +139,10 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
         }
       />
       <DialogContent className="overflow-hidden bg-surface p-0 sm:max-w-lg" showCloseButton={false}>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">
+        <div className="px-5 pb-2 pt-5 text-[17px] font-semibold text-text">
           {editando ? 'Editar loja' : 'Nova loja'}
         </div>
-        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-4 py-3">
+        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto px-5 py-3">
           <div>
             <label className={labelClass}>CNPJ</label>
             <input
@@ -244,7 +244,7 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
             </label>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
           <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
             {pending && <Spinner />}
             {pending ? 'Salvando...' : editando ? 'Salvar' : 'Criar loja'}

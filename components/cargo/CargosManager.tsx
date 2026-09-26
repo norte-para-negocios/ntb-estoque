@@ -11,9 +11,15 @@ import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 
-const inputClass = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
+const inputClass = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
 
 type Permissao = { id: number; nome: string }
+
+// Botão "Novo cargo" (mesma ação de antes), renderizado nas ações do PageHeader.
+export function NovoCargo({ permissoes }: { permissoes: Permissao[] }) {
+  const idPorNome = useMemo(() => new Map(permissoes.map((p) => [p.nome, p.id])), [permissoes])
+  return <EditorCargo idPorNome={idPorNome} trigger={<button className={btnClass('primary')}><Plus className="size-4" /> Novo cargo</button>} />
+}
 
 export function CargosManager({ cargos, permissoes }: { cargos: CargoComPermissoes[]; permissoes: Permissao[] }) {
   // nome -> id (o catálogo é por nome; o banco grava por id).
@@ -21,10 +27,6 @@ export function CargosManager({ cargos, permissoes }: { cargos: CargoComPermisso
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <EditorCargo idPorNome={idPorNome} trigger={<button className={btnClass('primary')}><Plus className="size-4" /> Novo cargo</button>} />
-      </div>
-
       {cargos.length === 0 ? (
         <EmptyState icon={IdCard} title="Nenhum cargo" hint="Crie um cargo (ex.: Gerente) com o conjunto de permissões dele." />
       ) : (
@@ -33,10 +35,10 @@ export function CargosManager({ cargos, permissoes }: { cargos: CargoComPermisso
             <div key={c.id} className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 font-medium text-text"><IdCard className="size-4 text-brand" /> {c.nome}</div>
+                  <div className="flex items-center gap-1.5 text-[15px] font-semibold text-text"><IdCard className="size-4 text-brand" /> {c.nome}</div>
                   {c.descricao && <p className="mt-0.5 text-[13px] text-text-muted">{c.descricao}</p>}
                 </div>
-                <span className="shrink-0 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[12px] text-text-muted">{c.permissaoIds.length} perm.</span>
+                <span className="shrink-0 text-[13px] text-text-muted"><span className="num">{c.permissaoIds.length}</span> perm.</span>
               </div>
               <div className="mt-3 flex items-center gap-1">
                 <EditorCargo idPorNome={idPorNome} cargo={c} trigger={<button className={btnLinhaClass('ghost')}><Pencil className="size-4" /><RotuloAcao>Editar</RotuloAcao></button>} />
@@ -112,8 +114,8 @@ function EditorCargo({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger render={trigger} />
       <SheetContent side="right" className="w-[92vw] overflow-y-auto bg-surface p-0 sm:max-w-none sm:w-[460px]" showCloseButton>
-        <div className="border-b border-border px-4 py-3 text-base font-semibold text-text">{cargo ? 'Editar cargo' : 'Novo cargo'}</div>
-        <div className="space-y-4 px-4 py-4">
+        <div className="px-5 pb-2 pt-5 text-[17px] font-semibold text-text">{cargo ? 'Editar cargo' : 'Novo cargo'}</div>
+        <div className="space-y-4 px-5 py-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-[13px] font-medium text-text-muted">Nome *</label>
@@ -134,10 +136,10 @@ function EditorCargo({
                     const ids = m.permissoes.map((p) => idPorNome.get(p.nome)).filter((v): v is number => v != null)
                     const todos = ids.length > 0 && ids.every((id) => sel.has(id))
                     return (
-                      <div key={m.modulo} className="rounded-md border border-border p-2.5">
+                      <div key={m.modulo} className="rounded-[var(--r-md)] bg-surface-2 p-3">
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-[13px] font-medium text-text">{m.modulo}</span>
-                          <button type="button" onClick={() => toggleModulo(ids, todos)} className="text-[12px] text-brand hover:underline">
+                          <button type="button" onClick={() => toggleModulo(ids, todos)} className="text-[13px] font-medium text-brand hover:underline">
                             {todos ? 'Desmarcar' : 'Marcar tudo'}
                           </button>
                         </div>
@@ -151,7 +153,7 @@ function EditorCargo({
                                 key={p.nome}
                                 type="button"
                                 onClick={() => toggle(id)}
-                                className={`rounded-full border px-2.5 py-1 text-[12px] u-motion ${on ? 'border-brand bg-brand/10 text-brand' : 'border-border text-text-muted hover:bg-surface-2'}`}
+                                className={`rounded-full px-3 py-1.5 text-[13px] u-motion ${on ? 'bg-brand text-white' : 'bg-surface text-text-muted hover:text-text'}`}
                               >
                                 {p.label}
                               </button>
@@ -166,7 +168,7 @@ function EditorCargo({
             ))}
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+        <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
           <button onClick={() => setOpen(false)} className={btnClass('outline')}>Cancelar</button>
           <button onClick={salvar} disabled={pending} className={btnClass('primary')}>{pending ? <Spinner /> : null}{cargo ? 'Salvar' : 'Criar cargo'}</button>
         </div>

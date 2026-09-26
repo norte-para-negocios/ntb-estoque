@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Money } from '@/components/ui-kit/Money'
-import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
 import { buscarItensNFFrio, cfopEntradaDe } from '@/lib/relatorio-frio-nf'
@@ -18,7 +17,7 @@ import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { periodoPendencias } from '@/lib/pendencias-periodo'
 
-const th = 'whitespace-nowrap px-3 py-2 text-left text-[13px] font-semibold text-text-muted'
+const th = 'whitespace-nowrap px-3 py-2.5 text-left text-[13px] font-semibold text-text-muted'
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 
 export default async function PendenciasClassificacaoPage({
@@ -217,7 +216,7 @@ export default async function PendenciasClassificacaoPage({
 
   const Bloco = ({ titulo, valor, exportBloco, children }: { titulo: string; valor: number; exportBloco: string; children: ReactNode }) => (
     <section className="space-y-2">
-      <h2 className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-text">
+      <h2 className="flex flex-wrap items-center gap-2 px-1 text-[17px] font-semibold text-text">
         {titulo}
         <span className="text-[13px] font-normal text-text-muted">
           R$ associado (12 meses): <span className="num font-medium text-text"><Money value={valor} /></span>
@@ -228,6 +227,15 @@ export default async function PendenciasClassificacaoPage({
       </h2>
       {children}
     </section>
+  )
+
+  // Bloco vazio compacto: cartão branco, sem caixa tracejada.
+  const Nenhum = ({ hint }: { hint: string }) => (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3.5 text-[15px]">
+      <span className="size-2 shrink-0 rounded-full bg-ok" />
+      <span className="font-semibold text-text">Nenhum</span>
+      <span className="text-[13px] text-text-muted">{hint}</span>
+    </div>
   )
 
   return (
@@ -251,7 +259,7 @@ export default async function PendenciasClassificacaoPage({
       </ListaHeader>
 
       {errosConsulta.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3 text-[13px] text-text-muted">
           Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
           números abaixo podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
         </p>
@@ -259,21 +267,21 @@ export default async function PendenciasClassificacaoPage({
 
       <Bloco titulo={`Produtos sem família (${semFamilia.length})`} valor={valorSemFamilia} exportBloco="sem-familia">
         {!semFamilia.length ? (
-          <EmptyState icon={ClipboardX} title="Nenhum" hint="Todos os produtos têm família." />
+          <Nenhum hint="Todos os produtos têm família." />
         ) : (
           <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[620px] text-sm">
-              <thead><tr className="border-b border-border bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th><th className={th}>CFOP de entrada</th></tr></thead>
+              <thead><tr className="border-b border-border/60 bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Tipo</th><th className={th}>CFOP de entrada</th></tr></thead>
               <tbody>
                 {semFamilia.map((p) => {
                   const cfop = cfopMaisComum(Number(p.codigo_produto))
                   const info = cfop ? descreverCFOP(cfop) : null
                   return (
                   <tr key={p.codigo_produto} className="border-t border-border/60">
-                    <td className="num px-3 py-2 text-text-muted">{p.codigo ?? p.codigo_produto}</td>
-                    <td className="px-3 py-2 text-text">{p.descricao ?? '-'}</td>
-                    <td className="px-3 py-2 text-text-muted">{p.tipo_item ? TIPO_LABEL.get(p.tipo_item) ?? p.tipo_item : '—'}</td>
-                    <td className="px-3 py-2 text-text-muted">
+                    <td className="num px-3 py-2.5 text-text-muted">{p.codigo ?? p.codigo_produto}</td>
+                    <td className="px-3 py-2.5 text-text">{p.descricao ?? '-'}</td>
+                    <td className="px-3 py-2.5 text-text-muted">{p.tipo_item ? TIPO_LABEL.get(p.tipo_item) ?? p.tipo_item : '—'}</td>
+                    <td className="px-3 py-2.5 text-text-muted">
                       {info ? <>{info.codigo} · {info.desc}</> : <span title="Sem NF de entrada nos últimos 12 meses">—</span>}
                     </td>
                   </tr>
@@ -283,7 +291,7 @@ export default async function PendenciasClassificacaoPage({
             </table>
           </div>
         )}
-        <p className="px-1 text-[12px] text-text-muted">
+        <p className="px-1 text-[13px] text-text-muted">
           O CFOP de entrada mais frequente do produto (últimos 12 meses) — não substitui a família, mas indica se é
           revenda/insumo, uso e consumo, ativo etc., pra ajudar a decidir a classificação certa no Omie.
         </p>
@@ -291,17 +299,17 @@ export default async function PendenciasClassificacaoPage({
 
       <Bloco titulo={`Produtos sem tipo (${semTipo.length})`} valor={valorSemTipo} exportBloco="sem-tipo">
         {!semTipo.length ? (
-          <EmptyState icon={ClipboardX} title="Nenhum" hint="Todos os produtos têm tipo." />
+          <Nenhum hint="Todos os produtos têm tipo." />
         ) : (
           <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[480px] text-sm">
-              <thead><tr className="border-b border-border bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Família</th></tr></thead>
+              <thead><tr className="border-b border-border/60 bg-surface"><th className={th}>Código</th><th className={th}>Descrição</th><th className={th}>Família</th></tr></thead>
               <tbody>
                 {semTipo.map((p) => (
                   <tr key={p.codigo_produto} className="border-t border-border/60">
-                    <td className="num px-3 py-2 text-text-muted">{p.codigo ?? p.codigo_produto}</td>
-                    <td className="px-3 py-2 text-text">{p.descricao ?? '-'}</td>
-                    <td className="px-3 py-2 text-text-muted">{p.descricao_familia ?? '—'}</td>
+                    <td className="num px-3 py-2.5 text-text-muted">{p.codigo ?? p.codigo_produto}</td>
+                    <td className="px-3 py-2.5 text-text">{p.descricao ?? '-'}</td>
+                    <td className="px-3 py-2.5 text-text-muted">{p.descricao_familia ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -312,12 +320,12 @@ export default async function PendenciasClassificacaoPage({
 
       <Bloco titulo={`Itens de NF sem produto no cadastro (${semCadastroLinhas.length})`} valor={valorSemCadastro} exportBloco="sem-cadastro">
         {!semCadastroLinhas.length ? (
-          <EmptyState icon={ClipboardX} title="Nenhum" hint="Todo item de NF dos últimos 12 meses tem produto no cadastro." />
+          <Nenhum hint="Todo item de NF dos últimos 12 meses tem produto no cadastro." />
         ) : (
           <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface">
+                <tr className="border-b border-border/60 bg-surface">
                   <th className={th}>Descrição na NF</th>
                   <th className={th}>Código na NF</th>
                   <th className={th}>Fornecedor</th>
@@ -328,39 +336,39 @@ export default async function PendenciasClassificacaoPage({
               <tbody>
                 {semCadastroLinhas.map((l, i) => (
                   <tr key={i} className="border-t border-border/60">
-                    <td className="max-w-[260px] truncate px-3 py-2 text-text" title={l.descricao}>{l.descricao}</td>
-                    <td className="num px-3 py-2 text-text-muted">{l.codigo}</td>
-                    <td className="max-w-[180px] truncate px-3 py-2 text-text-muted" title={l.fornecedor}>{l.fornecedor}</td>
-                    <td className="num px-3 py-2 text-right text-text-muted">{l.ocorrencias}</td>
-                    <td className="num px-3 py-2 text-right font-medium text-text"><Money value={l.valor} /></td>
+                    <td className="max-w-[260px] truncate px-3 py-2.5 text-text" title={l.descricao}>{l.descricao}</td>
+                    <td className="num px-3 py-2.5 text-text-muted">{l.codigo}</td>
+                    <td className="max-w-[180px] truncate px-3 py-2.5 text-text-muted" title={l.fornecedor}>{l.fornecedor}</td>
+                    <td className="num px-3 py-2.5 text-right text-text-muted">{l.ocorrencias}</td>
+                    <td className="num px-3 py-2.5 text-right font-medium text-text"><Money value={l.valor} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <p className="px-1 text-[12px] text-text-muted">
+        <p className="px-1 text-[13px] text-text-muted">
           É esta lista que vira <Link href="/relatorio-compras" className="underline">&quot;Sem cadastro de produto&quot;</Link> no relatório de Compras. Corrija os cadastros no Omie.
         </p>
       </Bloco>
 
       <Bloco titulo="Cupons com produto não identificado (por mês)" valor={valorNaoIdent} exportBloco="cupom-nao-identificado">
         {!naoIdentRows?.length ? (
-          <EmptyState icon={ClipboardX} title="Nenhum" hint="Todo cupom tem produto identificado nos últimos 12 meses." />
+          <Nenhum hint="Todo cupom tem produto identificado nos últimos 12 meses." />
         ) : (
           <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
             <table className="w-full min-w-[320px] text-sm">
-              <thead><tr className="border-b border-border bg-surface"><th className={th}>Mês</th><th className={`${th} text-right`}>Valor</th></tr></thead>
+              <thead><tr className="border-b border-border/60 bg-surface"><th className={th}>Mês</th><th className={`${th} text-right`}>Valor</th></tr></thead>
               <tbody>{(naoIdentRows ?? []).map((r) => (
                 <tr key={r.mes} className="border-t border-border/60">
-                  <td className="px-3 py-2 text-text">{r.mes}</td>
-                  <td className="num px-3 py-2 text-right font-medium text-text"><Money value={Number(r.valor)} /></td>
+                  <td className="num px-3 py-2.5 text-text">{r.mes}</td>
+                  <td className="num px-3 py-2.5 text-right font-medium text-text"><Money value={Number(r.valor)} /></td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
-        <p className="px-1 text-[12px] text-text-muted">
+        <p className="px-1 text-[13px] text-text-muted">
           Cada linha é um mês em que o sync do Faturamento rodou antes do catálogo de produtos estar
           completo (produto novo no PDV ainda não sincronizado). Rodar o sync de novo (botão &quot;Atualizar&quot;
           em <Link href="/relatorio-faturamento" className="underline">Faturamento</Link>) resolve os meses recentes.

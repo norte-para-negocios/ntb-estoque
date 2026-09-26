@@ -88,7 +88,7 @@ export default async function CategoriaContabilPage({
         }
       />
 
-      <p className="px-1 text-[11px] text-text-muted">
+      <p className="px-1 text-[13px] text-text-muted">
         Cadastro só local (não sincroniza com o Omie). Usada para marcar cada item de NF de entrada com o tipo de gasto contábil.
       </p>
     </div>

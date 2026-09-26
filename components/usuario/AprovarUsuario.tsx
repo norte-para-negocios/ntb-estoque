@@ -152,8 +152,8 @@ export function AprovarUsuario({
           className="flex max-h-[88vh] flex-col overflow-hidden bg-surface p-0 sm:max-w-lg"
           showCloseButton={false}
         >
-          <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+          <div className="flex items-center gap-2.5 px-5 pb-2 pt-5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-brand">
               <Check className="size-4" strokeWidth={2} />
             </span>
             <div className="min-w-0">
@@ -164,7 +164,7 @@ export function AprovarUsuario({
 
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
             <div>
-              <label className="mb-1.5 block text-[13px] font-medium text-text">Perfil</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-text-muted">Perfil</label>
               <div className={`grid grid-cols-1 gap-2 ${podeEscolherPerfilAlto ? 'sm:grid-cols-3' : ''}`}>
                 <PerfilBtn
                   ativo={perfil === 'Usuario'}
@@ -196,12 +196,12 @@ export function AprovarUsuario({
 
             {perfil !== 'Admin' && (
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-text">
+                <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
                   <span className="inline-flex items-center gap-1.5">
                     <Store className="size-3.5 text-text-muted" /> Lojas com acesso
                   </span>
                 </label>
-                <div className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-surface-2/30 p-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1 rounded-[var(--r-md)] bg-surface-2 p-1.5 sm:grid-cols-2">
                   {lojas.map((l) => {
                     const on = lojaIds.includes(l.id)
                     return (
@@ -209,13 +209,13 @@ export function AprovarUsuario({
                         key={l.id}
                         type="button"
                         onClick={() => toggleLoja(l.id)}
-                        className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                          on ? 'border-brand bg-brand-soft text-text' : 'border-border bg-surface text-text-muted hover:text-text'
+                        className={`flex items-center gap-2 rounded-[var(--r-sm)] px-2.5 py-2 text-left text-[13px] transition-colors ${
+                          on ? 'bg-surface text-text shadow-[var(--shadow-sm)]' : 'bg-surface text-text-muted hover:text-text'
                         }`}
                       >
                         <span
                           className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                            on ? 'border-brand bg-brand text-white' : 'border-border'
+                            on ? 'border-brand bg-brand text-white' : 'border-border bg-surface'
                           }`}
                         >
                           {on && <span className="text-[10px] leading-none">✓</span>}
@@ -229,12 +229,12 @@ export function AprovarUsuario({
             )}
 
             {perfil === 'AdminLoja' && (
-              <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+              <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text">
                 Admin da loja entra com acesso total aos módulos das lojas marcadas.
               </div>
             )}
             {perfil === 'Admin' && (
-              <div className="rounded-md border border-brand/30 bg-brand-soft/40 px-3 py-2.5 text-[13px] text-text">
+              <div className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text">
                 Administrador tem acesso a todas as lojas e a todos os módulos.
               </div>
             )}
@@ -274,7 +274,7 @@ export function AprovarUsuario({
                     const marcados = ids.filter((id) => permIds.has(id)).length
                     const todos = marcados === ids.length
                     return (
-                      <div key={mod.modulo} className="rounded-md border border-border bg-surface-2/30 p-2.5">
+                      <div key={mod.modulo} className="rounded-[var(--r-md)] bg-surface-2 p-3">
                         <button
                           type="button"
                           onClick={() => toggleModulo(ids, todos)}
@@ -282,8 +282,8 @@ export function AprovarUsuario({
                         >
                           <span className="text-[13px] font-medium text-text">{mod.modulo}</span>
                           <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                              marcados > 0 ? 'bg-brand-soft text-brand' : 'bg-surface-2 text-text-muted'
+                            className={`num text-[12px] font-medium ${
+                              marcados > 0 ? 'text-brand' : 'text-text-muted'
                             }`}
                           >
                             {marcados}/{ids.length}
@@ -297,8 +297,8 @@ export function AprovarUsuario({
                                 key={p.id}
                                 type="button"
                                 onClick={() => togglePerm(p.id)}
-                                className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
-                                  on ? 'border-brand bg-brand text-white' : 'border-border bg-surface text-text-muted hover:text-text'
+                                className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                                  on ? 'bg-brand text-white' : 'bg-surface text-text-muted hover:text-text'
                                 }`}
                               >
                                 {p.label}
@@ -314,7 +314,7 @@ export function AprovarUsuario({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-3">
             <button type="button" onClick={() => setOpen(false)} disabled={pending} className={btnClass('outline')}>
               Cancelar
             </button>
@@ -345,15 +345,15 @@ function PerfilBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors ${
-        ativo ? 'border-brand bg-brand-soft' : 'border-border bg-surface hover:bg-surface-2'
+      className={`flex flex-col gap-1 rounded-[var(--r-md)] p-3 text-left transition-colors ${
+        ativo ? 'bg-surface-2 ring-2 ring-brand' : 'bg-surface-2 hover:bg-[var(--border)]'
       }`}
     >
       <span className={`flex items-center gap-1.5 text-[13px] font-medium ${ativo ? 'text-brand' : 'text-text'}`}>
         {icon}
         {titulo}
       </span>
-      <span className="text-[11px] text-text-muted">{desc}</span>
+      <span className="text-[12px] text-text-muted">{desc}</span>
     </button>
   )
 }

@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 import { criarLocalEstoque } from '@/lib/actions/local-estoque'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
+  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
 
 export function NovoLocalEstoque() {
   const [open, setOpen] = useState(false)
