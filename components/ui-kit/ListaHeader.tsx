@@ -70,9 +70,12 @@ export function ListaHeader({ children }: { children: React.ReactNode }) {
         'border-b border-border',
         '-mx-4 px-4 lg:-mx-8 lg:px-8',
         'pt-3 pb-3',
-        // Remove a margem inferior do último filho (ex: mb-5 do PageHeader quando
-        // não há chips) para o bloco sticky não ficar com padding excessivo.
-        '[&>*:last-child]:mb-0',
+        // Blocos empilhados (título, barra de ações, chips de status, chips de
+        // período, filtros ativos) com espaço uniforme entre si: sem isso, quando a
+        // barra quebra em 2 linhas os blocos ficavam colados (achado 2026-09-27).
+        // O espaçamento vem do gap; margens próprias dos filhos são zeradas.
+        'flex flex-col gap-3',
+        '[&>*]:!mb-0',
         'min-w-0',
       ].join(' ')}
     >
