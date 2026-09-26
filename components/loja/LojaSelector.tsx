@@ -28,7 +28,7 @@ export function LojaSelector({
   if (lojas.length <= 1) {
     const unica = lojas[0]
     return (
-      <div className="flex w-full items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text">
+      <div className="flex w-full items-center gap-2 rounded-full bg-surface px-3.5 h-9 text-[14px] font-medium text-text">
         <Store className="size-4 shrink-0 text-text-muted" aria-hidden />
         <span className="truncate">
           {unica ? unica.nome_fantasia || unica.nome : 'Nenhuma loja'}
@@ -48,7 +48,7 @@ export function LojaSelector({
       }
       disabled={pending}
     >
-      <SelectTrigger className="w-full bg-surface border-border font-medium text-text data-[placeholder]:text-text-muted">
+      <SelectTrigger className="w-full h-9 rounded-full bg-surface border-0 px-3.5 font-medium text-text data-[placeholder]:text-text-muted">
         <SelectValue placeholder="Selecione a loja">
           {(value: string | null) => {
             const loja = lojas.find((l) => String(l.id) === value)

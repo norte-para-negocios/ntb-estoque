@@ -63,7 +63,7 @@ export function AppShell({
     <div className="flex min-h-screen bg-bg">
       <Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} />
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o
@@ -72,25 +72,16 @@ export function AppShell({
             (cabecalho de tabela congelado tipo Excel). */}
         <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
-            <div className="mb-4 flex justify-end">
-              {/* Mobile: so icone, sem texto e sem linha extra */}
+            <div className="mb-2 hidden justify-end lg:flex">
+              {/* Celular: a busca fica na barra superior (MobileNav). Desktop: botao completo com texto e atalho de teclado */}
               <button
                 type="button"
                 onClick={() => setBuscaAberta(true)}
-                aria-label="Buscar"
-                className="lg:hidden flex size-9 items-center justify-center rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
-              >
-                <Search className="size-4" aria-hidden />
-              </button>
-              {/* Desktop: botao completo com texto e atalho de teclado */}
-              <button
-                type="button"
-                onClick={() => setBuscaAberta(true)}
-                className="hidden lg:inline-flex items-center gap-2 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3 py-1.5 text-sm text-text-muted u-motion u-press hover:bg-surface-2 hover:text-text"
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-surface px-3.5 text-[14px] text-text-muted shadow-[var(--shadow-sm)] u-motion u-press hover:text-text"
               >
                 <Search className="size-4" aria-hidden />
                 <span>Buscar</span>
-                <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted">
+                <kbd className="rounded-md bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted">
                   /
                 </kbd>
               </button>

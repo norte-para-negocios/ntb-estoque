@@ -5,6 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react'
+import { motion } from 'motion/react'
+import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS, type NavItem } from './NavItems'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
@@ -132,8 +134,8 @@ export function Sidebar({
 
       <aside
         data-recolhida={recolhida}
-        className={`hidden lg:flex shrink-0 flex-col border-r border-border bg-surface sticky top-0 h-screen self-start overflow-hidden will-change-[width,opacity] ${
-          recolhida ? 'w-0 -translate-x-2 opacity-0 pointer-events-none border-r-0' : 'w-64 translate-x-0 opacity-100'
+        className={`sidebar-blue hidden lg:flex shrink-0 flex-col sticky top-0 h-screen self-start overflow-hidden will-change-[width,opacity] ${
+          recolhida ? 'w-0 -translate-x-2 opacity-0 pointer-events-none' : 'w-64 translate-x-0 opacity-100'
         }`}
         style={{
           transition:
@@ -144,27 +146,27 @@ export function Sidebar({
         {/* min-w-64 trava a largura do conteúdo durante a animação de width,
             evitando reflow/“amassado” do texto enquanto a aside encolhe. */}
         <div className="flex w-64 min-w-64 flex-col h-full">
-          <div className="flex h-16 items-center justify-between gap-2 px-5 border-b border-border">
+          <div className="flex h-16 items-center justify-between gap-2 px-5">
             <Image
               src="/ntb-logo.png"
               alt="NTB"
               width={110}
               height={36}
               priority
-              className="h-7 w-auto dark:brightness-0 dark:invert"
+              className="logo-adapt h-7 w-auto"
             />
             <button
               type="button"
               onClick={recolher}
               aria-label="Recolher menu"
               title="Recolher menu"
-              className="flex size-8 items-center justify-center rounded-md text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
+              className="flex size-8 items-center justify-center rounded-full text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
             >
               <PanelLeftClose className="size-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="px-3 py-3 border-b border-border">{lojaSelector}</div>
+          <div className="px-3 pb-3">{lojaSelector}</div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
             {gruposVisiveis.map((g) => {
@@ -228,7 +230,7 @@ function FloatingToggle({ visivel, onClick }: { visivel: boolean; onClick: () =>
         alt="NTB"
         width={64}
         height={22}
-        className="h-4 w-auto dark:brightness-0 dark:invert"
+        className="logo-adapt h-4 w-auto"
       />
     </button>
   )
@@ -253,7 +255,7 @@ function GrupoSanfona({
         type="button"
         onClick={onToggle}
         aria-expanded={aberto}
-        className="group flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] font-bold text-text-muted/70 u-motion hover:bg-surface-2 hover:text-text-muted"
+        className="group flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 text-[13px] font-semibold text-text-muted u-motion hover:bg-surface-2 hover:text-text"
       >
         <span className="flex items-center gap-1.5">
           {grupo}
@@ -303,23 +305,23 @@ function SideLink({ item, active, isAdmin }: { item: NavItem; active: boolean; i
   return (
     <Link
       href={item.href}
-      className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm u-motion u-press-sm ${
+      className={`group relative flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-[14px] u-motion u-press-sm ${
         active
-          ? 'bg-brand-soft text-text font-medium'
-          : `text-text-muted hover:bg-surface-2 hover:text-text ${bloqueada ? 'opacity-70' : ''}`
+          ? 'text-text font-semibold'
+          : `text-text-muted hover:bg-white/10 hover:text-text ${bloqueada ? 'opacity-70' : ''}`
       }`}
       title={bloqueada ? 'Em breve' : undefined}
     >
+      {/* Pílula branca translúcida que desliza entre os itens (estilo Apple). */}
       {active && (
-        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
+        <motion.span
+          layoutId="nav-ativo"
+          transition={SPRING_UI}
+          className="absolute inset-0 rounded-[10px] bg-white/[0.18] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+        />
       )}
-      <Icon
-        className={`size-[17px] shrink-0 u-motion ${
-          active ? 'text-brand' : 'text-text-muted/70 group-hover:translate-x-px group-hover:text-text-muted'
-        }`}
-        strokeWidth={2}
-      />
-      <span className="flex-1">{item.label}</span>
+      <Icon className="relative size-[17px] shrink-0" strokeWidth={1.9} />
+      <span className="relative flex-1">{item.label}</span>
       {bloqueada && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} />}
     </Link>
   )

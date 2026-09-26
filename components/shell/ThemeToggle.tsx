@@ -27,7 +27,7 @@ export function ThemeToggle() {
       onClick={alternar}
       title={escuro ? 'Mudar para claro' : 'Mudar para escuro'}
       aria-label={escuro ? 'Mudar para claro' : 'Mudar para escuro'}
-      className="flex size-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+      className="flex size-8 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
     >
       {escuro ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>

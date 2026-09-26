@@ -421,6 +421,21 @@
 .sidebar-blue {
   background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-2) 100%);
   color: #fff;
+  /* Dentro do menu azul, os tokens viram branco/translúcido: seletor de loja,
+     menu do usuário e botão de tema se adaptam sem classe especial. */
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.72);
+  --surface: rgba(255, 255, 255, 0.12);
+  --surface-2: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.14);
+  --brand: #ffffff;
+  --brand-soft: rgba(255, 255, 255, 0.2);
+  --err: #ffb4ab;
+}
+/* Logo preto no claro; branco no escuro e sempre branco no menu azul. */
+.dark .logo-adapt,
+.sidebar-blue .logo-adapt {
+  filter: brightness(0) invert(1);
 }
 
 [data-sticky-table] thead {

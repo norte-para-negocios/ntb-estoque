@@ -13,6 +13,7 @@ import {
   FileText,
   ClipboardList,
   Package,
+  Search,
 } from 'lucide-react'
 import { NAV_ITEMS } from './NavItems'
 
@@ -33,6 +34,7 @@ export function MobileNav({
   rotasVisiveis,
   lojaSelector,
   userMenu,
+  onBuscar,
 }: {
   isAdmin: boolean
   isSuperAdmin?: boolean
@@ -40,6 +42,8 @@ export function MobileNav({
   rotasVisiveis: string[] | null
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
+  /** Abre a busca global (o ícone fica na barra superior, não numa linha própria). */
+  onBuscar?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -100,7 +104,7 @@ export function MobileNav({
   return (
     <>
       <header
-        className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 backdrop-blur px-3"
+        className="lg:hidden sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/85 backdrop-blur-xl backdrop-saturate-150 px-3"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           height: 'calc(3.5rem + env(safe-area-inset-top))',
@@ -109,7 +113,7 @@ export function MobileNav({
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
-          className="flex size-10 items-center justify-center rounded-md text-text u-motion u-press-sm hover:bg-surface-2"
+          className="flex size-10 items-center justify-center rounded-full text-text u-motion u-press-sm hover:bg-surface-2"
         >
           <Menu className="size-5" />
         </button>
@@ -118,8 +122,18 @@ export function MobileNav({
           alt="NTB"
           width={100}
           height={32}
-          className="h-6 w-auto dark:brightness-0 dark:invert"
+          className="logo-adapt h-6 w-auto"
         />
+        {onBuscar && (
+          <button
+            type="button"
+            onClick={onBuscar}
+            aria-label="Buscar"
+            className="ml-auto flex size-10 items-center justify-center rounded-full text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
+          >
+            <Search className="size-5" />
+          </button>
+        )}
       </header>
 
       {/* Backdrop com fade. */}
@@ -133,7 +147,7 @@ export function MobileNav({
       />
 
       <aside
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[300px] max-w-[86vw] bg-surface flex flex-col will-change-transform ${
+        className={`sidebar-blue lg:hidden fixed inset-y-0 left-0 z-50 w-[300px] max-w-[86vw] flex flex-col will-change-transform ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{
@@ -142,7 +156,7 @@ export function MobileNav({
         aria-hidden={!open}
       >
         <div
-          className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0"
+          className="flex h-14 items-center justify-between px-4 shrink-0"
           style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
           <Image
@@ -150,18 +164,18 @@ export function MobileNav({
             alt="NTB"
             width={100}
             height={32}
-            className="h-6 w-auto dark:brightness-0 dark:invert"
+            className="logo-adapt h-6 w-auto"
           />
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"
-            className="flex size-10 items-center justify-center rounded-md u-motion u-press-sm hover:bg-surface-2"
+            className="flex size-10 items-center justify-center rounded-full u-motion u-press-sm hover:bg-surface-2"
           >
             <X className="size-5" />
           </button>
         </div>
 
-        <div className="px-3 py-3 border-b border-border shrink-0">{lojaSelector}</div>
+        <div className="px-3 pb-3 shrink-0">{lojaSelector}</div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {gruposVisiveis.map((g) => {
@@ -178,7 +192,7 @@ export function MobileNav({
                   type="button"
                   onClick={() => setGrupoAberto((atual) => (atual === g ? null : g))}
                   aria-expanded={aberto}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-[13px] font-bold text-text-muted/70 u-motion active:bg-surface-2"
+                  className="flex w-full items-center justify-between gap-2 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold text-text-muted u-motion active:bg-surface-2"
                 >
                   <span className="flex items-center gap-1.5">
                     {g}
@@ -219,13 +233,11 @@ export function MobileNav({
                             key={item.href}
                             href={item.href}
                             title={bloqueada ? 'Em breve' : undefined}
-                            className={`flex items-center gap-2.5 rounded-md px-2.5 py-3 text-sm u-motion active:bg-surface-2 ${
-                              active ? 'bg-brand-soft text-text font-medium' : `text-text-muted ${bloqueada ? 'opacity-70' : ''}`
+                            className={`flex min-h-11 items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[15px] u-motion active:bg-surface-2 ${
+                              active ? 'bg-white/[0.18] text-text font-semibold' : `text-text-muted ${bloqueada ? 'opacity-70' : ''}`
                             }`}
                           >
-                            <Icon
-                              className={`size-[18px] shrink-0 ${active ? 'text-brand' : ''}`}
-                            />
+                            <Icon className="size-[18px] shrink-0" />
                             <span className="flex-1">{item.label}</span>
                             {bloqueada && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} />}
                           </Link>
@@ -248,7 +260,7 @@ export function MobileNav({
       </aside>
 
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid border-t border-border bg-surface/95 backdrop-blur"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid border-t border-border bg-surface/85 backdrop-blur-xl backdrop-saturate-150"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           gridTemplateColumns: `repeat(${bottomVisivel.length}, minmax(0, 1fr))`,
@@ -261,7 +273,7 @@ export function MobileNav({
             <Link
               key={b.href}
               href={b.href}
-              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] u-motion u-press-sm active:text-brand ${
+              className={`flex min-h-12 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium u-motion u-press-sm active:text-brand ${
                 active ? 'text-brand' : 'text-text-muted'
               }`}
             >
