@@ -7,8 +7,9 @@
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
-  --font-sans: var(--font-sans-src);
-  --font-mono: var(--font-mono-src);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-brand-strong: var(--brand-strong);
   --color-brand: var(--brand);
   --color-brand-soft: var(--brand-soft);
   --color-bg: var(--bg);
@@ -53,22 +54,25 @@
 }
 
 :root {
-  /* Neutros slate frios */
-  --bg: #f7f8fa;
+  /* Estilo Apple (redesign 2026-09-26, mesma linguagem do NTB Vendas). */
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --surface-2: #f1f4f8;
-  --text: #1f2733;
-  --text-muted: #64748b;
-  --border: #e6e9ef;
-  /* Marca */
-  --brand: #2eb5c3;
-  --brand-strong: #1c8d99;
-  --brand-soft: #e6f7f9;
-  /* Semânticas */
-  --ok: #10b981;
-  --warn: #f59e0b;
-  --err: #ef4444;
-  --info: #3b82f6;
+  --surface-2: #f2f2f7;
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --border: rgba(60, 60, 67, 0.14);
+  /* Marca Norte (só ação/seleção) */
+  --brand: #484DB5;
+  --brand-strong: #3A3E91;
+  --brand-soft: #eceefb;
+  /* Semânticas (tons Apple, AA) */
+  --ok: #248a3d;
+  --warn: #b25000;
+  --err: #d70015;
+  --info: #0066cc;
+  /* Menu lateral azul da marca */
+  --sidebar-bg: #484DB5;
+  --sidebar-bg-2: #3A3E91;
   /* Paleta categorica p/ graficos (dashboard de producao, por funcionario).
      7 primeiros slots da paleta de referencia validada da skill dataviz
      (references/palette.md) -- CVD deltaE >= 8, contraste ok claro/escuro.
@@ -81,14 +85,15 @@
   --series-6: #008300;
   --series-7: #4a3aa7;
   /* Tinta: superfície escura de destaque (hero, atalhos). Era hex órfão #10151c. */
-  --ink: #10151c;
-  /* Raios */
-  --r-sm: 0.375rem;
-  --r-md: 0.625rem;
-  --r-lg: 0.875rem;
-  /* Sombras suaves difusas */
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 6px -2px rgba(16, 24, 40, 0.05);
+  --ink: #1E1B4B;
+  /* Raios: 8/12/18, janela 22 */
+  --r-sm: 0.5rem;
+  --r-md: 0.75rem;
+  --r-lg: 1.125rem;
+  --r-xl: 1.375rem;
+  /* Cartões sem borda, sombra quase imperceptível */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
 
   /* ----------------------------------------------------------------------
      Linguagem de movimento (A1). Tom: Linear / Stripe / Vercel.
@@ -107,32 +112,33 @@
   --ease: var(--ease-out);
 
   /* Escalas de toque/press padronizadas (nunca "saltam"). */
-  --press: 0.98; /* press de botões/links/cards */
+  --press: 0.97; /* press de botões/links/cards */
   --press-sm: 0.96; /* press de ícones pequenos (toggles do menu) */
 
   /* Brilho do skeleton shimmer (A6). Levíssimo no claro: quase branco translúcido
      varrendo o cinza-base. Sutil de propósito — não deve "cintilar". */
   --shimmer: rgba(255, 255, 255, 0.55);
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 }
 
 /* Modo escuro: sobrescreve os tokens. Ativado por .dark no <html>. */
 .dark {
-  --bg: #0d0e12;
-  --surface: #15171d;
-  --surface-2: #1c1f27;
-  --text: #e6e8ec;
-  --text-muted: #8b93a1;
-  /* 0.09 sumia nas tabelas do dark; 0.12 separa as linhas sem pesar. */
-  --border: rgba(255, 255, 255, 0.12);
-  --brand: #2eb5c3;
-  --brand-strong: #3fc6d4;
-  --brand-soft: rgba(46, 181, 195, 0.14);
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --err: #f87171;
-  --info: #60a5fa;
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --text: #f5f5f7;
+  --text-muted: #98989d;
+  --border: rgba(84, 84, 88, 0.45);
+  --brand: #8b90ea;
+  --brand-strong: #a6aaf0;
+  --brand-soft: rgba(139, 144, 234, 0.18);
+  --ok: #30d158;
+  --warn: #ffb340;
+  --err: #ff6961;
+  --info: #409cff;
+  --sidebar-bg: #23256b;
+  --sidebar-bg-2: #16174a;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -140,9 +146,9 @@
   --series-5: #d55181;
   --series-6: #008300;
   --series-7: #9085e9;
-  --ink: #0a0d13;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
+  --ink: #0a0a1f;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.55);
   /* No escuro o brilho branco forte estoura: usa um clarão bem mais discreto. */
   --shimmer: rgba(255, 255, 255, 0.06);
 }
@@ -153,7 +159,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-size: 0.9rem;
+    font-size: 0.9375rem;
+    letter-spacing: -0.005em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -169,12 +176,19 @@
     border-radius: 4px;
     transition: outline-offset var(--dur-fast) var(--ease-out);
   }
+  /* Números na fonte do sistema com algarismos de largura fixa (sem mono). */
   .num {
-    font-family: var(--font-mono);
+    font-family: inherit;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
+  /* Rótulo de seção: frase normal, 13px, cinza. Nunca CAIXA ALTA. */
   .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-muted);
   }
 }
 
@@ -207,6 +221,10 @@
     transition-property: box-shadow, transform, border-color;
     transition-duration: var(--dur);
     transition-timing-function: var(--ease-out);
+  }
+  .u-card {
+    border-color: transparent;
+    box-shadow: var(--shadow-sm);
   }
   .u-card:hover {
     transform: translateY(-1px);
@@ -399,6 +417,12 @@
    Todos os <thead> dentro de [data-sticky-table] ficam colados ABAIXO
    do ListaHeader. Fallback 0px: telas sem ListaHeader o thead gruda no topo.
    ----------------------------------------------------------------------- */
+/* Menu lateral azul da marca (mesmo do NTB Vendas). */
+.sidebar-blue {
+  background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-2) 100%);
+  color: #fff;
+}
+
 [data-sticky-table] thead {
   position: sticky;
   top: var(--lista-header-h, 0px);
@@ -416,8 +440,8 @@
 }
 
 :root {
-  --scrollbar-thumb: #c4ccd8;
-  --scrollbar-thumb-hover: #9aa6b8;
+  --scrollbar-thumb: rgba(60, 60, 67, 0.28);
+  --scrollbar-thumb-hover: rgba(60, 60, 67, 0.45);
 }
 .dark {
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);

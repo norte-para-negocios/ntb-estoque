@@ -1,19 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
-
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-sans-src",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const mono = JetBrains_Mono({
-  variable: "--font-mono-src",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
 
 export const metadata: Metadata = {
   title: "NTB - Estoque",
@@ -23,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2eb5c3",
+  themeColor: "#484DB5",
   viewportFit: "cover",
 };
 
@@ -33,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${sans.variable} ${mono.variable} h-full`} suppressHydrationWarning>
+    <html lang="pt-BR" className="h-full" suppressHydrationWarning>
       <head>
         {/* Aplica o tema salvo antes do render, evitando flash claro→escuro */}
         <script
