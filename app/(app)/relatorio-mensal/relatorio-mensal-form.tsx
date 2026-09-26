@@ -43,7 +43,7 @@ export function RelatorioMensalForm({
     <>
       <div className="space-y-4">
         <div>
-          <label htmlFor="mes-ano" className="mb-1 block text-[13px] font-medium text-text">
+          <label htmlFor="mes-ano" className="mb-1.5 block text-[13px] font-semibold text-text-muted">
             Mês do relatório
           </label>
           <select
@@ -51,7 +51,7 @@ export function RelatorioMensalForm({
             name="mesAno"
             value={mesAno}
             onChange={(e) => setMesAno(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
+            className="h-11 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
           >
             {opcoes.map((o) => (
               <option key={chaveMes(o)} value={chaveMes(o)}>
@@ -66,12 +66,12 @@ export function RelatorioMensalForm({
         </a>
       </div>
       {podeSincronizarEstrutura && (
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-4 border-t border-border/60 pt-4">
           <SincronizarEstruturaBotao
             dataIni={`${selecionado.ano}-${String(selecionado.mes).padStart(2, '0')}-01`}
             dataFim={ultimoDiaMes(selecionado.ano, selecionado.mes)}
           />
-          <p className="mt-2 text-xs text-text-muted">
+          <p className="mt-2 text-[13px] text-text-muted">
             Sincroniza a ficha técnica de {selecionado.label} (o mês selecionado acima).
           </p>
         </div>

@@ -24,8 +24,8 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
   {
     grupo: 'Dia a dia',
     itens: [
-      { href: '/resumo', titulo: 'Resumo do dia', icon: CalendarCheck, descricao: 'O que entrou, saiu e deu erro no dia, com auditoria de inventario.', pergunta: 'Como foi o estoque hoje?' },
-      { href: '/relatorio-movimentacao', titulo: 'Movimentacao', icon: ArrowDownUp, descricao: 'Entradas e saidas por operacao, local e familia, com valores.', pergunta: 'O que mais movimentou e por que?' },
+      { href: '/resumo', titulo: 'Resumo do dia', icon: CalendarCheck, descricao: 'O que entrou, saiu e deu erro no dia, com auditoria de inventário.', pergunta: 'Como foi o estoque hoje?' },
+      { href: '/relatorio-movimentacao', titulo: 'Movimentação', icon: ArrowDownUp, descricao: 'Entradas e saídas por operação, local e família, com valores.', pergunta: 'O que mais movimentou e por quê?' },
     ],
   },
   {
@@ -37,23 +37,23 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
   {
     grupo: 'Compras e custo',
     itens: [
-      { href: '/relatorio-compras', titulo: 'Compras', icon: ShoppingCart, descricao: 'Quanto e de quem voce compra; evolucao do preco dos insumos.', pergunta: 'Estou pagando mais caro?' },
-      { href: '/relatorio-estoque-valorizado', titulo: 'Estoque valorizado', icon: Boxes, descricao: 'Valor do estoque por produto: saldo x CMC da ultima foto do Omie.', pergunta: 'Quanto vale o meu estoque?' },
-      { href: '/relatorio-margem', titulo: 'Margem', icon: Percent, descricao: 'Margem por produto e familia, mais e menos rentaveis.', pergunta: 'O que da mais lucro?' },
+      { href: '/relatorio-compras', titulo: 'Compras', icon: ShoppingCart, descricao: 'Quanto e de quem você compra; evolução do preço dos insumos.', pergunta: 'Estou pagando mais caro?' },
+      { href: '/relatorio-estoque-valorizado', titulo: 'Estoque valorizado', icon: Boxes, descricao: 'Valor do estoque por produto: saldo x CMC da última foto do Omie.', pergunta: 'Quanto vale o meu estoque?' },
+      { href: '/relatorio-margem', titulo: 'Margem', icon: Percent, descricao: 'Margem por produto e família, mais e menos rentáveis.', pergunta: 'O que dá mais lucro?' },
     ],
   },
   {
     grupo: 'Faturamento',
     itens: [
-      { href: '/relatorio-faturamento', titulo: 'Faturamento', icon: DollarSign, descricao: 'Faturamento por periodo, produto e familia.', pergunta: 'Quanto vendi?' },
+      { href: '/relatorio-faturamento', titulo: 'Faturamento', icon: DollarSign, descricao: 'Faturamento por período, produto e família.', pergunta: 'Quanto vendi?' },
       { href: '/relatorio-indicadores', titulo: 'Faturamento x Compras', icon: Scale, descricao: 'Cruza o que entrou de venda com o que saiu de compra.', pergunta: 'Estou comprando demais pro que vendo?' },
     ],
   },
   {
     grupo: 'Fiscal',
     itens: [
-      { href: '/auditoria-fiscal', titulo: 'Auditoria fiscal', icon: ShieldCheck, descricao: 'Confere as notas fiscais contra o estoque e aponta divergencias.', pergunta: 'As notas batem com o estoque?' },
-      { href: '/pendencias-classificacao', titulo: 'Pendencias de classificacao', icon: ClipboardX, descricao: 'Produtos sem familia/tipo e itens de NF sem cadastro, com o R$ que representam.', pergunta: 'O que falta classificar?' },
+      { href: '/auditoria-fiscal', titulo: 'Auditoria fiscal', icon: ShieldCheck, descricao: 'Confere as notas fiscais contra o estoque e aponta divergências.', pergunta: 'As notas batem com o estoque?' },
+      { href: '/pendencias-classificacao', titulo: 'Pendências de classificação', icon: ClipboardX, descricao: 'Produtos sem família/tipo e itens de NF sem cadastro, com o R$ que representam.', pergunta: 'O que falta classificar?' },
     ],
   },
 ]
@@ -64,9 +64,9 @@ export default async function RelatoriosPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Relatorios"
+        title="Relatórios"
         icon={BarChart3}
-        description="Todos os relatorios num lugar so. Cada um responde uma pergunta do negocio."
+        description="Todos os relatórios num lugar só. Cada um responde uma pergunta do negócio."
       />
 
       {RELATORIOS.map((secao) => (
@@ -79,10 +79,10 @@ export default async function RelatoriosPage() {
                 <Link
                   key={r.href}
                   href={r.href}
-                  className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 u-motion hover:border-brand/50"
+                  className="group relative overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4 u-motion hover:shadow-[var(--shadow-md)]"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-soft text-brand">
                       <Icon className="size-[18px]" strokeWidth={2} />
                     </span>
                     <div className="min-w-0 flex-1">

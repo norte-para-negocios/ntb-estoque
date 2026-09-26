@@ -51,7 +51,6 @@ export default async function SaudeBancoPage() {
       <PageHeader
         title="Saúde do Banco"
         icon={Database}
-        description="Monitoramento do Postgres (Supabase free tier, limite 500 MB)"
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -80,12 +79,12 @@ export default async function SaudeBancoPage() {
 
       <div className="mt-4 rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
         <div className="mb-2 flex items-center justify-between text-[13px]">
-          <span className="font-medium text-text">
+          <span className="num font-medium text-text">
             <Num value={saude.total_mb} frac={1} /> MB de {LIMITE_FREE_MB} MB
           </span>
-          <span className={`font-semibold ${tomTexto}`}>{pct.toFixed(0)}%</span>
+          <span className={`num font-semibold ${tomTexto}`}>{pct.toFixed(0)}%</span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
           <div className={`h-full rounded-full transition-all ${tomBarra}`} style={{ width: `${pct}%` }} />
         </div>
         {saude.total_mb >= LIMITE_ALERTA_MB && (
@@ -96,12 +95,11 @@ export default async function SaudeBancoPage() {
       </div>
 
       <div className="mt-4 overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-        <div className="border-b border-border bg-surface-2 px-4 py-2 text-[13px] font-semibold text-text-muted">
-          Maiores tabelas
-        </div>
-        <table className="w-full text-[13px]">
+        <h2 className="px-4 pb-1 pt-4 text-[17px] font-semibold text-text">Maiores tabelas</h2>
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-[14px]">
           <thead>
-            <tr className="border-b border-border text-left text-[11px] text-text-muted">
+            <tr className="border-b border-border/60 text-left text-[13px] text-text-muted">
               <th className="px-4 py-2 font-medium">Tabela</th>
               <th className="px-4 py-2 text-right font-medium">Tamanho</th>
               <th className="px-4 py-2 text-right font-medium">Linhas</th>
@@ -109,18 +107,19 @@ export default async function SaudeBancoPage() {
           </thead>
           <tbody>
             {saude.tabelas.map((t) => (
-              <tr key={t.nome} className="border-b border-border last:border-0">
+              <tr key={t.nome} className="border-b border-border/60 last:border-0 hover:bg-surface-2/50">
                 <td className="px-4 py-2 text-text">{t.nome}</td>
-                <td className="px-4 py-2 text-right text-text">
+                <td className="num whitespace-nowrap px-4 py-2 text-right text-text">
                   <Num value={t.mb} frac={1} /> MB
                 </td>
-                <td className="px-4 py-2 text-right text-text-muted">
+                <td className="num px-4 py-2 text-right text-text-muted">
                   <Num value={t.linhas} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <p className="mt-3 text-[12px] text-text-muted">

@@ -21,6 +21,8 @@ const CORES = [
 const COR_OUTROS = 'var(--text-muted)'
 
 function corDoFuncionario(nome: string, funcionariosOrdenados: string[]): string {
+  // Série única: usa a cor da marca (estilo Apple, sem azul cru de paleta).
+  if (funcionariosOrdenados.length <= 1) return 'var(--brand)'
   const idx = funcionariosOrdenados.indexOf(nome)
   if (idx === -1 || idx >= CORES.length) return COR_OUTROS
   return CORES[idx]
@@ -61,9 +63,9 @@ export function ProducaoChart({
       {funcionariosOrdenados.length > 1 && (
         <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5">
           {funcionariosOrdenados.map((nome) => (
-            <div key={nome} className="flex items-center gap-1.5 text-[12px] text-text-muted">
+            <div key={nome} className="flex items-center gap-1.5 text-[13px] text-text-muted">
               <span
-                className="inline-block size-2.5 rounded-sm"
+                className="inline-block size-2.5 rounded-full"
                 style={{ background: corDoFuncionario(nome, funcionariosOrdenados) }}
               />
               {nome}
@@ -151,7 +153,7 @@ export function ProducaoChart({
 
       {/* Tooltip do bucket em hover/focus */}
       {hover !== null && buckets[hover] && buckets[hover].total > 0 && (
-        <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-[12px]">
+        <div className="mt-3 rounded-[var(--r-md)] bg-surface-2 px-3 py-2 text-[13px]">
           <div className="font-semibold text-text">
             {buckets[hover].rotulo} — {buckets[hover].total} OP(s)
           </div>

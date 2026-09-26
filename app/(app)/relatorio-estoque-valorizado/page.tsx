@@ -158,7 +158,7 @@ export default async function RelatorioEstoqueValorizadoPage({
     {
       tipo: 'texto',
       nome: 'busca',
-      label: 'Produto (nome ou codigo)',
+      label: 'Produto (nome ou código)',
     },
     {
       tipo: 'multi-select',
@@ -169,7 +169,7 @@ export default async function RelatorioEstoqueValorizadoPage({
     {
       tipo: 'multi-select',
       nome: 'familia',
-      label: 'Familia',
+      label: 'Família',
       opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })),
     },
     {
@@ -191,7 +191,7 @@ export default async function RelatorioEstoqueValorizadoPage({
         <PageHeader
           title="Estoque Valorizado"
           icon={Boxes}
-          description="Valor do estoque atual: saldo x CMC da ultima foto do Omie."
+          description="Valor do estoque atual: saldo x CMC da última foto do Omie."
           voltarHref="/relatorios"
           actions={
             <FiltrosGaveta
@@ -224,7 +224,7 @@ export default async function RelatorioEstoqueValorizadoPage({
       </ListaHeader>
 
       {errosRpc.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Falha ao consultar os dados de posição — o total acima pode estar
           incompleto. Recarregue a página; se persistir, avise o suporte.
         </p>
@@ -234,18 +234,18 @@ export default async function RelatorioEstoqueValorizadoPage({
         <>
           {/* Cards de resumo */}
           <div className="flex flex-wrap gap-3">
-            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-              <p className="text-[13px] font-semibold text-text-muted">Total valorizado</p>
-              <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValor)}</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+              <p className="text-[13px] text-text-muted">Total valorizado</p>
+              <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{fmtMoeda(totalValor)}</p>
             </div>
-            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-              <p className="text-[13px] font-semibold text-text-muted">Produtos no estoque</p>
-              <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutos}</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+              <p className="text-[13px] text-text-muted">Produtos no estoque</p>
+              <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{totalProdutos}</p>
             </div>
             {dataFoto && (
-              <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-                <p className="text-[13px] font-semibold text-text-muted">Foto do estoque</p>
-                <p className="mt-0.5 text-sm font-semibold text-text">{fmtData(dataFoto)}</p>
+              <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+                <p className="text-[13px] text-text-muted">Foto do estoque</p>
+                <p className="num mt-1.5 text-[17px] font-semibold text-text">{fmtData(dataFoto)}</p>
               </div>
             )}
           </div>
@@ -253,16 +253,16 @@ export default async function RelatorioEstoqueValorizadoPage({
           {linhas.length === 0 ? (
             <EmptyState
               icon={Boxes}
-              title="Sem dados de posicao"
-              hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
+              title="Sem dados de posição"
+              hint="Aguarde a sincronização de posição de estoques ou ajuste o filtro."
             />
           ) : (
             <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <table className="w-full min-w-[700px] border-collapse text-sm">
+              <table className="w-full min-w-[520px] border-collapse text-sm sm:min-w-[700px]">
                 <thead>
                   <tr className="border-b border-border bg-surface">
                     <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
-                    <th className={`text-left ${th} hidden md:table-cell`}>Familia</th>
+                    <th className={`text-left ${th} hidden md:table-cell`}>Família</th>
                     <th className={`text-left ${th} hidden lg:table-cell`}>Tipo</th>
                     <th className={`text-right ${th}`}>Saldo</th>
                     <th className={`text-right ${th} hidden sm:table-cell`}>CMC</th>
@@ -284,7 +284,7 @@ export default async function RelatorioEstoqueValorizadoPage({
                             {formatarNomeProduto(l.descricao ?? '')}
                           </div>
                           {l.codigo && (
-                            <div className="num text-[11px] text-text-muted">{l.codigo}</div>
+                            <div className="num text-[12px] text-text-muted">{l.codigo}</div>
                           )}
                         </Link>
                       </td>
@@ -294,13 +294,13 @@ export default async function RelatorioEstoqueValorizadoPage({
                       <td className="hidden px-3 py-2 text-[12px] text-text-muted lg:table-cell">
                         {TIPO_LABEL.get(l.tipo_item ?? '') ?? l.tipo_item ?? '-'}
                       </td>
-                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
+                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text">
                         {fmtNum(Number(l.n_saldo), 3)} {l.unidade ?? ''}
                       </td>
-                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
+                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text sm:table-cell">
                         {fmtMoeda(Number(l.n_cmc))}
                       </td>
-                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted 2xl:table-cell">
+                      <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text 2xl:table-cell">
                         {l.n_preco_unitario ? fmtMoeda(Number(l.n_preco_unitario)) : '-'}
                       </td>
                       <td className="num hidden whitespace-nowrap px-3 py-2 text-right 2xl:table-cell">
@@ -308,9 +308,7 @@ export default async function RelatorioEstoqueValorizadoPage({
                           className={
                             l.margem_pct != null && l.margem_pct < 0
                               ? 'text-err'
-                              : l.margem_pct != null && l.margem_pct >= 30
-                              ? 'text-ok'
-                              : 'text-text-muted'
+                              : 'text-text'
                           }
                         >
                           {fmtMargem(l.margem_pct)}
@@ -323,7 +321,7 @@ export default async function RelatorioEstoqueValorizadoPage({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                  <tr className="border-t border-border bg-surface-2 font-semibold">
                     <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">
                       {totalProdutos} produto(s)
                     </td>
@@ -343,7 +341,7 @@ export default async function RelatorioEstoqueValorizadoPage({
           )}
 
           {totalProdutos > LIMITE && (
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               Mostrando os {LIMITE} produtos de maior valor (de {totalProdutos} no total). Use os filtros para refinar.
             </p>
           )}
@@ -351,25 +349,25 @@ export default async function RelatorioEstoqueValorizadoPage({
       ) : (
         <>
           <div className="flex flex-wrap gap-3">
-            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-              <p className="text-[13px] font-semibold text-text-muted">Total valorizado</p>
-              <p className="num mt-0.5 text-xl font-semibold text-text">{fmtMoeda(totalValorLocal)}</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+              <p className="text-[13px] text-text-muted">Total valorizado</p>
+              <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{fmtMoeda(totalValorLocal)}</p>
             </div>
-            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-              <p className="text-[13px] font-semibold text-text-muted">Linhas (produto x local)</p>
-              <p className="num mt-0.5 text-xl font-semibold text-text">{totalProdutosLocal}</p>
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+              <p className="text-[13px] text-text-muted">Linhas (produto x local)</p>
+              <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{totalProdutosLocal}</p>
             </div>
           </div>
 
           {linhasLocal.length === 0 ? (
             <EmptyState
               icon={Boxes}
-              title="Sem dados de posicao"
-              hint="Aguarde a sincronizacao de posicao de estoques ou ajuste o filtro."
+              title="Sem dados de posição"
+              hint="Aguarde a sincronização de posição de estoques ou ajuste o filtro."
             />
           ) : (
             <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <table className="w-full min-w-[700px] border-collapse text-sm">
+              <table className="w-full min-w-[520px] border-collapse text-sm sm:min-w-[700px]">
                 <thead>
                   <tr className="border-b border-border bg-surface">
                     <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
@@ -398,20 +396,20 @@ export default async function RelatorioEstoqueValorizadoPage({
                             <div className="truncate text-text" title={l.descricao ?? ''}>
                               {formatarNomeProduto(l.descricao ?? '')}
                             </div>
-                            {l.codigo && <div className="num text-[11px] text-text-muted">{l.codigo}</div>}
+                            {l.codigo && <div className="num text-[12px] text-text-muted">{l.codigo}</div>}
                           </Link>
                         </td>
                         <td className="px-3 py-2 text-text-muted">{l.local_descricao ?? l.codigo_local_estoque}</td>
-                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text">
                           {fmtNum(Number(l.n_saldo), 3)}
                         </td>
-                        <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text-muted sm:table-cell">
+                        <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text sm:table-cell">
                           {fmtMoeda(Number(l.n_cmc))}
                         </td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">
                           {fmtMoeda(Number(l.valor_total))}
                         </td>
-                        <td className={`whitespace-nowrap px-3 py-2 ${critico ? 'text-err' : 'text-text-muted'}`}>
+                        <td className={`num whitespace-nowrap px-3 py-2 ${critico ? 'text-err' : 'text-text-muted'}`}>
                           {l.data_ultimo_inventario
                             ? `${fmtData(l.data_ultimo_inventario)} (há ${dias}d)`
                             : 'Nunca contado'}
@@ -425,7 +423,7 @@ export default async function RelatorioEstoqueValorizadoPage({
           )}
 
           {totalProdutosLocal > LIMITE && (
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               Mostrando as {LIMITE} linhas de maior valor (de {totalProdutosLocal} no total). Use os filtros para refinar.
             </p>
           )}

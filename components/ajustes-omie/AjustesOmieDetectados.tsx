@@ -11,27 +11,29 @@ export async function AjustesOmieDetectados({ lojaId, tipo }: { lojaId: number; 
 
   return (
     <section className="space-y-2">
-      <div className="flex items-baseline justify-between border-b-2 border-text pb-2 mb-1">
-        <h2 className="text-sm font-bold text-text">Feito direto na Omie ({itens.length})</h2>
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="text-[17px] font-semibold text-text">
+          Feito direto na Omie (<span className="num">{itens.length}</span>)
+        </h2>
       </div>
-      <p className="text-[12px] text-text-muted">
+      <p className="px-1 text-[13px] text-text-muted">
         Detectado automaticamente a partir dos ajustes de estoque sincronizados da Omie. A Omie não informa quem fez
         o lançamento — responsável aparece como &quot;Não identificado&quot;.
       </p>
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-border/60 overflow-hidden rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
         {itens.slice(0, 20).map((it: AjusteOmieDetectado) => (
-          <li key={it.chave} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
-            <span className="num text-text-muted">{fmtData(it.data)}</span>
+          <li key={it.chave} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[14px]">
+            <span className="num whitespace-nowrap text-text-muted">{fmtData(it.data)}</span>
             <span className="text-text">
               {it.localOrigemNome}
               {it.localDestinoNome ? ` → ${it.localDestinoNome}` : ''}
             </span>
-            <span className="text-[12px] text-text-muted">{it.qtdProdutos} produto(s)</span>
-            <span className="ml-auto text-[12px] text-text-muted">Responsável: Não identificado</span>
+            <span className="num text-[13px] text-text-muted">{it.qtdProdutos} produto(s)</span>
+            <span className="ml-auto text-[13px] text-text-muted">Responsável: Não identificado</span>
           </li>
         ))}
       </ul>
-      {itens.length > 20 && <p className="text-[11px] text-text-muted">Mostrando os 20 mais recentes de {itens.length}.</p>}
+      {itens.length > 20 && <p className="px-1 text-[12px] text-text-muted">Mostrando os 20 mais recentes de {itens.length}.</p>}
     </section>
   )
 }

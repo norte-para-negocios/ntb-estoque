@@ -127,15 +127,17 @@ export default async function LogPage({
           description="Tentativas de integração com APIs"
           actions={<FiltrosGaveta basePath="/log" campos={campos} defaults={defaults} persistirEm="/log" />}
         />
-        <div className="flex gap-1.5">
+        {/* Visual de SegmentedControl, mas com os mesmos links de antes (não preservam filtros). */}
+        <div className="inline-flex max-w-full items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filtros.map((f) => (
             <Link
               key={f.label}
               href={f.href}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              aria-current={f.ativo ? 'page' : undefined}
+              className={`flex h-8 shrink-0 items-center whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold u-motion max-sm:h-9 ${
                 f.ativo
-                  ? 'bg-brand text-white'
-                  : 'border border-border bg-surface text-text-muted hover:bg-surface-2 hover:text-text'
+                  ? 'bg-surface text-text shadow-[0_1px_3px_rgba(0,0,0,0.12)]'
+                  : 'text-text-muted hover:text-text'
               }`}
             >
               {f.label}
@@ -167,7 +169,7 @@ export default async function LogPage({
             </DataTable>
           </div>
           {/* Mobile: lista compacta com detalhe expansivel */}
-          <div className="divide-y divide-border overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface lg:hidden">
+          <div className="divide-y divide-border/60 overflow-hidden rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface lg:hidden">
             {logs.map((log) => (
               <LogCard key={log.id} log={log} />
             ))}

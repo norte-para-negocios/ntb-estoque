@@ -335,6 +335,10 @@ export default async function RelatorioComprasPage({
   // Cabeçalho de coluna (th) padrão.
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
 
+  // Colunas Total/% presas à direita no desktop (a matriz rola na horizontal).
+  const stickyTotal = 'sm:sticky sm:right-14 sm:z-10 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]'
+  const stickyPct = 'w-14 min-w-14 sm:sticky sm:right-0 sm:z-10'
+
   return (
     <div className="space-y-4">
       <ListaHeader>
@@ -387,24 +391,24 @@ export default async function RelatorioComprasPage({
       </ListaHeader>
 
       {/* Total do período + abertura */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        <span className="num self-end pb-1 text-[13px] text-text-muted">
           Período: {fmtData(ini)} a {fmtData(fim)}
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Total comprado <span className="num font-semibold text-text"><Money value={total} /></span>
+        <span className="flex flex-col rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          Total comprado <span className="num mt-1 block text-[22px] font-semibold leading-none tracking-[-0.02em] text-text"><Money value={total} /></span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Notas <span className="num font-semibold text-text">{nNotas}</span>
+        <span className="flex flex-col rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          Notas <span className="num mt-1 block text-[22px] font-semibold leading-none tracking-[-0.02em] text-text">{nNotas}</span>
         </span>
       </div>
       {errosRpc.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Falha ao consultar os dados recentes (Supabase) — o total acima pode estar
           incompleto para os últimos ~90 dias. Recarregue a página; se persistir, avise o suporte.
         </p>
       )}
-      <p className="px-1 text-[11px] text-text-muted">
+      <p className="px-1 text-[13px] text-text-muted">
         Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra/gasto e não entram nestes números.
       </p>
 
@@ -471,7 +475,7 @@ export default async function RelatorioComprasPage({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                  <tr className="border-t border-border bg-surface-2 font-semibold">
                     <td className="px-3 py-2 text-text" colSpan={7}>Total dos itens listados</td>
                     <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(itensDetalhe.reduce((s, it) => s + Number(it.total), 0))}</td>
                   </tr>
@@ -479,7 +483,7 @@ export default async function RelatorioComprasPage({
               </table>
             </div>
             {itensDetalhe.length >= 500 && (
-              <p className="px-1 text-[11px] text-text-muted">Mostrando os 500 itens mais recentes — use o Excel pra lista completa.</p>
+              <p className="px-1 text-[13px] text-text-muted">Mostrando os 500 itens mais recentes — use o Excel pra lista completa.</p>
             )}
           </div>
         )
@@ -493,15 +497,15 @@ export default async function RelatorioComprasPage({
         <div className="space-y-1.5">
           {/* Matriz mês a mês: 1ª coluna fixa, meses rolam na horizontal */}
           <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-            <table className="w-full min-w-[600px] border-collapse text-sm">
+            <table className="w-full border-collapse text-sm" style={{ minWidth: `${170 + meses.length * 100 + 130 + 56}px` }}>
               <thead>
                 <tr className="border-b border-border bg-surface">
                   <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimLabel}</th>
                   {meses.map((m) => (
                     <th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>
                   ))}
-                  <th className={`text-right ${th}`}>Total</th>
-                  <th className={`text-right ${th}`}>%</th>
+                  <th className={`bg-surface text-right ${th} ${stickyTotal}`}>Total</th>
+                  <th className={`bg-surface text-right ${th} ${stickyPct}`}>%</th>
                 </tr>
               </thead>
               <tbody>
@@ -519,10 +523,10 @@ export default async function RelatorioComprasPage({
                       </div>
                     </td>
                     {meses.map((m) => (
-                      <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>
+                      <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(l.meses[m] ?? 0)}</td>
                     ))}
-                    <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtMoeda(l.total)}</td>
-                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">
+                    <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right font-semibold text-text ${stickyTotal}`}>{fmtMoeda(l.total)}</td>
+                    <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right text-text-muted ${stickyPct}`}>
                       {total > 0 ? `${((l.total / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}
                     </td>
                   </tr>
@@ -530,19 +534,19 @@ export default async function RelatorioComprasPage({
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                <tr className="border-t border-border bg-surface-2 font-semibold">
                   <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text"><div className="max-w-[140px] truncate">Total</div></td>
                   {meses.map((m) => (
                     <td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>
                   ))}
-                  <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtMoeda(total)}</td>
-                  <td className="px-3 py-2" />
+                  <td className={`num whitespace-nowrap bg-surface-2 px-2 py-1.5 text-right text-text ${stickyTotal}`}>{fmtMoeda(total)}</td>
+                  <td className={`bg-surface-2 px-3 py-2 ${stickyPct}`} />
                 </tr>
               </tfoot>
             </table>
           </div>
           {ocultadas > 0 && (
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               Mostrando os {LIMITE_LINHAS} maiores de {ordenadas.length}. Use &quot;Baixar tudo&quot; para o completo.
             </p>
           )}

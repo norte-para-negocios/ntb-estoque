@@ -44,7 +44,11 @@ type Row = { codigo: string; descricao: string | null; familia: string | null; m
 // CMC podre faz a margem explodir (ex.: Casquinha de siri CMC R$100bi). Margem
 // abaixo de -100% = custo > 2x preço = claramente inválido (revisar no Omie).
 const margemValida = (m: number | null): m is number => m != null && m > -100
-const corMargem = (m: number) => (m >= 60 ? 'text-ok' : m >= 40 ? 'text-text' : m >= 0 ? 'text-warn' : 'text-err')
+// Estilo Apple: uma cor só por sinal -- negativo em vermelho, resto neutro.
+const corMargem = (m: number) => (m < 0 ? 'text-err' : 'text-text')
+// Cartão de KPI (mesmo desenho do StatCard: rótulo 13px + número grande).
+const KPI = 'flex flex-col rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]'
+const KPI_NUM = 'num mt-1 block text-[22px] font-semibold leading-none tracking-[-0.02em]'
 
 const MESES_ABREV_EVOLUCAO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabelEvolucao = (ym: string) => {
@@ -97,7 +101,7 @@ function TabelaEvolucaoMensal({ linhas, meses, th, diasPorMes }: { linhas: Linha
             {meses.map((m) => (
               <th key={m} className={`text-right ${th}`} title={diasPorMes?.[m] != null ? `Média de ${diasPorMes[m]} dia(s) com snapshot` : undefined}>
                 {mesLabelEvolucao(m)}
-                {diasPorMes?.[m] != null && <span className="ml-1 font-normal normal-case text-text-muted">({diasPorMes[m]}d)</span>}
+                {diasPorMes?.[m] != null && <span className="num ml-1 font-normal text-text-muted">({diasPorMes[m]}d)</span>}
               </th>
             ))}
             <th className={`text-right ${th}`}>Média</th>
@@ -379,7 +383,7 @@ export default async function RelatorioMargemPage({
           <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} voltarHref="/relatorios" />
         </ListaHeader>
         {errosConsulta.length > 0 && (
-          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
             Falha ao consultar dados de estoque/produto — a tela abaixo pode estar
             vazia por causa disso, não por falta real de margem importada. Recarregue a página; se persistir, avise o suporte.
           </p>
@@ -521,41 +525,41 @@ export default async function RelatorioMargemPage({
         <ChipsFiltrosAtivos basePath="/relatorio-margem" campos={campos} persistirEm="/relatorio-margem" />
       </ListaHeader>
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Produtos <span className="num font-semibold text-text">{validos.length}</span>
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        <span className={`${KPI} text-[13px] text-text-muted`}>
+          Produtos <span className={`${KPI_NUM} text-text`}>{validos.length}</span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Margem média <span className="num font-semibold text-text">{fmtPct(margemMedia)}</span>
+        <span className={`${KPI} text-[13px] text-text-muted`}>
+          Margem média <span className={`${KPI_NUM} ${corMargem(margemMedia)}`}>{fmtPct(margemMedia)}</span>
         </span>
         {menor && (
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Menor margem <span className={`num font-semibold ${corMargem(Number(menor.margem))}`}>{fmtPct(Number(menor.margem))}</span>
-            <span className="text-text-muted"> · {menor.descricao}</span>
+          <span className={`${KPI} min-w-0 max-w-full text-[13px] text-text-muted`}>
+            Menor margem <span className={`${KPI_NUM} ${corMargem(Number(menor.margem))}`}>{fmtPct(Number(menor.margem))}</span>
+            <span className="mt-1 block max-w-[260px] truncate text-[12px] text-text-muted" title={menor.descricao ?? ''}>{menor.descricao}</span>
           </span>
         )}
         {cmcInvalidos.length > 0 && (
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            CMC inválido <span className="num font-semibold text-err">{cmcInvalidos.length}</span>
+          <span className={`${KPI} text-[13px] text-text-muted`}>
+            CMC inválido <span className={`${KPI_NUM} text-err`}>{cmcInvalidos.length}</span>
           </span>
         )}
         {semEstoque.length > 0 && (
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Sem estoque na foto <span className="num font-semibold text-text-muted">{semEstoque.length}</span>
+          <span className={`${KPI} text-[13px] text-text-muted`}>
+            Sem estoque na foto <span className={`${KPI_NUM} text-text`}>{semEstoque.length}</span>
           </span>
         )}
         {!calculadaAoVivo && metaRow?.importado_em && (
-          <span className="text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
+          <span className="self-end pb-1 text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
         )}
         {calculadaAoVivo && mesImportadoMaisRecente && (
-          <span className="text-[13px] text-warn">
+          <span className="self-end pb-1 text-[13px] text-warn">
             Import manual desatualizado (último mês: {mesImportadoMaisRecente}) — mostrando cálculo ao vivo
           </span>
         )}
       </div>
 
       {errosConsulta.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Falha ao consultar dados de estoque/produto — os números acima podem estar
           incompletos. Recarregue a página; se persistir, avise o suporte.
         </p>
@@ -569,7 +573,7 @@ export default async function RelatorioMargemPage({
         />
       ) : (
         <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+          <table className="w-full min-w-[680px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-surface">
                 <th className={`text-left ${th}`}>Família</th>
@@ -588,8 +592,8 @@ export default async function RelatorioMargemPage({
                       {p.descricao ?? p.codigo}
                     </Link>
                   </td>
-                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtMoeda(p.pdv)}</td>
-                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtMoeda(p.cmc)}</td>
+                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(p.pdv)}</td>
+                  <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(p.cmc)}</td>
                   <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${corMargem(Number(p.margem))}`}>{fmtPct(Number(p.margem))}</td>
                 </tr>
               ))}
@@ -599,7 +603,7 @@ export default async function RelatorioMargemPage({
       )}
 
       {cmcInvalidos.length > 0 && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <p className="flex items-center gap-1.5 text-sm font-medium text-text">
             <AlertTriangle className="size-4 text-err" /> {cmcInvalidos.length} produto(s) com CMC inválido no Omie
           </p>
@@ -608,7 +612,7 @@ export default async function RelatorioMargemPage({
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {cmcInvalidos.map((p) => (
-              <span key={p.codigo} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-[12px] text-text" title={`CMC ${fmtMoeda(p.cmc)}`}>
+              <span key={p.codigo} className="rounded-full bg-surface-2 px-2.5 py-1 text-[13px] text-text" title={`CMC ${fmtMoeda(p.cmc)}`}>
                 {p.descricao ?? p.codigo}
               </span>
             ))}
@@ -617,7 +621,7 @@ export default async function RelatorioMargemPage({
       )}
 
       {semEstoque.length > 0 && (
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
           <p className="text-[13px] text-text-muted">
             <span className="font-medium text-text">{semEstoque.length} produto(s) sem estoque na foto de hoje</span> — não têm
             saldo positivo em nenhum local agora, então não dá pra calcular um CMC ponderado (motivo normal: estoque zerado, não é
@@ -626,7 +630,7 @@ export default async function RelatorioMargemPage({
         </div>
       )}
 
-      <p className="px-1 text-[11px] text-text-muted">
+      <p className="px-1 text-[13px] text-text-muted">
         {calculadaAoVivo
           ? 'Margem calculada automaticamente (preço de venda × custo médio da última posição de estoque) para produtos acabados e de revenda — sem import manual.'
           : 'Margem mais recente por produto, importada da aba MARGEM do FAT_DRV (produto acabado / venda PDV). A % é a que o Omie calcula.'}
@@ -634,10 +638,10 @@ export default async function RelatorioMargemPage({
 
       {temEvolucaoImportada && evolucaoImportada && (
         <div className="space-y-2">
-          <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
+          <h2 className="px-1 text-[17px] font-semibold text-text">Evolução mensal da margem</h2>
           <TabelaEvolucaoMensal linhas={evolucaoImportada.linhas} meses={evolucaoImportada.meses} th={th} />
           {calculadaAoVivo && (
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               Histórico do último import manual do FAT_DRV (a tabela acima usa o cálculo ao vivo, mais recente).
             </p>
           )}
@@ -646,11 +650,11 @@ export default async function RelatorioMargemPage({
 
       {!temEvolucaoImportada && (
         <div className="space-y-2">
-          <h2 className="px-1 text-[13px] font-semibold text-text">Evolução mensal da margem</h2>
+          <h2 className="px-1 text-[17px] font-semibold text-text">Evolução mensal da margem</h2>
           {evolucaoSnapshot && evolucaoSnapshot.meses.length > 1 ? (
             <TabelaEvolucaoMensal linhas={evolucaoSnapshot.linhas} meses={evolucaoSnapshot.meses} th={th} diasPorMes={diasPorMes} />
           ) : (
-            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
+            <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
               <p className="text-[13px] text-text-muted">
                 Evolução mensal real ainda não disponível pra esta loja — o sistema passou a arquivar o custo diário a
                 partir de <strong className="text-text">{primeiroSnapshotEm ? fmtDataSimples(primeiroSnapshotEm) : 'hoje'}</strong>.

@@ -46,6 +46,11 @@ const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', c
 const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
 
 const LIMITE_LINHAS = 200
+// Coluna Total presa à direita no desktop: com muitos meses a matriz rola na
+// horizontal e o total nunca fica escondido fora da tela.
+const STICKY_TOTAL = 'sm:sticky sm:right-0 sm:z-10 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]'
+const KPI = 'flex flex-col rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]'
+const KPI_NUM = 'num mt-1 block text-[22px] font-semibold leading-none tracking-[-0.02em] text-text'
 type LinhaMatriz = { rotulo: string; mes: string; qtde: number; valor: number }
 type LinhaOper = { origem: string; sentido: 'E' | 'S'; local: string; tipo_sped: string; familia: string; mes: string; inventario: boolean; qtde: number; valor: number }
 
@@ -280,7 +285,7 @@ export default async function RelatorioMovimentacaoPage({
     const totalGeral = Object.values(totalPorMes).reduce((s, v) => s + v, 0)
     const fmtCel = usarQtde ? fmtQtd : (n: number) => (n ? fmtMoeda(n) : '-')
 
-    const cardCls = 'rounded-lg border border-border bg-surface px-3.5 py-3'
+    const cardCls = 'rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]'
 
     return (
       <div className="space-y-4">
@@ -290,26 +295,26 @@ export default async function RelatorioMovimentacaoPage({
         {/* Cards executivos */}
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <div className={cardCls}>
-            <p className="flex items-center gap-1 text-[13px] font-semibold text-err">
-              <AlertTriangle className="size-3.5" /> Perdas reais
+            <p className="flex items-center gap-1 text-[13px] text-text-muted">
+              <AlertTriangle className="size-3.5 text-err" /> Perdas reais
             </p>
-            <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(perdasReais)}</p>
-            <p className="text-[12px] text-text-muted">baixa manual (fora inventário)</p>
+            <p className="num mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-text sm:text-[24px]">{fmtMoeda(perdasReais)}</p>
+            <p className="mt-1.5 text-[12px] text-text-muted">baixa manual (fora inventário)</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[13px] font-semibold text-warn">Ajuste por inventário</p>
-            <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(ajusteInv)}</p>
-            <p className="text-[12px] text-text-muted">baixa manual por contagem</p>
+            <p className="text-[13px] text-text-muted">Ajuste por inventário</p>
+            <p className="num mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-text sm:text-[24px]">{fmtMoeda(ajusteInv)}</p>
+            <p className="mt-1.5 text-[12px] text-text-muted">baixa manual por contagem</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[13px] font-semibold text-info">Compras (entrada)</p>
-            <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(compras)}</p>
-            <p className="text-[12px] text-text-muted">entrada por nota</p>
+            <p className="text-[13px] text-text-muted">Compras (entrada)</p>
+            <p className="num mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-text sm:text-[24px]">{fmtMoeda(compras)}</p>
+            <p className="mt-1.5 text-[12px] text-text-muted">entrada por nota</p>
           </div>
           <div className={cardCls}>
-            <p className="text-[13px] font-semibold text-text-muted">Consumo de OP</p>
-            <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(consumoOP)}</p>
-            <p className="text-[12px] text-text-muted">insumo consumido na produção</p>
+            <p className="text-[13px] text-text-muted">Consumo de OP</p>
+            <p className="num mt-1.5 text-[20px] font-semibold leading-none tracking-[-0.02em] text-text sm:text-[24px]">{fmtMoeda(consumoOP)}</p>
+            <p className="mt-1.5 text-[12px] text-text-muted">insumo consumido na produção</p>
           </div>
         </div>
 
@@ -342,7 +347,7 @@ export default async function RelatorioMovimentacaoPage({
             </tbody>
           </table>
         </div>
-        <p className="px-1 text-[11px] text-text-muted">
+        <p className="px-1 text-[13px] text-text-muted">
           {usarAutomatico
             ? 'Valor do PDV vem do fato de cupom (item a item, valor real de venda).'
             : 'O valor do PDV na saída não é confiável (custo médio de produto acabado fica distorcido no Omie) — use o modo "Em quantidade" para volume de venda.'}
@@ -371,14 +376,14 @@ export default async function RelatorioMovimentacaoPage({
         ) : (
           <div className="space-y-1.5">
             <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <table className="w-full min-w-[820px] border-collapse text-sm">
+              <table className="w-full border-collapse text-sm" style={{ minWidth: `${(esconderColTipo ? 330 : 470) + meses.length * 110 + 130}px` }}>
                 <thead>
                   <tr className="border-b border-border bg-surface">
                     <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimOper === 'produto' ? 'Produto' : 'Família'}</th>
                     <th className={`text-left ${th}`}>Local</th>
                     {!esconderColTipo && <th className={`text-left ${th}`}>Tipo (SPED)</th>}
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
-                    <th className={`text-right ${th}`}>Total</th>
+                    <th className={`bg-surface text-right ${th} ${STICKY_TOTAL}`}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -395,22 +400,22 @@ export default async function RelatorioMovimentacaoPage({
                       </td>
                       <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.local}</div></td>
                       {!esconderColTipo && <td className="px-3 py-2 text-text-muted"><div className="max-w-[140px] truncate">{e.tipo}</div></td>}
-                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCel(e.meses[m] ?? 0)}</td>))}
-                      <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCel(e.total)}</td>
+                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(e.meses[m] ?? 0)}</td>))}
+                      <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right font-semibold text-text ${STICKY_TOTAL}`}>{fmtCel(e.total)}</td>
                     </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                  <tr className="border-t border-border bg-surface-2 font-semibold">
                     <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text" colSpan={esconderColTipo ? 2 : 3}>Total</td>
                     {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCel(totalGeral)}</td>
+                    <td className={`num whitespace-nowrap bg-surface-2 px-2 py-1.5 text-right text-text ${STICKY_TOTAL}`}>{fmtCel(totalGeral)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               {usarQtde
                 ? 'Recorte só com PDV na saída: mostrando QUANTIDADE (valor não-confiável).'
                 : 'Valores em R$ por mês. O PDV na saída entra como 0 (valor distorcido no Omie).'}
@@ -695,19 +700,19 @@ export default async function RelatorioMovimentacaoPage({
         {seg}
         {fonteToggle}
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
-          <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-            Total <span className="num font-semibold text-text">{fmtMoeda(totalGeralM)}</span>
+        <div className="flex flex-wrap items-stretch gap-2.5">
+          <span className="num self-end pb-1 text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
+          <span className={KPI}>
+            Total <span className={KPI_NUM}>{fmtMoeda(totalGeralM)}</span>
           </span>
         </div>
-        <p className="px-1 text-[11px] text-text-muted">
+        <p className="px-1 text-[13px] text-text-muted">
           Só ajuste manual de estoque (Omie: ListarAjusteEstoque) — exclui venda de PDV e transferência entre
           locais (essas já têm relatório próprio: Faturamento e Transferências).
         </p>
 
         {falhouBuscaFriaManual && (
-          <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+          <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
             Período muito longo: o total acima pode estar abaixo do real (falha temporária ao buscar o
             histórico completo). Tente recarregar a página ou use um período mais curto.
           </p>
@@ -750,7 +755,7 @@ export default async function RelatorioMovimentacaoPage({
                   <tr className="border-b border-border bg-surface">
                     <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{dimLabelM}</th>
                     {mesesM.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
-                    <th className={`text-right ${th}`}>Total</th>
+                    <th className={`bg-surface text-right ${th} ${STICKY_TOTAL}`}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -768,22 +773,22 @@ export default async function RelatorioMovimentacaoPage({
                           )}
                         </div>
                       </td>
-                      {mesesM.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text-muted">{fmtCelM(l.meses[m] ?? 0)}</td>))}
-                      <td className="num whitespace-nowrap px-2 py-1.5 text-right font-medium text-text">{fmtCelM(l.total)}</td>
+                      {mesesM.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCelM(l.meses[m] ?? 0)}</td>))}
+                      <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right font-semibold text-text ${STICKY_TOTAL}`}>{fmtCelM(l.total)}</td>
                     </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                  <tr className="border-t border-border bg-surface-2 font-semibold">
                     <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total</td>
                     {mesesM.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCelM(totalPorMesM[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-text">{fmtCelM(totalGeralM)}</td>
+                    <td className={`num whitespace-nowrap bg-surface-2 px-2 py-1.5 text-right text-text ${STICKY_TOTAL}`}>{fmtCelM(totalGeralM)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               {pares.length === 0 ? 'Clique numa linha pra ver quais produtos compõem o valor.' : 'Detalhamento por produto dentro do recorte selecionado.'}
               {ocultadasM > 0 && ` Mostrando os ${LIMITE_LINHAS} maiores de ${ordenadasM.length}.`}
             </p>
@@ -792,8 +797,8 @@ export default async function RelatorioMovimentacaoPage({
 
         {pares.length === 0 && (
           <div className="space-y-1.5">
-            <p className="px-1 text-[13px] font-semibold text-text">Saldo contado no inventário</p>
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[17px] font-semibold text-text">Saldo contado no inventário</p>
+            <p className="px-1 text-[13px] text-text-muted">
               Contagens físicas de inventário (Omie: tipo=SLD) — isso NÃO é movimento de
               estoque, é uma foto do saldo contado num instante (confirmado: bate exato com
               `inventario_items`). Por isso aparece em quantidade de contagens, não em R$ —
@@ -820,7 +825,7 @@ export default async function RelatorioMovimentacaoPage({
                         <td className="px-3 py-2 text-text" title={l.rotulo}>
                           <div className="max-w-[160px] truncate">{l.rotulo}</div>
                         </td>
-                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{l.contagens}</td>
+                        <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{l.contagens}</td>
                         <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.zeradas ? 'font-medium text-err' : 'text-text-muted'}`}>{l.zeradas || '-'}</td>
                       </tr>
                     ))}
@@ -996,15 +1001,15 @@ export default async function RelatorioMovimentacaoPage({
       {seg}
       {fonteToggle}
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Produtos <span className="num font-semibold text-text">{ordenadas.length}</span>
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        <span className="num self-end pb-1 text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
+        <span className={KPI}>
+          Produtos <span className={KPI_NUM}>{ordenadas.length}</span>
         </span>
       </div>
 
       {falhouMatrizRecente && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Não foi possível carregar os dados mais recentes agora (instabilidade momentânea do banco). Os meses mais
           recentes podem estar faltando ou incompletos abaixo — recarregue a página em alguns segundos.
         </p>
@@ -1030,7 +1035,7 @@ export default async function RelatorioMovimentacaoPage({
                 <tr className="border-b border-border bg-surface">
                   <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Produto</th>
                   {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
-                  <th className={`text-right ${th}`}>Total</th>
+                  <th className={`bg-surface text-right ${th} ${STICKY_TOTAL}`}>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -1043,14 +1048,14 @@ export default async function RelatorioMovimentacaoPage({
                         <Link href={`/movimentacoes?produto=${encodeURIComponent(l.rotuloRaw)}`} className="hover:underline">{l.rotulo}</Link>
                       </div>
                     </td>
-                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] text-text-muted">{fmtQtd(l.meses[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-medium text-text">{fmtQtd(l.total)}</td>
+                    {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-2 py-1.5 text-right text-[13px] text-text">{fmtQtd(l.meses[m] ?? 0)}</td>))}
+                    <td className={`num whitespace-nowrap bg-surface px-2 py-1.5 text-right text-[13px] font-semibold text-text ${STICKY_TOTAL}`}>{fmtQtd(l.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="px-1 text-[11px] text-text-muted">
+          <p className="px-1 text-[13px] text-text-muted">
             {/* Sem linha de total geral de propósito: somar kg + un + cx de produtos
                 diferentes dava um numero gigante sem significado (feedback 18/07). */}
             Quantidades na unidade de cada produto (kg, un, cx...) — por isso não há total geral. Para R$, use o modo &quot;Por operação&quot;.

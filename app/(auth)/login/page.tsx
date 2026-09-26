@@ -4,21 +4,19 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useActionState } from 'react'
 import { login } from '@/lib/actions/auth'
+import { AlertCircle } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
-const labelClass = 'mb-1 block text-[13px] font-medium text-text-muted'
+  'h-11 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3.5 text-[15px] text-text outline-none transition-shadow placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:text-base'
+const labelClass = 'mb-1.5 block text-[13px] font-semibold text-text-muted'
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, null)
 
   return (
     <div className="w-full max-w-md">
-      <div
-        className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-8"
-        style={{ boxShadow: 'var(--shadow-md)' }}
-      >
+      <div className="rounded-[var(--r-xl)] bg-surface p-6 shadow-[var(--shadow-md)] sm:p-8">
         <div className="mb-8 flex justify-center">
           <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="logo-adapt h-14 w-auto" />
         </div>
@@ -51,15 +49,16 @@ export default function LoginPage() {
           </div>
 
           {state?.error && (
-            <div className="rounded-md border border-err/30 bg-err/10 px-3 py-2 text-sm text-err">
-              {state.error}
-            </div>
+            <p role="alert" className="flex items-start gap-2 text-[14px] text-err">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+              <span>{state.error}</span>
+            </p>
           )}
 
           <button
             type="submit"
             disabled={pending}
-            className={`${btnClass('primary')} w-full py-2.5`}
+            className={`${btnClass('primary')} h-11! w-full text-[15px]!`}
           >
             {pending ? 'Entrando...' : 'Entrar'}
           </button>
@@ -67,7 +66,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-[13px] text-text-muted">
           Não tem acesso?{' '}
-          <Link href="/cadastro" className="font-medium text-brand hover:underline">
+          <Link href="/cadastro" className="font-semibold text-brand hover:underline">
             Pedir acesso
           </Link>
         </p>

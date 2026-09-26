@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { carregarDashboardProducao, type Granularidade } from '@/lib/dashboard-producao'
 import { ProducaoChart } from '@/components/producao/ProducaoChart'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { btnClass } from '@/components/ui-kit/Button'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
@@ -180,16 +181,16 @@ export default async function RelatorioProducaoPage({
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+        <div className="inline-flex max-w-full shrink-0 items-center overflow-x-auto rounded-[10px] bg-surface-2 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {GRANULARIDADES.map((g) => (
             <Link
               key={g.value}
               href={linkPara(g.value, mes, filtrosURL)}
               aria-current={granularidade === g.value ? 'true' : undefined}
-              className={`rounded-full border px-3 py-1 text-[12px] font-medium u-motion ${
+              className={`inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold u-motion max-sm:h-9 ${
                 granularidade === g.value
-                  ? 'border-brand bg-brand/10 text-brand'
-                  : 'border-border bg-surface text-text-muted hover:border-brand/40 hover:text-text'
+                  ? 'bg-surface text-text shadow-[0_1px_3px_rgba(0,0,0,0.12)]'
+                  : 'text-text-muted hover:text-text'
               }`}
             >
               {g.label}
@@ -198,12 +199,12 @@ export default async function RelatorioProducaoPage({
         </div>
         {granularidade !== 'mes' && (
           <div className="flex items-center gap-2 text-[13px]">
-            <Link href={linkPara(granularidade, mesAnteriorISO, filtrosURL)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
+            <Link href={linkPara(granularidade, mesAnteriorISO, filtrosURL)} className={btnClass('outline')}>
               ← Mês anterior
             </Link>
-            <span className="font-medium text-text">{mes}</span>
+            <span className="num font-semibold text-text">{mes}</span>
             {!ehMesAtual && (
-              <Link href={linkPara(granularidade, mesSeguinteISO, filtrosURL)} className="rounded-md border border-border px-2 py-1 hover:bg-surface-2">
+              <Link href={linkPara(granularidade, mesSeguinteISO, filtrosURL)} className={btnClass('outline')}>
                 Mês seguinte →
               </Link>
             )}
@@ -212,17 +213,17 @@ export default async function RelatorioProducaoPage({
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-          <p className="text-[13px] font-semibold text-text-muted">Total no período</p>
-          <p className="num mt-0.5 text-xl font-semibold text-text">{total}</p>
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <p className="text-[13px] text-text-muted">Total no período</p>
+          <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{total}</p>
         </div>
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-          <p className="text-[13px] font-semibold text-text-muted">Média nos dias com produção</p>
-          <p className="num mt-0.5 text-xl font-semibold text-text">{media}</p>
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <p className="text-[13px] text-text-muted">Média nos dias com produção</p>
+          <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{media}</p>
         </div>
-        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-4 py-3">
-          <p className="text-[13px] font-semibold text-text-muted">Melhor período</p>
-          <p className="num mt-0.5 text-xl font-semibold text-text">
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <p className="text-[13px] text-text-muted">Melhor período</p>
+          <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">
             {melhor.rotulo} ({melhor.total})
           </p>
         </div>
@@ -253,7 +254,7 @@ export default async function RelatorioProducaoPage({
               <tr key={b.chave} className="border-t border-border/60">
                 <td className="whitespace-nowrap px-3 py-2 text-text">{b.rotulo}</td>
                 <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{b.total}</td>
-                <td className="px-3 py-2 text-[12px] text-text-muted">
+                <td className="px-3 py-2 text-[13px] text-text-muted">
                   {b.porFuncionario.map((f) => `${f.nome}: ${f.qtd}`).join(', ')}
                 </td>
               </tr>
@@ -265,8 +266,8 @@ export default async function RelatorioProducaoPage({
       {/* Previsto x produzido (migration 103) -- RPC propria (relatorio_op_previsto_produzido),
           nao aceita tipo/familia/produto/local: os filtros da gaveta acima nao afetam esta secao. */}
       <div className="space-y-2 pt-2">
-        <h2 className="px-1 text-[13px] font-semibold text-text">Previsto × produzido</h2>
-        <p className="px-1 text-[11px] text-text-muted">Esta seção sempre mostra todas as OPs do mês, sem os filtros de tipo/família/produto/local acima.</p>
+        <h2 className="px-1 text-[17px] font-semibold text-text">Previsto × produzido</h2>
+        <p className="px-1 text-[13px] text-text-muted">Esta seção sempre mostra todas as OPs do mês, sem os filtros de tipo/família/produto/local acima.</p>
         {divergencias.length > 0 ? (
           <>
             <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
@@ -291,7 +292,7 @@ export default async function RelatorioProducaoPage({
                         <td className="whitespace-nowrap px-3 py-2 text-text-muted">{fmtDataBr(d.dt_conclusao)}</td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(d.qtde_planejada)}</td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtQtd(d.qtde_produzida)}</td>
-                        <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${aMais ? 'text-ok' : 'text-warn'}`}>
+                        <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${aMais ? 'text-text' : 'text-err'}`}>
                           {aMais ? '+' : ''}{fmtQtd(d.divergencia)}
                           {d.pct != null && <span className="ml-1 font-normal text-text-muted">({aMais ? '+' : ''}{Number(d.pct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)</span>}
                         </td>
@@ -301,13 +302,13 @@ export default async function RelatorioProducaoPage({
                 </tbody>
               </table>
             </div>
-            <p className="px-1 text-[11px] text-text-muted">
+            <p className="px-1 text-[13px] text-text-muted">
               Só aparecem OPs em que o produzido ficou diferente do previsto. O previsto é capturado enquanto a OP está
               aberta — a Omie não guarda as duas quantidades (ao concluir, ela sobrescreve o previsto com o produzido).
             </p>
           </>
         ) : (
-          <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-3.5">
+          <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
             <p className="text-[13px] text-text-muted">
               {capturaDesde ? (
                 <>

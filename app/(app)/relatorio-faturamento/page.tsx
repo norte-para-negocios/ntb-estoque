@@ -618,9 +618,13 @@ export default async function RelatorioFaturamentoPage({
   const exportHref = `/relatorio-faturamento/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
-  const chipBase = 'rounded-full border px-3 py-1 text-[12px] font-medium transition-colors'
-  const chipAtivo = `${chipBase} border-ink bg-ink text-white`
-  const chipInativo = `${chipBase} border-border bg-surface text-text-muted hover:border-text/30 hover:text-text`
+  const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
+  const chipAtivo = `${chipBase} bg-brand text-white`
+  const chipInativo = `${chipBase} bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text`
+  // Colunas Total/% presas à direita no desktop: com muitos meses a matriz rola
+  // na horizontal e a coluna de total nunca fica escondida fora da tela.
+  const stickyTotal = 'sm:sticky sm:right-14 sm:z-10 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]'
+  const stickyPct = 'w-14 min-w-14 sm:sticky sm:right-0 sm:z-10'
 
   return (
     <div className="space-y-4">
@@ -676,7 +680,7 @@ export default async function RelatorioFaturamentoPage({
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
             {CHIPS_PERIODO.map((c) => (
               <Link key={c.value} href={chipHref(c.value)} className={periodo === c.value && !temPeriodoCustom ? chipAtivo : chipInativo}>
                 {c.label}
@@ -684,23 +688,24 @@ export default async function RelatorioFaturamentoPage({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-              Total faturado <span className="num font-semibold text-text"><Money value={totalGeral} /></span>
-            </span>
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <div className="rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]">
+              <div className="text-[13px] text-text-muted">Total faturado</div>
+              <div className="num mt-1 text-[24px] font-semibold leading-none tracking-[-0.02em] text-text"><Money value={totalGeral} /></div>
+            </div>
             {metaRow?.importado_em && (
-              <span className="text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
+              <span className="pb-1 text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
             )}
           </div>
 
           {errosConsulta.length > 0 && (
-            <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+            <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
               Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
               números acima podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
             {pares.length === 0 ? (
               <SegmentLinks
                 basePath="/relatorio-faturamento"
@@ -752,7 +757,7 @@ export default async function RelatorioFaturamentoPage({
                     <thead><tr className="border-b border-border bg-surface"><th className={`text-left ${th}`}>Produto</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
                     <tbody>
                       {descontoPorProduto.map((d) => (
-                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
+                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(d.valorDesconto)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -762,7 +767,7 @@ export default async function RelatorioFaturamentoPage({
                     <thead><tr className="border-b border-border bg-surface"><th className={`text-left ${th}`}>Forma de pagamento</th><th className={`text-right ${th}`}>Desconto</th></tr></thead>
                     <tbody>
                       {descontoPorForma.map((d) => (
-                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num px-3 py-2 text-right text-text-muted">{fmtMoeda(d.valorDesconto)}</td></tr>
+                        <tr key={d.rotulo} className="border-t border-border/60"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(d.valorDesconto)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -773,7 +778,7 @@ export default async function RelatorioFaturamentoPage({
             <>
               <ChipsStatus basePath="/relatorio-faturamento" param="status" opcoes={OPCOES_STATUS_CUPOM} />
               {cuponsCancelados.length > 0 && (
-                <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+                <div className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                   <span>
                     <strong className="text-warn">{cuponsCancelados.length.toLocaleString('pt-BR')} cupom{cuponsCancelados.length === 1 ? '' : 's'} cancelado{cuponsCancelados.length === 1 ? '' : 's'}</strong>{' '}
@@ -801,7 +806,7 @@ export default async function RelatorioFaturamentoPage({
             ) : (
               <>
               {cuponsFatoFiltrados.length > LIMITE_LINHAS_CUPONS && (
-                <div className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[12px] text-text-muted">
+                <div className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                   <span>
                     <strong className="text-warn">Mostrando os {LIMITE_LINHAS_CUPONS.toLocaleString('pt-BR')} mais recentes</strong>{' '}
@@ -845,13 +850,13 @@ export default async function RelatorioFaturamentoPage({
             />
           ) : (
             <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-              <table className="w-full min-w-[600px] border-collapse text-sm">
+              <table className="w-full border-collapse text-sm" style={{ minWidth: `${240 + meses.length * 104 + 130 + 56}px` }}>
                 <thead>
                   <tr className="border-b border-border bg-surface">
                     <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>{DIMS.find((d) => d.value === dimDoNivel)?.label ?? dimDoNivel}</th>
                     {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
-                    <th className={`text-right ${th}`}>Total</th>
-                    <th className={`text-right ${th}`}>%</th>
+                    <th className={`bg-surface text-right ${th} ${stickyTotal}`}>Total</th>
+                    <th className={`bg-surface text-right ${th} ${stickyPct}`}>%</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -860,7 +865,7 @@ export default async function RelatorioFaturamentoPage({
                     const opaco = explicarRotulo(l.rotulo)
                     return (
                     <tr key={l.rotulo} className="border-t border-border/60 hover:bg-surface-2/40">
-                      <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={opaco?.motivo ?? l.rotulo}>
+                      <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text max-sm:max-w-[150px]" title={opaco?.motivo ?? l.rotulo}>
                         {desce ? (
                           <Link href={hrefComDrill('/relatorio-faturamento', sp, [...pares, { dim: dimDoNivel, rotulo: l.rotulo }])} className="hover:underline">
                             {opaco?.label ?? l.rotulo}
@@ -873,19 +878,19 @@ export default async function RelatorioFaturamentoPage({
                           </>
                         )}
                       </td>
-                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtCel(l.meses[m] ?? 0)}</td>))}
-                      <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(l.total)}</td>
-                      <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{totalGeral > 0 ? `${((l.total / totalGeral) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}</td>
+                      {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtCel(l.meses[m] ?? 0)}</td>))}
+                      <td className={`num whitespace-nowrap bg-surface px-3 py-2 text-right font-semibold text-text ${stickyTotal}`}>{fmtMoeda(l.total)}</td>
+                      <td className={`num whitespace-nowrap bg-surface px-3 py-2 text-right text-text-muted ${stickyPct}`}>{totalGeral > 0 ? `${((l.total / totalGeral) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}</td>
                     </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-border bg-surface-2/70 font-semibold">
+                  <tr className="border-t border-border bg-surface-2 font-semibold">
                     <td className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-text">Total</td>
                     {meses.map((m) => (<td key={m} className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtCel(totalPorMes[m] ?? 0)}</td>))}
-                    <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtMoeda(totalGeral)}</td>
-                    <td className="px-3 py-2" />
+                    <td className={`num whitespace-nowrap bg-surface-2 px-3 py-2 text-right text-text ${stickyTotal}`}>{fmtMoeda(totalGeral)}</td>
+                    <td className={`bg-surface-2 px-3 py-2 ${stickyPct}`} />
                   </tr>
                 </tfoot>
               </table>

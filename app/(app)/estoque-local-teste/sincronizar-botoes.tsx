@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { btnClass } from '@/components/ui-kit/Button'
 
 export function SincronizarBotoes() {
   const [mensagem, setMensagem] = useState<string | null>(null)
@@ -22,17 +23,20 @@ export function SincronizarBotoes() {
 
   return (
     <div className="space-y-2">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface p-3 text-[13px] text-text shadow-[var(--shadow-sm)]">
+        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
+        <span>
         Os botões sincronizam a loja ativa na sua sessão (veja o menu lateral), que
         pode ser diferente da loja selecionada no filtro acima. Troque de loja pelo
         seletor do menu lateral antes de sincronizar.
+        </span>
       </div>
-      <div className="flex gap-2 items-center flex-wrap">
+      <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
         <button
           type="button"
           disabled={carregando !== null}
           onClick={() => chamar('/api/sync/ficha-tecnica-local', 'Sincronizar ficha técnica')}
-          className="border rounded px-3 py-1 disabled:opacity-50"
+          className={btnClass('outline')}
         >
           {carregando === 'Sincronizar ficha técnica' ? 'Sincronizando...' : 'Sincronizar ficha técnica'}
         </button>
@@ -40,18 +44,18 @@ export function SincronizarBotoes() {
           type="button"
           disabled={carregando !== null}
           onClick={() => chamar('/api/sync/estoque-local', 'Sincronizar saldo inicial')}
-          className="border rounded px-3 py-1 disabled:opacity-50"
+          className={btnClass('outline')}
         >
           {carregando === 'Sincronizar saldo inicial' ? 'Sincronizando...' : 'Sincronizar saldo inicial'}
         </button>
       </div>
       {mensagem && (
-        <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
-          <span className="flex-1 break-words">{mensagem}</span>
+        <div className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface p-3 text-[13px] text-text shadow-[var(--shadow-sm)]">
+          <span className="min-w-0 flex-1 break-words font-mono text-[12px]">{mensagem}</span>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="shrink-0 border rounded px-2 py-0.5 text-xs whitespace-nowrap"
+            className={`${btnClass('outline')} shrink-0`}
           >
             Atualizar página
           </button>

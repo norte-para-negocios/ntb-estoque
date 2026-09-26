@@ -202,23 +202,23 @@ export default async function SyncStatusPage({
 
       {/* Status de sincronizacao por loja */}
       <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-        <div className="border-b border-border px-4 py-2.5">
-          <h2 className="text-[13px] font-semibold text-text">Status de sincronização</h2>
+        <div className="px-4 pb-1 pt-4">
+          <h2 className="text-[17px] font-semibold text-text">Status de sincronização</h2>
         </div>
         {lojas.length ? (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60">
             {lojas.map((loja) => (
               <li
                 key={loja.id}
                 className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="text-sm font-medium text-text">
+                <span className="text-[15px] font-medium text-text">
                   {loja.nome_fantasia || loja.nome}
                 </span>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {STATUS_LOJA.map((s) => (
                     <span key={s.campo} className="inline-flex items-center gap-1.5">
-                      <span className="text-[11px] text-text-muted">{s.label}</span>
+                      <span className="text-[13px] text-text-muted">{s.label}</span>
                       <StatusPill status={(loja as unknown as Record<string, string | null>)[s.campo]} />
                     </span>
                   ))}
@@ -252,7 +252,7 @@ export default async function SyncStatusPage({
             larguraDesktop: 'w-44',
             sort: 'created_at',
             render: (erro) => (
-              <span className="whitespace-nowrap text-text-muted">
+              <span className="num whitespace-nowrap text-text-muted">
                 {formatarData(erro.created_at)}
               </span>
             ),
@@ -266,7 +266,7 @@ export default async function SyncStatusPage({
             label: 'Code',
             larguraDesktop: 'w-20',
             sort: 'code',
-            render: (erro) => <span className="text-text-muted">{erro.code ?? '-'}</span>,
+            render: (erro) => <span className="num text-text-muted">{erro.code ?? '-'}</span>,
           },
           {
             label: 'Erro',

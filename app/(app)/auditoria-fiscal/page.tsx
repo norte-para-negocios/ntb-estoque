@@ -19,7 +19,7 @@ import {
   agregarAuditoriaCfop,
   mapearAuditoriaItens,
 } from '@/lib/relatorio-frio-nf'
-import { descreverCFOP, CAT_COR, type CategoriaCFOP } from '@/lib/cfop'
+import { descreverCFOP, type CategoriaCFOP } from '@/lib/cfop'
 import { parseDrill, hrefComDrill, SEM } from '@/lib/drill'
 import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -312,25 +312,28 @@ export default async function AuditoriaFiscalPage({
       </ListaHeader>
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)}</span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+        <span className="text-[13px] text-text-muted">Período: <span className="num">{fmtData(ini)}</span> a <span className="num">{fmtData(fim)}</span></span>
+        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Comprado <span className="num font-semibold text-text"><Money value={totValor} /></span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
+        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Itens <span className="num font-semibold text-text">{fmtN(totItens)}</span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Creditam ICMS <span className={`num font-semibold ${totCredita ? 'text-info' : 'text-text'}`}>{fmtN(totCredita)}</span>
+        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          Creditam ICMS <span className="num font-semibold text-text">{fmtN(totCredita)}</span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Não estocam <span className={`num font-semibold ${totNaoEstoca ? 'text-warn' : 'text-text'}`}>{fmtN(totNaoEstoca)}</span>
+        <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface px-3.5 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          Não estocam <span className="num font-semibold text-text">{fmtN(totNaoEstoca)}</span>
         </span>
       </div>
 
       {errosConsulta.length > 0 && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
-          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — os
-          números acima podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
+        <p className="flex items-start gap-2 text-[13px] text-text-muted">
+          <span className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
+          <span>
+            Falha ao consultar: <strong className="text-text">{[...new Set(errosConsulta)].join(', ')}</strong> — os
+            números acima podem estar incompletos. Recarregue a página; se persistir, avise o suporte.
+          </span>
         </p>
       )}
 
@@ -342,9 +345,9 @@ export default async function AuditoriaFiscalPage({
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {cats.map((c) => (
               <div key={c.cat} className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface px-3.5 py-3">
-                <p className={`text-[13px] font-semibold ${CAT_COR[c.cat]}`}>{c.cat}</p>
-                <p className="num mt-1 text-[15px] font-semibold text-text">{fmtMoeda(c.valor)}</p>
-                <p className="text-[12px] text-text-muted">{fmtN(c.itens)} itens · {totValor > 0 ? ((c.valor / totValor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0}%</p>
+                <p className="text-[13px] font-semibold text-text-muted">{c.cat}</p>
+                <p className="num mt-1 text-[17px] font-semibold tracking-[-0.01em] text-text">{fmtMoeda(c.valor)}</p>
+                <p className="num text-[12px] text-text-muted">{fmtN(c.itens)} itens · {totValor > 0 ? ((c.valor / totValor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0}%</p>
               </div>
             ))}
           </div>
@@ -386,13 +389,13 @@ export default async function AuditoriaFiscalPage({
                       </td>
                       <td className="px-3 py-2">
                         <span className="text-text">{d.desc}</span>
-                        <span className={`ml-1.5 text-[12px] ${CAT_COR[d.cat]}`}>· {d.cat}</span>
+                        <span className="ml-1.5 text-[12px] text-text-muted">· {d.cat}</span>
                       </td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtN(Number(l.itens))}</td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(Number(l.valor))}</td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{totValor > 0 ? `${((Number(l.valor) / totValor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-'}</td>
-                      <td className={`num whitespace-nowrap px-3 py-2 text-right ${Number(l.credita_icms) ? 'text-info' : 'text-text-muted'}`}>{Number(l.credita_icms) ? fmtN(Number(l.credita_icms)) : '—'}</td>
-                      <td className={`num whitespace-nowrap px-3 py-2 text-right ${naoEstoca ? 'text-warn' : 'text-text-muted'}`}>{naoEstoca ? fmtN(naoEstoca) : '—'}</td>
+                      <td className={`num whitespace-nowrap px-3 py-2 text-right ${Number(l.credita_icms) ? 'text-text' : 'text-text-muted'}`}>{Number(l.credita_icms) ? fmtN(Number(l.credita_icms)) : '—'}</td>
+                      <td className={`num whitespace-nowrap px-3 py-2 text-right ${naoEstoca ? 'text-text' : 'text-text-muted'}`}>{naoEstoca ? fmtN(naoEstoca) : '—'}</td>
                     </tr>
                   )
                 })}
@@ -402,7 +405,7 @@ export default async function AuditoriaFiscalPage({
 
           {/* Drill por item */}
           {cfopDocSel && (
-            <div id="detalhe-cfop" className="space-y-1.5 rounded-lg border-2 border-brand bg-surface p-3 scroll-mt-4">
+            <div id="detalhe-cfop" className="scroll-mt-4 space-y-1.5 rounded-[var(--r-lg)] bg-surface p-3 shadow-[var(--shadow-sm)] sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <DrillBreadcrumb
                   basePath="/auditoria-fiscal"
@@ -415,7 +418,7 @@ export default async function AuditoriaFiscalPage({
                   {cfopEntSel && cfopEntSel !== SEM ? descreverCFOP(cfopEntSel).desc : 'itens sem CFOP de entrada definido'}
                 </p>
               </div>
-              <div className="overflow-x-auto rounded-md border border-border">
+              <div className="-mx-3 overflow-x-auto sm:-mx-4">
                 <table className="w-full min-w-[680px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border bg-surface">
@@ -432,7 +435,7 @@ export default async function AuditoriaFiscalPage({
                   <tbody>
                     {itensSel.map((it) => (
                       <tr key={it.item_id} className="border-t border-border/60 hover:bg-surface-2/40">
-                        <td className="whitespace-nowrap px-3 py-1.5 text-text-muted">{it.data ? fmtData(it.data) : '-'}</td>
+                        <td className="num whitespace-nowrap px-3 py-1.5 text-text-muted">{it.data ? fmtData(it.data) : '-'}</td>
                         <td className="num whitespace-nowrap px-3 py-1.5 text-text-muted">{it.nota}</td>
                         <td className="max-w-[200px] truncate px-3 py-1.5 text-text" title={it.fornecedor}>{it.fornecedor}</td>
                         <td className="max-w-[220px] truncate px-3 py-1.5 text-text" title={it.produto}>
@@ -441,19 +444,19 @@ export default async function AuditoriaFiscalPage({
                           </Link>
                         </td>
                         <td className="num px-3 py-1.5 text-center text-text-muted">{it.cst_icms ?? '-'}</td>
-                        <td className={`px-3 py-1.5 text-center ${it.credita_icms ? 'text-info' : 'text-text-muted'}`}>{it.credita_icms ? 'sim' : '—'}</td>
-                        <td className={`px-3 py-1.5 text-center ${it.move_estoque ? 'text-text-muted' : 'text-warn'}`}>{it.move_estoque ? 'sim' : 'não'}</td>
+                        <td className={`px-3 py-1.5 text-center ${it.credita_icms ? 'text-text' : 'text-text-muted'}`}>{it.credita_icms ? 'sim' : '—'}</td>
+                        <td className={`px-3 py-1.5 text-center ${it.move_estoque ? 'text-text-muted' : 'font-medium text-text'}`}>{it.move_estoque ? 'sim' : 'não'}</td>
                         <td className="num whitespace-nowrap px-3 py-1.5 text-right font-medium text-text">{fmtMoeda(Number(it.valor))}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {itensSel.length === 300 && <p className="px-1 text-[11px] text-text-muted">Mostrando os 300 mais recentes deste par CFOP.</p>}
+              {itensSel.length === 300 && <p className="px-1 text-[12px] text-text-muted">Mostrando os 300 mais recentes deste par CFOP.</p>}
             </div>
           )}
 
-          <p className="px-1 text-[11px] text-text-muted">
+          <p className="px-1 text-[12px] text-text-muted">
             CFOP de entrada é como a NTB classificou cada compra no Omie. &quot;Uso/consumo&quot; não credita ICMS nem entra no estoque
             de revenda. &quot;Credita ICMS&quot; e &quot;Não estoca&quot; destacam as exceções para revisão com o contador.
           </p>
@@ -462,10 +465,11 @@ export default async function AuditoriaFiscalPage({
           {linhasCst.length > 0 && (
             <div className="space-y-2 pt-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="px-1 text-[13px] font-semibold text-text">CST do documento × CST de entrada</h2>
+                <h2 className="px-1 text-[17px] font-semibold text-text">CST do documento × CST de entrada</h2>
                 {cstDivergentes.length > 0 && (
-                  <span className="rounded-md border border-warn/40 bg-warn/10 px-2.5 py-1 text-[12px] text-text-muted">
-                    <strong className="text-warn">{fmtN(cstDivergentes.length)}</strong> combinaç{cstDivergentes.length === 1 ? 'ão' : 'ões'} com
+                  <span className="inline-flex flex-wrap items-center gap-x-1 text-[13px] text-text-muted">
+                    <span className="mr-0.5 size-2 shrink-0 rounded-full bg-warn" />
+                    <strong className="num text-text">{fmtN(cstDivergentes.length)}</strong> combinaç{cstDivergentes.length === 1 ? 'ão' : 'ões'} com
                     tratamento divergente · <span className="num">{fmtMoeda(valorDivergente)}</span>
                   </span>
                 )}
@@ -488,9 +492,12 @@ export default async function AuditoriaFiscalPage({
                       return (
                         <tr
                           key={`${l.cst_doc}|${l.cst_entrada}|${l.cfop_entrada}`}
-                          className={`border-t border-border/60 hover:bg-surface-2/40 ${divergente ? 'bg-warn/5' : ''}`}
+                          className="border-t border-border/60 hover:bg-surface-2/40"
                         >
-                          <td className="num px-3 py-2 text-center text-text">{l.cst_doc}</td>
+                          <td className="num whitespace-nowrap px-3 py-2 text-center text-text">
+                            {divergente && <span className="mr-1.5 inline-block size-2 rounded-full bg-warn align-middle" title="Tratamento divergente" />}
+                            {l.cst_doc}
+                          </td>
                           <td className="num px-3 py-2 text-center text-text">{l.cst_entrada}</td>
                           <td className="px-3 py-2 text-text-muted">
                             <span className="num">{l.cfop_entrada}</span>
@@ -498,10 +505,10 @@ export default async function AuditoriaFiscalPage({
                               <span className="ml-1.5 text-[12px]">{descreverCFOP(l.cfop_entrada).desc}</span>
                             )}
                           </td>
-                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${Number(l.itens_com_credito) ? 'text-info' : 'text-text-muted'}`}>
+                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${Number(l.itens_com_credito) ? 'text-text' : 'text-text-muted'}`}>
                             {Number(l.itens_com_credito) ? fmtN(Number(l.itens_com_credito)) : '—'}
                           </td>
-                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${divergente ? 'font-medium text-warn' : 'text-text-muted'}`}>
+                          <td className={`num whitespace-nowrap px-3 py-2 text-right ${divergente ? 'font-semibold text-text' : 'text-text-muted'}`}>
                             {Number(l.itens_sem_credito) ? fmtN(Number(l.itens_sem_credito)) : '—'}
                           </td>
                           <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">{fmtMoeda(Number(l.valor))}</td>
@@ -511,7 +518,7 @@ export default async function AuditoriaFiscalPage({
                   </tbody>
                 </table>
               </div>
-              <p className="px-1 text-[11px] text-text-muted">
+              <p className="px-1 text-[12px] text-text-muted">
                 CST de entrada é como a compra foi classificada no Omie ao dar entrada — é aí que se decide aproveitar ou não o
                 crédito de ICMS. As linhas destacadas têm o <strong>mesmo</strong> CST de origem e CFOP tratados das{' '}
                 <strong>duas</strong> formas no período: isso é uma divergência objetiva da base, não um veredito de erro —

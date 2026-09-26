@@ -42,7 +42,7 @@ export default async function RelatorioMensalPage() {
         description="Gera o relatório mensal em PowerPoint (faturamento, vendas, família/fornecedores, compras/perdas, baixas de estoque) no mesmo formato já enviado hoje pra consultoria -- pra loja atual."
       />
 
-      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 max-w-md">
+      <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-5 max-w-md max-sm:max-w-none">
         <RelatorioMensalForm opcoes={opcoes} podeSincronizarEstrutura={podeSincronizarEstrutura} />
       </div>
     </div>

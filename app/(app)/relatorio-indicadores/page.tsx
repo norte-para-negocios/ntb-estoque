@@ -246,7 +246,13 @@ export default async function RelatorioIndicadoresPage({
     },
   ]
 
-  const corRes = (v: number) => (v >= 0 ? 'text-ok' : 'text-err')
+  // Estilo Apple: resultado só ganha cor quando negativo.
+  const corRes = (v: number) => (v >= 0 ? 'text-text' : 'text-err')
+  // Coluna Total presa à direita no desktop: com muitos meses a matriz rola
+  // na horizontal e o total nunca fica escondido fora da tela.
+  const stickyTotal = 'sm:sticky sm:right-0 sm:z-10 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]'
+  const KPI = 'flex flex-col rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]'
+  const KPI_NUM = 'num mt-1 block text-[22px] font-semibold leading-none tracking-[-0.02em]'
 
   const exportParams = new URLSearchParams()
   if (filtroIni) exportParams.set('data_inicio', filtroIni)
@@ -286,36 +292,36 @@ export default async function RelatorioIndicadoresPage({
         <ChipsPeriodo basePath="/relatorio-indicadores" opcoes={chipsPeriodo} />
       </ListaHeader>
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Faturado <span className="num font-semibold text-text"><Money value={totFat} /></span>
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        <span className={KPI}>
+          Faturado <span className={`${KPI_NUM} text-text`}><Money value={totFat} /></span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Comprado <span className="num font-semibold text-text"><Money value={totComp} /></span>
+        <span className={KPI}>
+          Comprado <span className={`${KPI_NUM} text-text`}><Money value={totComp} /></span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Compras ÷ Fat <span className={`num font-semibold ${corMeta(pctTotal, metaPct)}`}>{fmtPct(pctTotal)}</span>
+        <span className={KPI}>
+          Compras ÷ Fat <span className={`${KPI_NUM} ${corMeta(pctTotal, metaPct)}`}>{fmtPct(pctTotal)}</span>
         </span>
-        <span className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-text-muted">
-          Meta <span className="num font-semibold text-text">≤ {metaPct}%</span>
+        <span className={KPI}>
+          Meta <span className={`${KPI_NUM} text-text`}>≤ {metaPct}%</span>
           {Number.isFinite(pctTotal) && (
-            <span className={`ml-1 font-semibold ${corMeta(pctTotal, metaPct)}`}>
+            <span className={`mt-1 text-[12px] font-semibold ${corMeta(pctTotal, metaPct)}`}>
               {pctTotal <= metaPct ? '· no alvo' : `· ${(pctTotal - metaPct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} p.p. acima`}
             </span>
           )}
         </span>
         {metaRow?.importado_em && (
-          <span className="text-[13px] text-text-muted">Faturamento importado em {fmtQuando(metaRow.importado_em as string)}</span>
+          <span className="self-end pb-1 text-[13px] text-text-muted">Faturamento importado em {fmtQuando(metaRow.importado_em as string)}</span>
         )}
         {filtroAtivo && (
-          <span className="text-[13px] font-medium text-brand">
+          <span className="self-end pb-1 text-[13px] font-medium text-brand">
             Indicadores filtrados — Compras e Faturamento restritos ao mesmo recorte
           </span>
         )}
       </div>
 
       {frioFalhou && (
-        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[13px] text-text-muted">
+        <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
           Falha ao consultar o histórico do Contabo (NFs anteriores a ~90 dias) — Compras
           pode estar subcontado para os meses mais antigos deste período. Recarregue a
           página; se persistir, avise o suporte.
@@ -323,31 +329,31 @@ export default async function RelatorioIndicadoresPage({
       )}
 
       <div className="overflow-x-auto rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-        <table className="w-full min-w-[600px] border-collapse text-sm">
+        <table className="w-full border-collapse text-sm" style={{ minWidth: `${220 + meses.length * 104 + 130}px` }}>
           <thead>
             <tr className="border-b border-border bg-surface">
               <th className={`sticky left-0 z-20 bg-surface text-left ${th}`}>Indicador</th>
               {meses.map((m) => (<th key={m} className={`text-right ${th}`}>{mesLabel(m)}</th>))}
-              <th className={`text-right ${th}`}>Total</th>
+              <th className={`bg-surface text-right ${th} ${stickyTotal}`}>Total</th>
             </tr>
           </thead>
           <tbody>
             {indicadores.map((ind) => (
               <tr
                 key={ind.nome}
-                className={`border-t border-border/60 ${ind.destaque ? 'bg-surface-2/50 font-semibold' : 'hover:bg-surface-2/40'}`}
+                className={`border-t border-border/60 ${ind.destaque ? 'bg-surface-2 font-semibold' : 'hover:bg-surface-2/40'}`}
               >
-                <td className="sticky left-0 z-10 max-w-[240px] truncate bg-surface px-3 py-2 text-text" title={ind.nome}>{ind.nome}</td>
+                <td className={`sticky left-0 z-10 max-w-[240px] truncate px-3 py-2 text-text max-sm:max-w-[150px] ${ind.destaque ? 'bg-surface-2' : 'bg-surface'}`} title={ind.nome}>{ind.nome}</td>
                 {meses.map((m) => {
                   const v = ind.porMes(m)
-                  const cls = ind.tipo === 'res' ? corRes(v) : ind.tipo === 'pct' ? corMeta(v, metaPct) : ind.destaque ? 'text-text' : 'text-text-muted'
+                  const cls = ind.tipo === 'res' ? corRes(v) : ind.tipo === 'pct' ? corMeta(v, metaPct) : 'text-text'
                   return (
                     <td key={m} className={`num whitespace-nowrap px-3 py-2 text-right ${cls}`}>
                       {ind.tipo === 'pct' ? fmtPct(v) : fmtCelOrPct(v, 'money')}
                     </td>
                   )
                 })}
-                <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${ind.tipo === 'res' ? corRes(ind.total) : ind.tipo === 'pct' ? corMeta(ind.total, metaPct) : 'text-text'}`}>
+                <td className={`num whitespace-nowrap px-3 py-2 text-right font-semibold ${ind.destaque ? 'bg-surface-2' : 'bg-surface'} ${stickyTotal} ${ind.tipo === 'res' ? corRes(ind.total) : ind.tipo === 'pct' ? corMeta(ind.total, metaPct) : 'text-text'}`}>
                   {ind.tipo === 'pct' ? fmtPct(ind.total) : fmtMoeda(ind.total)}
                 </td>
               </tr>
@@ -356,7 +362,7 @@ export default async function RelatorioIndicadoresPage({
         </table>
       </div>
 
-      <p className="px-1 text-[11px] text-text-muted">
+      <p className="px-1 text-[13px] text-text-muted">
         Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
         e sem ativo imobilizado (compra de bem para a empresa é investimento, não gasto). &quot;Compras ÷ Faturamento&quot; é
         quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {metaPct}%</span> no alvo,

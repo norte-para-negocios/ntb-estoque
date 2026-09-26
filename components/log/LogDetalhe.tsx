@@ -30,26 +30,19 @@ function Detalhe({ log }: { log: LogRowData }) {
   return (
     <>
       {exp && (
-        <div
-          className={`mb-3 rounded-md border px-3 py-2.5 ${
-            exp.tipo === 'acao'
-              ? 'border-err/30 bg-err/10'
-              : exp.tipo === 'transitorio'
-                ? 'border-warn/30 bg-warn/10'
-                : 'border-border bg-surface-2/50'
-          }`}
-        >
-          <div
-            className={`text-[13px] font-semibold ${
-              exp.tipo === 'acao' ? 'text-err' : exp.tipo === 'transitorio' ? 'text-warn' : 'text-text'
-            }`}
-          >
+        <div className="mb-3 rounded-[var(--r-md)] bg-surface px-3 py-2.5 shadow-[var(--shadow-sm)]">
+          <div className="flex items-center gap-2 text-[14px] font-semibold text-text">
+            <span
+              className={`size-2 shrink-0 rounded-full ${
+                exp.tipo === 'acao' ? 'bg-err' : exp.tipo === 'transitorio' ? 'bg-warn' : 'bg-text-muted'
+              }`}
+            />
             {exp.titulo}
           </div>
           <div className="mt-0.5 text-[13px] text-text">{exp.explicacao}</div>
         </div>
       )}
-      <div className="mb-1 text-[13px] font-medium text-text-muted">
+      <div className="mb-1.5 text-[13px] font-semibold text-text-muted">
         Detalhes técnicos
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -57,7 +50,7 @@ function Detalhe({ log }: { log: LogRowData }) {
           <div className="mb-1 text-[13px] font-medium text-text-muted">
             Requisição
           </div>
-          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
+          <pre className="max-h-64 overflow-auto rounded-[var(--r-md)] bg-surface p-3 font-mono text-[12px] leading-relaxed text-text shadow-[var(--shadow-sm)]">
             {formatar(log.request)}
           </pre>
         </div>
@@ -65,7 +58,7 @@ function Detalhe({ log }: { log: LogRowData }) {
           <div className="mb-1 text-[13px] font-medium text-text-muted">
             Resposta
           </div>
-          <pre className="max-h-64 overflow-auto rounded-md border border-border bg-surface p-2 text-xs text-text">
+          <pre className="max-h-64 overflow-auto rounded-[var(--r-md)] bg-surface p-3 font-mono text-[12px] leading-relaxed text-text shadow-[var(--shadow-sm)]">
             {formatar(log.response)}
           </pre>
         </div>
@@ -91,7 +84,7 @@ export function LogDetalhe({ log }: { log: LogRowData }) {
           {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}
         </td>
         <td className="text-right">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-brand">
+          <span className="inline-flex items-center gap-1 text-[13px] font-medium text-brand">
             {aberto ? 'Ocultar' : 'Detalhes'}
             <ChevronDown
               className={`size-3.5 transition-transform ${aberto ? 'rotate-180' : ''}`}
@@ -115,15 +108,15 @@ export function LogCard({ log }: { log: LogRowData }) {
   const [aberto, setAberto] = useState(false)
 
   return (
-    <div className="px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg">
+    <div className="px-4 py-3">
       <button
         type="button"
         onClick={() => setAberto((a) => !a)}
         className="flex w-full items-center gap-2.5 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-text">{log.model || '-'}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-text-muted">
+          <div className="truncate text-[15px] font-medium text-text">{log.model || '-'}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-none text-text-muted">
             <span className="num">#{log.id}</span>
             <span className="num">
               {new Date(log.created_at).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}

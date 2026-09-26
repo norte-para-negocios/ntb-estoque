@@ -8,7 +8,7 @@ import type { ParceiroOmie } from '@/lib/omie/cliente-fornecedor'
 import { btnClass } from '@/components/ui-kit/Button'
 
 const inputClass =
-  'w-full rounded-[var(--r-md)] border-0 bg-surface-2 py-1.5 pl-9 pr-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40'
+  'h-[34px] w-full rounded-[var(--r-md)] border-0 bg-surface-2 pl-9 pr-3 text-[14px] text-text outline-none transition-shadow placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:text-base'
 
 type Estado = 'inicial' | 'buscando' | 'achou' | 'nao_achou'
 
@@ -101,21 +101,21 @@ export function SintegraBusca() {
 
       {estado === 'achou' && parceiro && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-            <Building2 className="size-4 text-brand" />
-            <span className="text-sm font-semibold text-text">Cadastro encontrado no Omie</span>
+          <div className="flex items-center gap-2 px-4 pb-1 pt-4">
+            <Building2 className="size-[18px] text-brand" />
+            <span className="text-[17px] font-semibold text-text">Cadastro encontrado no Omie</span>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-4 text-[13px] sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 text-[14px] sm:grid-cols-3">
             {campos.map(([label, valor]) => (
               <div key={label}>
                 <div className="text-[13px] text-text-muted">{label}</div>
-                <div className="truncate text-text" title={valor ?? undefined}>
+                <div className={`truncate text-text${label === 'CNPJ/CPF' || label === 'CEP' || label === 'Inscrição estadual' || label === 'Telefone' ? ' num' : ''}`} title={valor ?? undefined}>
                   {valor || '-'}
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-end border-t border-border px-4 py-3">
+          <div className="flex items-center justify-end border-t border-border/60 px-4 py-3">
             <button
               type="button"
               onClick={importar}

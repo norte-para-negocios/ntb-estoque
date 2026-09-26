@@ -3,6 +3,7 @@ import { isAdmin } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { SincronizarBotoes } from './sincronizar-botoes'
+import { btnClass } from '@/components/ui-kit/Button'
 
 interface SaldoRow {
   codigo_produto: number
@@ -106,91 +107,106 @@ export default async function EstoqueLocalTestePage({
     return nomes.get(codigo) || `Produto ${codigo}`
   }
 
-  return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold">Estoque local de teste</h1>
-      <p className="text-sm text-muted-foreground">
-        Só admin. Sem link na navegação principal. Dados aqui nunca aparecem em nenhum relatório real.
-      </p>
+  const th = 'whitespace-nowrap px-4 py-2 text-left text-[13px] font-medium text-text-muted'
+  const td = 'px-4 py-2'
 
-      <form method="get" className="flex gap-2 items-center">
-        <select name="loja" defaultValue={lojaSelecionada} className="border rounded px-2 py-1">
+  return (
+    <div className="space-y-6 p-4 sm:p-6">
+      <div>
+        <h1 className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-text sm:text-[30px]">Estoque local de teste</h1>
+        <p className="mt-1 text-[15px] text-text-muted">
+          Só admin. Sem link na navegação principal. Dados aqui nunca aparecem em nenhum relatório real.
+        </p>
+      </div>
+
+      <form method="get" className="flex items-center gap-2">
+        <select
+          name="loja"
+          defaultValue={lojaSelecionada}
+          className="h-[34px] min-w-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-[14px] text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:h-10 max-sm:flex-1 max-sm:text-base"
+        >
           {(lojas ?? []).map((l) => (
             <option key={l.id} value={l.id}>
               {l.nome_fantasia}
             </option>
           ))}
         </select>
-        <button type="submit" className="border rounded px-3 py-1">
+        <button type="submit" className={`${btnClass('outline')} shrink-0`}>
           Trocar loja
         </button>
       </form>
 
       {lojaSelecionada && <SincronizarBotoes />}
 
-      <section>
-        <h2 className="font-semibold mb-2">Saldo atual ({saldos.length} produtos)</h2>
+      <section className="space-y-2">
+        <h2 className="text-[17px] font-semibold text-text">
+          Saldo atual (<span className="num">{saldos.length}</span> produtos)
+        </h2>
         {lojaSelecionada && (
-          <p className="text-sm text-muted-foreground mb-2">
-            Ficha técnica: {fichaTecnicaCobertos} de {totalProdutosLoja} produtos com estrutura sincronizada
+          <p className="text-[13px] text-text-muted">
+            Ficha técnica: <span className="num">{fichaTecnicaCobertos}</span> de <span className="num">{totalProdutosLoja}</span> produtos com estrutura sincronizada
             {totalProdutosLoja > 0 && (
-              <> ({((fichaTecnicaCobertos / totalProdutosLoja) * 100).toFixed(1)}%)</>
+              <> (<span className="num">{((fichaTecnicaCobertos / totalProdutosLoja) * 100).toFixed(1)}%</span>)</>
             )}
             {' '}-- produtos sem estrutura não deduzem estoque local numa venda (baixa vira no-op silencioso).
           </p>
         )}
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-1">Produto</th>
-              <th className="py-1">Código</th>
-              <th className="py-1">Saldo</th>
-              <th className="py-1">Atualizado em</th>
-            </tr>
-          </thead>
-          <tbody>
-            {saldos.map((s) => (
-              <tr key={s.codigo_produto} className="border-b">
-                <td className="py-1">{nomeProduto(s.codigo_produto)}</td>
-                <td className="py-1 text-muted-foreground">{s.codigo_produto}</td>
-                <td className={`py-1 ${s.saldo < 0 ? 'text-red-600 font-semibold' : ''}`}>{s.saldo}</td>
-                <td className="py-1">{new Date(s.atualizado_em).toLocaleString('pt-BR')}</td>
+        <div className="overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
+          <table className="w-full min-w-[600px] border-collapse text-[14px]">
+            <thead>
+              <tr className="border-b border-border/60">
+                <th className={th}>Produto</th>
+                <th className={th}>Código</th>
+                <th className={`${th} text-right`}>Saldo</th>
+                <th className={th}>Atualizado em</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {saldos.map((s) => (
+                <tr key={s.codigo_produto} className="border-b border-border/60 last:border-0 hover:bg-surface-2/40">
+                  <td className={`${td} text-text`}>{nomeProduto(s.codigo_produto)}</td>
+                  <td className={`${td} num text-text-muted`}>{s.codigo_produto}</td>
+                  <td className={`${td} num text-right ${s.saldo < 0 ? 'font-semibold text-err' : 'text-text'}`}>{s.saldo}</td>
+                  <td className={`${td} num whitespace-nowrap text-text-muted`}>{new Date(s.atualizado_em).toLocaleString('pt-BR')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section>
-        <h2 className="font-semibold mb-2">Movimentos recentes</h2>
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="py-1">Quando</th>
-              <th className="py-1">Produto</th>
-              <th className="py-1">Tipo</th>
-              <th className="py-1">Qtde</th>
-              <th className="py-1">Saldo após</th>
-              <th className="py-1">OP origem</th>
-              <th className="py-1">Pedido</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movimentos.map((m) => (
-              <tr key={m.id} className="border-b">
-                <td className="py-1">{new Date(m.criado_em).toLocaleString('pt-BR')}</td>
-                <td className="py-1">
-                  {nomeProduto(m.codigo_produto)} <span className="text-muted-foreground">({m.codigo_produto})</span>
-                </td>
-                <td className="py-1">{m.tipo}</td>
-                <td className="py-1">{m.quantidade}</td>
-                <td className="py-1">{m.saldo_apos}</td>
-                <td className="py-1">{m.origem_n_cod_op}</td>
-                <td className="py-1">{m.pedido_ref}</td>
+      <section className="space-y-2">
+        <h2 className="text-[17px] font-semibold text-text">Movimentos recentes</h2>
+        <div className="overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
+          <table className="w-full min-w-[860px] border-collapse text-[14px]">
+            <thead>
+              <tr className="border-b border-border/60">
+                <th className={th}>Quando</th>
+                <th className={th}>Produto</th>
+                <th className={th}>Tipo</th>
+                <th className={`${th} text-right`}>Qtde</th>
+                <th className={`${th} text-right`}>Saldo após</th>
+                <th className={th}>OP origem</th>
+                <th className={th}>Pedido</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {movimentos.map((m) => (
+                <tr key={m.id} className="border-b border-border/60 last:border-0 hover:bg-surface-2/40">
+                  <td className={`${td} num whitespace-nowrap text-text-muted`}>{new Date(m.criado_em).toLocaleString('pt-BR')}</td>
+                  <td className={`${td} text-text`}>
+                    {nomeProduto(m.codigo_produto)} <span className="num text-text-muted">({m.codigo_produto})</span>
+                  </td>
+                  <td className={`${td} text-text`}>{m.tipo}</td>
+                  <td className={`${td} num text-right text-text`}>{m.quantidade}</td>
+                  <td className={`${td} num text-right text-text`}>{m.saldo_apos}</td>
+                  <td className={`${td} num text-text-muted`}>{m.origem_n_cod_op}</td>
+                  <td className={`${td} num text-text-muted`}>{m.pedido_ref}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   )
