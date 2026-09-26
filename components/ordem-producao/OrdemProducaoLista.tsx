@@ -126,7 +126,7 @@ export function OrdemProducaoLista({
 
       {/* Desktop: tabela com steppers na linha */}
       <div className="hidden lg:block">
-        <DataTable>
+        <DataTable minLargura="max-2xl:min-w-[1240px]">
           <thead>
             <tr>
               {temSelecao && (
