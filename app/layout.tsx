@@ -4,10 +4,10 @@ import { MotionProvider } from "@/components/MotionProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NTB - Estoque",
+  title: "Norte Estoque",
   description: "Sistema de gestão de estoque integrado ao Omie",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "NTB Estoque" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Norte Estoque" },
 };
 
 export const viewport: Viewport = {

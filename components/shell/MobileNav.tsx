@@ -120,10 +120,10 @@ export function MobileNav({
           <Menu className="size-5" />
         </button>
         <Image
-          src="/ntb-logo.png"
-          alt="NTB"
-          width={100}
-          height={32}
+          src="/norte-estoque-logo.png"
+          alt="Norte Estoque"
+          width={569}
+          height={240}
           className="logo-adapt h-6 w-auto"
         />
         {onBuscar && (
@@ -162,10 +162,10 @@ export function MobileNav({
           style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
           <Image
-            src="/ntb-logo.png"
-            alt="NTB"
-            width={100}
-            height={32}
+            src="/norte-estoque-logo.png"
+            alt="Norte Estoque"
+            width={569}
+            height={240}
             className="logo-adapt h-6 w-auto"
           />
           <button

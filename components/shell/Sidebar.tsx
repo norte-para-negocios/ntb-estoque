@@ -148,10 +148,10 @@ export function Sidebar({
         <div className="flex w-64 min-w-64 flex-col h-full">
           <div className="flex h-16 items-center justify-between gap-2 px-5">
             <Image
-              src="/ntb-logo.png"
-              alt="NTB"
-              width={110}
-              height={36}
+              src="/norte-estoque-logo.png"
+              alt="Norte Estoque"
+              width={569}
+              height={240}
               priority
               className="logo-adapt h-7 w-auto"
             />
@@ -226,10 +226,10 @@ function FloatingToggle({ visivel, onClick }: { visivel: boolean; onClick: () =>
     >
       <PanelLeftOpen className="size-[18px] text-brand" strokeWidth={2} />
       <Image
-        src="/ntb-logo.png"
-        alt="NTB"
-        width={64}
-        height={22}
+        src="/norte-estoque-logo.png"
+        alt="Norte Estoque"
+        width={569}
+        height={240}
         className="logo-adapt h-4 w-auto"
       />
     </button>

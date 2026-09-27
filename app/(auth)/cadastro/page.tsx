@@ -19,7 +19,7 @@ export default function CadastroPage() {
     <div className="w-full max-w-md">
       <div className="rounded-[var(--r-xl)] bg-surface p-6 shadow-[var(--shadow-md)] sm:p-8">
         <div className="mb-8 flex justify-center">
-          <Image src="/ntb-logo.png" alt="NTB - Estoque" width={180} height={60} priority className="logo-adapt h-14 w-auto" />
+          <Image src="/norte-estoque-logo.png" alt="Norte Estoque" width={569} height={240} priority className="logo-adapt h-14 w-auto" />
         </div>
 
         {state?.ok ? (
