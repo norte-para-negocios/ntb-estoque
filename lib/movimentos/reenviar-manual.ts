@@ -70,7 +70,8 @@ export async function reenviarMovimentoManual(
       id_prod: mov.id_prod,
       cod_int_ajuste: `MOV-${mov.id}`,
       data: dataOmieBR(mov.data),
-      quan: mov.quan,
+      // Omie exige quan > 0; a direcao vem de `tipo` (ENT/SAI). No banco o manual grava SAI negativo.
+      quan: Math.abs(mov.quan),
       valor,
       obs: mov.obs,
       origem: 'AJU',
