@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
+import { type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
+import { enviarNfceOuEnfileirar } from '@/lib/vendas-integracao'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 
 // Rota externa (não-sessão) pro ntb-vendas disparar o registro de uma
@@ -41,25 +42,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ skipped: true, reason: 'NFC-e de homologação não é registrada em loja real' })
   }
 
-  try {
-    const resultado = await incluirNfce(loja, body)
-    await logIntegrationAttempt({
-      loja_id: loja.id,
-      model: 'IncluirNfce [Norte Para Negócios]',
-      request: `chNFe=${body.chNFe} vNF=${body.vNF}`,
-      response: JSON.stringify(resultado),
-      code: '0',
-    })
-    return NextResponse.json({ ok: true, resultado })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Falha desconhecida na chamada Omie'
-    await logIntegrationAttempt({
-      loja_id: loja.id,
-      model: 'IncluirNfce [Norte Para Negócios]',
-      request: `chNFe=${body.chNFe} vNF=${body.vNF}`,
-      error: true,
-      error_message: msg,
-    })
-    return NextResponse.json({ ok: false, reason: msg })
-  }
+  // Falha transitoria (frequencia/rede) vai pra fila vendas_integracao_fila e o
+  // cron retry-integracao-vendas reenvia (2026-09-28).
+  const r = await enviarNfceOuEnfileirar(supabase, loja, body)
+  await logIntegrationAttempt({
+    loja_id: loja.id,
+    model: 'IncluirNfce [Norte Para Negócios]',
+    request: `chNFe=${body.chNFe} vNF=${body.vNF}`,
+    response: r.ok ? JSON.stringify(r.resultado) : undefined,
+    code: r.ok ? '0' : undefined,
+    error: !r.ok,
+    error_message: r.ok ? undefined : (r.naFila ? '[na fila] ' : '') + r.reason,
+  })
+  return NextResponse.json(r.ok ? { ok: true, resultado: r.resultado } : { ok: false, naFila: r.naFila, reason: r.reason })
 }

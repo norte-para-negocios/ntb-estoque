@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
+import { processarItemVenda, type ResultadoItemVenda } from '@/lib/vendas-integracao'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -69,6 +70,25 @@ export async function POST(request: Request) {
   }
 
   const dData = hojeBR()
+
+  // Loja REAL (2026-09-28, virada do Sertao pra loja 4): OP + saida de estoque por
+  // item, com fila pra falha transitoria -- ver lib/vendas-integracao.ts. Loja de
+  // teste segue no fluxo simulado original abaixo, sem mudanca.
+  if (!loja.is_test) {
+    const sufixo = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
+    const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixo
+    const itensReais: ResultadoItemVenda[] = []
+    for (let i = 0; i < body.itens.length; i++) {
+      const item = body.itens[i]
+      if (!item?.codigo || !item.quantidade || item.quantidade <= 0) {
+        itensReais.push({ codigo: item?.codigo ?? '?', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Item inválido' })
+        continue
+      }
+      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i }))
+    }
+    return NextResponse.json({ lojaId: loja.id, resultados: itensReais })
+  }
+
   const resultados: ResultadoItem[] = []
 
   // Sequencial (nao Promise.all): evita "consumo redundante" do Omie por chamadas

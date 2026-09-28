@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -56,4 +56,21 @@ test('bloqueioDaResposta: segundos da msg, MISUSE sem segundos usa padrão, rest
   assert.equal(bloqueioDaResposta('ERROR: API bloqueada por consumo indevido. Tente novamente em 300 segundos.', undefined), 300)
   assert.equal(bloqueioDaResposta('qualquer texto', 'MISUSE_API_PROCESS'), 900)
   assert.equal(bloqueioDaResposta('ERROR: produto inativo', 'SOAP-ENV:Client-5113'), null)
+})
+
+test('classificarErroOmie: casos reais do log de integracao', () => {
+  assert.equal(classificarErroOmie('ERROR: Este produto não possui nenhum item na sua estrutura. Só é possível gerar uma Ordem de Produção de produtos com a estrutura preenchida.'), 'sem_estrutura')
+  assert.equal(classificarErroOmie('ERROR: Consumo redundante detectado. Aguarde 49 segundos para tentar novamente (REDUNDANT).'), 'transitorio')
+  assert.equal(classificarErroOmie('ERROR: Já existe uma requisição desse método sendo executada e você pode tentar novamente em alguns instantes. (1)'), 'transitorio')
+  assert.equal(classificarErroOmie('Omie HTTP 418'), 'transitorio')
+  assert.equal(classificarErroOmie('SOAP-ERROR: Internal Error [PBB]'), 'transitorio')
+  assert.equal(classificarErroOmie('fetch failed'), 'transitorio')
+  assert.equal(classificarErroOmie('ERROR: Já existe uma Ordem de Produção cadastrada com o Código de Integração [NTBV123]!'), 'ja_existe')
+  assert.equal(classificarErroOmie('ERROR: Produto não cadastrado!'), 'permanente')
+})
+
+test('proximaTentativa: 10, 20, 40, 80, 120 min e para em 120', () => {
+  const t0 = Date.UTC(2026, 8, 28, 12, 0, 0)
+  const min = (n: number) => (new Date(proximaTentativa(n, t0)).getTime() - t0) / 60000
+  assert.deepEqual([1, 2, 3, 4, 5, 9].map(min), [10, 20, 40, 80, 120, 120])
 })

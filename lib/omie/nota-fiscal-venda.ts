@@ -43,7 +43,9 @@ function montarDetItem(item: IncluirNfceItem, seqItem: number) {
   return {
     seqItem,
     lCanc: 'N',
-    lNaoMovEstoque: 'N',
+    // 'S' (2026-09-28): a baixa de estoque ja acontece na venda (OP + saida, ver
+    // lib/vendas-integracao.ts). Movimentar aqui de novo baixaria em dobro.
+    lNaoMovEstoque: 'S',
     prodIdent: { cProd: item.cProd },
     prod: {
       cProd: item.cProd,
@@ -60,7 +62,7 @@ function montarDetItem(item: IncluirNfceItem, seqItem: number) {
   }
 }
 
-export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
+async function incluirNfceUmaVez(loja: LojaOmie, payload: IncluirNfcePayload, gerarTitulo: boolean) {
   const vProdTotal = payload.itens.reduce((acc, i) => acc + Number((i.qCom * i.vUnCom).toFixed(2)), 0)
   const vTaxa = Math.max(0, Number((payload.vNF - vProdTotal).toFixed(2)))
 
@@ -98,7 +100,7 @@ export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
         pagIdent: { pag: p.tPag },
         pag: { tPag: p.tPag, vPag: p.vPag },
         lCanc: 'N',
-        lNaoGerarTitulo: 'S',
+        lNaoGerarTitulo: gerarTitulo ? 'N' : 'S',
       })),
       nfce: {
         nfceXml: payload.nfceXml,
@@ -107,4 +109,23 @@ export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
       },
     },
   })
+}
+
+/**
+ * Registra a NFC-e na Omie gerando o titulo financeiro (pedido do dono, 2026-09-28:
+ * "registrar tudo no financeiro do Omie"). Se o Omie recusar por algo do titulo
+ * (conta corrente, categoria, cliente, forma de pagamento sem configuracao), registra
+ * a nota sem titulo pra nao perder o cupom e devolve `semTitulo` com o motivo --
+ * aparece no log de integracao pra corrigir a configuracao no Omie.
+ */
+export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
+  try {
+    const r = await incluirNfceUmaVez(loja, payload, true)
+    return { ...r, comTitulo: true as const }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (!/t.tulo|conta corrente|categoria|cliente|forma de pagamento|financeir|lan.amento/i.test(msg)) throw e
+    const r = await incluirNfceUmaVez(loja, payload, false)
+    return { ...r, comTitulo: false as const, semTitulo: msg }
+  }
 }

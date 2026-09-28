@@ -38,6 +38,9 @@ hit /api/cron/retry-op-conclusao
 # chamadas de IncluirAjusteEstoque nao tinham retry nenhum, so reenvio manual.
 hit /api/cron/retry-ajustes-inventario
 hit /api/cron/retry-ajustes-movimentos
+# Fila da integracao com o ntb-vendas (2026-09-28): OP/NFC-e de venda que o
+# Omie recusou por frequencia/rede na hora -- ver lib/vendas-integracao.ts.
+hit /api/cron/retry-integracao-vendas
 # Achado real (Task 17 da auditoria 2026-08-09): sync-ajustes nunca foi
 # migrado pro crontab do Contabo -- so existia no vercel.json (inativo desde
 # que producao saiu do Vercel), morto ha 7+ dias sem nenhum sinal de erro.

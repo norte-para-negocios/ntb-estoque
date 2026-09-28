@@ -83,3 +83,26 @@ export function decidirErroItemInventario(
     descricao_status: msg.slice(0, 500),
   }
 }
+
+// Integracao de vendas (2026-09-28, lib/vendas-integracao.ts): o que fazer quando
+// o Omie recusa a OP/NFC-e de uma venda.
+export type TipoErroOmie = 'sem_estrutura' | 'ja_existe' | 'transitorio' | 'permanente'
+
+export function classificarErroOmie(msg: string): TipoErroOmie {
+  if (/n.o possui nenhum item na sua estrutura|estrutura preenchida/i.test(msg)) return 'sem_estrutura'
+  if (
+    /consumo redundante|REDUNDANT|j. existe uma requisi|bloquead|MISUSE|consumo indevido|HTTP (4(08|18|29)|5\d\d)|timeout|timed out|ECONN|ETIMEDOUT|fetch failed|socket|tente novamente|Internal Error|SOAP-ERROR|Falha desconhecida/i.test(
+      msg
+    )
+  )
+    return 'transitorio'
+  if (/j. (existe|cadastrad).*(integra|cCodIntOP|ordem de produ)/i.test(msg)) return 'ja_existe'
+  return 'permanente'
+}
+
+// Espera antes da proxima tentativa: 10, 20, 40, 80, 120, 120... minutos.
+export function proximaTentativa(tentativas: number, agora = Date.now()): string {
+  const min = Math.min(10 * 2 ** Math.max(0, tentativas - 1), 120)
+  return new Date(agora + min * 60_000).toISOString()
+}
+
