@@ -117,6 +117,7 @@ type MovimentoManualElegivel = {
   id_prod: number
   codigo_local_estoque: number
   tipo: 'ENT' | 'SAI'
+  motivo: string | null
   obs: string | null
   data: string | null
   quan: number | null
@@ -275,7 +276,7 @@ export async function retryMovimentosManuaisPendentes(
 
     const { data: itensElegiveis, error: erroItens } = await supabase
       .from('movimentos')
-      .select('id, id_prod, codigo_local_estoque, tipo, obs, data, quan, id_ajuste, tentativas')
+      .select('id, id_prod, codigo_local_estoque, tipo, motivo, obs, data, quan, id_ajuste, tentativas')
       .in('id', idsSelecionados)
 
     if (erroItens) {
@@ -354,6 +355,7 @@ export async function retryMovimentosManuaisPendentes(
           id_prod: mov.id_prod,
           quan: mov.quan,
           tipo: mov.tipo,
+          motivo: mov.motivo,
           obs: mov.obs,
           data: mov.data ?? '',
           tentativas: mov.tentativas,

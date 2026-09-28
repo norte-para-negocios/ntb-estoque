@@ -133,7 +133,7 @@ async function darSaida(
       loja_id: loja.id,
       tipo: 'SAI',
       origem: 'AJU',
-      motivo: 'SAI',
+      motivo: 'PDV',
       data,
       id_prod: codigoProduto,
       codigo_local_estoque: local,
@@ -145,7 +145,7 @@ async function darSaida(
     .single<{ id: number; tentativas: number | null }>()
   if (error || !mov) return { ok: false, status: 'Erro', erro: error?.message ?? 'Falha ao gravar movimento' }
   const r = await reenviarMovimentoManual(
-    { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', obs, data, tentativas: mov.tentativas },
+    { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', obs, data, tentativas: mov.tentativas },
     loja,
     loja.id,
     { auditar: false }

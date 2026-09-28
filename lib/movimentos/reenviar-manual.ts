@@ -9,12 +9,17 @@ import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/cl
 import { dataOmieBR } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 
+// Valores que o Omie aceita na tag `motivo` do IncluirAjusteEstoque.
+const MOTIVOS_OMIE = new Set(['INV', 'OPS', 'PER', 'PDV'])
+
 export type MovimentoManualRow = {
   id: number
   codigo_local_estoque: number
   id_prod: number
   quan: number
   tipo: 'ENT' | 'SAI'
+  /** Motivo do ajuste no Omie (INV/OPS/PER/PDV). Venda do ntb-vendas grava 'PDV'. */
+  motivo?: string | null
   obs: string | null
   data: string // data de criacao do movimento (coluna `data`); vira dataOmieBR(data) no lancamento
   tentativas: number | null
@@ -70,7 +75,7 @@ export async function reenviarMovimentoManual(
       obs: mov.obs,
       origem: 'AJU',
       tipo: mov.tipo,
-      motivo: mov.tipo,
+      motivo: mov.motivo && MOTIVOS_OMIE.has(mov.motivo) ? mov.motivo : mov.tipo,
     }
 
     const res = await omieRequest<{
