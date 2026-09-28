@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const r = await enviarNfceOuEnfileirar(supabase, loja, body)
   await logIntegrationAttempt({
     loja_id: loja.id,
-    model: 'IncluirNfce [Norte Para Negócios]',
+    model: 'ImportarNFCe [Norte Para Negócios]',
     request: `chNFe=${body.chNFe} vNF=${body.vNF}`,
     response: r.ok ? JSON.stringify(r.resultado) : undefined,
     code: r.ok ? '0' : undefined,

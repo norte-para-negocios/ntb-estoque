@@ -1,6 +1,8 @@
+import { createHash } from 'crypto'
 import { omieRequest, type LojaOmie } from './client'
 
-// Payload do método IncluirNfce (serviço produtos/cupomfiscalincluir/),
+// Payload que o ntb-vendas manda (formato do antigo IncluirNfce; hoje so
+// chNFe e nfceXml vao pro Omie, via ImportarNFCe -- ver abaixo),
 // campos confirmados na documentação oficial da Omie (fetch feito em
 // 2026-09-05, ver docs/superpowers/specs/2026-09-05-envio-nota-fiscal-
 // omie-design.md no ntb-vendas). NÃO existe campo de observação/texto
@@ -38,77 +40,52 @@ export interface IncluirNfcePayload {
   vNF: number // valor total da nota
 }
 
-function montarDetItem(item: IncluirNfceItem, seqItem: number) {
-  const vProd = Number((item.qCom * item.vUnCom).toFixed(2))
-  return {
-    seqItem,
-    lCanc: 'N',
-    // 'S' (2026-09-28): a baixa de estoque ja acontece na venda (OP + saida, ver
-    // lib/vendas-integracao.ts). Movimentar aqui de novo baixaria em dobro.
-    lNaoMovEstoque: 'S',
-    prodIdent: { cProd: item.cProd },
-    prod: {
-      cProd: item.cProd,
-      xProd: item.xProd,
-      NCM: item.ncm,
-      CFOP: item.cfop,
-      cUn: 'UN',
-      nQuant: item.qCom,
-      vUnit: item.vUnCom,
-      vProd,
-      vDesc: 0,
-      vAcresc: 0,
-    },
-  }
+// Registro na Omie via ImportarNFCe (servico produtos/nfce/) -- trocado em
+// 2026-09-28 depois do 1o teste real na loja 4: o IncluirNfce montado a mao
+// (cupomfiscalincluir) era recusado ("Tag [CPROD] nao faz parte de prodIdent")
+// e ainda exigiria emissor/caixa/conta/categoria. O ImportarNFCe le itens,
+// totais e pagamentos do proprio XML autorizado. Validado ao vivo na loja 4:
+// cupom criado + titulo no contas a receber; ExcluirCupom remove os dois.
+// Regras descobertas no teste:
+// - nfceMd5 e o MD5 do XML em LATIN-1 (em UTF-8 o Omie recusa "MD5 diferente").
+// - todo cProd do XML precisa existir como produto no Omie (erro 5445 senao);
+//   o NCM do XML pode ser diferente do cadastro.
+// - resposta HTTP 200 com cCodStatus != "0" e erro (omieRequest nao lanca).
+const EMISSOR = { emiNome: 'NORTEVENDAS', emiVersao: '1.0', emiId: '01' }
+
+type ImportarNfceResposta = {
+  idImportacao?: number
+  idCupom?: number
+  idLote?: number
+  cCodStatus?: string
+  cDesStatus?: string
 }
 
-async function incluirNfceUmaVez(loja: LojaOmie, payload: IncluirNfcePayload, gerarTitulo: boolean) {
-  const vProdTotal = payload.itens.reduce((acc, i) => acc + Number((i.qCom * i.vUnCom).toFixed(2)), 0)
-  const vTaxa = Math.max(0, Number((payload.vNF - vProdTotal).toFixed(2)))
-
-  return omieRequest<{ status: string }>({
+async function importarNfceUmaVez(loja: LojaOmie, payload: IncluirNfcePayload, gerarTitulo: boolean) {
+  const r = await omieRequest<ImportarNfceResposta>({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
     omie_app_secret: loja.omie_app_secret,
     is_test: loja.is_test,
-    endpoint: 'v1/produtos/cupomfiscalincluir',
-    call: 'IncluirNfce',
+    endpoint: 'v1/produtos/nfce',
+    call: 'ImportarNFCe',
     data: {
-      NFe: {
-        chNFe: payload.chNFe,
-        nNF: payload.nNF,
-        serie: payload.serie,
-        dEmi: payload.dEmi,
-        hEmi: payload.hEmi,
-        tpAmb: payload.tpAmb,
-        tpEmis: 1,
-        lCanc: 'N',
-        det: payload.itens.map((item, idx) => montarDetItem(item, idx + 1)),
-        total: {
-          vItem: vProdTotal,
-          vProd: vProdTotal,
-          vDesc: 0,
-          vAcresc: 0,
-          vICMS: 0,
-          vCF: 0,
-          vTaxa,
-          vTotTrib: 0,
-        },
-      },
-      formasPag: payload.pagamentos.map((p, idx) => ({
-        seqPag: idx + 1,
-        pagIdent: { pag: p.tPag },
-        pag: { tPag: p.tPag, vPag: p.vPag },
-        lCanc: 'N',
-        lNaoGerarTitulo: gerarTitulo ? 'N' : 'S',
-      })),
-      nfce: {
-        nfceXml: payload.nfceXml,
-        nfceMd5: payload.nfceMd5,
-        nfceProt: payload.nfceProt,
-      },
+      ...EMISSOR,
+      chNFe: payload.chNFe,
+      nfceXml: payload.nfceXml,
+      nfceMd5: createHash('md5').update(Buffer.from(payload.nfceXml, 'latin1')).digest('hex'),
+      cAcaoCliente: 'CONSUMIDOR',
+      // 'S': a baixa de estoque ja acontece na venda (OP + saida, ver
+      // lib/vendas-integracao.ts). Movimentar aqui de novo baixaria em dobro.
+      cNaoMovEstoque: 'S',
+      cNaoGerarTitulo: gerarTitulo ? 'N' : 'S',
+      cIncluirProduto: 'N',
     },
   })
+  if (!loja.is_test && r?.cCodStatus !== undefined && String(r.cCodStatus) !== '0') {
+    throw new Error(`ImportarNFCe ${r.cCodStatus}: ${r.cDesStatus ?? 'erro sem descricao'}`)
+  }
+  return r
 }
 
 /**
@@ -117,15 +94,19 @@ async function incluirNfceUmaVez(loja: LojaOmie, payload: IncluirNfcePayload, ge
  * (conta corrente, categoria, cliente, forma de pagamento sem configuracao), registra
  * a nota sem titulo pra nao perder o cupom e devolve `semTitulo` com o motivo --
  * aparece no log de integracao pra corrigir a configuracao no Omie.
+ * Nota ja importada antes (ex.: reenvio da fila depois de timeout) conta como sucesso.
  */
 export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
   try {
-    const r = await incluirNfceUmaVez(loja, payload, true)
+    const r = await importarNfceUmaVez(loja, payload, true)
     return { ...r, comTitulo: true as const }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (!/t.tulo|conta corrente|categoria|cliente|forma de pagamento|financeir|lan.amento/i.test(msg)) throw e
-    const r = await incluirNfceUmaVez(loja, payload, false)
+    if (/j. (foi )?(importad|cadastrad|inclu.d)|j. existe|duplicad/i.test(msg)) {
+      return { cCodStatus: '0', cDesStatus: msg, jaImportada: true as const, comTitulo: true as const }
+    }
+    if (!/t.tulo|conta corrente|categoria|forma de pagamento|financeir|lan.amento|parcela/i.test(msg)) throw e
+    const r = await importarNfceUmaVez(loja, payload, false)
     return { ...r, comTitulo: false as const, semTitulo: msg }
   }
 }
