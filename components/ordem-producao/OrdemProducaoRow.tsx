@@ -61,7 +61,7 @@ export interface OPData {
   podeConcluir?: boolean // concluir OP aberta
   podeReverter?: boolean // reverter OP concluida
   ingredientes?: { cod: number; nome: string; unidade: string; qtd: number }[]
-  /** Só populado na loja de teste (ver lojaIsTest em page.tsx) — OP criada via
+  /** Populado quando a OP foi criada via
    * a integração do ntb-vendas (app/api/integracao/ordem-producao/route.ts). */
   origemNtbVendas?: boolean
   ambienteVenda?: 'homologacao' | 'producao' | null
@@ -73,15 +73,14 @@ export interface OPData {
 function OrigemBadge({ op, className = '' }: { op: OPData; className?: string }) {
   if (!op.origemNtbVendas) return null
   const homolog = op.ambienteVenda === 'homologacao'
-  // Texto cinza 12px numa linha, com ponto: laranja = homologação, verde = produção.
-  const ponto = homolog ? 'bg-warn' : op.ambienteVenda === 'producao' ? 'bg-ok' : 'bg-info'
+  // Etiqueta preenchida (chama atenção): distingue de cara a OP que veio da venda das criadas à mão/pelo Omie.
   return (
     <span
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] leading-none text-text-muted ${className}`}
-      title="Ordem de Produção criada automaticamente pelo NTB Vendas"
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-fill px-2.5 py-1 text-[11px] font-semibold leading-none text-white ${className}`}
+      title="Ordem de Produção criada automaticamente pelo Norte Vendas"
     >
-      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${ponto}`} />
-      NTB Vendas{op.ambienteVenda ? ` · ${homolog ? 'Homolog.' : 'Produção'}` : ''}
+      <span aria-hidden>🛒</span>
+      Veio do Norte Vendas{homolog ? ' · Homolog.' : ''}
     </span>
   )
 }

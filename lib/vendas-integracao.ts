@@ -92,7 +92,16 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     if (nCodOP) return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
     return { ok: false, semEstrutura: tipoErro === 'sem_estrutura', erro: msg, tipoErro }
   } finally {
-    if (nCodOP && !loja.is_test) await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+    if (nCodOP && !loja.is_test) {
+      await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+      // Marca a origem na OP local ("Venda ntb-vendas #pedido [Produção]"): a tela de OPs mostra "Norte Vendas".
+      // O sync do Omie não sobrescreve `observacao`, então a marca fica.
+      await supabase
+        .from('ordens_producao')
+        .update({ observacao: p.obs })
+        .eq('loja_id', loja.id)
+        .eq('identificacao_n_cod_op', nCodOP)
+    }
   }
 }
 

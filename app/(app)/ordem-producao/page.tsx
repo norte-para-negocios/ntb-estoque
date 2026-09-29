@@ -166,7 +166,7 @@ export default async function OrdemProducaoPage({
     // lojaIsTest acima); a observação grava "Venda ntb-vendas #<pedido>
     // [Homologação|Produção]" no momento da criação (ver
     // app/api/integracao/ordem-producao/route.ts).
-    if (lojaIsTest && sp.origem === 'ntb-vendas') q = q.ilike('observacao', 'Venda ntb-vendas%')
+    if (sp.origem === 'ntb-vendas') q = q.ilike('observacao', 'Venda ntb-vendas%')
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
     // Filtro de status granular: prevista / pendente / atrasada / concluida.
     // "pendente" = data = hoje (nao concluida); "prevista" = data futura; "atrasada" = data passada.
@@ -666,20 +666,14 @@ export default async function OrdemProducaoPage({
               podeConcluir,
               podeReverter,
               ingredientes: ingredientesMap.get(op.id) ?? [],
-              // Origem "ntb-vendas" (2026-08-16) — só relevante/mostrado na loja
-              // de teste (lojaIsTest), derivado do texto de observacao gravado
-              // em app/api/integracao/ordem-producao/route.ts no momento da
-              // criação. Loja real nunca recebe esses campos (undefined).
-              ...(lojaIsTest
-                ? {
-                    origemNtbVendas: !!op.observacao?.startsWith('Venda ntb-vendas'),
-                    ambienteVenda: op.observacao?.includes('[Homologação]')
-                      ? ('homologacao' as const)
-                      : op.observacao?.includes('[Produção]')
-                        ? ('producao' as const)
-                        : null,
-                  }
-                : {}),
+              // Origem "ntb-vendas": derivada do texto de observacao gravado na criação
+              // (lib/vendas-integracao.ts) — mostrada em todas as lojas (pedido do dono, 2026-09-29).
+              origemNtbVendas: !!op.observacao?.startsWith('Venda ntb-vendas'),
+              ambienteVenda: op.observacao?.includes('[Homologação]')
+                ? ('homologacao' as const)
+                : op.observacao?.includes('[Produção]')
+                  ? ('producao' as const)
+                  : null,
             }
           })
           const cabecalhoDesktop = (
