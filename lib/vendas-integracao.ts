@@ -68,8 +68,8 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
       loja_id: loja.id,
       model: 'OrdemProducao',
       request: `venda codigo=${p.codigo} qtde=${p.quantidade} · ${p.obs ?? ''}`.slice(0, 500),
+      // `code` é varchar(3): o nº da OP (10 dígitos) só vai no response, senão o insert do log falha em silêncio.
       response: `nCodOP=${nCodOP}`,
-      code: String(nCodOP),
     })
     return { ok: true, nCodOP }
   } catch (e) {

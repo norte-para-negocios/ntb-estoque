@@ -38,13 +38,13 @@ export async function estornarVenda(supabase: SupabaseClient, loja: LojaOmie, pe
   // 2) ordens de produção geradas por esta venda
   const { data: logsOp } = await supabase
     .from('integration_attempts')
-    .select('code')
+    .select('response')
     .eq('loja_id', loja.id)
     .eq('model', 'OrdemProducao')
     .eq('error', false)
     .like('request', marca)
     .like('response', 'nCodOP=%')
-  const codigosOp = [...new Set((logsOp ?? []).map((l) => Number(l.code)).filter((n) => Number.isFinite(n) && n > 0))]
+  const codigosOp = [...new Set((logsOp ?? []).map((l) => Number(String(l.response).replace('nCodOP=', ''))).filter((n) => Number.isFinite(n) && n > 0))]
   for (const nCodOP of codigosOp) {
     try {
       // Concluída (é como nasce): reverte a conclusão antes de excluir. Se já estava
