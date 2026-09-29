@@ -110,3 +110,69 @@ export async function incluirNfce(loja: LojaOmie, payload: IncluirNfcePayload) {
     return { ...r, comTitulo: false as const, semTitulo: msg }
   }
 }
+
+/**
+ * Cancelamento da NFC-e no Omie (2026-09-29): a nota cancelada na SEFAZ nao pode
+ * continuar como cupom + titulo no Omie. O idCupom vem do log da importacao
+ * (integration_attempts guarda chNFe no request e a resposta do ImportarNFCe).
+ * ExcluirCupom apaga cupom e titulo (testado na loja 4 em 28/09).
+ */
+export async function excluirCupomNfce(
+  supabase: import('@supabase/supabase-js').SupabaseClient,
+  loja: LojaOmie,
+  chNFe: string
+): Promise<{ ok: true; idCupom?: number; motivo?: string } | { ok: false; reason: string }> {
+  const { data: fila } = await supabase
+    .from('vendas_integracao_fila')
+    .select('id')
+    .eq('loja_id', loja.id)
+    .eq('tipo', 'nfce')
+    .eq('ref', chNFe)
+    .eq('status', 'Pendente')
+  if (fila?.length) {
+    await supabase
+      .from('vendas_integracao_fila')
+      .update({ status: 'Erro', ultimo_erro: 'Nota cancelada na SEFAZ antes de ir pro Omie', updated_at: new Date().toISOString() })
+      .in('id', fila.map((f) => f.id))
+  }
+
+  const { data: logs } = await supabase
+    .from('integration_attempts')
+    .select('response')
+    .eq('loja_id', loja.id)
+    .eq('model', 'ImportarNFCe [Norte Para Negócios]')
+    .eq('error', false)
+    .like('request', `chNFe=${chNFe}%`)
+    .not('response', 'is', null)
+    .order('id', { ascending: false })
+    .limit(10)
+  let idCupom: number | undefined
+  for (const l of logs ?? []) {
+    try {
+      const id = JSON.parse(l.response as string)?.idCupom
+      if (id) { idCupom = Number(id); break }
+    } catch { /* resposta fora do formato: tenta a proxima */ }
+  }
+  if (!idCupom) {
+    return fila?.length
+      ? { ok: true, motivo: 'nota ainda estava na fila; removida' }
+      : { ok: false, reason: 'Cupom desta nota nao encontrado no log de integracao (nao foi registrada no Omie ou foi reenviada). Exclua o cupom manualmente no Omie.' }
+  }
+  try {
+    const r = await omieRequest<{ cCodStatus?: string; cDesStatus?: string }>({
+      loja_id: loja.id,
+      omie_app_key: loja.omie_app_key,
+      omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
+      endpoint: 'v1/produtos/cupomfiscal',
+      call: 'ExcluirCupom',
+      data: { nIdCupom: idCupom },
+    })
+    if (!loja.is_test && r?.cCodStatus !== undefined && String(r.cCodStatus) !== '0') {
+      return { ok: false, reason: `ExcluirCupom ${r.cCodStatus}: ${r.cDesStatus ?? 'erro sem descricao'}` }
+    }
+    return { ok: true, idCupom }
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) }
+  }
+}
