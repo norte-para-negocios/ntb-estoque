@@ -67,7 +67,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     await logIntegrationAttempt({
       loja_id: loja.id,
       model: 'OrdemProducao',
-      request: `venda codigo=${p.codigo} qtde=${p.quantidade}`,
+      request: `venda codigo=${p.codigo} qtde=${p.quantidade} · ${p.obs ?? ''}`.slice(0, 500),
       response: `nCodOP=${nCodOP}`,
       code: String(nCodOP),
     })
@@ -83,7 +83,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     await logIntegrationAttempt({
       loja_id: loja.id,
       model: 'OrdemProducao',
-      request: `venda codigo=${p.codigo} qtde=${p.quantidade}`,
+      request: `venda codigo=${p.codigo} qtde=${p.quantidade} · ${p.obs ?? ''}`.slice(0, 500),
       error: tipoErro !== 'sem_estrutura',
       error_message: nCodOP ? `[OP ${nCodOP} criada, conclusão falhou] ${msg}` : msg,
     })
