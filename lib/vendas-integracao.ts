@@ -8,7 +8,8 @@
 //      tentar de novo a cada venda.
 //   2. Saida (ajuste SAI) do produto vendido no mesmo local da OP, pelo mesmo
 //      caminho dos ajustes manuais (tabela `movimentos`), que ja tem retry
-//      automatico no cron retry-ajustes-movimentos.
+//      automatico no cron retry-ajustes-movimentos. Vai pro Omie com origem "PDV"
+//      (movimento do PDV, nao "Movimento Manual" -- pedido do Ramon, 30/09).
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
@@ -19,11 +20,9 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
+import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 
-export type LojaVenda = LojaOmie & {
-  local_estoque_cozinha_codigo: number | null
-  local_estoque_bar_codigo: number | null
-}
+export type LojaVenda = LojaOmie & LojaLocais
 
 const MAX_TENTATIVAS_FILA = 60
 
@@ -180,7 +179,7 @@ async function darSaida(
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
 
-export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null }
+export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null }
 
 export type ResultadoItemVenda = {
   codigo: string
@@ -206,8 +205,8 @@ export async function processarItemVenda(
     .maybeSingle<{ codigo_produto: number }>()
   if (!produto) return { codigo: item.codigo, ok: false, op: 'pulada', baixa: 'pulada', erro: 'Produto sem cadastro correspondente no ntb-estoque' }
 
-  const localMapeado =
-    item.destination === 'kitchen' ? loja.local_estoque_cozinha_codigo : item.destination === 'bar' ? loja.local_estoque_bar_codigo : null
+  // Setor (ex.: Pizzaria -> PIZZA) > cozinha/bar > local padrão da loja.
+  const localMapeado = localDaVenda(loja, item)
   const local = localMapeado ?? (await localPadrao(supabase, loja.id))
 
   const { data: sem } = await supabase
@@ -270,7 +269,7 @@ type LinhaFila = { id: number; loja_id: number; tipo: 'op' | 'nfce'; payload: un
 export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoja = 10) {
   const { data: lojas } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo')
+    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor')
     .eq('ativo', true)
     .returns<LojaVenda[]>()
   const resumo: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []

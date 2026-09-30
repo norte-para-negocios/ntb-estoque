@@ -8,6 +8,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { dataOmieBR } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { origemDoAjuste } from '@/lib/vendas/local-venda'
 
 // Valores que o Omie aceita na tag `motivo` do IncluirAjusteEstoque.
 const MOTIVOS_OMIE = new Set(['INV', 'OPS', 'PER', 'PDV'])
@@ -74,7 +75,8 @@ export async function reenviarMovimentoManual(
       quan: Math.abs(mov.quan),
       valor,
       obs: mov.obs,
-      origem: 'AJU',
+      // Venda (motivo PDV) entra no Omie como movimento do PDV; o resto e ajuste manual.
+      origem: origemDoAjuste(mov.motivo),
       tipo: mov.tipo,
       motivo: mov.motivo && MOTIVOS_OMIE.has(mov.motivo) ? mov.motivo : mov.tipo,
     }

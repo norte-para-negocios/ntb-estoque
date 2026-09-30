@@ -4,6 +4,7 @@ import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from 
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
 import { processarItemVenda, type ResultadoItemVenda } from '@/lib/vendas-integracao'
+import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -19,6 +20,9 @@ interface ItemPedido {
   // local_estoque_bar_codigo (migration 120). Ausente ou destino sem
   // mapeamento configurado: cai no local padrao do Omie, como sempre foi.
   destination?: 'kitchen' | 'bar' | null
+  // Setor de produção do item no ntb-vendas (ex.: "Pizzaria", 2026-09-30). Se a loja
+  // mapeou o setor em lojas.local_estoque_por_setor, vence o destino cozinha/bar.
+  setor?: string | null
 }
 
 interface ResultadoItem {
@@ -60,10 +64,10 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo')
+    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<LojaOmie & { local_estoque_cozinha_codigo: number | null; local_estoque_bar_codigo: number | null }>()
+    .maybeSingle<LojaOmie & LojaLocais>()
 
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
@@ -122,12 +126,7 @@ export async function POST(request: Request) {
     const sufixoAmbiente = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
     const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixoAmbiente
 
-    const codigoLocalEstoque =
-      item.destination === 'kitchen'
-        ? loja.local_estoque_cozinha_codigo ?? undefined
-        : item.destination === 'bar'
-          ? loja.local_estoque_bar_codigo ?? undefined
-          : undefined
+    const codigoLocalEstoque = localDaVenda(loja, item) ?? undefined
 
     let nCodOP: number | undefined
     let cNumOP: string | undefined
