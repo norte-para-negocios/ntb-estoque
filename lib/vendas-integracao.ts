@@ -270,7 +270,7 @@ type LinhaFila = { id: number; loja_id: number; tipo: 'op' | 'nfce'; payload: un
 export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoja = 10) {
   const { data: lojas } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor')
+    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor, local_estoque_por_produto')
     .eq('ativo', true)
     .returns<LojaVenda[]>()
   const resumo: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []

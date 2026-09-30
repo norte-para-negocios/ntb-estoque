@@ -8,6 +8,12 @@ const loja = {
   local_estoque_por_setor: { pizzaria: 5906914974 },
 }
 
+test('produto mapeado vence tudo (embalagem de pizza baixa na PIZZA sem mexer na impressão)', () => {
+  const l = { ...loja, local_estoque_por_produto: { '90382': 5906914974 } }
+  assert.equal(localDaVenda(l, { codigo: '90382', destination: 'kitchen', setor: null }), 5906914974)
+  assert.equal(localDaVenda(l, { codigo: '90560', destination: 'bar', setor: null }), 2354627389)
+})
+
 test('setor mapeado vence o destino (pizza e embalagem de pizza baixam na PIZZA)', () => {
   assert.equal(localDaVenda(loja, { destination: 'kitchen', setor: 'Pizzaria' }), 5906914974)
 })

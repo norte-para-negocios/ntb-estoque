@@ -1,5 +1,5 @@
 // Local de estoque de onde sai cada item vendido no ntb-vendas (2026-09-30).
-// Ordem: setor do item (ex.: Pizzaria -> local PIZZA, pedido do Ramon: pizza e
+// Ordem: produto mapeado > setor do item (ex.: Pizzaria -> local PIZZA, pedido do Ramon: pizza e
 // embalagem de pizza consomem no local da pizzaria) > destino cozinha/bar > null
 // (quem chama usa o local padrão da loja).
 export type LojaLocais = {
@@ -7,13 +7,18 @@ export type LojaLocais = {
   local_estoque_bar_codigo: number | null
   /** { "<nome do setor>": codigo_local_estoque } — chave comparada sem caixa/acento. */
   local_estoque_por_setor?: Record<string, number> | null
+  /** { "<codigo do produto (SKU)>": codigo_local_estoque } — vence tudo. Ex.: embalagem de pizza
+   *  baixa na PIZZA sem precisar mudar onde ela imprime (30/09). */
+  local_estoque_por_produto?: Record<string, number> | null
 }
 
-export type ItemLocal = { destination?: 'kitchen' | 'bar' | null; setor?: string | null }
+export type ItemLocal = { codigo?: string; destination?: 'kitchen' | 'bar' | null; setor?: string | null }
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
 
 export function localDaVenda(loja: LojaLocais, item: ItemLocal): number | null {
+  const porProduto = item.codigo ? loja.local_estoque_por_produto?.[item.codigo] : undefined
+  if (porProduto) return Number(porProduto)
   if (item.setor && loja.local_estoque_por_setor) {
     const alvo = norm(item.setor)
     for (const [nome, codigo] of Object.entries(loja.local_estoque_por_setor)) {
