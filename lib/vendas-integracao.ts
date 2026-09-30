@@ -180,7 +180,7 @@ async function darSaida(
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
 
-export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null; comNota?: boolean | null }
+export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null; localEstoque?: number | null; comNota?: boolean | null }
 
 export type ResultadoItemVenda = {
   codigo: string

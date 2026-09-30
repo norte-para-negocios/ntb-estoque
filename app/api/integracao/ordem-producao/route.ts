@@ -23,6 +23,9 @@ interface ItemPedido {
   // Setor de produção do item no ntb-vendas (ex.: "Pizzaria", 2026-09-30). Se a loja
   // mapeou o setor em lojas.local_estoque_por_setor, vence o destino cozinha/bar.
   setor?: string | null
+  // Local de estoque do Omie escolhido no Norte Vendas pro destino/setor do item
+  // (Impressão → setores, 30/09). Vence setor e cozinha/bar; o mapa por produto vence ele.
+  localEstoque?: number | null
   // A venda deste item gerou nota fiscal? Com nota a saída vai como movimento do PDV;
   // sem nota, baixa comum (regra do dono, 30/09).
   comNota?: boolean | null
