@@ -23,6 +23,8 @@ import {
   removeMovimento,
   finishTransferencia,
   forceSyncTransferencia,
+  salvarObservacaoTransferencia,
+  salvarObservacaoItem,
 } from '@/lib/actions/transferencia'
 
 // Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
@@ -41,6 +43,8 @@ export type ItemMovimento = {
   quan: number | null
   status: string | null
   descricao_status?: string | null
+  /** Motivo/observação do item (ex.: tipo da avaria). */
+  obs_item?: string | null
 }
 
 export function ContagemTransferencia({
@@ -48,11 +52,13 @@ export function ContagemTransferencia({
   itensIniciais,
   finalizado,
   podeEditar = true,
+  observacaoInicial = null,
 }: {
   transferenciaId: number
   itensIniciais: ItemMovimento[]
   finalizado: boolean
   podeEditar?: boolean
+  observacaoInicial?: string | null
 }) {
   const [itens, setItens] = useState(itensIniciais)
   const [quans, setQuans] = useState<Record<number, number | null>>(() =>
@@ -65,6 +71,11 @@ export function ContagemTransferencia({
   // virgula fica; o number so e calculado no blur (salvar) com parseNumBR.
   const [textos, setTextos] = useState<Record<number, string>>(() =>
     Object.fromEntries(itensIniciais.map((i) => [i.id, formatNumBR(i.quan)]))
+  )
+  // Observação geral + motivo por item (pedido do Ramon, 30/09): salvam ao sair do campo.
+  const [obsGeral, setObsGeral] = useState(observacaoInicial ?? '')
+  const [obsItens, setObsItens] = useState<Record<number, string>>(() =>
+    Object.fromEntries(itensIniciais.map((i) => [i.id, i.obs_item ?? '']))
   )
   const [filtro, setFiltro] = useState('')
   // id do item recem-adicionado: a linha nova ganha o flash de entrada (u-flash-in).
@@ -109,6 +120,7 @@ export function ContagemTransferencia({
         setItens((prev) => [novoItem, ...prev])
         setQuans((prev) => ({ ...prev, [novo.id]: null }))
         setTextos((prev) => ({ ...prev, [novo.id]: '' }))
+        setObsItens((prev) => ({ ...prev, [novo.id]: '' }))
         setNovoId(novo.id)
         toast.success('Produto adicionado')
       } else {
@@ -166,6 +178,35 @@ export function ContagemTransferencia({
       } else if (res.status === 'Concluido') {
         toast.success('Item integrado ao Omie')
       }
+    })
+  }
+
+  function salvarObsGeral() {
+    if ((observacaoInicial ?? '') === obsGeral.trim()) return
+    startTransition(async () => {
+      const res = await salvarObservacaoTransferencia(transferenciaId, obsGeral)
+      if (res?.error) toast.error('Não foi possível salvar a observação', { description: res.error })
+      else toast.success('Observação salva')
+    })
+  }
+
+  function salvarObsItem(movId: number) {
+    const texto = obsItens[movId] ?? ''
+    const original = itens.find((i) => i.id === movId)?.obs_item ?? ''
+    if (original === texto.trim()) return
+    setItens((prev) => prev.map((i) => (i.id === movId ? { ...i, obs_item: texto.trim() || null } : i)))
+    startTransition(async () => {
+      const res = await salvarObservacaoItem(movId, texto)
+      if (res?.error) {
+        toast.error('Não foi possível salvar o motivo', { description: res.error })
+        return
+      }
+      if (res?.envio) {
+        const statusUi = res.envio.status === 'Iniciado' ? 'Vazio' : res.envio.status
+        setItens((prev) => prev.map((i) => (i.id === movId ? { ...i, status: statusUi } : i)))
+        if (res.envio.status === 'Concluido') toast.success('Motivo salvo e atualizado no Omie')
+        else toast.warning('Motivo salvo; reenvio ao Omie pendente', { description: res.envio.descricao_status ?? undefined })
+      } else toast.success('Motivo salvo')
     })
   }
 
@@ -306,6 +347,26 @@ export function ContagemTransferencia({
         </p>
       )}
 
+      {(editavel || obsGeral.trim()) && (
+        <div className="mb-4 rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]">
+          <label htmlFor="obs-transferencia" className="eyebrow">Observação da transferência</label>
+          {editavel ? (
+            <textarea
+              id="obs-transferencia"
+              value={obsGeral}
+              maxLength={300}
+              rows={2}
+              onChange={(e) => setObsGeral(e.target.value)}
+              onBlur={salvarObsGeral}
+              placeholder="Ex.: avarias do fim de semana, conferido pelo gerente"
+              className="mt-1.5 w-full resize-y rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-[15px] text-text outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:text-base"
+            />
+          ) : (
+            <p className="mt-1 text-[15px] text-text">{obsGeral}</p>
+          )}
+        </div>
+      )}
+
       {editavel && (
         <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-2 border-b border-border/60 bg-bg/85 px-4 py-3 backdrop-blur-xl sm:mx-0 sm:rounded-[var(--r-lg)] sm:border-0 sm:bg-surface/85 sm:px-3 sm:shadow-[var(--shadow-sm)]">
           {/* Busca manual ACIMA do QR (padrao em todas as contagens) */}
@@ -366,6 +427,20 @@ export function ContagemTransferencia({
                       )}
                     </div>
                     <div className="num mt-0.5 text-[13px] text-text-muted">{item.codigo}</div>
+                    {editavel ? (
+                      <input
+                        type="text"
+                        value={obsItens[item.id] ?? ''}
+                        maxLength={300}
+                        onChange={(e) => setObsItens((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        onBlur={() => salvarObsItem(item.id)}
+                        placeholder="Motivo (ex.: garrafa quebrada)"
+                        aria-label={`Motivo de ${item.descricao}`}
+                        className="mt-1.5 w-full max-w-md rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-[13px] text-text outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:text-base"
+                      />
+                    ) : item.obs_item ? (
+                      <div className="mt-1 text-[13px] text-text">Motivo: {item.obs_item}</div>
+                    ) : null}
                     {item.status && (
                       <div className="mt-1.5 lg:hidden">
                         {item.status === 'Erro' ? (

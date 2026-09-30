@@ -25,7 +25,7 @@ export default async function ContagemTransferenciaPage({
 
   const { data: trans } = await supabase
     .from('transferencias')
-    .select('id, data, codigo_local_origem, codigo_local_destino, status, user_id')
+    .select('id, data, codigo_local_origem, codigo_local_destino, status, user_id, observacao')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
@@ -38,7 +38,7 @@ export default async function ContagemTransferenciaPage({
 
   const { data: movimentos } = await supabase
     .from('movimentos')
-    .select('id, id_prod, quan, status, descricao_status')
+    .select('id, id_prod, quan, status, descricao_status, obs_item')
     .eq('transferencia_id', id)
     .order('id')
 
@@ -64,6 +64,7 @@ export default async function ContagemTransferenciaPage({
       quan: m.quan,
       status: m.status,
       descricao_status: (m as { descricao_status?: string | null }).descricao_status ?? null,
+      obs_item: (m as { obs_item?: string | null }).obs_item ?? null,
     }
   })
 
@@ -117,6 +118,7 @@ export default async function ContagemTransferenciaPage({
         itensIniciais={itens}
         finalizado={finalizado}
         podeEditar={podeEditar}
+        observacaoInicial={(trans as { observacao?: string | null }).observacao ?? null}
       />
     </div>
   )

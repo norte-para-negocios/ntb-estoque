@@ -9,6 +9,7 @@ import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { TipoTransferencia } from '@/lib/transferencia-tipos'
+import { limparObservacao, montarObsTransferencia } from '@/lib/transferencia-obs'
 
 export async function createTransferencia(data: {
   codigoLocalOrigem: number
@@ -223,6 +224,51 @@ export async function enviarMovimento(
   }
 }
 
+/** Observação geral da transferência (vai no Omie junto de cada item enviado depois, e no PDF). */
+export async function salvarObservacaoTransferencia(transferenciaId: number, texto: string) {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
+  const supabase = createServiceClient()
+  const { error } = await supabase
+    .from('transferencias')
+    .update({ observacao: limparObservacao(texto), updated_at: new Date().toISOString() })
+    .eq('id', transferenciaId)
+    .eq('loja_id', lojaId)
+  if (error) return { error: error.message }
+  revalidatePath(`/transferencia/${transferenciaId}/contagem`)
+  return { ok: true }
+}
+
+/**
+ * Motivo/observação de UM item (ex.: tipo da avaria). Se o item já foi lançado no Omie,
+ * relança pra observação chegar lá também (mesmo caminho de quando muda a quantidade).
+ */
+export async function salvarObservacaoItem(movimentoId: number, texto: string): Promise<{ ok?: true; error?: string; envio?: EnvioMovimentoResult }> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
+    return { error: 'Sem permissao para editar transferencia' }
+  }
+  const supabase = createServiceClient()
+  const obs = limparObservacao(texto)
+  const { data: mov } = await supabase
+    .from('movimentos')
+    .select('id, quan, obs_item, id_ajuste')
+    .eq('id', movimentoId)
+    .eq('loja_id', lojaId)
+    .maybeSingle<{ id: number; quan: number | null; obs_item: string | null; id_ajuste: number | null }>()
+  if (!mov) return { error: 'Item não encontrado' }
+  if ((mov.obs_item ?? null) === obs) return { ok: true }
+  const { error } = await supabase.from('movimentos').update({ obs_item: obs }).eq('id', movimentoId).eq('loja_id', lojaId)
+  if (error) return { error: error.message }
+  if (mov.id_ajuste && mov.quan != null && mov.quan > 0) {
+    const envio = await enviarMovimento(movimentoId, mov.quan)
+    return { ok: true, envio }
+  }
+  return { ok: true }
+}
+
 export async function removeMovimento(movimentoId: number) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Editar'))) {
@@ -290,6 +336,15 @@ async function processarMovimento(
     return
   }
 
+  // Observação geral da transferência + motivo do item (pedido do Ramon, 30/09) vão
+  // no `obs` do ajuste no Omie. Lidos aqui (e não do chamador) pra valer igual no
+  // envio na hora, no reenvio e no cron.
+  const [{ data: tObs }, { data: mObs }] = await Promise.all([
+    supabase.from('transferencias').select('observacao').eq('id', trans.id).maybeSingle<{ observacao: string | null }>(),
+    supabase.from('movimentos').select('obs_item').eq('id', mov.id).maybeSingle<{ obs_item: string | null }>(),
+  ])
+  const obsOmie = montarObsTransferencia(obsCarimbo, tObs?.observacao ?? null, mObs?.obs_item ?? null)
+
   // O CMC e buscado na posicao ATUAL (hoje): e o custo medio vigente. Buscar na
   // data retroativa marcaria "Sem CMC" produtos que so ganharam custo depois.
   // Apenas a DATA DO LANCAMENTO (param.data) usa a data da transferencia.
@@ -337,7 +392,7 @@ async function processarMovimento(
       data: dataMov,
       quan: mov.quan,
       valor,
-      obs: obsCarimbo,
+      obs: obsOmie,
       origem: 'AJU',
       // O `tipo` do ajuste no Omie só aceita ENT/SAI/SLD/TRF. A transferência (inclusive
       // Perda e Quebra) é sempre um TRF entre locais; o "TPQ" é o MOTIVO, não o tipo.

@@ -36,7 +36,7 @@ export async function GET(
 
   const { data: trans } = await supabase
     .from('transferencias')
-    .select('id, data, codigo_local_origem, codigo_local_destino')
+    .select('id, data, codigo_local_origem, codigo_local_destino, observacao')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
@@ -62,7 +62,7 @@ export async function GET(
 
   const { data: movimentos } = await supabase
     .from('movimentos')
-    .select('id_prod, quan, status')
+    .select('id_prod, quan, status, obs_item')
     .eq('transferencia_id', id)
     .order('id')
 
@@ -84,6 +84,7 @@ export async function GET(
       unidade: p?.unidade || '',
       quan: m.quan != null ? String(m.quan) : '-',
       status: m.status || 'N/A',
+      obs: (m as { obs_item?: string | null }).obs_item ?? null,
     }
   })
 
@@ -94,6 +95,7 @@ export async function GET(
     origem: localMap.get(trans.codigo_local_origem) || String(trans.codigo_local_origem),
     destino: localMap.get(trans.codigo_local_destino) || String(trans.codigo_local_destino),
     itens,
+    observacao: (trans as { observacao?: string | null }).observacao ?? null,
   }) as Parameters<typeof renderToBuffer>[0]
   const buffer = await renderToBuffer(element)
 

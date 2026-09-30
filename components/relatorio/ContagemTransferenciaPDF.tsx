@@ -30,6 +30,8 @@ export interface ContagemTransferenciaItem {
   unidade: string
   quan: string
   status: string
+  /** Motivo do item (ex.: tipo da avaria) — sai abaixo da descrição. */
+  obs?: string | null
 }
 
 export function ContagemTransferenciaPDF({
@@ -38,12 +40,14 @@ export function ContagemTransferenciaPDF({
   origem,
   destino,
   itens,
+  observacao,
 }: {
   loja: string
   data: string
   origem: string
   destino: string
   itens: ContagemTransferenciaItem[]
+  observacao?: string | null
 }) {
   const concluidos = itens.filter((it) => it.status === 'Concluido').length
 
@@ -65,6 +69,13 @@ export function ContagemTransferenciaPDF({
           ]}
         />
 
+        {observacao ? (
+          <View style={{ marginBottom: 10, padding: 8, borderRadius: 4, backgroundColor: '#F4F6F8' }} wrap={false}>
+            <Text style={{ fontSize: 8, color: '#555', marginBottom: 2 }}>OBSERVAÇÃO</Text>
+            <Text style={{ fontSize: 10 }}>{observacao}</Text>
+          </View>
+        ) : null}
+
         <View style={pdfTabela.table}>
           <View style={pdfTabela.thead} fixed>
             <Text style={[pdfTabela.th, col.codigo]}>Código</Text>
@@ -77,7 +88,10 @@ export function ContagemTransferenciaPDF({
           {itens.map((it, i) => (
             <View key={i} style={[pdfTabela.tr, i % 2 === 1 ? pdfTabela.trAlt : {}]} wrap={false}>
               <Text style={[pdfTabela.tdMuted, col.codigo]}>{it.codigo}</Text>
-              <Text style={[pdfTabela.td, col.descricao]}>{it.descricao}</Text>
+              <View style={col.descricao}>
+                <Text style={pdfTabela.td}>{it.descricao}</Text>
+                {it.obs ? <Text style={[pdfTabela.tdMuted, { fontSize: 8 }]}>Motivo: {it.obs}</Text> : null}
+              </View>
               <Text style={[pdfTabela.tdMuted, col.unidade]}>{it.unidade}</Text>
               <Text style={[pdfTabela.td, col.qtde]}>
                 {numBR2(it.quan)}
