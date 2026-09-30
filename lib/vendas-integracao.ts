@@ -11,6 +11,7 @@
 //      automatico no cron retry-ajustes-movimentos.
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
+import { comEsperaDeCmc } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
@@ -153,12 +154,19 @@ async function darSaida(
     .select('id, tentativas')
     .single<{ id: number; tentativas: number | null }>()
   if (error || !mov) return { ok: false, status: 'Erro', erro: error?.message ?? 'Falha ao gravar movimento' }
-  const r = await reenviarMovimentoManual(
-    { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', obs, data, tentativas: mov.tentativas },
-    loja,
-    loja.id,
-    { auditar: false }
-  )
+  // Logo após a OP o Omie ainda calcula o custo do que foi produzido ("Sem CMC" por alguns segundos): espera e tenta
+  // de novo aqui mesmo em vez de deixar pro cron de 1 h. "Sem CMC" não lança nada no Omie, então repetir é seguro.
+  let tentativas = mov.tentativas ?? 0
+  const r = await comEsperaDeCmc(async () => {
+    const res = await reenviarMovimentoManual(
+      { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', obs, data, tentativas },
+      loja,
+      loja.id,
+      { auditar: false }
+    )
+    if (res.status === 'Sem CMC') tentativas++
+    return res
+  }, { esperasMs: [6000, 12000, 20000] })
   // 'Erro'/'Sem CMC' ficam em `movimentos` e o cron retry-ajustes-movimentos reenvia.
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
