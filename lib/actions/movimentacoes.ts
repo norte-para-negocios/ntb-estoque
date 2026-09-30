@@ -276,7 +276,7 @@ export async function retryMovimentosManuaisPendentes(
 
     const { data: itensElegiveis, error: erroItens } = await supabase
       .from('movimentos')
-      .select('id, id_prod, codigo_local_estoque, tipo, motivo, obs, data, quan, id_ajuste, tentativas')
+      .select('id, id_prod, codigo_local_estoque, tipo, motivo, origem, obs, data, quan, id_ajuste, tentativas')
       .in('id', idsSelecionados)
 
     if (erroItens) {
@@ -356,6 +356,7 @@ export async function retryMovimentosManuaisPendentes(
           quan: mov.quan,
           tipo: mov.tipo,
           motivo: mov.motivo,
+          origem: (mov as { origem?: string | null }).origem ?? null,
           obs: mov.obs,
           data: mov.data ?? '',
           tentativas: mov.tentativas,

@@ -8,8 +8,8 @@
 //      tentar de novo a cada venda.
 //   2. Saida (ajuste SAI) do produto vendido no mesmo local da OP, pelo mesmo
 //      caminho dos ajustes manuais (tabela `movimentos`), que ja tem retry
-//      automatico no cron retry-ajustes-movimentos. Vai pro Omie com origem "PDV"
-//      (movimento do PDV, nao "Movimento Manual" -- pedido do Ramon, 30/09).
+//      automatico no cron retry-ajustes-movimentos. Venda COM nota vai pro Omie com
+//      origem "PDV" (movimento do PDV); venda SEM nota e baixa comum ("AJU") -- regra 30/09.
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
@@ -20,7 +20,7 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
-import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
+import { localDaVenda, origemDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 
 export type LojaVenda = LojaOmie & LojaLocais
 
@@ -142,7 +142,8 @@ async function darSaida(
   codigoProduto: number,
   quantidade: number,
   local: number,
-  obs: string
+  obs: string,
+  origem: 'PDV' | 'AJU'
 ): Promise<{ ok: boolean; status: string; erro?: string }> {
   const data = dataCriacaoBahia(hojeBahiaISO())!
   const { data: mov, error } = await supabase
@@ -150,7 +151,7 @@ async function darSaida(
     .insert({
       loja_id: loja.id,
       tipo: 'SAI',
-      origem: 'AJU',
+      origem,
       motivo: 'PDV',
       data,
       id_prod: codigoProduto,
@@ -167,7 +168,7 @@ async function darSaida(
   let tentativas = mov.tentativas ?? 0
   const r = await comEsperaDeCmc(async () => {
     const res = await reenviarMovimentoManual(
-      { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', obs, data, tentativas },
+      { id: mov.id, codigo_local_estoque: local, id_prod: codigoProduto, quan: -Math.abs(quantidade), tipo: 'SAI', motivo: 'PDV', origem, obs, data, tentativas },
       loja,
       loja.id,
       { auditar: false }
@@ -179,7 +180,7 @@ async function darSaida(
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
 
-export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null }
+export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null; comNota?: boolean | null }
 
 export type ResultadoItemVenda = {
   codigo: string
@@ -242,7 +243,7 @@ export async function processarItemVenda(
 
   let baixa = 'sem local de estoque'
   if (local) {
-    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, `${ctx.obs} · saída automática da venda`)
+    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, `${ctx.obs} · saída automática da venda`, origemDaVenda(item.comNota))
     baixa = s.status
   }
 

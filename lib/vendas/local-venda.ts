@@ -26,10 +26,15 @@ export function localDaVenda(loja: LojaLocais, item: ItemLocal): number | null {
 }
 
 /**
- * Origem do IncluirAjusteEstoque no Omie: saída de venda vai como "PDV" (aparece como
- * movimento do PDV, igual ao sistema antigo); o resto é ajuste manual ("AJU").
- * Pedido do dono/Ramon em 30/09: venda não pode aparecer como "Movimento Manual".
+ * Origem do IncluirAjusteEstoque no Omie (regra do dono, 30/09): saída de venda COM nota
+ * fiscal vai como "PDV" (movimento do PDV, igual ao sistema antigo); venda SEM nota é só uma
+ * baixa comum ("AJU"). Ajustes manuais continuam "AJU". A origem de cada movimento fica gravada
+ * em `movimentos.origem` na hora da venda; o reenvio (cron) usa a gravada.
  */
-export function origemDoAjuste(motivo: string | null | undefined): 'PDV' | 'AJU' {
-  return motivo === 'PDV' ? 'PDV' : 'AJU'
+export function origemDaVenda(comNota: boolean | null | undefined): 'PDV' | 'AJU' {
+  return comNota === true ? 'PDV' : 'AJU'
+}
+
+export function origemDoAjuste(motivo: string | null | undefined, origemGravada: string | null | undefined): 'PDV' | 'AJU' {
+  return motivo === 'PDV' && origemGravada === 'PDV' ? 'PDV' : 'AJU'
 }

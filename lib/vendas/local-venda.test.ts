@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { localDaVenda, origemDoAjuste } from './local-venda.ts'
+import { localDaVenda, origemDoAjuste, origemDaVenda } from './local-venda.ts'
 
 const loja = {
   local_estoque_cozinha_codigo: 5906914581,
@@ -25,8 +25,15 @@ test('sem mapeamento nenhum devolve null (quem chama usa o local padrão)', () =
   assert.equal(localDaVenda({ local_estoque_cozinha_codigo: null, local_estoque_bar_codigo: null, local_estoque_por_setor: null }, { destination: 'kitchen' }), null)
 })
 
-test('venda vai como movimento de PDV no Omie; ajuste manual continua AJU', () => {
-  assert.equal(origemDoAjuste('PDV'), 'PDV')
-  assert.equal(origemDoAjuste('PER'), 'AJU')
-  assert.equal(origemDoAjuste(null), 'AJU')
+test('regra 30/09: só é movimento de PDV quando a venda gera nota fiscal', () => {
+  assert.equal(origemDoAjuste('PDV', 'PDV'), 'PDV') // venda com nota
+  assert.equal(origemDoAjuste('PDV', 'AJU'), 'AJU') // venda sem nota: baixa comum
+  assert.equal(origemDoAjuste('PDV', null), 'AJU') // sem informação: baixa comum
+  assert.equal(origemDoAjuste('PER', 'AJU'), 'AJU') // ajuste manual continua AJU
+})
+
+test('origemDaVenda: com nota = PDV, sem nota ou sem informação = AJU', () => {
+  assert.equal(origemDaVenda(true), 'PDV')
+  assert.equal(origemDaVenda(false), 'AJU')
+  assert.equal(origemDaVenda(undefined), 'AJU')
 })

@@ -21,6 +21,8 @@ export type MovimentoManualRow = {
   tipo: 'ENT' | 'SAI'
   /** Motivo do ajuste no Omie (INV/OPS/PER/PDV). Venda do ntb-vendas grava 'PDV'. */
   motivo?: string | null
+  /** Origem gravada no movimento: 'PDV' só em venda com nota fiscal (regra 30/09); resto 'AJU'. */
+  origem?: string | null
   obs: string | null
   data: string // data de criacao do movimento (coluna `data`); vira dataOmieBR(data) no lancamento
   tentativas: number | null
@@ -75,8 +77,8 @@ export async function reenviarMovimentoManual(
       quan: Math.abs(mov.quan),
       valor,
       obs: mov.obs,
-      // Venda (motivo PDV) entra no Omie como movimento do PDV; o resto e ajuste manual.
-      origem: origemDoAjuste(mov.motivo),
+      // Venda com nota entra no Omie como movimento do PDV; venda sem nota e o resto, ajuste comum.
+      origem: origemDoAjuste(mov.motivo, mov.origem),
       tipo: mov.tipo,
       motivo: mov.motivo && MOTIVOS_OMIE.has(mov.motivo) ? mov.motivo : mov.tipo,
     }
