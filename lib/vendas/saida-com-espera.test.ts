@@ -30,3 +30,27 @@ test('esgotou as esperas: devolve Sem CMC (o cron assume)', async () => {
   assert.equal(r.status, 'Sem CMC')
   assert.equal(chamadas, 3)
 })
+
+import { repetirSeCalculoPendente, ehCalculoPendente } from './saida-com-espera.ts'
+
+test('conclusão da OP: "movimentos pendentes de cálculo" espera e tenta de novo', async () => {
+  let n = 0
+  const esperas: number[] = []
+  await repetirSeCalculoPendente(async () => {
+    n++
+    if (n < 3) throw new Error('ERROR: O seguinte produto da estrutura possui movimentos de estoque pendentes de cálculo em 29/09/2026')
+  }, { esperasMs: [5, 6, 7], dormir: async (ms) => { esperas.push(ms) } })
+  assert.equal(n, 3)
+  assert.deepEqual(esperas, [5, 6])
+})
+
+test('conclusão da OP: outro erro sobe na hora', async () => {
+  let n = 0
+  await assert.rejects(repetirSeCalculoPendente(async () => { n++; throw new Error('Consumo redundante') }, { esperasMs: [1], dormir: async () => {} }))
+  assert.equal(n, 1)
+})
+
+test('conclusão da OP: esgotou as esperas, sobe o erro', async () => {
+  await assert.rejects(repetirSeCalculoPendente(async () => { throw new Error('ainda não foi concluído o cálculo do saldo de estoque e CMC do produto') }, { esperasMs: [1, 1], dormir: async () => {} }))
+  assert.ok(ehCalculoPendente('movimentos de estoque pendentes de cálculo'))
+})

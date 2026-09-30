@@ -11,7 +11,7 @@
 //      automatico no cron retry-ajustes-movimentos.
 // Falha TRANSITORIA na OP (ou na nota, ver app/api/integracao/nota-fiscal) vai
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
-import { comEsperaDeCmc } from '@/lib/vendas/saida-com-espera'
+import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
@@ -53,6 +53,7 @@ type ResultadoOp = { ok: boolean; nCodOP?: number; semEstrutura?: boolean; naFil
 /** Cria e conclui 1 OP. Nao grava fila: quem chama decide o que fazer com o erro. */
 async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
   let nCodOP: number | undefined
+  let erroConclusao: string | undefined
   try {
     const criada = await incluirOrdemProducao(loja, {
       cCodIntOP: p.cCodIntOP,
@@ -64,7 +65,10 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     })
     nCodOP = criada?.nCodOP
     if (!nCodOP) return { ok: false, erro: 'Omie não retornou a OP criada', tipoErro: 'transitorio' }
-    await concluirOrdemProducao(loja, nCodOP, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)')
+    // "Movimentos pendentes de cálculo" logo após criar a OP é passageiro: espera e tenta de novo (ex.: ½ Portuguesa,
+    // 29/09 — ficou criada e não concluída porque nada a reenviava).
+    const opCriada = nCodOP
+    await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, opCriada, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'))
     await logIntegrationAttempt({
       loja_id: loja.id,
       model: 'OrdemProducao',
@@ -75,6 +79,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     return { ok: true, nCodOP }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Falha desconhecida na chamada Omie'
+    if (nCodOP) erroConclusao = msg
     const tipoErro = classificarErroOmie(msg)
     if (tipoErro === 'sem_estrutura') {
       await supabase
@@ -99,7 +104,11 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
       // O sync do Omie não sobrescreve `observacao`, então a marca fica.
       await supabase
         .from('ordens_producao')
-        .update({ observacao: p.obs })
+        .update({
+          observacao: p.obs,
+          // OP criada mas não concluída: marca pro cron retry-op-conclusao concluir depois (antes ficava esquecida).
+          ...(erroConclusao ? { conclusao_status: 'Erro', conclusao_erro_msg: erroConclusao.slice(0, 500), conclusao_tentativas: 1, conclusao_ultima_tentativa_em: new Date().toISOString() } : {}),
+        })
         .eq('loja_id', loja.id)
         .eq('identificacao_n_cod_op', nCodOP)
     }
