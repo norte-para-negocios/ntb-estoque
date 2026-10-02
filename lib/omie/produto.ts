@@ -280,6 +280,54 @@ export async function syncProdutos(loja: LojaOmie) {
       .from('lojas')
       .update({ produto_status: 'Concluido', produto_ultima_atualizacao: new Date().toISOString() })
       .eq('id', loja.id)
+
+    // Sync automática Omie → Norte Vendas (2026-10-02, pedido do usuário):
+    // após atualizar os produtos locais do Omie, notifica o ntb-vendas com
+    // as mudanças de nome e preço dos produtos vinculados por omie_codigo.
+    // Fire-and-forget: falha aqui não derruba o sync local (já concluído).
+    const vendasUrl = process.env.NTB_VENDAS_INTERNAL_URL
+    if (vendasUrl) {
+      try {
+        // Buscar a chave de integração da loja (não está em LojaOmie)
+        const { data: lojaRow } = await supabase
+          .from('lojas')
+          .select('integracao_api_key')
+          .eq('id', loja.id)
+          .maybeSingle()
+        const integracaoKey = lojaRow?.integracao_api_key
+        if (integracaoKey) {
+          // Coletar todos os produtos sincronizados nesta execução pra mandar pro vendas
+          const { data: todosProdutos } = await supabase
+            .from('produtos')
+            .select('codigo, descricao, valor_unitario')
+            .eq('loja_id', loja.id)
+            .not('codigo', 'is', null)
+          if (todosProdutos?.length) {
+            const updates = todosProdutos
+              .filter(p => p.codigo && p.descricao)
+              .map(p => ({
+                omieCodigo: p.codigo!,
+                nome: p.descricao!,
+                preco: Number(p.valor_unitario) || 0,
+              }))
+            // Enviar em lotes de 500 (mesmo teto da rota PATCH do vendas)
+            for (let i = 0; i < updates.length; i += 500) {
+              const lote = updates.slice(i, i + 500)
+              await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${integracaoKey}`,
+                },
+                body: JSON.stringify({ updates: lote }),
+              }).catch(() => {}) // fire-and-forget
+            }
+          }
+        }
+      } catch {
+        // Silencioso: sync local já concluiu, falha na notificação não é crítica
+      }
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await supabase.from('lojas').update({ produto_status: 'Erro' }).eq('id', loja.id)
