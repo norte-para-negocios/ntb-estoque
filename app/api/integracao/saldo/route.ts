@@ -43,18 +43,26 @@ export async function GET(request: Request) {
   }
   if (idPorCodigo.size === 0) return NextResponse.json({ saldos: [] })
 
-  const { data: pos, error: errPos } = await supabase
-    .from('posicao_estoques')
-    .select('n_cod_prod, codigo_local_estoque, n_saldo, data_posicao')
-    .eq('loja_id', loja.id)
-    .in('n_cod_prod', Array.from(idPorCodigo.keys()))
-    .order('data_posicao', { ascending: false })
-  if (errPos) return NextResponse.json({ error: errPos.message }, { status: 500 })
+  // O PostgREST devolve no máximo 1000 linhas por consulta: pagina até acabar (com teto de segurança),
+  // senão o saldo de alguns produtos podia vir truncado.
+  const pos: { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number | null; data_posicao: string }[] = []
+  for (let de = 0; de < 20000; de += 1000) {
+    const { data, error } = await supabase
+      .from('posicao_estoques')
+      .select('n_cod_prod, codigo_local_estoque, n_saldo, data_posicao')
+      .eq('loja_id', loja.id)
+      .in('n_cod_prod', Array.from(idPorCodigo.keys()))
+      .order('data_posicao', { ascending: false })
+      .range(de, de + 999)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    pos.push(...((data ?? []) as typeof pos))
+    if ((data?.length ?? 0) < 1000) break
+  }
 
   // Posição mais recente de cada produto/local (a lista já vem da data mais nova pra mais velha).
   const vistos = new Set<string>()
   const saldoPorCodigo = new Map<string, number>()
-  for (const r of (pos ?? []) as { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number | null }[]) {
+  for (const r of pos) {
     const chave = `${r.n_cod_prod}|${r.codigo_local_estoque}`
     if (vistos.has(chave)) continue
     vistos.add(chave)
