@@ -45,7 +45,7 @@ export function AcoesNF({
     startTransition(async () => {
       const res = await reverterManifestacaoNF(notaId)
       if (res?.error) toast.error(res.error)
-      else { toast.success('Conclusão revertida.'); router.refresh() }
+      else { toast.success(modoProprio ? 'Entrada desfeita: o estoque foi estornado e a nota voltou para a conferência.' : 'Conclusão revertida.'); router.refresh() }
     })
   }
 
