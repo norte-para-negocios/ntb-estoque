@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { ImportarFaturamento } from '@/components/faturamento/ImportarFaturamento'
 import { SyncButton } from '@/components/SyncButton'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { btnClass } from '@/components/ui-kit/Button'
 import Link from 'next/link'
 import { AlertTriangle, DollarSign, Download } from 'lucide-react'
@@ -153,6 +154,8 @@ export default async function RelatorioFaturamentoPage({
   }>
 }) {
   const lojaId = await getCurrentLojaId()
+  // Loja de estoque próprio: o faturamento vem do Norte Vendas (fechamento das vendas), sem Omie.
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   if (!(await getAtorGestao()).podeGerir) notFound()
 
   const sp = await searchParams
@@ -632,7 +635,7 @@ export default async function RelatorioFaturamentoPage({
         <PageHeader
           title="Faturamento"
           icon={DollarSign}
-          description="Vendas do PDV (NFC-e), puxadas direto da API do Omie (BETA)"
+          description={proprio ? 'Vendas fechadas no Norte Vendas, por tipo, família, produto e forma de pagamento' : 'Vendas do PDV (NFC-e), puxadas direto da API do Omie (BETA)'}
           voltarHref="/relatorios"
           actions={
             <>
@@ -660,12 +663,16 @@ export default async function RelatorioFaturamentoPage({
                 }}
                 persistirEm="/relatorio-faturamento"
               />
-              <SyncButton
-                endpoint="/api/sync/faturamento"
-                label="Atualizar"
-                title="Puxa tipo e família direto dos cupons fiscais do Omie. Já roda sozinho todo dia de madrugada; clique aqui pra atualizar na hora."
-              />
-              <ImportarFaturamento />
+              {!proprio && (
+                <>
+                  <SyncButton
+                    endpoint="/api/sync/faturamento"
+                    label="Atualizar"
+                    title="Puxa tipo e família direto dos cupons fiscais do Omie. Já roda sozinho todo dia de madrugada; clique aqui pra atualizar na hora."
+                  />
+                  <ImportarFaturamento />
+                </>
+              )}
             </>
           }
         />
@@ -676,7 +683,7 @@ export default async function RelatorioFaturamentoPage({
         <EmptyState
           icon={DollarSign}
           title="Faturamento ainda não sincronizado"
-          hint='As vendas do PDV desta loja ainda não foram puxadas da API do Omie. Clique em "Atualizar" para sincronizar agora, ou importe o export FAT_DRV.'
+          hint={proprio ? 'Ainda não há vendas fechadas no Norte Vendas para esta loja. Assim que uma mesa ou balcão for fechado, o faturamento aparece aqui.' : 'As vendas do PDV desta loja ainda não foram puxadas da API do Omie. Clique em "Atualizar" para sincronizar agora, ou importe o export FAT_DRV.'}
         />
       ) : (
         <>
