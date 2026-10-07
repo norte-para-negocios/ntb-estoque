@@ -13,6 +13,7 @@ import { buscarProdutoPorCodigo, type ProdutoBusca } from '@/lib/actions/produto
 import { criarOrdensProducao, saldoAtualProdutos } from '@/lib/actions/ordem-producao'
 import { parseNumBR } from '@/lib/num-br'
 import { gerarDatasOP, type UnidadeOP } from '@/lib/op-recorrencia'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 const QrScanner = dynamic(
   () => import('@/components/contagem/QrScanner').then((m) => m.QrScanner),
@@ -35,6 +36,7 @@ export function CriarOPProdutos({
   intervalo,
   vezes,
   localCodigo,
+  destinoCodigo = null,
   obs,
 }: {
   data: string
@@ -43,8 +45,11 @@ export function CriarOPProdutos({
   vezes: number
   localCodigo: number | null
   localNome: string | null
+  destinoCodigo?: number | null
+  destinoNome?: string | null
   obs: string
 }) {
+  const proprio = useEstoqueProprio()
   const [itens, setItens] = useState<ItemOP[]>([])
   const [filtro, setFiltro] = useState('')
   const [pending, startTransition] = useTransition()
@@ -137,6 +142,7 @@ export function CriarOPProdutos({
         itens: itensValidos,
         datas,
         codigoLocalEstoque: localCodigo,
+        codigoLocalDestino: proprio ? destinoCodigo : null,
         obs: obs.trim() || undefined,
       })
       if (res?.error) {
@@ -146,7 +152,7 @@ export function CriarOPProdutos({
       const criadas = res?.criadas ?? 0
       const erros = res?.erros ?? []
       if (criadas > 0) {
-        toast.success(`${criadas} ordem(ns) criada(s) no Omie`, {
+        toast.success(`${criadas} ordem(ns) criada(s)${proprio ? '' : ' no Omie'}`, {
           description: erros.length ? `${erros.length} falharam` : undefined,
         })
         router.push('/ordem-producao')
@@ -272,7 +278,7 @@ export function CriarOPProdutos({
               className={`${btnClass('primary')} w-full sm:w-auto`}
             >
               {pending ? <Spinner /> : <CheckCircle className="size-4" />}
-              {pending ? 'Criando no Omie...' : `Criar ${totalOPs > 1 ? `${totalOPs} OPs` : 'OP'}`}
+              {pending ? (proprio ? 'Criando...' : 'Criando no Omie...') : `Criar ${totalOPs > 1 ? `${totalOPs} OPs` : 'OP'}`}
             </button>
           </div>
         </div>

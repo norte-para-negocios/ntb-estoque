@@ -5,6 +5,7 @@ import { LojaSelector } from '@/components/loja/LojaSelector'
 import { UserMenu } from '@/components/shell/UserMenu'
 import { rotasPermitidas } from '@/lib/permissoes-menu'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { ModoEstoqueProvider } from '@/components/estoque-proprio/ModoEstoque'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
@@ -52,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >
-      {children}
+      <ModoEstoqueProvider proprio={estoqueProprio}>{children}</ModoEstoqueProvider>
     </AppShell>
   )
 }

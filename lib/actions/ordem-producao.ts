@@ -17,6 +17,9 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import {
+  ehLojaProprio, criarOPProprio, criarOPsProprio, alterarOPProprio, concluirOPProprio, reverterOPProprio, excluirOPProprio,
+} from '@/lib/estoque/op-proprio'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -175,6 +178,7 @@ export async function criarOrdemProducao(input: {
   data: string // 'YYYY-MM-DD'
   quantidade: number
   codigoLocalEstoque?: number | null
+  codigoLocalDestino?: number | null // so estoque proprio: onde o produto pronto entra (vazio = mesmo local)
   validade?: string | null // 'YYYY-MM-DD', so local
   obs?: string
 }) {
@@ -187,6 +191,12 @@ export async function criarOrdemProducao(input: {
 
   const dData = dataParaBR(input.data)
   if (!dData) return { error: 'Data inválida' }
+
+  // Loja de estoque proprio: a OP nasce no banco local, sem Omie.
+  if (await ehLojaProprio(lojaId)) {
+    const r = await criarOPProprio(lojaId, input, await carimboUsuario())
+    return 'error' in r ? r : { ok: true, nCodOP: r.nCodOP }
+  }
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase
@@ -240,12 +250,20 @@ export async function criarOrdensProducao(input: {
   itens: { nCodProduto: number; quantidade: number; validadeDias?: number | null }[]
   datas: string[] // 'YYYY-MM-DD'
   codigoLocalEstoque?: number | null
+  codigoLocalDestino?: number | null // so estoque proprio
   obs?: string
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) return { error: 'Sem permissão' }
   if (!input.itens.length) return { error: 'Adicione ao menos um produto' }
   if (!input.datas.length) return { error: 'Informe a data' }
+
+  if (await ehLojaProprio(lojaId)) {
+    const r = await criarOPsProprio(lojaId, input, await carimboUsuario())
+    if (r.criadas > 0) await registrarAuditoria('criar', 'ordem de produção', null, `${r.criadas} OP(s)`)
+    revalidatePath('/ordem-producao')
+    return r
+  }
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase
@@ -376,6 +394,10 @@ export async function setDataOP(opId: number, dataISO: string) {
 
   const dData = dataParaBR(dataISO)
   if (!dData) return { error: 'Data inválida' }
+  if (await ehLojaProprio(lojaId)) {
+    const r = await alterarOPProprio(lojaId, opId, { data: dataISO }, await carimboUsuario())
+    return 'error' in r ? { error: r.error } : { ok: true }
+  }
 
   const supabase = createServiceClient()
   const { data: op } = await supabase
@@ -427,6 +449,10 @@ export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   if (!novaQtd || !Number.isFinite(novaQtd) || novaQtd <= 0) return { error: 'Quantidade inválida' }
+  if (await ehLojaProprio(lojaId)) {
+    const r = await alterarOPProprio(lojaId, opId, { qtd: novaQtd }, await carimboUsuario())
+    return 'error' in r ? { error: r.error } : { ok: true }
+  }
 
   const supabase = createServiceClient()
   const { data: op } = await supabase
@@ -641,6 +667,9 @@ export async function finishOP(
   const {
     data: { user },
   } = await supabaseSessao.auth.getUser()
+  if (await ehLojaProprio(lojaId)) {
+    return concluirOPProprio(lojaId, opId, dataEscolhidaISO, qtdeProduzida, await carimboUsuario(), user?.id ?? null)
+  }
   const supabase = createServiceClient()
 
   const { data: op } = await supabase
@@ -718,6 +747,13 @@ async function carregarOPdaLoja(opId: number, permissao: string) {
  * producao). A pendente exclui direto, como antes.
  */
 export async function excluirOP(opId: number) {
+  {
+    const lojaProp = await getCurrentLojaId()
+    if (await ehLojaProprio(lojaProp)) {
+      if (!(await requirePermissao(lojaProp, 'Ordens de Producao - Excluir'))) return { error: 'Sem permissão' }
+      return excluirOPProprio(lojaProp, opId, await carimboUsuario())
+    }
+  }
   const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
@@ -761,6 +797,13 @@ export async function excluirOP(opId: number) {
  * OP nao estiver concluida (nao ha o que reverter).
  */
 export async function reverterOP(opId: number) {
+  {
+    const lojaProp = await getCurrentLojaId()
+    if (await ehLojaProprio(lojaProp)) {
+      if (!(await requirePermissao(lojaProp, 'Ordens de Producao - Reverter'))) return { error: 'Sem permissão' }
+      return reverterOPProprio(lojaProp, opId, await carimboUsuario())
+    }
+  }
   const ctx = await carregarOPdaLoja(opId, 'Ordens de Producao - Reverter')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, op } = ctx
@@ -942,6 +985,23 @@ export async function finishOPsEmLote(
   } = await supabaseSessao.auth.getUser()
   const supabase = createServiceClient()
 
+  if (await ehLojaProprio(lojaId)) {
+    const { data: abertas } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op, num_ordem')
+      .eq('loja_id', lojaId).eq('concluida', false).in('id', opIds).order('identificacao_d_dt_previsao').order('id')
+    const usuario = await carimboUsuario()
+    let ok = 0
+    const falhasProp: { id: number; numOP: string; error: string }[] = []
+    // sequencial: cada conclusao trava os custos dos insumos; em paralelo so brigariam entre si
+    for (const op of (abertas ?? []) as { id: number; identificacao_c_num_op: string | null; num_ordem: string | null }[]) {
+      const r = await concluirOPProprio(lojaId, op.id, null, null, usuario, user?.id ?? null)
+      if ('error' in r) falhasProp.push({ id: op.id, numOP: op.identificacao_c_num_op || op.num_ordem || `#${op.id}`, error: r.error })
+      else ok++
+    }
+    if (ok > 0) await registrarAuditoria('concluir', 'ordem de produção', null, `${ok} OP(s) em lote`)
+    revalidatePath('/ordem-producao')
+    return { sucesso: ok, falhas: falhasProp }
+  }
+
   const { data: linhas } = await supabase
     .from('ordens_producao')
     .select(
@@ -996,6 +1056,21 @@ export async function reverterOPsEmLote(
   }
   if (!opIds.length) return { sucesso: 0, falhas: [] }
   const supabase = createServiceClient()
+
+  if (await ehLojaProprio(lojaId)) {
+    const { data: feitas } = await supabase.from('ordens_producao').select('id').eq('loja_id', lojaId).eq('concluida', true).in('id', opIds).order('id', { ascending: false })
+    const usuario = await carimboUsuario()
+    let ok = 0
+    const falhasProp: { id: number; error: string }[] = []
+    for (const op of (feitas ?? []) as { id: number }[]) {
+      const r = await reverterOPProprio(lojaId, op.id, usuario)
+      if ('error' in r) falhasProp.push({ id: op.id, error: r.error })
+      else ok++
+    }
+    if (ok > 0) await registrarAuditoria('reverter', 'ordem de produção', null, `${ok} OP(s) em lote`)
+    revalidatePath('/ordem-producao')
+    return { sucesso: ok, falhas: falhasProp }
+  }
 
   const { data: linhas } = await supabase
     .from('ordens_producao')

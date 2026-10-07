@@ -11,6 +11,8 @@ import { InventariosRelacionadosOP } from '@/components/ordem-producao/Inventari
 import { NotaFiscalVinculadaOP } from '@/components/ordem-producao/NotaFiscalVinculadaOP'
 import { HistoricoSyncOP } from '@/components/ordem-producao/HistoricoSyncOP'
 import { HistoricoEdicoesOP } from '@/components/ordem-producao/HistoricoEdicoesOP'
+import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
+import { detalheOPProprio } from '@/lib/estoque/op-proprio'
 
 const STATUS_INFO: Record<OpStatus, { label: string; token: CorToken }> = {
   concluida: { label: 'Concluída', token: 'ok' },
@@ -44,6 +46,8 @@ export default async function OrdemProducaoDetalhePage({
 
   const { id } = await params
   const supabase = await createClient()
+  const { data: lojaModo } = await supabase.from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  const proprio = lojaModo?.modo_estoque === 'proprio'
 
   // errosConsulta: mesmo padrao de errosConsulta/banner ja estabelecido nas
   // Tasks 12-16 desta auditoria (AGENTS.md) -- acumula falha de query num
@@ -100,6 +104,17 @@ export default async function OrdemProducaoDetalhePage({
     notFound()
   }
 
+  // Colunas do estoque proprio (migration 136): lidas a parte e so em loja proprio, para o modo Omie nao depender delas.
+  type ExtraProprio = {
+    local_destino: number | null; criada_por: string | null; concluida_por_nome: string | null; revertida_em: string | null
+    revertida_por: string | null; custo_total: number | null; custo_unitario: number | null; venda_ref: string | null; dt_inclusao: string | null
+  }
+  const { data: extraProprio } = proprio
+    ? await supabase.from('ordens_producao')
+        .select('local_destino, criada_por, concluida_por_nome, revertida_em, revertida_por, custo_total, custo_unitario, venda_ref, dt_inclusao')
+        .eq('id', op.id).eq('loja_id', lojaId).maybeSingle<ExtraProprio>()
+    : { data: null as ExtraProprio | null }
+
   const [{ data: produto, error: produtoErro }, { data: local, error: localErro }] = await Promise.all([
     op.identificacao_n_cod_produto
       ? supabase
@@ -120,6 +135,10 @@ export default async function OrdemProducaoDetalhePage({
   ])
   logErro('produto')(produtoErro)
   logErro('local de estoque')(localErro)
+  const localDestinoCod = extraProprio?.local_destino ?? null
+  const { data: localDestino } = proprio && localDestinoCod
+    ? await supabase.from('local_estoques').select('descricao').eq('loja_id', lojaId).eq('codigo_local_estoque', localDestinoCod).maybeSingle()
+    : { data: null }
 
   // Ingredientes: mesmo padrao de app/(app)/ordem-producao/page.tsx (le
   // full_object.itensDetalhes, resolve nome/unidade via produtos).
@@ -212,9 +231,10 @@ export default async function OrdemProducaoDetalhePage({
             </span>{' '}
             {produto?.unidade ?? ''}
           </Campo>
-          <Campo label="Local de produção">
+          <Campo label={proprio ? 'Local de consumo' : 'Local de produção'}>
             {local?.descricao ?? (op.identificacao_codigo_local_estoque ? `#${op.identificacao_codigo_local_estoque}` : '-')}
           </Campo>
+          {proprio && <Campo label="Local de destino">{localDestino?.descricao ?? local?.descricao ?? '-'}</Campo>}
           <Campo label="Validade"><span className="num">{fmtDataBR(op.validade) ?? '-'}</span></Campo>
           <Campo label="Quantidade de etiqueta"><span className="num">{op.quantidade ?? '-'}</span></Campo>
           <Campo label="Data prevista"><span className="num">{fmtDataBR(op.identificacao_d_dt_previsao) ?? '-'}</span></Campo>
@@ -238,7 +258,27 @@ export default async function OrdemProducaoDetalhePage({
         )}
       </div>
 
-      <HistoricoSyncOP
+      {proprio && (
+        <DetalheOPProprio
+          detalhe={await detalheOPProprio(lojaId, op.id)}
+          opId={op.id}
+          numOP={numOP}
+          concluida={concluida}
+          podeReverter={await requirePermissao(lojaId, 'Ordens de Producao - Reverter')}
+          custoTotal={extraProprio?.custo_total ?? null}
+          custoUnitario={extraProprio?.custo_unitario ?? null}
+          unidade={produto?.unidade ?? ''}
+          criadaPor={extraProprio?.criada_por ?? null}
+          criadaEm={extraProprio?.dt_inclusao ?? null}
+          concluidaPor={extraProprio?.concluida_por_nome ?? null}
+          concluidaEm={concluida ? op.dt_conclusao_real ?? null : null}
+          revertidaPor={extraProprio?.revertida_por ?? null}
+          revertidaEm={extraProprio?.revertida_em ?? null}
+          vendaRef={extraProprio?.venda_ref ?? null}
+        />
+      )}
+
+      {!proprio && <HistoricoSyncOP
         info={{
           fonte: opFonte,
           concluida,
@@ -249,7 +289,7 @@ export default async function OrdemProducaoDetalhePage({
           conclusaoQtdeDesejada: op.conclusao_qtde_desejada ?? null,
           conclusaoDataDesejada: op.conclusao_data_desejada ?? null,
         }}
-      />
+      />}
 
       <InventariosRelacionadosOP
         lojaId={lojaId}

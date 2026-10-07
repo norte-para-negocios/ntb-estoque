@@ -15,7 +15,7 @@ import { UNIDADE_OP_VALIDAS, descreverRecorrenciaOP, type UnidadeOP } from '@/li
 export default async function NovaOPPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; unidade?: string; intervalo?: string; vezes?: string; local?: string; obs?: string }>
+  searchParams: Promise<{ data?: string; unidade?: string; intervalo?: string; vezes?: string; local?: string; destino?: string; obs?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   // Passo 2 da criacao de OP: exige a permissao de Criar (pode ser aberta por URL).
@@ -27,6 +27,7 @@ export default async function NovaOPPage({
   const intervalo = unidade === 'nao' ? 1 : Math.max(1, Math.min(60, Number(sp.intervalo) || 1))
   const vezes = unidade === 'nao' ? 1 : Math.max(2, Math.min(60, Number(sp.vezes) || 4))
   const localCodigo = sp.local && /^\d+$/.test(sp.local) ? Number(sp.local) : null
+  const destinoCodigo = sp.destino && /^\d+$/.test(sp.destino) ? Number(sp.destino) : null
   const obs = sp.obs ?? ''
 
   // Sem data valida = acesso direto sem passar pelo passo 1.
@@ -68,6 +69,18 @@ export default async function NovaOPPage({
     localNome = (loc?.descricao as string | null) ?? null
   }
 
+  let destinoNome: string | null = null
+  if (destinoCodigo != null) {
+    const supabase = await createClient()
+    const { data: loc } = await supabase
+      .from('local_estoques')
+      .select('descricao')
+      .eq('loja_id', lojaId)
+      .eq('codigo_local_estoque', destinoCodigo)
+      .maybeSingle()
+    destinoNome = (loc?.descricao as string | null) ?? null
+  }
+
   const m = data.match(/^(\d{4})-(\d{2})-(\d{2})/)
   const dataBR = m ? `${m[3]}/${m[2]}/${m[1]}` : data
 
@@ -85,6 +98,12 @@ export default async function NovaOPPage({
             <span className="num">{dataBR}</span>
             <span aria-hidden>·</span>
             <span>{localNome ?? 'Padrão do produto'}</span>
+            {destinoNome && (
+              <>
+                <span aria-hidden>→</span>
+                <span>{destinoNome}</span>
+              </>
+            )}
             {unidade !== 'nao' && (
               <>
                 <span aria-hidden>·</span>
@@ -94,7 +113,7 @@ export default async function NovaOPPage({
           </span>
         }
       />
-      <CriarOPProdutos data={data} unidade={unidade} intervalo={intervalo} vezes={vezes} localCodigo={localCodigo} localNome={localNome} obs={obs} />
+      <CriarOPProdutos data={data} unidade={unidade} intervalo={intervalo} vezes={vezes} localCodigo={localCodigo} localNome={localNome} destinoCodigo={destinoCodigo} destinoNome={destinoNome} obs={obs} />
     </div>
   )
 }

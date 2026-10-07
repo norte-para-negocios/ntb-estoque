@@ -22,6 +22,7 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { resolverFiltrosOPProprio, aplicarFiltrosOPProprio } from '@/lib/estoque/op-proprio-consulta'
 import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown, ShoppingCart } from 'lucide-react'
 import {
   complementarOrdensProducao,
@@ -54,6 +55,8 @@ export default async function OrdemProducaoPage({
     op_status?: string
     local?: string
     origem?: string
+    op_insumo?: string
+    op_usuario?: string
     ord?: string
     page?: string
   }>
@@ -66,11 +69,12 @@ export default async function OrdemProducaoPage({
   // Loja de teste (2026-08-16, pedido explícito do usuário): filtro/etiqueta de
   // "veio do ntb-vendas" só faz sentido mostrar aqui — em loja real, toda OP
   // é OP de verdade, não tem "origem" a distinguir.
-  const { data: lojaRow } = await supabase.from('lojas').select('is_test').eq('id', lojaId).maybeSingle()
+  const { data: lojaRow } = await supabase.from('lojas').select('is_test, modo_estoque').eq('id', lojaId).maybeSingle()
   const lojaIsTest = !!lojaRow?.is_test
+  const proprio = lojaRow?.modo_estoque === 'proprio'
 
   // Permissoes de acao por botao. Sync (Atualizar agora) virou admin-only.
-  const podeSync = await isAdmin()
+  const podeSync = (await isAdmin()) && !proprio // estoque proprio nao tem o que sincronizar com o Omie
   const podeCriar = await requirePermissao(lojaId, 'Ordens de Producao - Criar')
   const podeEditar = await requirePermissao(lojaId, 'Ordens de Producao - Editar')
   const podeExcluir = await requirePermissao(lojaId, 'Ordens de Producao - Excluir')
@@ -133,6 +137,9 @@ export default async function OrdemProducaoPage({
     ]
   }
 
+  // Estoque proprio: pesquisa tambem por local, usuario (quem criou/concluiu) e insumo usado.
+  const filtrosProprio = proprio ? await resolverFiltrosOPProprio(supabase, lojaId, { local: sp.local, usuario: sp.op_usuario, insumo: sp.op_insumo }) : null
+
   type OPRow = {
     id: number
     identificacao_n_cod_op: number
@@ -153,7 +160,7 @@ export default async function OrdemProducaoPage({
   // So precisa buscar tudo em memoria para ordenar por NOME do produto (vem do
   // join, nao da query), ou quando o periodo cruza a janela quente (o Contabo
   // pode ter linhas no meio do intervalo, paginacao nativa nao e confiavel nesse caso).
-  const precisaBuscarTudo = ordEmMemoria || dataInicio < limiteJanelaQuente()
+  const precisaBuscarTudo = ordEmMemoria || (!proprio && dataInicio < limiteJanelaQuente())
 
   function baseQuery() {
     let q = supabase
@@ -185,6 +192,7 @@ export default async function OrdemProducaoPage({
     if (codigosFiltro !== null) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
+    if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
     // Ordenacao no banco (qtd/validade/codigo do produto). produto_az/za sao
     // reordenados em memoria depois. O desempate por id mantem a janela .range
     // estavel quando a chave de ordem nao e unica.
@@ -236,7 +244,7 @@ export default async function OrdemProducaoPage({
       if (lote.length < LOTE) break
       if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
-    const completouComContabo = dataInicio < limiteJanelaQuente()
+    const completouComContabo = !proprio && dataInicio < limiteJanelaQuente()
     // campo: 'previsao' -- o filtro de periodo desta tela e sobre
     // identificacao_d_dt_previsao (data planejada), nao dt_conclusao_real (default
     // do helper). Achado real 2026-07-19: sem isso, o complemento frio filtrava
@@ -356,6 +364,7 @@ export default async function OrdemProducaoPage({
     if (codigosFiltro !== null) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
+    if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
     return q
   }
 
@@ -371,7 +380,7 @@ export default async function OrdemProducaoPage({
   // pra caber no lote), nao o valor exato -- avisamos em vez de mostrar errado.
   let totaisParciais = false
 
-  if (dataInicio < limiteJanelaQuente()) {
+  if (!proprio && dataInicio < limiteJanelaQuente()) {
     function totaisRowsQuery() {
       let q = supabase
         .from('ordens_producao')
@@ -459,6 +468,30 @@ export default async function OrdemProducaoPage({
     totAtrasadasFinal = totAtrasadas ?? 0
   }
 
+  // Estoque proprio: totais de custo/quantidade das OPs filtradas (nao depende dos chips de status: respeita periodo, produto, local, usuario, insumo e numero).
+  let totaisProprio: { ops: number; concluidas: number; custo: number } | null = null
+  if (proprio) {
+    let ops = 0
+    let concluidas = 0
+    let custo = 0
+    for (let off = 0; off < 200000; off += 1000) {
+      let q = supabase.from('ordens_producao').select('id, concluida, custo_total').eq('loja_id', lojaId)
+      if (dataInicio) q = q.gte('identificacao_d_dt_previsao', dataInicio)
+      if (dataFinal) q = q.lte('identificacao_d_dt_previsao', dataFinal)
+      if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
+      if (codigosFiltro !== null) q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
+      if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
+      const { data: lote, error: erroLote } = await q.order('id', { ascending: true }).range(off, off + 999)
+      if (erroLote) { console.error('ordem-producao: falha ao somar custos', erroLote.message); break }
+      const rows = (lote ?? []) as { concluida: boolean | null; custo_total: number | null }[]
+      ops += rows.length
+      concluidas += rows.filter((r) => r.concluida).length
+      custo += rows.reduce((a, r) => a + (Number(r.custo_total) || 0), 0)
+      if (rows.length < 1000) break
+    }
+    totaisProprio = { ops, concluidas, custo }
+  }
+
   const exportParams = new URLSearchParams()
   // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.
   exportParams.set('data_inicio', dataInicio)
@@ -470,6 +503,11 @@ export default async function OrdemProducaoPage({
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
   if (sp.op_status) exportParams.set('op_status', sp.op_status)
   if (sp.origem) exportParams.set('origem', sp.origem)
+  if (proprio) {
+    if (sp.local) exportParams.set('local', sp.local)
+    if (sp.op_insumo) exportParams.set('op_insumo', sp.op_insumo)
+    if (sp.op_usuario) exportParams.set('op_usuario', sp.op_usuario)
+  }
 
   // Ordenacao clicando no cabecalho da tabela (mantem os filtros atuais).
   const ordHref = (novoOrd: string) => {
@@ -510,6 +548,12 @@ export default async function OrdemProducaoPage({
               { value: 'ntb-vendas', label: 'Só do NTB Vendas' },
             ],
           },
+        ] as CampoFiltro[])
+      : []),
+    ...(proprio
+      ? ([
+          { tipo: 'texto', nome: 'op_insumo', label: 'Insumo usado (código ou descrição)' },
+          { tipo: 'texto', nome: 'op_usuario', label: 'Usuário (quem criou ou concluiu)' },
         ] as CampoFiltro[])
       : []),
     {
@@ -566,6 +610,8 @@ export default async function OrdemProducaoPage({
                   op_status: sp.op_status ?? '',
                   local: sp.local ?? '',
                   origem: sp.origem ?? '',
+                  op_insumo: sp.op_insumo ?? '',
+                  op_usuario: sp.op_usuario ?? '',
                   ord: sp.ord ?? '',
                 }}
                 persistirEm="/ordem-producao"
@@ -623,6 +669,14 @@ export default async function OrdemProducaoPage({
           persistirEm="/ordem-producao"
         />
       </ListaHeader>
+
+      {totaisProprio && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span><span className="num font-semibold text-text">{totaisProprio.ops.toLocaleString('pt-BR')}</span> OP(s) na busca</span>
+          <span><span className="num font-semibold text-text">{totaisProprio.concluidas.toLocaleString('pt-BR')}</span> concluída(s)</span>
+          <span>Custo das concluídas: <span className="num font-semibold text-text">R$ {totaisProprio.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-text-muted">Período: <span className="num">{fmtDataBR(dataInicio)}</span> a <span className="num">{fmtDataBR(dataFinal)}</span></span>
@@ -713,7 +767,7 @@ export default async function OrdemProducaoPage({
         <EmptyState
           icon={Factory}
           title="Nenhuma ordem de produção"
-          hint="Sincronize com o Omie."
+          hint={proprio ? 'Clique em "Criar OP" para planejar a primeira produção.' : 'Sincronize com o Omie.'}
         />
       )}
 

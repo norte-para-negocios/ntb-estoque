@@ -7,6 +7,8 @@ import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { resolverFiltrosOPProprio, aplicarFiltrosOPProprio, carregarExtrasOPProprio } from '@/lib/estoque/op-proprio-consulta'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -31,7 +33,12 @@ export async function GET(request: Request) {
     familia: searchParams.get('familia') || undefined,
     op_concluido: searchParams.get('op_concluido') || undefined,
     op_status: searchParams.get('op_status') || undefined,
+    local: searchParams.get('local') || undefined,
+    op_insumo: searchParams.get('op_insumo') || undefined,
+    op_usuario: searchParams.get('op_usuario') || undefined,
   }
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
+  const filtrosProprio = proprio ? await resolverFiltrosOPProprio(supabase, lojaId, { local: sp.local, usuario: sp.op_usuario, insumo: sp.op_insumo }) : null
 
   const filtraConclusao = sp.op_concluido === 'S' || sp.op_concluido === 'N'
   // Achado real (auditoria 2026-07-22): esta rota nunca lia op_status -- a tela
@@ -110,6 +117,7 @@ export async function GET(request: Request) {
     if (codigosFiltro !== null) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
+    if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
     return q
   }
 
@@ -125,7 +133,7 @@ export async function GET(request: Request) {
   // o filtro de periodo aqui e sobre identificacao_d_dt_previsao (linhas acima),
   // nao dt_conclusao_real (default do helper, usado por lib/resumo-dia.ts). O CSV
   // precisa bater com o que a tela mostra.
-  const ordens = (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente())
+  const ordens = (!proprio && (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente()))
     ? await complementarOrdensProducao(ordensRaw, { lojaId, dataInicio: sp.data_inicio, dataFinal: sp.data_final, campo: 'previsao' })
     : ordensRaw
 
@@ -141,28 +149,51 @@ export async function GET(request: Request) {
 
   const prodMap = new Map((produtos ?? []).map((p) => [p.codigo_produto, p]))
 
+  // Estoque proprio: o Excel traz tambem datas, locais, custo, quem criou/concluiu e a versao da ficha usada.
+  const extras = proprio ? await carregarExtrasOPProprio(supabase, lojaId, ordens.map((o) => o.id)) : null
+  const { data: locaisRows } = proprio ? await supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId) : { data: [] }
+  const nomeLocal = new Map((locaisRows ?? []).map((l) => [Number(l.codigo_local_estoque), String(l.descricao ?? '')]))
+
   const rows = ordens.map((op) => {
     const prod = prodMap.get(op.identificacao_n_cod_produto as number)
+    const x = extras?.get(op.id)
     return {
       op: op.identificacao_c_num_op || op.num_ordem || '-',
       produto: formatarNomeProduto(prod?.descricao) || `Produto ${op.identificacao_n_cod_produto}`,
       qtd: op.identificacao_n_qtde ?? 0,
       validade: op.validade ? fmtData(op.validade) : '-',
       status: op.concluida ? 'Concluída' : 'Pendente',
+      prevista: x?.identificacao_d_dt_previsao ? fmtData(x.identificacao_d_dt_previsao) : '-',
+      conclusao: x?.dt_conclusao_real ? fmtData(x.dt_conclusao_real) : '-',
+      consumo: x?.identificacao_codigo_local_estoque ? nomeLocal.get(Number(x.identificacao_codigo_local_estoque)) ?? '' : '',
+      destino: x ? nomeLocal.get(Number(x.local_destino ?? x.identificacao_codigo_local_estoque)) ?? '' : '',
+      custoTotal: x?.custo_total ?? 0,
+      custoUnit: x?.custo_unitario ?? 0,
+      criadaPor: x?.criada_por ?? '',
+      concluidaPor: x?.concluida_por_nome ?? '',
+      ficha: x?.ficha_versao ?? '',
     }
   })
 
-  const buffer = await gerarPlanilha(
-    rows,
-    [
-      { key: 'op', label: 'OP', tipo: 'texto', largura: 16 },
-      { key: 'produto', label: 'Produto', tipo: 'texto' },
-      { key: 'qtd', label: 'Qtd', tipo: 'numero', largura: 12 },
-      { key: 'validade', label: 'Validade', tipo: 'texto', largura: 14 },
-      { key: 'status', label: 'Status', tipo: 'texto', largura: 14 },
-    ],
-    { titulo: 'Ordens de Produção' },
-  )
+  const colunasBase = [
+    { key: 'op', label: 'OP', tipo: 'texto' as const, largura: 16 },
+    { key: 'produto', label: 'Produto', tipo: 'texto' as const },
+    { key: 'qtd', label: 'Qtd', tipo: 'numero' as const, largura: 12 },
+    { key: 'validade', label: 'Validade', tipo: 'texto' as const, largura: 14 },
+    { key: 'status', label: 'Status', tipo: 'texto' as const, largura: 14 },
+  ]
+  const colunasProprio = [
+    { key: 'prevista', label: 'Data prevista', tipo: 'texto' as const, largura: 14 },
+    { key: 'conclusao', label: 'Data de conclusão', tipo: 'texto' as const, largura: 16 },
+    { key: 'consumo', label: 'Local de consumo', tipo: 'texto' as const, largura: 20 },
+    { key: 'destino', label: 'Local de destino', tipo: 'texto' as const, largura: 20 },
+    { key: 'custoTotal', label: 'Custo total (R$)', tipo: 'numero' as const, largura: 16 },
+    { key: 'custoUnit', label: 'Custo unitário (R$)', tipo: 'numero' as const, largura: 18 },
+    { key: 'criadaPor', label: 'Criada por', tipo: 'texto' as const, largura: 22 },
+    { key: 'concluidaPor', label: 'Concluída por', tipo: 'texto' as const, largura: 22 },
+    { key: 'ficha', label: 'Versão da ficha', tipo: 'texto' as const, largura: 14 },
+  ]
+  const buffer = await gerarPlanilha(rows, proprio ? [...colunasBase, ...colunasProprio] : colunasBase, { titulo: 'Ordens de Produção' })
 
   return planilhaResponse('ordens-producao.xlsx', buffer)
 }

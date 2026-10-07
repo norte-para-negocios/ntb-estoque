@@ -77,6 +77,8 @@ export default async function RelatorioProducaoPage({
   if (sp.local) filtrosURL.set('local', sp.local)
 
   const supabase = createServiceClient()
+  const { data: lojaModo } = await supabase.from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  const proprio = lojaModo?.modo_estoque === 'proprio'
   const [{ buckets, funcionariosOrdenados }, familias, locaisRes] = await Promise.all([
     carregarDashboardProducao(lojaId, granularidade, mes, {
       tipos: tiposSel,
@@ -304,7 +306,7 @@ export default async function RelatorioProducaoPage({
             </div>
             <p className="px-1 text-[13px] text-text-muted">
               Só aparecem OPs em que o produzido ficou diferente do previsto. O previsto é capturado enquanto a OP está
-              aberta — a Omie não guarda as duas quantidades (ao concluir, ela sobrescreve o previsto com o produzido).
+              aberta — ao concluir, a quantidade da OP passa a ser a produzida{proprio ? '' : ' (a Omie sobrescreve o previsto com o produzido)'}.
             </p>
           </>
         ) : (
@@ -314,7 +316,7 @@ export default async function RelatorioProducaoPage({
                 <>
                   Nenhuma diferença entre previsto e produzido nas OPs concluídas neste mês. A captura do previsto começou
                   em <strong className="text-text">{fmtDataBr(capturaDesde)}</strong> — OPs concluídas antes disso não
-                  entram na comparação (a Omie não guarda o previsto depois de concluir).
+                  entram na comparação{proprio ? '' : ' (a Omie não guarda o previsto depois de concluir)'}.
                 </>
               ) : (
                 <>Comparação previsto × produzido ainda não disponível — a captura do previsto começa na próxima execução diária.</>

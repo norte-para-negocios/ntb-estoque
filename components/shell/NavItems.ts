@@ -24,8 +24,6 @@ import {
   Database,
   Tags,
   Boxes,
-  ChefHat,
-  CookingPot,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -50,7 +48,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
   { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', soEstoqueProprio: true },
   { href: '/compras', label: 'Compras', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
-  { href: '/producao-propria', label: 'Produção', icon: CookingPot, group: 'Operação', soEstoqueProprio: true },
   { href: '/inventario-proprio', label: 'Contagens', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
@@ -61,7 +58,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/validade', label: 'Validade', icon: CalendarClock, group: 'Operação' },
   { href: '/impressoes', label: 'Impressões', icon: Printer, group: 'Operação' },
   { href: '/produto', label: 'Produtos', icon: Package, group: 'Cadastros' },
-  { href: '/ficha-tecnica', label: 'Fichas técnicas', icon: ChefHat, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/local-estoque', label: 'Locais de Estoque', icon: Warehouse, group: 'Cadastros' },
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
   { href: '/categoria-contabil', label: 'Categorias Contábeis', icon: Tags, group: 'Cadastros' },

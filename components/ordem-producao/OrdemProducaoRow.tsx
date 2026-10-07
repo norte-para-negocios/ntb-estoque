@@ -19,6 +19,7 @@ import { parseNumBR, formatNumBR } from '@/lib/num-br'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 // Stepper em pilula: trilho bg-surface-2 com botoes circulares brancos nas pontas
 // e o campo transparente no meio (foco no trilho inteiro).
@@ -122,6 +123,8 @@ function QtdOP({ value }: { value: number | null | undefined }) {
 
 // Hook com toda a logica de estado/acoes, compartilhada entre tabela (desktop) e card (mobile).
 function useOP(op: OPData) {
+  const proprio = useEstoqueProprio()
+  const noOmie = proprio ? '' : ' no Omie'
   const [validade, setValidade] = useState(op.validade ? op.validade.split('T')[0] : '')
   // Quantidade = SO a contagem de etiquetas a imprimir (1, 2, 3...) -- NAO tem
   // nenhuma relacao com a producao da OP nem com o Omie. Campo 100% local, sempre
@@ -209,7 +212,7 @@ function useOP(op: OPData) {
         setDataOP(anterior) // desfaz o otimismo
       } else {
         dataOPSalva.current = novo
-        toast.success('Data da OP alterada no Omie')
+        toast.success(`Data da OP alterada${noOmie}`)
       }
     })
   }
@@ -256,7 +259,7 @@ function useOP(op: OPData) {
         setQtdPlanejada(anterior) // desfaz o otimismo
       } else {
         qtdPlanejadaSalva.current = novo
-        toast.success('Quantidade planejada alterada no Omie')
+        toast.success(`Quantidade planejada alterada${noOmie}`)
       }
     })
   }
@@ -308,10 +311,12 @@ function useOP(op: OPData) {
         // fallback resolveu (ex.: não achou qual insumo é, ou falhou de novo).
         const semCmc = /\bcmc\b|custo m.dio/i.test(res.error)
         toast.error(
-          semCmc ? 'Insumo sem custo médio (CMC) no Omie' : 'Erro ao concluir',
+          semCmc ? `Insumo sem custo médio (CMC)${noOmie}` : 'Erro ao concluir',
           {
             description: semCmc
-              ? `${res.error} — ajuste o CMC do insumo no Omie (Estoque > Movimentação Manual > Ajustar saldo do dia, com o valor unitário) e tente concluir de novo.`
+              ? proprio
+                ? `${res.error} — lance uma entrada com custo desse insumo (Estoque ou Compras) e tente concluir de novo.`
+                : `${res.error} — ajuste o CMC do insumo no Omie (Estoque > Movimentação Manual > Ajustar saldo do dia, com o valor unitário) e tente concluir de novo.`
               : res.error,
             duration: semCmc ? 15000 : undefined,
           }
@@ -323,7 +328,7 @@ function useOP(op: OPData) {
             duration: 15000,
           })
         } else {
-          toast.success('Ordem concluída no Omie')
+          toast.success(`Ordem concluída${noOmie}`)
         }
         if (res.avisoRestaurar) {
           toast.error('Atenção: ficha técnica pode estar incompleta', {
@@ -348,24 +353,24 @@ function useOP(op: OPData) {
 
   // Reverter a conclusao (OP concluida) e excluir (OP aberta). Escrevem no Omie.
   function reverter() {
-    if (!window.confirm('Reverter a conclusão desta OP no Omie? O estoque produzido será estornado.')) return
+    if (!window.confirm(`Reverter a conclusão desta OP${noOmie}? O estoque produzido será estornado${proprio ? ' e os insumos voltam ao estoque' : ''}.`)) return
     startTransition(async () => {
       const res = await reverterOP(op.id)
       if (res?.error) toast.error('Erro ao reverter', { description: res.error })
-      else toast.success('Conclusão revertida no Omie')
+      else toast.success(`Conclusão revertida${noOmie}`)
     })
   }
 
   function excluir() {
     const msg = op.concluida
-      ? 'Excluir esta OP concluída? A produção será estornada (revertida) no Omie e a OP removida. Esta ação não pode ser desfeita.'
-      : 'Excluir esta OP no Omie? Esta ação não pode ser desfeita.'
+      ? `Excluir esta OP concluída? A produção será estornada (revertida)${noOmie} e a OP removida. Esta ação não pode ser desfeita.`
+      : `Excluir esta OP${noOmie}? Esta ação não pode ser desfeita.`
     if (!window.confirm(msg)) return
     startTransition(async () => {
       const res = await excluirOP(op.id)
       if (res?.error) toast.error('Erro ao excluir', { description: res.error })
       else if (res?.fantasma) toast.success('OP removida — já não existia mais no Omie')
-      else toast.success('OP excluída no Omie')
+      else toast.success(`OP excluída${noOmie}`)
     })
   }
 
@@ -570,6 +575,7 @@ function StepperQtdOP({ op, ctrl }: StepperProps) {
 // Desacopla o seletor de data dos botoes Imprimir/Excluir, evitando o espremimento
 // reportado no video.
 function DialogConclusao({ op, ctrl }: StepperProps) {
+  const proprio = useEstoqueProprio()
   return (
     <Dialog open={ctrl.dialogConclusao} onOpenChange={ctrl.setDialogConclusao}>
       <DialogContent className="bg-surface" showCloseButton={false}>
@@ -616,14 +622,13 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
               className="num h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none transition-colors focus:ring-2 focus:ring-brand/40 disabled:opacity-60 max-sm:h-11 max-sm:text-base"
             />
             <p className="mt-1.5 text-[12px] text-text-muted">
-              Padrão: data prevista da OP (o Omie não aceita concluir com data
-              futura). Altere se a produção foi em outro dia.
+              Padrão: data prevista da OP ({proprio ? 'a conclusão não pode ser no futuro' : 'o Omie não aceita concluir com data futura'}). Altere se a produção foi em outro dia.
             </p>
           </div>
           <p className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text-muted">
             <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
-            A conclusão será gravada no Omie. O estoque produzido será incrementado
-            pela quantidade informada acima.
+            {proprio ? 'A conclusão baixa os insumos da ficha técnica no local de consumo e entrega o produto pronto no local de destino' : 'A conclusão será gravada no Omie. O estoque produzido será incrementado'}
+            {proprio ? ', pela quantidade informada acima.' : ' pela quantidade informada acima.'}
           </p>
         </div>
 
@@ -655,6 +660,7 @@ function DialogConclusao({ op, ctrl }: StepperProps) {
 // popup enxuto, pra a LINHA da OP ficar compacta como as outras telas. Os steppers
 // salvam sozinhos (onBlur/onChange); o botao so fecha.
 function DialogEditar({ op, ctrl }: StepperProps) {
+  const proprio = useEstoqueProprio()
   return (
     <Dialog open={ctrl.dialogEditar} onOpenChange={ctrl.setDialogEditar}>
       <DialogContent className="bg-surface" showCloseButton={false}>
@@ -696,7 +702,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
           </div>
           <p className="rounded-[var(--r-md)] bg-surface-2 px-3 py-2.5 text-[13px] text-text-muted">
             A <strong>data</strong> e a <strong>quantidade planejada</strong> da OP são gravadas
-            no Omie. Já a validade e a quantidade de etiquetas ficam só no nosso sistema — a
+            {proprio ? ' na OP' : ' no Omie'}. Já a validade e a quantidade de etiquetas ficam só no nosso sistema — a
             etiqueta é só quantas etiquetas imprimir, sem relação com a produção da OP.
           </p>
         </div>
@@ -715,6 +721,7 @@ function DialogEditar({ op, ctrl }: StepperProps) {
 // ja esta preenchido ali -- um window.confirm com os valores atuais e a unica
 // checagem antes de gravar de verdade no Omie.
 function Acoes({ op, ctrl }: StepperProps) {
+  const proprio = useEstoqueProprio()
   function concluirDesktop() {
     // O Omie rejeita concluir com data no futuro -- se a data da linha estiver
     // agendada pra frente (OP concluida adiantada), usa hoje na conclusao em vez de
@@ -723,7 +730,7 @@ function Acoes({ op, ctrl }: StepperProps) {
     const dataEfetivaISO = ctrl.dataOP && ctrl.dataOP > ctrl.hojeISO ? ctrl.hojeISO : ctrl.dataOP
     const dataBR = dataEfetivaISO ? dataEfetivaISO.split('-').reverse().join('/') : '-'
     const ok = window.confirm(
-      `Concluir a OP ${op.numOP}? Será gravado no Omie: ${ctrl.qtdPlanejada} ${op.unidade}, data ${dataBR}. O estoque produzido será incrementado.`
+      `Concluir a OP ${op.numOP}? ${proprio ? 'Será produzido' : 'Será gravado no Omie'}: ${ctrl.qtdPlanejada} ${op.unidade}, data ${dataBR}. O estoque produzido será incrementado${proprio ? ' e os insumos serão baixados' : ''}.`
     )
     if (!ok) return
     ctrl.concluir(dataEfetivaISO, ctrl.qtdPlanejada)
@@ -757,7 +764,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           onClick={ctrl.reverter}
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-warn hover:bg-warn/10`}
-          title="Reverter a conclusão (estorna no Omie)"
+          title={proprio ? 'Reverter a conclusão (estorna no estoque)' : 'Reverter a conclusão (estorna no Omie)'}
         >
           <Undo2 className="size-3.5" />
         </button>
@@ -768,7 +775,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           onClick={ctrl.excluir}
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-err hover:bg-err/10`}
-          title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : 'Excluir a OP no Omie'}
+          title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : proprio ? 'Excluir a OP' : 'Excluir a OP no Omie'}
         >
           <Trash2 className="size-3.5" />
         </button>
