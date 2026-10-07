@@ -1,7 +1,9 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { ehLojaProprio } from '@/lib/estoque/op-proprio'
+import { verEstruturaProprio, salvarEstruturaProprio } from '@/lib/estoque/estrutura-proprio'
 import { consultarEstrutura, incluirEstrutura, alterarEstrutura, excluirEstrutura } from '@/lib/omie/malha'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -16,6 +18,7 @@ export type EstruturaItemView = {
   quantidade: number
   unidade: string
   perda: number
+  fatorCorrecao?: number // so estoque proprio
 }
 
 export type ConsumoView = {
@@ -30,6 +33,12 @@ export type EstruturaView = {
   itens: EstruturaItemView[]
   consumoOP: { numero: string | null; data: string | null; itens: ConsumoView[] } | null
   semEstrutura: boolean
+  // so estoque proprio
+  proprio?: boolean
+  rendimento?: number
+  expandirNaVenda?: boolean
+  versao?: number | null
+  custoUnitario?: number | null
 }
 
 type OPItemDetalhe = {
@@ -49,6 +58,7 @@ export async function verEstrutura(
 ): Promise<{ error: string } | { ok: true; view: EstruturaView }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos'))) return { error: 'Sem permissão' }
+  if (await ehLojaProprio(lojaId)) return verEstruturaProprio(lojaId, codigoProduto)
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase
@@ -148,6 +158,7 @@ export type ItemEstruturaInput = {
   descricao: string
   quantidade: number
   perda: number
+  fatorCorrecao?: number // so estoque proprio (padrao 1)
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -161,10 +172,12 @@ const quaseIgual = (a: number, b: number) => Math.abs(a - b) < 1e-9
  */
 export async function salvarEstrutura(
   codigoProduto: number,
-  itens: ItemEstruturaInput[]
+  itens: ItemEstruturaInput[],
+  opts?: { rendimento?: number; expandirNaVenda?: boolean }
 ): Promise<{ error: string } | { ok: true; incluidos: number; alterados: number; excluidos: number }> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão para editar a ficha técnica' }
+  if (await ehLojaProprio(lojaId)) return salvarEstruturaProprio(lojaId, codigoProduto, itens, opts, await carimboUsuario())
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase
