@@ -195,6 +195,14 @@ export async function semearLojaProprio(lojaId: number): Promise<{ locais: numbe
     const r = await criarLocalProprio(lojaId, { descricao: l.descricao, padrao: l.padrao === 'S' })
     if ('ok' in r) locais++
   }
+  // Bar e Cozinha viram os locais de baixa dos itens de bar e de cozinha (se a loja ainda não escolheu outros).
+  const { data: todos } = await supabase.from('local_estoques').select('descricao, codigo_local_estoque').eq('loja_id', lojaId)
+  const achar = (nome: string) => (todos ?? []).find((l) => String(l.descricao).toLowerCase() === nome)?.codigo_local_estoque ?? null
+  const { data: lojaAtual } = await supabase.from('lojas').select('local_estoque_bar_codigo, local_estoque_cozinha_codigo').eq('id', lojaId).maybeSingle()
+  const upd: Record<string, number> = {}
+  if (!lojaAtual?.local_estoque_bar_codigo && achar('bar')) upd.local_estoque_bar_codigo = Number(achar('bar'))
+  if (!lojaAtual?.local_estoque_cozinha_codigo && achar('cozinha')) upd.local_estoque_cozinha_codigo = Number(achar('cozinha'))
+  if (Object.keys(upd).length) await supabase.from('lojas').update(upd).eq('id', lojaId)
   const { data: famAtuais } = await supabase.from('familias').select('nome').eq('loja_id', lojaId)
   const temFam = new Set((famAtuais ?? []).map((f) => String(f.nome).toLowerCase()))
   let familias = 0

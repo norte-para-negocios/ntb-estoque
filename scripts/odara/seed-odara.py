@@ -95,7 +95,7 @@ def main():
         loja_id, key = int(r[0][0]), r[0][1]
         print('Estoque: loja ODARA já existe, id', loja_id)
     else:
-        resp = post('/api/integracao/lojas', {'nome': 'ODARA BEACH', 'stockMode': 'proprio'}, BOOT)
+        resp = post('/api/integracao/lojas', {'nome': 'ODARA BEACH', 'cnpj': '66.764.497/0001-22', 'stockMode': 'proprio'}, BOOT)
         loja_id, key = int(resp['lojaId']), resp['integracaoApiKey']
         print('Estoque: loja ODARA criada, id', loja_id, 'modo', resp.get('modo'))
     modo = q('postgres', 'select modo_estoque from lojas where id=%d' % loja_id)[0][0]
@@ -127,7 +127,7 @@ def main():
         cod[nome] = (resp['codigo'], int(resp['codigoProduto']))
         print('  produto', nome, '->', resp['codigo'])
     for n, t, u, ncm in INSUMOS:
-        garantir(n, t, u, ncm, 0)
+        garantir(n, t, u, ncm, 0.01)
     for n, t, u, ncm, preco, *_ in VENDAVEIS:
         garantir(n, t, u, ncm, preco)
 
