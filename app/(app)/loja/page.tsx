@@ -40,9 +40,23 @@ export default async function LojaPage({
   // ver Fase 0 da contenção de RLS no AGENTS.md) -- computa o boolean aqui,
   // no server component, e descarta o valor bruto antes de montar o objeto
   // que desce pra LojaCard.
+  // Lojas de estoque próprio que já têm movimento: o modo delas trava (o banco também barra).
+  const idsProprio = (lojasRaw ?? []).filter((l) => l.modo_estoque === 'proprio').map((l) => l.id)
+  const comMovimento = new Set<number>()
+  await Promise.all(
+    idsProprio.map(async (id) => {
+      const { count } = await supabaseService
+        .from('estoque_movimentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('loja_id', id)
+      if ((count ?? 0) > 0) comMovimento.add(id)
+    })
+  )
+
   const lojas = lojasRaw?.map(({ integracao_api_key, ...resto }) => ({
     ...resto,
     integracao_ntb_vendas_configurada: !!integracao_api_key,
+    tem_movimentos_estoque: comMovimento.has(resto.id),
   }))
 
   // Catalogo de permissoes para o convite por codigo (gerado direto da tela da loja).

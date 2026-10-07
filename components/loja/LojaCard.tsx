@@ -57,6 +57,9 @@ export type LojaRow = {
   omie_app_secret: string | null
   // modo de estoque: omie | proprio | nenhum
   modo_estoque?: string | null
+  is_test?: boolean | null
+  // true quando a loja já tem movimento no estoque próprio (o modo trava)
+  tem_movimentos_estoque?: boolean
   // endereco
   logradouro: string | null
   numero: string | null
@@ -474,13 +477,14 @@ export function LojaCard({
             locais={locaisEstoque}
             cozinhaAtual={loja.local_estoque_cozinha_codigo}
             barAtual={loja.local_estoque_bar_codigo}
+            modo={loja.modo_estoque}
           />
         </div>
       </Section>
 
       {/* Rodapé: ações de edição/exclusão */}
       <div className="flex flex-wrap justify-end gap-2 border-t border-border/60 px-4 py-3">
-        <LojaForm loja={loja} />
+        <LojaForm loja={loja} locais={locaisEstoque} />
         <AtivarLoja lojaId={loja.id} ativo={!!loja.ativo} />
         <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome || '(sem nome)'} />
       </div>
