@@ -17,6 +17,7 @@ import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { editarLocalEstoque } from '@/lib/actions/local-estoque'
+import { CamposLocalProprio, CAMPOS_LOCAL_PADRAO, type CamposLocal } from './CamposLocalProprio'
 
 const inputClass =
   'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
@@ -25,14 +26,19 @@ export function EditarLocalEstoque({
   codigoLocalEstoque,
   descricaoAtual,
   codigoAtual,
+  proprio = false,
+  extrasAtuais,
 }: {
   codigoLocalEstoque: number
   descricaoAtual: string
   codigoAtual: string
+  proprio?: boolean
+  extrasAtuais?: CamposLocal
 }) {
   const [open, setOpen] = useState(false)
   const [descricao, setDescricao] = useState(descricaoAtual)
   const [codigo, setCodigo] = useState(codigoAtual)
+  const [extras, setExtras] = useState<CamposLocal>(extrasAtuais ?? CAMPOS_LOCAL_PADRAO)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -42,12 +48,12 @@ export function EditarLocalEstoque({
       return
     }
     startTransition(async () => {
-      const res = await editarLocalEstoque({ codigoLocalEstoque, descricao, codigo })
+      const res = await editarLocalEstoque(proprio ? { codigoLocalEstoque, descricao, codigo, ...extras } : { codigoLocalEstoque, descricao, codigo })
       if (res?.error) {
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success('Local alterado no Omie')
+      toast.success(proprio ? 'Local alterado' : 'Local alterado no Omie')
       setOpen(false)
       router.refresh()
     })
@@ -85,14 +91,18 @@ export function EditarLocalEstoque({
               placeholder="Código interno"
             />
           </div>
-          <p className="text-[12px] text-text-muted">
-            A alteração é gravada direto no Omie e sincronizada de volta para o sistema.
-          </p>
+          {proprio ? (
+            <CamposLocalProprio valor={extras} onChange={setExtras} mostrarInativo />
+          ) : (
+            <p className="text-[12px] text-text-muted">
+              A alteração é gravada direto no Omie e sincronizada de volta para o sistema.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={salvar} disabled={pending}>
             {pending && <Spinner />}
-            {pending ? 'Salvando...' : 'Salvar no Omie'}
+            {pending ? 'Salvando...' : proprio ? 'Salvar' : 'Salvar no Omie'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -14,10 +14,25 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { StatusPill } from '@/components/ui-kit/StatusPill'
 import { escapeIlike } from '@/lib/utils-busca'
 import { Warehouse } from 'lucide-react'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 function fmtTimestamp(d: string | null): string {
   if (!d) return '-'
   return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
+}
+
+type LinhaLocal = {
+  id: number
+  codigo_local_estoque: number
+  codigo: string | null
+  descricao: string | null
+  inativo: string | null
+  tipo: string | null
+  padrao: string | null
+  disp_venda: string | null
+  disp_consumo_op: string | null
+  disp_ordem_producao: string | null
+  disp_remessa: string | null
 }
 
 const COLUNAS_SORT = ['descricao', 'codigo_local_estoque', 'codigo', 'inativo'] as const
@@ -37,6 +52,8 @@ export default async function LocalEstoquePage({
   const dir = params.dir === 'desc' ? 'desc' : 'asc' // default hoje é descrição A-Z (asc)
 
   const supabase = await createClient()
+  // Loja com estoque proprio: locais criados aqui mesmo (sem sincronizar com Omie), com os mesmos campos.
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   // Sync (Sincronizar com Omie) virou admin-only.
   const podeSync = await isAdmin()
   const podeCriar = await requirePermissao(lojaId, 'Locais de Estoque - Criar')
@@ -51,7 +68,7 @@ export default async function LocalEstoquePage({
 
   let query = supabase
     .from('local_estoques')
-    .select('id, codigo_local_estoque, codigo, descricao, inativo')
+    .select('id, codigo_local_estoque, codigo, descricao, inativo, tipo, padrao, disp_venda, disp_consumo_op, disp_ordem_producao, disp_remessa')
     .eq('loja_id', lojaId)
     .order(ord, { ascending: dir === 'asc' })
     .limit(200)
@@ -78,21 +95,23 @@ export default async function LocalEstoquePage({
         <PageHeader
           title="Locais de Estoque"
           icon={Warehouse}
-          description="Locais sincronizados do Omie"
+          description={proprio ? 'Onde o estoque da loja fica guardado' : 'Locais sincronizados do Omie'}
           actions={
             <>
-              {podeCriar && <NovoLocalEstoque />}
-              {podeSync && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
+              {podeCriar && <NovoLocalEstoque proprio={proprio} />}
+              {podeSync && !proprio && <SyncButton endpoint="/api/sync/locais" label="Sincronizar com Omie" />}
             </>
           }
         />
       </ListaHeader>
 
-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
-        <span>Atualizado em {fmtTimestamp(lojaSync?.local_estoque_ultima_atualizacao ?? null)}</span>
-        <span>·</span>
-        <StatusPill status={lojaSync?.local_estoque_status ?? null} />
-      </div>
+      {!proprio && (
+        <div className="flex items-center gap-2 text-[13px] text-text-muted">
+          <span>Atualizado em {fmtTimestamp(lojaSync?.local_estoque_ultima_atualizacao ?? null)}</span>
+          <span>·</span>
+          <StatusPill status={lojaSync?.local_estoque_status ?? null} />
+        </div>
+      )}
 
       <BuscaSimples
         basePath="/local-estoque"
@@ -146,6 +165,19 @@ export default async function LocalEstoquePage({
             sort: 'codigo',
             render: (l) => <span className="num text-text-muted">{l.codigo || '-'}</span>,
           },
+          ...(proprio
+            ? [
+                {
+                  label: 'Tipo',
+                  render: (l: LinhaLocal) => <span className="text-text-muted">{l.tipo || '-'}</span>,
+                },
+                {
+                  label: 'Padrão',
+                  larguraDesktop: 'w-24',
+                  render: (l: LinhaLocal) => (l.padrao === 'S' ? <StatusPill status="Padrão" /> : <span className="text-text-muted">-</span>),
+                },
+              ]
+            : []),
           {
             label: 'Situação',
             alinhar: 'right',
@@ -162,9 +194,23 @@ export default async function LocalEstoquePage({
                   codigoLocalEstoque={l.codigo_local_estoque}
                   descricaoAtual={l.descricao || ''}
                   codigoAtual={l.codigo || ''}
+                  proprio={proprio}
+                  extrasAtuais={
+                    proprio
+                      ? {
+                          tipo: l.tipo ?? '',
+                          padrao: l.padrao === 'S',
+                          inativo: l.inativo === 'S',
+                          dispVenda: l.disp_venda !== 'N',
+                          dispConsumoOp: l.disp_consumo_op !== 'N',
+                          dispOrdemProducao: l.disp_ordem_producao !== 'N',
+                          dispRemessa: l.disp_remessa !== 'N',
+                        }
+                      : undefined
+                  }
                 />
               )}
-              {podeExcluir && <ExcluirLocalEstoque id={l.id} descricao={l.descricao || ''} />}
+              {podeExcluir && <ExcluirLocalEstoque id={l.id} descricao={l.descricao || ''} proprio={proprio} />}
             </div>
           ) : null
         }
@@ -172,7 +218,7 @@ export default async function LocalEstoquePage({
           <EmptyState
             icon={Warehouse}
             title="Nenhum local de estoque"
-            hint="Sincronize com o Omie para ver os locais."
+            hint={proprio ? 'Crie o primeiro local da loja.' : 'Sincronize com o Omie para ver os locais.'}
           />
         }
       />

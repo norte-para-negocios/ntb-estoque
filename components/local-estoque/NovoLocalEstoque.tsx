@@ -16,14 +16,16 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarLocalEstoque } from '@/lib/actions/local-estoque'
+import { CamposLocalProprio, CAMPOS_LOCAL_PADRAO, type CamposLocal } from './CamposLocalProprio'
 
 const inputClass =
   'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none max-sm:text-base focus:ring-2 focus:ring-brand/40'
 
-export function NovoLocalEstoque() {
+export function NovoLocalEstoque({ proprio = false }: { proprio?: boolean }) {
   const [open, setOpen] = useState(false)
   const [descricao, setDescricao] = useState('')
   const [codigo, setCodigo] = useState('')
+  const [extras, setExtras] = useState<CamposLocal>(CAMPOS_LOCAL_PADRAO)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -33,15 +35,16 @@ export function NovoLocalEstoque() {
       return
     }
     startTransition(async () => {
-      const res = await criarLocalEstoque({ descricao, codigo })
+      const res = await criarLocalEstoque(proprio ? { descricao, codigo, ...extras } : { descricao, codigo })
       if (res?.error) {
         toast.error('Erro', { description: res.error })
         return
       }
-      toast.success('Local criado no Omie')
+      toast.success(proprio ? 'Local criado' : 'Local criado no Omie')
       setOpen(false)
       setDescricao('')
       setCodigo('')
+      setExtras(CAMPOS_LOCAL_PADRAO)
       router.refresh()
     })
   }
@@ -78,14 +81,18 @@ export function NovoLocalEstoque() {
               placeholder="Código interno"
             />
           </div>
-          <p className="text-[12px] text-text-muted">
-            O local é criado direto no Omie e sincronizado de volta para o sistema.
-          </p>
+          {proprio ? (
+            <CamposLocalProprio valor={extras} onChange={setExtras} />
+          ) : (
+            <p className="text-[12px] text-text-muted">
+              O local é criado direto no Omie e sincronizado de volta para o sistema.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
             {pending && <Spinner />}
-            {pending ? 'Criando...' : 'Criar no Omie'}
+            {pending ? 'Criando...' : proprio ? 'Criar local' : 'Criar no Omie'}
           </Button>
         </DialogFooter>
       </DialogContent>
