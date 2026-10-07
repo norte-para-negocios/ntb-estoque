@@ -9,11 +9,13 @@ import { decidirErroItemInventario } from '@/lib/omie/erros-omie'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import * as proprio from '@/lib/inventario/proprio'
 
 export async function createInventario(
   codigoLocalEstoque: number,
   dataEscolhida?: string,
-  filtros?: { tipos?: string[]; familias?: string[] }
+  filtros?: { tipos?: string[]; familias?: string[]; curvas?: string[] }
 ) {
   const hojeBahia = hojeBahiaISO()
   if (dataEscolhida && dataEscolhida > hojeBahia) {
@@ -41,7 +43,10 @@ export async function createInventario(
   await registrarAuditoria('criar', 'inventário', inv.id, null)
 
   // Auto-popular com produtos se filtros informados
-  const temFiltro = filtros && ((filtros.tipos?.length ?? 0) > 0 || (filtros.familias?.length ?? 0) > 0)
+  const curvas = (filtros?.curvas ?? []).filter((c) => ['A', 'B', 'C'].includes(c))
+  const ehProprio = curvas.length > 0 && (await modoDaLoja(lojaId)) === 'proprio'
+  if (ehProprio) await supabase.from('inventarios').update({ curva: curvas.join(',') }).eq('id', inv.id)
+  const temFiltro = filtros && ((filtros.tipos?.length ?? 0) > 0 || (filtros.familias?.length ?? 0) > 0 || ehProprio)
   if (temFiltro) {
     let pq = supabase
       .from('produtos')
@@ -50,7 +55,10 @@ export async function createInventario(
       .eq('inativo', false)
     if (filtros!.tipos?.length) pq = pq.in('tipo_item', filtros!.tipos)
     if (filtros!.familias?.length) pq = pq.in('descricao_familia', filtros!.familias)
-    const { data: prods } = await pq
+    const { data: prodsTodos } = await pq
+    // Contagem cíclica (estoque próprio): só os produtos das curvas A/B/C escolhidas.
+    const daCurva = ehProprio ? await proprio.produtosDasCurvas(lojaId, curvas) : null
+    const prods = daCurva ? (prodsTodos ?? []).filter((p) => daCurva.has(Number(p.codigo_produto))) : prodsTodos
     if (prods?.length) {
       await supabase.from('inventario_items').insert(
         prods.map((p) => ({
@@ -107,6 +115,7 @@ export type EnvioInventarioResult = {
   descricao_status: string | null
   valor: number | null
   id_ajuste: number | null
+  diferenca?: number | null
   error?: string
 }
 
@@ -122,12 +131,14 @@ export type EnvioInventarioResult = {
  */
 export async function enviarInventarioItem(
   itemId: number,
-  quan: number | null
+  quan: number | null,
+  motivo?: string | null
 ): Promise<EnvioInventarioResult> {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
   }
+  if ((await modoDaLoja(lojaId)) === 'proprio') return enviarItemProprio(lojaId, itemId, quan, motivo)
   const supabase = createServiceClient()
 
   const { data: item } = await supabase
@@ -231,6 +242,17 @@ export async function removeInventarioItem(itemId: number) {
     return { error: 'Sem permissao para editar inventario' }
   }
   const supabase = createServiceClient()
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: it } = await supabase.from('inventario_items').select('id_ajuste').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()
+    const idAj = (it as { id_ajuste: number | null } | null)?.id_ajuste
+    if (idAj) {
+      const r = await proprio.desfazerAjuste(idAj, await carimboUsuario())
+      if (!r.ok) return { error: 'Não foi possível desfazer o ajuste do item: ' + r.erro }
+    }
+    await supabase.from('inventario_items').delete().eq('id', itemId).eq('loja_id', lojaId)
+    revalidatePath('/inventario')
+    return { ok: true }
+  }
   // Se o item ja foi lancado no Omie (id_ajuste), exclui o ajuste de estoque
   // antes de remover a linha — senao o estoque ficaria ajustado sem o item no
   // sistema. Vale para item de inventario finalizado tambem (editar pos-fato).
@@ -413,6 +435,7 @@ export async function finishInventario(inventarioId: number) {
     return { error: 'Sem permissao para editar inventario' }
   }
   const supabase = createServiceClient()
+  if ((await modoDaLoja(lojaId)) === 'proprio') return concluirProprio(lojaId, inventarioId, true)
 
   await supabase
     .from('inventarios')
@@ -463,6 +486,7 @@ export async function forceSyncInventario(inventarioId: number) {
     return { error: 'Sem permissao para editar inventario' }
   }
   const supabase = createServiceClient()
+  if ((await modoDaLoja(lojaId)) === 'proprio') return concluirProprio(lojaId, inventarioId, false)
 
   const { data: inventario } = await supabase
     .from('inventarios')
@@ -844,6 +868,19 @@ export async function excluirInventario(inventarioId: number) {
     return { error: 'Sem permissão para excluir' }
   }
   const supabase = createServiceClient()
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: itens } = await supabase.from('inventario_items').select('id, id_ajuste').eq('inventario_id', inventarioId).eq('loja_id', lojaId)
+    const usuario = await carimboUsuario()
+    for (const it of (itens ?? []) as { id: number; id_ajuste: number | null }[]) {
+      if (!it.id_ajuste) continue
+      const r = await proprio.desfazerAjuste(it.id_ajuste, usuario)
+      if (!r.ok) return { error: `Não foi possível desfazer o ajuste do item ${it.id}: ${r.erro}. Tente excluir de novo.` }
+    }
+    await supabase.from('inventarios').delete().eq('id', inventarioId).eq('loja_id', lojaId)
+    await registrarAuditoria('excluir', 'inventário', inventarioId, null)
+    revalidatePath('/inventario')
+    return { ok: true }
+  }
 
   const { data: inventario } = await supabase
     .from('inventarios')
@@ -888,6 +925,18 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
     return { error: 'Sem permissao para editar inventario' }
   }
   const supabase = createServiceClient()
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: it } = await supabase.from('inventario_items').select('id, id_ajuste').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()
+    if (!it) return { error: 'Item não encontrado' }
+    const idAj = (it as { id_ajuste: number | null }).id_ajuste
+    if (idAj) {
+      const r = await proprio.desfazerAjuste(idAj, await carimboUsuario())
+      if (!r.ok) return { error: 'Não foi possível desfazer o ajuste antigo: ' + r.erro }
+    }
+    await supabase.from('inventario_items').update({ quan, status: 'Iniciado', id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null, diferenca: null, updated_at: new Date().toISOString() }).eq('id', itemId).eq('loja_id', lojaId)
+    revalidatePath('/inventario')
+    return { ok: true }
+  }
 
   const { data: item } = await supabase
     .from('inventario_items')
@@ -923,6 +972,100 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
       .eq('loja_id', lojaId)
   }
 
+  revalidatePath('/inventario')
+  return { ok: true }
+}
+
+
+// ------------------------------------------------------------------------------------------------ estoque próprio
+/** Envia UM item em loja de estoque próprio: desfaz o ajuste antigo (se houver) e lança a diferença no ledger. */
+async function enviarItemProprio(lojaId: number, itemId: number, quan: number | null, motivo?: string | null): Promise<EnvioInventarioResult> {
+  const supabase = createServiceClient()
+  const { data: item } = await supabase
+    .from('inventario_items')
+    .select('id, produto_codigo_produto, id_ajuste, motivo, inventario:inventarios(id, codigo_local_estoque, data)')
+    .eq('id', itemId)
+    .eq('loja_id', lojaId)
+    .single<{ id: number; produto_codigo_produto: number; id_ajuste: number | null; motivo: string | null; inventario: { id: number; codigo_local_estoque: number; data: string | null } | null }>()
+  if (!item?.inventario) return { status: 'Erro', descricao_status: 'Item não encontrado', valor: null, id_ajuste: null, error: 'Item não encontrado' }
+  const usuario = await carimboUsuario()
+
+  if (item.id_ajuste) {
+    const r = await proprio.desfazerAjuste(item.id_ajuste, usuario)
+    if (!r.ok) return { status: 'Erro', descricao_status: 'Falha ao desfazer o ajuste antigo: ' + r.erro, valor: null, id_ajuste: item.id_ajuste, error: r.erro }
+    await supabase.from('inventario_items').update({ id_ajuste: null, id_movest: null, codigo_status: null, descricao_status: null, response: null, diferenca: null }).eq('id', item.id)
+  }
+
+  if (quan === null) {
+    await supabase.from('inventario_items').update({ quan: null, status: 'Iniciado', updated_at: new Date().toISOString() }).eq('id', item.id)
+    revalidatePath('/inventario')
+    return { status: 'Iniciado', descricao_status: null, valor: null, id_ajuste: null, diferenca: null }
+  }
+
+  try {
+    const r = await proprio.lancarItem({
+      lojaId, itemId: item.id, inventarioId: item.inventario.id, local: Number(item.inventario.codigo_local_estoque), dataIso: item.inventario.data,
+      produto: Number(item.produto_codigo_produto), quan, motivo: motivo ?? item.motivo ?? null, usuario,
+    })
+    revalidatePath('/inventario')
+    return r
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    await supabase.from('inventario_items').update({ quan, status: 'Erro', descricao_status: msg, response: msg, ultima_tentativa_em: new Date().toISOString() }).eq('id', item.id)
+    return { status: 'Erro', descricao_status: msg, valor: null, id_ajuste: null, error: msg }
+  }
+}
+
+/** Informa o motivo de uma diferença grande e lança o ajuste (estoque próprio). */
+export async function informarMotivoInventarioItem(itemId: number, motivo: string): Promise<EnvioInventarioResult> {
+  const lojaId = await getCurrentLojaId()
+  if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
+    return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
+  }
+  if ((await modoDaLoja(lojaId)) !== 'proprio') return { status: 'Erro', descricao_status: 'Não se aplica a esta loja', valor: null, id_ajuste: null, error: 'Não se aplica' }
+  const texto = (motivo ?? '').trim()
+  if (texto.length < 3) return { status: 'Erro', descricao_status: 'Informe o motivo (mínimo 3 letras)', valor: null, id_ajuste: null, error: 'Motivo muito curto' }
+  const { data: it } = await createServiceClient().from('inventario_items').select('quan').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()
+  const q = (it as { quan: number | null } | null)?.quan
+  if (q == null) return { status: 'Erro', descricao_status: 'Item sem quantidade', valor: null, id_ajuste: null, error: 'Item sem quantidade' }
+  return enviarItemProprio(lojaId, itemId, Number(q), texto)
+}
+
+/** Concluir (ou reenviar pendentes de) um inventário de estoque próprio: lança o que falta, sem Omie. */
+async function concluirProprio(lojaId: number, inventarioId: number, fechar: boolean) {
+  const supabase = createServiceClient()
+  const { data: inv } = await supabase.from('inventarios').select('id, codigo_local_estoque, data').eq('id', inventarioId).eq('loja_id', lojaId).maybeSingle()
+  if (!inv) return { error: 'Inventário não encontrado' }
+  const { data: itens } = await supabase.from('inventario_items').select('id, produto_codigo_produto, quan, status, id_ajuste, motivo').eq('inventario_id', inventarioId).eq('loja_id', lojaId).order('id')
+  const usuario = await carimboUsuario()
+  const lista = (itens ?? []) as { id: number; produto_codigo_produto: number; quan: number | null; status: string | null; id_ajuste: number | null; motivo: string | null }[]
+
+  // Item sem quantidade é descartado ao concluir (igual ao fluxo de sempre).
+  const vazios = lista.filter((i) => i.quan === null).map((i) => i.id)
+  if (vazios.length) await supabase.from('inventario_items').delete().in('id', vazios)
+
+  let aguardando = 0
+  for (const i of lista) {
+    if (i.quan === null || i.status === 'Concluido') continue
+    try {
+      const r = await proprio.lancarItem({
+        lojaId, itemId: i.id, inventarioId, local: Number(inv.codigo_local_estoque), dataIso: inv.data,
+        produto: Number(i.produto_codigo_produto), quan: Number(i.quan), motivo: i.motivo, usuario,
+      })
+      if (r.status === proprio.STATUS_AGUARDANDO_MOTIVO) aguardando++
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      await supabase.from('inventario_items').update({ status: 'Erro', descricao_status: msg, response: msg, ultima_tentativa_em: new Date().toISOString() }).eq('id', i.id)
+    }
+  }
+  if (aguardando > 0) {
+    revalidatePath('/inventario')
+    return { error: `${aguardando} item(ns) com diferença grande aguardam o motivo. Informe o motivo em cada um e conclua de novo.` }
+  }
+  // Itens com erro ficam marcados e podem ser reenviados depois (mesmo comportamento do fluxo de sempre).
+  if (fechar) {
+    await supabase.from('inventarios').update({ status: 'Finalizado', finalizado: new Date().toISOString() }).eq('id', inventarioId).eq('loja_id', lojaId)
+  }
   revalidatePath('/inventario')
   return { ok: true }
 }
