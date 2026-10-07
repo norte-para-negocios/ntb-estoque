@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { ROTULO_ORIGEM } from '@/lib/estoque/kardex'
+import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
 
 export type DetalheKardex =
   | { error: string }
@@ -14,7 +15,7 @@ export type DetalheKardex =
         saldo_apos: number; saldo_total_apos: number; cmc_apos: number | null; user_id: string | null; user_nome: string | null; obs: string | null
         produto: string; codigo: string | null; unidade: string | null; local: string | null; custo_estimado: boolean
       }
-      documento: { rotulo: string; descricao: string; href?: string; linhas?: { rotulo: string; valor: string }[] } | null
+      documento: { rotulo: string; descricao: string; href?: string; externo?: boolean; hrefSecundario?: string; rotuloSecundario?: string; linhas?: { rotulo: string; valor: string }[] } | null
       vinculados: { id: number; rotulo: string; quantidade: number; local: string | null; quando: string; produto: string }[]
     }
 
@@ -34,14 +35,18 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
   const nomeLocal = async (cod: number) => (await sb.from('local_estoques').select('descricao').eq('loja_id', lojaId).eq('codigo_local_estoque', cod).maybeSingle()).data?.descricao ?? String(cod)
   const nomeProduto = async (cod: number) => (await sb.from('produtos').select('descricao').eq('loja_id', lojaId).eq('codigo_produto', cod).maybeSingle()).data?.descricao ?? String(cod)
 
-  let documento: { rotulo: string; descricao: string; href?: string; linhas?: { rotulo: string; valor: string }[] } | null = null
+  let documento: { rotulo: string; descricao: string; href?: string; externo?: boolean; hrefSecundario?: string; rotuloSecundario?: string; linhas?: { rotulo: string; valor: string }[] } | null = null
   const ref = String(m.ref)
   try {
     if (m.origem === 'VENDA') {
       const pedido = ref.split('|')[0]
+      const filtroKardex = `/movimentacoes?aba=movimentos&og=VENDA&data_inicio=2000-01-01&data_final=2100-12-31&produto=${encodeURIComponent(pedido)}`
+      const urlVenda = urlVendaNoVendas(ref)
       documento = {
         rotulo: 'Venda', descricao: `Pedido ${pedido}`,
-        href: `/movimentacoes?aba=movimentos&og=VENDA&data_inicio=2000-01-01&data_final=2100-12-31&produto=${encodeURIComponent(pedido)}`,
+        // Abre a venda no Norte Vendas (nova aba); o filtro do histórico de movimentos fica como opção secundária.
+        href: urlVenda ?? filtroKardex, externo: !!urlVenda,
+        hrefSecundario: urlVenda ? filtroKardex : undefined, rotuloSecundario: urlVenda ? 'Ver as baixas desta venda' : undefined,
         linhas: ref.includes('|') ? [{ rotulo: 'Baixa por receita', valor: 'insumo do prato vendido' }] : undefined,
       }
     } else if (m.origem === 'COMPRA') {

@@ -63,8 +63,13 @@ export function DetalheKardex({ id, onFechar, onAbrir }: { id: number | null; on
                 {det.documento.linhas?.map((l) => (
                   <p key={l.rotulo} className="mt-1 text-[12px] text-text-muted"><span className="font-medium">{l.rotulo}:</span> <span className="break-all">{l.valor}</span></p>
                 ))}
-                {det.documento.href && (
+                {det.documento.href && (det.documento.externo ? (
+                  <a href={det.documento.href} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline">Abrir a venda no Norte Vendas ↗</a>
+                ) : (
                   <Link href={det.documento.href} className="mt-2 inline-block text-[13px] font-medium text-brand hover:underline">Abrir documento</Link>
+                ))}
+                {det.documento.hrefSecundario && (
+                  <Link href={det.documento.hrefSecundario} className="ml-3 mt-2 inline-block text-[13px] text-text-muted hover:underline">{det.documento.rotuloSecundario ?? 'Ver no histórico'}</Link>
                 )}
               </div>
             )}

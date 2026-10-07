@@ -13,6 +13,7 @@ import { HistoricoSyncOP } from '@/components/ordem-producao/HistoricoSyncOP'
 import { HistoricoEdicoesOP } from '@/components/ordem-producao/HistoricoEdicoesOP'
 import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
 import { detalheOPProprio } from '@/lib/estoque/op-proprio'
+import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
 
 const STATUS_INFO: Record<OpStatus, { label: string; token: CorToken }> = {
   concluida: { label: 'Concluída', token: 'ok' },
@@ -275,6 +276,7 @@ export default async function OrdemProducaoDetalhePage({
           revertidaPor={extraProprio?.revertida_por ?? null}
           revertidaEm={extraProprio?.revertida_em ?? null}
           vendaRef={extraProprio?.venda_ref ?? null}
+          vendaUrl={urlVendaNoVendas(extraProprio?.venda_ref ?? null)}
         />
       )}
 

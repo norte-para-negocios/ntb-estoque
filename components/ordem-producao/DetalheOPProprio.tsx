@@ -44,7 +44,7 @@ function resumoDetalhes(evento: string, d: Record<string, unknown>): string {
 }
 
 export function DetalheOPProprio({
-  detalhe, opId, numOP, concluida, podeReverter, custoTotal, custoUnitario, unidade, criadaPor, criadaEm, concluidaPor, concluidaEm, revertidaPor, revertidaEm, vendaRef,
+  detalhe, opId, numOP, concluida, podeReverter, custoTotal, custoUnitario, unidade, criadaPor, criadaEm, concluidaPor, concluidaEm, revertidaPor, revertidaEm, vendaRef, vendaUrl,
 }: {
   detalhe: Detalhe | null
   opId: number
@@ -61,6 +61,8 @@ export function DetalheOPProprio({
   revertidaPor: string | null
   revertidaEm: string | null
   vendaRef: string | null
+  /** Link da venda no Norte Vendas (calculado no servidor; null quando a OP não veio de uma venda). */
+  vendaUrl?: string | null
 }) {
   if (!detalhe) return null
   const movimentos = detalhe.execucoes.flatMap((e) => (e.movimentos ?? []).map((m) => ({ ...m, execucao: e.n })))
@@ -75,7 +77,7 @@ export function DetalheOPProprio({
           <div><dt className="text-[12px] text-text-muted">Custo total</dt><dd className="mt-0.5 text-[15px] text-text num">{concluida ? fr(custoTotal) : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Custo por {unidade || 'unidade'}</dt><dd className="mt-0.5 text-[15px] text-text num">{concluida ? fr(custoUnitario, 6) : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Ficha técnica usada</dt><dd className="mt-0.5 text-[15px] text-text">{detalhe.ficha ? `Versão ${detalhe.ficha.versao}${detalhe.ficha.ativa ? '' : ' (substituída)'}` : 'Sem ficha técnica'}</dd></div>
-          <div><dt className="text-[12px] text-text-muted">Venda de origem</dt><dd className="mt-0.5 text-[15px] text-text" title={vendaRef ?? undefined}>{origemVenda(vendaRef)}</dd></div>
+          <div><dt className="text-[12px] text-text-muted">Venda de origem</dt><dd className="mt-0.5 text-[15px] text-text" title={vendaRef ?? undefined}>{vendaUrl ? <a href={vendaUrl} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">{origemVenda(vendaRef)} ↗</a> : origemVenda(vendaRef)}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Criada</dt><dd className="mt-0.5 text-[15px] text-text">{criadaPor || '-'} <span className="num text-text-muted">{fd(criadaEm)}</span></dd></div>
           <div><dt className="text-[12px] text-text-muted">Concluída</dt><dd className="mt-0.5 text-[15px] text-text">{concluida ? <>{concluidaPor || '-'} <span className="num text-text-muted">{fd(concluidaEm)}</span></> : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Última reversão</dt><dd className="mt-0.5 text-[15px] text-text">{revertidaEm ? <>{revertidaPor || '-'} <span className="num text-text-muted">{fd(revertidaEm)}</span></> : '-'}</dd></div>
