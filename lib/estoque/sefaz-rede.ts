@@ -42,8 +42,14 @@ export async function consultarDistribuicao(p: { cnpj: string; tpAmb: 1 | 2; ult
 }
 
 // Mesma receita já validada contra a SEFAZ no Vendas (cancelamento): XMLDSig enveloped, C14N, SHA1/RSA-SHA1 (exigência do schema).
+// Só o certificado da loja vai no KeyInfo: o certPem traz também a cadeia da AC (necessária no TLS), e mais de um
+// X509Certificate quebra o esquema do evento (cStat 225 "Falha no Esquema XML", achado na ODARA em 07/10).
+export function certificadoFolha(certPem: string): string {
+  const m = certPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/)
+  return m ? m[0] : certPem
+}
 export function assinarEvento(xml: string, id: string, certPem: string, keyPem: string): string {
-  const sig = new SignedXml({ privateKey: keyPem, publicCert: certPem })
+  const sig = new SignedXml({ privateKey: keyPem, publicCert: certificadoFolha(certPem) })
   sig.addReference({
     xpath: `//*[local-name(.)='infEvento']`,
     transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315'],
