@@ -151,6 +151,7 @@ async function montarPayload(lojaId: number, produtos: string[], grupos: number[
       .select('codigo, descricao, valor_unitario, inativo, eh_mae, produto_pai_codigo, grupo_id, atributos, unidade, tipo_item, vendas_ref, updated_at, codigo_produto')
       .eq('loja_id', lojaId)
       .in('codigo', produtos)
+      .eq('pdv', true).in('tipo_item', ['00', '04'])  // só o que é vendável vai para o cardápio (insumos ficam só no Estoque)
     const rows = (data ?? []) as ProdutoRow[]
     // mãe precisa existir no Vendas antes das variações; busca também as mães referenciadas
     const paiIds = [...new Set(rows.map((r) => r.produto_pai_codigo).filter((x): x is number => x != null))]

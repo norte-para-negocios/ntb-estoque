@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     supabase
       .from('produtos')
       .select('codigo, codigo_produto, descricao, valor_unitario, inativo, eh_mae, produto_pai_codigo, grupo_id, atributos, unidade, tipo_item, vendas_ref, updated_at, pdv')
-      .eq('loja_id', loja.id).not('codigo', 'is', null).eq('pdv', true).order('id').limit(5000),
+      .eq('loja_id', loja.id).not('codigo', 'is', null).eq('pdv', true).in('tipo_item', ['00', '04']).order('id').limit(5000),
   ])
   const codigoDoPai = new Map((produtos ?? []).map((p) => [p.codigo_produto as number, p.codigo as string]))
   return NextResponse.json({
