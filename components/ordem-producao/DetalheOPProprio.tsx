@@ -10,7 +10,16 @@ const h2 = 'mb-3 text-[17px] font-semibold text-text'
 
 const fq = (n: number | null | undefined, max = 6) => (n == null ? '-' : Number(n).toLocaleString('pt-BR', { maximumFractionDigits: max }))
 const fr = (n: number | null | undefined, max = 4) => (n == null ? '-' : `R$ ${Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: max })}`)
-const fd = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) : '-')
+// Data sem hora ('AAAA-MM-DD', colunas date) não passa por new Date(): seria lida como meia-noite UTC e
+// apareceria no dia anterior às 21:00 em Brasília.
+const fd = (iso: string | null | undefined) => {
+  if (!iso) return '-'
+  const soData = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (soData) return `${soData[3]}/${soData[2]}/${soData[1]}`
+  return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })
+}
+/** venda_ref da OP automática = "pedido|produto|linha": mostra a origem legível. */
+const origemVenda = (ref: string | null) => (ref ? `Norte Vendas · pedido ${ref.split('|')[0].slice(0, 8)}` : '-')
 
 const EVENTO: Record<string, { rotulo: string; cor: string }> = {
   criada: { rotulo: 'OP criada', cor: 'bg-info' },
@@ -30,7 +39,7 @@ function resumoDetalhes(evento: string, d: Record<string, unknown>): string {
   }
   if (evento === 'concluida') return `custo ${fr(Number(v('custo_total')))} · unitário ${fr(Number(v('custo_unitario')), 6)}${v('ficha_versao') ? ` · ficha v${String(v('ficha_versao'))}` : ''}`
   if (evento === 'revertida') return `${String(v('estornados') ?? 0)} movimento(s) estornado(s)`
-  if (evento === 'criada') return `${v('ficha_versao') ? `ficha v${String(v('ficha_versao'))}` : 'sem ficha técnica ainda'}${v('venda_ref') ? ` · venda ${String(v('venda_ref'))}` : ''}`
+  if (evento === 'criada') return `${v('ficha_versao') ? `ficha v${String(v('ficha_versao'))}` : 'sem ficha técnica ainda'}${v('venda_ref') ? ` · ${origemVenda(String(v('venda_ref')))}` : ''}`
   return ''
 }
 
@@ -66,7 +75,7 @@ export function DetalheOPProprio({
           <div><dt className="text-[12px] text-text-muted">Custo total</dt><dd className="mt-0.5 text-[15px] text-text num">{concluida ? fr(custoTotal) : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Custo por {unidade || 'unidade'}</dt><dd className="mt-0.5 text-[15px] text-text num">{concluida ? fr(custoUnitario, 6) : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Ficha técnica usada</dt><dd className="mt-0.5 text-[15px] text-text">{detalhe.ficha ? `Versão ${detalhe.ficha.versao}${detalhe.ficha.ativa ? '' : ' (substituída)'}` : 'Sem ficha técnica'}</dd></div>
-          <div><dt className="text-[12px] text-text-muted">Venda de origem</dt><dd className="mt-0.5 text-[15px] text-text">{vendaRef || '-'}</dd></div>
+          <div><dt className="text-[12px] text-text-muted">Venda de origem</dt><dd className="mt-0.5 text-[15px] text-text" title={vendaRef ?? undefined}>{origemVenda(vendaRef)}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Criada</dt><dd className="mt-0.5 text-[15px] text-text">{criadaPor || '-'} <span className="num text-text-muted">{fd(criadaEm)}</span></dd></div>
           <div><dt className="text-[12px] text-text-muted">Concluída</dt><dd className="mt-0.5 text-[15px] text-text">{concluida ? <>{concluidaPor || '-'} <span className="num text-text-muted">{fd(concluidaEm)}</span></> : '-'}</dd></div>
           <div><dt className="text-[12px] text-text-muted">Última reversão</dt><dd className="mt-0.5 text-[15px] text-text">{revertidaEm ? <>{revertidaPor || '-'} <span className="num text-text-muted">{fd(revertidaEm)}</span></> : '-'}</dd></div>

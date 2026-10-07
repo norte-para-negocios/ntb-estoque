@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { BuscaSimples } from '@/components/BuscaSimples'
@@ -46,7 +47,9 @@ export default async function FamiliaPage({
 
   const supabase = await createClient()
   // Puxar do Omie (sync) virou admin-only.
-  const podeSync = await isAdmin()
+  // Loja de estoque próprio: famílias são só locais (não existe 'puxar' nem código externo).
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
+  const podeSync = !proprio && (await isAdmin())
   const podeCriar = await requirePermissao(lojaId, 'Familias - Criar')
   const podeEditar = await requirePermissao(lojaId, 'Familias - Editar')
   const podeExcluir = await requirePermissao(lojaId, 'Familias - Excluir')
@@ -85,7 +88,7 @@ export default async function FamiliaPage({
         <PageHeader
           title="Famílias"
           icon={FolderTree}
-          description="Famílias de produto (cadastro local e leitura do Omie)"
+          description={proprio ? 'Famílias de produto da loja' : 'Famílias de produto (cadastro local e leitura do Omie)'}
           actions={
             <>
               {podeCriar && <FamiliaForm />}
@@ -95,11 +98,13 @@ export default async function FamiliaPage({
         />
       </ListaHeader>
 
-      <div className="flex items-center gap-2 text-[13px] text-text-muted">
-        <span>Atualizado em {fmtTimestamp(lojaSync?.familia_ultima_atualizacao ?? null)}</span>
-        <span>·</span>
-        <StatusPill status={lojaSync?.familia_status ?? null} />
-      </div>
+      {!proprio && (
+        <div className="flex items-center gap-2 text-[13px] text-text-muted">
+          <span>Atualizado em {fmtTimestamp(lojaSync?.familia_ultima_atualizacao ?? null)}</span>
+          <span>·</span>
+          <StatusPill status={lojaSync?.familia_status ?? null} />
+        </div>
+      )}
 
       <BuscaSimples basePath="/familia" placeholder="Buscar família..." defaultValue={params.q ?? ''} />
 
@@ -138,17 +143,21 @@ export default async function FamiliaPage({
         sortHref={buildSortHref}
         colunas={[
           { label: 'Nome', primaria: true, flexivel: true, sort: 'nome', render: (f) => f.nome || '-' },
+          ...(proprio
+            ? []
+            : [
+                {
+                  label: 'Origem',
+                  sort: 'origem' as const,
+                  render: (f: FamiliaRow) => (
+                    <span className="text-[13px] text-text-muted">
+                      {f.origem === 'omie' ? 'Omie' : 'Local'}
+                    </span>
+                  ),
+                },
+              ]),
           {
-            label: 'Origem',
-            sort: 'origem',
-            render: (f) => (
-              <span className="text-[13px] text-text-muted">
-                {f.origem === 'omie' ? 'Omie' : 'Local'}
-              </span>
-            ),
-          },
-          {
-            label: 'Código Omie',
+            label: proprio ? 'Código' : 'Código Omie',
             sort: 'codigo_familia',
             render: (f) => <span className="num text-text-muted">{f.codigo_familia ?? '-'}</span>,
           },
@@ -171,7 +180,7 @@ export default async function FamiliaPage({
           <EmptyState
             icon={FolderTree}
             title="Nenhuma família cadastrada"
-            hint='Crie uma família ou clique em "Puxar do Omie".'
+            hint={proprio ? 'Crie a primeira família da loja.' : 'Crie uma família ou clique em "Puxar do Omie".'}
           />
         }
       />

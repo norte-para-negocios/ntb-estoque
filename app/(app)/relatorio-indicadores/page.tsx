@@ -19,6 +19,7 @@ import { chipsPeriodoPadrao } from '@/lib/periodo-rapido'
 import { descreverCFOP } from '@/lib/cfop'
 import type { LojaOmie } from '@/lib/omie/client'
 import { Scale, Download } from 'lucide-react'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesLabel = (ym: string) => {
@@ -42,6 +43,7 @@ export default async function RelatorioIndicadoresPage({
   searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
+  const indicadoresProprio = (await modoDaLoja(lojaId)) === 'proprio'
   if (!(await getAtorGestao()).podeGerir) notFound()
 
   const supabaseLoja = createServiceClient()
@@ -363,7 +365,7 @@ export default async function RelatorioIndicadoresPage({
       </div>
 
       <p className="px-1 text-[13px] text-text-muted">
-        Faturamento vem do import do FAT do Omie; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
+        {indicadoresProprio ? 'Faturamento vem das vendas do Norte Vendas' : 'Faturamento vem do import do FAT do Omie'}; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
         e sem ativo imobilizado (compra de bem para a empresa é investimento, não gasto). &quot;Compras ÷ Faturamento&quot; é
         quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {metaPct}%</span> no alvo,
         <span className="font-medium text-warn"> até 50% atenção</span>, <span className="font-medium text-err">acima de 50% alto</span> (na indústria, alguns miram 35%).

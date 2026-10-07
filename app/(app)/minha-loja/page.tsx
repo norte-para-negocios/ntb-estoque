@@ -7,6 +7,7 @@ import { InformacoesForm, type LojaInfo } from '@/components/minha-loja/Informac
 import { EtiquetaEditor } from '@/components/minha-loja/EtiquetaEditor'
 import { ETIQUETA_FORM_PADRAO, rowParaForm, type EtiquetaConfigRow, type EtiquetaFormValores } from '@/lib/etiqueta-config'
 import { Store, Lock } from 'lucide-react'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,7 +61,7 @@ export default async function MinhaLojaPage() {
         />
       </ListaHeader>
 
-      {loja && <InformacoesForm loja={loja} />}
+      {loja && <InformacoesForm loja={loja} proprio={(await modoDaLoja(lojaId)) === 'proprio'} />}
       <EtiquetaEditor inicial={etiquetaInicial} />
     </div>
   )

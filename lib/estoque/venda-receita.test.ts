@@ -15,3 +15,9 @@ test('só consulta fichas ativas da loja e cai na saída direta quando não há 
 test('estorno da venda encontra os movimentos da receita (ref com sufixo |produto|linha)', () => {
   assert.match(fonte, /ref\.like\.\$\{pedidoRef\}\|\*/)
 })
+
+test('estorno da venda EXCLUI as OPs automáticas (não deixa OP "Pendente" de venda estornada)', () => {
+  const trecho = fonte.slice(fonte.indexOf('OPs automáticas da venda'))
+  assert.match(trecho, /rpc\('op_proprio_excluir'/)
+  assert.doesNotMatch(trecho, /rpc\('op_proprio_reverter'/)
+})

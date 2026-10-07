@@ -29,7 +29,7 @@ export type LojaInfo = {
   meta_compras_pct: number | null
 }
 
-export function InformacoesForm({ loja }: { loja: LojaInfo }) {
+export function InformacoesForm({ loja, proprio = false }: { loja: LojaInfo; proprio?: boolean }) {
   const [form, setForm] = useState<LojaNegocioInput>({
     nome_fantasia: loja.nome_fantasia ?? '',
     cep: loja.cep ?? '',
@@ -63,7 +63,7 @@ export function InformacoesForm({ loja }: { loja: LojaInfo }) {
     <section>
       <h2 className="px-1 text-[17px] font-semibold text-text">Informações da loja</h2>
       <p className="mb-3 mt-0.5 px-1 text-[13px] text-text-muted">
-        Dados de negócio e endereço. CNPJ, razão social e integração com o Omie ficam com o administrador geral.
+        Dados de negócio e endereço. CNPJ, razão social e {proprio ? 'integrações' : 'integração com o Omie'} ficam com o administrador geral.
       </p>
 
       <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">

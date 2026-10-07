@@ -45,9 +45,13 @@ export function Lista<T>({
   const valColunas = demais.filter((c) => c.alinhar === 'right')
 
   // Classes da célula no desktop: flexível encolhe e trunca; o resto fica natural (nowrap).
+  // Com rolagem horizontal a tabela passa da largura do cartão: aí 'max-w-0' espremia a coluna flexível até
+  // poucas letras ("Farinha de Tr…"). Nesse caso ela ganha largura mínima legível e a tabela rola.
   const tdClasse = (c: Coluna<T>) =>
     c === flexivel
-      ? 'w-full max-w-0 truncate'
+      ? rolarHorizontal
+        ? 'min-w-[16rem] max-w-[24rem] truncate'
+        : 'w-full max-w-0 truncate'
       : 'whitespace-nowrap'
 
   // A4: stagger leve só nas primeiras linhas (24ms/linha, teto ~12) para a lista

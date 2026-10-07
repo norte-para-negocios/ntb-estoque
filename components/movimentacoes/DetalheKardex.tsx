@@ -50,7 +50,7 @@ export function DetalheKardex({ id, onFechar, onAbrir }: { id: number | null; on
               <dt className="text-text-muted">Custo do movimento</dt><dd className="num">{formatCustoUnit(det.movimento.custo)}{det.movimento.custo_estimado ? ' (estimado)' : ''}</dd>
               <dt className="text-text-muted">Custo médio depois</dt><dd className="num">{formatCustoUnit(det.movimento.cmc_apos)}</dd>
               <dt className="text-text-muted">Quando</dt><dd>{quando(det.movimento.quando)}</dd>
-              <dt className="text-text-muted">Usuário</dt><dd className="break-all">{det.movimento.user_id ?? '-'}</dd>
+              <dt className="text-text-muted">Usuário</dt><dd className="break-all">{det.movimento.user_nome ?? det.movimento.user_id ?? '-'}</dd>
               <dt className="text-text-muted">Referência</dt><dd className="num break-all">{det.movimento.ref}</dd>
               {det.movimento.obs && (<><dt className="text-text-muted">Observação</dt><dd>{det.movimento.obs}</dd></>)}
             </dl>

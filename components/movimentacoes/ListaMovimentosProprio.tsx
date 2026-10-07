@@ -14,6 +14,14 @@ import { DetalheKardex } from '@/components/movimentacoes/DetalheKardex'
 import { ROTULO_ORIGEM, type LinhaKardex } from '@/lib/estoque/kardex-tipos'
 import { formatCustoUnit } from '@/lib/num-br'
 
+// Movimento antigo guarda o id do usuário; se o perfil não existe mais, mostra isso em vez de um código longo.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function nomeUsuario(m: { user_nome?: string | null; user_id?: string | null }): string {
+  if (m.user_nome) return m.user_nome
+  if (!m.user_id) return '-'
+  return UUID.test(m.user_id) ? 'Usuário removido' : m.user_id
+}
+
 const COLUNAS = ['Data', 'Tipo', 'Produto', 'Quantidade', 'Local', 'Origem', 'Usuário', 'Saldo após', 'Custo']
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
@@ -103,7 +111,7 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
         </span>
       ),
     },
-    { label: 'Usuário', larguraDesktop: 'w-32', render: (m: LinhaKardex) => <span className="truncate text-[13px] text-text-muted">{m.user_nome ?? m.user_id ?? '-'}</span> },
+    { label: 'Usuário', larguraDesktop: 'w-32', render: (m: LinhaKardex) => <span className="truncate text-[13px] text-text-muted">{nomeUsuario(m)}</span> },
     { label: 'Saldo após', sort: 'saldo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className={`num text-[13px] ${m.saldo_apos < 0 ? 'font-semibold text-err' : 'text-text'}`}>{fmtQtd(m.saldo_apos)}</span> },
     { label: 'Custo', sort: 'custo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className="num text-[13px] text-text-muted">{formatCustoUnit(m.custo)}</span> },
   ]

@@ -118,11 +118,12 @@ export async function estornarVendaProprio(supabase: SupabaseClient, lojaId: num
       r.detalhes.push(`movimento ${m.id}: ${e instanceof Error ? e.message : 'falha ao estornar'}`)
     }
   }
-  // OPs automáticas da venda: reverte (devolve os insumos e tira o item produzido).
-  const { data: ops } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op, concluida').eq('loja_id', lojaId).like('venda_ref', `${pedidoRef}|%`)
-  for (const o of (ops ?? []) as { id: number; identificacao_c_num_op: string | null; concluida: unknown }[]) {
-    if (!(o.concluida === true || o.concluida === 'S')) continue
-    const { error: e } = await supabase.rpc('op_proprio_reverter', { p_loja: lojaId, p_op: o.id, p_user: 'Norte Vendas (estorno)' })
+  // OPs automáticas da venda: como no Omie, o estorno EXCLUI a OP (op_proprio_excluir reverte a conclusão,
+  // devolvendo os insumos e tirando o item produzido, e apaga a OP; a trilha fica em op_historico). Reverter
+  // sem excluir deixava a OP "Pendente" na lista, como se ainda houvesse algo a produzir.
+  const { data: ops } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op').eq('loja_id', lojaId).like('venda_ref', `${pedidoRef}|%`)
+  for (const o of (ops ?? []) as { id: number; identificacao_c_num_op: string | null }[]) {
+    const { error: e } = await supabase.rpc('op_proprio_excluir', { p_loja: lojaId, p_op: o.id, p_user: 'Norte Vendas (estorno)' })
     if (e) { r.falhas++; r.detalhes.push(`OP ${o.identificacao_c_num_op ?? o.id}: ${e.message}`) } else r.opsExcluidas++
   }
   return r

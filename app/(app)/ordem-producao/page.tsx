@@ -173,7 +173,7 @@ export default async function OrdemProducaoPage({
     // lojaIsTest acima); a observação grava "Venda ntb-vendas #<pedido>
     // [Homologação|Produção]" no momento da criação (ver
     // app/api/integracao/ordem-producao/route.ts).
-    if (sp.origem === 'ntb-vendas') q = q.ilike('observacao', 'Venda ntb-vendas%')
+    if (sp.origem === 'ntb-vendas') q = q.ilike('observacao', '%Venda ntb-vendas%')
     if (filtraConclusao) q = q.eq('concluida', sp.op_concluido === 'S')
     // Filtro de status granular: prevista / pendente / atrasada / concluida.
     // "pendente" = data = hoje (nao concluida); "prevista" = data futura; "atrasada" = data passada.
@@ -722,7 +722,8 @@ export default async function OrdemProducaoPage({
               ingredientes: ingredientesMap.get(op.id) ?? [],
               // Origem "ntb-vendas": derivada do texto de observacao gravado na criação
               // (lib/vendas-integracao.ts) — mostrada em todas as lojas (pedido do dono, 2026-09-29).
-              origemNtbVendas: !!op.observacao?.startsWith('Venda ntb-vendas'),
+              // OP automática do estoque próprio grava 'Norte Vendas · Venda ntb-vendas #…' (e venda_ref); a do Omie começa com 'Venda ntb-vendas'.
+              origemNtbVendas: !!op.observacao?.includes('Venda ntb-vendas'),
               ambienteVenda: op.observacao?.includes('[Homologação]')
                 ? ('homologacao' as const)
                 : op.observacao?.includes('[Produção]')
@@ -732,7 +733,7 @@ export default async function OrdemProducaoPage({
           })
           const cabecalhoDesktop = (
             <>
-              <th className="w-28">OP</th>
+              <th className="w-32">OP</th>
               <th className="w-[172px] !text-center">Data</th>
               <th className="w-[108px]">Status</th>
               <th>

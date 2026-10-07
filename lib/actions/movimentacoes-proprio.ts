@@ -11,7 +11,7 @@ export type DetalheKardex =
       ok: true
       movimento: {
         id: number; quando: string; data_ref: string; tipo: string; origem: string; ref: string; quantidade: number; custo: number | null
-        saldo_apos: number; saldo_total_apos: number; cmc_apos: number | null; user_id: string | null; obs: string | null
+        saldo_apos: number; saldo_total_apos: number; cmc_apos: number | null; user_id: string | null; user_nome: string | null; obs: string | null
         produto: string; codigo: string | null; unidade: string | null; local: string | null; custo_estimado: boolean
       }
       documento: { rotulo: string; descricao: string; href?: string; linhas?: { rotulo: string; valor: string }[] } | null
@@ -54,10 +54,17 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
     } else if (m.origem === 'PRODUCAO') {
       const { data: op } = await sb.from('ordens_producao_proprio').select('id, ref, quantidade, custo_total, custo_unitario, status, codigo_produto').eq('loja_id', lojaId).eq('ref', ref).maybeSingle()
       const opId = /^OP:(\d+):/.exec(ref)?.[1]
+      // A OP automática de uma venda estornada é excluída (como no Omie): sem link para não abrir uma página inexistente.
+      const { data: opViva } = opId
+        ? await sb.from('ordens_producao').select('id, identificacao_c_num_op').eq('loja_id', lojaId).eq('id', Number(opId)).maybeSingle()
+        : { data: null }
       if (op) documento = {
         rotulo: 'Ordem de produção', descricao: `${await nomeProduto(Number(op.codigo_produto))} · ${op.quantidade}`,
-        href: opId ? `/ordem-producao/${opId}` : undefined,
-        linhas: [{ rotulo: 'Custo do lote', valor: Number(op.custo_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }, { rotulo: 'Situação', valor: String(op.status) }],
+        href: opViva ? `/ordem-producao/${opId}` : undefined,
+        linhas: [
+          { rotulo: 'Custo do lote', valor: Number(op.custo_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+          { rotulo: 'Situação', valor: opViva ? String(op.status) : 'OP excluída (venda estornada ou exclusão manual)' },
+        ],
       }
     } else if (m.origem === 'INVENTARIO') {
       const itemId = Number(ref.split(':')[1])
@@ -104,12 +111,20 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
     }
   }
 
+  // Quem lançou: movimento grava o id do usuário (ou um nome, nas rotinas automáticas como "Norte Vendas").
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  let userNome: string | null = m.user_id && !UUID.test(String(m.user_id)) ? String(m.user_id) : null
+  if (m.user_id && UUID.test(String(m.user_id))) {
+    const { data: pf } = await sb.from('profiles').select('name').eq('id', m.user_id).maybeSingle()
+    userNome = pf?.name ?? 'Usuário removido'
+  }
+
   return {
     ok: true,
     movimento: {
       id: Number(m.id), quando: m.created_at, data_ref: m.data_ref, tipo: m.tipo, origem: m.origem, ref, quantidade: Number(m.quantidade),
       custo: m.custo_unitario == null ? null : Number(m.custo_unitario), saldo_apos: Number(m.saldo_apos), saldo_total_apos: Number(m.saldo_total_apos),
-      cmc_apos: m.cmc_apos == null ? null : Number(m.cmc_apos), user_id: m.user_id, obs: m.obs, produto: pr?.descricao ?? String(m.codigo_produto),
+      cmc_apos: m.cmc_apos == null ? null : Number(m.cmc_apos), user_id: m.user_id, user_nome: userNome, obs: m.obs, produto: pr?.descricao ?? String(m.codigo_produto),
       codigo: pr?.codigo ?? null, unidade: pr?.unidade ?? null, local: lc?.descricao ?? null, custo_estimado: !!m.custo_estimado,
     },
     documento,

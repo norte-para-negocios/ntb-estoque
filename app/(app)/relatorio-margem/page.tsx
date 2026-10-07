@@ -637,7 +637,7 @@ export default async function RelatorioMargemPage({
           <p className="text-[13px] text-text-muted">
             <span className="font-medium text-text">{semEstoque.length} produto(s) sem estoque na foto de hoje</span> — não têm
             saldo positivo em nenhum local agora, então não dá pra calcular um CMC ponderado (motivo normal: estoque zerado, não é
-            problema de cadastro no Omie).
+            problema de cadastro{margemProprio ? '' : ' no Omie'}).
           </p>
         </div>
       )}
