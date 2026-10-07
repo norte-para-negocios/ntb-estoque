@@ -24,6 +24,7 @@ import {
   removeInventarioItem,
   finishInventario,
   forceSyncInventario,
+  informarMotivoInventarioItem,
 } from '@/lib/actions/inventario'
 
 // Base do stepper +/-: prioriza o que esta DIGITADO agora (texto cru, pode ter
@@ -41,6 +42,10 @@ export type ItemContagem = {
   unidade?: string | null
   quan: number | null
   status: string | null
+  // Só em loja de estoque próprio: diferença lançada, motivo e mensagem do item.
+  diferenca?: number | null
+  motivo?: string | null
+  descricao_status?: string | null
 }
 
 export function ContagemInventario({
@@ -48,12 +53,16 @@ export function ContagemInventario({
   itensIniciais,
   finalizado,
   podeEditar = true,
+  proprio = false,
 }: {
   inventarioId: number
   itensIniciais: ItemContagem[]
   finalizado: boolean
   podeEditar?: boolean
+  // Loja de estoque próprio: o ajuste vai para o estoque da própria loja (sem Omie) e diferenças grandes pedem motivo.
+  proprio?: boolean
 }) {
+  const [motivos, setMotivos] = useState<Record<number, string>>({})
   const [itens, setItens] = useState(itensIniciais)
   // Texto CRU do input de quantidade: mantido separado do number pra que a virgula
   // fique enquanto o usuario digita ("3,4"). Se o input fosse controlado pelo
@@ -167,7 +176,7 @@ export function ContagemInventario({
       }
       const statusUi = res.status === 'Iniciado' ? 'Vazio' : res.status
       setItens((prev) =>
-        prev.map((i) => (i.id === itemId ? { ...i, status: statusUi } : i))
+        prev.map((i) => (i.id === itemId ? { ...i, status: statusUi, diferenca: res.diferenca ?? null, descricao_status: res.descricao_status ?? null } : i))
       )
       if (res.status === 'Sem CMC') {
         toast.warning('Sem custo no Omie ainda', {
@@ -177,14 +186,44 @@ export function ContagemInventario({
         toast.error('Falha ao integrar item', {
           description: res.descricao_status || 'Tente reenviar',
         })
+      } else if (res.status === 'Aguardando motivo') {
+        toast.warning('Diferença grande: informe o motivo', { description: res.descricao_status ?? undefined })
       } else if (res.status === 'Concluido') {
-        toast.success('Item integrado ao Omie')
+        toast.success(proprio ? 'Item lançado no estoque' : 'Item integrado ao Omie')
+      }
+    })()
+  }
+
+  function informarMotivo(itemId: number) {
+    const texto = (motivos[itemId] ?? '').trim()
+    if (texto.length < 3) return
+    setEnviando((prev) => new Set(prev).add(itemId))
+    setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Processando' } : i)))
+    void (async () => {
+      try {
+        const res = await informarMotivoInventarioItem(itemId, texto)
+        setItens((prev) =>
+          prev.map((i) =>
+            i.id === itemId ? { ...i, status: res.status, diferenca: res.diferenca ?? null, descricao_status: res.descricao_status ?? null, motivo: texto } : i
+          )
+        )
+        if (res.status === 'Concluido') toast.success('Item lançado no estoque')
+        else toast.error('Não foi possível lançar', { description: res.descricao_status ?? undefined })
+      } catch {
+        setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, status: 'Erro' } : i)))
+        toast.error('Falha ao lançar item')
+      } finally {
+        setEnviando((prev) => {
+          const novo = new Set(prev)
+          novo.delete(itemId)
+          return novo
+        })
       }
     })()
   }
 
   function remover(itemId: number) {
-    if (finalizado && !window.confirm('Excluir este item? O ajuste já lançado no Omie será removido.')) {
+    if (finalizado && !window.confirm(`Excluir este item? O ajuste já lançado ${proprio ? 'no estoque' : 'no Omie'} será removido.`)) {
       return
     }
     const anterior = itens
@@ -192,7 +231,7 @@ export function ContagemInventario({
     startTransition(async () => {
       const res = await removeInventarioItem(itemId)
       if (res?.error) {
-        setItens(anterior) // desfaz o otimismo se o Omie recusar
+        setItens(anterior) // desfaz o otimismo se o servidor recusar
         toast.error('Erro ao remover', { description: res.error })
       } else {
         toast.success('Item removido')
@@ -215,7 +254,7 @@ export function ContagemInventario({
       const res = await finishInventario(inventarioId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Inventário enviado ao Omie')
+        toast.success(proprio ? 'Inventário concluído' : 'Inventário enviado ao Omie')
         router.refresh()
       }
     })
@@ -226,7 +265,7 @@ export function ContagemInventario({
       const res = await forceSyncInventario(inventarioId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Reenviado ao Omie')
+        toast.success(proprio ? 'Pendentes reenviados' : 'Reenviado ao Omie')
         router.refresh()
       }
     })
@@ -251,9 +290,10 @@ export function ContagemInventario({
   // pos-finalizacao etc.). Num inventario finalizado esses itens nunca chegaram ao Omie
   // e o botao de reenvio nao aparecia. Agora entram no criterio de "tem pendentes".
   const comIniciado = comQtd.filter((i) => i.status === 'Iniciado' || i.status === 'Processando').length
-  const temPendentes = comErro > 0 || semCusto > 0 || (finalizado && comIniciado > 0)
+  const aguardandoMotivo = comQtd.filter((i) => i.status === 'Aguardando motivo').length
+  const temPendentes = comErro > 0 || semCusto > 0 || aguardandoMotivo > 0 || (finalizado && comIniciado > 0)
   // Cor do aviso: vermelho so com erro real; amarelo com sem-custo/pendente; verde ok.
-  const tomBanner = comErro > 0 ? 'bg-err' : semCusto > 0 || (finalizado && comIniciado > 0) ? 'bg-warn' : 'bg-ok'
+  const tomBanner = comErro > 0 ? 'bg-err' : semCusto > 0 || aguardandoMotivo > 0 || (finalizado && comIniciado > 0) ? 'bg-warn' : 'bg-ok'
 
   return (
     <div className="pb-28 lg:pb-20">
@@ -265,7 +305,7 @@ export function ContagemInventario({
             <span className="inline-flex items-center gap-2">
               <span aria-hidden className={`size-2 shrink-0 rounded-full ${tomBanner}`} />
               <span>
-                <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
+                <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos {proprio ? 'lançados no estoque' : 'integrados ao Omie'}
               </span>
             </span>
             {comErro > 0 && (
@@ -277,7 +317,13 @@ export function ContagemInventario({
             {semCusto > 0 && (
               <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
                 <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
-                <span className="num">{semCusto}</span> sem custo (aguardando o Omie)
+                <span className="num">{semCusto}</span> sem custo ({proprio ? 'custo ainda zerado' : 'aguardando o Omie'})
+              </span>
+            )}
+            {aguardandoMotivo > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-normal text-text-muted">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
+                <span className="num">{aguardandoMotivo}</span> aguardando motivo
               </span>
             )}
             {comIniciado > 0 && (
@@ -326,7 +372,7 @@ export function ContagemInventario({
           <span aria-hidden className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" />
           <span>
           Editando um inventário finalizado. Ao alterar a quantidade ou excluir um item, o ajuste já
-          lançado no Omie é refeito ou removido na hora.</span>
+          lançado {proprio ? 'no estoque' : 'no Omie'} é refeito ou removido na hora.</span>
         </p>
       )}
 
@@ -393,6 +439,33 @@ export function ContagemInventario({
                     {item.status && (
                       <div className="mt-1.5 lg:hidden">
                         <StatusPill status={item.status} />
+                      </div>
+                    )}
+                    {proprio && item.diferenca != null && item.diferenca !== 0 && item.status !== 'Vazio' && (
+                      <div className={`mt-1 text-[12px] font-medium ${item.diferenca < 0 ? 'text-err' : 'text-ok'}`}>
+                        Diferença: <span className="num">{item.diferenca > 0 ? '+' : ''}{formatNumBR(item.diferenca)}</span>
+                        {item.unidade ? ` ${item.unidade}` : ''}
+                        {item.motivo ? <span className="font-normal text-text-muted"> · {item.motivo}</span> : null}
+                      </div>
+                    )}
+                    {proprio && item.status === 'Aguardando motivo' && editavel && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="w-full text-[12px] text-text-muted">{item.descricao_status}</span>
+                        <input
+                          type="text"
+                          value={motivos[item.id] ?? ''}
+                          onChange={(e) => setMotivos((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          placeholder="Motivo da diferença (ex.: quebra, perda, erro de lançamento)"
+                          className="h-9 min-w-[14rem] flex-1 rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+                        />
+                        <button
+                          type="button"
+                          disabled={enviando.has(item.id) || (motivos[item.id] ?? '').trim().length < 3}
+                          onClick={() => informarMotivo(item.id)}
+                          className={btnClass('primary')}
+                        >
+                          Lançar com motivo
+                        </button>
                       </div>
                     )}
                   </div>
