@@ -15,20 +15,23 @@ export async function GET(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, nome, is_test, omie_app_key, omie_app_secret')
+    .select('id, nome, is_test, modo_estoque, omie_app_key, omie_app_secret')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<{ id: number; nome: string | null; is_test: boolean; omie_app_key: string | null; omie_app_secret: string | null }>()
+    .maybeSingle<{ id: number; nome: string | null; is_test: boolean; modo_estoque: string | null; omie_app_key: string | null; omie_app_secret: string | null }>()
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
   }
 
+  const modo = loja.modo_estoque === 'proprio' || loja.modo_estoque === 'nenhum' ? loja.modo_estoque : 'omie'
   return NextResponse.json({
     nome: loja.nome,
+    // 'omie' | 'proprio' | 'nenhum' (versao >= 3). Em 'proprio' nada vai ao Omie: simulada=false, omieReal=false.
+    modo,
     // Loja de teste: toda escrita no Omie é simulada (lib/omie/client.ts, ehChamadaDeEscrita).
-    simulada: !!loja.is_test,
+    simulada: modo === 'omie' && !!loja.is_test,
     // Loja real com chave do Omie de verdade (sem chave, a baixa não tem para onde ir).
-    omieReal: !loja.is_test && !!loja.omie_app_key && !!loja.omie_app_secret,
-    versao: 2,
+    omieReal: modo === 'omie' && !loja.is_test && !!loja.omie_app_key && !!loja.omie_app_secret,
+    versao: 3,
   })
 }

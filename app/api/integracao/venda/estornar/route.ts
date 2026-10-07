@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { estornarVenda } from '@/lib/vendas-estorno'
 import type { LojaOmie } from '@/lib/omie/client'
+import { estornarVendaProprio } from '@/lib/estoque/venda-proprio'
 
 // Chamada pelo ntb-vendas quando a nota fiscal de uma venda inteira é cancelada: desfaz
 // no Omie da loja o que a venda gerou (saídas de estoque e ordens de produção).
@@ -18,11 +19,20 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test')
+    .select('id, omie_app_key, omie_app_secret, is_test, modo_estoque')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<LojaOmie>()
+    .maybeSingle<LojaOmie & { modo_estoque?: string | null }>()
   if (!loja) return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
+  if (loja.modo_estoque === 'nenhum') return NextResponse.json({ ok: true, skipped: true, reason: 'Loja sem controle de estoque' })
+  if (loja.modo_estoque === 'proprio') {
+    try {
+      const r = await estornarVendaProprio(supabase, loja.id, body.pedidoRef)
+      return NextResponse.json({ ok: r.falhas === 0, ...r })
+    } catch (e) {
+      return NextResponse.json({ ok: false, reason: e instanceof Error ? e.message : 'Falha ao estornar a venda' }, { status: 400 })
+    }
+  }
   if (!loja.omie_app_key || !loja.omie_app_secret) return NextResponse.json({ skipped: true, reason: 'Loja sem Omie configurada' })
 
   try {

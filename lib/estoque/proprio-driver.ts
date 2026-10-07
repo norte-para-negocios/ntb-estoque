@@ -80,7 +80,7 @@ export async function editarProdutoProprio(lojaId: number, id: number, d: Produt
   if (d.estoqueMinimo != null && (Number.isNaN(d.estoqueMinimo) || d.estoqueMinimo < 0)) return { error: 'Estoque mínimo inválido' }
 
   const supabase = createServiceClient()
-  const { data: atual } = await supabase.from('produtos').select('codigo_produto').eq('id', id).eq('loja_id', lojaId).maybeSingle()
+  const { data: atual } = await supabase.from('produtos').select('codigo_produto, codigo').eq('id', id).eq('loja_id', lojaId).maybeSingle()
   if (!atual) return { error: 'Produto não encontrado' }
   const { error } = await supabase
     .from('produtos')
@@ -100,6 +100,7 @@ export async function editarProdutoProprio(lojaId: number, id: number, d: Produt
     .eq('id', id)
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
+  if (atual.codigo) await notificarVendasProduto(lojaId, atual.codigo as string, d.descricao.trim(), Number(d.valorUnitario) || 0)
   return { ok: true, codigoProduto: (atual.codigo_produto as number | null) ?? null }
 }
 
@@ -203,4 +204,55 @@ export async function semearLojaProprio(lojaId: number): Promise<{ locais: numbe
     if ('ok' in r) familias++
   }
   return { locais, familias }
+}
+
+// -------------------------------------------------------------------------------- integração (Norte Vendas)
+/** Aviso best-effort ao Vendas quando nome/preço de um produto mudam aqui (nunca derruba a edição). */
+export async function notificarVendasProduto(lojaId: number, codigo: string, nome: string, preco: number): Promise<void> {
+  const vendasUrl = process.env.NTB_VENDAS_INTERNAL_URL
+  if (!vendasUrl) return
+  try {
+    const { data: loja } = await createServiceClient().from('lojas').select('integracao_api_key').eq('id', lojaId).maybeSingle()
+    const chave = (loja as { integracao_api_key?: string | null } | null)?.integracao_api_key
+    if (!chave) return
+    await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chave}` },
+      body: JSON.stringify({ updates: [{ omieCodigo: codigo, nome, preco }] }),
+    }).catch(() => {})
+  } catch { /* silencioso: a edição local já foi salva */ }
+}
+
+/**
+ * Cadastro vindo do Vendas em loja 'proprio': se vier `codigo` e ele já existe aqui, só VINCULA (marca PDV, não duplica);
+ * se vier `codigo` novo, cria com ele; sem `codigo`, gera pelo tipo do item (default 04 = vendável, prefixo 90).
+ */
+export async function vincularOuCriarProdutoProprio(
+  lojaId: number,
+  d: { nome: string; precoVenda: number; ncm?: string | null; unidade?: string | null; codigo?: string | null; tipoItem?: string | null }
+): Promise<Resultado<{ codigo: string; codigoProduto: number; existente: boolean }>> {
+  const supabase = createServiceClient()
+  const codigoPedido = d.codigo?.trim() || null
+  if (codigoPedido) {
+    const { data: ja } = await supabase.from('produtos').select('codigo_produto, codigo').eq('loja_id', lojaId).eq('codigo', codigoPedido).maybeSingle()
+    if (ja) {
+      await supabase.from('produtos').update({ pdv: true, updated_at: new Date().toISOString() }).eq('loja_id', lojaId).eq('codigo_produto', ja.codigo_produto)
+      return { ok: true, codigo: ja.codigo as string, codigoProduto: Number(ja.codigo_produto), existente: true }
+    }
+  }
+  const ncm = (d.ncm || '').replace(/\D/g, '') || '21069090' // mesmo ponto de partida técnico da rota do Omie; o contador revisa
+  if (!codigoPedido) {
+    const r = await criarProdutoProprio(lojaId, {
+      descricao: d.nome, unidade: d.unidade?.trim() || 'UN', ncm, valorUnitario: d.precoVenda, pdv: true, tipoItem: d.tipoItem || '04',
+    })
+    if ('error' in r) return { error: r.error }
+    return { ok: true, codigo: r.codigo, codigoProduto: r.codigoProduto, existente: false }
+  }
+  const codigoProduto = await novoIdProdutoProprio()
+  const { error } = await supabase.from('produtos').insert({
+    loja_id: lojaId, codigo_produto: codigoProduto, codigo: codigoPedido, descricao: d.nome.trim(), unidade: d.unidade?.trim() || 'UN',
+    ncm, valor_unitario: d.precoVenda, pdv: true, tipo_item: d.tipoItem || '04', inativo: false, updated_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+  return { ok: true, codigo: codigoPedido, codigoProduto, existente: false }
 }
