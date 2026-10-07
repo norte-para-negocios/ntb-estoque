@@ -7,7 +7,7 @@ import { incluirLocalEstoque, alterarLocalEstoque, syncLocaisEstoque } from '@/l
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { criarLocalProprio, editarLocalProprio } from '@/lib/estoque/proprio-driver'
+import { criarLocalProprio, editarLocalProprio, localTemMovimento, type LocalProprioCampos } from '@/lib/estoque/proprio-driver'
 
 /**
  * Exclui um local de estoque APENAS do banco local (nao no Omie).
@@ -22,10 +22,14 @@ export async function excluirLocalEstoque(id: number) {
   const supabase = createServiceClient()
   const { data: alvo } = await supabase
     .from('local_estoques')
-    .select('descricao')
+    .select('descricao, codigo_local_estoque')
     .eq('id', id)
     .eq('loja_id', lojaId)
-    .maybeSingle()
+    .maybeSingle<{ descricao: string | null; codigo_local_estoque: number }>()
+  // Estoque proprio: local que ja teve movimento no ledger nao e excluido (sumiria do historico) -- inativa.
+  if (alvo && (await modoDaLoja(lojaId)) === 'proprio' && (await localTemMovimento(lojaId, Number(alvo.codigo_local_estoque)))) {
+    return { error: 'Este local já tem movimentos de estoque. Para tirá-lo de uso, edite e marque como inativo.' }
+  }
   const { error } = await supabase
     .from('local_estoques')
     .delete()
@@ -42,7 +46,7 @@ export async function excluirLocalEstoque(id: number) {
  * Cria um local de estoque no Omie e re-sincroniza (Bloco 9.2). ESCREVE no Omie.
  * Disparo real apenas com o Ramon (regra: nao escrever no Omie em teste sozinho).
  */
-export async function criarLocalEstoque(dados: { descricao: string; codigo?: string }) {
+export async function criarLocalEstoque(dados: { descricao: string; codigo?: string } & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Criar'))) return { error: 'Sem permissão' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
@@ -86,7 +90,7 @@ export async function editarLocalEstoque(dados: {
   codigoLocalEstoque: number
   descricao: string
   codigo?: string
-}) {
+} & Partial<Omit<LocalProprioCampos, 'descricao' | 'codigo'>>) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Editar'))) return { error: 'Sem permissão' }
   if (!dados.codigoLocalEstoque) return { error: 'Local inválido' }

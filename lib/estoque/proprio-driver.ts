@@ -152,7 +152,22 @@ export async function excluirFamiliaProprio(lojaId: number, id: number): Promise
 }
 
 // -------------------------------------------------------------------------------- local
-export async function criarLocalProprio(lojaId: number, d: { descricao: string; codigo?: string | null; padrao?: boolean }): Promise<Resultado<{ codigoLocalEstoque: number }>> {
+/** Campos de um local de estoque do modo próprio (os mesmos que a tela de Locais mostra hoje). 'S'/'N' como no cadastro. */
+export type LocalProprioCampos = {
+  descricao: string
+  codigo?: string | null
+  tipo?: string | null
+  padrao?: boolean
+  inativo?: boolean
+  dispOrdemProducao?: boolean
+  dispConsumoOp?: boolean
+  dispRemessa?: boolean
+  dispVenda?: boolean
+}
+
+const sn = (v: boolean | undefined, padrao: 'S' | 'N'): 'S' | 'N' => (v === undefined ? padrao : v ? 'S' : 'N')
+
+export async function criarLocalProprio(lojaId: number, d: LocalProprioCampos): Promise<Resultado<{ codigoLocalEstoque: number }>> {
   if (!d.descricao?.trim()) return { error: 'Informe a descrição do local' }
   const supabase = createServiceClient()
   if (d.padrao) await supabase.from('local_estoques').update({ padrao: 'N' }).eq('loja_id', lojaId)
@@ -162,25 +177,58 @@ export async function criarLocalProprio(lojaId: number, d: { descricao: string; 
     codigo_local_estoque: codigoLocalEstoque,
     codigo: d.codigo?.trim() || null,
     descricao: d.descricao.trim(),
+    tipo: d.tipo?.trim() || null,
     padrao: d.padrao ? 'S' : 'N',
-    inativo: 'N',
-    disp_venda: 'S',
-    disp_consumo_op: 'S',
-    disp_ordem_producao: 'S',
+    inativo: sn(d.inativo, 'N'),
+    disp_venda: sn(d.dispVenda, 'S'),
+    disp_consumo_op: sn(d.dispConsumoOp, 'S'),
+    disp_ordem_producao: sn(d.dispOrdemProducao, 'S'),
+    disp_remessa: sn(d.dispRemessa, 'S'),
   })
   if (error) return { error: error.message }
   return { ok: true, codigoLocalEstoque }
 }
 
-export async function editarLocalProprio(lojaId: number, codigoLocalEstoque: number, d: { descricao: string; codigo?: string | null }): Promise<Resultado> {
+/** Edita só o que veio informado (campo ausente = não mexe). Marcar como padrão desmarca os outros; o padrão não pode ser inativado. */
+export async function editarLocalProprio(lojaId: number, codigoLocalEstoque: number, d: LocalProprioCampos): Promise<Resultado> {
   if (!d.descricao?.trim()) return { error: 'Informe a descrição do local' }
-  const { error } = await createServiceClient()
+  const supabase = createServiceClient()
+  const { data: atual } = await supabase
     .from('local_estoques')
-    .update({ descricao: d.descricao.trim(), codigo: d.codigo?.trim() || null, updated_at: new Date().toISOString() })
+    .select('padrao')
     .eq('loja_id', lojaId)
     .eq('codigo_local_estoque', codigoLocalEstoque)
+    .maybeSingle<{ padrao: string | null }>()
+  if (!atual) return { error: 'Local não encontrado' }
+  const seraPadrao = d.padrao === undefined ? atual.padrao === 'S' : d.padrao
+  if (d.inativo === true && seraPadrao) return { error: 'O local padrão não pode ser inativado. Defina outro local como padrão antes.' }
+  if (d.padrao === true) await supabase.from('local_estoques').update({ padrao: 'N' }).eq('loja_id', lojaId)
+  const campos: Record<string, string | null> = {
+    descricao: d.descricao.trim(),
+    codigo: d.codigo?.trim() || null,
+    updated_at: new Date().toISOString(),
+  }
+  if (d.tipo !== undefined) campos.tipo = d.tipo?.trim() || null
+  if (d.padrao !== undefined) campos.padrao = d.padrao ? 'S' : 'N'
+  if (d.inativo !== undefined) campos.inativo = d.inativo ? 'S' : 'N'
+  if (d.dispVenda !== undefined) campos.disp_venda = d.dispVenda ? 'S' : 'N'
+  if (d.dispConsumoOp !== undefined) campos.disp_consumo_op = d.dispConsumoOp ? 'S' : 'N'
+  if (d.dispOrdemProducao !== undefined) campos.disp_ordem_producao = d.dispOrdemProducao ? 'S' : 'N'
+  if (d.dispRemessa !== undefined) campos.disp_remessa = d.dispRemessa ? 'S' : 'N'
+  const { error } = await supabase.from('local_estoques').update(campos).eq('loja_id', lojaId).eq('codigo_local_estoque', codigoLocalEstoque)
   if (error) return { error: error.message }
   return { ok: true }
+}
+
+/** Local com movimento ou saldo no ledger não é excluído (some do histórico): inativa em vez de excluir. */
+export async function localTemMovimento(lojaId: number, codigoLocalEstoque: number): Promise<boolean> {
+  const supabase = createServiceClient()
+  const { count } = await supabase
+    .from('estoque_movimentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('loja_id', lojaId)
+    .eq('codigo_local_estoque', codigoLocalEstoque)
+  return (count ?? 0) > 0
 }
 
 // -------------------------------------------------------------------------------- loja nova
