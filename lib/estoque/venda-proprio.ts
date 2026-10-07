@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
+import { consumoPorReceita } from './receita-db'
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -38,11 +39,27 @@ export async function baixarVendaProprio(
     if (p.pulo) resultados[p.indice] = { codigo: p.codigo, ok: false, op: p.pulo.op, baixa: p.pulo.baixa, erro: p.pulo.erro }
   }
 
+  // Produto com ficha técnica ativa baixa os INSUMOS pela receita; sem ficha, baixa o próprio produto (como antes).
+  const comReceita = new Set<number>()
+  const produtosPlano = Array.from(new Set(plano.filter((p) => !p.pulo).map((p) => p.produto!)))
+  if (produtosPlano.length) {
+    const { data: fichas } = await supabase.from('fichas_tecnicas').select('codigo_produto').eq('loja_id', loja.id).eq('ativa', true).in('codigo_produto', produtosPlano)
+    for (const f of (fichas ?? []) as { codigo_produto: number }[]) comReceita.add(Number(f.codigo_produto))
+  }
+
   const executaveis = plano
     .filter((p) => !p.pulo)
     .sort((a, b) => (a.produto! - b.produto!) || (a.local! - b.local!) || (a.indice - b.indice))
   for (const p of executaveis) {
     try {
+      if (comReceita.has(p.produto!)) {
+        const c = await consumoPorReceita(supabase, { lojaId: loja.id, produto: p.produto!, quantidade: p.quantidade, local: p.local!, ref, linhaBase: p.linha })
+        if (c.tem_receita) {
+          resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', negativo: !!c.negativo, duplicado: !!c.itens?.length && c.itens.every((i) => i.duplicado) }
+          continue
+        }
+        // ficha desativada entre a consulta e a baixa: cai no caminho normal (baixa o produto)
+      }
       const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs })
       resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado }
     } catch (e) {
@@ -61,7 +78,8 @@ export type ResultadoEstornoProprio = { ajustesExcluidos: number; opsExcluidas: 
 /** Estorno da venda inteira: devolve ao ledger cada saida VENDA do pedido (idempotente: estornar duas vezes nao devolve duas). */
 export async function estornarVendaProprio(supabase: SupabaseClient, lojaId: number, pedidoRef: string): Promise<ResultadoEstornoProprio> {
   const r: ResultadoEstornoProprio = { ajustesExcluidos: 0, opsExcluidas: 0, filaCancelada: 0, falhas: 0, detalhes: [] }
-  const { data, error } = await supabase.from('estoque_movimentos').select('id').eq('loja_id', lojaId).eq('origem', 'VENDA').eq('ref', pedidoRef)
+  // Venda direta: ref = pedido. Venda por receita: ref = "pedido|produto|linha" (um movimento por insumo).
+  const { data, error } = await supabase.from('estoque_movimentos').select('id').eq('loja_id', lojaId).eq('origem', 'VENDA').or(`ref.eq.${pedidoRef},ref.like.${pedidoRef}|*`)
   if (error) throw new Error(error.message)
   for (const m of (data ?? []) as { id: number }[]) {
     try {
