@@ -8,65 +8,9 @@
 //   sem local     -> { ok:false, op:'sem_estrutura', baixa:'sem local de estoque', erro }  (retentavel)
 //   falha incerta -> { ok:false, op:'erro', baixa:'erro', erro }                (incerto: o gerente confere)
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { localDaVenda, type ItemLocal, type LojaLocais } from '@/lib/vendas/local-venda'
+import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
+import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
-
-export type ItemVendaProprio = ItemLocal & { codigo: string; quantidade: number }
-
-export type PlanoItem = {
-  indice: number
-  codigo: string
-  quantidade: number
-  produto?: number
-  local?: number
-  /** n-esima ocorrencia do mesmo (produto, local) no pedido: parte da chave de idempotencia. */
-  linha: number
-  pulo?: { op: 'pulada' | 'sem_estrutura'; baixa: string; erro: string }
-}
-
-export type ResultadoItemProprio = {
-  codigo: string
-  ok: boolean
-  op: 'sem_estrutura' | 'pulada' | 'erro'
-  baixa: string
-  erro?: string
-  saldo?: number
-  negativo?: boolean
-  duplicado?: boolean
-}
-
-/** Decide, sem tocar no banco, o que cada item vira. Pura: testada em scripts/testes/vendaProprio.test.ts. */
-export function planejarBaixa(
-  itens: Partial<ItemVendaProprio>[],
-  loja: LojaLocais,
-  produtoPorCodigo: Map<string, number>,
-  localPadrao: number | null,
-  locaisDaLoja: Set<number>
-): PlanoItem[] {
-  const ocorrencias = new Map<string, number>()
-  return itens.map((item, indice) => {
-    const codigo = item?.codigo ?? '?'
-    const base = { indice, codigo, quantidade: Number(item?.quantidade) || 0, linha: 0 }
-    if (!item?.codigo || !item.quantidade || item.quantidade <= 0) {
-      return { ...base, pulo: { op: 'pulada', baixa: 'pulada', erro: 'Item inválido' } }
-    }
-    const produto = produtoPorCodigo.get(item.codigo)
-    if (!produto) {
-      return { ...base, pulo: { op: 'pulada', baixa: 'pulada', erro: 'Produto sem cadastro correspondente no ntb-estoque' } }
-    }
-    const local = localDaVenda(loja, item as ItemLocal) ?? localPadrao
-    if (!local) {
-      return { ...base, produto, pulo: { op: 'sem_estrutura', baixa: 'sem local de estoque', erro: 'Sem local de estoque para a saída' } }
-    }
-    if (!locaisDaLoja.has(Number(local))) {
-      return { ...base, produto, pulo: { op: 'pulada', baixa: 'pulada', erro: `O local de estoque ${local} não existe nesta loja` } }
-    }
-    const chave = `${produto}|${local}`
-    const n = ocorrencias.get(chave) ?? 0
-    ocorrencias.set(chave, n + 1)
-    return { ...base, produto, local: Number(local), linha: n }
-  })
-}
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -85,7 +29,7 @@ export async function baixarVendaProprio(
   const { data: locais } = await supabase.from('local_estoques').select('codigo_local_estoque, padrao, inativo').eq('loja_id', loja.id)
   const locaisDaLoja = new Set<number>(((locais ?? []) as { codigo_local_estoque: number }[]).map((l) => Number(l.codigo_local_estoque)))
   const padrao = ((locais ?? []) as { codigo_local_estoque: number; padrao: string | null }[]).find((l) => l.padrao === 'S')
-  const plano = planejarBaixa(itens, loja, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja)
+  const plano = planejarBaixa(itens, loja, localDaVenda, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja)
 
   const ref = pedidoRef ?? `sem-ref:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
   const resultados = new Array<ResultadoItemProprio>(plano.length)
