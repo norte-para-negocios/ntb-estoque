@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -315,6 +316,16 @@ export default async function RelatorioMargemPage({
       const cmcPorCod = new Map<number, number>()
       for (const [cod, e] of acumPorCod) {
         if (e.saldo > 0) cmcPorCod.set(cod, e.valor / e.saldo)
+      }
+      // Loja de estoque próprio: o produto vendável com ficha técnica não tem saldo próprio (o custo está nos
+      // insumos); usa o custo da ficha quando o custo médio do próprio produto não existe. Loja Omie não passa aqui.
+      if ((await modoDaLoja(lojaId)) === 'proprio') {
+        const { data: efetivos } = await supabase.rpc('cmc_efetivo_proprio', { p_loja: lojaId })
+        for (const e of (efetivos ?? []) as { codigo_produto: number; cmc: number | string | null }[]) {
+          const cod = Number(e.codigo_produto)
+          const v = Number(e.cmc)
+          if (v > 0 && !cmcPorCod.has(cod)) cmcPorCod.set(cod, v)
+        }
       }
       // Achado real (usuário 2026-07-19): o .filter() anterior escondia da tela
       // QUALQUER produto sem CMC ou sem preço de venda cadastrado (muitos

@@ -2,8 +2,10 @@ import Link from 'next/link'
 import { getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
+import { getCurrentLojaId } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
-  BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart,
+  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart,
 } from 'lucide-react'
 
 type Rel = {
@@ -60,6 +62,13 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
 
 export default async function RelatoriosPage() {
   if (!(await getAtorGestao()).podeGerir) notFound()
+  // Lojas com estoque proprio ganham o relatorio de Lucro (faturamento menos o custo real de cada baixa).
+  const proprio = (await modoDaLoja(await getCurrentLojaId())) === 'proprio'
+  const secoes = RELATORIOS.map((sec) =>
+    proprio && sec.grupo === 'Faturamento'
+      ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' }, ...sec.itens] }
+      : sec
+  )
 
   return (
     <div className="space-y-6">
@@ -69,7 +78,7 @@ export default async function RelatoriosPage() {
         description="Todos os relatórios num lugar só. Cada um responde uma pergunta do negócio."
       />
 
-      {RELATORIOS.map((secao) => (
+      {secoes.map((secao) => (
         <section key={secao.grupo}>
           <h2 className="mb-2 text-[13px] font-semibold text-text-muted">{secao.grupo}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
