@@ -46,6 +46,7 @@ hit /api/cron/retry-integracao-vendas
 # que producao saiu do Vercel), morto ha 7+ dias sem nenhum sinal de erro.
 hit /api/cron/sync-ajustes
 hit /api/cron/sync-posicao
+hit /api/cron/projetar-posicao-proprio
 # Achado real (usuario reportou 01/08: ficava excluindo OP direto no Omie e o
 # NTB Estoque nao sumia com ela) -- reconciliarOPsFantasmas agora tambem cobre
 # a fatia "recente" (created_at desc, sem exigir 3+ dias de atraso), entao

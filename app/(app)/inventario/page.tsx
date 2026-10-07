@@ -22,6 +22,8 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { LimiteMotivo } from '@/components/inventario-proprio/LimiteMotivo'
+import { limiteMotivo } from '@/lib/inventario/proprio'
 
 const POR_PAGINA = 50
 
@@ -322,6 +324,8 @@ export default async function InventarioPage({
         />
         <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} persistirEm="/inventario" />
       </ListaHeader>
+
+      {proprio && <LimiteMotivo valor={await limiteMotivo(lojaId)} podeEditar={podeEditar} />}
 
       <Lista
         linhas={inventarios ?? []}

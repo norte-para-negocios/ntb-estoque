@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
+import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
 
@@ -42,6 +43,24 @@ export async function criarAjusteManual(input: {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes - Criar'))) {
     return { error: 'Sem permissao para criar movimento' }
+  }
+
+  // Loja de estoque proprio: o ajuste vai direto para o ledger (sem Omie). Mesmas regras de sempre: motivo obrigatorio,
+  // data nao futura, quantidade > 0. Estorno e feito na propria tela de Movimentacoes.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    try {
+      const base = {
+        lojaId, local: input.codigoLocalEstoque, produto: input.idProd, origem: 'MANUAL',
+        ref: `man-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        quantidade: Math.abs(input.quantidade), user: await carimboUsuario(), obs: input.motivo.trim(), data: input.data ?? hojeBahia,
+      }
+      const r = input.tipo === 'SAI' ? await saida(base) : await entrada(base)
+      revalidatePath('/movimentacoes')
+      revalidatePath('/estoque')
+      return { status: 'Concluido', saldo: r.saldo }
+    } catch (e) {
+      return { status: 'Erro', erro: e instanceof Error ? e.message : 'Falha ao lancar o ajuste' }
+    }
   }
 
   const supabase = createServiceClient()
