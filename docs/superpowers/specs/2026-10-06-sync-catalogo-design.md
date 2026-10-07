@@ -33,3 +33,10 @@ Chave de ligação de produto: **`codigo`** (texto, único por loja em `proprio`
 
 ## Fora de escopo desta rodada
 Sincronizar ficha técnica/receita para o Vendas, imagens e descrição do cardápio no Estoque, grupos de opção que não são "Variação" (adicionais continuam só no Vendas).
+
+## Estado da implementação (06/10/2026)
+- Estoque: migration 141 (+ teste `scripts/testes-sql/catalogo_sync.sql`), `lib/estoque/catalogo-sync.ts`, rota `/api/integracao/catalogo`, cron `/api/cron/sync-catalogo`, telas `/grupo-produto`, `/produto/novo` e `/produto/[codigo]` (mãe/variações/atributos/grupo) e `/sync-catalogo` (divergências).
+- Vendas: migration 170 (+ `scripts/testes-sql/sync_catalogo_170.sql`), `lib/catalogoSync.ts`, rotas `/api/integracao/catalogo` e `/api/integracao/catalogo-status`, agendamento em `instrumentation.ts`, cartão "Catálogo sincronizado" em Integrações.
+- Só entra no cardápio o que é vendável: `pdv=true` e tipo de item 00/04. Insumos ficam só no Estoque. Adicionais (grupos de opção que não são variação) continuam só no Vendas.
+- Reativar produto no Estoque não reativa no Vendas (só a inativação propaga), para não desfazer um "esconder do cardápio" manual.
+- Teste de contrato com dados reais da ODARA (transação desfeita): payload do Vendas aplicado no Estoque e snapshot do Estoque aplicado de volta no Vendas, sem duplicar produto, sem eco no outbox.
