@@ -1,10 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
+import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { ajuste, entrada, estornar, modoDaLoja, transferir } from '@/lib/estoque/ledger'
+import { ajuste, entrada, estornar, modoDaLoja } from '@/lib/estoque/ledger'
+import { transferenciaRapida } from '@/lib/estoque/transferencia-proprio'
+import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 
 type Resposta = { ok: true; saldo?: number; negativo?: boolean; aviso?: string } | { error: string }
 
@@ -140,13 +142,17 @@ export async function transferirEntreLocais(dados: {
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   if (dados.de === dados.para) return { error: 'Escolha locais diferentes.' }
   try {
-    const r = await transferir({
-      lojaId: ctx.lojaId, de: dados.de, para: dados.para, produto: dados.codigoProduto, quantidade,
-      ref: ref('tr'), user: ctx.userId, obs: dados.obs?.trim() || null,
+    // Mesmo fluxo da tela de Transferências: cria o documento (aparece lá com o histórico de sempre) e lança o par no ledger.
+    const r = await transferenciaRapida({
+      lojaId: ctx.lojaId, userId: ctx.userId, carimbo: await carimboUsuario(), de: dados.de, para: dados.para,
+      produto: dados.codigoProduto, quantidade, observacao: dados.obs ?? null,
+      dataIso: dataCriacaoBahia(hojeBahiaISO())!,
     })
-    await registrarAuditoria('criar', 'transferência de estoque', r.saida.id, await descreverProduto(ctx.lojaId, dados.codigoProduto))
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('criar', 'transferência de estoque', r.transferenciaId, await descreverProduto(ctx.lojaId, dados.codigoProduto))
     atualizarTelas()
-    return { ok: true, saldo: r.entrada.saldo, negativo: r.saida.negativo }
+    revalidatePath('/transferencia')
+    return { ok: true, saldo: r.saldoDestino ?? undefined, negativo: r.negativo }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Falha ao transferir' }
   }

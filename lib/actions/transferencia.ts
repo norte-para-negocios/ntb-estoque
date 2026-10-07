@@ -10,6 +10,13 @@ import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { TipoTransferencia } from '@/lib/transferencia-tipos'
 import { limparObservacao, montarObsTransferencia } from '@/lib/transferencia-obs'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import {
+  desfazerItemTransferencia,
+  desfazerTransferenciaInteira,
+  lancarItemTransferencia,
+  lancarPendentesDaTransferencia,
+} from '@/lib/estoque/transferencia-proprio'
 
 export async function createTransferencia(data: {
   codigoLocalOrigem: number
@@ -123,6 +130,33 @@ export async function enviarMovimento(
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar transferencia' }
   }
   const supabase = createServiceClient()
+
+  // Loja com estoque proprio: o item vai pro ledger (par de movimentos), sem Omie. Mesmo retorno pra tela.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const userId = (await getUser()).id
+    const { data: atual } = await supabase
+      .from('movimentos')
+      .select('id, ledger_ref')
+      .eq('id', movimentoId)
+      .eq('loja_id', lojaId)
+      .maybeSingle<{ id: number; ledger_ref: string | null }>()
+    if (!atual) return { status: 'Erro', descricao_status: 'Movimento não encontrado', valor: null, id_ajuste: null, error: 'Movimento não encontrado' }
+    // Quantidade vazia/zerada: grava, estorna o que já tinha sido lançado e volta pra 'Iniciado' (item fica "Sem quantidade").
+    if (quan === null || !(quan > 0)) {
+      if (atual.ledger_ref) {
+        const r = await desfazerItemTransferencia(lojaId, movimentoId, userId)
+        if ('error' in r) return { status: 'Erro', descricao_status: r.error, valor: null, id_ajuste: null, error: r.error }
+      }
+      await supabase.from('movimentos').update({ quan, status: 'Iniciado', valor: null, updated_at: new Date().toISOString() }).eq('id', movimentoId).eq('loja_id', lojaId)
+      revalidatePath('/transferencia')
+      return { status: 'Iniciado', descricao_status: null, valor: null, id_ajuste: null }
+    }
+    await supabase.from('movimentos').update({ quan, updated_at: new Date().toISOString() }).eq('id', movimentoId).eq('loja_id', lojaId)
+    const r = await lancarItemTransferencia(lojaId, movimentoId, { id: userId, carimbo: await carimboUsuario() })
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { status: r.status, descricao_status: r.descricao_status, valor: r.valor, id_ajuste: null, ...(r.error ? { error: r.error } : {}) }
+  }
 
   // Carrega o movimento + transferencia + loja num so passo.
   const { data: mov } = await supabase
@@ -254,15 +288,15 @@ export async function salvarObservacaoItem(movimentoId: number, texto: string): 
   const obs = limparObservacao(texto)
   const { data: mov } = await supabase
     .from('movimentos')
-    .select('id, quan, obs_item, id_ajuste')
+    .select('id, quan, obs_item, id_ajuste, ledger_ref')
     .eq('id', movimentoId)
     .eq('loja_id', lojaId)
-    .maybeSingle<{ id: number; quan: number | null; obs_item: string | null; id_ajuste: number | null }>()
+    .maybeSingle<{ id: number; quan: number | null; obs_item: string | null; id_ajuste: number | null; ledger_ref: string | null }>()
   if (!mov) return { error: 'Item não encontrado' }
   if ((mov.obs_item ?? null) === obs) return { ok: true }
   const { error } = await supabase.from('movimentos').update({ obs_item: obs }).eq('id', movimentoId).eq('loja_id', lojaId)
   if (error) return { error: error.message }
-  if (mov.id_ajuste && mov.quan != null && mov.quan > 0) {
+  if ((mov.id_ajuste || mov.ledger_ref) && mov.quan != null && mov.quan > 0) {
     const envio = await enviarMovimento(movimentoId, mov.quan)
     return { ok: true, envio }
   }
@@ -275,6 +309,15 @@ export async function removeMovimento(movimentoId: number) {
     return { error: 'Sem permissao para editar transferencia' }
   }
   const supabase = createServiceClient()
+  // Loja com estoque proprio: estorna o lançamento no ledger antes de apagar a linha.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const r = await desfazerItemTransferencia(lojaId, movimentoId, (await getUser()).id)
+    if ('error' in r) return { error: r.error }
+    await supabase.from('movimentos').delete().eq('id', movimentoId).eq('loja_id', lojaId)
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { ok: true }
+  }
   // Se o movimento ja foi lancado no Omie (id_ajuste), exclui o ajuste de estoque
   // antes de remover a linha — senao o estoque ficaria ajustado sem o item no
   // sistema. Vale para transferencia finalizada tambem (editar pos-fato).
@@ -476,6 +519,17 @@ export async function finishTransferencia(transferenciaId: number) {
   }
   const supabase = createServiceClient()
 
+  // Loja com estoque proprio: lança o que ficou pendente no ledger e conclui. Sem Omie.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: existe } = await supabase.from('transferencias').select('id').eq('id', transferenciaId).eq('loja_id', lojaId).maybeSingle()
+    if (!existe) return { error: 'Transferência não encontrada' }
+    await lancarPendentesDaTransferencia(lojaId, transferenciaId, { id: (await getUser()).id, carimbo: await carimboUsuario() })
+    await supabase.from('transferencias').update({ status: 'Concluido', updated_at: new Date().toISOString() }).eq('id', transferenciaId).eq('loja_id', lojaId)
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { ok: true }
+  }
+
   await supabase
     .from('transferencias')
     .update({ status: 'Processando no Omie' })
@@ -525,6 +579,17 @@ export async function forceSyncTransferencia(transferenciaId: number) {
     return { error: 'Sem permissao para editar transferencia' }
   }
   const supabase = createServiceClient()
+
+  // Loja com estoque proprio: relança os itens pendentes/com erro no ledger. Sem Omie.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: existe } = await supabase.from('transferencias').select('id').eq('id', transferenciaId).eq('loja_id', lojaId).maybeSingle()
+    if (!existe) return { error: 'Transferência não encontrada' }
+    await lancarPendentesDaTransferencia(lojaId, transferenciaId, { id: (await getUser()).id, carimbo: await carimboUsuario() })
+    await supabase.from('transferencias').update({ status: 'Concluido', updated_at: new Date().toISOString() }).eq('id', transferenciaId).eq('loja_id', lojaId)
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { ok: true }
+  }
 
   const { data: trans } = await supabase
     .from('transferencias')
@@ -955,6 +1020,19 @@ export async function excluirTransferencia(transferenciaId: number) {
   }
   const supabase = createServiceClient()
 
+  // Loja com estoque proprio: estorna os lançamentos do ledger e apaga o documento. Sem Omie.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const { data: existe } = await supabase.from('transferencias').select('id').eq('id', transferenciaId).eq('loja_id', lojaId).maybeSingle()
+    if (!existe) return { error: 'Transferência não encontrada' }
+    const r = await desfazerTransferenciaInteira(lojaId, transferenciaId, (await getUser()).id)
+    if ('error' in r) return { error: r.error }
+    await supabase.from('transferencias').delete().eq('id', transferenciaId).eq('loja_id', lojaId)
+    await registrarAuditoria('excluir', 'transferência', transferenciaId, null)
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { ok: true }
+  }
+
   const { data: trans } = await supabase
     .from('transferencias')
     .select('id, movimentos(id, id_ajuste), loja:lojas(id, omie_app_key, omie_app_secret, is_test)')
@@ -998,6 +1076,16 @@ export async function editQuantidadeMovimento(movId: number, quan: number | null
     return { error: 'Sem permissao para editar transferencia' }
   }
   const supabase = createServiceClient()
+
+  // Loja com estoque proprio: o lançamento anterior é estornado e o item volta pra 'Iniciado' com a nova quantidade.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const r = await desfazerItemTransferencia(lojaId, movId, (await getUser()).id)
+    if ('error' in r) return { error: r.error }
+    await supabase.from('movimentos').update({ quan, status: 'Iniciado', updated_at: new Date().toISOString() }).eq('id', movId).eq('loja_id', lojaId)
+    revalidatePath('/transferencia')
+    revalidatePath('/estoque')
+    return { ok: true }
+  }
 
   const { data: mov } = await supabase
     .from('movimentos')
