@@ -69,6 +69,11 @@ begin
     _op_itens_detalhes(p_loja, p_produto, p_qtde)
   ) returning id into v_id;
 
+  -- Previsto x produzido (relatório de produção): guarda o planejado enquanto a OP está aberta.
+  insert into op_qtde_planejada (loja_id, n_cod_op, qtde_planejada, dt_previsao, ultima_vez_em)
+  values (p_loja, v_cod, p_qtde, coalesce(p_data, v_hoje), v_hoje)
+  on conflict (loja_id, n_cod_op) do update set qtde_planejada = excluded.qtde_planejada, dt_previsao = excluded.dt_previsao, ultima_vez_em = excluded.ultima_vez_em;
+
   return jsonb_build_object('ok', true, 'id', v_id, 'n_cod_op', v_cod, 'num_op', v_num);
 end $$;
 
@@ -89,6 +94,9 @@ begin
     full_object = _op_itens_detalhes(p_loja, o.identificacao_n_cod_produto, v_qtd),
     updated_at = now()
   where id = o.id;
+  insert into op_qtde_planejada (loja_id, n_cod_op, qtde_planejada, dt_previsao, ultima_vez_em)
+  values (p_loja, o.identificacao_n_cod_op, v_qtd, coalesce(p_data, o.identificacao_d_dt_previsao), (now() at time zone 'America/Sao_Paulo')::date)
+  on conflict (loja_id, n_cod_op) do update set qtde_planejada = excluded.qtde_planejada, dt_previsao = excluded.dt_previsao, ultima_vez_em = excluded.ultima_vez_em;
   return jsonb_build_object('ok', true, 'n_cod_op', o.identificacao_n_cod_op);
 end $$;
 

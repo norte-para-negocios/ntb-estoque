@@ -44,6 +44,8 @@ export default async function OrdemProducaoDetalhePage({
 
   const { id } = await params
   const supabase = await createClient()
+  const { data: lojaModo } = await supabase.from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  const proprio = lojaModo?.modo_estoque === 'proprio'
 
   // errosConsulta: mesmo padrao de errosConsulta/banner ja estabelecido nas
   // Tasks 12-16 desta auditoria (AGENTS.md) -- acumula falha de query num
@@ -63,7 +65,7 @@ export default async function OrdemProducaoDetalhePage({
   const { data: opSupabase, error: opErro } = await supabase
     .from('ordens_producao')
     .select(
-      'id, loja_id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, conclusao_status, conclusao_erro_msg, conclusao_tentativas, conclusao_ultima_tentativa_em, conclusao_qtde_desejada, conclusao_data_desejada, full_object'
+      'id, loja_id, local_destino, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, conclusao_status, conclusao_erro_msg, conclusao_tentativas, conclusao_ultima_tentativa_em, conclusao_qtde_desejada, conclusao_data_desejada, full_object'
     )
     .eq('id', id)
     .eq('loja_id', lojaId)
@@ -120,6 +122,10 @@ export default async function OrdemProducaoDetalhePage({
   ])
   logErro('produto')(produtoErro)
   logErro('local de estoque')(localErro)
+  const localDestinoCod = (op as { local_destino?: number | null }).local_destino ?? null
+  const { data: localDestino } = proprio && localDestinoCod
+    ? await supabase.from('local_estoques').select('descricao').eq('loja_id', lojaId).eq('codigo_local_estoque', localDestinoCod).maybeSingle()
+    : { data: null }
 
   // Ingredientes: mesmo padrao de app/(app)/ordem-producao/page.tsx (le
   // full_object.itensDetalhes, resolve nome/unidade via produtos).
@@ -212,9 +218,10 @@ export default async function OrdemProducaoDetalhePage({
             </span>{' '}
             {produto?.unidade ?? ''}
           </Campo>
-          <Campo label="Local de produção">
+          <Campo label={proprio ? 'Local de consumo' : 'Local de produção'}>
             {local?.descricao ?? (op.identificacao_codigo_local_estoque ? `#${op.identificacao_codigo_local_estoque}` : '-')}
           </Campo>
+          {proprio && <Campo label="Local de destino">{localDestino?.descricao ?? local?.descricao ?? '-'}</Campo>}
           <Campo label="Validade"><span className="num">{fmtDataBR(op.validade) ?? '-'}</span></Campo>
           <Campo label="Quantidade de etiqueta"><span className="num">{op.quantidade ?? '-'}</span></Campo>
           <Campo label="Data prevista"><span className="num">{fmtDataBR(op.identificacao_d_dt_previsao) ?? '-'}</span></Campo>
@@ -238,7 +245,7 @@ export default async function OrdemProducaoDetalhePage({
         )}
       </div>
 
-      <HistoricoSyncOP
+      {!proprio && <HistoricoSyncOP
         info={{
           fonte: opFonte,
           concluida,
@@ -249,7 +256,7 @@ export default async function OrdemProducaoDetalhePage({
           conclusaoQtdeDesejada: op.conclusao_qtde_desejada ?? null,
           conclusaoDataDesejada: op.conclusao_data_desejada ?? null,
         }}
-      />
+      />}
 
       <InventariosRelacionadosOP
         lojaId={lojaId}

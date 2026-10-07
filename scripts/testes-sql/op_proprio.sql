@@ -32,6 +32,7 @@ begin
   r := op_proprio_criar(99020, 8000000002801, current_date, 500);
   assert (r->>'num_op') ~ '/00002$', 'numero sequencial ' || r;
 
+  assert (select qtde_planejada from op_qtde_planejada where loja_id=99020 and n_cod_op=(select identificacao_n_cod_op from ordens_producao where id=v_id)) = 2000, 'planejado capturado';
   -- conclui (parcial: 1000 ml em vez de 2000)
   r := op_proprio_concluir(99020, v_id, current_date, 1000, 'joao', null);
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002802 and codigo_local_estoque=8000000002901;
@@ -46,6 +47,7 @@ begin
   begin perform op_proprio_concluir(99020, v_id); assert false, 'dupla conclusao'; exception when sqlstate '22023' then null; end;
   begin perform op_proprio_alterar(99020, v_id, null, 5); assert false, 'alterar concluida'; exception when sqlstate '22023' then null; end;
 
+  assert (select divergencia from relatorio_op_previsto_produzido(99020, current_date - 1, current_date + 1) where n_cod_op=(select identificacao_n_cod_op from ordens_producao where id=v_id)) = -1000, 'previsto x produzido';
   -- reverte: tudo volta
   perform op_proprio_reverter(99020, v_id, 'joao');
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002802 and codigo_local_estoque=8000000002901;

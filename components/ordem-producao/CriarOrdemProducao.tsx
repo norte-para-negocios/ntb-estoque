@@ -7,6 +7,7 @@ import { Plus, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { UNIDADE_OP_LABEL, type UnidadeOP } from '@/lib/op-recorrencia'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 const inputClass =
   'h-10 w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:ring-2 focus:ring-brand/40 max-sm:h-11 max-sm:text-base'
@@ -26,7 +27,9 @@ function hojeISO(): string {
 // fluxo da transferencia (modal de cabecalho -> tela dedicada de itens).
 export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
   const [open, setOpen] = useState(false)
+  const proprio = useEstoqueProprio()
   const [local, setLocal] = useState('')
+  const [destino, setDestino] = useState('')
   const [data, setData] = useState(hojeISO())
   const [unidade, setUnidade] = useState<UnidadeOP>('nao')
   const [intervalo, setIntervalo] = useState('1')
@@ -47,6 +50,7 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
       params.set('vezes', vezes)
     }
     if (local) params.set('local', local)
+    if (proprio && destino) params.set('destino', destino)
     if (obs.trim()) params.set('obs', obs.trim())
     setOpen(false)
     router.push(`/ordem-producao/nova?${params.toString()}`)
@@ -109,9 +113,9 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
           )}
 
           <div>
-            <label className={labelClass}>Local de estoque</label>
+            <label className={labelClass}>{proprio ? 'Local de consumo (de onde saem os insumos)' : 'Local de estoque'}</label>
             <select value={local} onChange={(e) => setLocal(e.target.value)} className={inputClass}>
-              <option value="">Padrão do produto</option>
+              <option value="">{proprio ? 'Local padrão da loja' : 'Padrão do produto'}</option>
               {locais.map((l) => (
                 <option key={l.codigo_local_estoque} value={String(l.codigo_local_estoque)}>
                   {l.descricao || l.codigo_local_estoque}
@@ -120,13 +124,27 @@ export function CriarOrdemProducao({ locais }: { locais: Local[] }) {
             </select>
           </div>
 
+          {proprio && (
+            <div>
+              <label className={labelClass}>Local de destino (onde o produto pronto entra)</label>
+              <select value={destino} onChange={(e) => setDestino(e.target.value)} className={inputClass}>
+                <option value="">Mesmo local de consumo</option>
+                {locais.map((l) => (
+                  <option key={l.codigo_local_estoque} value={String(l.codigo_local_estoque)}>
+                    {l.descricao || l.codigo_local_estoque}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className={labelClass}>Observação (opcional)</label>
             <input value={obs} onChange={(e) => setObs(e.target.value)} className={inputClass} placeholder="Ex.: lote, cupom..." />
           </div>
 
           <p className="text-[13px] text-text-muted">
-            No próximo passo você escolhe os produtos e a validade de cada um. A data vai ao Omie como início, conclusão e previsão.
+            No próximo passo você escolhe os produtos e a validade de cada um. {proprio ? 'A data é a previsão da produção; o estoque só se move quando a OP é concluída.' : 'A data vai ao Omie como início, conclusão e previsão.'}
           </p>
         </div>
         <div className="flex justify-end gap-2 px-5 pb-5 pt-1">

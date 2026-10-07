@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { OrdemProducaoRow, OrdemProducaoCard, type OPData } from '@/components/ordem-producao/OrdemProducaoRow'
 import { finishOPsEmLote, reverterOPsEmLote } from '@/lib/actions/ordem-producao'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 // Lista de OPs com selecao multipla + acoes em lote (Concluir/Reverter selecionadas).
 // `cabecalhoDesktop`: as <th> de ordenacao ja montadas em page.tsx (Server Component,
@@ -24,6 +25,8 @@ export function OrdemProducaoLista({
   podeReverter: boolean
   cabecalhoDesktop: ReactNode
 }) {
+  const proprio = useEstoqueProprio()
+  const noOmie = proprio ? '' : ' no Omie'
   const [sel, setSel] = useState<Set<number>>(new Set())
   const [pending, startTransition] = useTransition()
 
@@ -53,10 +56,10 @@ export function OrdemProducaoLista({
     if (!ids.length) return
     startTransition(async () => {
       const res = await finishOPsEmLote(ids)
-      if (res.sucesso) toast.success(`${res.sucesso} OP(s) concluída(s) no Omie`)
+      if (res.sucesso) toast.success(`${res.sucesso} OP(s) concluída(s)${noOmie}`)
       if (res.falhas.length) {
         toast.error(`${res.falhas.length} falharam ao concluir`, {
-          description: `Entraram na fila de reenvio automático.\n${res.falhas
+          description: `${proprio ? 'Nada foi gravado nelas.' : 'Entraram na fila de reenvio automático.'}\n${res.falhas
             .slice(0, 5)
             .map((f) => `OP ${f.numOP}: ${f.error}`)
             .join('\n')}${res.falhas.length > 5 ? `\n... e mais ${res.falhas.length - 5}` : ''}`,
@@ -73,13 +76,13 @@ export function OrdemProducaoLista({
     if (!ids.length) return
     if (
       !window.confirm(
-        `Reverter a conclusão de ${ids.length} OP(s) no Omie? O estoque produzido será estornado em cada uma.`
+        `Reverter a conclusão de ${ids.length} OP(s)${noOmie}? O estoque produzido será estornado em cada uma.`
       )
     )
       return
     startTransition(async () => {
       const res = await reverterOPsEmLote(ids)
-      if (res.sucesso) toast.success(`${res.sucesso} OP(s) revertida(s) no Omie`)
+      if (res.sucesso) toast.success(`${res.sucesso} OP(s) revertida(s)${noOmie}`)
       if (res.falhas.length) {
         toast.error(`${res.falhas.length} falharam ao reverter`, {
           description: res.falhas
@@ -94,7 +97,7 @@ export function OrdemProducaoLista({
   }
 
   if (!linhas.length) {
-    return <EmptyState icon={Factory} title="Nenhuma ordem de produção" hint="Sincronize com o Omie." />
+    return <EmptyState icon={Factory} title="Nenhuma ordem de produção" hint={proprio ? 'Clique em "Criar OP" para planejar a primeira produção.' : 'Sincronize com o Omie.'} />
   }
 
   return (

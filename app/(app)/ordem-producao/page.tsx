@@ -66,11 +66,12 @@ export default async function OrdemProducaoPage({
   // Loja de teste (2026-08-16, pedido explícito do usuário): filtro/etiqueta de
   // "veio do ntb-vendas" só faz sentido mostrar aqui — em loja real, toda OP
   // é OP de verdade, não tem "origem" a distinguir.
-  const { data: lojaRow } = await supabase.from('lojas').select('is_test').eq('id', lojaId).maybeSingle()
+  const { data: lojaRow } = await supabase.from('lojas').select('is_test, modo_estoque').eq('id', lojaId).maybeSingle()
   const lojaIsTest = !!lojaRow?.is_test
+  const proprio = lojaRow?.modo_estoque === 'proprio'
 
   // Permissoes de acao por botao. Sync (Atualizar agora) virou admin-only.
-  const podeSync = await isAdmin()
+  const podeSync = (await isAdmin()) && !proprio // estoque proprio nao tem o que sincronizar com o Omie
   const podeCriar = await requirePermissao(lojaId, 'Ordens de Producao - Criar')
   const podeEditar = await requirePermissao(lojaId, 'Ordens de Producao - Editar')
   const podeExcluir = await requirePermissao(lojaId, 'Ordens de Producao - Excluir')
@@ -713,7 +714,7 @@ export default async function OrdemProducaoPage({
         <EmptyState
           icon={Factory}
           title="Nenhuma ordem de produção"
-          hint="Sincronize com o Omie."
+          hint={proprio ? 'Clique em "Criar OP" para planejar a primeira produção.' : 'Sincronize com o Omie.'}
         />
       )}
 
