@@ -19,10 +19,13 @@ begin
   assert (r->>'num_op') ~ '^\d{4}/00001$', 'numero da OP ' || r;
   assert (select jsonb_array_length(full_object->'itensDetalhes') from ordens_producao where id=v_id) = 2, 'ingredientes previstos';
   assert ((select full_object->'itensDetalhes'->0->>'nQtde' from ordens_producao where id=v_id))::numeric = 3000, 'qtde prevista do 1o insumo (2000 ml x 1.5)';
-  perform op_proprio_alterar(99020, v_id, current_date + 1, 4000);
+  perform op_proprio_alterar(99020, v_id, current_date + 1, 4000, 'maria');
   assert (select identificacao_n_qtde from ordens_producao where id=v_id) = 4000, 'qtde planejada alterada';
   assert ((select full_object->'itensDetalhes'->0->>'nQtde' from ordens_producao where id=v_id))::numeric = 6000, 'ingredientes refeitos';
-  perform op_proprio_alterar(99020, v_id, null, 2000);
+  perform op_proprio_alterar(99020, v_id, null, 2000, 'maria');
+  assert (select criada_por from ordens_producao where id=v_id) = 'joao', 'criada_por';
+  assert (select ficha_versao from ordens_producao where id=v_id) = 1, 'ficha usada na criacao';
+  assert (select count(*) from op_historico where op_id=v_id and evento='alterada' and user_nome='maria') = 2, 'historico das alteracoes';
   assert (r->>'n_cod_op')::bigint >= 8000000000001, 'id proprio';
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002802 and codigo_local_estoque=8000000002901;
   assert s = 10000, 'criar OP nao mexe no estoque';
@@ -41,6 +44,17 @@ begin
   assert s = 1000, 'molho produzido (parcial) ' || s;
   assert (select concluida from ordens_producao where id=v_id), 'OP concluida';
   assert (select identificacao_n_qtde from ordens_producao where id=v_id) = 1000, 'qtde produzida gravada';
+  assert (select concluida_por_nome from ordens_producao where id=v_id) = 'joao', 'quem concluiu';
+  assert (select ficha_versao from ordens_producao where id=v_id) = 1, 'versao da ficha';
+  assert (select custo_total from ordens_producao where id=v_id) = 19, 'custo total da OP ' || (select custo_total from ordens_producao where id=v_id);
+  assert (select custo_unitario from ordens_producao where id=v_id) = 0.019, 'custo unitario da OP';
+  r := op_proprio_detalhe(99020, v_id);
+  assert jsonb_array_length(r->'execucoes') = 1, 'uma execucao';
+  assert jsonb_array_length(r->'execucoes'->0->'insumos') = 2, 'insumos consumidos';
+  assert jsonb_array_length(r->'execucoes'->0->'movimentos') = 3, 'movimentos do ledger (2 insumos + produto)';
+  assert (r->'execucoes'->0->'insumos'->0->>'quantidade_bruta')::numeric = 1500, 'bruto do 1o insumo (FC 1.5)';
+  assert (r->'ficha'->>'versao')::int = 1 and jsonb_array_length(r->'ficha'->'itens') = 2, 'receita usada';
+  assert (select count(*) from jsonb_array_elements(r->'historico')) = 4, 'historico: criada, 2 alteradas, concluida';
   -- custo do intermediário = (1500*0.01 + 200*0.02)/1000 = 0.019
   assert (select cmc from estoque_custos where loja_id=99020 and codigo_produto=8000000002801) = 0.019, 'custo do molho';
   -- não conclui duas vezes
@@ -55,6 +69,11 @@ begin
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002801 and codigo_local_estoque=8000000002901;
   assert s = 0, 'molho estornado ' || s;
   assert not (select concluida from ordens_producao where id=v_id), 'OP reaberta';
+  assert (select revertida_por from ordens_producao where id=v_id) = 'joao' and (select revertida_em from ordens_producao where id=v_id) is not null, 'quem e quando reverteu';
+  assert (select custo_total from ordens_producao where id=v_id) is null, 'custo zerado ao reverter';
+  r := op_proprio_detalhe(99020, v_id);
+  assert (r->'execucoes'->0->>'status') = 'revertida', 'execucao marcada revertida';
+  assert (select bool_and((m->>'estornado')::boolean) from jsonb_array_elements(r->'execucoes'->0->'movimentos') m), 'movimentos estornados';
   begin perform op_proprio_reverter(99020, v_id); assert false, 'reverter aberta'; exception when sqlstate '22023' then null; end;
 
   -- conclui de novo (nova ref) com a quantidade planejada, destino diferente
@@ -67,6 +86,8 @@ begin
   -- excluir OP concluída: reverte e apaga
   perform op_proprio_excluir(99020, v_id, 'joao');
   assert not exists (select 1 from ordens_producao where id=v_id), 'OP excluida';
+  assert (select count(*) from op_historico where op_id=v_id and evento='excluida') = 1, 'trilha da exclusao fica';
+  begin update op_historico set evento='criada' where op_id=v_id; assert false, 'historico imutavel'; exception when sqlstate '55000' then null; end;
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002802 and codigo_local_estoque=8000000002901;
   assert s = 10000, 'tomate de volta apos excluir ' || s;
 

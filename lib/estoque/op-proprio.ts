@@ -27,13 +27,13 @@ function addDiasISO(iso: string, dias: number): string | null {
 
 export async function criarOPProprio(
   lojaId: number,
-  input: { nCodProduto: number; data: string; quantidade: number; codigoLocalEstoque?: number | null; codigoLocalDestino?: number | null; validade?: string | null; obs?: string },
+  input: { nCodProduto: number; data: string; quantidade: number; codigoLocalEstoque?: number | null; codigoLocalDestino?: number | null; validade?: string | null; obs?: string; vendaRef?: string | null },
   usuario: string
 ): Promise<Erro | { ok: true; nCodOP: number; id: number }> {
   const { data, error } = await createServiceClient().rpc('op_proprio_criar', {
     p_loja: lojaId, p_produto: input.nCodProduto, p_data: input.data, p_qtde: input.quantidade,
     p_local: input.codigoLocalEstoque ?? null, p_local_destino: input.codigoLocalDestino ?? null,
-    p_validade: input.validade ?? null, p_obs: input.obs ?? null, p_user: usuario || null,
+    p_validade: input.validade ?? null, p_obs: input.obs ?? null, p_user: usuario || null, p_venda_ref: input.vendaRef ?? null,
   })
   if (error) return { error: msg(error, 'Falha ao criar a OP') }
   const r = data as { n_cod_op: number; id: number }
@@ -65,10 +65,10 @@ export async function criarOPsProprio(
 }
 
 export async function alterarOPProprio(
-  lojaId: number, opId: number, campos: { data?: string; qtd?: number }
+  lojaId: number, opId: number, campos: { data?: string; qtd?: number }, usuario?: string
 ): Promise<Erro | { ok: true }> {
   const { data, error } = await createServiceClient().rpc('op_proprio_alterar', {
-    p_loja: lojaId, p_op: opId, p_data: campos.data ?? null, p_qtde: campos.qtd ?? null,
+    p_loja: lojaId, p_op: opId, p_data: campos.data ?? null, p_qtde: campos.qtd ?? null, p_user: usuario || null,
   })
   if (error) return { error: msg(error, 'Falha ao alterar a OP') }
   await registrarAuditoria('editar', 'ordem de produção', Number((data as { n_cod_op?: number })?.n_cod_op ?? opId), campos.data ? `data → ${campos.data}` : `qtde planejada → ${campos.qtd}`)
@@ -117,4 +117,25 @@ export async function excluirOPProprio(lojaId: number, opId: number, usuario: st
   await registrarAuditoria('excluir', 'ordem de produção', cod, null)
   revalidatePath('/ordem-producao')
   return { ok: true, fantasma: false }
+}
+
+// ---- Detalhe completo da OP (receita usada, execuções, insumos com bruto e custo, movimentos do ledger e trilha de mudanças).
+export type DetalheOPProprio = {
+  ficha: null | {
+    id: number; versao: number; rendimento: number; ativa: boolean
+    itens: { codigo_insumo: number; codigo: string | null; descricao: string | null; unidade: string | null; quantidade_liquida: number; fator_correcao: number; perda_pct: number; quantidade_bruta: number }[]
+  }
+  execucoes: {
+    n: number; ref: string; status: string; quantidade: number; custo_total: number; custo_unitario: number
+    local_consumo: number; local_destino: number; user_id: string | null; created_at: string
+    insumos: { codigo_insumo: number; codigo: string | null; descricao: string | null; unidade: string | null; quantidade_bruta: number; custo_unitario: number; custo_total: number; movimento_id: number | null }[] | null
+    movimentos: { id: number; tipo: string; codigo_produto: number; codigo: string | null; descricao: string | null; codigo_local_estoque: number; local: string | null; quantidade: number; custo_unitario: number | null; saldo_apos: number; created_at: string; estornado: boolean }[] | null
+  }[]
+  historico: { id: number; evento: 'criada' | 'alterada' | 'concluida' | 'revertida' | 'excluida'; user_nome: string | null; quantidade: number | null; detalhes: Record<string, unknown>; created_at: string }[]
+}
+
+export async function detalheOPProprio(lojaId: number, opId: number): Promise<DetalheOPProprio | null> {
+  const { data, error } = await createServiceClient().rpc('op_proprio_detalhe', { p_loja: lojaId, p_op: opId })
+  if (error) { console.error('op_proprio_detalhe falhou', error.message); return null }
+  return (data as DetalheOPProprio | null) ?? null
 }

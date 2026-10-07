@@ -395,7 +395,7 @@ export async function setDataOP(opId: number, dataISO: string) {
   const dData = dataParaBR(dataISO)
   if (!dData) return { error: 'Data inválida' }
   if (await ehLojaProprio(lojaId)) {
-    const r = await alterarOPProprio(lojaId, opId, { data: dataISO })
+    const r = await alterarOPProprio(lojaId, opId, { data: dataISO }, await carimboUsuario())
     return 'error' in r ? { error: r.error } : { ok: true }
   }
 
@@ -450,7 +450,7 @@ export async function setQtdPlanejadaOP(opId: number, novaQtd: number) {
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Editar'))) return { error: 'Sem permissão' }
   if (!novaQtd || !Number.isFinite(novaQtd) || novaQtd <= 0) return { error: 'Quantidade inválida' }
   if (await ehLojaProprio(lojaId)) {
-    const r = await alterarOPProprio(lojaId, opId, { qtd: novaQtd })
+    const r = await alterarOPProprio(lojaId, opId, { qtd: novaQtd }, await carimboUsuario())
     return 'error' in r ? { error: r.error } : { ok: true }
   }
 

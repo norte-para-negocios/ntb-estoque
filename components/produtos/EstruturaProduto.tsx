@@ -10,6 +10,7 @@ import type { ProdutoBusca } from '@/lib/actions/produtos-search'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { parseNumBR, formatNumBR } from '@/lib/num-br'
+import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -29,6 +30,7 @@ type Linha = {
   unidade: string
   quantidade: string // texto cru (vírgula BR)
   perda: string
+  fator: string // fator de correção (so estoque proprio; vazio = 1)
 }
 
 export function EstruturaProduto({
@@ -42,14 +44,17 @@ export function EstruturaProduto({
   tipoItem?: string | null
   podeEditar?: boolean
 }) {
+  const proprio = useEstoqueProprio()
   const [open, setOpen] = useState(false)
+  const [rendimento, setRendimento] = useState('1')
+  const [expandir, setExpandir] = useState(false)
   const [view, setView] = useState<EstruturaView | null>(null)
   const [linhas, setLinhas] = useState<Linha[]>([])
   const [editando, setEditando] = useState(false)
   const [pending, startTransition] = useTransition()
 
-  // Só produto acabado (04) ou em processo (03) tem ficha técnica (regra do Omie).
-  const podeTerEstrutura = tipoItem === '04' || tipoItem === '03'
+  // Só produto acabado (04) ou em processo (03) tem ficha técnica (regra do Omie); no estoque próprio também o intermediário (06).
+  const podeTerEstrutura = tipoItem === '04' || tipoItem === '03' || (proprio && tipoItem === '06')
   const editavel = podeEditar && podeTerEstrutura
 
   function carregar() {
@@ -69,8 +74,11 @@ export function EstruturaProduto({
           unidade: i.unidade,
           quantidade: formatNumBR(i.quantidade),
           perda: i.perda ? formatNumBR(i.perda) : '',
+          fator: i.fatorCorrecao && i.fatorCorrecao !== 1 ? formatNumBR(i.fatorCorrecao) : '',
         }))
       )
+      setRendimento(formatNumBR(res.view.rendimento ?? 1))
+      setExpandir(res.view.expandirNaVenda ?? false)
     })
   }
 
@@ -91,7 +99,7 @@ export function EstruturaProduto({
     }
     setLinhas((prev) => [
       ...prev,
-      { idMalha: null, idProdMalha: p.codigo_produto, codigo: p.codigo, descricao: p.descricao, unidade: p.unidade ?? '', quantidade: '1', perda: '' },
+      { idMalha: null, idProdMalha: p.codigo_produto, codigo: p.codigo, descricao: p.descricao, unidade: p.unidade ?? '', quantidade: '1', perda: '', fator: '' },
     ])
   }
 
@@ -100,6 +108,9 @@ export function EstruturaProduto({
   }
   function setQt(idProdMalha: number, v: string) {
     setLinhas((prev) => prev.map((l) => (l.idProdMalha === idProdMalha ? { ...l, quantidade: v } : l)))
+  }
+  function setFator(idProdMalha: number, v: string) {
+    setLinhas((prev) => prev.map((l) => (l.idProdMalha === idProdMalha ? { ...l, fator: v } : l)))
   }
   function setPerda(idProdMalha: number, v: string) {
     setLinhas((prev) => prev.map((l) => (l.idProdMalha === idProdMalha ? { ...l, perda: v } : l)))
@@ -114,15 +125,25 @@ export function EstruturaProduto({
         return
       }
       const perda = l.perda ? parseNumBR(l.perda) ?? 0 : 0
-      itens.push({ idMalha: l.idMalha, idProdMalha: l.idProdMalha, codigo: l.codigo, descricao: l.descricao, quantidade: q, perda })
-    }
-    startTransition(async () => {
-      const res = await salvarEstrutura(codigoProduto, itens)
-      if ('error' in res) {
-        toast.error('Erro ao salvar no Omie', { description: res.error })
+      const fator = proprio && l.fator ? parseNumBR(l.fator) ?? 1 : 1
+      if (proprio && !(fator > 0)) {
+        toast.error('Fator de correção inválido', { description: l.descricao })
         return
       }
-      toast.success('Ficha técnica salva no Omie', {
+      itens.push({ idMalha: l.idMalha, idProdMalha: l.idProdMalha, codigo: l.codigo, descricao: l.descricao, quantidade: q, perda, fatorCorrecao: proprio ? fator : undefined })
+    }
+    const rend = proprio ? parseNumBR(rendimento) ?? 1 : undefined
+    if (proprio && !(rend! > 0)) {
+      toast.error('Rendimento inválido')
+      return
+    }
+    startTransition(async () => {
+      const res = await salvarEstrutura(codigoProduto, itens, proprio ? { rendimento: rend, expandirNaVenda: expandir } : undefined)
+      if ('error' in res) {
+        toast.error(proprio ? 'Erro ao salvar a ficha técnica' : 'Erro ao salvar no Omie', { description: res.error })
+        return
+      }
+      toast.success(proprio ? 'Ficha técnica salva' : 'Ficha técnica salva no Omie', {
         description: `+${res.incluidos} incluído(s) · ~${res.alterados} alterado(s) · -${res.excluidos} removido(s)`,
       })
       setEditando(false)
@@ -163,7 +184,7 @@ export function EstruturaProduto({
         </div>
 
         <div className="max-h-[65vh] space-y-5 overflow-y-auto px-5 py-3">
-          {pending && !view && <div className="py-6 text-center text-sm text-text-muted">Carregando estrutura do Omie...</div>}
+          {pending && !view && <div className="py-6 text-center text-sm text-text-muted">{proprio ? 'Carregando ficha técnica...' : 'Carregando estrutura do Omie...'}</div>}
 
           {view && (
             <>
@@ -172,11 +193,41 @@ export function EstruturaProduto({
                   <Info className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {editavel
-                      ? 'Ficha técnica (malha) cadastrada no Omie. Clique em "Editar" para ajustar os componentes e quantidades.'
+                      ? proprio
+                        ? `Ficha técnica${view.versao ? ` (versão ${view.versao})` : ''}. Clique em "Editar" para ajustar os componentes, quantidades, fator de correção e rendimento; cada edição gera uma versão nova.`
+                        : 'Ficha técnica (malha) cadastrada no Omie. Clique em "Editar" para ajustar os componentes e quantidades.'
                       : podeTerEstrutura
                         ? 'Exibição em leitura. A edição precisa da permissão de editar produtos.'
                         : 'Só produto acabado ou em processo tem ficha técnica.'}
                   </span>
+                </div>
+              )}
+
+              {proprio && (
+                <div className="grid gap-3 rounded-[var(--r-md)] bg-surface-2/50 p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div>
+                    <div className="text-[13px] font-semibold text-text-muted">Rendimento da receita</div>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-text">
+                      {editando ? (
+                        <input
+                          value={rendimento}
+                          onChange={(e) => setRendimento(e.target.value.replace(/[^\d.,]/g, ''))}
+                          inputMode="decimal"
+                          className="num w-24 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+                        />
+                      ) : (
+                        <span className="num font-medium">{rendimento}</span>
+                      )}
+                      <span className="text-text-muted">{view.produto?.unidade ?? ''} por receita — as quantidades abaixo são para esse rendimento.</span>
+                    </div>
+                    {view.custoUnitario != null && !editando && (
+                      <div className="mt-1 text-[12px] text-text-muted">Custo por {view.produto?.unidade || 'unidade'}: <span className="num font-medium text-text">R$ {view.custoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span> (pelo custo médio dos insumos)</div>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 text-[13px] text-text">
+                    <input type="checkbox" checked={expandir} disabled={!editando} onChange={(e) => setExpandir(e.target.checked)} className="size-4 accent-[var(--brand)]" />
+                    Abrir na venda (baixar os insumos direto, sem produzir antes)
+                  </label>
                 </div>
               )}
 
@@ -192,7 +243,7 @@ export function EstruturaProduto({
 
                 {linhas.length === 0 ? (
                   <div className="rounded-[var(--r-md)] bg-surface-2 p-4 text-[13px] text-text-muted">
-                    {editando ? 'Adicione os componentes (insumos) que entram neste produto.' : 'Este produto não tem ficha técnica cadastrada no Omie.'}
+                    {editando ? 'Adicione os componentes (insumos) que entram neste produto.' : proprio ? 'Este produto não tem ficha técnica cadastrada.' : 'Este produto não tem ficha técnica cadastrada no Omie.'}
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-[var(--r-md)] bg-surface-2/50">
@@ -202,7 +253,9 @@ export function EstruturaProduto({
                           <th className={th}>Componente</th>
                           <th className={`${th} text-right`}>Qtde</th>
                           <th className={th}>Un.</th>
+                          {proprio && <th className={`${th} text-right`} title="Fator de correção: quanto do insumo bruto vira líquido (ex.: peixe com espinha 1,3)">FC</th>}
                           <th className={`${th} text-right`}>Perda %</th>
+                          {proprio && <th className={`${th} text-right`} title="Quantidade bruta que sai do estoque">Bruta</th>}
                           {editando && <th className={th} />}
                         </tr>
                       </thead>
@@ -226,6 +279,21 @@ export function EstruturaProduto({
                               )}
                             </td>
                             <td className="px-3 py-2 text-text-muted">{l.unidade}</td>
+                            {proprio && (
+                              <td className="px-3 py-2 text-right">
+                                {editando ? (
+                                  <input
+                                    value={l.fator}
+                                    onChange={(e) => setFator(l.idProdMalha, e.target.value.replace(/[^\d.,]/g, ''))}
+                                    inputMode="decimal"
+                                    placeholder="1"
+                                    className="num w-16 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+                                  />
+                                ) : (
+                                  <span className="num text-text-muted">{l.fator ? fmtQt(parseNumBR(l.fator) ?? 1) : '1'}</span>
+                                )}
+                              </td>
+                            )}
                             <td className="px-3 py-2 text-right">
                               {editando ? (
                                 <input
@@ -239,6 +307,11 @@ export function EstruturaProduto({
                                 <span className="num text-text-muted">{l.perda ? fmtQt(parseNumBR(l.perda) ?? 0) : '-'}</span>
                               )}
                             </td>
+                            {proprio && (
+                              <td className="px-3 py-2 text-right num font-medium text-text">
+                                {fmtQt((parseNumBR(l.quantidade) ?? 0) * (l.fator ? parseNumBR(l.fator) ?? 1 : 1) * (1 + (l.perda ? parseNumBR(l.perda) ?? 0 : 0) / 100))}
+                              </td>
+                            )}
                             {editando && (
                               <td className="px-2 py-2 text-right">
                                 <button onClick={() => remover(l.idProdMalha)} className="flex size-8 items-center justify-center rounded-full text-err u-motion u-press hover:bg-surface" aria-label="Remover">
@@ -293,7 +366,7 @@ export function EstruturaProduto({
               </button>
               <button type="button" onClick={salvar} disabled={pending} className={btnClass('primary')}>
                 {pending ? <Spinner /> : <Save className="size-4" />}
-                {pending ? 'Salvando no Omie...' : 'Salvar no Omie'}
+                {pending ? (proprio ? 'Salvando...' : 'Salvando no Omie...') : proprio ? 'Salvar ficha' : 'Salvar no Omie'}
               </button>
             </>
           ) : (
