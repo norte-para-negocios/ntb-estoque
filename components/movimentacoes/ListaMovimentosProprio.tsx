@@ -120,6 +120,7 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
         sortAtual={ord}
         dirAtual={dir}
         sortHref={sortHref}
+        rolarHorizontal
         acao={(m: LinhaKardex) => (
           <span className="inline-flex items-center gap-1">
             <button type="button" onClick={() => setAberto(m.id)} className={btnLinhaClass('outline')} aria-label="Ver detalhe do movimento" title="Detalhe e documento de origem">

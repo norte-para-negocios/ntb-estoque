@@ -41,7 +41,8 @@ export async function lancarItemTransferencia(
   const supabase = createServiceClient()
   const obs = await observacaoDoLancamento(lojaId, movimentoId, usuario.carimbo)
   const { data, error } = await supabase.rpc('lancar_transferencia_item', {
-    p_loja: lojaId, p_movimento: movimentoId, p_user: usuario.id, p_obs: obs,
+    // p_user: o carimbo ("NTB Estoque · Nome"), igual aos outros lançamentos; o kardex mostra isso em Usuário.
+    p_loja: lojaId, p_movimento: movimentoId, p_user: usuario.carimbo || usuario.id, p_obs: obs,
   })
   if (error) {
     await supabase

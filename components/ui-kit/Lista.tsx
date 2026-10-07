@@ -21,6 +21,7 @@ export function Lista<T>({
   sortAtual,
   dirAtual,
   sortHref,
+  rolarHorizontal,
 }: {
   colunas: Coluna<T>[]
   linhas: T[]
@@ -30,6 +31,8 @@ export function Lista<T>({
   sortAtual?: string
   dirAtual?: 'asc' | 'desc'
   sortHref?: (key: string, dir: 'asc' | 'desc') => string
+  /** Tabela larga (muitas colunas): rola na horizontal em vez de cortar as últimas colunas; o cabeçalho deixa de ser fixo. */
+  rolarHorizontal?: boolean
 }) {
   if (!linhas.length) return <>{vazio ?? null}</>
   const primaria = colunas.find((c) => c.primaria) ?? colunas[0]
@@ -73,16 +76,16 @@ export function Lista<T>({
       {/* Desktop: tabela. overflow-clip (NAO -hidden): corta o fundo quadrado do
           thead na curva do card SEM virar scroll container, entao o cabecalho fixo
           (sticky) continua funcionando ao rolar, igual Excel. */}
-      <div className="hidden lg:block overflow-clip rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface">
+      <div className={`hidden lg:block ${rolarHorizontal ? 'overflow-x-auto' : 'overflow-clip'} rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface`}>
         <table className="w-full text-sm">
           <thead
-            className="sticky z-20 border-b border-border bg-surface"
+            className={`${rolarHorizontal ? '' : 'sticky'} z-20 border-b border-border bg-surface`}
             style={{
               // Desktop: fica logo abaixo do ListaHeader (top-0 do ListaHeader).
               // Mobile: fica abaixo do MobileNav (56px) + ListaHeader.
               // --lista-header-h é gravado pelo ListaHeader via ResizeObserver.
               // Fallback 0px: telas sem ListaHeader o thead gruda no topo normal.
-              top: 'var(--lista-header-h, 0px)',
+              top: rolarHorizontal ? undefined : 'var(--lista-header-h, 0px)',
             }}
           >
             <tr>

@@ -38,7 +38,12 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
   const ref = String(m.ref)
   try {
     if (m.origem === 'VENDA') {
-      documento = { rotulo: 'Venda', descricao: `Pedido ${ref.split('|')[0]}`, linhas: ref.includes('|') ? [{ rotulo: 'Baixa por receita', valor: 'insumo do prato vendido' }] : undefined }
+      const pedido = ref.split('|')[0]
+      documento = {
+        rotulo: 'Venda', descricao: `Pedido ${pedido}`,
+        href: `/movimentacoes?aba=movimentos&og=VENDA&data_inicio=2000-01-01&data_final=2100-12-31&produto=${encodeURIComponent(pedido)}`,
+        linhas: ref.includes('|') ? [{ rotulo: 'Baixa por receita', valor: 'insumo do prato vendido' }] : undefined,
+      }
     } else if (m.origem === 'COMPRA') {
       const { data: c } = await sb.from('compras_proprio').select('id, numero, serie, fornecedor_nome, chave_acesso, emissao, origem')
         .eq('loja_id', lojaId).or(`chave_acesso.eq.${ref},id.eq.${ref.startsWith('compra:') ? Number(ref.slice(7)) || 0 : 0}`).maybeSingle()
@@ -48,8 +53,10 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
       }
     } else if (m.origem === 'PRODUCAO') {
       const { data: op } = await sb.from('ordens_producao_proprio').select('id, ref, quantidade, custo_total, custo_unitario, status, codigo_produto').eq('loja_id', lojaId).eq('ref', ref).maybeSingle()
+      const opId = /^OP:(\d+):/.exec(ref)?.[1]
       if (op) documento = {
         rotulo: 'Ordem de produção', descricao: `${await nomeProduto(Number(op.codigo_produto))} · ${op.quantidade}`,
+        href: opId ? `/ordem-producao/${opId}` : undefined,
         linhas: [{ rotulo: 'Custo do lote', valor: Number(op.custo_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }, { rotulo: 'Situação', valor: String(op.status) }],
       }
     } else if (m.origem === 'INVENTARIO') {
@@ -62,7 +69,15 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
         }
       }
     } else if (m.origem === 'TRANSFERENCIA') {
-      documento = { rotulo: 'Transferência entre locais', descricao: `Transferência ${m.transferencia_ref ?? ref}` }
+      const movId = Number(/^trf:(\d+):/.exec(String(m.transferencia_ref ?? ref))?.[1] ?? 0)
+      const { data: tm } = movId
+        ? await sb.from('movimentos').select('transferencia_id').eq('loja_id', lojaId).eq('id', movId).maybeSingle()
+        : { data: null }
+      const tid = (tm as { transferencia_id?: number | null } | null)?.transferencia_id
+      documento = {
+        rotulo: 'Transferência entre locais', descricao: tid ? `Transferência #${tid}` : `Transferência ${m.transferencia_ref ?? ref}`,
+        href: tid ? `/transferencia/${tid}/contagem` : undefined,
+      }
     } else if (m.origem === 'SALDO_INICIAL' || m.origem === 'MANUAL') {
       documento = { rotulo: ROTULO_ORIGEM[m.origem] ?? m.origem, descricao: m.obs ?? ref }
     }

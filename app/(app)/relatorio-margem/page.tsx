@@ -143,6 +143,7 @@ export default async function RelatorioMargemPage({
   searchParams: Promise<{ busca?: string; familia?: string; tipo?: string; local?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
+  const margemProprio = (await modoDaLoja(lojaId)) === 'proprio'
   if (!(await getAtorGestao()).podeGerir) notFound()
 
   const sp = await searchParams
@@ -391,7 +392,7 @@ export default async function RelatorioMargemPage({
     return (
       <div className="space-y-4">
         <ListaHeader>
-          <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={<ImportarMargem />} voltarHref="/relatorios" />
+          <PageHeader title="Margem" icon={Percent} description="Margem por produto (preço de venda × custo) — BETA" actions={margemProprio ? undefined : <ImportarMargem />} voltarHref="/relatorios" />
         </ListaHeader>
         {errosConsulta.length > 0 && (
           <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
@@ -402,7 +403,7 @@ export default async function RelatorioMargemPage({
         <EmptyState
           icon={Percent}
           title="Sem margem importada"
-          hint='A margem por produto vem da aba "MARGEM" do export FAT_DRV do Omie. Remova a aba "BD" (dados brutos) e clique em "Importar do Omie".'
+          hint={margemProprio ? 'A margem aparece assim que houver vendas e custo médio nos produtos (entradas com custo ou ficha técnica).' : 'A margem por produto vem da aba "MARGEM" do export FAT_DRV do Omie. Remova a aba "BD" (dados brutos) e clique em "Importar do Omie".'}
         />
       </div>
     )
@@ -529,7 +530,7 @@ export default async function RelatorioMargemPage({
               <a href={exportHref} target="_blank" rel="noopener noreferrer" className={btnClass('outline')} title="Excel: margem por produto (com filtros)">
                 <Download className="size-4" /> Baixar
               </a>
-              <ImportarMargem />
+              {!margemProprio && <ImportarMargem />}
             </>
           }
         />

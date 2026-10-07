@@ -1,4 +1,5 @@
 import { getProfile, getPermissoesNomes, getAtorGestao } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { createClient } from '@/lib/supabase/server'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { NAO_CANCELADA_OR } from '@/lib/nf-status'
@@ -216,7 +217,8 @@ export default async function HomePage() {
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${qtdRepor} produto(s) abaixo do mínimo para repor`, href: '/produto?vista=compras&repor=1' })
   if ((errosSync.count ?? 0) > 0 && isAdmin)
     alertas.push({ icon: AlertTriangle, token: 'err', texto: `${errosSync.count} erro(s) de sincronização nas últimas 24h`, href: '/sync-status' })
-  if (syncAtraso && isAdmin)
+  const homeProprio = lojaId ? (await modoDaLoja(Number(lojaId))) === 'proprio' : false
+  if (syncAtraso && isAdmin && !homeProprio)
     alertas.push({ icon: TrendingUp, token: 'warn', texto: 'Sincronização com Omie atrasada (mais de 24h)', href: '/sync-status' })
   if (qtdVencidos > 0 && pode('Validade'))
     alertas.push({ icon: CalendarClock, token: 'err', texto: `${qtdVencidos} produto(s) já vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
