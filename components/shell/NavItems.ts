@@ -24,6 +24,9 @@ import {
   Database,
   Tags,
   Boxes,
+  ChefHat,
+  CookingPot,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -58,6 +61,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/produto', label: 'Produtos', icon: Package, group: 'Cadastros' },
   { href: '/local-estoque', label: 'Locais de Estoque', icon: Warehouse, group: 'Cadastros' },
   { href: '/familia', label: 'Famílias', icon: FolderTree, group: 'Cadastros' },
+  { href: '/grupo-produto', label: 'Grupos e subgrupos', icon: FolderTree, group: 'Cadastros', soEstoqueProprio: true },
+  { href: '/sync-catalogo', label: 'Sincronização Vendas', icon: RefreshCw, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/categoria-contabil', label: 'Categorias Contábeis', icon: Tags, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },

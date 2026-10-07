@@ -82,6 +82,10 @@ if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-preco-movimentacao; fi
 # Reenvia ao Contabo o faturamento das lojas de estoque proprio que nao chegou no fechamento (so local, sem Omie).
 if [ "$bloco" -eq 5 ]; then hit /api/cron/sync-fechamentos-frio; fi
 
+# Catalogo unificado Vendas <-> Estoque (migration 141): so age em lojas modo 'proprio' (liga a loja ao Vendas,
+# reconcilia os catalogos e entrega o outbox). Roda a cada ciclo; sem loja 'proprio' responde 200 sem fazer nada.
+hit /api/cron/sync-catalogo
+
 # Snapshot diario de CMC/margem (migration 101) -- precisa rodar so 1x/DIA
 # (arquivo append-only, uma linha por produto/dia; rodar a cada 10min como os
 # outros jobs so reescreveria a mesma data_snapshot repetidas vezes por nada).

@@ -185,6 +185,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/produto': 'Produtos',
   '/local-estoque': 'Locais de Estoque',
   '/familia': 'Familias',
+  '/grupo-produto': 'Familias',
+  '/sync-catalogo': 'Produtos',
   '/categoria-contabil': 'Categorias Contabeis',
   '/produto-substituicao': 'Produto Substituicoes',
   '/fornecedor': 'Fornecedores',

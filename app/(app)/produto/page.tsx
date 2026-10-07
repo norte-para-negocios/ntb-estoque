@@ -21,6 +21,8 @@ import { EditarProdutoForm } from '@/components/produtos/EditarProdutoForm'
 import { EstruturaProduto } from '@/components/produtos/EstruturaProduto'
 import { EstoqueMinimoInput } from '@/components/produtos/EstoqueMinimoInput'
 import { buscarFamilias } from '@/lib/actions/produto'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { Layers } from 'lucide-react'
 import { resolverCodigosPorFiltro } from '@/lib/produtos-selecionados'
 import { Num } from '@/components/ui-kit/Num'
 import { formatQtdExata } from '@/lib/num-br'
@@ -78,6 +80,7 @@ export default async function ProdutoPage({
   searchParams: Promise<{ q?: string; familia?: string; tipo?: string; situacao?: string; margem?: string; vista?: string; repor?: string; ord?: string; page?: string; fornecedor?: string; pdv?: string; janela?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
+  const modoProprio = (await modoDaLoja(lojaId)) === 'proprio'
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
 
   const params = await searchParams
@@ -746,6 +749,15 @@ export default async function ProdutoPage({
         acao={(p) =>
           p.codigo_produto != null ? (
             <div className="flex items-center justify-end gap-1">
+              {podeEditar && modoProprio && p.codigo && (
+                <Link
+                  href={`/produto/${encodeURIComponent(p.codigo)}`}
+                  aria-label="Variações, grupo e detalhes" title="Variações, grupo e detalhes"
+                  className="flex size-8 items-center justify-center rounded-full bg-surface-2 text-text-muted u-motion u-press hover:bg-[var(--border)] hover:text-text"
+                >
+                  <Layers className="size-4" />
+                </Link>
+              )}
               {podeEditar && (
                 <EditarProdutoForm
                   produto={{

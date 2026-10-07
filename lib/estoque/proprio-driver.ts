@@ -100,7 +100,7 @@ export async function editarProdutoProprio(lojaId: number, id: number, d: Produt
     .eq('id', id)
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
-  if (atual.codigo) await notificarVendasProduto(lojaId, atual.codigo as string, d.descricao.trim(), Number(d.valorUnitario) || 0)
+  // A mudança chega ao Norte Vendas pelo outbox do catálogo (gatilho no banco); sem PATCH direto.
   return { ok: true, codigoProduto: (atual.codigo_produto as number | null) ?? null }
 }
 
@@ -298,8 +298,9 @@ export async function vincularOuCriarProdutoProprio(
   }
   const ncm = (d.ncm || '').replace(/\D/g, '') || '21069090' // mesmo ponto de partida técnico da rota do Omie; o contador revisa
   if (!codigoPedido) {
+    const tipoNovo = d.tipoItem || '04'
     const r = await criarProdutoProprio(lojaId, {
-      descricao: d.nome, unidade: d.unidade?.trim() || 'UN', ncm, valorUnitario: d.precoVenda, pdv: true, tipoItem: d.tipoItem || '04',
+      descricao: d.nome, unidade: d.unidade?.trim() || 'UN', ncm, valorUnitario: d.precoVenda, pdv: tipoNovo === '04' || tipoNovo === '00', tipoItem: tipoNovo,
     })
     if ('error' in r) return { error: r.error }
     return { ok: true, codigo: r.codigo, codigoProduto: r.codigoProduto, existente: false }
@@ -307,7 +308,7 @@ export async function vincularOuCriarProdutoProprio(
   const codigoProduto = await novoIdProdutoProprio()
   const { error } = await supabase.from('produtos').insert({
     loja_id: lojaId, codigo_produto: codigoProduto, codigo: codigoPedido, descricao: d.nome.trim(), unidade: d.unidade?.trim() || 'UN',
-    ncm, valor_unitario: d.precoVenda, pdv: true, tipo_item: d.tipoItem || '04', inativo: false, updated_at: new Date().toISOString(),
+    ncm, valor_unitario: d.precoVenda, pdv: !d.tipoItem || d.tipoItem === '04' || d.tipoItem === '00', tipo_item: d.tipoItem || '04', inativo: false, updated_at: new Date().toISOString(),
   })
   if (error) return { error: error.message }
   return { ok: true, codigo: codigoPedido, codigoProduto, existente: false }
