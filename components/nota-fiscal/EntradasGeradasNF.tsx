@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { formatCustoUnit } from '@/lib/num-br'
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -31,7 +32,7 @@ export async function EntradasGeradasNF({ lojaId, referencias }: { lojaId: numbe
               <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13px]">
                 <span className="min-w-0 truncate"><span className="num text-text-muted">{pr?.codigo ?? m.codigo_produto}</span> · {pr?.descricao ?? 'Produto'} <span className="text-text-muted">· {l.get(Number(m.codigo_local_estoque)) ?? 'Local'}</span></span>
                 <span className="num text-right"><span className={estorno ? 'text-warn' : 'text-ok'}>{estorno ? '' : '+'}{fmtQtd(Number(m.quantidade))} {pr?.unidade ?? ''}</span>
-                  <span className="text-text-muted"> · custo {m.custo_unitario != null ? fmtBRL(Number(m.custo_unitario)) : '—'} · saldo {fmtQtd(Number(m.saldo_apos))}</span></span>
+                  <span className="text-text-muted"> · custo {m.custo_unitario != null ? formatCustoUnit(Number(m.custo_unitario)) : '—'} · saldo {fmtQtd(Number(m.saldo_apos))}</span></span>
               </li>
             )
           })}

@@ -11,6 +11,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { parseNumBR, formatNumBR } from '@/lib/num-br'
 import { useEstoqueProprio } from '@/components/estoque-proprio/ModoEstoque'
+import { formatCustoUnit } from '@/lib/num-br'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -221,7 +222,7 @@ export function EstruturaProduto({
                       <span className="text-text-muted">{view.produto?.unidade ?? ''} por receita — as quantidades abaixo são para esse rendimento.</span>
                     </div>
                     {view.custoUnitario != null && !editando && (
-                      <div className="mt-1 text-[12px] text-text-muted">Custo por {view.produto?.unidade || 'unidade'}: <span className="num font-medium text-text">R$ {view.custoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span> (pelo custo médio dos insumos)</div>
+                      <div className="mt-1 text-[12px] text-text-muted">Custo por {view.produto?.unidade || 'unidade'}: <span className="num font-medium text-text">{formatCustoUnit(view.custoUnitario)}</span> (pelo custo médio dos insumos)</div>
                     )}
                   </div>
                   <label className="flex items-center gap-2 text-[13px] text-text">

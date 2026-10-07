@@ -16,6 +16,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { SegmentLinks } from '@/components/ui-kit/SegmentLinks'
 import { Boxes } from 'lucide-react'
+import { formatCustoUnit } from '@/lib/num-br'
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 
@@ -300,7 +301,7 @@ export default async function RelatorioEstoqueValorizadoPage({
                         {fmtNum(Number(l.n_saldo), 3)} {l.unidade ?? ''}
                       </td>
                       <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text sm:table-cell">
-                        {fmtMoeda(Number(l.n_cmc))}
+                        {formatCustoUnit(Number(l.n_cmc))}
                       </td>
                       <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text 2xl:table-cell">
                         {l.n_preco_unitario ? fmtMoeda(Number(l.n_preco_unitario)) : '-'}
@@ -406,7 +407,7 @@ export default async function RelatorioEstoqueValorizadoPage({
                           {fmtNum(Number(l.n_saldo), 3)}
                         </td>
                         <td className="num hidden whitespace-nowrap px-3 py-2 text-right text-text sm:table-cell">
-                          {fmtMoeda(Number(l.n_cmc))}
+                          {formatCustoUnit(Number(l.n_cmc))}
                         </td>
                         <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text">
                           {fmtMoeda(Number(l.valor_total))}

@@ -8,6 +8,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { SeletorProduto, campoCompra } from '@/components/compras-proprio/SeletorProduto'
 import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
+import { formatCustoUnit } from '@/lib/num-br'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
@@ -101,7 +102,7 @@ function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; edita
         </div>
         <div className="text-right text-[13px]">
           {item.lancado
-            ? <p className="inline-flex items-center gap-1.5 font-medium text-ok"><CheckCircle2 className="size-4" />{encerrada ? 'estornado' : `entrou${item.custoUnitarioBase != null ? ` a ${fmtBRL(item.custoUnitarioBase)}/${item.produto?.unidade ?? ''}` : ''}`}</p>
+            ? <p className="inline-flex items-center gap-1.5 font-medium text-ok"><CheckCircle2 className="size-4" />{encerrada ? 'estornado' : `entrou${item.custoUnitarioBase != null ? ` a ${formatCustoUnit(item.custoUnitarioBase, item.produto?.unidade)}` : ''}`}</p>
             : item.produto ? <p className="text-text-muted">aguardando entrada</p> : <p className="font-medium text-warn">sem produto</p>}
         </div>
       </div>

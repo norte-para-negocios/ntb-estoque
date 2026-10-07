@@ -6,9 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { detalheMovimentoProprio, type DetalheKardex as Detalhe } from '@/lib/actions/movimentacoes-proprio'
 import { ROTULO_ORIGEM, ROTULO_TIPO } from '@/lib/estoque/kardex-tipos'
+import { formatCustoUnit } from '@/lib/num-br'
 
 const qtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 4 })
-const brl = (n: number | null) => (n == null ? '-' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 }))
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia' })
 
 /** Janela de detalhe de um movimento do kardex: dados, documento de origem e movimentos ligados (estorno, pernas). */
@@ -47,8 +47,8 @@ export function DetalheKardex({ id, onFechar, onAbrir }: { id: number | null; on
               <dt className="text-text-muted">Local</dt><dd>{det.movimento.local ?? '-'}</dd>
               <dt className="text-text-muted">Saldo no local depois</dt><dd className="num">{qtd(det.movimento.saldo_apos)}</dd>
               <dt className="text-text-muted">Saldo total depois</dt><dd className="num">{qtd(det.movimento.saldo_total_apos)}</dd>
-              <dt className="text-text-muted">Custo do movimento</dt><dd className="num">{brl(det.movimento.custo)}{det.movimento.custo_estimado ? ' (estimado)' : ''}</dd>
-              <dt className="text-text-muted">Custo médio depois</dt><dd className="num">{brl(det.movimento.cmc_apos)}</dd>
+              <dt className="text-text-muted">Custo do movimento</dt><dd className="num">{formatCustoUnit(det.movimento.custo)}{det.movimento.custo_estimado ? ' (estimado)' : ''}</dd>
+              <dt className="text-text-muted">Custo médio depois</dt><dd className="num">{formatCustoUnit(det.movimento.cmc_apos)}</dd>
               <dt className="text-text-muted">Quando</dt><dd>{quando(det.movimento.quando)}</dd>
               <dt className="text-text-muted">Usuário</dt><dd className="break-all">{det.movimento.user_id ?? '-'}</dd>
               <dt className="text-text-muted">Referência</dt><dd className="num break-all">{det.movimento.ref}</dd>

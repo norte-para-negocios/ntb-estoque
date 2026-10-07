@@ -13,6 +13,7 @@ import { BarraSaldo, fmtBRL, Indicador, Saldo, SituacaoPill } from '@/components
 import { FiltrosEstoque } from '@/components/estoque-proprio/FiltrosEstoque'
 import { ModalEntrada } from '@/components/estoque-proprio/Acoes'
 import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from './dados'
+import { formatCustoUnit } from '@/lib/num-br'
 
 const POR_PAGINA = 50
 const ORDEM_SITUACAO: Record<Situacao, number> = { negativo: 0, baixo: 1, zerado: 2, ok: 3 }
@@ -118,7 +119,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         </div>
       ),
     },
-    { label: 'Custo médio', alinhar: 'right', ocultarMobile: true, render: (l) => <span className="num">{l.cmc ? fmtBRL(l.cmc) : '-'}</span> },
+    { label: 'Custo médio', alinhar: 'right', ocultarMobile: true, render: (l) => <span className="num">{l.cmc ? formatCustoUnit(l.cmc) : '-'}</span> },
     { label: 'Valor', alinhar: 'right', sort: 'valor', render: (l) => <span className={`num ${l.valor < 0 ? 'text-err' : ''}`}>{fmtBRL(l.valor)}</span> },
     { label: 'Situação', sort: 'situacao', render: (l) => <SituacaoPill situacao={l.situacao} /> },
   ]

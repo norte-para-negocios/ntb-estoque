@@ -12,11 +12,11 @@ import { SeletorColunas, useColunasVisiveis } from '@/components/movimentacoes/S
 import { TIPOS_LEDGER } from '@/components/movimentacoes/FiltroTipoLedger'
 import { DetalheKardex } from '@/components/movimentacoes/DetalheKardex'
 import { ROTULO_ORIGEM, type LinhaKardex } from '@/lib/estoque/kardex-tipos'
+import { formatCustoUnit } from '@/lib/num-br'
 
 const COLUNAS = ['Data', 'Tipo', 'Produto', 'Quantidade', 'Local', 'Origem', 'Usuário', 'Saldo após', 'Custo']
 
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
-const fmtMoeda = (n: number | null) => (n == null ? '-' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 }))
 const fmtQuando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: LinhaKardex[]; podeEstornar: boolean }) {
@@ -105,7 +105,7 @@ export function ListaMovimentosProprio({ linhas, podeEstornar }: { linhas: Linha
     },
     { label: 'Usuário', larguraDesktop: 'w-32', render: (m: LinhaKardex) => <span className="truncate text-[13px] text-text-muted">{m.user_nome ?? m.user_id ?? '-'}</span> },
     { label: 'Saldo após', sort: 'saldo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className={`num text-[13px] ${m.saldo_apos < 0 ? 'font-semibold text-err' : 'text-text'}`}>{fmtQtd(m.saldo_apos)}</span> },
-    { label: 'Custo', sort: 'custo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className="num text-[13px] text-text-muted">{fmtMoeda(m.custo)}</span> },
+    { label: 'Custo', sort: 'custo', alinhar: 'right' as const, larguraDesktop: 'w-28', render: (m: LinhaKardex) => <span className="num text-[13px] text-text-muted">{formatCustoUnit(m.custo)}</span> },
   ]
 
   return (

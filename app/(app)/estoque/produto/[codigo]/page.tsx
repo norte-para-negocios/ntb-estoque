@@ -7,6 +7,7 @@ import { BarraSaldo, fmtBRL, fmtQtd, Indicador, Saldo, SituacaoPill } from '@/co
 import { AcoesProduto } from '@/components/estoque-proprio/Acoes'
 import { Kardex } from '@/components/estoque-proprio/Kardex'
 import { carregarEstoque, carregarMovimentos, situacaoDe, TIPOS_ITEM } from '../../dados'
+import { formatCustoUnit } from '@/lib/num-br'
 
 export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -50,7 +51,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Layers} rotulo="Saldo total" valor={`${fmtQtd(p.saldo)} ${p.unidade}`} tom={p.situacao === 'negativo' ? 'erro' : p.situacao === 'baixo' ? 'aviso' : undefined} dica={p.situacao === 'negativo' ? 'Saldo negativo: lance a entrada' : undefined} />
-        <Indicador icon={Coins} rotulo="Custo médio" valor={p.cmc ? fmtBRL(p.cmc) : '-'} dica={`por ${p.unidade}`} />
+        <Indicador icon={Coins} rotulo="Custo médio" valor={p.cmc ? formatCustoUnit(p.cmc) : '-'} dica={`por ${p.unidade}`} />
         <Indicador icon={Wallet} rotulo="Valor em estoque" valor={fmtBRL(p.valor)} dica="saldo × custo médio" />
         <Indicador icon={Scale} rotulo="Estoque mínimo" valor={p.minimo != null ? `${fmtQtd(p.minimo)} ${p.unidade}` : 'Não definido'} />
       </div>

@@ -49,3 +49,18 @@ export function formatQtdResumo(v: number | string | null | undefined): string {
   if (!Number.isFinite(n)) return ''
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 }
+
+// Custo UNITARIO em R$ (custo medio, custo da entrada, custo do insumo). Item vendido/estocado em
+// unidade pequena (g, ml) custa frações de centavo: com 2 casas, R$ 0,006224/g virava "R$ 0,01" e
+// escondia o valor real. Regra: >= R$ 0,10 -> 2 casas; abaixo disso, 3 algarismos significativos
+// (até 6 casas). TOTAIS em R$ (saldo x custo, valor da nota) continuam com 2 casas: não usar aqui.
+// Ex.: 12.5 -> "R$ 12,50"; 0.006224 -> "R$ 0,00622"; 0.01128 -> "R$ 0,0113"; com unidade "g" -> "R$ 0,00622/g".
+export function formatCustoUnit(v: number | string | null | undefined, unidade?: string | null): string {
+  if (v == null || v === '') return '-'
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return '-'
+  const abs = Math.abs(n)
+  const casas = abs === 0 || abs >= 0.1 ? 2 : Math.min(6, Math.max(2, -Math.floor(Math.log10(abs)) + 2))
+  const txt = n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: casas })
+  return unidade ? `${txt}/${unidade.toLowerCase()}` : txt
+}
