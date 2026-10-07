@@ -75,6 +75,14 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   const compraId = Number((rc as { compra_id: number }).compra_id)
   let statusCompra = String((rc as { status: string }).status)
 
+  // Lote e validade do XML (grupo rastro) vão para o item ANTES da entrada: o gatilho de lotes (migration 145) os lê
+  // na hora do movimento. Só preenche o que estiver vazio e ainda não lançado (não sobrescreve o que o gerente digitou).
+  for (const i of nfe.itens) {
+    if (!i.lote && !i.validade) continue
+    await sb.from('compras_proprio_itens').update({ lote: i.lote ?? null, validade: i.validade ?? null })
+      .eq('compra_id', compraId).eq('linha', i.linha).eq('lancado', false).is('lote', null).is('validade', null)
+  }
+
   // Entrada automática só quando tudo casou com segurança, a nota não tem alerta e há um local de destino.
   const casados = casamentos.filter((c) => c.codigoProduto != null).length
   let lancados = 0

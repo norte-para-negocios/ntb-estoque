@@ -97,10 +97,17 @@ export type ProdutoCatalogoInput = {
   estoqueMinimo?: number | null; pdv?: boolean; codigoFamilia?: number | null; descricaoFamilia?: string | null
   grupoId?: number | null; atributos?: Record<string, string>
   ean?: string | null
+  /** Prazo de validade em dias (lote de compra/produção sem validade informada vence em entrada + N dias). */
+  validadeDias?: number | null
   /** Campos de detalhe (origem, CEST, marca, modelo, pesos, medidas, descrição detalhada, observações): guardados em full_object.extras. */
   extras?: Record<string, string | number>
   /** Cria como produto mãe com estas variações (cada uma vira um produto com código e saldo próprios). */
   variacoes?: VariacaoInput[]
+}
+
+function validadeOk(n?: number | null): number | null {
+  const v = Math.trunc(Number(n))
+  return Number.isFinite(v) && v > 0 && v <= 3650 ? v : null
 }
 
 function limparAtributos(a?: Record<string, string>): Record<string, string> {
@@ -129,7 +136,7 @@ export async function criarProdutoCatalogo(d: ProdutoCatalogoInput): Promise<{ o
   if ('error' in r) return { error: r.error }
   const extra: Record<string, unknown> = {
     grupo_id: d.grupoId ?? null, atributos: limparAtributos(d.atributos), ean: d.ean?.trim() || null,
-    full_object: { extras: d.extras ?? {} },
+    full_object: { extras: d.extras ?? {} }, validade_dias: validadeOk(d.validadeDias),
   }
   if (ehMae) extra.eh_mae = true
   const { error: e1 } = await supabase.from('produtos').update(extra).eq('loja_id', ctx.lojaId).eq('codigo_produto', r.codigoProduto)
@@ -143,7 +150,7 @@ export async function criarProdutoCatalogo(d: ProdutoCatalogoInput): Promise<{ o
     })
     if ('error' in rv) return { error: `Mãe criada, mas a variação "${v.descricao}" falhou: ${rv.error}` }
     const { error: e2 } = await supabase.from('produtos').update({
-      grupo_id: d.grupoId ?? null, produto_pai_codigo: r.codigoProduto, atributos: limparAtributos(v.atributos),
+      grupo_id: d.grupoId ?? null, produto_pai_codigo: r.codigoProduto, atributos: limparAtributos(v.atributos), validade_dias: validadeOk(d.validadeDias),
     }).eq('loja_id', ctx.lojaId).eq('codigo_produto', rv.codigoProduto)
     if (e2) return { error: `Variação "${v.descricao}" criada, mas não foi ligada à mãe: ${e2.message}` }
     filhos.push({ codigo: rv.codigo, descricao: v.descricao.trim() })
@@ -157,14 +164,14 @@ export type ProdutoCatalogo = {
   id: number; codigo: string; codigoProduto: number; descricao: string; unidade: string; ncm: string | null; tipoItem: string | null
   valorUnitario: number; estoqueMinimo: number | null; pdv: boolean; inativo: boolean; codigoFamilia: number | null
   grupoId: number | null; ehMae: boolean; paiCodigoProduto: number | null; atributos: Record<string, string>; vinculado: boolean
-  ean: string | null; extras: Record<string, string | number>
+  ean: string | null; extras: Record<string, string | number>; validadeDias: number | null
   variacoes: { id: number; codigo: string; codigoProduto: number; descricao: string; valorUnitario: number; inativo: boolean; atributos: Record<string, string> }[]
 }
 
 export async function carregarProdutoCatalogo(codigo: string): Promise<ProdutoCatalogo | null> {
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
-  const cols = 'id, codigo, codigo_produto, descricao, unidade, ncm, tipo_item, valor_unitario, estoque_minimo, pdv, inativo, codigo_familia, grupo_id, eh_mae, produto_pai_codigo, atributos, vendas_ref, ean, full_object'
+  const cols = 'id, codigo, codigo_produto, descricao, unidade, ncm, tipo_item, valor_unitario, estoque_minimo, pdv, inativo, codigo_familia, grupo_id, eh_mae, produto_pai_codigo, atributos, vendas_ref, ean, full_object, validade_dias'
   const { data: p } = await supabase.from('produtos').select(cols).eq('loja_id', lojaId).eq('codigo', codigo).maybeSingle()
   if (!p) return null
   const { data: filhos } = await supabase.from('produtos').select('id, codigo, codigo_produto, descricao, valor_unitario, inativo, atributos')
@@ -176,6 +183,7 @@ export async function carregarProdutoCatalogo(codigo: string): Promise<ProdutoCa
     grupoId: (p.grupo_id as number | null) ?? null, ehMae: !!p.eh_mae, paiCodigoProduto: (p.produto_pai_codigo as number | null) ?? null,
     atributos: (p.atributos as Record<string, string>) ?? {}, vinculado: !!p.vendas_ref,
     ean: (p.ean as string | null) ?? null, extras: ((p.full_object as { extras?: Record<string, string | number> } | null)?.extras) ?? {},
+    validadeDias: (p.validade_dias as number | null) ?? null,
     variacoes: (filhos ?? []).map((f) => ({
       id: f.id as number, codigo: f.codigo as string, codigoProduto: f.codigo_produto as number, descricao: (f.descricao as string) ?? '',
       valorUnitario: Number(f.valor_unitario) || 0, inativo: !!f.inativo, atributos: (f.atributos as Record<string, string>) ?? {},
@@ -185,7 +193,7 @@ export async function carregarProdutoCatalogo(codigo: string): Promise<ProdutoCa
 
 export async function salvarProdutoCatalogo(
   codigo: string,
-  d: { descricao: string; unidade: string; ncm: string | null; estoqueMinimo: number | null; pdv: boolean; inativo: boolean; valorUnitario: number | null; grupoId: number | null; atributos: Record<string, string>; ean?: string | null; extras?: Record<string, string | number> },
+  d: { descricao: string; unidade: string; ncm: string | null; estoqueMinimo: number | null; pdv: boolean; inativo: boolean; valorUnitario: number | null; grupoId: number | null; atributos: Record<string, string>; ean?: string | null; extras?: Record<string, string | number>; validadeDias?: number | null },
   variacoes: { codigo: string | null; descricao: string; preco: number; inativo: boolean; atributos: Record<string, string> }[] = []
 ): Promise<{ ok: true } | Erro> {
   const ctx = await lojaProprio('Produtos - Editar')
@@ -204,6 +212,7 @@ export async function salvarProdutoCatalogo(
     descricao: d.descricao.trim(), unidade: d.unidade.trim(), ncm: ncm || null, estoque_minimo: d.estoqueMinimo, pdv: d.pdv,
     inativo: d.inativo, valor_unitario: preco, grupo_id: d.grupoId, atributos: limparAtributos(d.atributos), ean: d.ean?.trim() || null,
     full_object: { extras: d.extras ?? {} }, updated_at: new Date().toISOString(),
+    ...(d.validadeDias !== undefined ? { validade_dias: validadeOk(d.validadeDias) } : {}),
   }).eq('id', p.id as number)
   if (error) return { error: error.message }
 

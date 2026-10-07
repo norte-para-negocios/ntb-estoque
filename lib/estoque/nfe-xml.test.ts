@@ -84,3 +84,14 @@ test('extras: destinatário, tipo da operação, transporte, parcelas e tributos
   assert.deepEqual(n.parcelas, [{ seq: 1, vencimento: '2026-11-05', valor: 150 }, { seq: 2, vencimento: '2026-12-05', valor: 165 }])
   assert.equal(n.tributosAprox, 40)
 })
+
+test('rastro: lote e validade do item; com vários lotes, entra o de validade mais próxima e avisa', () => {
+  const comRastro = XML
+    .replace('<vDesc>10.00</vDesc></prod>', '<vDesc>10.00</vDesc><rastro><nLote>L-B</nLote><qLote>1</qLote><dFab>2026-09-01</dFab><dVal>2026-11-30</dVal></rastro><rastro><nLote>L-A</nLote><qLote>1</qLote><dFab>2026-09-01</dFab><dVal>2026-10-20</dVal></rastro></prod>')
+  const n = lerNfe(comRastro)
+  assert.equal(n.itens[0].lote, 'L-A')
+  assert.equal(n.itens[0].validade, '2026-10-20')
+  assert.ok(n.avisos.some((a) => a.includes('2 lotes')))
+  assert.equal(n.itens[1].lote ?? null, null)
+  assert.equal(n.itens[1].validade ?? null, null)
+})

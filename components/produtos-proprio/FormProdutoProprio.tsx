@@ -71,6 +71,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
   const [ean, setEan] = useState(inicial?.ean ?? '')
   const [valor, setValor] = useState(inicial ? String(inicial.valorUnitario).replace('.', ',') : '')
   const [minimo, setMinimo] = useState(inicial?.estoqueMinimo != null ? String(inicial.estoqueMinimo).replace('.', ',') : '')
+  const [validadeDias, setValidadeDias] = useState(inicial?.validadeDias != null ? String(inicial.validadeDias) : '')
   const [familia, setFamilia] = useState(inicial?.codigoFamilia != null ? String(inicial.codigoFamilia) : '')
   const [grupoId, setGrupoId] = useState(inicial?.grupoId != null ? String(inicial.grupoId) : '')
   const [pdv, setPdv] = useState(inicial?.pdv ?? true)
@@ -103,6 +104,8 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
     if (!comVariacoes && precoNum != null && (Number.isNaN(precoNum) || precoNum < 0)) return toast.error('Preço de venda inválido')
     const minNum = parseNumBR(minimo)
     if (minNum != null && (Number.isNaN(minNum) || minNum < 0)) return toast.error('Estoque mínimo inválido')
+    const diasNum = validadeDias.trim() ? Math.trunc(Number(validadeDias)) : null
+    if (diasNum != null && (!Number.isFinite(diasNum) || diasNum < 1 || diasNum > 3650)) return toast.error('Validade em dias inválida (1 a 3650)')
 
     const vars = comVariacoes
       ? linhas.filter((l) => l.valor.trim()).map((l) => {
@@ -120,7 +123,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
       if (edicao && inicial) {
         const r = await salvarProdutoCatalogo(
           inicial.codigo,
-          { descricao, unidade, ncm: n8 || null, estoqueMinimo: minNum ?? null, pdv, inativo, valorUnitario: precoNum ?? null, grupoId: grupoId ? Number(grupoId) : null, atributos: inicial.atributos, ean: ean || null, extras: extrasLimpos },
+          { descricao, unidade, ncm: n8 || null, estoqueMinimo: minNum ?? null, pdv, inativo, valorUnitario: precoNum ?? null, grupoId: grupoId ? Number(grupoId) : null, atributos: inicial.atributos, ean: ean || null, extras: extrasLimpos, validadeDias: diasNum },
           vars
         )
         if ('error' in r) { toast.error('Não foi possível salvar', { description: r.error }); return }
@@ -131,7 +134,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
       const r = await criarProdutoCatalogo({
         descricao, unidade, ncm: n8 || null, tipoItem: tipo, valorUnitario: precoNum ?? 0, estoqueMinimo: minNum ?? null, pdv,
         codigoFamilia: fam?.codigo ?? null, descricaoFamilia: fam?.descricao ?? null, grupoId: grupoId ? Number(grupoId) : null,
-        ean: ean || null, extras: extrasLimpos,
+        ean: ean || null, extras: extrasLimpos, validadeDias: diasNum,
         variacoes: vars.map((v) => ({ descricao: v.descricao, preco: v.preco, atributos: v.atributos })),
       })
       if ('error' in r) { toast.error('Não foi possível criar', { description: r.error }); return }
@@ -251,6 +254,9 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
             )}
             <Campo label="Estoque mínimo" dica={comVariacoes ? 'Aplicado em cada variação.' : undefined}>
               <input inputMode="decimal" value={minimo} onChange={(e) => setMinimo(e.target.value)} className={inputClass} placeholder="0" />
+            </Campo>
+            <Campo label="Validade (dias)" dica="Sem validade informada na entrada, o lote vence em entrada + estes dias.">
+              <input inputMode="numeric" value={validadeDias} onChange={(e) => setValidadeDias(e.target.value.replace(/\D/g, ''))} className={inputClass} placeholder="Ex.: 5" />
             </Campo>
           </div>
           <label className="mt-4 flex min-h-[44px] items-center gap-2.5 text-[15px] text-text sm:min-h-0">

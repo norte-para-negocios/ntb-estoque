@@ -94,6 +94,23 @@ export async function vincularItemNF(compraItemId: number, codigoProduto: number
   return { ok: true }
 }
 
+/** Lote e validade do item antes da entrada (o gatilho de lotes usa na hora do movimento). Item já lançado não muda. */
+export async function definirLoteItemNF(compraItemId: number, lote: string | null, validade: string | null): Promise<{ ok: true } | { error: string }> {
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const l = lote?.trim() || null
+  const v = validade && /^\d{4}-\d{2}-\d{2}$/.test(validade) ? validade : null
+  if (validade && !v) return { error: 'Validade inválida.' }
+  if (l && l.length > 60) return { error: 'Lote muito longo.' }
+  const sb = createServiceClient()
+  const { data: it } = await sb.from('compras_proprio_itens').select('id, lancado').eq('id', compraItemId).eq('loja_id', ctx.lojaId).maybeSingle()
+  if (!it) return { error: 'Item não encontrado.' }
+  if (it.lancado) return { error: 'Este item já entrou no estoque: o lote não muda mais.' }
+  const { error } = await sb.from('compras_proprio_itens').update({ lote: l, validade: v }).eq('id', compraItemId).eq('loja_id', ctx.lojaId)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 /** Cria o produto a partir do item da nota (descrição, unidade e NCM da nota; código por tipo) e já liga o item a ele. */
 export async function criarProdutoDoItemNF(compraItemId: number, tipoItem: string): Promise<{ ok: true; codigo: string } | { error: string }> {
   const ctx = await contexto('Notas Fiscais - Manifestar')

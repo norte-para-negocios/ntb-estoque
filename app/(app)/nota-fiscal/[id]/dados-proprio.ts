@@ -33,6 +33,7 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
         custoUnitarioBase: i.custo_unitario_base == null ? null : Number(i.custo_unitario_base),
         matchOrigem: (i.match_origem as ItemConferencia['matchOrigem']) ?? null, score: i.match_score == null ? null : Number(i.match_score),
         produto: cp != null ? prods.get(cp) ?? null : null, sugestao: cp == null && sg != null ? prods.get(sg) ?? null : null,
+        lote: (i.lote as string) ?? null, validade: (i.validade as string) ?? null,
       })
     }
   }

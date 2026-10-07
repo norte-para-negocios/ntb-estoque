@@ -2,18 +2,20 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, CircleAlert, Link2, PackageCheck, Sparkles } from 'lucide-react'
+import { CalendarClock, CheckCircle2, CircleAlert, Link2, PackageCheck, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { SeletorProduto, campoCompra } from '@/components/compras-proprio/SeletorProduto'
-import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
+import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, definirLoteItemNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
   lancado: boolean; fator: number; custoUnitarioBase: number | null; matchOrigem: 'depara' | 'ean' | 'descricao' | 'manual' | null; score: number | null
   produto: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
   sugestao: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
+  lote?: string | null
+  validade?: string | null
 }
 
 const ORIGEM: Record<string, string> = { depara: 'de-para do fornecedor', ean: 'código de barras', descricao: 'nome parecido', manual: 'ligado por você' }
@@ -124,6 +126,8 @@ function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; edita
         </div>
       )}
 
+      {(item.produto || item.lote || item.validade) && <LoteItem item={item} editavel={editavel} />}
+
       {editavel && !item.produto && (
         <div className="space-y-2">
           {item.sugestao && (
@@ -146,5 +150,45 @@ function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; edita
         </div>
       )}
     </li>
+  )
+}
+
+const dataBR = (iso: string) => iso.split('-').reverse().join('/')
+
+/** Lote e validade do item: editável até a entrada; depois só leitura. Vem do XML quando a nota traz (grupo rastro). */
+function LoteItem({ item, editavel }: { item: ItemConferencia; editavel: boolean }) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [lote, setLote] = useState(item.lote ?? '')
+  const [validade, setValidade] = useState(item.validade ?? '')
+  const mudou = lote !== (item.lote ?? '') || validade !== (item.validade ?? '')
+
+  if (!editavel) {
+    if (!item.lote && !item.validade) return null
+    return (
+      <p className="inline-flex items-center gap-1.5 text-[12px] text-text-muted">
+        <CalendarClock className="size-3.5" />
+        {item.lote && <span>lote <span className="num text-text">{item.lote}</span></span>}
+        {item.lote && item.validade && <span>·</span>}
+        {item.validade && <span>validade <span className="num text-text">{dataBR(item.validade)}</span></span>}
+      </p>
+    )
+  }
+  function salvar() {
+    start(async () => {
+      const r = await definirLoteItemNF(item.id, lote, validade || null)
+      if ('error' in r) { toast.error('Não foi possível salvar o lote', { description: r.error }); return }
+      toast.success('Lote salvo', { description: 'Entra com esse lote e validade na confirmação.' })
+      router.refresh()
+    })
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+      <CalendarClock className="size-4 text-text-muted" />
+      <input aria-label="Lote" placeholder="Lote (opcional)" className={`${campoCompra} w-36`} value={lote} onChange={(e) => setLote(e.target.value)} />
+      <input aria-label="Validade" type="date" className={`${campoCompra} w-40`} value={validade} onChange={(e) => setValidade(e.target.value)} />
+      {mudou && <button type="button" className={btnClass('outline')} disabled={pending} onClick={salvar}>{pending && <Spinner />}Salvar lote</button>}
+      {!mudou && (item.lote || item.validade) && <span className="text-[12px] text-text-muted">vai entrar com este lote</span>}
+    </div>
   )
 }
