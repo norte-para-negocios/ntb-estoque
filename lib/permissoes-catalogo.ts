@@ -163,6 +163,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/estoque': 'Movimentacoes',
   '/producao-propria': 'Ordens de Producao',
   '/ficha-tecnica': 'Produtos',
+  '/inventario-proprio': 'Inventarios - Ver',
+  '/reposicao': 'Movimentacoes',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',
