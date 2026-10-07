@@ -26,6 +26,7 @@ import { IntegracaoNtbVendas } from '@/components/loja/IntegracaoNtbVendas'
 import { MapeamentoLocalEstoque } from '@/components/loja/MapeamentoLocalEstoque'
 import { LojaForm } from '@/components/loja/LojaForm'
 import { ExcluirLoja } from '@/components/loja/ExcluirLoja'
+import { AtivarLoja } from '@/components/loja/AtivarLoja'
 import { ConvidarUsuario } from '@/components/usuario/ConvidarUsuario'
 import { FUNDO_CLASSE, type CorToken } from '@/lib/status-cor'
 
@@ -54,6 +55,8 @@ export type LojaRow = {
   // omie
   omie_app_key: string | null
   omie_app_secret: string | null
+  // modo de estoque: omie | proprio | nenhum
+  modo_estoque?: string | null
   // endereco
   logradouro: string | null
   numero: string | null
@@ -318,6 +321,9 @@ export function LojaCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-text">{displayName}</span>
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] font-medium text-text-muted">
+              {loja.modo_estoque === 'proprio' ? 'Estoque próprio' : loja.modo_estoque === 'nenhum' ? 'Só vendas' : 'Omie'}
+            </span>
             {!loja.ativo && (
               <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-muted">
                 <span className="size-2 shrink-0 rounded-full bg-text-muted" />
@@ -350,7 +356,8 @@ export function LojaCard({
       {aberta && (
         <div className="animate-in fade-in" style={{ animationDuration: 'var(--dur)' }}>
 
-      {/* Seção: Sincronização */}
+      {/* Seção: Sincronização (só loja integrada ao Omie) */}
+      {(loja.modo_estoque ?? 'omie') === 'omie' && (
       <Section icon={RefreshCw} title="Sincronização" badge={<StatusPill status={loja.empresa_status} />}>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <ForceSyncLoja lojaId={loja.id} />
@@ -373,8 +380,10 @@ export function LojaCard({
           </p>
         )}
       </Section>
+      )}
 
       {/* Seção: Chaves Omie */}
+      {(loja.modo_estoque ?? 'omie') === 'omie' && (
       <Section icon={Key} title="Chaves Omie">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <DadoLinha label="App Key" valor={maskSegredo(loja.omie_app_key)} mono />
@@ -384,6 +393,7 @@ export function LojaCard({
           Para editar as chaves, use o botão &quot;Editar loja&quot; abaixo.
         </p>
       </Section>
+      )}
 
       {/* Seção: Endereço */}
       <Section icon={MapPin} title="Endereço">
@@ -391,7 +401,7 @@ export function LojaCard({
           <p className="text-[13px] text-text">{enderecoCompleto(loja)}</p>
         ) : (
           <p className="text-[13px] text-text-muted">
-            Sem endereço. Edite a loja para informar, ou use &quot;Dados da empresa&quot; para trazer do Omie.
+            Sem endereço. Edite a loja para informar{(loja.modo_estoque ?? 'omie') === 'omie' ? ', ou use "Dados da empresa" para trazer do Omie' : ''}.
           </p>
         )}
         {loja.complemento && (
@@ -400,10 +410,12 @@ export function LojaCard({
       </Section>
 
       {/* Seção: Dados da empresa */}
-      <Section icon={Building2} title="Dados da empresa (Omie)">
-        <div className="mb-3 flex">
-          <PuxarEmpresa lojaId={loja.id} />
-        </div>
+      <Section icon={Building2} title={(loja.modo_estoque ?? 'omie') === 'omie' ? 'Dados da empresa (Omie)' : 'Dados da empresa'}>
+        {(loja.modo_estoque ?? 'omie') === 'omie' && (
+          <div className="mb-3 flex">
+            <PuxarEmpresa lojaId={loja.id} />
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
           <DadoLinha label="Razão Social" valor={loja.razao_social} />
           <DadoLinha label="Inscrição Estadual" valor={loja.inscricao_estadual} mono />
@@ -469,6 +481,7 @@ export function LojaCard({
       {/* Rodapé: ações de edição/exclusão */}
       <div className="flex flex-wrap justify-end gap-2 border-t border-border/60 px-4 py-3">
         <LojaForm loja={loja} />
+        <AtivarLoja lojaId={loja.id} ativo={!!loja.ativo} />
         <ExcluirLoja lojaId={loja.id} nome={loja.nome_fantasia || loja.nome || '(sem nome)'} />
       </div>
         </div>

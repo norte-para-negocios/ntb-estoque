@@ -7,6 +7,8 @@ import { syncEmpresa } from '@/lib/omie/empresa'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
 import { gerarChaveIntegracaoNtbVendas } from '@/lib/actions/integracao-ntb-vendas'
+import type { ModoEstoque } from '@/lib/estoque/ledger'
+import { semearLojaProprio } from '@/lib/estoque/proprio-driver'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -25,10 +27,19 @@ export type LojaInput = {
   omie_app_key: string
   omie_app_secret: string
   ativo: boolean
+  /** Como a loja controla estoque: omie (espelho do Omie), proprio (Norte Estoque é o dono), nenhum. Default omie. */
+  modo_estoque?: ModoEstoque
+}
+
+const MODOS: ModoEstoque[] = ['omie', 'proprio', 'nenhum']
+function modoDe(dados: LojaInput): ModoEstoque {
+  return dados.modo_estoque && MODOS.includes(dados.modo_estoque) ? dados.modo_estoque : 'omie'
 }
 
 function normalizarDados(dados: LojaInput) {
+  const modo = modoDe(dados)
   return {
+    modo_estoque: modo,
     cnpj: dados.cnpj.trim(),
     nome: dados.nome.trim(),
     nome_fantasia: dados.nome_fantasia.trim() || null,
@@ -39,8 +50,9 @@ function normalizarDados(dados: LojaInput) {
     logradouro: dados.logradouro.trim() || null,
     numero: dados.numero.trim() || null,
     // Loja "fora do Omie": chaves podem ser vazias -> grava null
-    omie_app_key: dados.omie_app_key.trim() || null,
-    omie_app_secret: dados.omie_app_secret.trim() || null,
+    // Fora do modo omie as chaves nunca são guardadas.
+    omie_app_key: modo === 'omie' ? dados.omie_app_key.trim() || null : null,
+    omie_app_secret: modo === 'omie' ? dados.omie_app_secret.trim() || null : null,
     ativo: dados.ativo,
   }
 }
@@ -63,11 +75,17 @@ export async function criarLoja(dados: LojaInput, criarNoVendasTambem?: boolean)
   await registrarAuditoria('criar', 'loja', null, dados.nome.trim())
   revalidatePath('/loja')
 
-  if (!criarNoVendasTambem) return { ok: true }
+  // Estoque próprio: já nasce com Estoque Geral (padrão), Bar, Cozinha e as famílias básicas.
+  let avisoSemente: string | undefined
+  if (modoDe(dados) === 'proprio') {
+    try { await semearLojaProprio(loja.id) } catch (e) { avisoSemente = 'Loja criada, mas os locais e famílias padrão falharam: ' + (e instanceof Error ? e.message : String(e)) }
+  }
 
-  const vendasResult = await criarLojaNoNtbVendas(loja.id, dados.nome.trim(), dados.cnpj.trim())
-  if (vendasResult.error) return { ok: true, avisoVendas: vendasResult.error }
-  return { ok: true }
+  if (!criarNoVendasTambem) return { ok: true, lojaId: loja.id, avisoSemente }
+
+  const vendasResult = await criarLojaNoNtbVendas(loja.id, dados.nome.trim(), dados.cnpj.trim(), modoDe(dados))
+  if (vendasResult.error) return { ok: true, lojaId: loja.id, avisoSemente, avisoVendas: vendasResult.error }
+  return { ok: true, lojaId: loja.id, avisoSemente }
 }
 
 // Bootstrap cross-sistema (2026-08-16, pedido explícito do usuário): cria a
@@ -77,7 +95,7 @@ export async function criarLoja(dados: LojaInput, criarNoVendasTambem?: boolean)
 // criada de-este lado (mesmo princípio de "loja salva, mas..." já usado no
 // ntb-vendas pra fiscal/estoque) -- por isso nunca retorna `error` de verdade,
 // só um aviso separado (`avisoVendas`) que não bloqueia o resto do fluxo.
-async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string): Promise<{ error?: string }> {
+async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string, modo: ModoEstoque = 'omie'): Promise<{ error?: string }> {
   const segredo = process.env.CROSS_SYSTEM_BOOTSTRAP_KEY
   const vendasUrl = process.env.NTB_VENDAS_INTERNAL_URL
   if (!segredo || !vendasUrl) return { error: 'Integração cross-sistema não configurada neste servidor.' }
@@ -87,7 +105,8 @@ async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string):
     const res = await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/lojas`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${segredo}` },
-      body: JSON.stringify({ nome, cnpj }),
+      // stockMode: contrato com o Vendas (stores.stock_mode): 'omie' | 'proprio' | 'nenhum'. Vendas antigo ignora o campo.
+      body: JSON.stringify({ nome, cnpj, stockMode: modo }),
     })
     resposta = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar loja no NTB Vendas.' }
@@ -120,14 +139,35 @@ export async function editarLoja(lojaId: number, dados: LojaInput) {
   }
 
   const supabase = createServiceClient()
+  const modo = modoDe(dados)
+  const { data: antes } = await supabase.from('lojas').select('modo_estoque').eq('id', lojaId).maybeSingle()
+  const modoAntes = (antes as { modo_estoque?: string } | null)?.modo_estoque ?? 'omie'
   const { error } = await supabase
     .from('lojas')
     .update(normalizarDados(dados))
     .eq('id', lojaId)
 
+  // O banco recusa trocar o modo depois do primeiro movimento de estoque próprio.
   if (error) return { error: error.message }
 
+  if (modo === 'proprio' && modoAntes !== 'proprio') {
+    const { count } = await supabase.from('local_estoques').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId)
+    if (!count) await semearLojaProprio(lojaId)
+  }
+
   await registrarAuditoria('editar', 'loja', lojaId, dados.nome.trim())
+  revalidatePath('/loja')
+  return { ok: true }
+}
+
+/** Ativa ou desativa a loja (sem apagar nada). Loja inativa some das integrações. */
+export async function alternarAtivoLoja(lojaId: number, ativo: boolean) {
+  if (!(await isAdmin())) return { error: 'Somente administradores' }
+  const supabase = createServiceClient()
+  const { data: alvo } = await supabase.from('lojas').select('nome').eq('id', lojaId).maybeSingle()
+  const { error } = await supabase.from('lojas').update({ ativo }).eq('id', lojaId)
+  if (error) return { error: error.message }
+  await registrarAuditoria('editar', 'loja', lojaId, alvo?.nome ?? null)
   revalidatePath('/loja')
   return { ok: true }
 }
