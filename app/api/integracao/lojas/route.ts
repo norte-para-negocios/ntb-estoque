@@ -46,6 +46,21 @@ export async function POST(request: Request) {
   const modo = body.stockMode === 'proprio' || body.stockMode === 'nenhum' ? body.stockMode : 'omie'
   const supabase = createServiceClient()
 
+  // Idempotente por CNPJ (ligação automática Estoque <-> Vendas): se a loja já existe aqui, devolve a existente.
+  const digitos = (body.cnpj ?? '').replace(/\D/g, '')
+  if (digitos.length >= 11) {
+    const { data: todas } = await supabase.from('lojas').select('id, cnpj, integracao_api_key, modo_estoque').not('cnpj', 'is', null)
+    const existente = (todas ?? []).find((l) => String(l.cnpj).replace(/\D/g, '') === digitos)
+    if (existente) {
+      let chave = existente.integracao_api_key as string | null
+      if (!chave) {
+        chave = gerarChave()
+        await supabase.from('lojas').update({ integracao_api_key: chave }).eq('id', existente.id)
+      }
+      return NextResponse.json({ ok: true, lojaId: existente.id, integracaoApiKey: chave, url: urlPublica(), modo: existente.modo_estoque, existente: true })
+    }
+  }
+
   for (let tentativa = 0; tentativa < 5; tentativa++) {
     const integracaoApiKey = gerarChave()
     const { data: loja, error } = await supabase
