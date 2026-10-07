@@ -79,7 +79,7 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
+export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject: unknown; semOmie?: boolean }) {
   const fo = (fullObject ?? {}) as FullObjectNF
   const { cabec, infoCadastro: ic, transporte, parcelas, totais, infoAdicionais } = fo
 
@@ -101,7 +101,7 @@ export function DetalhesFiscaisNF({ fullObject }: { fullObject: unknown }) {
 
       {ic && (
         <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-          <h3 className="mb-3 text-[17px] font-semibold text-text">Situação no Omie</h3>
+          <h3 className="mb-3 text-[17px] font-semibold text-text">{semOmie ? 'Situação' : 'Situação no Omie'}</h3>
           <dl className="space-y-2.5">
             <Campo label="Recebido">
               <SimNao v={ic.cRecebido} />

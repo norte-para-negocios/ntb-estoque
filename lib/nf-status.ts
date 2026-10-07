@@ -13,14 +13,26 @@
 export type StatusNF = { label: string; tom: 'ok' | 'warn' | 'err' }
 
 type FullObjectComCadastro =
-  | { infoCadastro?: { cCancelada?: string | null; cRecebido?: string | null } }
+  | { infoCadastro?: { cCancelada?: string | null; cRecebido?: string | null }; sefaz?: { situacao?: string | null } }
   | null
   | undefined
+
+// Notas vindas da SEFAZ (loja de estoque próprio) guardam a situação da conferência em full_object.sefaz.situacao.
+// Notas do Omie não têm esse bloco: o comportamento delas é exatamente o de sempre.
+const ROTULO_SEFAZ: Record<string, StatusNF> = {
+  resumo: { label: 'Recebida (aguardando XML)', tom: 'warn' },
+  a_conferir: { label: 'A conferir', tom: 'warn' },
+  parcial: { label: 'Parcial', tom: 'warn' },
+  divergente: { label: 'Divergente', tom: 'err' },
+  estornada: { label: 'Entrada desfeita', tom: 'warn' },
+}
 
 export function statusNF(cEtapa: string | null, fullObject: unknown): StatusNF {
   const cancelada = (fullObject as FullObjectComCadastro)?.infoCadastro?.cCancelada === 'S'
   if (cancelada) return { label: 'Cancelada', tom: 'err' }
   if (cEtapa === '60') return { label: 'Concluída', tom: 'ok' }
+  const sit = (fullObject as FullObjectComCadastro)?.sefaz?.situacao
+  if (sit && ROTULO_SEFAZ[sit]) return ROTULO_SEFAZ[sit]
   return { label: `Pendente (etapa ${cEtapa ?? '?'})`, tom: 'warn' }
 }
 

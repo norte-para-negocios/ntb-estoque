@@ -22,9 +22,13 @@ const TIPOS = [
 ]
 const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'CX', 'PCT', 'FD']
 
+export type CriarProdutoFn = (d: { descricao: string; unidade: string; tipoItem: string; ncm?: string | null }) => Promise<{ ok: true; produto: ProdutoBusca } | { error: string }>
+
 export function SeletorProduto({
-  value, onChange, sugestaoDescricao, sugestaoUnidade, id, placeholder = 'Buscar produto por nome ou código',
+  value, onChange, sugestaoDescricao, sugestaoUnidade, id, placeholder = 'Buscar produto por nome ou código', buscar = buscarProdutosCompra, criarProduto = criarProdutoRapido,
 }: {
+  buscar?: (termo: string) => Promise<ProdutoBusca[]>
+  criarProduto?: CriarProdutoFn
   value: ProdutoBusca | null
   onChange: (p: ProdutoBusca | null) => void
   sugestaoDescricao?: string
@@ -43,11 +47,11 @@ export function SeletorProduto({
     if (q.trim().length < 2) { setAchados([]); return }
     setCarregando(true)
     const t = setTimeout(async () => {
-      setAchados(await buscarProdutosCompra(q))
+      setAchados(await buscar(q))
       setCarregando(false)
     }, 250)
     return () => clearTimeout(t)
-  }, [q])
+  }, [q, buscar])
 
   useEffect(() => {
     function fora(e: MouseEvent) { if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false) }
@@ -86,14 +90,14 @@ export function SeletorProduto({
           </button>
         </div>
       )}
-      <CriarProdutoRapido aberto={criar} onFechar={() => setCriar(false)} descricaoInicial={sugestaoDescricao ?? q} unidadeInicial={sugestaoUnidade}
+      <CriarProdutoRapido criarProduto={criarProduto} aberto={criar} onFechar={() => setCriar(false)} descricaoInicial={sugestaoDescricao ?? q} unidadeInicial={sugestaoUnidade}
         onCriado={(p) => { onChange(p); setCriar(false); setQ('') }} />
     </div>
   )
 }
 
-function CriarProdutoRapido({ aberto, onFechar, descricaoInicial, unidadeInicial, onCriado }: {
-  aberto: boolean; onFechar: () => void; descricaoInicial: string; unidadeInicial?: string; onCriado: (p: ProdutoBusca) => void
+function CriarProdutoRapido({ criarProduto, aberto, onFechar, descricaoInicial, unidadeInicial, onCriado }: {
+  criarProduto: CriarProdutoFn; aberto: boolean; onFechar: () => void; descricaoInicial: string; unidadeInicial?: string; onCriado: (p: ProdutoBusca) => void
 }) {
   const [descricao, setDescricao] = useState(descricaoInicial)
   const [unidade, setUnidade] = useState(UNIDADES.includes((unidadeInicial ?? '').toUpperCase()) ? (unidadeInicial ?? '').toUpperCase() : 'UN')
@@ -103,7 +107,7 @@ function CriarProdutoRapido({ aberto, onFechar, descricaoInicial, unidadeInicial
 
   async function salvar() {
     setSalvando(true)
-    const r = await criarProdutoRapido({ descricao, unidade, tipoItem: tipo })
+    const r = await criarProduto({ descricao, unidade, tipoItem: tipo })
     setSalvando(false)
     if ('error' in r) { toast.error('Não foi possível criar o produto', { description: r.error }); return }
     toast.success(`Produto ${r.produto.codigo} criado`)

@@ -12,6 +12,8 @@ import {
 import { registrarAuditoria } from '@/lib/auditoria'
 import { statusNF } from '@/lib/nf-status'
 import type { LojaOmie } from '@/lib/omie/client'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { confirmarEntradaNF, desfazerEntradaNF, excluirNotaProprio } from '@/lib/actions/nota-fiscal-proprio'
 
 export async function setQuantidadeNFItem(itemId: number, quantidade: number | null) {
   const lojaId = await getCurrentLojaId()
@@ -82,6 +84,11 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
  * junto à SEFAZ, que a API da Omie não expõe).
  */
 export async function manifestarNF(notaId: number) {
+  // Loja de estoque proprio: 'manifestar' = confirmar a entrada no estoque (sem Omie).
+  if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
+    const r = await confirmarEntradaNF(notaId)
+    return 'error' in r ? { error: r.error } : { ok: true as const }
+  }
   const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Manifestar')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
@@ -112,6 +119,10 @@ export async function manifestarNF(notaId: number) {
 
 /** Reverte a conclusão -- volta a nota pra Pendente. */
 export async function reverterManifestacaoNF(notaId: number) {
+  if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
+    const r = await desfazerEntradaNF(notaId)
+    return 'error' in r ? { error: r.error } : { ok: true as const }
+  }
   const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Reverter')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx
@@ -144,6 +155,10 @@ export async function reverterManifestacaoNF(notaId: number) {
  * do lado da Omie -- a UI precisa confirmar antes de chamar isso.
  */
 export async function excluirRecebimentoNF(notaId: number) {
+  if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
+    const r = await excluirNotaProprio(notaId)
+    return 'error' in r ? { error: r.error } : { ok: true as const, fantasma: false }
+  }
   const ctx = await carregarNFdaLoja(notaId, 'Notas Fiscais - Excluir')
   if ('error' in ctx) return { error: ctx.error }
   const { lojaId, supabase, nf } = ctx

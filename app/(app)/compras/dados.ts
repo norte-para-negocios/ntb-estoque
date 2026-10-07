@@ -4,7 +4,7 @@ export type StatusCompra = 'pendente' | 'parcial' | 'lancada' | 'cancelada'
 
 export type CompraLinha = {
   id: number
-  origem: 'manual' | 'xml'
+  origem: 'manual' | 'xml' | 'sefaz'
   numero: string | null
   serie: string | null
   fornecedorNome: string | null
@@ -50,7 +50,7 @@ export type CompraDetalhe = CompraLinha & {
 }
 
 type CompraRow = {
-  id: number; origem: 'manual' | 'xml'; numero: string | null; serie: string | null; fornecedor_nome: string | null; fornecedor_cnpj: string | null
+  id: number; origem: 'manual' | 'xml' | 'sefaz'; numero: string | null; serie: string | null; fornecedor_nome: string | null; fornecedor_cnpj: string | null
   emissao: string | null; valor_total: number; valor_frete: number; status: StatusCompra; created_at: string
 }
 

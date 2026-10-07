@@ -40,7 +40,7 @@ export function CompraManual({ locais }: { locais: { codigoLocal: number; descri
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       toast.success('Compra lançada no estoque')
-      router.push(`/compras/${r.compraId}`)
+      router.push(r.notaId ? `/nota-fiscal/${r.notaId}` : '/nota-fiscal')
     })
   }
 

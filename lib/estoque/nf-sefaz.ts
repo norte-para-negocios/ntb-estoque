@@ -10,6 +10,7 @@ import type { NfeLida } from './nfe-xml'
 export type ResultadoNota = {
   notaId: number; compraId: number | null; situacao: string | null; lancada: boolean
   itens: number; casados: number; sugestoes: number; pendentes: number; alertas: string[]; criada: boolean
+  lancados: number; status: string
 }
 
 async function carregarProdutos(lojaId: number): Promise<ProdutoCad[]> {
@@ -33,6 +34,8 @@ export async function localPadraoEntrada(lojaId: number): Promise<number | null>
 export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   ambiente: '1' | '2'; origem: OrigemNota; nsu?: string | null; autoLancar: boolean; cnpjLoja?: string | null; userId?: string | null
   mapeamentos?: Map<number, { codigoProduto: number | null; fator: number }>; icmsRecuperavel?: boolean; localEntrada?: number | null
+  /** Upload manual de XML: lança já os itens que a pessoa mapeou e deixa os demais pendentes. */
+  lancarParcial?: boolean
 }): Promise<ResultadoNota> {
   const sb = createServiceClient()
   const alertas = alertasDaNota(nfe, opts.cnpjLoja)
@@ -74,10 +77,14 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
 
   // Entrada automática só quando tudo casou com segurança, a nota não tem alerta e há um local de destino.
   const casados = casamentos.filter((c) => c.codigoProduto != null).length
-  if (opts.autoLancar && statusCompra === 'pendente' && !alertas.length && local && podeLancarAutomatico(casamentos)) {
+  let lancados = 0
+  const automatico = opts.autoLancar && !alertas.length && podeLancarAutomatico(casamentos)
+  const parcial = !!opts.lancarParcial && casados > 0
+  if ((automatico || parcial) && (statusCompra === 'pendente' || statusCompra === 'parcial') && local) {
     const { data: rl, error: erl } = await sb.rpc('lancar_compra', { p_compra: { loja_id: lojaId, id: compraId, itens: [] }, p_local: local, p_user: opts.userId ?? null })
     if (erl) throw new Error('Falha ao lançar a entrada no estoque: ' + erl.message)
     statusCompra = String((rl as { status: string }).status)
+    lancados = Number((rl as { lancados: number }).lancados) || 0
   }
 
   const { data: situacao } = await sb.rpc('sincronizar_situacao_nota', { p_loja: lojaId, p_nota: notaId })
@@ -85,6 +92,6 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   return {
     notaId, compraId, situacao: (situacao as string | null) ?? null, lancada: statusCompra === 'lancada', itens: nfe.itens.length, casados,
     sugestoes: casamentos.filter((c) => c.codigoProduto == null && c.sugestao != null).length,
-    pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada,
+    pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada, lancados, status: statusCompra,
   }
 }
