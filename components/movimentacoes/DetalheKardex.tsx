@@ -25,7 +25,7 @@ export function DetalheKardex({ id, onFechar, onAbrir }: { id: number | null; on
 
   return (
     <Dialog open={id != null} onOpenChange={(o) => { if (!o) onFechar() }}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Movimento #{id}</DialogTitle>
         </DialogHeader>
