@@ -4,9 +4,10 @@ estruturas REAIS da Donana (loja 2, lidas do Omie só em leitura via ConsultarEs
 
 - Matérias-primas (80xxx) e produtos em processo (70xxx) com o MESMO nome, unidade, NCM, tipo e família da Donana.
 - Sub-receitas dos 70xxx com ficha (expandir_na_venda = false: o PI sai do estoque dele; a OP de preparo do PI consome a MP,
-  como na Donana). Só os componentes de escolha (Preparo Moqueca/Ensopado, acompanhamento da Carne do Sol, Acarajé/Abará)
+  como na Donana). Só os componentes de escolha (acompanhamento da Carne do Sol, Acarajé/Abará)
   abrem na venda (expandir = true).
 - Fichas dos 90xxx da ODARA escaladas para as porções do cardápio; escolhas do Vendas ganham o código do componente.
+- Moquecas/Ensopados: NÃO estão aqui. Cada um é produto próprio com estrutura literal da Donana: ver moq-ens-odara.py.
 - Limpeza do cardápio/insumos de teste (apaga sem movimento, inativa e zera com ajuste o que tem movimento).
 Uso: python3 fichas-odara.py > fichas-odara.sql ; aplicar com psql -v ON_ERROR_STOP=1 (sempre dry-run com ROLLBACK antes).
 """
@@ -51,6 +52,9 @@ DONANA = """80002|ACUCAR CRISTAL (MP)|KG|17019900|01|Atacado
 80142|TOMATE SALADA (MP)|KG|07020000|01|Horti - Frut
 80145|VINAGRE ALCOOL (MP)|ML|22090000|01|Atacado
 80149|GIN NACIONAL (MP)|ML|22085000|01|Destilados
+80150|GIN IMPORTADO (MP)|ML|22085000|01|Destilados
+70022|PEIXE PESCADA AMARELA 600 g (PI)|UN|03022900|03|Produto Intermediário
+70054|FILE PESCADA 400 g (PI)|UN|03022900|03|Produto Intermediário
 80157|MAIONESE (MP)|KG|21039019|01|Atacado
 80163|VODKA ABSOLUT (MP)|ML|22086000|01|Destilados
 80165|VODKA SMIRNOFF (MP)|ML|22086000|01|Destilados
@@ -107,10 +111,6 @@ NOVOS = """ACARAJE (MP)|UN|21069090|01|Feira
 BOLINHO DE QUEIJO (MP)|UN|19059090|01|Feira
 APEROL (MP)|ML|22089000|01|Destilados
 ESPUMANTE (MP)|ML|22041010|01|Destilados
-Preparo Moqueca - porção inteira (PI)|UN|21069090|03|Produto Intermediário
-Preparo Moqueca - porção individual (PI)|UN|21069090|03|Produto Intermediário
-Preparo Ensopado - porção inteira (PI)|UN|21069090|03|Produto Intermediário
-Preparo Ensopado - porção individual (PI)|UN|21069090|03|Produto Intermediário
 Porção de Batata Frita (acompanhamento da Carne do Sol) (PI)|UN|20041000|03|Produto Intermediário
 Porção de Farofa (acompanhamento da Carne do Sol) (PI)|UN|19019090|03|Produto Intermediário
 Acarajé - 8 bolinhos (PI)|UN|21069090|03|Produto Intermediário
@@ -132,6 +132,8 @@ PI = {
  'CAMARAO MOQ / ENS 300 g - (PI)': [('CAMARAO MOQ / ENSO (PI)', .3)],
  'PEIXE PESCADA AMARELA 200 g (PI)': [('PEIXE PESCADA AMARELA (MP)', .415301)],
  'PEIXE VERMELHO INTEIRO 1 KG (PI)': [('PEIXE VERMELHO (MP)', 1.1)],
+ 'PEIXE PESCADA AMARELA 600 g (PI)': [('PEIXE PESCADA AMARELA (MP)', 1.245902)],
+ 'FILE PESCADA 400 g (PI)': [('FILE DE PESCADA - G (MP)', .56)],
  'CALDO MISTO (PI)': [('CAMARAO CONG IQF CRU PPV 61/70 (MP)', .035), ('SURURU (MP)', .035), ('ALHO TRITURADO (MP)', .007), ('LEITE DE COCO (MOQ) (MP)', 35), ('AZEITE DE DENDE 2000 (MP)', .013), ('AMENDOIM TORRADO (MP)', .009), ('TOMATE SALADA (MP)', .03), ('CEBOLA (MP)', .025), ('PIMENTAO (MP)', .005), ('COENTRO (MP)', .005), ('BATATA INGLESA (MP)', .025), ('CAMARAO SECO (MP)', .004)],
  'CALDO DE CAMARAO (250ml) (PI)': [('CAMARAO CONG IQF CRU PPV 61/70 (MP)', .07), ('AMENDOIM TORRADO (MP)', .009), ('ALHO TRITURADO (MP)', .007), ('LEITE DE COCO (MOQ) (MP)', 35), ('AZEITE DE DENDE 2000 (MP)', .013), ('COENTRO (MP)', .006749), ('BATATA INGLESA (MP)', .025), ('SAL FINO (MP)', .001852), ('TEMPERO LIQUIDO (PI)', .002778), ('VINAGRETE (PI)', .024074), ('EXTRATO DE TOMATE (MP)', .002963), ('LIMAO TAHITI (MP)', .00008), ('CEBOLA (MP)', .003497), ('PIMENTAO (MP)', .001749), ('TOMATE SALADA (MP)', .011556), ('CAMARAO SECO (MP)', .007)],
  'CALDO DE SURURU (250 ml) (PI)': [('SURURU (MP)', .031), ('EXTRATO DE TOMATE (MP)', .01), ('ALHO TRITURADO (MP)', .007), ('TOMATE SALADA (MP)', .03), ('CEBOLA (MP)', .025), ('PIMENTAO (MP)', .005), ('COENTRO (MP)', .005), ('BATATA INGLESA (MP)', .025), ('LEITE DE COCO (BASE) (MP)', 35)],
@@ -148,10 +150,6 @@ PI = {
 }
 # Componentes das escolhas (abrem na venda): partes que mudam entre Moqueca e Ensopado na Donana, e os acompanhamentos.
 COMP = {
- 'Preparo Moqueca - porção inteira (PI)': [('AZEITE DE DENDE 2000 (MP)', .05), ('FAROFA DE DENDE (PI)', .175), ('PIRAO DE DENDE (PI)', .375)],
- 'Preparo Moqueca - porção individual (PI)': [('AZEITE DE DENDE 2000 (MP)', .025), ('FAROFA DE DENDE (PI)', .055), ('PIRAO DE DENDE (PI)', .27)],
- 'Preparo Ensopado - porção inteira (PI)': [('EXTRATO DE TOMATE (MP)', .13), ('FAROFA DE MANTEIGA (PI)', .2), ('PIRAO ENSOPADO (PI)', .375)],
- 'Preparo Ensopado - porção individual (PI)': [('EXTRATO DE TOMATE (MP)', .05), ('FAROFA DE MANTEIGA (PI)', .1), ('PIRAO ENSOPADO (PI)', .27)],
  'Porção de Batata Frita (acompanhamento da Carne do Sol) (PI)': [('BATATA PRE-FRITA (MP)', .2)],
  'Porção de Farofa (acompanhamento da Carne do Sol) (PI)': [('FAROFA DE MANTEIGA (PI)', .15)],
  'Acarajé - 8 bolinhos (PI)': [('ACARAJE (MP)', 8)],
@@ -175,15 +173,8 @@ FICHAS = {
  '90034': [('CARNE DO SOL 300 G (PI)', 1), ('FAROFA DE MANTEIGA (PI)', .15), ('TOMATE SALADA (MP)', .03), ('CEBOLA (MP)', .045), ('PIMENTAO (MP)', .0225), ('COENTRO (MP)', .007), ('FEIJAO FRADINHO (MP)', .125)],
  '90035': [('CARNE DO SOL 300 G (PI)', 1), ('CEBOLA (MP)', .05), ('VINAGRETE (PI)', .04)],
  '90039': [('VATAPA (PI)', .075), ('VINAGRETE (PI)', .04), ('CAMARAO SECO (MP)', .03), ('PIMENTA MALAGUETA (MP)', .005)],
- '90040': [('ARROZ BCO (PI)', .2), ('LEITE DE COCO (MOQ) (MP)', 100), ('CAMARAO MOQ / ENS 200 g - (PI)', 1), ('VINAGRETE (PI)', .02), ('TEMPERO LIQUIDO (PI)', .02)],
- '90041': [('ARROZ BCO (PI)', .26), ('LEITE DE COCO (MOQ) (MP)', 350), ('CAMARAO MOQ / ENSO (PI)', .4), ('VINAGRETE (PI)', .04), ('TEMPERO LIQUIDO (PI)', .04)],
- '90043': [('ARROZ BCO (PI)', .26), ('LEITE DE COCO (BASE) (MP)', 300), ('PEIXE PESCADA AMARELA 500 g (PI)', 1), ('VINAGRETE (PI)', .04), ('TEMPERO LIQUIDO (PI)', .04), FEIJAO_ACOMP],
- '90044': [('ARROZ BCO (PI)', .4), ('LEITE DE COCO (MOQ) (MP)', 100), ('LEITE DE COCO (BASE) (MP)', 200), ('PEIXE PESCADA AMARELA 500 g (PI)', 1), ('CAMARAO MOQ / ENS 300 g - (PI)', 1), ('VINAGRETE (PI)', .04), ('TEMPERO LIQUIDO (PI)', .04), FEIJAO_ACOMP],
- '90045': [('ARROZ BCO (PI)', .26), ('LEITE DE COCO (MOQ) (MP)', 300), ('FILE PESCADA 450 g (PI)', 1), ('VINAGRETE (PI)', .04), ('TEMPERO LIQUIDO (PI)', .04), FEIJAO_ACOMP],
- '90046': [('ARROZ BCO (PI)', .4), ('LEITE DE COCO (MOQ) (MP)', 100), ('LEITE DE COCO (BASE) (MP)', 200), ('FILE PESCADA 450 g (PI)', 1), ('CAMARAO MOQ / ENS 300 g - (PI)', 1), ('VINAGRETE (PI)', .04), ('TEMPERO LIQUIDO (PI)', .04), FEIJAO_ACOMP],
- '90037': [('ARROZ BCO (PI)', .2), ('LEITE DE COCO (MOQ) (MP)', 100), ('PEIXE PESCADA AMARELA 200 g (PI)', 1), ('VINAGRETE (PI)', .02), ('TEMPERO LIQUIDO (PI)', .02)],
- '90047': [('PEIXE PESCADA AMARELA 500 g (PI)', 1), ('FAROFA DE MANTEIGA (PI)', .165), ('VINAGRETE (PI)', .15), ('ALFACE CRESPA (MP)', .02), ('ARROZ BCO (PI)', .28), FEIJAO_ACOMP],
- '90036': [('PEIXE VERMELHO INTEIRO 1 KG (PI)', 1), ('FAROFA DE MANTEIGA (PI)', .165), ('VINAGRETE (PI)', .15), ('LIMAO TAHITI (MP)', .05), ('SAL FINO (MP)', .03), ('TEMPERO LIQUIDO (PI)', .06), ('FARINHA DE TRIGO (MP)', .05), ('OLEO SOJA (MP)', 500), ('ALFACE CRESPA (MP)', .01), ('FEIJAO FRADINHO (PI)', .44)],
+ '90047': [('FAROFA DE MANTEIGA (PI)', .165), ('VINAGRETE (PI)', .15), ('ALFACE CRESPA (MP)', .02), ('ARROZ BCO (PI)', .28), ('PEIXE PESCADA AMARELA 600 g (PI)', 1), ('FEIJAO FRADINHO (PI)', .44)],  # literal Donana 90472
+ '90036': [('VINAGRETE (PI)', .15), ('FAROFA DE MANTEIGA (PI)', .165), ('PEIXE VERMELHO INTEIRO 1 KG (PI)', 1), ('LIMAO TAHITI (MP)', .05), ('SAL FINO (MP)', .03), ('TEMPERO LIQUIDO (PI)', .06), ('FARINHA DE TRIGO (MP)', .05), ('OLEO SOJA (MP)', 500), ('ALFACE CRESPA (MP)', .01), ('ARROZ BCO (PI)', .4), ('FEIJAO FRADINHO (PI)', .315)],  # literal Donana 90139
  '90038': [('FAROFA DE MANTEIGA (PI)', .2)],
  '90042': [('ARROZ BCO (PI)', .26)],
  '90048': [('FEIJAO FRADINHO (PI)', .44), ('VINAGRETE (PI)', .025)],
@@ -192,7 +183,7 @@ FICHAS = {
  '90062': [('ACUCAR CRISTAL (MP)', .04), ('CACHAÇA 51 (MP)', 70), ('LIMAO TAHITI (MP)', .2)],
  '90063': [('VODKA SMIRNOFF (MP)', 70), ('ACUCAR CRISTAL (MP)', .04), ('LIMAO TAHITI (MP)', .2)],
  '90064': [('VODKA ABSOLUT (MP)', 70), ('ACUCAR CRISTAL (MP)', .04), ('LIMAO TAHITI (MP)', .2)],
- '90065': [('GIN NACIONAL (MP)', 60), ('Tonica Antarctica 350 ML', 1)],
+ '90065': [('GIN IMPORTADO (MP)', 60), ('Tonica Antarctica 350 ML', 1)],  # literal Donana 90609
  '90017': [('APEROL (MP)', 60), ('ESPUMANTE (MP)', 90), ('LARANJA (MP)', .03)],
  '90051': [('DOCE DE AMBROSIA (MP)', 170), ('COPO DESC 100ML C / TAMPA - (SOBREMESA) (MP)', 1)],
  '90052': [('COCADA BRANCA (MP)', .15), ('COPO DESC 100ML C / TAMPA - (SOBREMESA) (MP)', 1)],
@@ -202,8 +193,8 @@ ESCOLHAS = [('Moqueca ou Ensopado de Camarão (200g)', IND), ('Moqueca ou Ensopa
             ('Moqueca ou Ensopado de Camarão (400g)', BIG), ('Moqueca ou Ensopado de Pescada (500g)', BIG),
             ('Moqueca ou Ensopado de Pescada e Camarão', BIG), ('Moqueca ou Ensopado de Filé de Pescada (500g)', BIG),
             ('Moqueca ou Ensopado de Filé de Pescada e Camarão', BIG)]
-OPCOES = [(p, 'Preparo', 'Moqueca', f'Preparo Moqueca - {t} (PI)') for p, t in ESCOLHAS] + \
-         [(p, 'Preparo', 'Ensopado', f'Preparo Ensopado - {t} (PI)') for p, t in ESCOLHAS] + [
+# Moqueca/Ensopado: produtos separados com código próprio (scripts/odara/moq-ens-odara.py), não componentes.
+OPCOES = [
   ('Carne do Sol (300g)', 'Acompanhamento', 'Batata frita', 'Porção de Batata Frita (acompanhamento da Carne do Sol) (PI)'),
   ('Carne do Sol (300g)', 'Acompanhamento', 'Farofa', 'Porção de Farofa (acompanhamento da Carne do Sol) (PI)'),
   ('Acarajé ou Abará', 'Escolha', '8 bolinhos de acarajé', 'Acarajé - 8 bolinhos (PI)'),
@@ -211,7 +202,7 @@ OPCOES = [(p, 'Preparo', 'Moqueca', f'Preparo Moqueca - {t} (PI)') for p, t in E
 # Famílias dos 49 vendáveis (nomes da Donana)
 FAM_VEND = {'GELADAS COM ALCOOL': '90057 90058 90059 90060 90061', 'GELADAS SEM ALCOOL': '90018 90019 90021 90022 90023 90024 90025 90026',
             'DRINKS': '90062 90063 90064 90065 90017', 'ENTRADA / PETISCOS': '90027 90028 90029 90030 90031 90032 90055 90056 90020 90054 90033 90034 90035 90039',
-            'MOQUECAS OU ENSOPADOS': '90040 90041 90043 90045 90037', 'ESPECIAIS C/ CAMARÃO': '90044 90046', 'DO MAR': '90047 90036',
+            'DO MAR': '90047 90036',
             'GUARNIÇÕES': '90038 90042 90048 90049 90050', 'SOBREMESA': '90051 90052 90053'}
 TESTE = ['70001', '70002'] + [f'800{i:02d}' for i in range(1, 17)] + [f'900{i:02d}' for i in range(1, 17)]
 
