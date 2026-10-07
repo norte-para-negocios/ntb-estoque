@@ -7,6 +7,8 @@ import { incluirProduto, alterarProduto, excluirProdutoOmie } from '@/lib/omie/p
 import { registrarAuditoria } from '@/lib/auditoria'
 import { FAIXA_CODIGO_POR_TIPO } from '@/lib/constants-omie'
 import type { LojaOmie } from '@/lib/omie/client'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { criarProdutoProprio, editarProdutoProprio, excluirProdutoProprio } from '@/lib/estoque/proprio-driver'
 
 // Familias existentes na loja (codigo + descricao), para o seletor do cadastro.
 // Busca da tabela `familias` (fonte da verdade), nao de produtos: assim familias
@@ -34,9 +36,10 @@ export async function buscarFamilias(): Promise<{ codigo: number; descricao: str
 // escolher "Materia Prima", retorna o maior codigo existente entre 80000-89999 + 1
 // (ou o inicio da faixa se nao houver). Tipos sem faixa definida retornam null.
 export async function sugerirProximoCodigo(tipo: string): Promise<string | null> {
+  const lojaId = await getCurrentLojaId()
+  if ((await modoDaLoja(lojaId)) !== 'omie') return null // loja própria: o código é gerado sozinho ao salvar
   const faixa = FAIXA_CODIGO_POR_TIPO[tipo]
   if (!faixa) return null
-  const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   // So a coluna codigo (leve). Filtra/calcula o maximo numerico na faixa em memoria
   // (codigo e text e pode ter nao-numericos como PRD00011, que sao ignorados).
@@ -138,6 +141,19 @@ export async function criarProduto(dados: {
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão' }
+
+  // Loja com estoque próprio (ou sem estoque): nunca chama o Omie. Código automático por tipo do item.
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await criarProdutoProprio(lojaId, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('criar', 'produto', r.codigoProduto, dados.descricao)
+    revalidatePath('/produto')
+    let avisoVendas: string | undefined
+    if (dados.criarNoNtbVendas && dados.pdv) {
+      avisoVendas = (await enviarProdutoParaNtbVendas(lojaId, dados.descricao.trim(), Number(dados.valorUnitario) || 0, r.codigo)).error
+    }
+    return { ok: true, codigoProduto: r.codigoProduto, codigo: r.codigo, avisoVendas }
+  }
 
   if (!dados.codigo?.trim()) return { error: 'Informe o código do produto' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição' }
@@ -244,6 +260,14 @@ export async function editarProduto(
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Editar'))) return { error: 'Sem permissão' }
   if (!id) return { error: 'Produto inválido' }
+
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await editarProdutoProprio(lojaId, id, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('editar', 'produto', r.codigoProduto ?? id, dados.descricao.trim())
+    revalidatePath('/produto')
+    return { ok: true }
+  }
 
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição' }
   if (!dados.unidade?.trim()) return { error: 'Informe a unidade (ex.: UN, KG)' }
@@ -380,6 +404,14 @@ export async function excluirProduto(codigoProduto: number) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Excluir'))) return { error: 'Sem permissão' }
   if (!codigoProduto) return { error: 'Produto inválido' }
+
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await excluirProdutoProprio(lojaId, codigoProduto)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('excluir', 'produto', codigoProduto, null)
+    revalidatePath('/produto')
+    return { ok: true }
+  }
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase

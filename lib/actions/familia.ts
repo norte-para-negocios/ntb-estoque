@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { syncFamilias, incluirFamilia, alterarFamilia, excluirFamiliaOmie } from '@/lib/omie/familia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { criarFamiliaProprio, editarFamiliaProprio, excluirFamiliaProprio } from '@/lib/estoque/proprio-driver'
 
 export type FamiliaInput = {
   nome: string
@@ -32,6 +34,14 @@ export async function criarFamilia(dados: FamiliaInput): Promise<{ ok?: boolean;
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Criar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
+
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await criarFamiliaProprio(lojaId, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('criar', 'família', r.codigoFamilia, dados.nome.trim())
+    revalidatePath('/familia')
+    return { ok: true }
+  }
 
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key) return { error: 'Loja sem chave do Omie' }
@@ -65,6 +75,14 @@ export async function editarFamilia(id: number, dados: FamiliaInput): Promise<{ 
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Editar'))) return { error: 'Sem permissão' }
   if (!dados.nome.trim()) return { error: 'Informe o nome da família' }
+
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await editarFamiliaProprio(lojaId, id, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('editar', 'família', id, dados.nome.trim())
+    revalidatePath('/familia')
+    return { ok: true }
+  }
 
   const supabase = createServiceClient()
 
@@ -128,6 +146,14 @@ export async function excluirFamilia(id: number): Promise<{ ok?: boolean; error?
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Excluir'))) return { error: 'Sem permissão' }
 
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await excluirFamiliaProprio(lojaId, id)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('excluir', 'família', id, null)
+    revalidatePath('/familia')
+    return { ok: true }
+  }
+
   const supabase = createServiceClient()
   const { data: alvo } = await supabase
     .from('familias')
@@ -163,6 +189,7 @@ export async function excluirFamilia(id: number): Promise<{ ok?: boolean; error?
 export async function puxarFamiliasDoOmie() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Familias - Sincronizar'))) return { error: 'Sem permissão' }
+  if ((await modoDaLoja(lojaId)) !== 'omie') return { error: 'Esta loja não usa sincronização com sistema externo.' }
 
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key || !loja?.omie_app_secret) return { error: 'Loja sem chave do Omie' }
