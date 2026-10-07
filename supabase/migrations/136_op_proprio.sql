@@ -295,3 +295,15 @@ do $$ declare f text; begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+-- Busca de OPs por insumo usado (ingredientes previstos/consumidos gravados em full_object.itensDetalhes).
+create or replace function public.op_proprio_ids_por_insumo(p_loja bigint, p_codigos bigint[]) returns table (id bigint)
+language sql stable security definer set search_path = public as $$
+  select o.id from ordens_producao o
+   where o.loja_id = p_loja
+     and exists (select 1 from jsonb_array_elements(coalesce(o.full_object -> 'itensDetalhes', '[]'::jsonb)) e
+                  where (e ->> 'nIdProdutoMalha')::bigint = any (p_codigos))
+$$;
+revoke all on function public.op_proprio_ids_por_insumo(bigint, bigint[]) from public, anon, authenticated;
+grant execute on function public.op_proprio_ids_por_insumo(bigint, bigint[]) to service_role;
+notify pgrst, 'reload schema';
