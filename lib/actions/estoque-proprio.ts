@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { ajuste, entrada, estornar, modoDaLoja } from '@/lib/estoque/ledger'
 import { transferenciaRapida } from '@/lib/estoque/transferencia-proprio'
+import { entradaComLote } from '@/lib/estoque/lotes'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 
 type Resposta = { ok: true; saldo?: number; negativo?: boolean; aviso?: string } | { error: string }
@@ -49,18 +50,29 @@ export async function entradaManual(dados: {
   quantidade: number | string
   custo?: number | string | null
   obs?: string
+  /** Lote e validade (opcionais): a entrada vira um lote com vencimento (tela Validade). */
+  lote?: string | null
+  validade?: string | null
 }): Promise<Resposta> {
   const ctx = await contexto()
   if ('error' in ctx) return ctx
+  const lote = dados.lote?.trim() || null
+  const validade = dados.validade && /^\d{4}-\d{2}-\d{2}$/.test(dados.validade) ? dados.validade : null
+  if (dados.validade && !validade) return { error: 'Validade inválida.' }
   const quantidade = numero(dados.quantidade)
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
   const custo = dados.custo === '' || dados.custo == null ? null : numero(dados.custo)
   if (custo != null && custo < 0) return { error: 'O custo não pode ser negativo.' }
   try {
-    const r = await entrada({
-      lojaId: ctx.lojaId, local: dados.codigoLocal, produto: dados.codigoProduto, origem: 'ENTRADA_MANUAL', ref: ref('em'),
-      quantidade, custo, user: ctx.userId, obs: dados.obs?.trim() || null,
-    })
+    const r = lote || validade
+      ? await entradaComLote({
+          lojaId: ctx.lojaId, local: dados.codigoLocal, produto: dados.codigoProduto, origem: 'ENTRADA_MANUAL', ref: ref('em'),
+          quantidade, custo, user: ctx.userId, obs: dados.obs?.trim() || null, lote, validade,
+        })
+      : await entrada({
+          lojaId: ctx.lojaId, local: dados.codigoLocal, produto: dados.codigoProduto, origem: 'ENTRADA_MANUAL', ref: ref('em'),
+          quantidade, custo, user: ctx.userId, obs: dados.obs?.trim() || null,
+        })
     await registrarAuditoria('criar', 'entrada de estoque', r.id, await descreverProduto(ctx.lojaId, dados.codigoProduto))
     atualizarTelas()
     return {

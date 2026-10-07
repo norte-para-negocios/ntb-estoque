@@ -1,5 +1,6 @@
 import { getProfile, getPermissoesNomes, getAtorGestao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { resumoValidade } from '@/lib/estoque/lotes'
 import { createClient } from '@/lib/supabase/server'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { NAO_CANCELADA_OR } from '@/lib/nf-status'
@@ -220,10 +221,19 @@ export default async function HomePage() {
   const homeProprio = lojaId ? (await modoDaLoja(Number(lojaId))) === 'proprio' : false
   if (syncAtraso && isAdmin && !homeProprio)
     alertas.push({ icon: TrendingUp, token: 'warn', texto: 'Sincronização com Omie atrasada (mais de 24h)', href: '/sync-status' })
-  if (qtdVencidos > 0 && pode('Validade'))
-    alertas.push({ icon: CalendarClock, token: 'err', texto: `${qtdVencidos} produto(s) já vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
-  if ((vencendo.count ?? 0) > 0 && pode('Validade'))
-    alertas.push({ icon: CalendarClock, token: 'warn', texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`, href: '/validade' })
+  if (homeProprio && pode('Validade')) {
+    // Estoque próprio: validade por lote (migration 145), com o prazo de alerta da loja.
+    const rv = await resumoValidade(Number(lojaId), hojeBahiaISO())
+    if (rv.vencidos > 0)
+      alertas.push({ icon: CalendarClock, token: 'err', texto: `${rv.vencidos} lote(s) vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
+    if (rv.vencendo > 0)
+      alertas.push({ icon: CalendarClock, token: 'warn', texto: `${rv.vencendo} lote(s) vencem nos próximos ${rv.alertaDias} dias`, href: `/validade?dias=${rv.alertaDias}` })
+  } else {
+    if (qtdVencidos > 0 && pode('Validade'))
+      alertas.push({ icon: CalendarClock, token: 'err', texto: `${qtdVencidos} produto(s) já vencido(s) ainda em estoque`, href: '/validade?modo=vencidos' })
+    if ((vencendo.count ?? 0) > 0 && pode('Validade'))
+      alertas.push({ icon: CalendarClock, token: 'warn', texto: `${vencendo.count} produto(s) vencem nos próximos 7 dias`, href: '/validade' })
+  }
   if ((invAbertos.count ?? 0) > 0 && pode('Inventarios - Ver'))
     alertas.push({ icon: ClipboardList, token: 'brand', texto: `${invAbertos.count} inventário(s) em contagem aguardando finalização`, href: '/inventario' })
   if ((transfAbertas.count ?? 0) > 0 && pode('Transferencias - Ver'))

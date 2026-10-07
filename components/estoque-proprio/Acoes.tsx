@@ -98,11 +98,13 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
   const [qtd, setQtd] = useState('')
   const [custo, setCusto] = useState('')
   const [obs, setObs] = useState('')
-  const { pending, enviar } = useEnvio(() => { setOpen(false); setQtd(''); setCusto(''); setObs('') })
+  const [lote, setLote] = useState('')
+  const [validade, setValidade] = useState('')
+  const { pending, enviar } = useEnvio(() => { setOpen(false); setQtd(''); setCusto(''); setObs(''); setLote(''); setValidade('') })
 
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
-    enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs }), 'Entrada registrada')
+    enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs, lote, validade }), 'Entrada registrada')
   }
   return (
     <Moldura open={open} onOpenChange={setOpen} titulo="Entrada de estoque" produto={produto}
@@ -116,6 +118,13 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
           <CampoComUnidade unidade={`R$/${produto.unidade}`}><input inputMode="decimal" className={`${campo} pr-16`} value={custo} onChange={(e) => setCusto(e.target.value)} placeholder="0,00" /></CampoComUnidade></div>
       </div>
       <p className="text-[12px] text-text-muted">Sem custo, a entrada não altera o custo médio do produto.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2"><Label htmlFor="ent-lote">Lote (opcional)</Label>
+          <input id="ent-lote" className={campo} value={lote} onChange={(e) => setLote(e.target.value)} placeholder="Ex.: L2310" /></div>
+        <div className="space-y-2"><Label htmlFor="ent-val">Validade (opcional)</Label>
+          <input id="ent-val" type="date" className={campo} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
+      </div>
+      <p className="text-[12px] text-text-muted">Com validade, o lote aparece na tela Validade e sai primeiro nas vendas (o que vence antes sai antes).</p>
       <div className="space-y-2"><Label>Observação (opcional)</Label><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: nota 1234, compra do mercado" /></div>
     </Moldura>
   )
