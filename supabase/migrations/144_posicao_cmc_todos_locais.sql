@@ -1,4 +1,4 @@
--- 143 — Estoque próprio: o custo médio é um só por produto, mas a projeção em posicao_estoques guarda o
+-- 144 — Estoque próprio: o custo médio é um só por produto, mas a projeção em posicao_estoques guarda o
 -- n_cmc em cada linha (local). Quando uma entrada num local muda o custo médio, as linhas dos OUTROS locais
 -- ficavam com o custo antigo e o Estoque Valorizado errava (achado do QA de 07/10/2026: R$ 5.008,02 na tela
 -- contra R$ 5.008,53 somando saldo x custo médio). Aditiva; só toca lojas em modo 'proprio'.
