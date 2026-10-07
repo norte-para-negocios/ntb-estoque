@@ -27,6 +27,13 @@ export type LojaInput = {
   omie_app_key: string
   omie_app_secret: string
   ativo: boolean
+  /** Contato e complemento do cadastro (opcionais; só gravados quando a chave vem no objeto). */
+  razao_social?: string
+  email?: string
+  telefone1?: string
+  complemento?: string
+  /** Só vale na CRIAÇÃO: loja de teste (escritas ficam simuladas). */
+  is_test?: boolean
   /** Como a loja controla estoque: omie (espelho do Omie), proprio (Norte Estoque é o dono), nenhum. Default omie. */
   modo_estoque?: ModoEstoque
 }
@@ -54,6 +61,10 @@ function normalizarDados(dados: LojaInput) {
     omie_app_key: modo === 'omie' ? dados.omie_app_key.trim() || null : null,
     omie_app_secret: modo === 'omie' ? dados.omie_app_secret.trim() || null : null,
     ativo: dados.ativo,
+    ...(dados.razao_social !== undefined ? { razao_social: dados.razao_social.trim() || null } : {}),
+    ...(dados.email !== undefined ? { email: dados.email.trim() || null } : {}),
+    ...(dados.telefone1 !== undefined ? { telefone1: dados.telefone1.trim() || null } : {}),
+    ...(dados.complemento !== undefined ? { complemento: dados.complemento.trim() || null } : {}),
   }
 }
 
@@ -66,7 +77,7 @@ export async function criarLoja(dados: LojaInput, criarNoVendasTambem?: boolean)
   const supabase = createServiceClient()
   const { data: loja, error } = await supabase
     .from('lojas')
-    .insert(normalizarDados(dados))
+    .insert({ ...normalizarDados(dados), ...(dados.is_test ? { is_test: true } : {}) })
     .select('id')
     .single()
 
