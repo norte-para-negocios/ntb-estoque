@@ -205,29 +205,31 @@ export function EstruturaProduto({
               )}
 
               {proprio && (
-                <div className="grid gap-3 rounded-[var(--r-md)] bg-surface-2/50 p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div className="space-y-3 rounded-[var(--r-md)] bg-surface-2/50 p-3">
                   <div>
-                    <div className="text-[13px] font-semibold text-text-muted">Rendimento da receita</div>
-                    <div className="mt-1 flex items-center gap-2 text-sm text-text">
+                    <label htmlFor="ficha-rendimento" className="text-[13px] font-semibold text-text-muted">Rendimento da receita</label>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-text">
                       {editando ? (
                         <input
+                          id="ficha-rendimento"
                           value={rendimento}
                           onChange={(e) => setRendimento(e.target.value.replace(/[^\d.,]/g, ''))}
                           inputMode="decimal"
-                          className="num w-24 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
+                          className="num w-28 shrink-0 rounded-[var(--r-md)] border-0 bg-surface-2 px-2 py-1.5 text-right text-sm text-text outline-none focus:ring-2 focus:ring-brand/40"
                         />
                       ) : (
-                        <span className="num font-medium">{rendimento}</span>
+                        <span className="num text-[15px] font-semibold">{rendimento}</span>
                       )}
-                      <span className="text-text-muted">{view.produto?.unidade ?? ''} por receita — as quantidades abaixo são para esse rendimento.</span>
+                      <span className="shrink-0 font-medium text-text">{(view.produto?.unidade ?? '').toLowerCase()} por receita</span>
                     </div>
+                    <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">As quantidades dos componentes abaixo são para esse rendimento.</p>
                     {view.custoUnitario != null && !editando && (
-                      <div className="mt-1 text-[12px] text-text-muted">Custo por {view.produto?.unidade || 'unidade'}: <span className="num font-medium text-text">{formatCustoUnit(view.custoUnitario)}</span> (pelo custo médio dos insumos)</div>
+                      <p className="mt-1 text-[12px] text-text-muted">Custo por {(view.produto?.unidade || 'unidade').toLowerCase()}: <span className="num font-medium text-text">{formatCustoUnit(view.custoUnitario)}</span> (pelo custo médio dos insumos)</p>
                     )}
                   </div>
-                  <label className="flex items-center gap-2 text-[13px] text-text">
-                    <input type="checkbox" checked={expandir} disabled={!editando} onChange={(e) => setExpandir(e.target.checked)} className="size-4 accent-[var(--brand)]" />
-                    Abrir na venda (baixar os insumos direto, sem produzir antes)
+                  <label className="flex items-start gap-2 border-t border-border/60 pt-3 text-[13px] text-text">
+                    <input type="checkbox" checked={expandir} disabled={!editando} onChange={(e) => setExpandir(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--brand)]" />
+                    <span>Abrir na venda <span className="text-text-muted">(baixar os insumos direto, sem produzir antes)</span></span>
                   </label>
                 </div>
               )}
