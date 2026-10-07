@@ -458,6 +458,13 @@
   top: var(--lista-header-h, 0px);
   z-index: 20;
 }
+/* Bloco que rola na horizontal vira o container do sticky: o top (altura do ListaHeader) empurrava o
+   cabecalho para cima das linhas (achado QA 07/10: OP com 1 linha ficava invisivel a 1440px). Ali o
+   cabecalho deixa de ser fixo. */
+.overflow-x-auto > [data-sticky-table] thead { position: static; }
+@media (max-width: 1535.98px) {
+  .max-2xl\:overflow-x-auto > [data-sticky-table] thead { position: static; }
+}
 
 /* Scrollbar customizada: fina, discreta e estilizada (2.1).
    Vale para a janela e para qualquer container que role (tabelas, dropdowns).
