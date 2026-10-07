@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { carregarCredencialLoja, type CredencialLoja } from './sefaz-certificado'
-import { consultarDistribuicao, enviarCiencia } from './sefaz-rede'
+import { consultarDistribuicao, consultarPorChave, enviarCiencia } from './sefaz-rede'
 import { lerEvento, lerResNFe, proximaConsulta, tipoDocumento, type DocDistribuido } from './sefaz-distdfe'
 import { lerNfe } from './nfe-xml'
 import { cabecalhoDoResumo } from './nf-sefaz-mapa'
@@ -20,7 +20,8 @@ const vazio = (lojaId: number): ResultadoSync => ({ lojaId, ok: true, consultas:
 const MAX_LOTES_POR_EXECUCAO = 5
 const MAX_CIENCIAS_POR_EXECUCAO = 15
 
-type Ctx = { lojaId: number; cnpj: string; ambiente: 1 | 2; autoLancar: boolean; autoCiencia: boolean }
+type Ctx = { lojaId: number; cnpj: string; ambiente: 1 | 2; autoLancar: boolean; autoCiencia: boolean; uf?: string | null }
+const ESPERA_BUSCA_CHAVE_MS = 60 * 60 * 1000
 
 async function marcarDoc(lojaId: number, nsu: string, campos: Record<string, unknown>) {
   await createServiceClient().from('sefaz_documentos').update(campos).eq('loja_id', lojaId).eq('nsu', nsu)
@@ -97,11 +98,39 @@ async function darCiencias(ctx: Ctx, cred: CredencialLoja, r: ResultadoSync): Pr
     if (completo?.length) { await sb.from('sefaz_documentos').update({ ciencia_em: new Date().toISOString(), ciencia_cstat: 'xml-completo' }).eq('id', d.id); continue }
     try {
       const c = await enviarCiencia({ chave: d.chave as string, cnpj: ctx.cnpj, tpAmb: ctx.ambiente, cred })
-      if (c.ok) { await sb.from('sefaz_documentos').update({ ciencia_em: new Date().toISOString(), ciencia_cstat: c.cStat }).eq('id', d.id); r.ciencias++ }
+      if (c.ok) { await sb.from('sefaz_documentos').update({ ciencia_em: new Date().toISOString(), ciencia_cstat: c.cStat, erro: null }).eq('id', d.id); r.ciencias++ }
       else await sb.from('sefaz_documentos').update({ ciencia_cstat: c.cStat, erro: `ciência recusada: ${c.xMotivo ?? c.cStat}` }).eq('id', d.id)
     } catch (e) {
       console.error(`sefaz-sync loja ${ctx.lojaId}: falha na ciência da operação`, e instanceof Error ? e.message : e)
       break // problema de rede/certificado: tenta de novo no próximo ciclo, sem insistir
+    }
+  }
+}
+
+// Depois da ciência, busca o XML completo pela chave (consChNFe) em vez de esperar o próximo NSU (até 1 hora de espera).
+// No máximo uma tentativa por nota por hora (sefaz_documentos.busca_chave_em), para não cair no consumo indevido (656).
+async function buscarCompletosPorChave(ctx: Ctx, cred: CredencialLoja, r: ResultadoSync): Promise<void> {
+  const sb = createServiceClient()
+  const limite = new Date(Date.now() - ESPERA_BUSCA_CHAVE_MS).toISOString()
+  const { data: pend } = await sb.from('sefaz_documentos').select('id, chave').eq('loja_id', ctx.lojaId).eq('tipo', 'resNFe').not('ciencia_em', 'is', null).is('ignorado', null)
+    .not('chave', 'is', null).or(`busca_chave_em.is.null,busca_chave_em.lt.${limite}`).order('id').limit(MAX_CIENCIAS_POR_EXECUCAO)
+  for (const d of pend ?? []) {
+    const { data: completo } = await sb.from('sefaz_documentos').select('id').eq('loja_id', ctx.lojaId).eq('chave', d.chave).eq('tipo', 'procNFe').limit(1)
+    if (completo?.length) continue
+    await sb.from('sefaz_documentos').update({ busca_chave_em: new Date().toISOString() }).eq('id', d.id)
+    try {
+      const ret = await consultarPorChave({ cnpj: ctx.cnpj, tpAmb: ctx.ambiente, chave: d.chave as string, uf: ctx.uf, cred })
+      r.consultas++
+      const docs = ret.docs.filter((x) => tipoDocumento(x.schema) === 'procNFe')
+      if (!docs.length) continue
+      const linhas = docs.map((x) => ({ loja_id: ctx.lojaId, nsu: x.nsu, schema: x.schema, tipo: 'procNFe', completo: true, xml: x.xml }))
+      const { error } = await sb.from('sefaz_documentos').upsert(linhas, { onConflict: 'loja_id,nsu', ignoreDuplicates: true })
+      if (error) throw new Error('Falha ao guardar o XML completo: ' + error.message)
+      r.documentos += docs.length
+      for (const x of docs) await processarDocumento(ctx, x, r)
+    } catch (e) {
+      console.error(`sefaz-sync loja ${ctx.lojaId}: falha ao buscar a nota pela chave`, e instanceof Error ? e.message : e)
+      break
     }
   }
 }
@@ -124,9 +153,7 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
   }
   if (!nsu || !nsu.ativo) return { ...r, ok: true, motivo: 'Consulta à SEFAZ desligada para esta loja.' }
   const bloq = nsu.bloqueado_ate ? new Date(nsu.bloqueado_ate).getTime() : 0
-  if (bloq > agora) return { ...r, ok: true, motivo: 'A SEFAZ pede esperar antes de consultar de novo.', bloqueadoAte: nsu.bloqueado_ate }
-
-  const ctx: Ctx = { lojaId, cnpj, ambiente: nsu.ambiente === 2 ? 2 : 1, autoLancar: !!nsu.auto_lancar, autoCiencia: !!nsu.auto_ciencia }
+  const ctx: Ctx = { lojaId, cnpj, ambiente: nsu.ambiente === 2 ? 2 : 1, autoLancar: !!nsu.auto_lancar, autoCiencia: !!nsu.auto_ciencia, uf: loja.uf }
   let cred: CredencialLoja
   try { cred = await carregarCredencialLoja(lojaId) }
   catch (e) {
@@ -134,6 +161,12 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
     await sb.from('sefaz_nsu').update({ ultimo_erro: erro, ultima_consulta: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('loja_id', lojaId)
     await sb.from('lojas').update({ nota_fiscal_status: 'Erro' }).eq('id', lojaId)
     return { ...r, ok: false, erro }
+  }
+  if (bloq > agora) {
+    // a espera de 1 hora vale só para a consulta por NSU; ciência e busca pela chave são outros pedidos e seguem
+    try { await darCiencias(ctx, cred, r); await buscarCompletosPorChave(ctx, cred, r) }
+    catch (e) { console.error(`sefaz-sync loja ${lojaId}: ciência/busca pela chave`, e instanceof Error ? e.message : e) }
+    return { ...r, ok: true, motivo: 'A SEFAZ pede esperar antes de consultar de novo.', bloqueadoAte: nsu.bloqueado_ate }
   }
   await sb.from('lojas').update({ nota_fiscal_status: 'Processando' }).eq('id', lojaId)
 
@@ -163,6 +196,7 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
       if (!prox.continuarJa) break
     }
     await darCiencias(ctx, cred, r)
+    await buscarCompletosPorChave(ctx, cred, r)
     await sb.from('lojas').update({ nota_fiscal_status: r.falhas ? 'Erro' : 'Concluido', nota_fiscal_ultima_atualizacao: new Date().toISOString() }).eq('id', lojaId)
     r.bloqueadoAte = bloqueadoAte ? new Date(bloqueadoAte).toISOString() : null
     return r

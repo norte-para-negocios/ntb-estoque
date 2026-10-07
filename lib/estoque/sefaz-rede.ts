@@ -1,7 +1,7 @@
 import https from 'node:https'
 import { SignedXml } from 'xml-crypto'
 import {
-  ACAO_DIST, ACAO_EVENTO, cienciaRegistrada, codigoUf, lerRetornoDist, lerRetornoEvento, montarEventoCiencia, montarPedidoDistNsu,
+  ACAO_DIST, ACAO_EVENTO, cienciaRegistrada, codigoUf, lerRetornoDist, lerRetornoEvento, montarEventoCiencia, montarPedidoDistChave, montarPedidoDistNsu,
   soapDistribuicao, soapEvento, urlDistribuicao, urlEventoNacional, type RetornoDist,
 } from './sefaz-distdfe'
 import type { CredencialLoja } from './sefaz-certificado'
@@ -36,6 +36,13 @@ function postSoap(url: string, soap: string, acao: string, cred: Pick<Credencial
 
 export async function consultarDistribuicao(p: { cnpj: string; tpAmb: 1 | 2; ultNsu: string; uf?: string | null; cred: CredencialLoja }): Promise<RetornoDist> {
   const pedido = montarPedidoDistNsu(p.cnpj, p.tpAmb, p.ultNsu, codigoUf(p.uf))
+  const { status, body } = await postSoap(urlDistribuicao(p.tpAmb), soapDistribuicao(pedido), ACAO_DIST, p.cred)
+  if (!/retDistDFeInt/.test(body)) throw new Error(`Resposta inesperada da SEFAZ (HTTP ${status}): ${body.replace(/\s+/g, ' ').slice(0, 200)}`)
+  return lerRetornoDist(body)
+}
+
+export async function consultarPorChave(p: { cnpj: string; tpAmb: 1 | 2; chave: string; uf?: string | null; cred: CredencialLoja }): Promise<RetornoDist> {
+  const pedido = montarPedidoDistChave(p.cnpj, p.tpAmb, p.chave, codigoUf(p.uf))
   const { status, body } = await postSoap(urlDistribuicao(p.tpAmb), soapDistribuicao(pedido), ACAO_DIST, p.cred)
   if (!/retDistDFeInt/.test(body)) throw new Error(`Resposta inesperada da SEFAZ (HTTP ${status}): ${body.replace(/\s+/g, ' ').slice(0, 200)}`)
   return lerRetornoDist(body)

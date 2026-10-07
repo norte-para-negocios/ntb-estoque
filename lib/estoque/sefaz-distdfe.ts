@@ -15,7 +15,15 @@ export function montarPedidoDistNsu(cnpj: string, tpAmb: 1 | 2, ultNsu: string, 
   return `<distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>${tpAmb}</tpAmb><cUFAutor>${cUfAutor}</cUFAutor><CNPJ>${c}</CNPJ><distNSU><ultNSU>${nsu}</ultNSU></distNSU></distDFeInt>`
 }
 
-export type DocDistribuido = { nsu: string; schema: string; xml: string; completo: boolean }
+/** Consulta de UMA nota pela chave (consChNFe): depois da ciência da operação devolve o XML completo sem esperar o próximo NSU. */
+export function montarPedidoDistChave(cnpj: string, tpAmb: 1 | 2, chave: string, cUfAutor = '29'): string {
+  const c = cnpj.replace(/\D/g, '')
+  if (c.length !== 14) throw new Error('CNPJ inválido')
+  if (!/^\d{44}$/.test(chave)) throw new Error('Chave de acesso inválida')
+  return `<distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>${tpAmb}</tpAmb><cUFAutor>${cUfAutor}</cUFAutor><CNPJ>${c}</CNPJ><consChNFe><chNFe>${chave}</chNFe></consChNFe></distDFeInt>`
+}
+
+export type DocDistribuido ={ nsu: string; schema: string; xml: string; completo: boolean }
 export type RetornoDist = { cStat: string; xMotivo: string; ultNsu: string; maxNsu: string; docs: DocDistribuido[] }
 
 function achar(no: ReturnType<typeof parseXml>, nome: string): ReturnType<typeof parseXml> | undefined {
