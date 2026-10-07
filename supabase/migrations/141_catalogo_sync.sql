@@ -297,6 +297,9 @@ begin
     update produtos set vendas_ref = (m ->> 'vendas_ref')::uuid, sync_atualizado_em = now()
      where loja_id = p_loja and codigo = m ->> 'codigo' and vendas_ref is null;
   end loop;
+  -- carimba tudo o que acabou de ser entregue (a reconciliação não reenvia o que já foi)
+  update produtos set sync_atualizado_em = now()
+   where loja_id = p_loja and codigo in (select jsonb_array_elements_text(coalesce(p_mapa -> 'codigos', '[]'::jsonb)));
 end $$;
 
 -- Só o servidor chama.

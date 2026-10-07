@@ -89,6 +89,8 @@ begin
   -- 7) mapa de volta
   perform registrar_mapa_vendas(99020, jsonb_build_object('produtos', jsonb_build_array(jsonb_build_object('codigo', '90001', 'vendas_ref', gen_random_uuid()))));
   assert (select vendas_ref from produtos where loja_id = 99020 and codigo = '90001') is not null, 'mapa grava vendas_ref';
+  perform registrar_mapa_vendas(99020, jsonb_build_object('codigos', jsonb_build_array('90001')));
+  assert (select sync_atualizado_em from produtos where loja_id = 99020 and codigo = '90001') is not null, 'carimba entregue';
   select count(*) into n from sync_outbox where loja_id = 99020 and status = 'pending';
   assert n = 0, 'mapa não gera eco';
 
