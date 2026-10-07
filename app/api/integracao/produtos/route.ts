@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { incluirProduto, syncProdutos } from '@/lib/omie/produto'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
+import { vincularOuCriarProdutoProprio } from '@/lib/estoque/proprio-driver'
 
 // Rota externa (nao-sessao) pro ntb-vendas criar um produto aqui
 // automaticamente ao cadastrar um produto novo no cardapio, com um clique so
@@ -19,6 +20,10 @@ interface RequestBody {
   precoVenda?: number
   ncm?: string
   unidade?: string
+  /** Loja com estoque proprio: codigo ja existente no Vendas (vincula sem duplicar) ou novo; ausente = gerado pelo tipo. */
+  codigo?: string
+  /** Loja com estoque proprio: tipo do item SPED (04 vendavel=90, 01 materia-prima=80, 03/06=70, 07=60...). */
+  tipoItem?: string
 }
 
 // Gera um codigo (SKU) curto e ja' com prefixo reconhecivel -- so' precisa
@@ -90,13 +95,23 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test')
+    .select('id, omie_app_key, omie_app_secret, is_test, modo_estoque')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<LojaOmie>()
+    .maybeSingle<LojaOmie & { modo_estoque?: string | null }>()
 
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
+  }
+
+  // Loja sem estoque: nada a cadastrar aqui. Loja com estoque PROPRIO: cadastra/vincula localmente (nunca chama o Omie).
+  if (loja.modo_estoque === 'nenhum') return NextResponse.json({ ok: true, skipped: true, reason: 'Loja sem controle de estoque' })
+  if (loja.modo_estoque === 'proprio') {
+    const r = await vincularOuCriarProdutoProprio(loja.id, {
+      nome: body.nome, precoVenda: body.precoVenda, ncm: body.ncm, unidade: body.unidade, codigo: body.codigo, tipoItem: body.tipoItem,
+    })
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: 409 })
+    return NextResponse.json({ ok: true, codigo: r.codigo, codigoProduto: r.codigoProduto, existente: r.existente })
   }
 
   const codigo = gerarCodigo()

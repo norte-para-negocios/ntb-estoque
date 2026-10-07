@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { incluirLocalEstoque, alterarLocalEstoque, syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import { registrarAuditoria } from '@/lib/auditoria'
 import type { LojaOmie } from '@/lib/omie/client'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { criarLocalProprio, editarLocalProprio } from '@/lib/estoque/proprio-driver'
 
 /**
  * Exclui um local de estoque APENAS do banco local (nao no Omie).
@@ -45,6 +47,14 @@ export async function criarLocalEstoque(dados: { descricao: string; codigo?: str
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Criar'))) return { error: 'Sem permissão' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
 
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await criarLocalProprio(lojaId, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('criar', 'local de estoque', r.codigoLocalEstoque, dados.descricao.trim())
+    revalidatePath('/local-estoque')
+    return { ok: true }
+  }
+
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
@@ -81,6 +91,14 @@ export async function editarLocalEstoque(dados: {
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Editar'))) return { error: 'Sem permissão' }
   if (!dados.codigoLocalEstoque) return { error: 'Local inválido' }
   if (!dados.descricao?.trim()) return { error: 'Informe a descrição do local' }
+
+  if ((await modoDaLoja(lojaId)) !== 'omie') {
+    const r = await editarLocalProprio(lojaId, dados.codigoLocalEstoque, dados)
+    if ('error' in r) return { error: r.error }
+    await registrarAuditoria('editar', 'local de estoque', dados.codigoLocalEstoque, dados.descricao.trim())
+    revalidatePath('/local-estoque')
+    return { ok: true }
+  }
 
   const supabase = createServiceClient()
   const { data: loja } = await supabase

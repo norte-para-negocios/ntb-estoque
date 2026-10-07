@@ -10,6 +10,7 @@ import {
 import { Plus, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { criarLoja, editarLoja, type LojaInput } from '@/lib/actions/loja'
+import type { ModoEstoque } from '@/lib/estoque/ledger'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 
@@ -48,6 +49,7 @@ export type LojaExistente = {
   omie_app_key: string | null
   omie_app_secret: string | null
   ativo: boolean | null
+  modo_estoque?: string | null
   // campos extras (presentes em LojaRow, ignorados no form mas necessarios para
   // o card receber o objeto completo e passar para LojaForm sem erros de tipo)
   [key: string]: unknown
@@ -67,6 +69,7 @@ function vazio(): LojaInput {
     omie_app_key: '',
     omie_app_secret: '',
     ativo: true,
+    modo_estoque: 'omie',
   }
 }
 
@@ -84,6 +87,7 @@ function fromLoja(l: LojaExistente): LojaInput {
     omie_app_key: l.omie_app_key ?? '',
     omie_app_secret: l.omie_app_secret ?? '',
     ativo: l.ativo ?? true,
+    modo_estoque: l.modo_estoque === 'proprio' || l.modo_estoque === 'nenhum' ? l.modo_estoque : 'omie',
   }
 }
 
@@ -94,6 +98,7 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
   const [criarNoVendas, setCriarNoVendas] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  const modoAtual: ModoEstoque = form.modo_estoque ?? 'omie'
 
   function set<K extends keyof LojaInput>(campo: K, valor: LojaInput[K]) {
     setForm((prev) => ({ ...prev, [campo]: valor }))
@@ -111,7 +116,9 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
         return
       }
       toast.success(editando ? 'Loja atualizada' : 'Loja criada')
-      const avisoVendas = (res as { avisoVendas?: string } | undefined)?.avisoVendas
+      const aviso = res as { avisoVendas?: string; avisoSemente?: string } | undefined
+      if (aviso?.avisoSemente) toast.error('Atenção', { description: aviso.avisoSemente })
+      const avisoVendas = aviso?.avisoVendas
       if (!editando && avisoVendas) {
         toast.error('Loja criada, mas o NTB Vendas ficou pendente', { description: avisoVendas })
       } else if (!editando && criarNoVendas) {
@@ -206,6 +213,28 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
             <input className={inputClass} value={form.numero} onChange={(e) => set('numero', e.target.value)} />
           </div>
           <div className="col-span-2">
+            <label className={labelClass}>Como a loja controla estoque</label>
+            <select
+              className={inputClass}
+              value={form.modo_estoque ?? 'omie'}
+              onChange={(e) => set('modo_estoque', e.target.value as ModoEstoque)}
+            >
+              <option value="omie">Integrado ao Omie (espelho do Omie)</option>
+              <option value="proprio">Estoque próprio (Norte Estoque é o dono do estoque)</option>
+              <option value="nenhum">Sem controle de estoque (só vendas)</option>
+            </select>
+            <p className="mt-1 text-[12px] text-text-muted">
+              {modoAtual === 'proprio'
+                ? 'Produtos, locais, entradas, saídas e inventário ficam aqui. A loja já nasce com Estoque Geral, Bar, Cozinha e famílias básicas.'
+                : modoAtual === 'nenhum'
+                  ? 'A loja só vende: nenhuma baixa de estoque é feita.'
+                  : 'O estoque continua sincronizado com o Omie, como hoje.'}
+              {editando && ' O modo só pode ser trocado antes do primeiro movimento de estoque próprio.'}
+            </p>
+          </div>
+          {modoAtual === 'omie' && (
+            <>
+          <div className="col-span-2">
             <label className={labelClass}>Omie App Key</label>
             <input
               className={inputClass}
@@ -223,6 +252,8 @@ export function LojaForm({ loja }: { loja?: LojaExistente }) {
               placeholder="Deixe vazio para loja fora do Omie"
             />
           </div>
+            </>
+          )}
           <label className="col-span-2 flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"

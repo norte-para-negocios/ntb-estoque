@@ -5,6 +5,7 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { baixarEstoqueLocal } from '@/lib/estoque-local/baixa'
 import { processarItemVenda, type ResultadoItemVenda } from '@/lib/vendas-integracao'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
+import { baixarVendaProprio } from '@/lib/estoque/venda-proprio'
 
 // Rota externa (nao-sessao) pro ntb-vendas disparar Ordem de Producao ao concluir
 // uma venda. Autenticada por API key por loja (lojas.integracao_api_key, migration
@@ -70,13 +71,28 @@ export async function POST(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor, local_estoque_por_produto')
+    .select('id, omie_app_key, omie_app_secret, is_test, modo_estoque, local_estoque_cozinha_codigo, local_estoque_bar_codigo, local_estoque_por_setor, local_estoque_por_produto')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<LojaOmie & LojaLocais>()
+    .maybeSingle<LojaOmie & LojaLocais & { modo_estoque?: string | null }>()
 
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
+  }
+
+  // Modo da loja (06/10/2026): 'proprio' baixa no ledger do Norte Estoque (sem OP, sem Omie); 'nenhum' nao baixa nada.
+  // 'omie' (ou coluna ausente) segue o caminho de sempre, abaixo, sem nenhuma mudanca.
+  if (loja.modo_estoque === 'nenhum') {
+    return NextResponse.json({
+      lojaId: loja.id,
+      modo: 'nenhum',
+      resultados: body.itens.map((i) => ({ codigo: i?.codigo ?? '?', ok: true, op: 'sem_estrutura', baixa: 'Concluido' })),
+    })
+  }
+  if (loja.modo_estoque === 'proprio') {
+    const obsProprio = body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas'
+    const resultados = await baixarVendaProprio(supabase, loja, body.itens, body.pedidoRef ?? null, obsProprio)
+    return NextResponse.json({ lojaId: loja.id, modo: 'proprio', resultados })
   }
 
   const dData = hojeBR()

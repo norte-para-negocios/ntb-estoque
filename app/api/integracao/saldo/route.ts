@@ -15,10 +15,10 @@ export async function GET(request: Request) {
   const supabase = createServiceClient()
   const { data: loja } = await supabase
     .from('lojas')
-    .select('id')
+    .select('id, modo_estoque')
     .eq('integracao_api_key', apiKey)
     .eq('ativo', true)
-    .maybeSingle<{ id: number }>()
+    .maybeSingle<{ id: number; modo_estoque: string | null }>()
   if (!loja) {
     return NextResponse.json({ error: 'Chave de integração inválida' }, { status: 401 })
   }
@@ -42,6 +42,31 @@ export async function GET(request: Request) {
     idPorCodigo.set(Number(p.codigo_produto), p.codigo)
   }
   if (idPorCodigo.size === 0) return NextResponse.json({ saldos: [] })
+
+  // Estoque proprio: o saldo vem do ledger (estoque_saldos), somado de todos os locais. Loja sem controle: nada a alertar.
+  if (loja.modo_estoque === 'nenhum') return NextResponse.json({ saldos: [] })
+  if (loja.modo_estoque === 'proprio') {
+    const soma = new Map<string, number>()
+    for (let de = 0; de < 20000; de += 1000) {
+      const { data, error } = await supabase
+        .from('estoque_saldos')
+        .select('codigo_produto, codigo_local_estoque, saldo')
+        .eq('loja_id', loja.id)
+        .in('codigo_produto', Array.from(idPorCodigo.keys()))
+        .order('codigo_produto')
+        .order('codigo_local_estoque')
+        .range(de, de + 999)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      for (const r of (data ?? []) as { codigo_produto: number; saldo: number | null }[]) {
+        const codigo = idPorCodigo.get(Number(r.codigo_produto))
+        if (codigo) soma.set(codigo, (soma.get(codigo) ?? 0) + Number(r.saldo ?? 0))
+      }
+      if ((data?.length ?? 0) < 1000) break
+    }
+    // Produto sem nenhum movimento ainda tem saldo 0 (nao some da lista).
+    for (const codigo of idPorCodigo.values()) if (!soma.has(codigo)) soma.set(codigo, 0)
+    return NextResponse.json({ saldos: Array.from(soma.entries()).map(([codigo, saldo]) => ({ codigo, saldo })) })
+  }
 
   // O PostgREST devolve no máximo 1000 linhas por consulta: pagina até acabar (com teto de segurança),
   // senão o saldo de alguns produtos podia vir truncado.

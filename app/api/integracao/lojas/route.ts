@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { semearLojaProprio } from '@/lib/estoque/proprio-driver'
 
 // Rota externa (nao-sessao) pro ntb-vendas criar uma loja aqui automaticamente
 // ao criar uma loja de la, com um clique so ("Criar no NTB Estoque tambem"),
@@ -25,6 +26,8 @@ interface RequestBody {
   nome?: string
   nomeFantasia?: string
   cnpj?: string
+  /** Contrato com o Vendas: stores.stock_mode. Ausente = 'omie' (comportamento de sempre). */
+  stockMode?: 'omie' | 'proprio' | 'nenhum'
 }
 
 export async function POST(request: Request) {
@@ -40,6 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Informe nome' }, { status: 400 })
   }
 
+  const modo = body.stockMode === 'proprio' || body.stockMode === 'nenhum' ? body.stockMode : 'omie'
   const supabase = createServiceClient()
 
   for (let tentativa = 0; tentativa < 5; tentativa++) {
@@ -52,12 +56,14 @@ export async function POST(request: Request) {
         cnpj: body.cnpj?.trim() || null,
         ativo: true,
         integracao_api_key: integracaoApiKey,
+        modo_estoque: modo,
       })
       .select('id')
       .single()
 
     if (!error) {
-      return NextResponse.json({ ok: true, lojaId: loja.id, integracaoApiKey, url: urlPublica() })
+      if (modo === 'proprio') await semearLojaProprio(loja.id).catch((e) => console.error('integracao/lojas: semente do estoque próprio falhou:', e))
+      return NextResponse.json({ ok: true, lojaId: loja.id, integracaoApiKey, url: urlPublica(), modo })
     }
     // 23505 = unique_violation -- pode ser colisao de chave (rarissima) ou
     // CNPJ duplicado. So retenta no caso de chave; CNPJ duplicado e' erro real.
