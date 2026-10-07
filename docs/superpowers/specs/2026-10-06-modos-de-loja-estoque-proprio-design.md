@@ -41,6 +41,13 @@ Pedidos explícitos do dono: produtos com código nosso no padrão do Omie; **lo
 - **Fase 4 (compras):** NF-e de entrada manual e por XML; chave de 44 dígitos é a idempotência da compra; de-para fornecedor+`cProd`→produto com fator; custo de entrada = total da nota (frete rateado, ICMS conforme regime); respeita o CFOP do XML. Consulta SEFAZ (DistribuicaoDFe) com controle de NSU fica opcional e depois.
 - **Fase 5 (relatórios):** valorizado, movimentação, parados, CMV, real × teórico por insumo, crons e saúde da integração por modo, modo "só Estoque".
 
+## 4b. Cadastro de loja nos dois painéis (pedido do dono, 06/10 à noite; só plano por enquanto)
+
+- **Escopo do Estoque próprio:** vale para todas as lojas. Lojas `omie` continuam espelhando o Omie e, num passo posterior, copiam o histórico do Omie para o ledger local, de modo que, se algum dia a loja ficar independente, o histórico já esteja no Estoque. Loja que não é do Omie nasce com tudo local.
+- **Painel Master do Vendas (AdminModule, "Nova Loja" / "Editar Loja"):** o modal hoje é estreito no meio da tela (ver print de 06/10). Passa a ocupar cerca de 70% da tela, em seções com navegação lateral: Identidade (logo, capa, nome, CNPJ, link), Contrato (status, meses/sem prazo, plano), Operação (balcão + mesas, só balcão, número de mesas, módulos, fluxo de pedido, taxa de serviço), Estoque (modo: Omie / Estoque próprio / Nenhum; "criar também no Norte Estoque"; trocar o modo depois, com as travas da seção 6), Fiscal e Integrações. Muito mais opções que hoje, no padrão do Norte Estoque.
+- **Norte Estoque (tela de Lojas):** já tem criar/editar loja. Passa a ter: modo de estoque, "criar também no Norte Vendas", ativar/desativar, e editar o tipo da loja depois. Loja criada de um lado aparece no outro quando a opção "criar lá também" é marcada (já existe o pareamento por chave de integração).
+- **Design:** padrão visual de cada app (kit do Estoque; azul-violeta Norte do Vendas). Capturas antes de entregar.
+
 ## 5. Regras de segurança do projeto
 
 - Modo `omie` não muda nada (teste de regressão por fase).
