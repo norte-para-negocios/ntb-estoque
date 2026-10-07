@@ -158,7 +158,7 @@ const SECOES: { id: SecaoId; label: string; hint: string; icon: LucideIcon }[] =
   { id: 'estoque', label: 'Estoque', hint: 'Modo de controle', icon: Package },
   { id: 'locais', label: 'Locais', hint: 'Locais de baixa', icon: Warehouse },
   { id: 'fiscal', label: 'Fiscal', hint: 'Certificado e empresa', icon: Receipt },
-  { id: 'integracao', label: 'NTB Vendas', hint: 'Ligação com o PDV', icon: Share2 },
+  { id: 'integracao', label: 'Norte Vendas', hint: 'Ligação com o PDV', icon: Share2 },
   { id: 'teste', label: 'Teste', hint: 'Loja de teste', icon: FlaskConical },
 ]
 
@@ -307,9 +307,9 @@ export function LojaForm({
       if (aviso?.avisoSemente) toast.error('Atenção', { description: aviso.avisoSemente })
       const avisoVendas = aviso?.avisoVendas
       if (!editando && avisoVendas) {
-        toast.error('Loja criada, mas o NTB Vendas ficou pendente', { description: avisoVendas })
+        toast.error('Loja criada, mas o Norte Vendas ficou pendente', { description: avisoVendas })
       } else if (!editando && criarNoVendas) {
-        toast.success('Loja criada no NTB Vendas também')
+        toast.success('Loja criada no Norte Vendas também')
       }
       setOpen(false)
       if (!editando) {
@@ -607,7 +607,7 @@ export function LojaForm({
 
             {secaoAtual === 'locais' && modo === 'proprio' && (
               <div>
-                <Titulo desc="Escolha de qual local de estoque sai a baixa dos itens preparados no Bar e na Cozinha quando o NTB Vendas fecha uma venda.">
+                <Titulo desc="Escolha de qual local de estoque sai a baixa dos itens preparados no Bar e na Cozinha quando o Norte Vendas fecha uma venda.">
                   Locais de baixa
                 </Titulo>
                 {editando ? (
@@ -691,7 +691,7 @@ export function LojaForm({
             {secaoAtual === 'integracao' && (
               <div>
                 <Titulo desc="Liga esta loja ao PDV do Norte Vendas: cada venda fechada lá baixa o estoque aqui.">
-                  Integração com o NTB Vendas
+                  Integração com o Norte Vendas
                 </Titulo>
                 {editando ? (
                   <div className="space-y-6">
@@ -713,7 +713,7 @@ export function LojaForm({
                   <Chave
                     checked={criarNoVendas}
                     onChange={setCriarNoVendas}
-                    label="Criar no NTB Vendas também"
+                    label="Criar no Norte Vendas também"
                     desc="Cria a loja no Norte Vendas já ligada a esta, com a chave de integração configurada nos dois lados."
                   />
                 )}

@@ -121,9 +121,9 @@ async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string, 
       body: JSON.stringify({ nome, cnpj, stockMode: modo }),
     })
     resposta = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar loja no NTB Vendas.' }
+    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar loja no Norte Vendas.' }
   } catch (e) {
-    return { error: 'Não foi possível contatar o NTB Vendas: ' + (e instanceof Error ? e.message : String(e)) }
+    return { error: 'Não foi possível contatar o Norte Vendas: ' + (e instanceof Error ? e.message : String(e)) }
   }
 
   const chaveResult = await gerarChaveIntegracaoNtbVendas(lojaId)
@@ -136,9 +136,9 @@ async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string, 
       body: JSON.stringify({ storeId: resposta.storeId, url: chaveResult.url, apiKey: chaveResult.chave, ativo: true }),
     })
     const configResposta = await res.json().catch(() => ({ success: false }))
-    if (!res.ok || !configResposta.success) return { error: configResposta.message || 'Loja criada no NTB Vendas, mas falhou salvar a integração lá.' }
+    if (!res.ok || !configResposta.success) return { error: configResposta.message || 'Loja criada no Norte Vendas, mas falhou salvar a integração lá.' }
   } catch (e) {
-    return { error: 'Loja criada no NTB Vendas, mas falhou salvar a integração lá: ' + (e instanceof Error ? e.message : String(e)) }
+    return { error: 'Loja criada no Norte Vendas, mas falhou salvar a integração lá: ' + (e instanceof Error ? e.message : String(e)) }
   }
 
   return {}

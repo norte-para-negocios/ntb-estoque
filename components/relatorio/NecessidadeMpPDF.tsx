@@ -104,7 +104,7 @@ export function NecessidadeMpPDF({
           )}
         </View>
 
-        <PdfRodape texto="NTB Estoque · Quantidade de matéria-prima necessária por dia, calculada a partir da ficha técnica das ordens de produção previstas." />
+        <PdfRodape texto="Norte Estoque · Quantidade de matéria-prima necessária por dia, calculada a partir da ficha técnica das ordens de produção previstas." />
       </Page>
     </Document>
   )

@@ -335,7 +335,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
 
   function slideDePontos(subtitulo: string, blocos: [string, string[]][]): void {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Pontos de Melhoria e Recomendações — NTB Estoque + Omie', subtitulo)
+    tituloSlide(slide, 'Pontos de Melhoria e Recomendações — Norte Estoque + Omie', subtitulo)
     const colW = 6.1
     blocos.forEach(([titulo, itens], i) => {
       const col = i % 2
@@ -356,10 +356,10 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 10: Recomendações — NTB Estoque (operacional) ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Recomendações — NTB Estoque')
+    tituloSlide(slide, 'Recomendações — Norte Estoque')
     const blocos: [string, string[]][] = [
       ['1. Treinamento dos Operadores (Prioridade Máxima)', [
-        'Capacitar todos os operadores para usar corretamente o NTB Estoque.',
+        'Capacitar todos os operadores para usar corretamente o Norte Estoque.',
         'Treinamento prático no celular: lançamento de produção (abrir, consumir, produzir, encerrar); transferências entre setores e lojas; inventários conforme rotina definida.',
         'Inventário não substitui lançamento — ele apenas aponta divergências que a consultoria corrige.',
       ]],

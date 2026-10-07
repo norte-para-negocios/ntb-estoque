@@ -119,7 +119,7 @@ export function ProgramacaoProducaoPDF({
           )}
         </View>
 
-        <PdfRodape texto="NTB Estoque · Número em cima = previsto. Linha em baixo = espaço para anotar o produzido." />
+        <PdfRodape texto="Norte Estoque · Número em cima = previsto. Linha em baixo = espaço para anotar o produzido." />
       </Page>
     </Document>
   )

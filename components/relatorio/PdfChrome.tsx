@@ -67,7 +67,7 @@ const sFooter = StyleSheet.create({
   },
 })
 
-export function PdfRodape({ texto = 'NTB Estoque' }: { texto?: string }) {
+export function PdfRodape({ texto = 'Norte Estoque' }: { texto?: string }) {
   return (
     <View style={sFooter.footer} fixed>
       <Text>{texto}</Text>
@@ -227,7 +227,7 @@ export function PdfErro({ titulo = 'Acesso negado', mensagem = 'Você não tem p
   return (
     <Document>
       <Page size="A4" style={sErro.page}>
-        <PdfCabecalho titulo="NTB Estoque" mostrarDataGeracao={false} />
+        <PdfCabecalho titulo="Norte Estoque" mostrarDataGeracao={false} />
         <Text style={sErro.titulo}>{titulo}</Text>
         <Text style={sErro.msg}>{mensagem}</Text>
         <PdfRodape />

@@ -55,7 +55,7 @@ export async function gerarPlanilha(
  */
 export async function gerarPlanilhaMulti(abas: AbaPlanilha[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
-  wb.creator = 'NTB Estoque'
+  wb.creator = 'Norte Estoque'
   wb.created = new Date()
   const usados = new Set<string>()
   for (const aba of abas) {

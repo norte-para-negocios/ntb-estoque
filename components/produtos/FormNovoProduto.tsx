@@ -156,9 +156,9 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
       toast.success('Produto criado no Omie')
       if (pdv && criarNoNtbVendas) {
         if (res?.avisoVendas) {
-          toast.error('Falhou criar no NTB Vendas', { description: res.avisoVendas })
+          toast.error('Falhou criar no Norte Vendas', { description: res.avisoVendas })
         } else {
-          toast.success('Produto criado no NTB Vendas também!')
+          toast.success('Produto criado no Norte Vendas também!')
         }
       }
       router.push('/produto')
@@ -260,7 +260,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
             Produto de PDV (frente de loja)
           </label>
           <p className="mt-1 text-[12px] text-text-muted">
-            Só produtos marcados vão pro cardápio do NTB Vendas. Salvo localmente, não enviado ao Omie.
+            Só produtos marcados vão pro cardápio do Norte Vendas. Salvo localmente, não enviado ao Omie.
           </p>
           {pdv && (
             <label className="mt-2 flex min-h-[44px] items-center gap-2.5 text-[15px] text-text sm:min-h-0">
@@ -270,7 +270,7 @@ export function FormNovoProduto({ familias }: { familias: { codigo: number; desc
                 onChange={(e) => setCriarNoNtbVendas(e.target.checked)}
                 className="size-4 accent-[var(--brand)]"
               />
-              Criar no NTB Vendas também
+              Criar no Norte Vendas também
             </label>
           )}
         </Secao>

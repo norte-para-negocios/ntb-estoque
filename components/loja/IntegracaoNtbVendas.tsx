@@ -62,12 +62,12 @@ export function IntegracaoNtbVendas({
     <div>
       <div className="mb-1 flex items-center gap-2">
         <Share2 className="size-4 text-text-muted" />
-        <span className="text-[13px] font-medium text-text">Integração com NTB Vendas</span>
+        <span className="text-[13px] font-medium text-text">Integração com Norte Vendas</span>
       </div>
       <p className="mb-2 text-[13px] text-text-muted">
-        Gera a chave que autentica as chamadas do NTB Vendas pra esta loja (cada venda fechada por
+        Gera a chave que autentica as chamadas do Norte Vendas pra esta loja (cada venda fechada por
         lá cria automaticamente uma Ordem de Produção aqui). Copie a URL e a chave e cole no
-        formulário de loja do NTB Vendas — a chave só é mostrada uma vez, logo depois de gerar.
+        formulário de loja do Norte Vendas — a chave só é mostrada uma vez, logo depois de gerar.
       </p>
 
       {revelado && (

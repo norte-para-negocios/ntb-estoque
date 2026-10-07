@@ -96,7 +96,7 @@ async function enviarProdutoParaNtbVendas(
     .select('integracao_api_key')
     .eq('id', lojaId)
     .maybeSingle()
-  if (!loja?.integracao_api_key) return { error: 'Loja sem integração com o NTB Vendas configurada.' }
+  if (!loja?.integracao_api_key) return { error: 'Loja sem integração com o Norte Vendas configurada.' }
 
   try {
     const res = await fetch(`${vendasUrl.replace(/\/$/, '')}/api/integracao/produtos`, {
@@ -105,9 +105,9 @@ async function enviarProdutoParaNtbVendas(
       body: JSON.stringify({ nome, preco: precoVenda, omieCodigo }),
     })
     const resposta = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar produto no NTB Vendas.' }
+    if (!res.ok || !resposta.ok) return { error: resposta.error || 'Falha ao criar produto no Norte Vendas.' }
   } catch (e) {
-    return { error: 'Não foi possível contatar o NTB Vendas: ' + (e instanceof Error ? e.message : String(e)) }
+    return { error: 'Não foi possível contatar o Norte Vendas: ' + (e instanceof Error ? e.message : String(e)) }
   }
   return {}
 }

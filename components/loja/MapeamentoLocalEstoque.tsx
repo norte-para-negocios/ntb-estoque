@@ -62,7 +62,7 @@ export function MapeamentoLocalEstoque({
   return (
     <div className="space-y-3">
       <p className="text-[13px] text-text-muted">
-        {modo === 'proprio' ? 'Quando o NTB Vendas fechar uma venda, a baixa sai do local escolhido aqui conforme onde o item foi preparado (Cozinha ou Bar).' : 'Quando o ntb-vendas disparar uma Ordem de Produção, ela usa o local escolhido aqui conforme onde o item foi preparado (Cozinha ou Bar).'} {modo === 'proprio' ? 'Sem escolher, a baixa cai no local padrão da loja.' : 'Sem escolher, a OP cai no local padrão do Omie, como sempre foi.'}
+        {modo === 'proprio' ? 'Quando o Norte Vendas fechar uma venda, a baixa sai do local escolhido aqui conforme onde o item foi preparado (Cozinha ou Bar).' : 'Quando o Norte Vendas disparar uma Ordem de Produção, ela usa o local escolhido aqui conforme onde o item foi preparado (Cozinha ou Bar).'} {modo === 'proprio' ? 'Sem escolher, a baixa cai no local padrão da loja.' : 'Sem escolher, a OP cai no local padrão do Omie, como sempre foi.'}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>

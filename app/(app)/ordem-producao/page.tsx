@@ -545,7 +545,7 @@ export default async function OrdemProducaoPage({
             label: 'Origem',
             opcoes: [
               { value: '', label: 'Todas' },
-              { value: 'ntb-vendas', label: 'Só do NTB Vendas' },
+              { value: 'ntb-vendas', label: 'Só do Norte Vendas' },
             ],
           },
         ] as CampoFiltro[])

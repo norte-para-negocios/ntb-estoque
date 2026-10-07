@@ -467,8 +467,8 @@ export function LojaCard({
         </div>
       </Section>
 
-      {/* Seção: Integração com NTB Vendas */}
-      <Section icon={Share2} title="Integração com NTB Vendas">
+      {/* Seção: Integração com Norte Vendas */}
+      <Section icon={Share2} title="Integração com Norte Vendas">
         <IntegracaoNtbVendas lojaId={loja.id} configurada={loja.integracao_ntb_vendas_configurada} />
         <div className="mt-4 border-t border-border/60 pt-4">
           <p className="mb-2 text-[13px] font-semibold text-text">Local de estoque por destino (Cozinha/Bar)</p>

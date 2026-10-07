@@ -202,7 +202,7 @@ export function EditarProdutoForm({
               onChange={(e) => setPdv(e.target.checked)}
               className="accent-[var(--brand)]"
             />
-            Produto de PDV (frente de loja) — só esses vão pro cardápio do NTB Vendas
+            Produto de PDV (frente de loja) — só esses vão pro cardápio do Norte Vendas
           </label>
           <label className="col-span-2 flex items-center gap-2 text-sm text-text">
             <input
