@@ -21,6 +21,7 @@ import {
   BarChart3,
   Database,
   Tags,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -37,10 +38,13 @@ export type NavItem = {
   cadeadoSemAdmin?: boolean
   // superAdmin: so quem tem is_super_admin = true ve a rota.
   superAdmin?: boolean
+  // soEstoqueProprio: so aparece quando a loja atual usa o estoque proprio (modo_estoque='proprio').
+  soEstoqueProprio?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
+  { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },
