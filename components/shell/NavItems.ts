@@ -22,6 +22,7 @@ import {
   Database,
   Tags,
   Boxes,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -45,6 +46,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
   { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', soEstoqueProprio: true },
+  { href: '/compras', label: 'Compras', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },
