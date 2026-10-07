@@ -20,6 +20,14 @@ alter table public.op_numeracao enable row level security;
 revoke all on public.op_numeracao from anon, authenticated;
 grant all on public.op_numeracao to service_role;
 
+-- Ingredientes da OP no mesmo formato que a tela já lê das OPs do Omie (full_object.itensDetalhes): consumo previsto pela ficha ativa.
+create or replace function public._op_itens_detalhes(p_loja bigint, p_produto bigint, p_qtde numeric) returns jsonb
+language sql stable set search_path = public as $$
+  select jsonb_build_object('itensDetalhes', coalesce(jsonb_agg(jsonb_build_object(
+           'nIdProdutoMalha', e.codigo_insumo, 'nQtde', e.quantidade, 'cUtilizarDoEstoque', 'S') order by e.codigo_insumo), '[]'::jsonb))
+    from expandir_receita(p_loja, p_produto, p_qtde) e
+$$;
+
 -- Cria a OP (aberta, sem mexer em estoque). Número no formato AAAA/00001 por loja e ano, como o das OPs do Omie.
 create or replace function public.op_proprio_criar(
   p_loja bigint, p_produto bigint, p_data date, p_qtde numeric, p_local bigint default null, p_local_destino bigint default null,
@@ -52,15 +60,36 @@ begin
     loja_id, num_ordem, validade, identificacao_n_cod_op, identificacao_c_cod_int_op, identificacao_c_num_op,
     identificacao_n_cod_produto, identificacao_c_cod_int_prod, identificacao_d_dt_previsao, identificacao_n_qtde,
     identificacao_codigo_local_estoque, local_destino, adicionais_d_dt_inicio, produto_codigo, produto_descricao,
-    produto_tipo_item, produto_unidade, concluida, dt_inclusao, observacao
+    produto_tipo_item, produto_unidade, concluida, dt_inclusao, observacao, full_object
   ) values (
     p_loja, v_num, p_validade, v_cod, 'NTB-' || v_cod, v_num,
     p_produto, v_pr.codigo, coalesce(p_data, v_hoje), p_qtde,
     v_local, p_local_destino, coalesce(p_data, v_hoje), v_pr.codigo, v_pr.descricao,
-    v_pr.tipo_item, v_pr.unidade, false, v_hoje, nullif(btrim(concat_ws(' · ', p_obs, p_user)), '')
+    v_pr.tipo_item, v_pr.unidade, false, v_hoje, nullif(btrim(concat_ws(' · ', p_obs, p_user)), ''),
+    _op_itens_detalhes(p_loja, p_produto, p_qtde)
   ) returning id into v_id;
 
   return jsonb_build_object('ok', true, 'id', v_id, 'n_cod_op', v_cod, 'num_op', v_num);
+end $$;
+
+-- Altera data e/ou quantidade planejada de uma OP aberta (refaz os ingredientes previstos).
+create or replace function public.op_proprio_alterar(p_loja bigint, p_op bigint, p_data date default null, p_qtde numeric default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare o ordens_producao%rowtype; v_qtd numeric;
+begin
+  select * into o from ordens_producao where id = p_op and loja_id = p_loja for update;
+  if not found then raise exception 'Ordem de produção não encontrada' using errcode = '22023'; end if;
+  if coalesce(o.concluida, false) then raise exception 'Não dá para alterar uma OP concluída. Reverta a conclusão primeiro.' using errcode = '22023'; end if;
+  if p_qtde is not null and p_qtde <= 0 then raise exception 'Quantidade inválida' using errcode = '22023'; end if;
+  v_qtd := coalesce(p_qtde, o.identificacao_n_qtde);
+  update ordens_producao set
+    identificacao_d_dt_previsao = coalesce(p_data, identificacao_d_dt_previsao),
+    adicionais_d_dt_inicio = coalesce(p_data, adicionais_d_dt_inicio),
+    identificacao_n_qtde = v_qtd,
+    full_object = _op_itens_detalhes(p_loja, o.identificacao_n_cod_produto, v_qtd),
+    updated_at = now()
+  where id = o.id;
+  return jsonb_build_object('ok', true, 'n_cod_op', o.identificacao_n_cod_op);
 end $$;
 
 -- Conclui a OP: consome os insumos da ficha técnica e entrega o produto (ledger). Conclusão parcial = p_qtde menor que o previsto.
@@ -90,6 +119,7 @@ begin
   update ordens_producao set
     concluida = true, dt_conclusao_real = least(coalesce(p_data, v_hoje), v_hoje), concluida_por = p_user_uuid,
     identificacao_n_qtde = v_qtd, producao_ref = v_ref, producao_n = v_n,
+    full_object = _op_itens_detalhes(p_loja, o.identificacao_n_cod_produto, v_qtd),
     conclusao_status = null, conclusao_erro_msg = null, conclusao_tentativas = 0, updated_at = now()
   where id = o.id;
 
@@ -137,6 +167,7 @@ end $$;
 do $$ declare f text; begin
   foreach f in array array[
     'op_proprio_criar(bigint,bigint,date,numeric,bigint,bigint,date,text,text)',
+    'op_proprio_alterar(bigint,bigint,date,numeric)',
     'op_proprio_concluir(bigint,bigint,date,numeric,text,uuid)',
     'op_proprio_reverter(bigint,bigint,text)',
     'op_proprio_excluir(bigint,bigint,text)'

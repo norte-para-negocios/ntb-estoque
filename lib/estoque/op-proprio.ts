@@ -67,18 +67,18 @@ export async function criarOPsProprio(
 export async function alterarOPProprio(
   lojaId: number, opId: number, campos: { data?: string; qtd?: number }
 ): Promise<Erro | { ok: true }> {
-  const supabase = createServiceClient()
-  const { data: op } = await supabase.from('ordens_producao').select('concluida, identificacao_n_cod_op').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
-  if (!op) return { error: 'Ordem de produção não encontrada' }
-  if (op.concluida) return { error: 'Não dá para alterar uma OP concluída. Reverta a conclusão primeiro.' }
-  const upd: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (campos.data) { upd.identificacao_d_dt_previsao = campos.data; upd.adicionais_d_dt_inicio = campos.data }
-  if (campos.qtd != null) upd.identificacao_n_qtde = campos.qtd
-  const { error } = await supabase.from('ordens_producao').update(upd).eq('id', opId).eq('loja_id', lojaId)
-  if (error) return { error: error.message }
-  await registrarAuditoria('editar', 'ordem de produção', op.identificacao_n_cod_op as number, campos.data ? `data → ${campos.data}` : `qtde planejada → ${campos.qtd}`)
+  const { data, error } = await createServiceClient().rpc('op_proprio_alterar', {
+    p_loja: lojaId, p_op: opId, p_data: campos.data ?? null, p_qtde: campos.qtd ?? null,
+  })
+  if (error) return { error: msg(error, 'Falha ao alterar a OP') }
+  await registrarAuditoria('editar', 'ordem de produção', Number((data as { n_cod_op?: number })?.n_cod_op ?? opId), campos.data ? `data → ${campos.data}` : `qtde planejada → ${campos.qtd}`)
   revalidatePath('/ordem-producao')
   return { ok: true }
+}
+
+async function codOP(lojaId: number, opId: number): Promise<number> {
+  const { data } = await createServiceClient().from('ordens_producao').select('identificacao_n_cod_op').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
+  return Number(data?.identificacao_n_cod_op ?? opId)
 }
 
 export async function concluirOPProprio(
@@ -96,23 +96,25 @@ export async function concluirOPProprio(
     const { count } = await supabase.from('impressao_etiquetas').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId).eq('origem', 'OP').eq('referencia_id', opId)
     semEtiqueta = !count
   } catch { /* só um lembrete */ }
-  await registrarAuditoria('concluir', 'ordem de produção', opId, null)
+  await registrarAuditoria('concluir', 'ordem de produção', await codOP(lojaId, opId), null)
   revalidatePath('/ordem-producao')
   return { ok: true, semEtiqueta }
 }
 
 export async function reverterOPProprio(lojaId: number, opId: number, usuario: string): Promise<Erro | { ok: true }> {
+  const cod = await codOP(lojaId, opId)
   const { error } = await createServiceClient().rpc('op_proprio_reverter', { p_loja: lojaId, p_op: opId, p_user: usuario || null })
   if (error) return { error: msg(error, 'Falha ao reverter a OP') }
-  await registrarAuditoria('reverter', 'ordem de produção', opId, null)
+  await registrarAuditoria('reverter', 'ordem de produção', cod, null)
   revalidatePath('/ordem-producao')
   return { ok: true }
 }
 
 export async function excluirOPProprio(lojaId: number, opId: number, usuario: string): Promise<Erro | { ok: true; fantasma: boolean }> {
+  const cod = await codOP(lojaId, opId)
   const { error } = await createServiceClient().rpc('op_proprio_excluir', { p_loja: lojaId, p_op: opId, p_user: usuario || null })
   if (error) return { error: msg(error, 'Falha ao excluir a OP') }
-  await registrarAuditoria('excluir', 'ordem de produção', opId, null)
+  await registrarAuditoria('excluir', 'ordem de produção', cod, null)
   revalidatePath('/ordem-producao')
   return { ok: true, fantasma: false }
 }

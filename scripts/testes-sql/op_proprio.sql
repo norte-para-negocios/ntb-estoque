@@ -17,6 +17,12 @@ begin
   r := op_proprio_criar(99020, 8000000002801, current_date, 2000, null, null, current_date + 5, 'teste', 'joao');
   v_id := (r->>'id')::bigint;
   assert (r->>'num_op') ~ '^\d{4}/00001$', 'numero da OP ' || r;
+  assert (select jsonb_array_length(full_object->'itensDetalhes') from ordens_producao where id=v_id) = 2, 'ingredientes previstos';
+  assert ((select full_object->'itensDetalhes'->0->>'nQtde' from ordens_producao where id=v_id))::numeric = 3000, 'qtde prevista do 1o insumo (2000 ml x 1.5)';
+  perform op_proprio_alterar(99020, v_id, current_date + 1, 4000);
+  assert (select identificacao_n_qtde from ordens_producao where id=v_id) = 4000, 'qtde planejada alterada';
+  assert ((select full_object->'itensDetalhes'->0->>'nQtde' from ordens_producao where id=v_id))::numeric = 6000, 'ingredientes refeitos';
+  perform op_proprio_alterar(99020, v_id, null, 2000);
   assert (r->>'n_cod_op')::bigint >= 8000000000001, 'id proprio';
   select saldo into s from estoque_saldos where loja_id=99020 and codigo_produto=8000000002802 and codigo_local_estoque=8000000002901;
   assert s = 10000, 'criar OP nao mexe no estoque';
@@ -38,6 +44,7 @@ begin
   assert (select cmc from estoque_custos where loja_id=99020 and codigo_produto=8000000002801) = 0.019, 'custo do molho';
   -- não conclui duas vezes
   begin perform op_proprio_concluir(99020, v_id); assert false, 'dupla conclusao'; exception when sqlstate '22023' then null; end;
+  begin perform op_proprio_alterar(99020, v_id, null, 5); assert false, 'alterar concluida'; exception when sqlstate '22023' then null; end;
 
   -- reverte: tudo volta
   perform op_proprio_reverter(99020, v_id, 'joao');
