@@ -31,6 +31,8 @@ min=$(date -u +%M)
 bloco=$(( 10#$min / 10 ))
 
 hit /api/cron/sync-nfs
+# Lojas de estoque proprio: puxa as notas de entrada da SEFAZ (distribuicao por NSU, so leitura; a espera de 1h fica no banco)
+hit /api/cron/sync-sefaz
 hit /api/cron/sync-ops
 hit /api/cron/retry-op-conclusao
 # Retry automatico de ajuste de estoque (inventario/movimentacao/transferencia)

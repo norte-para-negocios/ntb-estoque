@@ -33,6 +33,7 @@ export function SyncButton({
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
         if (data.registros != null) total += Number(data.registros) || 0
+        if (data.aviso) toast.message(String(data.aviso))
       }
       toast.success('Sincronização concluída', {
         description: total > 0 ? `${total} registros atualizados` : undefined,

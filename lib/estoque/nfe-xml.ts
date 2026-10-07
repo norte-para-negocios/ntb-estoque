@@ -27,6 +27,13 @@ export type NfeLida = {
   valores: { produtos: number; frete: number; desconto: number; descontoNota: number; total: number; icms: number }
   itens: ItemNfe[]
   avisos: string[]
+  // Extras (tela de detalhe das Notas Fiscais e conferência da entrada)
+  destinatario: { cnpj: string; nome: string }
+  tipoOperacao: string | null // tpNF: 0 = entrada (emitida pelo destinatário), 1 = saída do emitente
+  transporte: { modFrete: string | null; nome: string | null; cnpj: string | null; pesoBruto: number | null; pesoLiquido: number | null; volumes: string | null; especie: string | null }
+  parcelas: { seq: number; vencimento: string | null; valor: number }[]
+  tributosAprox: number
+  infCpl: string | null
 }
 
 type No = { nome: string; attrs: Record<string, string>; filhos: No[]; texto: string }
@@ -168,7 +175,25 @@ export function lerNfe(xml: string): NfeLida {
   }
   if (tot && Math.abs(valores.produtos - vProdItens) > 0.05) avisos.push('A soma dos itens não bate com o total de produtos da nota.')
 
+  const dest = achar(inf, 'dest')
+  const transp = achar(inf, 'transp')
+  const cobr = achar(inf, 'cobr')
+  const parcelas = (cobr?.filhos ?? []).filter((f) => f.nome === 'dup').map((d, i) => ({
+    seq: Number(txt(d, 'nDup')) || i + 1, vencimento: txt(d, 'dVenc') || null, valor: num(txt(d, 'vDup')),
+  }))
+  const vol = achar(transp, 'vol')
   return {
+    destinatario: { cnpj: (txt(dest, 'CNPJ') || txt(dest, 'CPF')).replace(/\D/g, ''), nome: txt(dest, 'xNome') },
+    tipoOperacao: txt(ide, 'tpNF') || null,
+    transporte: {
+      modFrete: txt(transp, 'modFrete') || null, nome: txt(transp, 'transporta', 'xNome') || null,
+      cnpj: (txt(transp, 'transporta', 'CNPJ') || txt(transp, 'transporta', 'CPF')).replace(/\D/g, '') || null,
+      pesoBruto: vol && txt(vol, 'pesoB') ? num(txt(vol, 'pesoB')) : null, pesoLiquido: vol && txt(vol, 'pesoL') ? num(txt(vol, 'pesoL')) : null,
+      volumes: txt(vol, 'qVol') || null, especie: txt(vol, 'esp') || null,
+    },
+    parcelas,
+    tributosAprox: num(txt(tot, 'vTotTrib')),
+    infCpl: txt(achar(inf, 'infAdic'), 'infCpl') || null,
     chave,
     numero: txt(ide, 'nNF'),
     serie: txt(ide, 'serie'),
