@@ -65,6 +65,7 @@ export function Sidebar({
           (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
           (!i.superAdmin || isSuperAdmin) &&
           (!i.soEstoqueProprio || estoqueProprio) &&
+          (!i.soOmie || !estoqueProprio) &&
           (permitidas === null || permitidas.has(i.href))
       ),
     [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio] // eslint-disable-line react-hooks/exhaustive-deps

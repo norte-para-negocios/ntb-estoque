@@ -44,6 +44,8 @@ export type NavItem = {
   superAdmin?: boolean
   // soEstoqueProprio: so aparece quando a loja atual usa o estoque proprio (modo_estoque='proprio').
   soEstoqueProprio?: boolean
+  // soOmie: telas que dependem do Omie; somem quando a loja usa o estoque proprio.
+  soOmie?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -52,11 +54,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/producao-propria', label: 'Produção', icon: CookingPot, group: 'Operação', soEstoqueProprio: true },
   { href: '/inventario-proprio', label: 'Contagens', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
-  { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
-  { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
-  { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },
-  { href: '/inventario', label: 'Inventários', icon: ClipboardList, group: 'Operação' },
-  { href: '/movimentacoes', label: 'Movimentações', icon: ArrowDownUp, group: 'Operação' },
+  { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação', soOmie: true },
+  { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação', soOmie: true },
+  { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação', soOmie: true },
+  { href: '/inventario', label: 'Inventários', icon: ClipboardList, group: 'Operação', soOmie: true },
+  { href: '/movimentacoes', label: 'Movimentações', icon: ArrowDownUp, group: 'Operação', soOmie: true },
   { href: '/validade', label: 'Validade', icon: CalendarClock, group: 'Operação' },
   { href: '/impressoes', label: 'Impressões', icon: Printer, group: 'Operação' },
   { href: '/produto', label: 'Produtos', icon: Package, group: 'Cadastros' },
