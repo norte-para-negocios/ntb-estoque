@@ -26,7 +26,6 @@ import {
   Boxes,
   ChefHat,
   CookingPot,
-  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 
