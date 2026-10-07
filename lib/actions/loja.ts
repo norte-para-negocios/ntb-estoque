@@ -9,6 +9,7 @@ import type { LojaOmie } from '@/lib/omie/client'
 import { gerarChaveIntegracaoNtbVendas } from '@/lib/actions/integracao-ntb-vendas'
 import type { ModoEstoque } from '@/lib/estoque/ledger'
 import { semearLojaProprio } from '@/lib/estoque/proprio-driver'
+import { notificarVendasLoja } from '@/lib/estoque/catalogo-sync'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -167,6 +168,7 @@ export async function editarLoja(lojaId: number, dados: LojaInput) {
   }
 
   await registrarAuditoria('editar', 'loja', lojaId, dados.nome.trim())
+  await notificarVendasLoja(lojaId).catch(() => {})
   revalidatePath('/loja')
   return { ok: true }
 }
@@ -179,6 +181,7 @@ export async function alternarAtivoLoja(lojaId: number, ativo: boolean) {
   const { error } = await supabase.from('lojas').update({ ativo }).eq('id', lojaId)
   if (error) return { error: error.message }
   await registrarAuditoria('editar', 'loja', lojaId, alvo?.nome ?? null)
+  await notificarVendasLoja(lojaId).catch(() => {})
   revalidatePath('/loja')
   return { ok: true }
 }
