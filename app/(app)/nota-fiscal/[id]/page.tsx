@@ -13,6 +13,11 @@ import { AcoesNF } from '@/components/nota-fiscal/AcoesNF'
 import { OPsRelacionadasNF } from '@/components/nota-fiscal/OPsRelacionadasNF'
 import { MovimentacoesGeradasNF } from '@/components/nota-fiscal/MovimentacoesGeradasNF'
 import { HistoricoStatusNF } from '@/components/nota-fiscal/HistoricoStatusNF'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
+import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
+import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
+import { carregarConferencia } from './dados-proprio'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -31,10 +36,12 @@ export default async function NotaFiscalItensPage({
 
   const { id } = await params
   const supabase = await createClient()
+  // Loja de estoque proprio: sem Omie (DANFE/eventos/OPs do Omie somem); entram a conferencia com o cadastro e as entradas do estoque.
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
 
   const { data: nfSupabase } = await supabase
     .from('notas_fiscais')
-    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb, full_object')
+    .select('id, c_numero_nfe, c_razao_social, c_nome, c_chave_nfe, d_emissao_nfe, n_valor_nfe, c_etapa, n_id_receb, full_object, origem')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .is('deleted_at', null)
@@ -93,6 +100,7 @@ export default async function NotaFiscalItensPage({
   const statusInfo = nf.c_etapa ? statusNF(nf.c_etapa, nf.full_object) : null
   const concluida = statusInfo?.label === 'Concluída'
   const cancelada = statusInfo?.label === 'Cancelada'
+  const conferencia = proprio && nfSupabase ? await carregarConferencia(lojaId, Number(id), nf.full_object, nf.c_chave_nfe ?? null) : null
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -146,7 +154,7 @@ export default async function NotaFiscalItensPage({
                 >
                   <Download className="size-4" /> XML
                 </a>
-                <a
+                {!proprio && <a
                   href={`/api/nota-fiscal/${nf.id}/danfe`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -154,7 +162,7 @@ export default async function NotaFiscalItensPage({
                   title="Abrir DANFE em PDF"
                 >
                   <FileText className="size-4" /> DANFE
-                </a>
+                </a>}
               </div>
             )}
             {/* So renderiza os botoes de acao quando a nota veio do Supabase
@@ -171,23 +179,38 @@ export default async function NotaFiscalItensPage({
                   notaId={Number(id)}
                   concluida={concluida}
                   cancelada={cancelada}
-                  podeManifestar={podeManifestar}
+                  podeManifestar={podeManifestar && !proprio}
                   podeReverter={podeReverter}
                   podeExcluir={podeExcluir}
+                  modoProprio={proprio}
+                  temEntrada={!!conferencia?.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'}
                 />
               </div>
             )}
           </div>
         }
       />
-      <DetalhesFiscaisNF fullObject={nf.full_object} />
+      <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} />
+      {conferencia && (
+        <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
+          podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} />
+      )}
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} />
 
-      <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
+      {proprio ? (
+        <>
+          <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
+          {conferencia && <OrigemSefazNF info={conferencia} />}
+        </>
+      ) : (
+        <>
+          <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
 
-      <MovimentacoesGeradasNF lojaId={lojaId} itens={itensComLocal} dataEmissao={nf.d_emissao_nfe ?? null} />
+          <MovimentacoesGeradasNF lojaId={lojaId} itens={itensComLocal} dataEmissao={nf.d_emissao_nfe ?? null} />
 
-      <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} />
+          <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} />
+        </>
+      )}
     </div>
   )
 }

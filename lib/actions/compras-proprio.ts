@@ -7,6 +7,9 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { lerNfe, type ItemNfe, type NfeLida } from '@/lib/estoque/nfe-xml'
+import { gravarNotaCompleta } from '@/lib/estoque/nf-sefaz'
+import { casarItem, montarContexto, type Depara, type ProdutoCad } from '@/lib/estoque/nf-conferencia'
+import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 
 // Compras / NF-e de entrada do Estoque próprio. Só vale em loja 'proprio'. Toda entrada passa por lancar_compra (ledger).
 
@@ -22,6 +25,7 @@ async function contexto(permissao: string): Promise<{ lojaId: number; userId: st
 
 function atualizarTelas() {
   revalidatePath('/compras')
+  revalidatePath('/nota-fiscal')
   revalidatePath('/estoque')
 }
 
@@ -33,13 +37,13 @@ const numero = (v: unknown): number => {
 export type ItemPrevia = ItemNfe & {
   codigoProduto: number | null
   fator: number
-  sugestao: 'depara' | 'descricao' | null
+  sugestao: 'depara' | 'ean' | 'descricao' | null
   produto?: { codigo: string; descricao: string; unidade: string }
 }
 export type PreviaCompra = {
   nfe: NfeLida
   itens: ItemPrevia[]
-  jaExiste: { id: number; status: string } | null
+  jaExiste: { id: number; status: string; notaId: number | null } | null
 }
 
 /** Lê o XML e sugere o produto de cada item (de-para do fornecedor, depois descrição igual). Não grava nada. */
@@ -54,35 +58,31 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
   const [{ data: depara }, { data: existente }, { data: produtos }] = await Promise.all([
     nfe.fornecedor.cnpj
       ? sb.from('fornecedor_produto_depara').select('c_prod, codigo_produto, fator').eq('loja_id', ctx.lojaId).eq('fornecedor_cnpj', nfe.fornecedor.cnpj)
-      : Promise.resolve({ data: [] as { c_prod: string; codigo_produto: number; fator: number }[] }),
-    sb.from('compras_proprio').select('id, status').eq('loja_id', ctx.lojaId).eq('chave_acesso', nfe.chave).maybeSingle(),
-    sb.from('produtos').select('codigo_produto, codigo, descricao, unidade').eq('loja_id', ctx.lojaId).neq('inativo', true).limit(5000),
+      : Promise.resolve({ data: [] as Depara[] }),
+    sb.from('compras_proprio').select('id, status, nota_fiscal_id').eq('loja_id', ctx.lojaId).eq('chave_acesso', nfe.chave).maybeSingle(),
+    sb.from('produtos').select('codigo_produto, codigo, descricao, unidade, ean, inativo').eq('loja_id', ctx.lojaId).neq('inativo', true).limit(5000),
   ])
-  const porProduto = new Map((produtos ?? []).map((p) => [Number(p.codigo_produto), p]))
-  const porDescricao = new Map((produtos ?? []).map((p) => [String(p.descricao ?? '').trim().toLowerCase(), p]))
-  const dp = new Map((depara ?? []).map((d) => [d.c_prod, d]))
-
+  const cad = montarContexto((produtos ?? []) as ProdutoCad[], (depara ?? []) as Depara[])
   const itens: ItemPrevia[] = nfe.itens.map((i) => {
-    const d = dp.get(i.cProd)
-    if (d && porProduto.has(Number(d.codigo_produto))) {
-      const p = porProduto.get(Number(d.codigo_produto))!
-      return { ...i, codigoProduto: Number(d.codigo_produto), fator: Number(d.fator) || 1, sugestao: 'depara', produto: { codigo: p.codigo, descricao: p.descricao, unidade: p.unidade } }
+    const m = casarItem({ cProd: i.cProd, ean: i.ean, descricao: i.descricao, unidade: i.unidade }, cad)
+    const alvo = m.codigoProduto ?? m.sugestao
+    const p = alvo != null ? cad.produtosPorCodigo.get(alvo) : undefined
+    return {
+      ...i, codigoProduto: alvo, fator: m.fator, sugestao: m.origem,
+      produto: p ? { codigo: p.codigo, descricao: p.descricao, unidade: p.unidade ?? '' } : undefined,
     }
-    const p = porDescricao.get(i.descricao.trim().toLowerCase())
-    if (p) return { ...i, codigoProduto: Number(p.codigo_produto), fator: 1, sugestao: 'descricao', produto: { codigo: p.codigo, descricao: p.descricao, unidade: p.unidade } }
-    return { ...i, codigoProduto: null, fator: 1, sugestao: null }
   })
-  return { ok: true, previa: { nfe, itens, jaExiste: existente ? { id: Number(existente.id), status: existente.status } : null } }
+  return { ok: true, previa: { nfe, itens, jaExiste: existente ? { id: Number(existente.id), status: existente.status, notaId: existente.nota_fiscal_id != null ? Number(existente.nota_fiscal_id) : null } : null } }
 }
 
 export type Mapeamento = { linha: number; codigoProduto: number | null; fator: number }
-type ResultadoLancamento = { ok: true; compraId: number; status: string; lancados: number; pendentes: number; duplicado: boolean } | { error: string }
+type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean } | { error: string }
 
 async function chamarLancar(lojaId: number, compra: Record<string, unknown>, local: number, userId: string | null): Promise<ResultadoLancamento> {
   const { data, error } = await createServiceClient().rpc('lancar_compra', { p_compra: { ...compra, loja_id: lojaId }, p_local: local, p_user: userId })
   if (error) return { error: error.message }
   const r = data as { compra_id: number; status: string; lancados: number; pendentes: number; duplicado: boolean }
-  return { ok: true, compraId: r.compra_id, status: r.status, lancados: r.lancados, pendentes: r.pendentes, duplicado: r.duplicado }
+  return { ok: true, compraId: r.compra_id, notaId: null, status: r.status, lancados: r.lancados, pendentes: r.pendentes, duplicado: r.duplicado }
 }
 
 /** Importa o XML: relê no servidor (nunca confia nos valores do navegador), aplica o mapeamento e lança no ledger. */
@@ -93,24 +93,20 @@ export async function lancarCompraXml(dados: { xml: string; codigoLocal: number;
   if (!dados.xml || dados.xml.length > TAMANHO_MAX_XML) return { error: 'Arquivo vazio ou grande demais.' }
   let nfe: NfeLida
   try { nfe = lerNfe(dados.xml) } catch (e) { return { error: e instanceof Error ? e.message : 'XML inválido' } }
-  const mapa = new Map(dados.mapeamentos.map((m) => [m.linha, m]))
-  const r = await chamarLancar(ctx.lojaId, {
-    origem: 'xml', chave_acesso: nfe.chave, numero: nfe.numero, serie: nfe.serie,
-    fornecedor_cnpj: nfe.fornecedor.cnpj, fornecedor_nome: nfe.fornecedor.nome, emissao: nfe.emissao,
-    valor_frete: nfe.valores.frete, valor_desconto: nfe.valores.descontoNota, icms_recuperavel: !!dados.icmsRecuperavel,
-    itens: nfe.itens.map((i) => {
-      const m = mapa.get(i.linha)
-      return {
-        linha: i.linha, c_prod: i.cProd, ean: i.ean, descricao: i.descricao, ncm: i.ncm, cfop: i.cfop, unidade_compra: i.unidade,
-        quantidade: i.quantidade, valor_unitario: i.valorUnitario, valor_total: i.valorTotal, desconto: i.desconto, icms_valor: i.icms,
-        fator: m?.fator && m.fator > 0 ? m.fator : 1, codigo_produto: m?.codigoProduto ?? null,
-      }
-    }),
-  }, dados.codigoLocal, ctx.userId)
-  if ('error' in r) return r
-  await registrarAuditoria('criar', 'compra (XML)', r.compraId, `NF ${nfe.numero} · ${nfe.fornecedor.nome}`)
+  const mapa = new Map(dados.mapeamentos.map((m) => [m.linha, { codigoProduto: m.codigoProduto, fator: m.fator }]))
+  const { data: loja } = await createServiceClient().from('lojas').select('cnpj').eq('id', ctx.lojaId).maybeSingle()
+  let res
+  try {
+    res = await gravarNotaCompleta(ctx.lojaId, nfe, {
+      ambiente: '1', origem: 'xml', autoLancar: false, lancarParcial: true, mapeamentos: mapa, icmsRecuperavel: !!dados.icmsRecuperavel,
+      localEntrada: dados.codigoLocal, userId: ctx.userId, cnpjLoja: String(loja?.cnpj ?? '').replace(/\D/g, '') || null,
+    })
+  } catch (e) { return { error: e instanceof Error ? e.message : 'Falha ao lançar a nota' } }
+  // guarda o XML completo (download na tela da nota; mesma tabela dos documentos recebidos da SEFAZ)
+  await createServiceClient().from('sefaz_documentos').upsert({ loja_id: ctx.lojaId, nsu: `upload-${nfe.chave}`, schema: 'procNFe_upload', tipo: 'procNFe', chave: nfe.chave, completo: true, xml: dados.xml, nota_fiscal_id: res.notaId, processado: true }, { onConflict: 'loja_id,nsu', ignoreDuplicates: true })
+  await registrarAuditoria('criar', 'compra (XML)', res.compraId ?? res.notaId, `NF ${nfe.numero} · ${nfe.fornecedor.nome}`)
   atualizarTelas()
-  return r
+  return { ok: true, compraId: res.compraId ?? 0, notaId: res.notaId, status: res.status, lancados: res.lancados, pendentes: res.pendentes, duplicado: !res.criada && res.lancados === 0 && res.pendentes === 0 }
 }
 
 export type ItemManual = { codigoProduto: number; quantidade: number | string; valorUnitario: number | string; unidade?: string; fator?: number | string; descricao?: string }
@@ -137,9 +133,52 @@ export async function lancarCompraManual(dados: {
     })),
   }, dados.codigoLocal, ctx.userId)
   if ('error' in r) return r
+  // A compra manual também aparece em Notas Fiscais (sem chave de acesso: nota de papel).
+  const notaId = await criarNotaDaCompraManual(ctx.lojaId, r.compraId, dados, itens)
   await registrarAuditoria('criar', 'compra (manual)', r.compraId, dados.fornecedorNome?.trim() || null)
   atualizarTelas()
-  return r
+  return { ...r, notaId }
+}
+
+async function criarNotaDaCompraManual(
+  lojaId: number, compraId: number,
+  dados: { fornecedorNome?: string; fornecedorCnpj?: string; numero?: string; emissao?: string; frete?: number | string; desconto?: number | string },
+  itens: ItemManual[]
+): Promise<number | null> {
+  try {
+    const sb = createServiceClient()
+    const { data: prods } = await sb.from('produtos').select('codigo_produto, descricao').eq('loja_id', lojaId).in('codigo_produto', itens.map((i) => i.codigoProduto))
+    const nome = new Map((prods ?? []).map((p) => [Number(p.codigo_produto), p.descricao as string]))
+    const total = (n: number) => Math.round(n * 100) / 100
+    const produtos = total(itens.reduce((a, i) => a + numero(i.quantidade) * numero(i.valorUnitario), 0))
+    const valor = total(produtos + numero(dados.frete) - numero(dados.desconto))
+    const cnpj = (dados.fornecedorCnpj ?? '').replace(/\D/g, '')
+    const { data: g, error } = await sb.rpc('gravar_nota_sefaz', {
+      p_loja: lojaId,
+      p_cab: {
+        numero: dados.numero?.trim() || null, emissao: dados.emissao || null, valor, fornecedor_nome: dados.fornecedorNome?.trim() || 'Compra sem nota', fornecedor_cnpj: cnpj || null,
+        ambiente: '1', natureza: 'Compra lançada manualmente',
+        full_object: {
+          cabec: { cCNPJ_CPF: cnpj, cInscricao: '', cNaturezaOperacao: 'Compra lançada manualmente' },
+          infoCadastro: { cRecebido: 'N', cFaturado: 'N', cCancelada: 'N', cDevolvido: 'N', cBloqueado: 'N' },
+          totais: { vTotalProdutos: produtos }, sefaz: { origem: 'manual', completo: true, alertas: [] },
+        },
+      },
+      p_itens: itens.map((i, idx) => ({
+        seq: idx + 1, c_prod: null, descricao: i.descricao ?? nome.get(i.codigoProduto) ?? `Item ${idx + 1}`, qtde: numero(i.quantidade), unidade: i.unidade ?? null,
+        preco_unit: numero(i.valorUnitario), desconto: 0, frete: 0, total: total(numero(i.quantidade) * numero(i.valorUnitario)), n_id_produto: String(i.codigoProduto),
+      })),
+    })
+    if (error) throw new Error(error.message)
+    const notaId = Number((g as { nota_id: number }).nota_id)
+    await sb.from('compras_proprio').update({ nota_fiscal_id: notaId }).eq('id', compraId).eq('loja_id', lojaId)
+    await sb.rpc('sincronizar_situacao_nota', { p_loja: lojaId, p_nota: notaId })
+    void espelharNotaNoFrio(lojaId, notaId)
+    return notaId
+  } catch (e) {
+    console.error('compra manual: a compra entrou no estoque, mas a nota não foi criada em Notas Fiscais', e)
+    return null
+  }
 }
 
 /** Mapeia os itens pendentes de uma compra já importada e lança só eles. */
@@ -154,6 +193,7 @@ export async function mapearPendentes(dados: { compraId: number; mapeamentos: Ma
     itens: dados.mapeamentos.filter((m) => m.codigoProduto).map((m) => ({ linha: m.linha, codigo_produto: m.codigoProduto, fator: m.fator > 0 ? m.fator : 1 })),
   }, Number(compra.codigo_local_estoque), ctx.userId)
   if ('error' in r) return r
+  await sincronizarNotaDaCompra(ctx.lojaId, dados.compraId)
   await registrarAuditoria('editar', 'compra (mapeamento)', dados.compraId, null)
   atualizarTelas()
   return r
@@ -167,6 +207,7 @@ export async function estornarCompra(compraId: number): Promise<{ ok: true; esto
   if (!compra) return { error: 'Compra não encontrada.' }
   const { data, error } = await sb.rpc('estornar_compra', { p_compra_id: compraId, p_user: ctx.userId })
   if (error) return { error: error.message }
+  await sincronizarNotaDaCompra(ctx.lojaId, compraId)
   await registrarAuditoria('excluir', 'compra (estorno)', compraId, compra.numero ?? null)
   atualizarTelas()
   return { ok: true, estornados: Number((data as { estornados: number }).estornados) }
@@ -193,4 +234,13 @@ export async function criarProdutoRapido(dados: { descricao: string; unidade: st
   if ('error' in r) return r
   await registrarAuditoria('criar', 'produto', r.codigoProduto, dados.descricao.trim())
   return { ok: true, produto: { codigoProduto: r.codigoProduto, codigo: r.codigo, descricao: dados.descricao.trim(), unidade: dados.unidade.trim() } }
+}
+
+async function sincronizarNotaDaCompra(lojaId: number, compraId: number) {
+  const sb = createServiceClient()
+  const { data } = await sb.from('compras_proprio').select('nota_fiscal_id').eq('id', compraId).eq('loja_id', lojaId).maybeSingle()
+  if (data?.nota_fiscal_id) {
+    await sb.rpc('sincronizar_situacao_nota', { p_loja: lojaId, p_nota: Number(data.nota_fiscal_id) })
+    void espelharNotaNoFrio(lojaId, Number(data.nota_fiscal_id))
+  }
 }

@@ -70,3 +70,17 @@ test('soma dos itens diferente do total vira aviso', () => {
   const n = lerNfe(XML.replace('<vProd>300.00</vProd>', '<vProd>350.00</vProd>'))
   assert.ok(n.avisos.some((a) => /não bate/.test(a)))
 })
+
+test('extras: destinatário, tipo da operação, transporte, parcelas e tributos aproximados', () => {
+  const xml = XML.replace('<ide><mod>55</mod>', '<ide><tpNF>1</tpNF><mod>55</mod>')
+    .replace('<det nItem="1">', '<dest><CNPJ>66764497000122</CNPJ><xNome>ODARA BEACH</xNome></dest><det nItem="1">')
+    .replace('<total>', '<transp><modFrete>0</modFrete><transporta><CNPJ>99888777000155</CNPJ><xNome>Transp Rapido</xNome></transporta><vol><qVol>3</qVol><esp>CX</esp><pesoB>12.5</pesoB></vol></transp><cobr><dup><nDup>001</nDup><dVenc>2026-11-05</dVenc><vDup>150.00</vDup></dup><dup><nDup>002</nDup><dVenc>2026-12-05</dVenc><vDup>165.00</vDup></dup></cobr><total>')
+    .replace('<vICMS>18.00</vICMS></ICMSTot>', '<vICMS>18.00</vICMS><vTotTrib>40.00</vTotTrib></ICMSTot>')
+  const n = lerNfe(xml)
+  assert.equal(n.destinatario.cnpj, '66764497000122'); assert.equal(n.destinatario.nome, 'ODARA BEACH')
+  assert.equal(n.tipoOperacao, '1')
+  assert.equal(n.transporte.modFrete, '0'); assert.equal(n.transporte.nome, 'Transp Rapido'); assert.equal(n.transporte.cnpj, '99888777000155')
+  assert.equal(n.transporte.pesoBruto, 12.5); assert.equal(n.transporte.volumes, '3'); assert.equal(n.transporte.especie, 'CX')
+  assert.deepEqual(n.parcelas, [{ seq: 1, vencimento: '2026-11-05', valor: 150 }, { seq: 2, vencimento: '2026-12-05', valor: 165 }])
+  assert.equal(n.tributosAprox, 40)
+})

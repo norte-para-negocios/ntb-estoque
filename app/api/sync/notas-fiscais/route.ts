@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { syncNotasFiscais } from '@/lib/omie/nota-fiscal'
 import type { LojaOmie } from '@/lib/omie/client'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
 
 export const maxDuration = 300
 
@@ -14,6 +16,17 @@ export async function POST() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais - Sincronizar'))) {
     return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
+  }
+
+  // Loja de estoque proprio: as notas vem da SEFAZ (sem Omie). Modo omie segue exatamente o caminho de sempre.
+  if ((await modoDaLoja(lojaId)) === 'proprio') {
+    const r = await sincronizarSefaz(lojaId)
+    if (r.erro) return NextResponse.json({ error: r.erro }, { status: 500 })
+    const aviso = r.motivo
+      ? r.bloqueadoAte ? `${r.motivo} Próxima consulta a partir de ${new Date(r.bloqueadoAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}.` : r.motivo
+      : undefined
+    if (!r.ok && !r.bloqueadoAte) return NextResponse.json({ error: r.motivo ?? 'Falha na consulta à SEFAZ' }, { status: 400 })
+    return NextResponse.json({ ok: true, registros: r.notas + r.resumos, aviso, resumo: r })
   }
 
   const supabase = createServiceClient()

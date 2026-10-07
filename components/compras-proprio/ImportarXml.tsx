@@ -61,7 +61,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       toast.success(r.status === 'lancada' ? 'Compra lançada no estoque' : `${r.lancados} itens lançados, ${r.pendentes} pendentes de produto`)
-      router.push(`/compras/${r.compraId}`)
+      router.push(r.notaId ? `/nota-fiscal/${r.notaId}` : '/nota-fiscal')
     })
   }
 
@@ -99,7 +99,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
             {previa.jaExiste && (
               <p className="mt-3 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] bg-surface-2 px-3 py-2 text-[13px]">
                 <CheckCircle2 className="size-4 text-ok" /> Esta nota já foi importada ({previa.jaExiste.status}).
-                <Link href={`/compras/${previa.jaExiste.id}`} className="font-medium text-brand hover:underline">Abrir a compra</Link>
+                <Link href={previa.jaExiste.notaId ? `/nota-fiscal/${previa.jaExiste.notaId}` : '/nota-fiscal'} className="font-medium text-brand hover:underline">Abrir a nota</Link>
               </p>
             )}
           </section>

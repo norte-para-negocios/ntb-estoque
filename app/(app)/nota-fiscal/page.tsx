@@ -19,7 +19,9 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
 import { escapeIlike, escapeIlikeOr, buscarTudoPaginado, buscarTodosPorIds } from '@/lib/utils-busca'
 import { buscarFamilias } from '@/lib/actions/produto'
-import { FileText, Download } from 'lucide-react'
+import { FileText, Download, FileUp, PenLine } from 'lucide-react'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { StatusSefaz, type EstadoSefaz } from '@/components/nota-fiscal/StatusSefaz'
 import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
 import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
 import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
@@ -83,6 +85,22 @@ export default async function NotaFiscalPage({
   const supabase = await createClient()
   // Sync (Atualizar agora) virou admin-only. NF e importada do Omie (so leitura).
   const podeSync = await isAdmin()
+  // Loja de estoque proprio: as notas vem sozinhas da SEFAZ; importar XML e lancar sem XML ficam como opcoes secundarias.
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
+  const podeLancarManual = proprio && (await requirePermissao(lojaId, 'Compras - Criar'))
+  let estadoSefaz: EstadoSefaz | null = null
+  if (proprio) {
+    const [{ data: n }, { data: l }, { count: aConferir }] = await Promise.all([
+      supabase.from('sefaz_nsu').select('ativo, auto_lancar, auto_ciencia, ambiente, ultima_consulta, bloqueado_ate, ultimo_cstat, ultimo_erro').eq('loja_id', lojaId).maybeSingle(),
+      supabase.from('lojas').select('certificado_path').eq('id', lojaId).maybeSingle(),
+      supabase.from('compras_proprio').select('id', { count: 'exact', head: true }).eq('loja_id', lojaId).in('status', ['pendente', 'parcial']),
+    ])
+    estadoSefaz = {
+      existe: !!n, ativo: n?.ativo ?? true, autoLancar: n?.auto_lancar ?? true, autoCiencia: n?.auto_ciencia ?? true, ambiente: n?.ambiente === 2 ? 2 : 1,
+      ultimaConsulta: n?.ultima_consulta ?? null, bloqueadoAte: n?.bloqueado_ate ?? null, ultimoCstat: n?.ultimo_cstat ?? null, ultimoErro: n?.ultimo_erro ?? null,
+      semCertificado: !l?.certificado_path, aConferir: aConferir ?? 0,
+    }
+  }
 
   const dataInicio =
     params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
@@ -571,14 +589,26 @@ export default async function NotaFiscalPage({
               >
                 <Download className="size-4" /> Excel
               </a>
-              {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label="Atualizar agora" />}
+              {podeLancarManual && (
+                <>
+                  <a href="/nota-fiscal/importar" className={btnClass('outline')}><FileUp className="size-4" /> Importar XML</a>
+                  <a href="/nota-fiscal/nova" className={btnClass('outline')}><PenLine className="size-4" /> Lançar sem XML</a>
+                </>
+              )}
+              {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label={proprio ? 'Buscar na SEFAZ' : 'Atualizar agora'} />}
             </div>
           }
         />
+        {estadoSefaz && <StatusSefaz estado={estadoSefaz} podeConfigurar={podeSync} />}
         <ChipsStatus
           basePath="/nota-fiscal"
           param="status"
-          opcoes={[
+          opcoes={proprio ? [
+            { value: '', label: 'Todas' },
+            { value: 'CONCLUIDA', label: 'Lançadas no estoque' },
+            { value: 'PENDENTE', label: 'A conferir' },
+            { value: 'CANCELADA', label: 'Canceladas' },
+          ] : [
             { value: '', label: 'Todas' },
             { value: 'CONCLUIDA', label: 'Concluídas' },
             { value: 'MANIFESTADA', label: 'Manifestadas' },
