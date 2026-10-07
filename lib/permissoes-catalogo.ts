@@ -160,6 +160,7 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
 // sao SEMPRE visiveis (ex.: /home), e rotas com `admin: true` no NavItems ja sao
 // tratadas a parte (so admin). Se uma rota nao tem permissao mapeada, nao filtra.
 export const MENU_PERMISSAO: Record<string, string> = {
+  '/estoque': 'Movimentacoes',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

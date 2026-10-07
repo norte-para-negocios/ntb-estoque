@@ -4,6 +4,7 @@ import { AppShell } from '@/components/shell/AppShell'
 import { LojaSelector } from '@/components/loja/LojaSelector'
 import { UserMenu } from '@/components/shell/UserMenu'
 import { rotasPermitidas } from '@/lib/permissoes-menu'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
@@ -38,12 +39,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: lojas } = await lojasQuery
 
+  // Item "Estoque" do menu: só para loja em modo estoque próprio (lojas Omie não veem nada novo).
+  const estoqueProprio = profile.current_loja_id != null && (await modoDaLoja(profile.current_loja_id)) === 'proprio'
+
   return (
     <AppShell
       isAdmin={isAdmin}
       isSuperAdmin={superAdmin}
       podeGerirUsuarios={podeGerirUsuarios}
       rotasVisiveis={rotasVisiveis}
+      estoqueProprio={estoqueProprio}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >

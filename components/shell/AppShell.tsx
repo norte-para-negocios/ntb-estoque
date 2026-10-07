@@ -13,6 +13,7 @@ export function AppShell({
   isSuperAdmin = false,
   podeGerirUsuarios = false,
   rotasVisiveis,
+  estoqueProprio = false,
   lojaSelector,
   userMenu,
   children,
@@ -23,6 +24,7 @@ export function AppShell({
   podeGerirUsuarios?: boolean
   // null = admin (ve tudo). Array = rotas que o nao-admin pode ver (4.2).
   rotasVisiveis: string[] | null
+  estoqueProprio?: boolean
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
   children: React.ReactNode
@@ -61,9 +63,9 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} />
+      <Sidebar isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} lojaSelector={lojaSelector} userMenu={userMenu} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} />
+        <MobileNav isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} podeGerirUsuarios={podeGerirUsuarios} rotasVisiveis={rotasVisiveis} estoqueProprio={estoqueProprio} lojaSelector={lojaSelector} userMenu={userMenu} onBuscar={() => setBuscaAberta(true)} />
         {/* overflow-x-clip (NAO -hidden): clip corta overflow horizontal sem
             virar container de scroll. -hidden faria o overflow-y computar pra
             auto, tornando o <main> um scroll container SEM altura fixa -> o
