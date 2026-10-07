@@ -78,6 +78,15 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Compras',
+    grupo: 'Operação',
+    // Estoque proprio: nota de entrada (XML ou manual) que da entrada no ledger.
+    permissoes: [
+      { nome: 'Compras', label: 'Acessar' },
+      { nome: 'Compras - Criar', label: 'Criar' },
+    ],
+  },
+  {
     modulo: 'Validade',
     grupo: 'Operação',
     // Modulo de leitura: OPs com validade proxima ou vencida.
@@ -165,6 +174,7 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/ficha-tecnica': 'Produtos',
   '/inventario-proprio': 'Inventarios - Ver',
   '/reposicao': 'Movimentacoes',
+  '/compras': 'Compras',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

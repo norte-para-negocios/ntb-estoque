@@ -26,6 +26,7 @@ import {
   Boxes,
   ChefHat,
   CookingPot,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -51,6 +52,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
   { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', soEstoqueProprio: true },
+  { href: '/compras', label: 'Compras', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/producao-propria', label: 'Produção', icon: CookingPot, group: 'Operação', soEstoqueProprio: true },
   { href: '/inventario-proprio', label: 'Contagens', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
