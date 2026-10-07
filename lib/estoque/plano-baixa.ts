@@ -22,7 +22,9 @@ export type PlanoItem = {
 export type ResultadoItemProprio = {
   codigo: string
   ok: boolean
-  op: 'sem_estrutura' | 'pulada' | 'erro'
+  op: 'sem_estrutura' | 'pulada' | 'erro' | 'criada'
+  /** OP automática gerada pela venda (item com ficha técnica). */
+  nCodOP?: number
   baixa: string
   erro?: string
   saldo?: number

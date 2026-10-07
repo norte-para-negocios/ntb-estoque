@@ -9,7 +9,7 @@ const fonte = readFileSync(new URL('./venda-proprio.ts', import.meta.url), 'utf8
 test('só consulta fichas ativas da loja e cai na saída direta quando não há receita', () => {
   assert.match(fonte, /from\('fichas_tecnicas'\)[\s\S]*\.eq\('ativa', true\)/)
   assert.match(fonte, /if \(comReceita\.has\(p\.produto!\)\)/)
-  assert.match(fonte, /if \(c\.tem_receita\)[\s\S]*continue[\s\S]*await saida\(/)
+  assert.match(fonte, /opDaVenda\([\s\S]*continue[\s\S]*await saida\(/)
 })
 
 test('estorno da venda encontra os movimentos da receita (ref com sufixo |produto|linha)', () => {

@@ -1,5 +1,5 @@
-// Baixa de venda do Norte Vendas em loja de estoque PROPRIO (06/10/2026). Sem OP e sem Omie: cada item vendido
-// vira uma SAIDA no ledger, no local resolvido por localDaVenda (por_produto > local escolhido no Vendas > setor >
+// Baixa de venda do Norte Vendas em loja de estoque PROPRIO (06/10/2026). Sem Omie: item com ficha técnica gera uma OP
+// (marcada com o pedido do Norte Vendas, concluída na hora) e depois sai; item sem ficha vira só uma SAIDA no ledger, no local resolvido por localDaVenda (por_produto > local escolhido no Vendas > setor >
 // cozinha/bar > local padrao). Nunca bloqueia por saldo (negativo e permitido e alertado).
 //
 // Contrato de resposta = o mesmo que o Vendas ja consome (lib/baixaEstoque.ts do Vendas, classificarItemEstoque):
@@ -11,7 +11,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { localDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 import { planejarBaixa, type ItemVendaProprio, type ResultadoItemProprio } from './plano-baixa'
 import { estornar, saida } from './ledger'
-import { consumoPorReceita } from './receita-db'
 
 /** Executa o plano: saidas em ORDEM de codigo_produto (evita deadlock entre vendas simultaneas) e devolve na ordem original dos itens. */
 export async function baixarVendaProprio(
@@ -53,12 +52,12 @@ export async function baixarVendaProprio(
   for (const p of executaveis) {
     try {
       if (comReceita.has(p.produto!)) {
-        const c = await consumoPorReceita(supabase, { lojaId: loja.id, produto: p.produto!, quantidade: p.quantidade, local: p.local!, ref, linhaBase: p.linha })
-        if (c.tem_receita) {
-          resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', negativo: !!c.negativo, duplicado: !!c.itens?.length && c.itens.every((i) => i.duplicado) }
-          continue
-        }
-        // ficha desativada entre a consulta e a baixa: cai no caminho normal (baixa o produto)
+        // Como no Omie: a venda gera uma ORDEM DE PRODUÇÃO marcada com o pedido do Norte Vendas, que é concluída na hora
+        // (consome os insumos da ficha e produz o item no local da venda); depois o item vendido sai do estoque.
+        const op = await opDaVenda(supabase, loja.id, p.produto!, p.quantidade, p.local!, `${ref}|${p.produto}|${p.linha}`, obs)
+        const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs: `${obs} · OP ${op.numero}` })
+        resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'criada', baixa: 'Concluido', nCodOP: op.nCodOP, saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado && op.existente }
+        continue
       }
       const r = await saida({ lojaId: loja.id, local: p.local!, produto: p.produto!, quantidade: p.quantidade, origem: 'VENDA', ref, linha: p.linha, obs })
       resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido', saldo: r.saldo, negativo: r.saldo < 0, duplicado: r.duplicado }
@@ -71,6 +70,35 @@ export async function baixarVendaProprio(
     }
   }
   return resultados
+}
+
+/** OP automática da venda, idempotente pela referência (pedido|produto|linha): reenviar a venda nunca cria outra OP. */
+async function opDaVenda(
+  supabase: SupabaseClient, lojaId: number, produto: number, quantidade: number, local: number, vendaRef: string, obs: string
+): Promise<{ nCodOP: number; numero: string; existente: boolean }> {
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const { data: existente } = await supabase.from('ordens_producao')
+    .select('id, identificacao_n_cod_op, identificacao_c_num_op, concluida').eq('loja_id', lojaId).eq('venda_ref', vendaRef).maybeSingle()
+  let id: number, nCodOP: number, numero: string, jaConcluida = false
+  if (existente) {
+    id = Number(existente.id); nCodOP = Number(existente.identificacao_n_cod_op); numero = String(existente.identificacao_c_num_op ?? nCodOP)
+    jaConcluida = existente.concluida === true || existente.concluida === 'S'
+  } else {
+    const { data, error } = await supabase.rpc('op_proprio_criar', {
+      p_loja: lojaId, p_produto: produto, p_data: hoje, p_qtde: quantidade, p_local: local, p_local_destino: local,
+      p_validade: null, p_obs: `Norte Vendas · ${obs}`, p_user: 'Norte Vendas', p_venda_ref: vendaRef,
+    })
+    if (error) throw new Error(`OP da venda: ${error.message}`)
+    const r = data as { id: number; n_cod_op: number; numero?: string }
+    id = Number(r.id); nCodOP = Number(r.n_cod_op); numero = String(r.numero ?? r.n_cod_op)
+    const { data: lida } = await supabase.from('ordens_producao').select('identificacao_c_num_op').eq('id', id).maybeSingle()
+    if (lida?.identificacao_c_num_op) numero = String(lida.identificacao_c_num_op)
+  }
+  if (!jaConcluida) {
+    const { error } = await supabase.rpc('op_proprio_concluir', { p_loja: lojaId, p_op: id, p_data: hoje, p_qtde: quantidade, p_user: 'Norte Vendas', p_user_uuid: null })
+    if (error) throw new Error(`Conclusão da OP ${numero}: ${error.message}`)
+  }
+  return { nCodOP, numero, existente: !!existente }
 }
 
 export type ResultadoEstornoProprio = { ajustesExcluidos: number; opsExcluidas: number; filaCancelada: number; falhas: number; detalhes: string[] }
@@ -89,6 +117,13 @@ export async function estornarVendaProprio(supabase: SupabaseClient, lojaId: num
       r.falhas++
       r.detalhes.push(`movimento ${m.id}: ${e instanceof Error ? e.message : 'falha ao estornar'}`)
     }
+  }
+  // OPs automáticas da venda: reverte (devolve os insumos e tira o item produzido).
+  const { data: ops } = await supabase.from('ordens_producao').select('id, identificacao_c_num_op, concluida').eq('loja_id', lojaId).like('venda_ref', `${pedidoRef}|%`)
+  for (const o of (ops ?? []) as { id: number; identificacao_c_num_op: string | null; concluida: unknown }[]) {
+    if (!(o.concluida === true || o.concluida === 'S')) continue
+    const { error: e } = await supabase.rpc('op_proprio_reverter', { p_loja: lojaId, p_op: o.id, p_user: 'Norte Vendas (estorno)' })
+    if (e) { r.falhas++; r.detalhes.push(`OP ${o.identificacao_c_num_op ?? o.id}: ${e.message}`) } else r.opsExcluidas++
   }
   return r
 }
