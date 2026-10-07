@@ -61,3 +61,46 @@ Executado em 06–07/10/2026 contra produção (Estoque commit 91c486c no ar), l
 | 40 | Design (capturas) | PASSOU com observações | `/tmp/qa2/` (desktop/celular, claro; escuro no desktop pelo botão do app — o app não segue o tema do sistema). Sem rolagem horizontal e sem erro de página em 31 telas. Textos "Omie" em loja própria (vazio de Notas Fiscais e Produtos, botão "Importar do Omie" da Margem, subtítulo do Estoque Valorizado, card de Relatórios, alerta de sincronização no Início) → corrigidos em `qa2-fix`. Visual: rótulos do formulário de produto não ligados aos campos (acessibilidade); ficha técnica com o texto do rendimento espremido; cartão de limite de motivo do Inventário apertado no celular; botões de ação da OP sem nome acessível; produtos da ODARA sem família (dado da semente). |
 
 **Correções na branch `qa2-fix` (Estoque, NÃO estão no ar, sem push):** `4bce04c` cabeçalho fixo e kardex largo; `2a06cd4` links do detalhe e usuário da transferência; `d43397b` textos sem Omie, reposição, PDV padrão por tipo; `e07de60` migration 143 (custo projetado em todos os locais). `tsc`, `npm run build` e 133 testes passaram.
+
+## QA rodada 2 (07/10/2026, madrugada) — reteste do que está no ar + OP automática + casos pendentes
+
+Contra produção: Vendas `3bdec69`, Estoque `c55c0a1` → `de0558d` (o deploy da validade entrou no meio do teste). Telas por Playwright em segundo plano, conferência no banco. Loja de trabalho: ODARA BEACH; loja de teste criada e apagada: `ZZ QA R2`. Capturas em `/tmp/qa3/`.
+
+| Caso | Resultado | Evidência |
+|---|---|---|
+| A. Loja criada pelo modal do Vendas (modo próprio) grava o vínculo e NÃO duplica | PASSOU | Vendas `e17c5226…` ↔ Estoque 18, `vendas_store_id` gravado; 25 min depois (cron rodou) 1 loja em cada lado, ODARA também 1. |
+| A. Nome/ativo propagam nos dois sentidos | PASSOU | Vendas → Estoque "ZZ QA R2 EDIT V"; Estoque → Vendas "ZZ QA R2 EDIT E"; Desativar no Estoque → `is_active=false` no Vendas. |
+| A. NCM chega ao Vendas | PASSOU | Produto criado pela tela do Estoque com NCM 20098990 → `products.ncm=20098990`, código 90011. |
+| A. Grupos sem duplicar (143) | PASSOU | Grupo "QA3 Grupo" › "QA3 Sub" → categoria "QA3 Sub" no grupo "QA3 Grupo" no Vendas; após o cron, 0 grupos/categorias duplicados. |
+| A. Insumo novo não é PDV | PASSOU | "QA3 Polpa de Caju" (80015) `pdv=false`, não foi ao Vendas. |
+| A. OP visível com 1 linha a 1440 px | PASSOU | linha começa em y=462, logo abaixo do cabeçalho. |
+| A. Kardex sem corte | FALHOU → corrigido em `qa3-fix` | A tabela rola, mas a coluna Produto ficava espremida ("Farinha de Tr…", "Açúcar Refin…"). Largura mínima legível quando a lista rola. |
+| A. Detalhe do movimento abre OP/venda/inventário | PASSOU | Filtro "Produção" → movimento #371 → "Abrir documento" → `/ordem-producao/48630222`. Venda e inventário com link. |
+| A. Nome do usuário na transferência | FALHOU parcial → corrigido em `qa3-fix` | Transferências antigas do usuário QA2 (apagado) mostravam o id longo na lista e no detalhe; o detalhe mostrava o id mesmo de usuário vivo. Agora: nome do perfil, ou "Usuário removido". |
+| A. Estoque Valorizado = banco | PASSOU | Tela R$ 4.925,82 = posição do dia 4925,82 = ledger 4925,82. |
+| A. "Omie" fora do modo próprio | FALHOU → corrigido em `qa3-fix` | Famílias (botão "Puxar do Omie", coluna "Código Omie", texto), Margem, Indicadores e Minha loja ainda citavam o Omie. |
+| B. Venda na tela do Vendas gera OP automática | PASSOU | Mesa 7 (Caipirinha + Isca + Heineken), R$ 82, NFC-e homologação nº 3 autorizada; OPs 2026/00004 (custo R$ 3,57) e 2026/00005 (R$ 18,63) criadas por "Norte Vendas", concluídas, no Bar e na Cozinha; Heineken saiu sem OP. |
+| B. Abrir a OP e ver os movimentos | PASSOU com observações → corrigido em `qa3-fix` | Detalhe completo (receita, insumos, custo, movimentos). Mas: "Criada/Concluída" apareciam em 06/10 21:00 (data sem hora lida como UTC) e "Venda de origem" mostrava o ref cru. |
+| B. Lista de OPs mostra a origem | FALHOU → corrigido em `qa3-fix` | Número da OP cortado ("2026/000…") e sem selo de origem: o selo "Veio do Norte Vendas" e o filtro de origem só reconheciam a OP do Omie. |
+| B. Reenvio não duplica OP | PASSOU | Mesma venda reenviada: 2 → 2 OPs, 168 → 168 movimentos, `duplicado: true`. |
+| B. Estorno reverte as OPs | FALHOU → corrigido em `qa3-fix` | Revertia, mas as OPs ficavam "Pendente" na lista, como se faltasse produzir. Agora o estorno exclui a OP (como no Omie), a trilha fica em `op_historico` e o detalhe do movimento não linka para OP excluída. Estorno repetido não devolve de novo. |
+| C. Inativar local com movimento / local padrão | PASSOU | Excluir "Bar" recusado ("já tem movimentos… marque como inativo"); inativar Bar OK e reativado; inativar "Estoque Geral" recusado ("o local padrão não pode ser inativado"). |
+| C. Taxa de serviço no faturamento | FALHOU → corrigido em `qa3-fix` (Vendas) + migration 147 (Estoque) | Com a taxa ligada, mesa 8 pagou R$ 66 (60 + 6) e o faturamento gravou R$ 60, taxa 0: sem o produto "Taxa de Serviço" cadastrado a taxa sumia. Agora entra o que foi pago (total − itens), respeita "Tirar a taxa". 147: a taxa não acende "item sem baixa" no Lucro. Achado extra: o modal do Master grava `service_fee_rate` mas não liga `charge_service_fee` — loja nova não cobra taxa até o lojista ligar (decisão de produto, não alterado). |
+| C. Desconto | NÃO SE APLICA | O pagamento do Vendas não tem desconto; a Cortesia entra como forma de pagamento "COURTESY" (R$ 7,70 na mesa 1), coerente com o Omie. |
+| C. Meio a meio | NÃO TESTADO | A ODARA não tem pizza/produto com grupos "maior valor"; não criei um cardápio de pizza só para isso. |
+| C. Sub-receita pela tela da ficha | PASSOU (com a 148) | Editor: "QA3 Molho Base" (06, rende 100 ml: 100 ml leite de coco + 10 ml dendê) dentro de "QA3 Moqueca Teste" (200 g peixe FC 1,3 + 100 ml molho). Abrir na venda desligado: OP consome peixe 260 g + molho 100 ml; ligado: peixe 260 g + leite de coco 100 ml + dendê 10 ml (teste em transação desfeita). |
+| C. Venda com sub-receita | FALHOU → corrigido (migration 148) | **CRÍTICO, no ar:** a venda falhou com "null value in column lote_id" — a 145 (lotes) quebra a saída de qualquer item que nunca teve lote naquele local (saldo indo a negativo). Toda venda/OP que consome insumo sem estoque no local cai assim. A 148 corrige; teste SQL falha sem ela e passa com ela. **Não aplicada.** |
+| C. Venda durante contagem aberta | PASSOU | Inventário #554 (Bar): contado 43 com sistema 45 → AJU −2 (saldo 43); venda de 1 Heineken → 42; concluir não lançou ajuste extra. |
+| C. Setor Pizzaria → local (feito no Vendas) | PASSOU | Local de estoque "QA3 Forno" e local de preparo "QA3 Pizzaria" criados no Vendas (o local apareceu no Estoque), Petiscos → QA3 Pizzaria → QA3 Forno; venda de Porção de Batata pela tela: OP consumiu batata/óleo e saiu do QA3 Forno. |
+| C. Queda de conexão entre os sistemas | PASSOU | Integração desligada no Vendas, venda na mesa 10, nenhuma baixa; religada às 01:21, a varredura baixou em 3 min: 1 OP (Gin Tônica), 2 saídas, sem duplicar após mais ciclos. (A taxa dessa venda também sumiu — mesmo bug acima.) |
+| D. Início, Resumo, Mensal, Estoque Valorizado | PASSOU | Todas as 25 telas do Estoque abriram com 200 e sem erro na ODARA (varredura `s1`). |
+
+**Achado de infraestrutura (não corrigido):** o `deploy.sh` do Estoque compila dentro da pasta em produção: durante os ~3 min do build o site no ar devolve 500 nos arquivos `_next/static` (visto em Movimentações enquanto o deploy da validade rodava). Build em pasta separada e troca no fim resolveria.
+
+**Observações menores (não corrigidas):** "Abrir documento" da venda leva ao kardex filtrado, não ao pedido; movimento de venda sem usuário (poderia mostrar "Norte Vendas"); o carimbo de usuário diz "NTB Estoque · nome" (material ao cliente deveria dizer "Norte Estoque"); produto criado no Estoque com categoria e preço chega ao Vendas indisponível; inativar o local mapeado para o Bar é permitido sem aviso.
+
+**Correções (sem push, sem deploy):**
+- Estoque, branch `qa3-fix` (`.worktrees/qa3-fix`): `2fe68e7` (OP no estorno, lista e detalhe da OP, detalhe do movimento, kardex, usuário, Famílias/Margem/Indicadores/Minha loja, migration 147 + teste) e `d8f6176` (migration 148 + teste). **Aplicar 148 com urgência** (147 também), nesta ordem, antes do deploy da branch.
+- Vendas, branch `qa3-fix` (`.worktrees/qa3-fix`): `609c6e8` (taxa de serviço paga no faturamento do estoque próprio + teste). Precisa do portão.
+
+**Limpeza:** loja ZZ QA R2 apagada nos dois sistemas; usuários temporários (Master, universal, gerente da ODARA, admin do Estoque) apagados; na ODARA: OPs pendentes de teste excluídas (trilha em `op_historico`), produtos QA3 com ficha inativados e os demais apagados, grupos/categoria QA3, setor QA3 Pizzaria e mapeamento removidos, QA3 Forno esvaziado (estoque devolvido à Cozinha) e inativado, taxa de serviço desligada como estava, turno do gerente temporário fechado. Ficam na ODARA, como registro: as vendas das mesas 7 (estornada só no Estoque), 8, 9, 10 e 1, a NFC-e de homologação nº 3 e o inventário #554.
