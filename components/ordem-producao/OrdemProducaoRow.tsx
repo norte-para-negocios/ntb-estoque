@@ -728,6 +728,14 @@ function Acoes({ op, ctrl }: StepperProps) {
     // estourar erro. O backend (finishOP) faz o mesmo clamp por garantia; aqui e so
     // pra mensagem de confirmacao já mostrar a data real que vai pro Omie.
     const dataEfetivaISO = ctrl.dataOP && ctrl.dataOP > ctrl.hojeISO ? ctrl.hojeISO : ctrl.dataOP
+    if (proprio) {
+      // Estoque próprio: abre a mesma janela do celular, já preenchida com a linha, para concluir
+      // tudo ou só uma parte (ex.: OP de 10 kg, produziu 4 kg agora).
+      ctrl.setQtdeConcluir(ctrl.qtdPlanejada)
+      if (dataEfetivaISO) ctrl.setDataConclusao(dataEfetivaISO)
+      ctrl.setDialogConclusao(true)
+      return
+    }
     const dataBR = dataEfetivaISO ? dataEfetivaISO.split('-').reverse().join('/') : '-'
     const ok = window.confirm(
       `Concluir a OP ${op.numOP}? ${proprio ? 'Será produzido' : 'Será gravado no Omie'}: ${ctrl.qtdPlanejada} ${op.unidade}, data ${dataBR}. O estoque produzido será incrementado${proprio ? ' e os insumos serão baixados' : ''}.`
@@ -752,12 +760,13 @@ function Acoes({ op, ctrl }: StepperProps) {
           onClick={concluirDesktop}
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
-          title="Concluir OP"
-          aria-label="Concluir OP"
+          title={proprio ? 'Concluir OP (tudo ou parte)' : 'Concluir OP'}
+          aria-label={proprio ? 'Concluir OP (tudo ou parte)' : 'Concluir OP'}
         >
           <Check className="size-3.5" />
         </button>
       )}
+      {proprio && !op.concluida && op.podeConcluir && <DialogConclusao op={op} ctrl={ctrl} />}
       {/* Reverter: so na concluida (estorna sem excluir). Excluir: qualquer estado. */}
       {op.concluida && op.podeReverter && (
         <button
