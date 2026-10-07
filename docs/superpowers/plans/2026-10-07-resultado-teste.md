@@ -130,3 +130,36 @@ Cenário montado: insumo "Calabresa Fatiada" (80016, 5 kg a R$ 0,045/g), meias p
 - Vendas `656d965` (cupom no fechamento) e `04db5f9` (componentes): portão PASSOU (800 s, commit `04db5f9`), push na `main`. **Falta o deploy do Vendas** (`/opt/ntb-vendas/deploy.sh`). Até lá a venda nova vai sem `componentes` e o Lucro usa o rateio do custo sem dono (mesmo resultado para a pizza).
 
 **Limpeza:** produtos "Pizza Teste…" do Vendas indisponíveis e sem categoria (têm venda, não podem ser apagados), categoria e preço por horário apagados; no Estoque 80016/90013/90014/90015/90016 inativados e a calabresa zerada por ajuste (`qa4-limpeza:80016`); turno de caixa do gerente temporário fechado; usuários temporários (gerente da ODARA, Master, admin do Estoque) apagados. Ficam como registro: a venda da mesa 8 (estornada) e a NFC-e de homologação nº 7 (cancelada). A taxa de serviço da ODARA ficou **ligada em 10%** (o modal grava os dois juntos agora).
+
+## Rodada 3 — visual/validade/SEFAZ (07/10/2026, manhã, fork TESTE 2)
+
+Contra produção, loja ODARA BEACH (Estoque 15, Vendas `e73782c1…`). Playwright headless em segundo plano (desktop 1440×900 e celular 390, claro e escuro). Capturas (161 arquivos, ~33 MB, fora do git) em `docs/qa/2026-10-07-rodada3/` (`estoque_*`, `vendas_*`; `_estoque.json`/`_vendas.json` com HTTP, rolagem horizontal e contagem de "Omie"). Fiscal: nada emitido. Omie: nada escrito.
+
+| Caso | Resultado | Evidência |
+|---|---|---|
+| Entrada de compra com lote e validade | PASSOU | `lancar_compra_com_lotes` (compra 10, Cozinha): Farinha de Trigo 80009, lote QA3-PX-03 vence em 3 dias (2.000 g) e QA3-PX-60 em 60 dias (3.000 g). Soma dos lotes = saldo do ledger (6.940), `estoque_lotes_divergencia` vazia. |
+| Produção com validade | PASSOU | OP 2026/00014 (70001 Molho da Casa, validade +5 dias) concluída → lote "2026/00014" com validade 12/10/2026 na Cozinha. |
+| Venda consome FEFO | PASSOU | Venda de 2 Isca de Peixe pela rota de integração (`destination: kitchen`, como o Vendas manda) → OP 2026/00013 "Norte Vendas" → farinha −120 g saiu do lote QA3-PX-03 (2.000 → 1.880), QA3-PX-60 intacto. Antes, envio de teste com `setor: "Cozinha"` sem `destination` caiu no Estoque Geral (lote "sem lote" −120): é o comportamento previsto (setor só vale se mapeado). Estornado pela rota de estorno: o lote voltou a 0 e a OP foi excluída. |
+| Telas de Validade | PASSOU | Cartões (0 vencidos, 2 vencem em 7 dias, 25 sem validade, R$ 70,91), linha do tempo, pílulas e lista por lote com "em 3 dias"/"em 5 dias" e baixa por lote; celular e escuro sem corte. |
+| Transferência pela tela (próprio) | PASSOU | Nova transferência Estoque Geral → Bar, Água Mineral 6 UN, concluída: ledger `trf:1287325:v1` −6/+6, status "Concluído". |
+| Movimentações: filtro por origem e clique no documento | PASSOU | Movimentos › origem Produção/Venda/Compra/Transferência/Inventário: "Abrir documento" leva a `/ordem-producao/<id>`, `/compras/10`, `/transferencia/1402/contagem`, `/inventario/554/contagem`; venda leva a `…/loja?venda=<id>` (nova aba). Estorno não tem documento próprio (aparece em "Movimentos ligados"). OP excluída mostra a situação, sem link. |
+| OP com venda de origem | PASSOU | OP 2026/00011: "Venda de origem: Norte Vendas · pedido 94fc27b8 ↗", histórico "OP criada · Norte Vendas", movimentos gerados. |
+| Detalhe do movimento | FALHOU → corrigido | O conteúdo vazava para fora do modal (o `max-w-xl` perdia para `sm:max-w-sm` do Dialog). Corrigido (`sm:max-w-xl`), conferido depois do deploy: modal até x=1008, conteúdo até 994. |
+| Observação de produção legível | FALHOU → corrigido (migration 151) | Os consumos de OP mostravam "Produção de 8000000000089" e as baixas por receita "Receita 8000000000032 v1" (id interno). Agora "Produção de 70001 QA2 Molho da Casa" / "Receita 90005 Caipirinha de Limão v1" (testado em ROLLBACK e aplicado). Movimentos antigos ficam como estavam (ledger imutável). |
+| Textos "NTB Vendas"/"NTB Estoque" nas telas | FALHOU → corrigido | Modal de loja do Estoque (seção "NTB Vendas"), cadastro de produto, PDFs e mensagens; no Vendas, modal Master ("Criar no NTB Estoque também?") e Integrações. Trocado por "Norte Vendas"/"Norte Estoque" nas telas/mensagens. Não mudou: carimbo das observações que vão ao Omie (`NTB Estoque · usuário`) e o texto do XML da NFC-e. |
+| Vendas › Locais de estoque no celular | FALHOU → corrigido | O ícone de "ligado" ficava sozinho numa linha acima do nome; agora fica na linha do nome. |
+| Demais telas do Estoque (Início, Lojas + modal, Produtos, Grupos, Locais, OP lista, Inventário, Transferência, Notas Fiscais, Faturamento, Lucro, Estoque Valorizado, Estoque, Reposição, Sincronização do catálogo) | PASSOU | HTTP 200, nenhuma rolagem horizontal, nenhum "Omie" em tela da ODARA (só na lista de Lojas, que mostra as lojas Omie e o modo de cada uma). Tabelas largas rolam dentro do próprio quadro. |
+| Vendas: Master (lista, modal Nova Loja nas 7 seções), Administração (Resumo, Relatórios/fechamento, Configurações › Locais de estoque) | PASSOU | Modal ~70% no desktop e folha cheia no celular; Preparo e impressão com Acompanhamento/Impressão direta por local; Estoque com Omie/Próprio/Sem estoque; sem rolagem horizontal. Local "QA3 Forno" não aparece no Vendas porque está inativo no Estoque (correto). |
+| SEFAZ (DistribuicaoDFe) | PASSOU (sem notas) | Agendamento ativo: o cron de 10 em 10 min do servidor chama `/api/cron/sync-sefaz`, que só consulta quando passa o horário liberado (1 h depois de cStat 137, regra do 656). Consultas automáticas às 07:00 e 08:00 (`sefaz_nsu`): cStat 137 "Nenhum documento localizado", NSU 0; próxima a partir de 09:00 e depois de hora em hora. Nenhuma NF-e emitida contra o CNPJ 66.764.497/0001-22 ainda; quando vier, entra sozinha. Não forcei consulta manual (daria 656). |
+
+Observações (não corrigidas aqui):
+- O Painel Master do Vendas compara a senha de `system_admins` em texto puro (`authenticate_admin_secure`). Vale trocar por hash.
+- Nas capturas headless os campos de data aparecem em mm/dd/aaaa porque o Chromium sem interface ignora o idioma no campo de data; num navegador em português aparecem dd/mm/aaaa.
+
+**Correções:**
+- Estoque: `f928fcb` (textos Norte), `fd95974` (migration 151, aplicada), `211f4d9` (modal do detalhe do movimento). No ar (deploy-seguro, `211f4d9`).
+- Vendas: `0cc43c9` (textos Norte), `7f26217` (Locais de estoque no celular), sobre `04db5f9`. Portão PASSOU (809 s, `7f26217`), push e deploy feitos depois do release dos apps; conferido no ar (modal Master sem "NTB").
+
+**Dados de teste que ficam na ODARA:** compra manual 10 (lotes QA3-PX-03/QA3-PX-60 de farinha), OP 2026/00014 (molho com validade), OP 2026/00013 (venda QA3-VAL-VENDA-2 de 2 Isca de Peixe), transferência 1402 (6 Água Mineral para o Bar).
+
+**Limpeza:** usuários temporários (admin do Estoque `qa5-temp`, Master `qa5-master-temp`, gerente da ODARA `qa5-gerente`) apagados.
