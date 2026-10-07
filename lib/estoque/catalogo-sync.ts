@@ -14,7 +14,7 @@ export type GrupoSync = { estoque_id: number; vendas_ref: string | null; nome: s
 export type ProdutoSync = {
   codigo: string; vendas_ref: string | null; nome: string; preco: number; ativo: boolean; mae: boolean
   pai_codigo: string | null; grupo_estoque_id: number | null; atributos: Record<string, unknown>
-  unidade: string | null; tipo_item: string | null; updated_at: string
+  unidade: string | null; tipo_item: string | null; ncm: string | null; updated_at: string
 }
 export type PayloadParaVendas = { grupos: GrupoSync[]; produtos: ProdutoSync[] }
 export type RespostaVendas = {
@@ -80,6 +80,8 @@ export async function vincularLojaAoVendas(loja: Loja): Promise<{ ok: true; stor
   const base = urlVendas()
   const segredo = process.env.CROSS_SYSTEM_BOOTSTRAP_KEY
   if (!base || !segredo) return { ok: false, error: 'Integração cross-sistema não configurada neste servidor' }
+  // Sem CNPJ não há como achar a loja correspondente no Vendas: criar às cegas duplicaria a loja (achado do QA de 07/10).
+  if ((loja.cnpj ?? '').replace(/\D/g, '').length < 11) return { ok: false, error: 'Loja sem CNPJ: informe o CNPJ para ligar ao Norte Vendas' }
   const supabase = createServiceClient()
 
   let chave = loja.integracao_api_key
@@ -107,11 +109,24 @@ export async function vincularLojaAoVendas(loja: Loja): Promise<{ ok: true; stor
   return { ok: true, storeId: j.storeId }
 }
 
+/** Avisa o Vendas que nome/CNPJ/ativo da loja mudaram aqui (best-effort, nunca derruba a edição). */
+export async function notificarVendasLoja(lojaId: number): Promise<void> {
+  const base = urlVendas()
+  if (!base) return
+  const { data: loja } = await createServiceClient().from('lojas').select('nome, cnpj, ativo, integracao_api_key, vendas_store_id').eq('id', lojaId).maybeSingle()
+  if (!loja?.integracao_api_key || !loja.vendas_store_id) return
+  await fetch(`${base}/api/integracao/lojas`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${loja.integracao_api_key}` },
+    body: JSON.stringify({ nome: loja.nome, cnpj: loja.cnpj, ativo: loja.ativo }),
+  }).catch(() => {})
+}
+
 // ---------------------------------------------------------------------------------- montagem do payload
 type ProdutoRow = {
   codigo: string | null; descricao: string | null; valor_unitario: number | null; inativo: boolean | null; eh_mae: boolean
   produto_pai_codigo: number | null; grupo_id: number | null; atributos: Record<string, unknown> | null
-  unidade: string | null; tipo_item: string | null; vendas_ref: string | null; updated_at: string; codigo_produto: number
+  unidade: string | null; tipo_item: string | null; ncm: string | null; vendas_ref: string | null; updated_at: string; codigo_produto: number
 }
 
 async function montarPayload(lojaId: number, produtos: string[], grupos: number[]): Promise<PayloadParaVendas> {
@@ -148,7 +163,7 @@ async function montarPayload(lojaId: number, produtos: string[], grupos: number[
   if (produtos.length) {
     const { data } = await supabase
       .from('produtos')
-      .select('codigo, descricao, valor_unitario, inativo, eh_mae, produto_pai_codigo, grupo_id, atributos, unidade, tipo_item, vendas_ref, updated_at, codigo_produto')
+      .select('codigo, descricao, valor_unitario, inativo, eh_mae, produto_pai_codigo, grupo_id, atributos, unidade, tipo_item, ncm, vendas_ref, updated_at, codigo_produto')
       .eq('loja_id', lojaId)
       .in('codigo', produtos)
       .eq('pdv', true).in('tipo_item', ['00', '04'])  // só o que é vendável vai para o cardápio (insumos ficam só no Estoque)
@@ -165,7 +180,7 @@ async function montarPayload(lojaId: number, produtos: string[], grupos: number[
       .map((r) => ({
         codigo: r.codigo as string, vendas_ref: r.vendas_ref, nome: r.descricao ?? '', preco: Number(r.valor_unitario) || 0, ativo: !r.inativo,
         mae: r.eh_mae, pai_codigo: r.produto_pai_codigo != null ? codigoDoPai.get(r.produto_pai_codigo) ?? null : null,
-        grupo_estoque_id: r.grupo_id, atributos: r.atributos ?? {}, unidade: r.unidade, tipo_item: r.tipo_item, updated_at: r.updated_at,
+        grupo_estoque_id: r.grupo_id, atributos: r.atributos ?? {}, unidade: r.unidade, tipo_item: r.tipo_item, ncm: r.ncm ?? null, updated_at: r.updated_at,
       }))
     out.produtos = lista.sort((a, b) => Number(b.mae) - Number(a.mae))
     // grupos dos produtos também vão junto
@@ -205,7 +220,7 @@ export async function drenarOutbox(lojaId: number, limite = 100): Promise<{ entr
   const existentes = new Set(payload.produtos.map((p) => p.codigo))
   for (const codigo of apagados) {
     if (!existentes.has(codigo)) {
-      payload.produtos.push({ codigo, vendas_ref: null, nome: '', preco: 0, ativo: false, mae: false, pai_codigo: null, grupo_estoque_id: null, atributos: {}, unidade: null, tipo_item: null, updated_at: new Date().toISOString() })
+      payload.produtos.push({ codigo, vendas_ref: null, nome: '', preco: 0, ativo: false, mae: false, pai_codigo: null, grupo_estoque_id: null, atributos: {}, unidade: null, tipo_item: null, ncm: null, updated_at: new Date().toISOString() })
     }
   }
 
