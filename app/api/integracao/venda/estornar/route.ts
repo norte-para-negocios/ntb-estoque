@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { estornarVenda } from '@/lib/vendas-estorno'
 import type { LojaOmie } from '@/lib/omie/client'
 import { estornarVendaProprio } from '@/lib/estoque/venda-proprio'
+import { enviarFatoFrio } from '@/lib/estoque/fechamento'
 
 // Chamada pelo ntb-vendas quando a nota fiscal de uma venda inteira é cancelada: desfaz
 // no Omie da loja o que a venda gerou (saídas de estoque e ordens de produção).
@@ -28,6 +29,10 @@ export async function POST(request: Request) {
   if (loja.modo_estoque === 'proprio') {
     try {
       const r = await estornarVendaProprio(supabase, loja.id, body.pedidoRef)
+      // A venda estornada sai do faturamento (o histórico fica) e o fato do Contabo é atualizado.
+      const cancelada = await supabase.rpc('cancelar_venda_proprio', { p_loja: loja.id, p_ref: body.pedidoRef })
+      const vendaId = (cancelada.data as { venda_id?: number } | null)?.venda_id
+      if (vendaId) await enviarFatoFrio(supabase, loja.id, { vendaIds: [vendaId] })
       return NextResponse.json({ ok: r.falhas === 0, ...r })
     } catch (e) {
       return NextResponse.json({ ok: false, reason: e instanceof Error ? e.message : 'Falha ao estornar a venda' }, { status: 400 })
