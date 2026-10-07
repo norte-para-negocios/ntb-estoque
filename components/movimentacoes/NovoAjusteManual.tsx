@@ -32,7 +32,7 @@ const TIPOS_AJUSTE: Record<'ENT' | 'SAI', string> = {
   SAI: 'Saída (ajuste negativo)',
 }
 
-export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto: Produto }) {
+export function NovoAjusteManual({ locais, produto, proprio = false }: { locais: Local[]; produto: Produto; proprio?: boolean }) {
   const [open, setOpen] = useState(false)
   const [tipo, setTipo] = useState<'ENT' | 'SAI'>('SAI')
   const [local, setLocal] = useState('')
@@ -71,13 +71,13 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
         return
       }
       if (res?.status === 'Erro') {
-        toast.error(res.erro ?? 'Omie recusou o ajuste')
+        toast.error(res.erro ?? (proprio ? 'Não foi possível lançar o ajuste' : 'Omie recusou o ajuste'))
         return
       }
       if (res?.status === 'Sem CMC') {
         toast.warning('Ajuste gravado, mas o produto ainda não tem custo médio (CMC) fechado no Omie. Reenviar quando tiver.')
       } else {
-        toast.success('Ajuste lançado no Omie')
+        toast.success(proprio ? 'Ajuste lançado no estoque' : 'Ajuste lançado no Omie')
       }
       setOpen(false)
       setQuantidade('')
@@ -177,7 +177,7 @@ export function NovoAjusteManual({ locais, produto }: { locais: Local[]; produto
         <DialogFooter>
           <Button onClick={criar} disabled={pending}>
             {pending && <Spinner />}
-            {pending ? 'Lançando...' : 'Lançar ajuste no Omie'}
+            {pending ? 'Lançando...' : proprio ? 'Lançar ajuste' : 'Lançar ajuste no Omie'}
           </Button>
         </DialogFooter>
       </DialogContent>

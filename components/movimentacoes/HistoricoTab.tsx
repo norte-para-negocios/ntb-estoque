@@ -58,7 +58,7 @@ type LinhaExibida = {
   temCmc: boolean
 }
 
-export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
+export async function HistoricoTab({ sp, lojaId, proprio = false }: { sp: SP; lojaId: number; proprio?: boolean }) {
   const supabase = await createClient()
   const page = Math.max(1, Number(sp.page) || 1)
   const porMes = sp.modo !== 'data' && !sp.produto
@@ -352,6 +352,7 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
         </span>
       </div>
 
+      {!proprio && (
       <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
         <span>
@@ -362,8 +363,9 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
           (mostra Saldo inicial/final, que não é afetado por transferência interna).
         </span>
       </div>
+      )}
 
-      {MOSTRAR_VALORES && temCmcAbsurdo && (
+      {!proprio && MOSTRAR_VALORES && temCmcAbsurdo && (
         <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
           <span>
@@ -380,6 +382,7 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
         </div>
       )}
 
+      {!proprio && (
       <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
         <Info className="mt-0.5 size-3.5 shrink-0 text-warn" />
         <p>
@@ -387,6 +390,7 @@ export async function HistoricoTab({ sp, lojaId }: { sp: SP; lojaId: number }) {
           quantidade movimentada, agregada por produto/dia.
         </p>
       </div>
+      )}
 
       <Lista
         linhas={linhas}

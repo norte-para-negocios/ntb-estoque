@@ -21,6 +21,9 @@ import { btnClass, btnLinhaClass } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { escapeIlikeOr } from '@/lib/utils-busca'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { LimiteMotivo } from '@/components/inventario-proprio/LimiteMotivo'
+import { limiteMotivo } from '@/lib/inventario/proprio'
 
 const POR_PAGINA = 50
 
@@ -47,6 +50,7 @@ export default async function InventarioPage({
   if (!(await requirePermissao(lojaId, 'Inventarios - Ver'))) notFound()
 
   const supabase = await createClient()
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   const podeCriar = await requirePermissao(lojaId, 'Inventarios - Criar')
   const podeExcluir = await requirePermissao(lojaId, 'Inventarios - Excluir')
   const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
@@ -305,7 +309,7 @@ export default async function InventarioPage({
                 <FileText className="size-4" /> Relatório PDF
               </a>
               <CopiarLinkRelatorio href={`/inventario/relatorio?${filtrosParams.toString()}`} />
-              {podeCriar ? <NovoInventario locais={locais ?? []} familias={familias} /> : null}
+              {podeCriar ? <NovoInventario locais={locais ?? []} familias={familias} proprio={proprio} /> : null}
             </div>
           }
         />
@@ -320,6 +324,8 @@ export default async function InventarioPage({
         />
         <ChipsFiltrosAtivos basePath="/inventario" campos={campos} naoMostrar={['status']} persistirEm="/inventario" />
       </ListaHeader>
+
+      {proprio && <LimiteMotivo valor={await limiteMotivo(lojaId)} podeEditar={podeEditar} />}
 
       <Lista
         linhas={inventarios ?? []}
@@ -348,7 +354,7 @@ export default async function InventarioPage({
             render: (inv) => <span className="truncate text-text-muted">{nomeMap.get(inv.user_id) || '-'}</span>,
           },
           {
-            label: 'Integrados',
+            label: proprio ? 'Lançados' : 'Integrados',
             alinhar: 'right',
             larguraDesktop: 'w-32',
             render: (inv) => {
@@ -395,6 +401,7 @@ export default async function InventarioPage({
                 inventarioId={inv.id}
                 temErro={temErro}
                 podeExcluir={podeExcluir}
+                proprio={proprio}
               />
             </div>
           )
@@ -412,7 +419,7 @@ export default async function InventarioPage({
         <Paginacao basePath="/inventario" page={page} temProxima={temProxima} />
       )}
 
-      <AjustesOmieDetectados lojaId={lojaId} tipo="SLD" />
+      {!proprio && <AjustesOmieDetectados lojaId={lojaId} tipo="SLD" />}
     </div>
   )
 }

@@ -12,6 +12,8 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ArrowLeftRight } from 'lucide-react'
 import { HistoricoTab } from '@/components/movimentacoes/HistoricoTab'
 import { MovimentosTab } from '@/components/movimentacoes/MovimentosTab'
+import { MovimentosProprio } from '@/components/movimentacoes/MovimentosProprio'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export default async function MovimentacoesPage({
   searchParams,
@@ -24,6 +26,7 @@ export default async function MovimentacoesPage({
     tipo?: string
     modo?: string
     mov?: string
+    tm?: string
     page?: string
     aba?: string
     local?: string
@@ -33,6 +36,7 @@ export default async function MovimentacoesPage({
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
 
   const sp = await searchParams
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   const aba = sp.aba === 'movimentos' ? 'movimentos' : 'historico'
 
   // FiltrosGaveta só aparece no Histórico
@@ -68,7 +72,7 @@ export default async function MovimentacoesPage({
         <PageHeader
           title="Movimentações"
           icon={ArrowLeftRight}
-          description="Histórico de entradas e saídas por produto (2026)"
+          description={proprio ? 'Histórico de entradas e saídas por produto e todos os movimentos do estoque' : 'Histórico de entradas e saídas por produto (2026)'}
           actions={
             aba === 'historico' ? (
               <FiltrosGaveta
@@ -101,8 +105,10 @@ export default async function MovimentacoesPage({
       />
 
       {aba === 'historico'
-        ? <HistoricoTab sp={sp} lojaId={lojaId} />
-        : <MovimentosTab sp={sp} lojaId={lojaId} />
+        ? <HistoricoTab sp={sp} lojaId={lojaId} proprio={proprio} />
+        : proprio
+          ? <MovimentosProprio sp={sp} lojaId={lojaId} />
+          : <MovimentosTab sp={sp} lojaId={lojaId} />
       }
     </div>
   )

@@ -30,9 +30,12 @@ type Local = { codigo_local_estoque: number; descricao: string }
 export function NovoInventario({
   locais,
   familias,
+  proprio = false,
 }: {
   locais: Local[]
   familias: string[]
+  // Loja de estoque próprio: contagem cíclica por curva A/B/C (itens que mais giram em valor).
+  proprio?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState<string>('')
@@ -40,12 +43,17 @@ export function NovoInventario({
   const [data, setData] = useState(hojeBahia)
   const [tiposSel, setTiposSel] = useState<string[]>([])
   const [familiasSel, setFamiliasSel] = useState<string[]>([])
+  const [curvasSel, setCurvasSel] = useState<string[]>([])
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
   function toggleTipo(v: string) {
     setTiposSel((prev) => (prev.includes(v) ? prev.filter((t) => t !== v) : [...prev, v]))
+  }
+
+  function toggleCurva(v: string) {
+    setCurvasSel((prev) => (prev.includes(v) ? prev.filter((c) => c !== v) : [...prev, v]))
   }
 
   function toggleFamilia(v: string) {
@@ -59,8 +67,8 @@ export function NovoInventario({
     }
     startTransition(async () => {
       const filtros =
-        tiposSel.length || familiasSel.length
-          ? { tipos: tiposSel, familias: familiasSel }
+        tiposSel.length || familiasSel.length || curvasSel.length
+          ? { tipos: tiposSel, familias: familiasSel, curvas: curvasSel }
           : undefined
       const inv = await createInventario(Number(local), data, filtros)
       if (inv && 'error' in inv) {
@@ -75,7 +83,7 @@ export function NovoInventario({
     })
   }
 
-  const totalFiltros = tiposSel.length + familiasSel.length
+  const totalFiltros = tiposSel.length + familiasSel.length + curvasSel.length
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -162,6 +170,19 @@ export function NovoInventario({
                     ))}
                   </div>
                 </div>
+                {proprio && (
+                  <div className="space-y-1.5">
+                    <p className="text-[13px] font-medium text-text-muted">Contagem cíclica por curva</p>
+                    <div className="space-y-1">
+                      {([['A', 'Curva A: os itens que mais giram em valor (conte toda semana)'], ['B', 'Curva B: giro médio (conte todo mês)'], ['C', 'Curva C: giro baixo (conte a cada 3 meses)']] as const).map(([c, rotulo]) => (
+                        <label key={c} className="flex cursor-pointer items-center gap-2 text-xs">
+                          <input type="checkbox" className="accent-brand" checked={curvasSel.includes(c)} onChange={() => toggleCurva(c)} />
+                          <span className="text-text-muted">{rotulo}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {familias.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[13px] font-medium text-text-muted">
@@ -184,7 +205,7 @@ export function NovoInventario({
                 )}
                 <p className="text-[12px] text-text-muted">
                   {totalFiltros > 0
-                    ? 'Apenas produtos dos tipos/famílias selecionados serão incluídos.'
+                    ? 'Apenas produtos dos tipos, famílias e curvas selecionados serão incluídos.'
                     : 'Selecione tipos ou famílias para incluir produtos automaticamente.'}
                 </p>
               </div>

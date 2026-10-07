@@ -24,10 +24,12 @@ export function AcoesInventario({
   inventarioId,
   temErro,
   podeExcluir,
+  proprio = false,
 }: {
   inventarioId: number
   temErro: boolean
   podeExcluir: boolean
+  proprio?: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -59,7 +61,7 @@ export function AcoesInventario({
   }
 
   function excluir() {
-    if (!window.confirm('Excluir este inventário? Os ajustes já lançados no Omie serão removidos.'))
+    if (!window.confirm(`Excluir este inventário? Os ajustes já lançados ${proprio ? 'no estoque' : 'no Omie'} serão removidos.`))
       return
     startTransition(async () => {
       const res = await excluirInventario(inventarioId)
@@ -117,7 +119,7 @@ export function AcoesInventario({
           disabled={pending}
           className={btnLinhaClass('outline')}
           aria-label="Reenviar erros"
-          title="Reenviar itens com erro ao Omie"
+          title={proprio ? 'Reenviar itens pendentes' : 'Reenviar itens com erro ao Omie'}
         >
           <RefreshCw className="size-4" />
         </button>

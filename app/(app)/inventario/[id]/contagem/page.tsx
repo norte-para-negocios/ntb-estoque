@@ -7,6 +7,7 @@ import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { btnClass } from '@/components/ui-kit/Button'
 import { ContagemInventario, type ItemContagem } from '@/components/inventario/ContagemInventario'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export default async function ContagemPage({ params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -15,6 +16,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
 
   const { id } = await params
   const supabase = await createClient()
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
 
   const { data: inventario } = await supabase
     .from('inventarios')
@@ -40,18 +42,25 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
     produto_codigo_produto: number
     quan: number | null
     status: string | null
+    diferenca?: number | null
+    motivo?: string | null
+    descricao_status?: string | null
   }[] = []
   const PAGE_SIZE = 1000
   for (let pagina = 0; ; pagina++) {
     const from = pagina * PAGE_SIZE
     const { data: bloco } = await supabase
       .from('inventario_items')
-      .select('id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status')
+      .select(
+        proprio
+          ? 'id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status, diferenca, motivo, descricao_status'
+          : 'id, produto_codigo, produto_descricao, produto_familia, produto_codigo_produto, quan, status'
+      )
       .eq('inventario_id', id)
       .order('id')
       .range(from, from + PAGE_SIZE - 1)
     if (!bloco?.length) break
-    itensRaw.push(...bloco)
+    itensRaw.push(...(bloco as unknown as typeof itensRaw))
     if (bloco.length < PAGE_SIZE) break
   }
 
@@ -126,6 +135,7 @@ export default async function ContagemPage({ params }: { params: Promise<{ id: s
         itensIniciais={(itens ?? []) as ItemContagem[]}
         finalizado={finalizado}
         podeEditar={podeEditar}
+        proprio={proprio}
       />
     </div>
   )
