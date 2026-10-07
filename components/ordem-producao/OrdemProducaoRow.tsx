@@ -741,7 +741,7 @@ function Acoes({ op, ctrl }: StepperProps) {
       <DialogImprimirEtiqueta
         href={`/ordem-producao/${op.id}/imprimir`}
         trigger={
-          <button type="button" className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`} title="Imprimir">
+          <button type="button" className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`} title="Imprimir" aria-label="Imprimir">
             <Printer className="size-3.5" />
           </button>
         }
@@ -753,6 +753,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2 hover:text-brand`}
           title="Concluir OP"
+          aria-label="Concluir OP"
         >
           <Check className="size-3.5" />
         </button>
@@ -765,6 +766,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-warn hover:bg-warn/10`}
           title={proprio ? 'Reverter a conclusão (estorna no estoque)' : 'Reverter a conclusão (estorna no Omie)'}
+          aria-label={proprio ? 'Reverter a conclusão (estorna no estoque)' : 'Reverter a conclusão (estorna no Omie)'}
         >
           <Undo2 className="size-3.5" />
         </button>
@@ -776,6 +778,7 @@ function Acoes({ op, ctrl }: StepperProps) {
           disabled={ctrl.pending}
           className={`${acaoDesktopClass} text-err hover:bg-err/10`}
           title={op.concluida ? 'Excluir a OP (reverte a produção antes)' : proprio ? 'Excluir a OP' : 'Excluir a OP no Omie'}
+          aria-label={op.concluida ? 'Excluir a OP (reverte a produção antes)' : proprio ? 'Excluir a OP' : 'Excluir a OP no Omie'}
         >
           <Trash2 className="size-3.5" />
         </button>
@@ -855,6 +858,7 @@ export function OrdemProducaoRow({
                 onClick={() => setExpandido((e) => !e)}
                 className={`${acaoDesktopClass} text-text-muted hover:bg-surface-2`}
                 title={expandido ? 'Ocultar ingredientes' : `${op.ingredientes!.length} ingrediente(s)`}
+                aria-label={expandido ? 'Ocultar ingredientes' : `${op.ingredientes!.length} ingrediente(s)`}
               >
                 <ChevronDown className={`size-3.5 transition-transform duration-150 ${expandido ? 'rotate-180' : ''}`} />
               </button>

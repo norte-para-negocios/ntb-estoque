@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition, type ReactNode } from 'react'
+import { Children, cloneElement, isValidElement, useId, useMemo, useState, useTransition, type ReactElement, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -20,11 +20,16 @@ type Familia = { codigo: number; descricao: string }
 type LinhaVar = { codigo: string | null; valor: string; preco: string; inativo: boolean }
 
 function Campo({ label, dica, children }: { label: string; dica?: string; children: ReactNode }) {
+  // Rótulo ligado ao campo (htmlFor/id) para leitor de tela e clique no rótulo; grupo de vários campos vira role=group.
+  const id = useId()
+  const unico = Children.count(children) === 1 && isValidElement(children)
+  const filho = unico ? (children as ReactElement<{ id?: string; 'aria-describedby'?: string }>) : null
+  const campoId = filho?.props.id ?? `${id}-campo`
   return (
-    <div className="space-y-1.5">
-      <label className="block text-[13px] font-medium text-text-muted">{label}</label>
-      {children}
-      {dica && <p className="text-[12px] text-text-muted">{dica}</p>}
+    <div className="space-y-1.5" {...(unico ? {} : { role: 'group', 'aria-labelledby': `${id}-rotulo` })}>
+      <label id={`${id}-rotulo`} htmlFor={unico ? campoId : undefined} className="block text-[13px] font-medium text-text-muted">{label}</label>
+      {filho ? cloneElement(filho, { id: campoId, 'aria-describedby': dica ? `${id}-dica` : filho.props['aria-describedby'] }) : children}
+      {dica && <p id={`${id}-dica`} className="text-[12px] text-text-muted">{dica}</p>}
     </div>
   )
 }
