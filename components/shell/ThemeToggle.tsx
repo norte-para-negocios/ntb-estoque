@@ -8,6 +8,17 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setEscuro(document.documentElement.classList.contains('dark'))
+    // Sem escolha manual salva, acompanha o tema do sistema (inclusive se ele mudar com a tela aberta).
+    let salvo: string | null = null
+    try { salvo = localStorage.getItem('tema') } catch { /* sem localStorage: segue o sistema */ }
+    if (salvo) return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const aoMudar = (e: MediaQueryListEvent) => {
+      document.documentElement.classList.toggle('dark', e.matches)
+      setEscuro(e.matches)
+    }
+    mq.addEventListener('change', aoMudar)
+    return () => mq.removeEventListener('change', aoMudar)
   }, [])
 
   function alternar() {
