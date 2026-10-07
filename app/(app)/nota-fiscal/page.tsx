@@ -697,7 +697,7 @@ export default async function NotaFiscalPage({
           <EmptyState
             icon={FileText}
             title="Nenhuma nota fiscal no período"
-            hint="Sincronize com o Omie ou ajuste os filtros."
+            hint={proprio ? 'Clique em Buscar na SEFAZ, importe um XML ou ajuste os filtros.' : 'Sincronize com o Omie ou ajuste os filtros.'}
           />
         }
       />

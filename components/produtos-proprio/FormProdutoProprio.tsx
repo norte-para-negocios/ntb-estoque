@@ -180,7 +180,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
             </Campo>
             {!edicao && (
               <Campo label="Tipo do item *" dica="Define o prefixo do código: 90 vendável, 80 matéria-prima, 70 intermediário, 60 consumo, 50 outros.">
-                <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputClass}>
+                <select value={tipo} onChange={(e) => { setTipo(e.target.value); if (!inicial) setPdv(['00', '04'].includes(e.target.value)) }} className={inputClass}>
                   {PRODUTO_TIPO_ITEM.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </Campo>

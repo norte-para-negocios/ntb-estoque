@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -75,6 +76,7 @@ export default async function RelatorioEstoqueValorizadoPage({
   searchParams: Promise<{ familia?: string; tipo?: string; local?: string; busca?: string; ver?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   const ator = await getAtorGestao()
   if (!ator.podeGerir) notFound()
 
@@ -191,7 +193,7 @@ export default async function RelatorioEstoqueValorizadoPage({
         <PageHeader
           title="Estoque Valorizado"
           icon={Boxes}
-          description="Valor do estoque atual: saldo x CMC da última foto do Omie."
+          description={proprio ? 'Valor do estoque atual: saldo x custo médio de hoje.' : 'Valor do estoque atual: saldo x CMC da última foto do Omie.'}
           voltarHref="/relatorios"
           actions={
             <FiltrosGaveta

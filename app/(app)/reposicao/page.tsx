@@ -38,7 +38,7 @@ export default async function ReposicaoPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Indicador icon={BellRing} rotulo="Itens abaixo do mínimo" valor={String(filtradas.length)} tom={filtradas.length ? 'aviso' : undefined} dica={`${grupos.length} família${grupos.length === 1 ? '' : 's'}`} />
         <Indicador icon={Wallet} rotulo="Compra estimada" valor={fmtBRL(valorTotal)} dica="falta × último custo (ou custo médio)" />
-        <Indicador icon={PackageCheck} rotulo="Mínimos definidos" valor="no produto" dica="defina o mínimo por local em Estoque" />
+        <Indicador icon={PackageCheck} rotulo="Mínimos definidos" valor="Por local" dica="defina o mínimo de cada produto em Estoque" />
       </div>
 
       <Toolbar>

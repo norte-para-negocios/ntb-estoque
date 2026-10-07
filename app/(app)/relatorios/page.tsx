@@ -64,7 +64,9 @@ export default async function RelatoriosPage() {
   if (!(await getAtorGestao()).podeGerir) notFound()
   // Lojas com estoque proprio ganham o relatorio de Lucro (faturamento menos o custo real de cada baixa).
   const proprio = (await modoDaLoja(await getCurrentLojaId())) === 'proprio'
-  const secoes = RELATORIOS.map((sec) =>
+  const semOmie = (sec: (typeof RELATORIOS)[number]) =>
+    proprio ? { ...sec, itens: sec.itens.map((i) => (i.href === '/relatorio-estoque-valorizado' ? { ...i, descricao: 'Valor do estoque por produto: saldo x custo médio de hoje.' } : i)) } : sec
+  const secoes = RELATORIOS.map(semOmie).map((sec) =>
     proprio && sec.grupo === 'Faturamento'
       ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' }, ...sec.itens] }
       : sec

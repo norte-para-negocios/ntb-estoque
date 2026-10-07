@@ -790,7 +790,7 @@ export default async function ProdutoPage({
           <EmptyState
             icon={Package}
             title="Nenhum produto"
-            hint="Sincronize com o Omie ou ajuste a busca."
+            hint={modoProprio ? 'Crie o primeiro produto ou ajuste a busca.' : 'Sincronize com o Omie ou ajuste a busca.'}
           />
         }
       />
