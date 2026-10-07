@@ -10,6 +10,7 @@ import {
   type ItemMovimento,
 } from '@/components/transferencia/ContagemTransferencia'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export default async function ContagemTransferenciaPage({
   params,
@@ -19,6 +20,7 @@ export default async function ContagemTransferenciaPage({
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Transferencias - Ver'))) notFound()
   const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
 
   const { id } = await params
   const supabase = await createClient()
@@ -118,6 +120,7 @@ export default async function ContagemTransferenciaPage({
         itensIniciais={itens}
         finalizado={finalizado}
         podeEditar={podeEditar}
+        proprio={proprio}
         observacaoInicial={(trans as { observacao?: string | null }).observacao ?? null}
       />
     </div>

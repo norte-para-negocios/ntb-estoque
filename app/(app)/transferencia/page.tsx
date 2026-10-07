@@ -23,6 +23,7 @@ import { btnClass, btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { complementarMovimentos } from '@/lib/historico-contabo'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 const POR_PAGINA = 50
 
@@ -53,6 +54,7 @@ export default async function TransferenciaPage({
   const podeCriar = await requirePermissao(lojaId, 'Transferencias - Criar')
   const podeExcluir = await requirePermissao(lojaId, 'Transferencias - Excluir')
   const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
+  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
 
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
@@ -431,6 +433,7 @@ export default async function TransferenciaPage({
                 transferenciaId={t.id}
                 temErro={temErro}
                 podeExcluir={podeExcluir}
+                proprio={proprio}
               />
             </div>
           )
@@ -448,7 +451,7 @@ export default async function TransferenciaPage({
         <Paginacao basePath="/transferencia" page={page} temProxima={temProxima} />
       )}
 
-      <AjustesOmieDetectados lojaId={lojaId} tipo="TRF" />
+      {!proprio && <AjustesOmieDetectados lojaId={lojaId} tipo="TRF" />}
     </div>
   )
 }

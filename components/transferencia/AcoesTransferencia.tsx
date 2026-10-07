@@ -24,10 +24,12 @@ export function AcoesTransferencia({
   transferenciaId,
   temErro,
   podeExcluir,
+  proprio = false,
 }: {
   transferenciaId: number
   temErro: boolean
   podeExcluir: boolean
+  proprio?: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -61,7 +63,9 @@ export function AcoesTransferencia({
   function excluir() {
     if (
       !window.confirm(
-        'Excluir esta transferência? Os ajustes já lançados no Omie serão removidos.'
+        proprio
+          ? 'Excluir esta transferência? Os lançamentos já feitos no estoque serão estornados.'
+          : 'Excluir esta transferência? Os ajustes já lançados no Omie serão removidos.'
       )
     )
       return

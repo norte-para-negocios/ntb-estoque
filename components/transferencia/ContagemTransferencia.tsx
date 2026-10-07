@@ -53,12 +53,15 @@ export function ContagemTransferencia({
   finalizado,
   podeEditar = true,
   observacaoInicial = null,
+  proprio = false,
 }: {
   transferenciaId: number
   itensIniciais: ItemMovimento[]
   finalizado: boolean
   podeEditar?: boolean
   observacaoInicial?: string | null
+  /** Loja com estoque próprio: o item é lançado no estoque da própria loja (sem Omie). */
+  proprio?: boolean
 }) {
   const [itens, setItens] = useState(itensIniciais)
   const [quans, setQuans] = useState<Record<number, number | null>>(() =>
@@ -86,6 +89,31 @@ export function ContagemTransferencia({
   const [editando, setEditando] = useState(false)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
+  const T = proprio
+    ? {
+        itemOk: 'Item lançado no estoque',
+        enviada: 'Transferência concluída',
+        reenviada: 'Pendentes lançados no estoque',
+        motivoOk: 'Motivo salvo e atualizado no estoque',
+        motivoPend: 'Motivo salvo; lançamento no estoque pendente',
+        excluirItem: 'Excluir este item? O lançamento já feito no estoque será estornado.',
+        placar: 'produtos lançados no estoque',
+        reenviar: 'Lançar pendentes',
+        reenviando: 'Lançando...',
+        editando: 'Editando uma transferência finalizada. Ao adicionar, alterar a quantidade ou excluir um item, o lançamento já feito no estoque é estornado e refeito na hora.',
+      }
+    : {
+        itemOk: 'Item integrado ao Omie',
+        enviada: 'Transferência enviada ao Omie',
+        reenviada: 'Reenviado ao Omie',
+        motivoOk: 'Motivo salvo e atualizado no Omie',
+        motivoPend: 'Motivo salvo; reenvio ao Omie pendente',
+        excluirItem: 'Excluir este item? O ajuste já lançado no Omie será removido.',
+        placar: 'produtos integrados ao Omie',
+        reenviar: 'Reenviar pendentes',
+        reenviando: 'Reenviando...',
+        editando: 'Editando uma transferência finalizada. Ao adicionar, alterar a quantidade ou excluir um item, o ajuste já lançado no Omie é refeito ou removido na hora.',
+      }
   // Controles de quantidade/adicao/remocao liberados: durante a contagem (nao
   // finalizado) ou quando o usuario clica em "Editar itens" numa transferencia
   // finalizada. Requer tambem podeEditar (permissao Transferencias - Editar):
@@ -176,7 +204,7 @@ export function ContagemTransferencia({
       } else if (res.status === 'Erro') {
         toast.error('Falha ao integrar item', { description: res.descricao_status || 'Tente reenviar' })
       } else if (res.status === 'Concluido') {
-        toast.success('Item integrado ao Omie')
+        toast.success(T.itemOk)
       }
     })
   }
@@ -204,14 +232,14 @@ export function ContagemTransferencia({
       if (res?.envio) {
         const statusUi = res.envio.status === 'Iniciado' ? 'Vazio' : res.envio.status
         setItens((prev) => prev.map((i) => (i.id === movId ? { ...i, status: statusUi } : i)))
-        if (res.envio.status === 'Concluido') toast.success('Motivo salvo e atualizado no Omie')
-        else toast.warning('Motivo salvo; reenvio ao Omie pendente', { description: res.envio.descricao_status ?? undefined })
+        if (res.envio.status === 'Concluido') toast.success(T.motivoOk)
+        else toast.warning(T.motivoPend, { description: res.envio.descricao_status ?? undefined })
       } else toast.success('Motivo salvo')
     })
   }
 
   function remover(movId: number) {
-    if (finalizado && !window.confirm('Excluir este item? O ajuste já lançado no Omie será removido.')) {
+    if (finalizado && !window.confirm(T.excluirItem)) {
       return
     }
     const anterior = itens
@@ -245,7 +273,7 @@ export function ContagemTransferencia({
       const res = await finishTransferencia(transferenciaId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Transferência enviada ao Omie')
+        toast.success(T.enviada)
         router.refresh()
       }
     })
@@ -256,7 +284,7 @@ export function ContagemTransferencia({
       const res = await forceSyncTransferencia(transferenciaId)
       if (res?.error) toast.error('Erro', { description: res.error })
       else {
-        toast.success('Reenviado ao Omie')
+        toast.success(T.reenviada)
         router.refresh()
       }
     })
@@ -288,7 +316,7 @@ export function ContagemTransferencia({
             <span className="inline-flex items-center gap-2">
               <span aria-hidden className={`size-2 shrink-0 rounded-full ${tomBanner}`} />
               <span>
-                <span className="num">{integrados}</span> de <span className="num">{total}</span> produtos integrados ao Omie
+                <span className="num">{integrados}</span> de <span className="num">{total}</span> {T.placar}
               </span>
             </span>
             {comErro > 0 && (
@@ -314,7 +342,7 @@ export function ContagemTransferencia({
             {(comErro > 0 || semCusto > 0) && (
               <button onClick={reenviar} disabled={pending} className={btnClass('outline')}>
                 {pending && <Spinner />}
-                {pending ? 'Reenviando...' : 'Reenviar pendentes'}
+                {pending ? T.reenviando : T.reenviar}
               </button>
             )}
             {finalizado && podeEditar && (
@@ -342,8 +370,7 @@ export function ContagemTransferencia({
         <p className="mb-4 flex items-start gap-2 px-1 text-[13px] text-text-muted">
           <span aria-hidden className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" />
           <span>
-          Editando uma transferência finalizada. Ao adicionar, alterar a quantidade ou excluir um item, o
-          ajuste já lançado no Omie é refeito ou removido na hora.</span>
+          {T.editando}</span>
         </p>
       )}
 
