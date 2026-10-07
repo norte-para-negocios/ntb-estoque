@@ -30,7 +30,7 @@ begin
       jsonb_build_object('vendas_ref', v_g2, 'nome', 'Sucos', 'pai_vendas_ref', v_g1, 'ordem', 1, 'ativo', true)),
     'produtos', jsonb_build_array(
       jsonb_build_object('vendas_ref', v_pm, 'nome', 'Moqueca', 'preco', 80, 'mae', true, 'grupo_vendas_ref', v_g2),
-      jsonb_build_object('vendas_ref', v_p1, 'nome', 'Moqueca Individual', 'preco', 80, 'pai_codigo', null, 'atributos', jsonb_build_object('tamanho', 'Individual')),
+      jsonb_build_object('vendas_ref', v_p1, 'nome', 'Moqueca Individual', 'preco', 80, 'pai_vendas_ref', v_pm, 'atributos', jsonb_build_object('tamanho', 'Individual')),
       jsonb_build_object('vendas_ref', v_ps, 'nome', 'Água', 'preco', 4.5, 'grupo_vendas_ref', v_g2))));
   assert (r -> 'produtos' -> 0 ->> 'criado')::boolean, 'mãe criada';
   cm := r -> 'produtos' -> 0 ->> 'codigo';
@@ -40,6 +40,7 @@ begin
   assert n = 0, 'sem eco: o que veio do Vendas não volta ao outbox (' || n || ')';
   assert (select eh_mae from produtos where loja_id = 99020 and codigo = cm), 'mãe marcada';
 
+  assert (select produto_pai_codigo from produtos where loja_id = 99020 and vendas_ref = v_p1) = (select codigo_produto from produtos where loja_id = 99020 and codigo = cm), 'variação ligada à mãe pelo id do Vendas no mesmo lote';
   -- variação com pai (segunda chamada, mãe já existe)
   r := aplicar_catalogo_vendas(99020, jsonb_build_object('produtos', jsonb_build_array(
       jsonb_build_object('vendas_ref', v_p2, 'nome', 'Moqueca Família', 'preco', 150, 'pai_codigo', cm, 'atributos', jsonb_build_object('tamanho', 'Família')))));

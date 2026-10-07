@@ -270,8 +270,12 @@ export async function reconciliarCatalogo(lojaId: number): Promise<{ aplicadoDoV
     const r = await getJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string)
     const snap = r.json as { ok?: boolean; grupos?: unknown[]; produtos?: unknown[]; error?: string }
     if (r.status >= 300 || !snap.ok) return { aplicadoDoVendas: 0, enfileirados: 0, erro: snap.error || `Vendas respondeu HTTP ${r.status}` }
-    const { error } = await supabase.rpc('aplicar_catalogo_vendas', { p_loja: lojaId, p_payload: { grupos: snap.grupos ?? [], produtos: snap.produtos ?? [] } })
+    const { data: mapa, error } = await supabase.rpc('aplicar_catalogo_vendas', { p_loja: lojaId, p_payload: { grupos: snap.grupos ?? [], produtos: snap.produtos ?? [] } })
     if (error) return { aplicadoDoVendas: 0, enfileirados: 0, erro: error.message }
+    // O Vendas aprende os códigos criados aqui (produto que só existia no Vendas ganha código por tipo).
+    const m = mapa as { produtos?: { vendas_ref: string; codigo: string; criado?: boolean }[] } | null
+    const novos = (m?.produtos ?? []).filter((x) => x.criado)
+    if (novos.length) await postJson(`${base}/api/integracao/catalogo`, loja.integracao_api_key as string, { origem: 'estoque', mapa: { produtos: novos.map((x) => ({ vendas_ref: x.vendas_ref, codigo: x.codigo })) } })
     aplicado = (snap.produtos?.length ?? 0) + (snap.grupos?.length ?? 0)
   } catch (e) {
     return { aplicadoDoVendas: 0, enfileirados: 0, erro: e instanceof Error ? e.message : String(e) }

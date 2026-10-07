@@ -172,7 +172,7 @@ create trigger grupos_produto_sync_outbox after insert or update on public.grupo
 
 -- 5) Aplicar catálogo vindo do Vendas (idempotente, sem eco) ------------------------------------------------------
 -- payload: { grupos:[{vendas_ref, nome, pai_vendas_ref, ordem, ativo, updated_at}],
---            produtos:[{vendas_ref, codigo, nome, preco, ativo, grupo_vendas_ref, pai_codigo, mae, atributos, updated_at, tipo_item, ncm, unidade}] }
+--            produtos:[{vendas_ref, codigo, nome, preco, ativo, grupo_vendas_ref, pai_codigo, pai_vendas_ref, mae, atributos, updated_at, tipo_item, ncm, unidade}] }
 -- Regras: preço de venda = Vendas manda; código/unidade/tipo/NCM/custo = Estoque manda; nome/ativo/grupo = vence updated_at mais novo.
 create or replace function public.aplicar_catalogo_vendas(p_loja bigint, p_payload jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -229,6 +229,10 @@ begin
     v_paicp := null;
     if nullif(p ->> 'pai_codigo', '') is not null then
       select codigo_produto into v_paicp from produtos where loja_id = p_loja and codigo = p ->> 'pai_codigo';
+    end if;
+    -- mãe criada no mesmo lote (ainda sem código no Vendas): o vínculo vem pelo id do Vendas
+    if v_paicp is null and nullif(p ->> 'pai_vendas_ref', '') is not null then
+      select codigo_produto into v_paicp from produtos where loja_id = p_loja and vendas_ref = (p ->> 'pai_vendas_ref')::uuid;
     end if;
 
     v_atual := null;

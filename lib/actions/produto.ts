@@ -8,6 +8,8 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { FAIXA_CODIGO_POR_TIPO } from '@/lib/constants-omie'
 import type { LojaOmie } from '@/lib/omie/client'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { after } from 'next/server'
+import { entregarAgora } from '@/lib/estoque/catalogo-sync'
 import { criarProdutoProprio, editarProdutoProprio, excluirProdutoProprio } from '@/lib/estoque/proprio-driver'
 
 // Familias existentes na loja (codigo + descricao), para o seletor do cadastro.
@@ -148,11 +150,9 @@ export async function criarProduto(dados: {
     if ('error' in r) return { error: r.error }
     await registrarAuditoria('criar', 'produto', r.codigoProduto, dados.descricao)
     revalidatePath('/produto')
-    let avisoVendas: string | undefined
-    if (dados.criarNoNtbVendas && dados.pdv) {
-      avisoVendas = (await enviarProdutoParaNtbVendas(lojaId, dados.descricao.trim(), Number(dados.valorUnitario) || 0, r.codigo)).error
-    }
-    return { ok: true, codigoProduto: r.codigoProduto, codigo: r.codigo, avisoVendas }
+    // Estoque próprio: o produto chega ao Norte Vendas sozinho (outbox + entrega), sem checkbox e sem criar em duplicata.
+    after(() => entregarAgora(lojaId))
+    return { ok: true, codigoProduto: r.codigoProduto, codigo: r.codigo, avisoVendas: undefined as string | undefined }
   }
 
   if (!dados.codigo?.trim()) return { error: 'Informe o código do produto' }
@@ -266,6 +266,7 @@ export async function editarProduto(
     if ('error' in r) return { error: r.error }
     await registrarAuditoria('editar', 'produto', r.codigoProduto ?? id, dados.descricao.trim())
     revalidatePath('/produto')
+    after(() => entregarAgora(lojaId))
     return { ok: true }
   }
 

@@ -100,7 +100,7 @@ export async function editarProdutoProprio(lojaId: number, id: number, d: Produt
     .eq('id', id)
     .eq('loja_id', lojaId)
   if (error) return { error: error.message }
-  if (atual.codigo) await notificarVendasProduto(lojaId, atual.codigo as string, d.descricao.trim(), Number(d.valorUnitario) || 0)
+  // A mudança chega ao Norte Vendas pelo outbox do catálogo (gatilho no banco); sem PATCH direto.
   return { ok: true, codigoProduto: (atual.codigo_produto as number | null) ?? null }
 }
 
