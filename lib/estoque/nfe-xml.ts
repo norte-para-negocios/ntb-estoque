@@ -14,6 +14,9 @@ export type ItemNfe = {
   valorTotal: number // vProd, antes do desconto do item
   desconto: number // vDesc do item
   icms: number // vICMS do item (informativo; só entra no custo se a compra marcar ICMS recuperável)
+  /** Rastreabilidade (grupo prod/rastro: nLote, dVal). Vem em produto com lote obrigatório; com vários lotes, o de validade mais próxima. */
+  lote?: string | null
+  validade?: string | null // YYYY-MM-DD
 }
 
 export type NfeLida = {
@@ -142,6 +145,11 @@ export function lerNfe(xml: string): NfeLida {
     const desconto = num(txt(prod, 'vDesc'))
     somaDescItens += desconto
     const icmsNo = achar(det, 'imposto', 'ICMS')?.filhos[0]
+    const rastros = prod.filhos.filter((f) => f.nome === 'rastro')
+      .map((r) => ({ lote: txt(r, 'nLote') || null, validade: /^\d{4}-\d{2}-\d{2}/.test(txt(r, 'dVal')) ? txt(r, 'dVal').slice(0, 10) : null }))
+      .filter((r) => r.lote || r.validade)
+      .sort((a, b) => (a.validade ?? '9999') < (b.validade ?? '9999') ? -1 : 1)
+    if (rastros.length > 1) avisos.push(`Item ${det.attrs.nItem ?? itens.length + 1}: a nota traz ${rastros.length} lotes; entra como o de validade mais próxima (${rastros[0].lote ?? 'sem número'}).`)
     itens.push({
       linha: Number(det.attrs.nItem) || itens.length + 1,
       cProd: txt(prod, 'cProd'),
@@ -155,6 +163,7 @@ export function lerNfe(xml: string): NfeLida {
       valorTotal: num(txt(prod, 'vProd')),
       desconto,
       icms: num(txt(icmsNo, 'vICMS')),
+      ...(rastros[0] ? { lote: rastros[0].lote, validade: rastros[0].validade } : {}),
     })
   }
   if (!itens.length) throw new Error('A nota não tem itens.')

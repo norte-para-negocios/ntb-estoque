@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { BellRing, Download, PackageCheck, Wallet } from 'lucide-react'
+import { BellRing, CalendarClock, Download, PackageCheck, Wallet } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { resumoValidade } from '@/lib/estoque/lotes'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
@@ -19,7 +21,7 @@ export default async function ReposicaoPage({ searchParams }: { searchParams: Pr
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
   const sp = await searchParams
-  const { linhas, locais, familias } = await carregarReposicao(lojaId)
+  const [{ linhas, locais, familias }, validade] = await Promise.all([carregarReposicao(lojaId), resumoValidade(lojaId, hojeBahiaISO())])
   const filtradas = filtrarReposicao(linhas, sp)
 
   const porFamilia = new Map<string, typeof filtradas>()
@@ -34,6 +36,20 @@ export default async function ReposicaoPage({ searchParams }: { searchParams: Pr
         <PageHeader title="Reposição" description="O que está abaixo do mínimo e quanto falta para chegar nele"
           actions={filtradas.length ? <a href={`/reposicao/csv${qs ? `?${qs}` : ''}`} className={btnClass('outline')}><Download className="size-4" />Baixar CSV</a> : undefined} />
       </ListaHeader>
+
+      {(validade.vencidos > 0 || validade.vencendo > 0) && (
+        <Link href={validade.vencidos > 0 ? '/validade?modo=vencidos' : `/validade?dias=${validade.alertaDias}`}
+          className="flex items-center justify-between gap-3 rounded-[var(--r-lg)] bg-warn/10 p-3 text-[13px] text-text ring-1 ring-warn/30 u-motion hover:bg-warn/15">
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock className="size-4 text-warn" />
+            {validade.vencidos > 0 && <span><span className="num font-semibold text-err">{validade.vencidos}</span> lote(s) vencido(s)</span>}
+            {validade.vencidos > 0 && validade.vencendo > 0 && <span className="text-text-muted">·</span>}
+            {validade.vencendo > 0 && <span><span className="num font-semibold">{validade.vencendo}</span> vencem em até {validade.alertaDias} dias</span>}
+            <span className="text-text-muted">— dê baixa antes de comprar mais.</span>
+          </span>
+          <span className="text-[12px] font-semibold text-brand">Ver validade</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Indicador icon={BellRing} rotulo="Itens abaixo do mínimo" valor={String(filtradas.length)} tom={filtradas.length ? 'aviso' : undefined} dica={`${grupos.length} família${grupos.length === 1 ? '' : 's'}`} />

@@ -79,7 +79,8 @@ export type Mapeamento = { linha: number; codigoProduto: number | null; fator: n
 type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean } | { error: string }
 
 async function chamarLancar(lojaId: number, compra: Record<string, unknown>, local: number, userId: string | null): Promise<ResultadoLancamento> {
-  const { data, error } = await createServiceClient().rpc('lancar_compra', { p_compra: { ...compra, loja_id: lojaId }, p_local: local, p_user: userId })
+  // lancar_compra_com_lotes (migration 145) = lancar_compra + lote/validade de cada item até o gatilho de lotes.
+  const { data, error } = await createServiceClient().rpc('lancar_compra_com_lotes', { p_compra: { ...compra, loja_id: lojaId }, p_local: local, p_user: userId })
   if (error) return { error: error.message }
   const r = data as { compra_id: number; status: string; lancados: number; pendentes: number; duplicado: boolean }
   return { ok: true, compraId: r.compra_id, notaId: null, status: r.status, lancados: r.lancados, pendentes: r.pendentes, duplicado: r.duplicado }
@@ -109,7 +110,7 @@ export async function lancarCompraXml(dados: { xml: string; codigoLocal: number;
   return { ok: true, compraId: res.compraId ?? 0, notaId: res.notaId, status: res.status, lancados: res.lancados, pendentes: res.pendentes, duplicado: !res.criada && res.lancados === 0 && res.pendentes === 0 }
 }
 
-export type ItemManual = { codigoProduto: number; quantidade: number | string; valorUnitario: number | string; unidade?: string; fator?: number | string; descricao?: string }
+export type ItemManual = { codigoProduto: number; quantidade: number | string; valorUnitario: number | string; unidade?: string; fator?: number | string; descricao?: string; lote?: string | null; validade?: string | null }
 
 /** Compra sem XML (nota de papel, feira, mercado): fornecedor e itens digitados. */
 export async function lancarCompraManual(dados: {
@@ -130,6 +131,7 @@ export async function lancarCompraManual(dados: {
       linha: idx + 1, c_prod: null, descricao: i.descricao ?? null, unidade_compra: i.unidade ?? null,
       quantidade: numero(i.quantidade), valor_unitario: numero(i.valorUnitario), valor_total: Math.round(numero(i.quantidade) * numero(i.valorUnitario) * 100) / 100,
       fator: numero(i.fator) > 0 ? numero(i.fator) : 1, codigo_produto: i.codigoProduto,
+      lote: i.lote?.trim() || null, validade: i.validade && /^\d{4}-\d{2}-\d{2}$/.test(i.validade) ? i.validade : null,
     })),
   }, dados.codigoLocal, ctx.userId)
   if ('error' in r) return r

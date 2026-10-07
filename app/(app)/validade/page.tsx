@@ -17,6 +17,8 @@ import { urgenciaValidade, FUNDO_CLASSE } from '@/lib/status-cor'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { CalendarClock } from 'lucide-react'
 import { complementarOrdensProducao } from '@/lib/historico-contabo'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { ValidadeProprio } from './ValidadeProprio'
 
 const LIMITE = 200
 // 0 = "vence hoje" (so a data de hoje). Os demais sao horizontes acumulados:
@@ -49,12 +51,14 @@ function formataData(validade: string): string {
 export default async function ValidadePage({
   searchParams,
 }: {
-  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string; ord?: string; dir?: string }>
+  searchParams: Promise<{ dias?: string; tipo?: string; modo?: string; familia?: string; produto?: string; local?: string; grupo?: string; ord?: string; dir?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Validade'))) notFound()
 
   const sp = await searchParams
+  // Estoque próprio: validade por LOTE (estoque_lotes, migration 145). Modo omie segue exatamente como antes.
+  if ((await modoDaLoja(lojaId)) === 'proprio') return <ValidadeProprio lojaId={lojaId} sp={sp} hoje={hojeBahiaISO()} />
   // Modo "vencidos": so os que ja venceram (validade < hoje), do mais vencido pro
   // menos. Senao, o que vence ate hoje + N dias.
   const vencidos = sp.modo === 'vencidos'
