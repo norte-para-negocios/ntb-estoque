@@ -62,3 +62,15 @@ export function parseValorBR(entrada: string): number {
   if (/^\d+\.\d{1,2}$/.test(t)) return Number(t)
   return Number(t.replace(/\./g, ''))
 }
+
+export type AtalhoDia = 'hoje' | 'ontem' | 'semana' | 'mes' | 'mes_passado'
+
+// Atalhos de periodo da visao "Por dia" do Faturamento (datas 'YYYY-MM-DD').
+export function periodoDiario(atalho: AtalhoDia, hoje: string): { ini: string; fim: string } {
+  if (atalho === 'ontem') { const d = addDias(hoje, -1); return { ini: d, fim: d } }
+  if (atalho === 'mes_passado') {
+    const fim = addDias(`${hoje.slice(0, 8)}01`, -1) // ultimo dia do mes anterior
+    return { ini: `${fim.slice(0, 8)}01`, fim }
+  }
+  return periodoDoAtalho(atalho, hoje)
+}

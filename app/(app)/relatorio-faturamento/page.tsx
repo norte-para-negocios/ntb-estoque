@@ -22,6 +22,7 @@ import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { buscarFatAgregado, buscarFatAgregadoPorSituacao, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { periodoDiario, type AtalhoDia } from '@/lib/meta-faturamento'
 import { carregarFaturamentoDiario } from '@/lib/faturamento-diario'
 import { BarrasDiarias } from '@/components/faturamento/BarrasDiarias'
 import { TabelaDiaria } from '@/components/faturamento/TabelaDiaria'
@@ -90,6 +91,14 @@ const CHIPS_PERIODO = [
 // corta só a EXIBIÇÃO (mais recentes primeiro) -- a busca continua completa.
 const LIMITE_LINHAS_CUPONS = 1000
 const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+// Atalhos da visao "Por dia" (substituem os chips de meses enquanto ela esta ativa).
+const CHIPS_DIA: { value: AtalhoDia; label: string }[] = [
+  { value: 'hoje', label: 'Hoje' },
+  { value: 'ontem', label: 'Ontem' },
+  { value: 'semana', label: 'Esta semana' },
+  { value: 'mes', label: 'Este mês' },
+  { value: 'mes_passado', label: 'Mês passado' },
+]
 const mesLabel = (ym: string) => {
   const [a, m] = ym.split('-')
   return `${MESES_ABREV[Number(m) - 1] ?? m}/${a.slice(2)}`
@@ -360,7 +369,7 @@ export default async function RelatorioFaturamentoPage({
   // A busca comeca ja aqui, em paralelo com o resto, e o resto pula o que o modo diario nao usa.
   const verDiario = sp.ver === 'diario'
   const hojeISO = hojeBahiaISO()
-  const iniDiarioPedido = dataIni && dataIni <= hojeISO ? dataIni : mesIniChip ? `${mesIniChip}-01` : `${hojeISO.slice(0, 8)}01`
+  const iniDiarioPedido = dataIni && dataIni <= hojeISO ? dataIni : mesIniChip ? `${mesIniChip}-01` : hojeISO
   const fimDiarioBruto = dataFim || (mesFimChip ? fimDoMes(mesFimChip) : hojeISO)
   const fimDiarioPedido = fimDiarioBruto >= iniDiarioPedido ? (fimDiarioBruto > hojeISO ? hojeISO : fimDiarioBruto) : hojeISO
   const fatDiarioP = verDiario ? carregarFaturamentoDiario(lojaId, iniDiarioPedido, fimDiarioPedido) : null
@@ -708,19 +717,31 @@ export default async function RelatorioFaturamentoPage({
       ) : (
         <>
           <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
-            {CHIPS_PERIODO.map((c) => (
-              <Link key={c.value} href={chipHref(c.value)} className={periodo === c.value && !temPeriodoCustom ? chipAtivo : chipInativo}>
-                {c.label}
-              </Link>
-            ))}
+            {verDiario
+              ? CHIPS_DIA.map((c) => {
+                  const per = periodoDiario(c.value, hojeISO)
+                  const ativo = iniDiario === per.ini && fimDiario === per.fim
+                  return (
+                    <Link key={c.value} href={`/relatorio-faturamento?ver=diario&data_inicio=${per.ini}&data_final=${per.fim}`} className={ativo ? chipAtivo : chipInativo}>
+                      {c.label}
+                    </Link>
+                  )
+                })
+              : CHIPS_PERIODO.map((c) => (
+                  <Link key={c.value} href={chipHref(c.value)} className={periodo === c.value && !temPeriodoCustom ? chipAtivo : chipInativo}>
+                    {c.label}
+                  </Link>
+                ))}
           </div>
 
           <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
             <div className="rounded-[var(--r-lg)] bg-surface px-4 py-3 shadow-[var(--shadow-sm)]">
-              <div className="text-[13px] text-text-muted">Total faturado</div>
-              <div className="num mt-1 text-[24px] font-semibold leading-none tracking-[-0.02em] text-text"><Money value={totalGeral} /></div>
+              <div className="text-[13px] text-text-muted">{verDiario ? 'Faturado no período' : 'Total faturado'}</div>
+              <div className="num mt-1 text-[24px] font-semibold leading-none tracking-[-0.02em] text-text">
+                <Money value={verDiario && fatDiario ? fatDiario.dias.reduce((t, d) => t + d.valor, 0) : totalGeral} />
+              </div>
             </div>
-            {metaRow?.importado_em && (
+            {!verDiario && metaRow?.importado_em && (
               <span className="pb-1 text-[13px] text-text-muted">Importado em {fmtQuando(metaRow.importado_em as string)}</span>
             )}
           </div>

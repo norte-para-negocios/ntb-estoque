@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { periodoDoAtalho, resumirMeta, parseValorBR } from './meta-faturamento.ts'
+import { periodoDoAtalho, resumirMeta, parseValorBR, periodoDiario } from './meta-faturamento.ts'
 
 test('periodoDoAtalho: hoje, semana (segunda a hoje), mes (dia 1 a hoje)', () => {
   // 2026-10-08 é quinta-feira
@@ -65,4 +65,18 @@ test('parseValorBR: ponto e vírgula em todos os formatos comuns', () => {
   assert.equal(parseValorBR(' R$ 5.000,5 '), 5000.5)
   assert.ok(Number.isNaN(parseValorBR('abc')))
   assert.ok(Number.isNaN(parseValorBR('')))
+})
+
+test('periodoDiario: hoje, ontem, semana, mês e mês passado', () => {
+  assert.deepEqual(periodoDiario('hoje', '2026-10-08'), { ini: '2026-10-08', fim: '2026-10-08' })
+  assert.deepEqual(periodoDiario('ontem', '2026-10-08'), { ini: '2026-10-07', fim: '2026-10-07' })
+  assert.deepEqual(periodoDiario('semana', '2026-10-08'), { ini: '2026-10-05', fim: '2026-10-08' })
+  assert.deepEqual(periodoDiario('mes', '2026-10-08'), { ini: '2026-10-01', fim: '2026-10-08' })
+  assert.deepEqual(periodoDiario('mes_passado', '2026-10-08'), { ini: '2026-09-01', fim: '2026-09-30' })
+})
+
+test('periodoDiario: virada de mês e de ano', () => {
+  assert.deepEqual(periodoDiario('ontem', '2026-10-01'), { ini: '2026-09-30', fim: '2026-09-30' })
+  assert.deepEqual(periodoDiario('mes_passado', '2027-01-15'), { ini: '2026-12-01', fim: '2026-12-31' })
+  assert.deepEqual(periodoDiario('mes_passado', '2026-03-10'), { ini: '2026-02-01', fim: '2026-02-28' })
 })
