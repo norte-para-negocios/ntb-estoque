@@ -1,0 +1,406 @@
+[
+ {
+  "nome": "estoque_movimentacoes_desk_light.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_Movimentos_desk_light.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": [
+   "nao achei botao ^Movimentos$"
+  ]
+ },
+ {
+  "nome": "estoque_ordem-producao_48653355_desk_light.png",
+  "http": 200,
+  "url": "/ordem-producao/48653355",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "OP 2026/00011",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_inventario_554_contagem_desk_light.png",
+  "http": 200,
+  "url": "/inventario/554/contagem",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Inventário · Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_desk_light.png",
+  "http": 200,
+  "url": "/transferencia",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Transferências",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_1402_contagem_desk_light.png",
+  "http": 200,
+  "url": "/transferencia/1402/contagem",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Estoque Geral → Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-lucro_desk_light.png",
+  "http": 200,
+  "url": "/relatorio-lucro",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Lucro",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-faturamento_desk_light.png",
+  "http": 200,
+  "url": "/relatorio-faturamento",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Faturamento",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_loja_Novaloja_desk_light.png",
+  "http": 200,
+  "url": "/loja",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 17,
+  "h1": "Lojas",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_cel_light.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_Movimentos_cel_light.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": [
+   "nao achei botao ^Movimentos$"
+  ]
+ },
+ {
+  "nome": "estoque_ordem-producao_48653355_cel_light.png",
+  "http": 200,
+  "url": "/ordem-producao/48653355",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "OP 2026/00011",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_inventario_554_contagem_cel_light.png",
+  "http": 200,
+  "url": "/inventario/554/contagem",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Inventário · Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_cel_light.png",
+  "http": 200,
+  "url": "/transferencia",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Transferências",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_1402_contagem_cel_light.png",
+  "http": 200,
+  "url": "/transferencia/1402/contagem",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Estoque Geral → Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-lucro_cel_light.png",
+  "http": 200,
+  "url": "/relatorio-lucro",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Lucro",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-faturamento_cel_light.png",
+  "http": 200,
+  "url": "/relatorio-faturamento",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Faturamento",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_loja_Novaloja_cel_light.png",
+  "http": 200,
+  "url": "/loja",
+  "sw": 390,
+  "w": 390,
+  "omie": 16,
+  "h1": "Lojas",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_desk_dark.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_Movimentos_desk_dark.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": [
+   "nao achei botao ^Movimentos$"
+  ]
+ },
+ {
+  "nome": "estoque_ordem-producao_48653355_desk_dark.png",
+  "http": 200,
+  "url": "/ordem-producao/48653355",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "OP 2026/00011",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_inventario_554_contagem_desk_dark.png",
+  "http": 200,
+  "url": "/inventario/554/contagem",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Inventário · Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_desk_dark.png",
+  "http": 200,
+  "url": "/transferencia",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Transferências",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_1402_contagem_desk_dark.png",
+  "http": 200,
+  "url": "/transferencia/1402/contagem",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Estoque Geral → Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-lucro_desk_dark.png",
+  "http": 200,
+  "url": "/relatorio-lucro",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Lucro",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-faturamento_desk_dark.png",
+  "http": 200,
+  "url": "/relatorio-faturamento",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 0,
+  "h1": "Faturamento",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_loja_Novaloja_desk_dark.png",
+  "http": 200,
+  "url": "/loja",
+  "sw": 1440,
+  "w": 1440,
+  "omie": 17,
+  "h1": "Lojas",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_cel_dark.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_movimentacoes_Movimentos_cel_dark.png",
+  "http": 200,
+  "url": "/movimentacoes",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Movimentações",
+  "erro": false,
+  "errs": [
+   "nao achei botao ^Movimentos$"
+  ]
+ },
+ {
+  "nome": "estoque_ordem-producao_48653355_cel_dark.png",
+  "http": 200,
+  "url": "/ordem-producao/48653355",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "OP 2026/00011",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_inventario_554_contagem_cel_dark.png",
+  "http": 200,
+  "url": "/inventario/554/contagem",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Inventário · Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_cel_dark.png",
+  "http": 200,
+  "url": "/transferencia",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Transferências",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_transferencia_1402_contagem_cel_dark.png",
+  "http": 200,
+  "url": "/transferencia/1402/contagem",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Estoque Geral → Bar",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-lucro_cel_dark.png",
+  "http": 200,
+  "url": "/relatorio-lucro",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Lucro",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_relatorio-faturamento_cel_dark.png",
+  "http": 200,
+  "url": "/relatorio-faturamento",
+  "sw": 390,
+  "w": 390,
+  "omie": 0,
+  "h1": "Faturamento",
+  "erro": false,
+  "errs": []
+ },
+ {
+  "nome": "estoque_loja_Novaloja_cel_dark.png",
+  "http": 200,
+  "url": "/loja",
+  "sw": 390,
+  "w": 390,
+  "omie": 16,
+  "h1": "Lojas",
+  "erro": false,
+  "errs": []
+ }
+]

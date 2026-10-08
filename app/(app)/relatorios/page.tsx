@@ -47,7 +47,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
   {
     grupo: 'Faturamento',
     itens: [
-      { href: '/relatorio-faturamento', titulo: 'Faturamento', icon: DollarSign, descricao: 'Faturamento por período, produto e família.', pergunta: 'Quanto vendi?' },
+      { href: '/faturamento', titulo: 'Faturamento', icon: DollarSign, descricao: 'Escolha o período e veja o que mais vendeu: ranking de produtos, famílias e tipos, com gráfico dia a dia.', pergunta: 'Quanto vendi?' },
       { href: '/relatorio-indicadores', titulo: 'Faturamento x Compras', icon: Scale, descricao: 'Cruza o que entrou de venda com o que saiu de compra.', pergunta: 'Estou comprando demais pro que vendo?' },
       { href: '/meta-mensal', titulo: 'Meta do mês', icon: Flag, descricao: 'Quanto já foi, quanto falta e quanto vender por dia para fechar a meta do mês, com barras de progresso por semana.', pergunta: 'Vou fechar a meta do mês?' },
       { href: '/relatorio-meta', titulo: 'Meta de faturamento', icon: Target, descricao: 'Defina a meta diária e compare com o faturamento de cada dia, semana ou mês.', pergunta: 'Bati a meta?' },
