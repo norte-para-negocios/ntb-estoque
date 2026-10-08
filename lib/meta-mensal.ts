@@ -98,3 +98,20 @@ export function resumirSemanas(semanas: Semana[], dias: DiaValor[], metaDiaria: 
     }
   })
 }
+
+export type ResumoDia = { dia: string; meta: number; realizado: number; pct: number | null; situacao: 'fechada' | 'andamento' | 'futura' }
+
+// Um item por dia do mes (inclusive os que ainda nao chegaram), cada um contra a meta diaria.
+export function resumirDiasMes(mes: string, dias: DiaValor[], metaDiaria: number, hoje: string): ResumoDia[] {
+  return Array.from({ length: diasDoMes(mes) }, (_, i) => {
+    const dia = `${mes}-${pad(i + 1)}`
+    const realizado = dia <= hoje ? round2(dias.filter((d) => d.dia === dia).reduce((t, d) => t + d.valor, 0)) : 0
+    return {
+      dia,
+      meta: metaDiaria,
+      realizado,
+      pct: metaDiaria > 0 ? round2((realizado / metaDiaria) * 100) : null,
+      situacao: dia < hoje ? 'fechada' : dia === hoje ? 'andamento' : 'futura',
+    }
+  })
+}

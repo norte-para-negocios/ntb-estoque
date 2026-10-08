@@ -8,12 +8,13 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { carregarFaturamentoDiario } from '@/lib/faturamento-diario'
-import { diasDoMes, resumirMes, resumirSemanas, semanasDoMes } from '@/lib/meta-mensal'
+import { diasDoMes, resumirDiasMes, resumirMes, resumirSemanas, semanasDoMes } from '@/lib/meta-mensal'
 import { BarrasDiarias } from '@/components/faturamento/BarrasDiarias'
 import { TabelaDiaria } from '@/components/faturamento/TabelaDiaria'
 import { BarraProgresso } from '@/components/faturamento/BarraProgresso'
 import { FormMetaMensal } from '@/components/faturamento/FormMetaMensal'
 
+const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`)
 const fmtDM = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
@@ -27,7 +28,7 @@ function mesAnterior(mes: string, n: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
-export default async function MetaMensalPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
+export default async function MetaMensalPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
   if (!(await getAtorGestao()).podeGerir) notFound()
   const lojaId = await getCurrentLojaId()
   const sp = await searchParams
@@ -35,6 +36,7 @@ export default async function MetaMensalPage({ searchParams }: { searchParams: P
   const mesAtual = hoje.slice(0, 7)
   // So mes atual ou passado: nao ha o que comparar com o futuro.
   const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mes ?? '') && sp.mes! <= mesAtual ? sp.mes! : mesAtual
+  const porDia = sp.vista === 'dia'
   const ultimoDia = `${mes}-${String(diasDoMes(mes)).padStart(2, '0')}`
 
   const supabase = createServiceClient()
@@ -43,7 +45,14 @@ export default async function MetaMensalPage({ searchParams }: { searchParams: P
 
   const fat = meta != null ? await carregarFaturamentoDiario(lojaId, `${mes}-01`, ultimoDia > hoje ? hoje : ultimoDia) : null
   const r = fat && meta != null ? resumirMes({ mes, meta, dias: fat.dias, hoje }) : null
-  const semanas = r && fat ? resumirSemanas(semanasDoMes(mes), fat.dias, r.metaDiaria, hoje) : []
+  const semanas = r && fat && !porDia ? resumirSemanas(semanasDoMes(mes), fat.dias, r.metaDiaria, hoje) : []
+  const diasMes = r && fat && porDia ? resumirDiasMes(mes, fat.dias, r.metaDiaria, hoje) : []
+  const hrefVista = (v: '' | 'dia') => {
+    const q = new URLSearchParams()
+    if (mes !== mesAtual) q.set('mes', mes)
+    if (v) q.set('vista', v)
+    return `/meta-mensal${q.size ? `?${q}` : ''}`
+  }
 
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chipAtivo = `${chipBase} bg-brand-fill text-white`
@@ -57,7 +66,7 @@ export default async function MetaMensalPage({ searchParams }: { searchParams: P
 
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden">
         {meses.map((m) => (
-          <Link key={m} href={m === mesAtual ? '/meta-mensal' : `/meta-mensal?mes=${m}`} className={m === mes ? chipAtivo : chipInativo}>{nomeMes(m)}</Link>
+          <Link key={m} href={`/meta-mensal${m === mesAtual ? '' : `?mes=${m}`}${porDia ? `${m === mesAtual ? '?' : '&'}vista=dia` : ''}`} className={m === mes ? chipAtivo : chipInativo}>{nomeMes(m)}</Link>
         ))}
       </div>
 
@@ -116,22 +125,42 @@ export default async function MetaMensalPage({ searchParams }: { searchParams: P
           )}
 
           <section className="space-y-3 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
-            <h2 className="text-[14px] font-semibold text-text">Por semana</h2>
-            {semanas.map((s, i) => (
-              <div key={s.ini} className="space-y-1.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
-                  <span className="font-semibold text-text">
-                    Semana {i + 1} <span className="font-normal text-text-muted">· {fmtDM(s.ini)} a {fmtDM(s.fim)} ({s.nDias} dias)</span>
-                  </span>
-                  <span className="text-text-muted">
-                    <Money value={s.realizado} /> de <Money value={s.meta} /> · <strong className="text-text">{fmtPct(s.situacao === 'futura' ? null : s.pct)}</strong>
-                    {s.situacao === 'andamento' && ' · em andamento'}
-                    {s.situacao === 'futura' && ' · ainda não começou'}
-                  </span>
-                </div>
-                <BarraProgresso pct={s.situacao === 'futura' ? 0 : s.pct} rotulo={`Semana ${i + 1}`} cor={s.situacao === 'fechada' && (s.pct ?? 0) < 100 ? 'bg-brand/40' : 'bg-brand'} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[14px] font-semibold text-text">{porDia ? 'Por dia' : 'Por semana'}</h2>
+              <div className="flex gap-1.5">
+                <Link href={hrefVista('')} className={!porDia ? chipAtivo : chipInativo}>Por semana</Link>
+                <Link href={hrefVista('dia')} className={porDia ? chipAtivo : chipInativo}>Por dia</Link>
               </div>
-            ))}
+            </div>
+            {porDia
+              ? diasMes.map((d) => (
+                  <div key={d.dia} className="space-y-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+                      <span className="font-semibold text-text">{fmtDM(d.dia)} <span className="font-normal text-text-muted">· {DIAS_SEMANA[new Date(`${d.dia}T12:00:00Z`).getUTCDay()]}</span></span>
+                      <span className="text-text-muted">
+                        <Money value={d.realizado} /> de <Money value={d.meta} /> · <strong className="text-text">{fmtPct(d.situacao === 'futura' ? null : d.pct)}</strong>
+                        {d.situacao === 'andamento' && ' · em andamento'}
+                        {d.situacao === 'futura' && ' · ainda não chegou'}
+                      </span>
+                    </div>
+                    <BarraProgresso pct={d.situacao === 'futura' ? 0 : d.pct} altura="h-2" rotulo={`Dia ${fmtDM(d.dia)}`} cor={d.situacao === 'fechada' && (d.pct ?? 0) < 100 ? 'bg-brand/40' : 'bg-brand'} />
+                  </div>
+                ))
+              : semanas.map((s, i) => (
+                  <div key={s.ini} className="space-y-1.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+                      <span className="font-semibold text-text">
+                        Semana {i + 1} <span className="font-normal text-text-muted">· {fmtDM(s.ini)} a {fmtDM(s.fim)} ({s.nDias} dias)</span>
+                      </span>
+                      <span className="text-text-muted">
+                        <Money value={s.realizado} /> de <Money value={s.meta} /> · <strong className="text-text">{fmtPct(s.situacao === 'futura' ? null : s.pct)}</strong>
+                        {s.situacao === 'andamento' && ' · em andamento'}
+                        {s.situacao === 'futura' && ' · ainda não começou'}
+                      </span>
+                    </div>
+                    <BarraProgresso pct={s.situacao === 'futura' ? 0 : s.pct} rotulo={`Semana ${i + 1}`} cor={s.situacao === 'fechada' && (s.pct ?? 0) < 100 ? 'bg-brand/40' : 'bg-brand'} />
+                  </div>
+                ))}
           </section>
 
           <BarrasDiarias dias={fat.dias} meta={r.metaDiaria} hoje={hoje} />

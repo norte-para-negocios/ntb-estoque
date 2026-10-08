@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { diasDoMes, semanasDoMes, resumirMes, resumirSemanas } from './meta-mensal.ts'
+import { diasDoMes, semanasDoMes, resumirMes, resumirSemanas, resumirDiasMes } from './meta-mensal.ts'
 
 test('diasDoMes: meses de 28, 29, 30 e 31 dias', () => {
   assert.equal(diasDoMes('2026-10'), 31)
@@ -91,4 +91,23 @@ test('resumirSemanas: realizado, meta proporcional e situação de cada semana',
   assert.equal(r[1].realizado, 4000) // só 05..08 (até hoje)
   assert.equal(r[2].situacao, 'futura')
   assert.equal(r[2].realizado, 0)
+})
+
+test('resumirDiasMes: um item por dia do mês, com meta, realizado e situação', () => {
+  const d = dias([12000, 8000, 5000]) // dias 1, 2 e 3 (hoje = 3)
+  const r = resumirDiasMes('2026-10', d, 10000, '2026-10-03')
+  assert.equal(r.length, 31)
+  assert.deepEqual(r[0], { dia: '2026-10-01', meta: 10000, realizado: 12000, pct: 120, situacao: 'fechada' })
+  assert.equal(r[1].pct, 80)
+  assert.equal(r[2].situacao, 'andamento')
+  assert.equal(r[2].realizado, 5000)
+  assert.equal(r[3].situacao, 'futura')
+  assert.equal(r[3].realizado, 0)
+  assert.equal(r[30].dia, '2026-10-31')
+})
+
+test('resumirDiasMes: dia fechado sem venda tem 0%', () => {
+  const r = resumirDiasMes('2026-10', dias([0]), 10000, '2026-10-05')
+  assert.equal(r[0].pct, 0)
+  assert.equal(r[0].situacao, 'fechada')
 })
