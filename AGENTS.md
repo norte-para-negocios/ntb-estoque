@@ -1687,3 +1687,9 @@ Modo `omie` e `nenhum` ficam IDÊNTICOS (despacho por modo no começo de cada ac
 - Meta diária: tabela `metas_faturamento` (migration 154, uma linha por loja, escrita só via action `salvarMetaFaturamento`). Hoje fica "em andamento" e fora da média/dias que bateram; período é limitado a hoje e 366 dias (`limitarPeriodo`).
 - Funções puras testáveis com `node --test lib/faturamento-dias.test.ts lib/meta-faturamento.test.ts` (sem alias `@/`; `meta-faturamento.ts` tem `addDias` próprio de propósito, import com `.ts` quebra o `tsc`).
 - Os 3 pontos menores do primeiro deploy (campo da meta com ponto decimal, aviso falso de histórico indisponível, meta 0) foram corrigidos no mesmo dia; `parseValorBR` está em `lib/meta-faturamento.ts`.
+
+## Meta do mês (2026-10-08)
+
+- Tela `/meta-mensal` (grupo Faturamento em Relatórios): meta por mês e loja, tabela `metas_mensais` (migration 155, aplicada à mão no Contabo). Campo nasce vazio, quem define o valor é o cliente.
+- Meta por dia = meta ÷ dias do mês; "precisa vender por dia" = falta ÷ dias restantes (hoje conta); projeção = média dos dias fechados × dias do mês; semanas de segunda a domingo cortadas nas pontas do mês. Tudo em `lib/meta-mensal.ts` (puro, `node --test lib/meta-mensal.test.ts`). Faturamento vem de `carregarFaturamentoDiario`, o mesmo do "Por dia".
+- Conferido em produção (loja 3, out/2026, meta de teste R$ 1.000.000 já removida): faturado R$ 133.302,20, igual ao SQL.
