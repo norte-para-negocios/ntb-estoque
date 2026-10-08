@@ -1693,3 +1693,11 @@ Modo `omie` e `nenhum` ficam IDÊNTICOS (despacho por modo no começo de cada ac
 - Tela `/meta-mensal` (grupo Faturamento em Relatórios): meta por mês e loja, tabela `metas_mensais` (migration 155, aplicada à mão no Contabo). Campo nasce vazio, quem define o valor é o cliente.
 - Meta por dia = meta ÷ dias do mês; "precisa vender por dia" = falta ÷ dias restantes (hoje conta); projeção = média dos dias fechados × dias do mês; semanas de segunda a domingo cortadas nas pontas do mês. Tudo em `lib/meta-mensal.ts` (puro, `node --test lib/meta-mensal.test.ts`). Faturamento vem de `carregarFaturamentoDiario`, o mesmo do "Por dia".
 - Conferido em produção (loja 3, out/2026, meta de teste R$ 1.000.000 já removida): faturado R$ 133.302,20, igual ao SQL.
+
+## Tela nova de Faturamento (2026-10-08)
+
+- `/faturamento` (card "Faturamento" em Relatórios) substitui a tela antiga como entrada; `/relatorio-faturamento` continua intacta (evolução mensal, forma de pgto, cupons, descontos) e é linkada de dentro da nova.
+- Uma leitura de itens por período (`lib/faturamento-itens-loader.ts`): loja Omie = `fat_cupons` + `fat_cupom_itens` do Contabo; loja própria = `vendas_proprio*`; tipo/família/nome vêm de `produtos`. Filtros de tipo, família e situação são aplicados nessa leitura, então valem em todas as abas (a tela antiga só aplicava o filtro da dimensão exibida).
+- Funções puras testáveis: `lib/faturamento-itens.ts` (ranking, ordenação, busca, KPIs, série) e `lib/faturamento-periodo.ts` (atalhos, mês, validação, limite de 366 dias). `node --test lib/faturamento-itens.test.ts lib/faturamento-periodo.test.ts`.
+- Conferido em produção (loja 3, set/2026): faturado R$ 657.434,28 (= SQL dos cupons), top produto R$ 59.154,88 (= tabela antiga), detalhe do produto bate com a linha do ranking, filtro tipo=04 reduz para R$ 532.261,91.
+- Loja própria (ODARA) ainda sem venda real para validar esse caminho.
