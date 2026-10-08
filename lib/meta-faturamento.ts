@@ -1,5 +1,12 @@
 // Funcoes puras do relatorio Meta x Realizado (sem I/O, sem alias '@/').
-import { addDias, type DiaValor } from './faturamento-dias.ts'
+import type { DiaValor } from './faturamento-dias'
+
+// Local de proposito: este arquivo e testado direto no node (import com extensao .ts nao passa no tsc).
+function addDias(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 
 export type Atalho = 'hoje' | 'semana' | 'mes'
 
