@@ -356,9 +356,17 @@ export default async function RelatorioFaturamentoPage({
   const groupSituacao: 'forma' | 'tipo' | 'familia' | 'produto' =
     dim === 'forma_pgto' ? 'forma' : dim === 'tipo' || dim === 'familia' ? dim : 'produto'
 
+  // Modo "Por dia": periodo = datas digitadas, senao o chip ativo (mes/3m/6m/ano passado), senao o mes atual.
+  // A busca comeca ja aqui, em paralelo com o resto, e o resto pula o que o modo diario nao usa.
+  const verDiario = sp.ver === 'diario'
+  const hojeISO = hojeBahiaISO()
+  const iniDiarioPedido = dataIni && dataIni <= hojeISO ? dataIni : mesIniChip ? `${mesIniChip}-01` : `${hojeISO.slice(0, 8)}01`
+  const fimDiarioBruto = dataFim || (mesFimChip ? fimDoMes(mesFimChip) : hojeISO)
+  const fimDiarioPedido = fimDiarioBruto >= iniDiarioPedido ? (fimDiarioBruto > hojeISO ? hojeISO : fimDiarioBruto) : hojeISO
+  const fatDiarioP = verDiario ? carregarFaturamentoDiario(lojaId, iniDiarioPedido, fimDiarioPedido) : null
   const statusCupomSel = sp.status || 'NORMAL'
   const [matrizFato, cuponsFatoTodos]: [LinhaFatAgregado[], CupomFat[]] = await Promise.all([
-    usarFato && !verCupons
+    usarFato && !verCupons && !verDiario
       ? statusForcaAgregacao
         ? (async () => {
             // metaPorCodigo só é necessário quando o rótulo vem de
@@ -424,11 +432,9 @@ export default async function RelatorioFaturamentoPage({
   // agregação (cara -- itens + pagamentos do fato inteiro do período) quando o
   // usuário está de fato nessa aba, reaproveitando dataInicioFato/dataFinalFato
   // já calculados pro modo "Ver cupons".
-  const verDiario = sp.ver === 'diario'
-  const hojeISO = hojeBahiaISO()
-  const iniDiario = dataIni && dataIni <= hojeISO ? dataIni : `${hojeISO.slice(0, 8)}01`
-  const fimDiario = dataFim && dataFim >= iniDiario ? (dataFim > hojeISO ? hojeISO : dataFim) : hojeISO
-  const fatDiario = verDiario ? await carregarFaturamentoDiario(lojaId, iniDiario, fimDiario) : null
+  const fatDiario = fatDiarioP ? await fatDiarioP : null
+  const iniDiario = fatDiario?.ini ?? ''
+  const fimDiario = fatDiario?.fim ?? ''
   const verDescontos = sp.ver === 'descontos'
   const [descontoPorProduto, descontoPorForma]: [DescontoRanking[], DescontoRanking[]] = verDescontos
     ? await Promise.all([
@@ -486,7 +492,7 @@ export default async function RelatorioFaturamentoPage({
   // corrente, uma ação deliberada, não o estado padrão da tela.
   // (`anoAtualStr` já foi declarado mais acima -- mesmo raciocínio de custo
   // aplicado ao filtro de Situação, ver `dataInicioSituacao`.)
-  const cruzaAnoAnterior = !usarFato && !verCupons && !!mesIni && mesIni < `${anoAtualStr}-01`
+  const cruzaAnoAnterior = !usarFato && !verCupons && !verDiario && !!mesIni && mesIni < `${anoAtualStr}-01`
   let historico: LinhaMatriz[] = []
   if (cruzaAnoAnterior) {
     // Mesma paginação (e mesmo achado de >1000 produtos) de lib/omie/faturamento.ts,
@@ -771,6 +777,9 @@ export default async function RelatorioFaturamentoPage({
             <div className="space-y-3">
               {fatDiario.aviso && (
                 <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{fatDiario.aviso}</p>
+              )}
+              {(tipoFiltro.length > 0 || familiaFiltro.length > 0 || formaPgtoFiltro.length > 0 || statusForcaAgregacao) && (
+                <p className="text-[13px] text-text-muted">Os filtros de tipo, família, forma de pagamento e situação não se aplicam ao “Por dia”: o total é o faturamento da loja inteira (sem cancelados).</p>
               )}
               <p className="text-[13px] text-text-muted">
                 Período: {iniDiario.split('-').reverse().join('/')} a {fimDiario.split('-').reverse().join('/')} · use o filtro de datas para mudar.{' '}

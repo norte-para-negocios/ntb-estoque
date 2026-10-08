@@ -1,32 +1,39 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { buscarFatCupons } from '@/lib/faturamento-frio'
-import { agruparCuponsPorDia, preencherDias, type DiaValor } from '@/lib/faturamento-dias'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { agruparCuponsPorDia, preencherDias, limitarPeriodo, type DiaValor } from '@/lib/faturamento-dias'
 
-export type FaturamentoDiario = { dias: DiaValor[]; aviso: string | null }
+// ini/fim devolvidos sao os efetivamente usados (periodo pode ser cortado em MAX_DIAS).
+export type FaturamentoDiario = { dias: DiaValor[]; aviso: string | null; ini: string; fim: string }
 
 // Faturamento por dia. Loja Omie: cupons do Contabo (fat_cupons), mesmo fato
 // que alimenta "Ver cupons". Loja de estoque proprio: vendas_proprio.
-// Cancelado nunca entra; devolvido entra (bate com o total mensal da tela).
-export async function carregarFaturamentoDiario(lojaId: number, ini: string, fim: string): Promise<FaturamentoDiario> {
+// Omie: cancelado nunca entra, devolvido entra (bate com o total mensal). Propria: nenhum dos dois.
+export async function carregarFaturamentoDiario(lojaId: number, iniPedido: string, fimPedido: string): Promise<FaturamentoDiario> {
+  const { ini, fim, cortado } = limitarPeriodo(iniPedido, fimPedido)
   const modo = await modoDaLoja(lojaId)
-  let aviso: string | null = null
+  let aviso: string | null = cortado ? 'Período limitado a 366 dias: mostrando os dias mais recentes.' : null
   let porDia: Map<string, number>
 
   if (modo === 'proprio') {
     const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from('vendas_proprio')
-      .select('data, valor, cancelado')
-      .eq('loja_id', lojaId)
-      .gte('data', ini)
-      .lte('data', fim)
-      .limit(50000)
-    if (error) aviso = `Falha ao ler as vendas (${error.message}). Os valores abaixo podem estar incompletos.`
+    // buscarTodasLinhas pagina (o PostgREST corta em 1000) e sinaliza falha via onErro.
+    const vendas = await buscarTodasLinhas<{ data: string; valor: number | string; cancelado: boolean; devolvido: boolean }>(
+      (from, to) => supabase
+        .from('vendas_proprio')
+        .select('data, valor, cancelado, devolvido')
+        .eq('loja_id', lojaId)
+        .gte('data', ini)
+        .lte('data', fim)
+        .order('id')
+        .range(from, to),
+      undefined,
+      (e) => { aviso = `Falha ao ler as vendas (${e.message}). Os valores abaixo podem estar incompletos.` },
+    )
+    // Loja propria: o total mensal (recalcular_faturamento_proprio) exclui cancelado E devolvido.
     porDia = agruparCuponsPorDia(
-      ((data ?? []) as { data: string; valor: number | string; cancelado: boolean }[]).map((v) => ({
-        data: v.data, valor: Number(v.valor) || 0, cancelado: v.cancelado,
-      })),
+      vendas.map((v) => ({ data: v.data, valor: Number(v.valor) || 0, cancelado: v.cancelado || v.devolvido })),
     )
   } else {
     let truncou = false
@@ -36,5 +43,5 @@ export async function carregarFaturamentoDiario(lojaId: number, ini: string, fim
     porDia = agruparCuponsPorDia(cupons)
   }
 
-  return { dias: preencherDias(ini, fim, porDia), aviso }
+  return { dias: preencherDias(ini, fim, porDia), aviso, ini, fim }
 }

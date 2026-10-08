@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addDias, diasEntre, agruparCuponsPorDia, preencherDias, MAX_DIAS } from './faturamento-dias.ts'
+import { addDias, diasEntre, agruparCuponsPorDia, preencherDias, limitarPeriodo, MAX_DIAS } from './faturamento-dias.ts'
 
 test('addDias atravessa mês e ano', () => {
   assert.equal(addDias('2026-01-31', 1), '2026-02-01')
@@ -37,4 +37,15 @@ test('preencherDias inclui dias sem venda com 0', () => {
     { dia: '2026-10-07', valor: 50 },
     { dia: '2026-10-08', valor: 0 },
   ])
+})
+
+test('limitarPeriodo mantém o trecho mais recente quando passa de MAX_DIAS', () => {
+  const r = limitarPeriodo('2025-01-01', '2026-10-08')
+  assert.equal(r.fim, '2026-10-08')
+  assert.equal(r.cortado, true)
+  assert.equal(diasEntre(r.ini, r.fim).length, MAX_DIAS)
+})
+
+test('limitarPeriodo não mexe em período dentro do limite', () => {
+  assert.deepEqual(limitarPeriodo('2026-10-01', '2026-10-08'), { ini: '2026-10-01', fim: '2026-10-08', cortado: false })
 })

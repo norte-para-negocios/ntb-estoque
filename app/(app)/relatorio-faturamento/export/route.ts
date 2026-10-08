@@ -74,14 +74,14 @@ export async function GET(request: Request) {
     const ok = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
     const ini = ok(di) && di <= hoje ? di : `${hoje.slice(0, 8)}01`
     const fim = ok(df) && df >= ini ? (df > hoje ? hoje : df) : hoje
-    const { dias, aviso } = await carregarFaturamentoDiario(lojaId, ini, fim)
+    const { dias, aviso, ini: iniEf, fim: fimEf } = await carregarFaturamentoDiario(lojaId, ini, fim)
     const buffer = await gerarPlanilhaMulti([{
       rows: dias.map((d) => ({ dia: d.dia.split('-').reverse().join('/'), valor: d.valor })),
       colunas: [
         { key: 'dia', label: 'Dia', tipo: 'texto', largura: 14 },
         { key: 'valor', label: 'Faturamento', tipo: 'moeda', largura: 18, somar: true },
       ],
-      opts: { titulo: 'Faturamento por dia', subtitulo: `${ini} a ${fim}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}` },
+      opts: { titulo: 'Faturamento por dia', subtitulo: `${iniEf} a ${fimEf}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}` },
       nome: 'Por dia',
     }])
     return planilhaResponse('faturamento-por-dia', buffer)

@@ -32,3 +32,9 @@ export function agruparCuponsPorDia(cupons: { data: string; valor: number; cance
 export function preencherDias(ini: string, fim: string, porDia: Map<string, number>): DiaValor[] {
   return diasEntre(ini, fim).map((dia) => ({ dia, valor: porDia.get(dia) ?? 0 }))
 }
+
+// Garante no maximo MAX_DIAS dias, preservando o trecho MAIS RECENTE (o fim).
+export function limitarPeriodo(ini: string, fim: string): { ini: string; fim: string; cortado: boolean } {
+  const minIni = addDias(fim, -(MAX_DIAS - 1))
+  return ini < minIni ? { ini: minIni, fim, cortado: true } : { ini, fim, cortado: false }
+}

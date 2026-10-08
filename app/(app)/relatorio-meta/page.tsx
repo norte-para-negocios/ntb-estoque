@@ -49,6 +49,8 @@ export default async function RelatorioMetaPage({
   const chipInativo = `${chipBase} bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text`
 
   const fat = meta != null ? await carregarFaturamentoDiario(lojaId, ini, fim) : null
+  const iniEf = fat?.ini ?? ini
+  const fimEf = fat?.fim ?? fim
   const resumo = fat && meta != null ? resumirMeta(fat.dias, meta, hoje) : null
   const qs = new URLSearchParams({ data_inicio: ini, data_final: fim }).toString()
 
@@ -84,7 +86,7 @@ export default async function RelatorioMetaPage({
             </form>
           </div>
 
-          <p className="text-[13px] text-text-muted">Período: {fmtData(ini)} a {fmtData(fim)} · meta diária <Money value={meta} /></p>
+          <p className="text-[13px] text-text-muted">Período: {fmtData(iniEf)} a {fmtData(fimEf)} · meta diária <Money value={meta} /></p>
 
           {fat?.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{fat.aviso}</p>}
 

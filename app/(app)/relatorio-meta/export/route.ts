@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   if (metaRow?.valor_diario == null) return new Response('Meta diária não cadastrada', { status: 404 })
   const meta = Number(metaRow.valor_diario)
 
-  const { dias, aviso } = await carregarFaturamentoDiario(lojaId, ini, fim)
+  const { dias, aviso, ini: iniEf, fim: fimEf } = await carregarFaturamentoDiario(lojaId, ini, fim)
   const rows = dias.map((d) => ({
     dia: d.dia.split('-').reverse().join('/'),
     valor: d.valor,
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       { key: 'dif', label: 'Diferença', tipo: 'moeda', largura: 16 },
       { key: 'situacao', label: 'Situação', tipo: 'texto', largura: 16 },
     ],
-    opts: { titulo: 'Meta de faturamento', subtitulo: `${ini} a ${fim} · meta diária ${meta}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}` },
+    opts: { titulo: 'Meta de faturamento', subtitulo: `${iniEf} a ${fimEf} · meta diária ${meta}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}` },
     nome: 'Dia a dia',
   }])
   return planilhaResponse('meta-faturamento', buffer)
