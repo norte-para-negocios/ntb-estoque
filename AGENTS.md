@@ -1696,8 +1696,9 @@ Modo `omie` e `nenhum` ficam IDÊNTICOS (despacho por modo no começo de cada ac
 
 ## Tela nova de Faturamento (2026-10-08)
 
-- `/faturamento` (card "Faturamento" em Relatórios) substitui a tela antiga como entrada; `/relatorio-faturamento` continua intacta (evolução mensal, forma de pgto, cupons, descontos) e é linkada de dentro da nova.
+- `/faturamento` (card "Faturamento" em Relatórios) é a tela principal e tem tudo em abas: Produtos, Famílias, Tipos, Forma de pgto, Evolução mensal, Por dia, Cupons e Descontos. `/relatorio-faturamento` (antiga) continua existindo por URL, sem link na tela nova. Forma de pgto, Cupons e Descontos são por cupom: filtros de tipo/família não se aplicam (a tela avisa); Descontos só existe para lojas Omie. Loaders das abas extras em `lib/faturamento-extras-loader.ts`.
 - Uma leitura de itens por período (`lib/faturamento-itens-loader.ts`): loja Omie = `fat_cupons` + `fat_cupom_itens` do Contabo; loja própria = `vendas_proprio*`; tipo/família/nome vêm de `produtos`. Filtros de tipo, família e situação são aplicados nessa leitura, então valem em todas as abas (a tela antiga só aplicava o filtro da dimensão exibida).
 - Funções puras testáveis: `lib/faturamento-itens.ts` (ranking, ordenação, busca, KPIs, série) e `lib/faturamento-periodo.ts` (atalhos, mês, validação, limite de 366 dias). `node --test lib/faturamento-itens.test.ts lib/faturamento-periodo.test.ts`.
 - Conferido em produção (loja 3, set/2026): faturado R$ 657.434,28 (= SQL dos cupons), top produto R$ 59.154,88 (= tabela antiga), detalhe do produto bate com a linha do ranking, filtro tipo=04 reduz para R$ 532.261,91.
 - Loja própria (ODARA) ainda sem venda real para validar esse caminho.
+- Abas extras conferidas em produção (loja 3, set/2026): forma de pgto igual ao SQL (CRC R$ 446.511,38, CRD 103.602,52, PIX 43.345,24, CRT 43.119,37, DIN 20.855,77), evolução mensal ago–out fecha em R$ 1.463.429,96 (= tela antiga), 2.187 cupons.
