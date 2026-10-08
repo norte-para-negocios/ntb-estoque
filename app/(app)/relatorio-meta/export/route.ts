@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     valor: d.valor,
     meta,
     dif: Math.round((d.valor - meta) * 100) / 100,
-    situacao: d.dia === hoje ? 'Em andamento' : d.valor >= meta ? 'Bateu' : 'Não bateu',
+    situacao: d.dia === hoje ? 'Em andamento' : meta <= 0 ? '—' : d.valor >= meta ? 'Bateu' : 'Não bateu',
   }))
   const buffer = await gerarPlanilhaMulti([{
     rows,

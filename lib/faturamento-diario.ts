@@ -39,7 +39,6 @@ export async function carregarFaturamentoDiario(lojaId: number, iniPedido: strin
     let truncou = false
     const cupons = await buscarFatCupons({ lojaId, dataInicio: ini, dataFinal: fim, onTruncado: () => { truncou = true } })
     if (truncou) aviso = 'A consulta ao histórico foi cortada antes do fim. Os valores abaixo podem estar incompletos.'
-    if (!cupons.length) aviso = aviso ?? 'Nenhum cupom retornado para o período. Se isso não é esperado, o histórico pode estar indisponível — recarregue a página.'
     porDia = agruparCuponsPorDia(cupons)
   }
 

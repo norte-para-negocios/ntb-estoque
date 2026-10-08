@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { periodoDoAtalho, resumirMeta } from './meta-faturamento.ts'
+import { periodoDoAtalho, resumirMeta, parseValorBR } from './meta-faturamento.ts'
 
 test('periodoDoAtalho: hoje, semana (segunda a hoje), mes (dia 1 a hoje)', () => {
   // 2026-10-08 é quinta-feira
@@ -37,7 +37,7 @@ test('resumirMeta: usa só dias fechados e separa o dia em andamento', () => {
 test('resumirMeta: meta 0 não divide por zero', () => {
   const r = resumirMeta(dias, 0, '2026-10-08')
   assert.equal(r.pctAtingido, null)
-  assert.equal(r.diasBateram, 3)
+  assert.equal(r.diasBateram, 0) // meta 0 não é meta: nenhum dia "bateu"
 })
 
 test('resumirMeta: só hoje no período (nenhum dia fechado)', () => {
@@ -53,4 +53,16 @@ test('resumirMeta: dia sem venda conta como não bateu', () => {
   const r = resumirMeta([{ dia: '2026-10-06', valor: 0 }, { dia: '2026-10-07', valor: 1500 }], 1000, '2026-10-08')
   assert.equal(r.diasBateram, 1)
   assert.deepEqual(r.pior, { dia: '2026-10-06', valor: 0 })
+})
+
+test('parseValorBR: ponto e vírgula em todos os formatos comuns', () => {
+  assert.equal(parseValorBR('5000'), 5000)
+  assert.equal(parseValorBR('5000,50'), 5000.5)
+  assert.equal(parseValorBR('5000.50'), 5000.5) // teclado numérico com ponto
+  assert.equal(parseValorBR('5.000,50'), 5000.5)
+  assert.equal(parseValorBR('5.000'), 5000) // milhar
+  assert.equal(parseValorBR('1.234.567'), 1234567)
+  assert.equal(parseValorBR(' R$ 5.000,5 '), 5000.5)
+  assert.ok(Number.isNaN(parseValorBR('abc')))
+  assert.ok(Number.isNaN(parseValorBR('')))
 })

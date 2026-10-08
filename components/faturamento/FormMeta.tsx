@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { salvarMetaFaturamento } from '@/lib/actions/meta-faturamento'
+import { parseValorBR } from '@/lib/meta-faturamento'
 
 export function FormMeta({ valorInicial }: { valorInicial: number | null }) {
   const [valor, setValor] = useState(valorInicial != null ? String(valorInicial).replace('.', ',') : '')
@@ -9,7 +10,7 @@ export function FormMeta({ valorInicial }: { valorInicial: number | null }) {
   const [pending, start] = useTransition()
 
   function salvar() {
-    const n = Number(valor.replace(/\./g, '').replace(',', '.'))
+    const n = parseValorBR(valor)
     start(async () => {
       const r = await salvarMetaFaturamento(n)
       setMsg('error' in r ? r.error : 'Meta salva')

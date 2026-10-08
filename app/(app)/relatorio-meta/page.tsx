@@ -36,9 +36,11 @@ export default async function RelatorioMetaPage({
   // Periodo: datas livres tem prioridade; senao atalho; default = este mes.
   const custom = ISO.test(sp.data_inicio ?? '') && sp.data_inicio! <= hoje
   const atalho: Atalho | null = custom ? null : (ATALHOS.some((a) => a.value === sp.atalho) ? (sp.atalho as Atalho) : 'mes')
-  const base = atalho ? periodoDoAtalho(atalho, hoje) : { ini: sp.data_inicio!, fim: ISO.test(sp.data_final ?? '') ? sp.data_final! : hoje }
+  const pedido = atalho ? periodoDoAtalho(atalho, hoje) : { ini: sp.data_inicio!, fim: ISO.test(sp.data_final ?? '') ? sp.data_final! : hoje }
+  // Periodo invertido (fim antes do inicio) volta para o mes atual, em vez de virar 1 dia so.
+  const base = pedido.fim < pedido.ini ? periodoDoAtalho('mes', hoje) : pedido
   const ini = base.ini
-  const fim = base.fim > hoje ? hoje : base.fim < ini ? ini : base.fim
+  const fim = base.fim > hoje ? hoje : base.fim
 
   const supabase = createServiceClient()
   const { data: metaRow } = await supabase.from('metas_faturamento').select('valor_diario').eq('loja_id', lojaId).maybeSingle()
@@ -88,6 +90,8 @@ export default async function RelatorioMetaPage({
 
           <p className="text-[13px] text-text-muted">Período: {fmtData(iniEf)} a {fmtData(fimEf)} · meta diária <Money value={meta} /></p>
 
+          {meta === 0 && <p className="text-[13px] text-text-muted">A meta está em R$ 0,00. Informe um valor maior que zero para comparar os dias.</p>}
+
           {fat?.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{fat.aviso}</p>}
 
           {resumo && fat && (
@@ -96,7 +100,7 @@ export default async function RelatorioMetaPage({
                 <Card titulo="Realizado" valor={<Money value={resumo.realizado} />} sub={`meta do período: ${fmtMoeda(resumo.metaPeriodo)}`} />
                 <Card titulo="% da meta" valor={resumo.pctAtingido == null ? '—' : `${resumo.pctAtingido.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} sub={`${resumo.diasFechados} dia(s) fechado(s)`} />
                 <Card titulo="Média por dia" valor={resumo.media == null ? '—' : <Money value={resumo.media} />} sub={resumo.melhor && resumo.pior ? `melhor: ${fmtData(resumo.melhor.dia)} · pior: ${fmtData(resumo.pior.dia)}` : undefined} />
-                <Card titulo="Dias que bateram" valor={`${resumo.diasBateram} de ${resumo.diasFechados}`} sub={resumo.emAndamento ? `hoje (em andamento): ${fmtMoeda(resumo.emAndamento.valor)}` : undefined} />
+                <Card titulo="Dias que bateram" valor={meta > 0 ? `${resumo.diasBateram} de ${resumo.diasFechados}` : '—'} sub={resumo.emAndamento ? `hoje (em andamento): ${fmtMoeda(resumo.emAndamento.valor)}` : undefined} />
               </div>
               {fat.dias.length > 0 ? (
                 <>

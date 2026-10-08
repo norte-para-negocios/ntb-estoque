@@ -47,7 +47,18 @@ export function resumirMeta(dias: DiaValor[], meta: number, hoje: string): Resum
     media: fechados.length ? round2(realizado / fechados.length) : null,
     melhor,
     pior,
-    diasBateram: fechados.filter((d) => d.valor >= meta).length,
+    diasBateram: meta > 0 ? fechados.filter((d) => d.valor >= meta).length : 0,
     emAndamento,
   }
+}
+
+// Le o que a pessoa digitou no campo de meta (pt-BR, mas aceita teclado numerico com ponto decimal).
+// Com virgula: virgula e' decimal e pontos sao milhar. Sem virgula: um unico ponto seguido de 1-2
+// digitos e' decimal ("5000.50"); qualquer outro uso do ponto e' milhar ("5.000", "1.234.567").
+export function parseValorBR(entrada: string): number {
+  const t = entrada.replace(/[^\d.,]/g, '')
+  if (!t) return NaN
+  if (t.includes(',')) return Number(t.replace(/\./g, '').replace(',', '.'))
+  if (/^\d+\.\d{1,2}$/.test(t)) return Number(t)
+  return Number(t.replace(/\./g, ''))
 }
