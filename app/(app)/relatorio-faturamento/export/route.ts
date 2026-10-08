@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { gerarPlanilhaMulti, planilhaResponse, abaMatrizMensal, type AbaPlanilha } from '@/lib/excel'
+import { hojeBahiaISO } from '@/lib/data-bahia'
+import { carregarFaturamentoDiario } from '@/lib/faturamento-diario'
 import { buscarFatAgregadoPorSituacao, buscarFatCupons, buscarFatCupomItens, buscarFatCupomPagamentosPeriodo } from '@/lib/faturamento-frio'
 
 export const dynamic = 'force-dynamic'
@@ -64,6 +66,26 @@ export async function GET(request: Request) {
   // Mesmos filtros da tela (período customizado + rótulos por dimensão), pra
   // "Baixar" bater com o que está sendo exibido (o título já prometia "com filtros").
   const { searchParams } = new URL(request.url)
+
+  if (searchParams.get('ver') === 'diario') {
+    const hoje = hojeBahiaISO()
+    const di = searchParams.get('data_inicio') ?? ''
+    const df = searchParams.get('data_final') ?? ''
+    const ok = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const ini = ok(di) && di <= hoje ? di : `${hoje.slice(0, 8)}01`
+    const fim = ok(df) && df >= ini ? (df > hoje ? hoje : df) : hoje
+    const { dias, aviso } = await carregarFaturamentoDiario(lojaId, ini, fim)
+    const buffer = await gerarPlanilhaMulti([{
+      rows: dias.map((d) => ({ dia: d.dia.split('-').reverse().join('/'), valor: d.valor })),
+      colunas: [
+        { key: 'dia', label: 'Dia', tipo: 'texto', largura: 14 },
+        { key: 'valor', label: 'Faturamento', tipo: 'moeda', largura: 18, somar: true },
+      ],
+      opts: { titulo: 'Faturamento por dia', subtitulo: `${ini} a ${fim}${aviso ? ` · ATENÇÃO: ${aviso}` : ''}` },
+      nome: 'Por dia',
+    }])
+    return planilhaResponse('faturamento-por-dia', buffer)
+  }
   const dataIni = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_inicio') ?? '') ? searchParams.get('data_inicio')!.slice(0, 7) : null
   const dataFim = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('data_final') ?? '') ? searchParams.get('data_final')!.slice(0, 7) : null
   const rotulosPorDim: Record<string, string[]> = {

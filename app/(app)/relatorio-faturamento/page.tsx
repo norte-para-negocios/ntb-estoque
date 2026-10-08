@@ -21,6 +21,10 @@ import { DrillBreadcrumb } from '@/components/ui-kit/DrillBreadcrumb'
 import { explicarRotulo } from '@/lib/rotulos-opacos'
 import { buscarFatAgregado, buscarFatAgregadoPorSituacao, buscarFatCupons, buscarFaturamentoFrioHistorico, type LinhaFatAgregado, type CupomFat } from '@/lib/faturamento-frio'
 import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
+import { hojeBahiaISO } from '@/lib/data-bahia'
+import { carregarFaturamentoDiario } from '@/lib/faturamento-diario'
+import { BarrasDiarias } from '@/components/faturamento/BarrasDiarias'
+import { TabelaDiaria } from '@/components/faturamento/TabelaDiaria'
 import { calcularDescontoPorProduto, calcularDescontoPorFormaPgto, type DescontoRanking } from '@/lib/faturamento-descontos'
 
 // Pedido real do Ramon (reuniao 27/07, item #28): filtro de status tambem
@@ -420,6 +424,11 @@ export default async function RelatorioFaturamentoPage({
   // agregação (cara -- itens + pagamentos do fato inteiro do período) quando o
   // usuário está de fato nessa aba, reaproveitando dataInicioFato/dataFinalFato
   // já calculados pro modo "Ver cupons".
+  const verDiario = sp.ver === 'diario'
+  const hojeISO = hojeBahiaISO()
+  const iniDiario = dataIni && dataIni <= hojeISO ? dataIni : `${hojeISO.slice(0, 8)}01`
+  const fimDiario = dataFim && dataFim >= iniDiario ? (dataFim > hojeISO ? hojeISO : dataFim) : hojeISO
+  const fatDiario = verDiario ? await carregarFaturamentoDiario(lojaId, iniDiario, fimDiario) : null
   const verDescontos = sp.ver === 'descontos'
   const [descontoPorProduto, descontoPorForma]: [DescontoRanking[], DescontoRanking[]] = verDescontos
     ? await Promise.all([
@@ -618,6 +627,11 @@ export default async function RelatorioFaturamentoPage({
   // agora entende `status` -- sem isso aqui, a nova capacidade ficaria
   // inalcançável a partir do botão "Baixar" (só via edição manual da URL).
   if (statusForcaAgregacao) exportParams.set('status', sp.status!)
+  if (verDiario) {
+    exportParams.set('ver', 'diario')
+    exportParams.set('data_inicio', iniDiario)
+    exportParams.set('data_final', fimDiario)
+  }
   const exportHref = `/relatorio-faturamento/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   const th = 'whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-text-muted'
@@ -729,6 +743,9 @@ export default async function RelatorioFaturamentoPage({
                 rotuloDe={(p) => explicarRotulo(p.rotulo)?.label ?? p.rotulo}
               />
             )}
+            <Link href={verDiario ? hrefComVer(null) : hrefComVer('diario')} className={verDiario ? chipAtivo : chipInativo}>
+              {verDiario ? 'Ver resumo' : 'Por dia'}
+            </Link>
             <Link href={verCupons ? hrefComVer(null) : hrefComVer('cupons')} className={verCupons ? chipAtivo : chipInativo}>
               {verCupons ? 'Ver resumo' : 'Ver cupons'}
             </Link>
@@ -750,7 +767,19 @@ export default async function RelatorioFaturamentoPage({
             </p>
           )}
 
-          {verDescontos ? (
+          {verDiario && fatDiario ? (
+            <div className="space-y-3">
+              {fatDiario.aviso && (
+                <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{fatDiario.aviso}</p>
+              )}
+              <p className="text-[13px] text-text-muted">
+                Período: {iniDiario.split('-').reverse().join('/')} a {fimDiario.split('-').reverse().join('/')} · use o filtro de datas para mudar.{' '}
+                Total: <strong className="text-text">{fmtMoeda(fatDiario.dias.reduce((s, d) => s + d.valor, 0))}</strong>
+              </p>
+              <BarrasDiarias dias={fatDiario.dias} hoje={hojeISO} />
+              <TabelaDiaria dias={fatDiario.dias} hoje={hojeISO} />
+            </div>
+          ) : verDescontos ? (
             !descontoPorProduto.length && !descontoPorForma.length ? (
               <EmptyState
                 icon={DollarSign}
