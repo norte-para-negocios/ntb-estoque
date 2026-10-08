@@ -12,6 +12,12 @@ export type ItensCarregados = { linhas: LinhaItem[]; aviso: string | null; opcoe
 
 type Meta = { codigo_produto: number; tipo_item: string | null; descricao_familia: string | null; descricao: string | null; codigo: string | null }
 
+// Situacao do cupom: Omie mantem devolvido nas "validas" (igual ao total mensal); loja propria exclui (igual a recalcular_faturamento_proprio).
+export const bateSituacaoOmie = (c: { cancelado: boolean; devolvido: boolean }, s: Situacao) =>
+  s === 'canceladas' ? c.cancelado : s === 'devolvidas' ? c.devolvido && !c.cancelado : !c.cancelado
+export const bateSituacaoProprio = (v: { cancelado: boolean; devolvido: boolean }, s: Situacao) =>
+  s === 'canceladas' ? v.cancelado : s === 'devolvidas' ? v.devolvido && !v.cancelado : !v.cancelado && !v.devolvido
+
 const rotuloTipo = (cod: string) => (cod ? (TIPO_NOME[cod] ?? `Tipo ${cod}`) : 'Não classificado')
 const SEM_FAMILIA = 'Sem família'
 
@@ -55,8 +61,7 @@ export async function carregarItens(lojaId: number, ini: string, fim: string, fi
   const modo = await modoDaLoja(lojaId)
 
   if (modo === 'proprio') {
-    const bate = (v: { cancelado: boolean; devolvido: boolean }) =>
-      filtros.situacao === 'canceladas' ? v.cancelado : filtros.situacao === 'devolvidas' ? v.devolvido && !v.cancelado : !v.cancelado && !v.devolvido
+    const bate = (v: { cancelado: boolean; devolvido: boolean }) => bateSituacaoProprio(v, filtros.situacao)
     const vendas = (await buscarTodasLinhas<{ id: number; data: string; cancelado: boolean; devolvido: boolean }>(
       (from, to) => supabase.from('vendas_proprio').select('id, data, cancelado, devolvido').eq('loja_id', lojaId).gte('data', ini).lte('data', fim).order('id').range(from, to),
       undefined,
@@ -84,8 +89,7 @@ export async function carregarItens(lojaId: number, ini: string, fim: string, fi
       buscarFatCupomItens({ lojaId, dataInicio: ini, dataFinal: fim, onTruncado }),
     ])
     if (truncou) aviso = 'A consulta ao histórico foi cortada antes do fim. Os valores abaixo podem estar incompletos.'
-    const bate = (c: { cancelado: boolean; devolvido: boolean }) =>
-      filtros.situacao === 'canceladas' ? c.cancelado : filtros.situacao === 'devolvidas' ? c.devolvido && !c.cancelado : !c.cancelado
+    const bate = (c: { cancelado: boolean; devolvido: boolean }) => bateSituacaoOmie(c, filtros.situacao)
     const porCupom = new Map(cupons.filter(bate).map((c) => [c.n_id_cupom, c.data]))
     for (const it of itens) {
       const dia = porCupom.get(it.n_id_cupom)

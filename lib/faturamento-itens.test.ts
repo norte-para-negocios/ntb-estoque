@@ -80,3 +80,36 @@ test('posicaoNoRanking é 1-based e null quando não existe', () => {
   assert.equal(posicaoNoRanking(r, '2'), 2)
   assert.equal(posicaoNoRanking(r, '999'), null)
 })
+
+import { mesesEntre, matrizMensal, agruparPagamentos } from './faturamento-itens.ts'
+
+test('mesesEntre lista os meses do período, inclusive os das pontas', () => {
+  assert.deepEqual(mesesEntre('2026-08-15', '2026-10-02'), ['2026-08', '2026-09', '2026-10'])
+  assert.deepEqual(mesesEntre('2026-10-01', '2026-10-08'), ['2026-10'])
+  assert.deepEqual(mesesEntre('2025-12-20', '2026-01-03'), ['2025-12', '2026-01'])
+})
+
+test('matrizMensal: linhas por dimensão, colunas por mês, totais e % ', () => {
+  const m = matrizMensal([
+    L({ dia: '2026-09-10', idProduto: 1, produto: 'A', valor: 100 }),
+    L({ dia: '2026-10-02', idProduto: 1, produto: 'A', valor: 50 }),
+    L({ dia: '2026-10-03', idProduto: 2, produto: 'B', valor: 50 }),
+  ], 'produto', '2026-09-01', '2026-10-08')
+  assert.deepEqual(m.meses, ['2026-09', '2026-10'])
+  assert.equal(m.linhas[0].rotulo, 'A')
+  assert.deepEqual(m.linhas[0].porMes, { '2026-09': 100, '2026-10': 50 })
+  assert.equal(m.linhas[0].total, 150)
+  assert.equal(m.linhas[0].pct, 75)
+  assert.deepEqual(m.linhas[1].porMes, { '2026-09': 0, '2026-10': 50 })
+  assert.deepEqual(m.totalPorMes, { '2026-09': 100, '2026-10': 100 })
+  assert.equal(m.total, 200)
+})
+
+test('agruparPagamentos soma por forma, conta cupons e calcula %', () => {
+  const r = agruparPagamentos([
+    { cupom: 1, forma: 'Pix', valor: 60 },
+    { cupom: 2, forma: 'Pix', valor: 40 },
+    { cupom: 2, forma: 'Dinheiro', valor: 100 },
+  ])
+  assert.deepEqual(r.map((x) => [x.rotulo, x.valor, x.cupons, x.pct]), [['Dinheiro', 100, 1, 50], ['Pix', 100, 2, 50]]) // empate desempata pelo nome
+})

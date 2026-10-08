@@ -9,7 +9,10 @@ import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
 import { lerParamsFaturamento, type SpFat } from '@/lib/faturamento-params'
 import { carregarItens } from '@/lib/faturamento-itens-loader'
-import { filtrarPorNome, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type Dimensao } from '@/lib/faturamento-itens'
+import { agruparPagamentos, filtrarPorNome, matrizMensal, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type Dimensao } from '@/lib/faturamento-itens'
+import { carregarCupons, carregarDescontos, carregarPagamentos } from '@/lib/faturamento-extras-loader'
+import { MatrizMensalTabela } from '@/components/faturamento/MatrizMensalTabela'
+import { TabelaCupons } from '@/components/faturamento/TabelaCupons'
 import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { RankingBarras } from '@/components/faturamento/RankingBarras'
@@ -21,8 +24,14 @@ const ABAS = [
   { value: 'produtos', label: 'Produtos' },
   { value: 'familias', label: 'Famílias' },
   { value: 'tipos', label: 'Tipos' },
+  { value: 'pagamentos', label: 'Forma de pgto' },
+  { value: 'mensal', label: 'Evolução mensal' },
   { value: 'dias', label: 'Por dia' },
+  { value: 'cupons', label: 'Cupons' },
+  { value: 'descontos', label: 'Descontos' },
 ] as const
+const LIMITE_CUPONS = 1000
+const DIMS_MENSAL = [{ value: 'tipo', label: 'Tipo' }, { value: 'familia', label: 'Família' }, { value: 'produto', label: 'Produto' }] as const
 const POR_ABA: Record<string, Dimensao> = { produtos: 'produto', familias: 'familia', tipos: 'tipo' }
 const fmtDM = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
@@ -39,7 +48,7 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
   // Parametros que atravessam links (periodo, aba, filtros, ordenacao, busca).
   const base: Record<string, string> = {
     ini: p.ini, fim: p.fim, aba: p.aba, tipo: p.tipos.join(','), familia: p.familias.join(','),
-    situacao: p.situacao === 'validas' ? '' : p.situacao, q: p.q, ordem: p.ordem === 'valor' ? '' : p.ordem, sentido: p.sentido === 'mais' ? '' : p.sentido,
+    situacao: p.situacao === 'validas' ? '' : p.situacao, por: p.por === 'tipo' ? '' : p.por, q: p.q, ordem: p.ordem === 'valor' ? '' : p.ordem, sentido: p.sentido === 'mais' ? '' : p.sentido,
   }
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams()
@@ -53,6 +62,15 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
   const selecionado = p.aba === 'produtos' && p.produto ? rankingTodos.find((r) => r.chave === p.produto) : undefined
   const serieSel = selecionado ? serieDiaria(linhas.filter((l) => (l.idProduto != null ? String(l.idProduto) : `nome:${l.produto}`) === p.produto), p.ini, p.fim) : []
   const serie = serieDiaria(linhas, p.ini, p.fim)
+  const mensal = p.aba === 'mensal' ? matrizMensal(linhas, p.por, p.ini, p.fim) : null
+  const [pagamentos, cuponsAba, descontos] = await Promise.all([
+    p.aba === 'pagamentos' ? carregarPagamentos(lojaId, p.ini, p.fim, p.situacao) : null,
+    p.aba === 'cupons' ? carregarCupons(lojaId, p.ini, p.fim, p.situacao) : null,
+    p.aba === 'descontos' ? carregarDescontos(lojaId, p.ini, p.fim) : null,
+  ])
+  const rankingPgto = pagamentos ? agruparPagamentos(pagamentos.linhas) : []
+  const semFiltroItem = (p.aba === 'pagamentos' || p.aba === 'cupons' || p.aba === 'descontos') && (p.tipos.length > 0 || p.familias.length > 0)
+  const avisoExtra = pagamentos?.aviso ?? cuponsAba?.aviso ?? null
 
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chipAtivo = `${chipBase} bg-brand-fill text-white`
@@ -68,8 +86,7 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
         description="Escolha o período, filtre e veja o que mais vendeu."
         actions={
           <>
-            <Link href="/relatorio-faturamento" className={btnClass('outline')}>Evolução mensal, forma de pgto e cupons</Link>
-            {p.aba !== 'dias' && <a href={`/faturamento/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a>}
+            {(p.aba === 'produtos' || p.aba === 'familias' || p.aba === 'tipos' || p.aba === 'pagamentos') && <a href={`/faturamento/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a>}
           </>
         }
       />
@@ -78,7 +95,8 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
       <FiltrosFaturamento tipos={opcoes.tipos} familias={opcoes.familias} />
 
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias: mostrando os dias mais recentes.</p>}
-      {aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{aviso}</p>}
+      {(aviso || avisoExtra) && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{avisoExtra ?? aviso}</p>}
+      {semFiltroItem && <p className="text-[13px] text-text-muted">Os filtros de tipo e família não se aplicam a esta aba (ela é por cupom). Situação continua valendo.</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card titulo="Faturado" valor={<Money value={kp.faturado} />} />
@@ -91,8 +109,54 @@ export default async function FaturamentoPage({ searchParams }: { searchParams: 
         {ABAS.map((a) => <Link key={a.value} href={href({ aba: a.value, produto: '' })} className={p.aba === a.value ? chipAtivo : chipInativo}>{a.label}</Link>)}
       </div>
 
-      {linhas.length === 0 ? (
+      {p.aba === 'descontos' ? (
+        !descontos?.suportado ? (
+          <EmptyState icon={DollarSign} title="Descontos ainda não disponível" hint="O relatório de descontos por produto e forma de pagamento só existe para lojas com Omie por enquanto." />
+        ) : descontos.porProduto.length === 0 && descontos.porForma.length === 0 ? (
+          <EmptyState icon={DollarSign} title="Sem descontos no período" hint="Tente ampliar o período." />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {[{ t: 'Produtos com mais desconto', l: descontos.porProduto }, { t: 'Desconto por forma de pagamento', l: descontos.porForma }].map((g) => (
+              <section key={g.t} className="space-y-2">
+                <h2 className="text-[14px] font-semibold text-text">{g.t}</h2>
+                <div className="overflow-hidden rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
+                  <table className="w-full border-collapse text-sm"><tbody>
+                    {g.l.map((d) => (
+                      <tr key={d.rotulo} className="border-t border-border/60 first:border-t-0"><td className="px-3 py-2 text-text">{d.rotulo}</td><td className="px-3 py-2 text-right text-text"><Money value={d.valorDesconto} /></td></tr>
+                    ))}
+                  </tbody></table>
+                </div>
+              </section>
+            ))}
+          </div>
+        )
+      ) : p.aba === 'cupons' ? (
+        !cuponsAba || cuponsAba.linhas.length === 0 ? (
+          <EmptyState icon={DollarSign} title="Sem cupons no período" hint="Mude o período ou a situação." />
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[13px] text-text-muted">
+              {cuponsAba.linhas.length > LIMITE_CUPONS ? `Mostrando os ${LIMITE_CUPONS} mais recentes de ${cuponsAba.linhas.length.toLocaleString('pt-BR')} cupons. Reduza o período para ver os outros.` : `${cuponsAba.linhas.length.toLocaleString('pt-BR')} cupons`}
+            </p>
+            <TabelaCupons cupons={cuponsAba.linhas.slice(0, LIMITE_CUPONS)} />
+          </div>
+        )
+      ) : p.aba === 'pagamentos' ? (
+        rankingPgto.length === 0 ? (
+          <EmptyState icon={DollarSign} title="Sem pagamentos no período" hint="Mude o período ou a situação." />
+        ) : (
+          <RankingBarras linhas={rankingPgto} ordem="valor" mostrarQuant={false} />
+        )
+      ) : linhas.length === 0 ? (
         <EmptyState icon={DollarSign} title="Sem vendas no período" hint="Mude o período ou limpe os filtros de tipo, família e situação." />
+      ) : p.aba === 'mensal' && mensal ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[12px] text-text-muted">Por</span>
+            {DIMS_MENSAL.map((d) => <Link key={d.value} href={href({ aba: 'mensal', por: d.value === 'tipo' ? '' : d.value, produto: '' })} className={p.por === d.value ? chipAtivo : chipInativo}>{d.label}</Link>)}
+          </div>
+          <MatrizMensalTabela matriz={mensal} titulo={DIMS_MENSAL.find((d) => d.value === p.por)?.label ?? 'Item'} />
+        </div>
       ) : p.aba === 'dias' ? (
         <div className="space-y-3">
           <BarrasDiarias dias={serie} hoje={hoje} />

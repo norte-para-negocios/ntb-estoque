@@ -32,7 +32,7 @@ export type LinhaFatAgregado = { rotulo: string; mes?: string; valor: number; qt
 // um filtro escrito no vocabulário amigável). Ver também o safety net em
 // `export/route.ts` (aba nunca desaparece silenciosamente mesmo se um
 // filtro não bater nada).
-const FORMA_PGTO_LABEL: Record<string, string> = {
+export const FORMA_PGTO_LABEL: Record<string, string> = {
   PIX: 'Pix',
   CRC: 'Cartão de Crédito',
   CRD: 'Cartão de Débito',

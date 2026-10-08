@@ -6,7 +6,7 @@ const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits:
 const fmtPct = (n: number) => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 
 // Lista ordenada com barra proporcional ao maior valor. `hrefDe` (opcional) torna a linha clicavel.
-export function RankingBarras({ linhas, ordem, selecionado, hrefDe }: { linhas: LinhaRanking[]; ordem: 'valor' | 'quant'; selecionado?: string; hrefDe?: (chave: string) => string }) {
+export function RankingBarras({ linhas, ordem, selecionado, hrefDe, mostrarQuant = true }: { linhas: LinhaRanking[]; ordem: 'valor' | 'quant'; selecionado?: string; hrefDe?: (chave: string) => string; mostrarQuant?: boolean }) {
   const max = Math.max(1, ...linhas.map((l) => l[ordem]))
   return (
     <ol className="divide-y divide-border/60 overflow-hidden rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
@@ -22,7 +22,7 @@ export function RankingBarras({ linhas, ordem, selecionado, hrefDe }: { linhas: 
             </div>
             <div className="text-right">
               <div className="num text-sm font-semibold text-text"><Money value={l.valor} /></div>
-              <div className="num text-[12px] text-text-muted">{fmtQtd(l.quant)} un · {fmtPct(l.pct)}</div>
+              <div className="num text-[12px] text-text-muted">{mostrarQuant ? `${fmtQtd(l.quant)} un · ` : `${l.cupons} cupons · `}{fmtPct(l.pct)}</div>
             </div>
           </div>
         )

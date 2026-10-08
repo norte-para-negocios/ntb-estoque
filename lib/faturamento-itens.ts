@@ -92,3 +92,58 @@ export function posicaoNoRanking(r: LinhaRanking[], chave: string): number | nul
   const i = r.findIndex((x) => x.chave === chave)
   return i < 0 ? null : i + 1
 }
+
+export function mesesEntre(ini: string, fim: string): string[] {
+  const out: string[] = []
+  let [a, m] = ini.slice(0, 7).split('-').map(Number)
+  const [af, mf] = fim.slice(0, 7).split('-').map(Number)
+  while (a < af || (a === af && m <= mf)) {
+    out.push(`${a}-${String(m).padStart(2, '0')}`)
+    m += 1
+    if (m > 12) { m = 1; a += 1 }
+  }
+  return out
+}
+
+export type LinhaMatriz = { chave: string; rotulo: string; porMes: Record<string, number>; total: number; pct: number }
+export type MatrizMensal = { meses: string[]; linhas: LinhaMatriz[]; totalPorMes: Record<string, number>; total: number }
+
+// Evolucao mensal: uma linha por produto/familia/tipo, uma coluna por mes do periodo.
+export function matrizMensal(linhas: LinhaItem[], por: Dimensao, ini: string, fim: string): MatrizMensal {
+  const meses = mesesEntre(ini, fim)
+  const zero = () => Object.fromEntries(meses.map((m) => [m, 0])) as Record<string, number>
+  const g = new Map<string, { rotulo: string; porMes: Record<string, number> }>()
+  const totalPorMes = zero()
+  for (const l of linhas) {
+    const { chave, rotulo } = chaveDe(l, por)
+    const mes = l.dia.slice(0, 7)
+    const x = g.get(chave) ?? { rotulo, porMes: zero() }
+    x.porMes[mes] = (x.porMes[mes] ?? 0) + l.valor
+    totalPorMes[mes] = (totalPorMes[mes] ?? 0) + l.valor
+    g.set(chave, x)
+  }
+  const total = round2(Object.values(totalPorMes).reduce((s, v) => s + v, 0))
+  const out = [...g.entries()].map(([chave, x]) => {
+    const porMes = Object.fromEntries(Object.entries(x.porMes).map(([k, v]) => [k, round2(v)])) as Record<string, number>
+    const t = round2(Object.values(porMes).reduce((s, v) => s + v, 0))
+    return { chave, rotulo: x.rotulo, porMes, total: t, pct: total > 0 ? round2((t / total) * 100) : 0 }
+  }).sort((a, b) => b.total - a.total || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
+  return { meses, linhas: out, totalPorMes: Object.fromEntries(Object.entries(totalPorMes).map(([k, v]) => [k, round2(v)])), total }
+}
+
+export type Pagamento = { cupom: number; forma: string; valor: number }
+
+// Forma de pagamento como ranking (mesmo formato dos outros; quant fica 0).
+export function agruparPagamentos(pags: Pagamento[]): LinhaRanking[] {
+  const m = new Map<string, { valor: number; cupons: Set<number> }>()
+  for (const p of pags) {
+    const g = m.get(p.forma) ?? { valor: 0, cupons: new Set<number>() }
+    g.valor += p.valor
+    g.cupons.add(p.cupom)
+    m.set(p.forma, g)
+  }
+  const total = [...m.values()].reduce((s, g) => s + g.valor, 0)
+  return [...m.entries()]
+    .map(([forma, g]) => ({ chave: forma, rotulo: forma, valor: round2(g.valor), quant: 0, cupons: g.cupons.size, pct: total > 0 ? round2((g.valor / total) * 100) : 0 }))
+    .sort((a, b) => b.valor - a.valor || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
+}
