@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { getCurrentLojaId } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
-  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target,
+  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag,
 } from 'lucide-react'
 
 type Rel = {
@@ -49,6 +49,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
     itens: [
       { href: '/relatorio-faturamento', titulo: 'Faturamento', icon: DollarSign, descricao: 'Faturamento por período, produto e família.', pergunta: 'Quanto vendi?' },
       { href: '/relatorio-indicadores', titulo: 'Faturamento x Compras', icon: Scale, descricao: 'Cruza o que entrou de venda com o que saiu de compra.', pergunta: 'Estou comprando demais pro que vendo?' },
+      { href: '/meta-mensal', titulo: 'Meta do mês', icon: Flag, descricao: 'Quanto já foi, quanto falta e quanto vender por dia para fechar a meta do mês, com barras de progresso por semana.', pergunta: 'Vou fechar a meta do mês?' },
       { href: '/relatorio-meta', titulo: 'Meta de faturamento', icon: Target, descricao: 'Defina a meta diária e compare com o faturamento de cada dia, semana ou mês.', pergunta: 'Bati a meta?' },
     ],
   },
