@@ -40,15 +40,17 @@
       {
         "from": "web",
         "to": "web"
-      },
-      {
-        "from": "vendor/${platform}-${arch}",
-        "to": "vendor"
       }
     ],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "vendor/win32-x64",
+          "to": "vendor"
+        }
+      ]
     },
     "compression": "normal",
     "nsis": {
@@ -60,7 +62,15 @@
       "provider": "generic",
       "url": "https://updates.norteparanegocios.com.br/ntb-estoque-desktop/"
     },
-    "asar": false
+    "asar": false,
+    "mac": {
+      "extraResources": [
+        {
+          "from": "vendor/darwin-arm64",
+          "to": "vendor"
+        }
+      ]
+    }
   },
   "allowScripts": {
     "@embedded-postgres/darwin-arm64@17.10.0-beta.17": true,

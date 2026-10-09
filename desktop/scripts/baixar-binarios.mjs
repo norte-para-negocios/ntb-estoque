@@ -55,5 +55,14 @@ if (fs.existsSync(path.join(tmp, 'package', 'scripts', 'hydrate-symlinks.js'))) 
 }
 fs.cpSync(path.join(tmp, 'package', 'native'), path.join(DESTINO, 'pgsql'), { recursive: true, verbatimSymlinks: true })
 
+// Windows: o Postgres precisa do VCRUNTIME140.dll (runtime do Visual C++). Vai junto dos binários
+// (distribuição app-local que a Microsoft permite), tirado do pacote "embeddable" oficial do Python.
+if (ALVO === 'win32-x64') {
+  const zip = path.join(tmp, 'python-embed.zip')
+  execFileSync('curl', ['-fsSL', '-o', zip, 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip'], { stdio: 'inherit' })
+  conferir(zip, 'vcruntime-python-3.12.7-embed-amd64')
+  execFileSync('unzip', ['-q', '-o', zip, 'vcruntime140.dll', 'vcruntime140_1.dll', '-d', path.join(DESTINO, 'pgsql', 'bin')])
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log(`binários prontos em ${DESTINO}:`, fs.readdirSync(DESTINO))

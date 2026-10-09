@@ -42,6 +42,10 @@ const empacotado = app.isPackaged
 const dirVendor = empacotado ? path.join(process.resourcesPath, 'vendor') : path.join(__dirname, '..', 'vendor', `${process.platform}-${process.arch}`)
 const dirWeb = empacotado ? path.join(process.resourcesPath, 'web') : path.join(__dirname, '..', 'web')
 
+// Erro não tratado no processo principal vira log, nunca um diálogo que trava o app.
+process.on('uncaughtException', (e) => log(`erro não tratado: ${e?.stack ?? e}`))
+process.on('unhandledRejection', (e) => log(`promessa rejeitada: ${e?.stack ?? e}`))
+
 let janela = null
 let servicos = null
 
@@ -160,36 +164,37 @@ app.whenReady().then(async () => {
     servicos = await subir()
     criarJanela()
     configurarAtualizacao()
+    // Teste automatizado do fechamento normal (app.quit, o mesmo caminho do X da janela no Windows).
+    if (process.env.NTB_TESTE_SAIR_EM) setTimeout(() => app.quit(), Number(process.env.NTB_TESTE_SAIR_EM))
   } catch (e) {
     log(`falha ao subir: ${e.stack ?? e.message}`)
     dialog.showErrorBox('Norte Estoque', `Não foi possível iniciar o app.\n\n${e.message}\n\nDetalhes em: ${path.join(dirDados, 'app.log')}`)
-    await encerrar()
+    encerrar()
     app.exit(1)
   }
 })
 
-let encerrando = false
-async function encerrar() {
-  if (encerrando) return
-  encerrando = true
+// Encerramento único e síncrono: no SIGTERM/fechar o loop do Electron pode parar antes de qualquer
+// callback assíncrono, então tudo aqui é síncrono (derruba os processos e para o Postgres).
+let encerrado = false
+function encerrar() {
+  if (encerrado) return
+  encerrado = true
+  const t0 = Date.now()
   try {
     servicos?.sync.parar()
-    await servicos?.gateway.fechar()
+    servicos?.gateway.servidor.closeAllConnections()
+    servicos?.gateway.servidor.close()
     servicos?.processos.encerrar()
-    await servicos?.b.parar()
+    servicos?.b.parar()
+    log(`encerrado em ${Date.now() - t0}ms`)
   } catch (e) {
     log(`encerrar: ${e.message}`)
   }
 }
 
-app.on('window-all-closed', async () => {
-  await encerrar()
-  app.quit()
-})
-app.on('before-quit', async (e) => {
-  if (!encerrando) {
-    e.preventDefault()
-    await encerrar()
-    app.quit()
-  }
-})
+// O encerramento é síncrono, então o quit normal do Electron segue sozinho depois dele
+// (chamar app.exit dentro do before-quit trava no macOS).
+app.on('window-all-closed', () => app.quit())
+app.on('before-quit', () => encerrar())
+for (const sinal of ['SIGTERM', 'SIGINT']) process.on(sinal, () => app.quit())

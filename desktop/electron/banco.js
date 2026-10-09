@@ -4,7 +4,7 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { execFile } = require('child_process')
+const { execFile, execFileSync } = require('child_process')
 const { Client } = require('pg')
 
 const EXE = process.platform === 'win32' ? '.exe' : ''
@@ -65,10 +65,21 @@ async function iniciar(o) {
     ].join('\n'))
   }
 
-  await rodar(path.join(binDir, `pg_ctl${EXE}`), [
-    'start', '-D', pgData, '-w', '-t', '60', '-l', path.join(o.dataDir, 'postgres.log'),
-    '-o', `-p ${o.porta} -c listen_addresses=127.0.0.1 -c unix_socket_directories= -c max_connections=60 -c shared_buffers=128MB`,
-  ])
+  // stdio 'ignore': o postgres herda os handles do pg_ctl; com pipe, no Windows o retorno nunca chega.
+  try {
+    execFileSync(path.join(binDir, `pg_ctl${EXE}`), [
+      'start', '-D', pgData, '-w', '-t', '60', '-l', path.join(o.dataDir, 'postgres.log'),
+      '-o', `-p ${o.porta} -c listen_addresses=127.0.0.1 -c unix_socket_directories= -c max_connections=60 -c shared_buffers=128MB`,
+    ], { windowsHide: true, stdio: 'ignore' })
+  } catch (e) {
+    let detalhe = ''
+    try {
+      detalhe = fs.readFileSync(path.join(o.dataDir, 'postgres.log'), 'utf8').split('\n').slice(-8).join('\n')
+    } catch {
+      // sem log
+    }
+    throw new Error(`O banco local não iniciou (${e.message}).\n${detalhe}`)
+  }
 
   const conectar = (database) => {
     const c = new Client({ host: '127.0.0.1', port: o.porta, user: 'postgres', password: o.senhaAdmin, database })
@@ -101,8 +112,14 @@ async function iniciar(o) {
     recriado = true
   }
 
-  async function parar() {
-    await rodar(path.join(binDir, `pg_ctl${EXE}`), ['stop', '-D', pgData, '-m', 'fast', '-w']).catch(() => {})
+  // Síncrono de propósito: no encerramento (SIGTERM, fechar janela) o loop do Electron pode parar
+  // antes de um callback assíncrono voltar.
+  function parar() {
+    try {
+      execFileSync(path.join(binDir, `pg_ctl${EXE}`), ['stop', '-D', pgData, '-m', 'fast', '-w', '-t', '20'], { windowsHide: true, stdio: 'ignore' })
+    } catch {
+      // já parado
+    }
   }
 
   // Apaga tudo e recria a estrutura (troca de usuário, "apagar dados", esquema novo).

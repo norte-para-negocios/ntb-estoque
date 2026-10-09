@@ -33,12 +33,20 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     return p
   }
 
+  // Conexão que cai (banco reiniciado, encerramento) é descartada e reaberta na próxima vez.
+  function vigiar(c, limpar) {
+    c.on('error', (e) => {
+      log(`conexão local caiu: ${e.message}`)
+      limpar()
+    })
+    return c
+  }
   async function conexao() {
-    if (!pool) pool = await banco.conectar('estoque')
+    if (!pool) pool = vigiar(await banco.conectar('estoque'), () => { pool = null })
     return pool
   }
   async function conexaoFrio() {
-    if (!poolFrio) poolFrio = await banco.conectar('frio')
+    if (!poolFrio) poolFrio = vigiar(await banco.conectar('frio'), () => { poolFrio = null })
     return poolFrio
   }
   async function fecharConexoes() {
@@ -381,7 +389,9 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
           "select tabela, pk from ntb_local.alteracoes where intent_id = $1 and op = 'INSERT' order by seq",
           [it.intentId],
         )).rows
-        const { mapa, divergentes } = parear(locais, res.criados ?? [])
+        // Tabelas que só existem no computador (audit_log etc.) não voltam do servidor: fora do pareamento.
+        const sincronizadas = new Set(((await meta('tabelas')) ?? []).map((t) => t.tabela))
+        const { mapa, divergentes } = parear(locais.filter((l) => sincronizadas.has(l.tabela)), res.criados ?? [])
         fila.somarMapa(mapa)
         if (divergentes.length) log(`pareamento divergente em ${it.acao}: ${divergentes.join(', ')}`)
       }
@@ -470,6 +480,7 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
   function parar() {
     timers.forEach(clearInterval)
     timers = []
+    fecharConexoes()
   }
 
   return {

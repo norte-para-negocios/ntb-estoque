@@ -268,7 +268,11 @@ function criarGateway(o) {
       servidor.once('error', reject)
       servidor.listen(portas.gateway, '127.0.0.1', resolve)
     }),
-    fechar: () => new Promise((resolve) => servidor.close(() => resolve())),
+    // closeAllConnections: a janela mantém conexões keep-alive; sem isso o close() espera para sempre.
+    fechar: () => new Promise((resolve) => {
+      servidor.close(() => resolve())
+      servidor.closeAllConnections()
+    }),
     servidor,
   }
 }

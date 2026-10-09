@@ -93,7 +93,7 @@ function criarProcessos({ dirVendor, dirWeb, dirDados, log }) {
       encerrando = true
       for (const p of filhos) {
         try {
-          p.kill()
+          p.kill("SIGKILL") // sem estado: o Postgres para à parte (pg_ctl stop)
         } catch {
           // já saiu
         }
