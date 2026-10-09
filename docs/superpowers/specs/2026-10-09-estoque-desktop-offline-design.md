@@ -62,7 +62,7 @@ const __d = viaDesktop('produto#criarProduto', criarProduto, arguments); if (__d
 - Idempotência: cada execução tem `intent_id` (uuid). Tabela `offline_execucoes` grava `em_andamento` antes de rodar e o resultado depois. Reenvio do mesmo id devolve o resultado gravado; `em_andamento` antigo vira "verificar manualmente" e nunca roda de novo (evita ajuste duplicado no Omie).
 
 ### Fila offline e ids provisórios
-- Linhas criadas offline usam ids provisórios: cada tabela tem sua faixa (`int4`: 2.000.000.000 + i×1.000.000; `int8`: 9×10¹⁵ + i×10⁹), então um número provisório identifica a tabela.
+- Linhas criadas offline usam ids provisórios: cada tabela tem sua faixa (`int4`: 2.000.000.000 + i×1.000.000; `int8`: 5×10¹⁵ + i×10¹⁰), então um número provisório identifica a tabela.
 - Ao reenviar uma ação `local`, o servidor devolve as linhas que ela criou (outbox ganha coluna `intent_id`, preenchida pelo header `x-ntb-intent` que o PostgREST expõe em `request.headers`). O app pareia com as linhas locais da mesma intenção (trigger local `ntb_local.alteracoes`, mesma ordem por tabela) e monta o mapa provisório→real. As ações seguintes da fila têm os ids reescritos antes do envio. Se a contagem não bater, as dependentes falham com explicação, nunca chutam.
 - Depois da fila, a reconciliação apaga as linhas provisórias e pede ao servidor a versão real das linhas alteradas offline (`/api/offline/linhas`).
 - Falha de negócio no reenvio (ex.: saldo insuficiente) aparece na tela **Sincronização** com a mensagem do servidor e botão Descartar. Rede/5xx: tenta de novo com espera crescente.

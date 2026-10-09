@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const svc = createServiceClient()
   const saida: { tabela: string; pk: unknown; dado: unknown }[] = []
   for (const it of itens) {
-    if (!/^[a-z_][a-z0-9_]*$/.test(it.tabela) || !Array.isArray(it.pks) || it.pks.length > 5000) return erro(400, 'Pedido inválido.')
+    if (!/^[a-z_][a-z0-9_]*$/.test(it.tabela) || !Array.isArray(it.pks) || it.pks.length > 1000) return erro(400, 'Pedido inválido.')
     const { data, error } = await svc.rpc('offline_buscar_linhas', { p_tabela: it.tabela, p_pks: it.pks, p_lojas: u.lojas, p_user: u.userId })
     if (error) return erro(400, `Tabela ${it.tabela} não sincronizável.`)
     const achadas = new Map(((data ?? []) as { pk: unknown; dado: unknown }[]).map((r) => [chave(r.pk), r.dado]))

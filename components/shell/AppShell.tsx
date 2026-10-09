@@ -7,6 +7,7 @@ import { Search } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { MobileNav } from './MobileNav'
 import { BuscaGlobal } from './BuscaGlobal'
+import { BannerSync } from '@/components/desktop/BannerSync'
 
 export function AppShell({
   isAdmin,
@@ -94,6 +95,7 @@ export function AppShell({
                 conta do stagger das linhas (A4), entao a pagina nao da um slide
                 grande que brigaria com ele. Tom Linear/Vercel: a pagina troca,
                 nao "voa". */}
+            <BannerSync />
             <div
               key={pathname}
               className="animate-in fade-in slide-in-from-bottom-[8px]"

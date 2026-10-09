@@ -15,7 +15,7 @@
 - Produção não pode mudar de comportamento: toda mudança no caminho do servidor é inerte sem `NTB_MODO_LOCAL=1` (desktop) ou sem headers `x-ntb-desktop` (canal).
 - Segredos nunca saem do servidor: allowlist de tabelas/colunas em SQL (`offline_tabelas`), denylist de colunas de `lojas` (`omie_app_key, omie_app_secret, certificado_path, certificado_nome, certificado_senha_enc, certificado_validade, certificado_atualizado, csc_producao, csc_id_producao, integracao_api_key, integracao_teste_api_key, codigo_onboarding`).
 - Tudo do desktop escuta só em `127.0.0.1`; portas: gateway 54398, next 54397, postgrest 54396, frio 54395, postgres 54394.
-- Ids provisórios: int4 = 2.000.000.000 + i×1.000.000; int8 = 9.000.000.000.000.000 + i×1.000.000.000 (i = índice da tabela em `offline_tabelas` ordenado por nome).
+- Ids provisórios: int4 = 2.000.000.000 + i×1.000.000; int8 = 5.000.000.000.000.000 + i×10.000.000.000 (abaixo de 2^53, seguro em JS) (i = índice da tabela em `offline_tabelas` ordenado por nome).
 - Migrations aplicadas à mão (`docker exec -i supabase-db psql -v ON_ERROR_STOP=1 ...`), deploy manual (`deploy.sh`).
 - Pure files sem alias `@/` e sem import `.ts` (tsc TS5097); testes `node --test lib/offline/*.test.ts`.
 - Mensagens ao usuário em português, curtas.

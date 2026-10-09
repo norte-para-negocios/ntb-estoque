@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Norte Estoque</title>
+<style>
+  :root { --bg: #f5f5f7; --texto: #1d1d1f; --suave: #6e6e73; --marca: #0f766e; --trilho: #e5e5ea; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111113; --texto: #f5f5f7; --suave: #a1a1a6; --trilho: #2c2c2e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--texto);
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { width: min(440px, 100% - 32px); }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p { margin: 0; color: var(--suave); }
+  .trilho { height: 8px; border-radius: 99px; background: var(--trilho); overflow: hidden; margin: 22px 0 10px; }
+  .barra { height: 100%; width: 0; background: var(--marca); border-radius: 99px; transition: width .4s ease; }
+  .fase { font-size: 13px; color: var(--suave); min-height: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Preparando o Norte Estoque neste computador</h1>
+  <p>Estamos copiando os dados da sua loja para funcionar mesmo sem internet. Isso acontece só na primeira vez.</p>
+  <div class="trilho"><div class="barra" id="barra"></div></div>
+  <div class="fase" id="fase">Iniciando…</div>
+</main>
+<script>
+  async function atualizar() {
+    try {
+      const r = await fetch('/__ntb/status', { cache: 'no-store' })
+      const s = await r.json()
+      if (s.carga && s.carga.pronta) { location.reload(); return }
+      document.getElementById('barra').style.width = (s.carga?.pct ?? 0) + '%'
+      document.getElementById('fase').textContent = s.carga?.fase ?? ''
+    } catch (e) { /* app ainda subindo */ }
+    setTimeout(atualizar, 1000)
+  }
+  atualizar()
+</script>
+</body>
+</html>

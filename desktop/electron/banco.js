@@ -30,12 +30,11 @@ function hashEsquema() {
 }
 
 function binDirPadrao() {
-  // Em desenvolvimento usa os binários do pacote npm; empacotado, os de resources/vendor/pgsql.
+  // Empacotado: resources/vendor/pgsql; em desenvolvimento: desktop/vendor/<plataforma>-<arch>/pgsql.
   if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'vendor', 'pgsql', 'bin'))) {
     return path.join(process.resourcesPath, 'vendor', 'pgsql', 'bin')
   }
-  const plat = process.platform === 'win32' ? 'windows' : process.platform
-  return path.join(__dirname, '..', 'node_modules', '@embedded-postgres', `${plat}-${process.arch}`, 'native', 'bin')
+  return path.join(__dirname, '..', 'vendor', `${process.platform}-${process.arch}`, 'pgsql', 'bin')
 }
 
 /**
@@ -106,7 +105,12 @@ async function iniciar(o) {
     await rodar(path.join(binDir, `pg_ctl${EXE}`), ['stop', '-D', pgData, '-m', 'fast', '-w']).catch(() => {})
   }
 
-  return { conectar, parar, recriado, hash }
+  // Apaga tudo e recria a estrutura (troca de usuário, "apagar dados", esquema novo).
+  async function recriar() {
+    await recriarBancos(conectar, o, hash)
+  }
+
+  return { conectar, parar, recriar, recriado, hash }
 }
 
 async function recriarBancos(conectar, o, hash) {

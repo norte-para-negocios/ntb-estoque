@@ -16,10 +16,12 @@ export async function GET(req: Request) {
   } catch {
     return erro(400, 'Cursor inválido.')
   }
-  const limite = Math.min(Math.max(Number(sp.get('limite')) || 5000, 1), 5000)
+  // PostgREST de produção corta qualquer resposta em 1000 linhas (db-max-rows): página máxima = 1000.
+  const limite = Math.min(Math.max(Number(sp.get('limite')) || 1000, 1), 1000)
   const { data, error } = await createServiceClient().rpc('offline_snapshot', {
     p_tabela: tabela,
-    p_lojas: u.lojas,
+    // A lista de lojas (só cadastro, sem segredos) vem inteira para o seletor de loja funcionar.
+    p_lojas: tabela === 'lojas' ? u.permitidas : u.lojas,
     p_user: u.userId,
     p_depois: depois,
     p_limite: limite,

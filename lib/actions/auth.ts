@@ -12,7 +12,11 @@ export async function login(_prevState: unknown, formData: FormData) {
     email: formData.get('email') as string,
     password: formData.get('password') as string,
   })
-  if (error) return { error: 'E-mail ou senha inválidos.' }
+  if (error) {
+    // App desktop: o login local explica o motivo (sem internet há mais de 30 dias, outro usuário com pendências...).
+    if (process.env.NTB_MODO_LOCAL === '1' && error.message) return { error: error.message }
+    return { error: 'E-mail ou senha inválidos.' }
+  }
   redirect('/home')
 }
 

@@ -15,7 +15,6 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "electron-updater": "^6.3.9",
-    "embedded-postgres": "17.10.0-beta.17",
     "express": "^5.2.1",
     "pg": "^8.22.0"
   },
@@ -47,9 +46,6 @@
         "to": "vendor"
       }
     ],
-    "asarUnpack": [
-      "node_modules/@embedded-postgres/**/*"
-    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.png"
@@ -63,7 +59,8 @@
     "publish": {
       "provider": "generic",
       "url": "https://updates.norteparanegocios.com.br/ntb-estoque-desktop/"
-    }
+    },
+    "asar": false
   },
   "allowScripts": {
     "@embedded-postgres/darwin-arm64@17.10.0-beta.17": true,

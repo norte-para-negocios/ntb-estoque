@@ -51,3 +51,4 @@ _qa_*.mjs
 scripts/.ajustes-checkpoint-*.json
 
 .worktrees/
+/.next-desktop/

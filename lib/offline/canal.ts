@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 export const OFFLINE_VERSAO_MINIMA = '1.0.0'
 
-export type UsuarioCanal = { userId: string; email: string | null; lojas: number[]; admin: boolean; lojaAtual: number | null }
+export type UsuarioCanal = { userId: string; email: string | null; lojas: number[]; permitidas: number[]; admin: boolean; lojaAtual: number | null }
 
 function compararVersao(a: string, b: string): number {
   const pa = a.split('.').map((x) => Number(x) || 0)
@@ -63,7 +63,7 @@ export async function autenticarCanal(req: Request): Promise<UsuarioCanal | Resp
     if (lojaAtual && permitidas.has(lojaAtual)) padrao.add(lojaAtual)
     lojas = [...padrao]
   }
-  return { userId, email: data.user.email ?? null, lojas: lojas.sort((a, b) => a - b), admin, lojaAtual }
+  return { userId, email: data.user.email ?? null, lojas: lojas.sort((a, b) => a - b), permitidas: [...permitidas].sort((a, b) => a - b), admin, lojaAtual }
 }
 
 /** Resposta JSON compactada (snapshot e pull podem ter milhares de linhas). */
