@@ -47,9 +47,12 @@ export function PainelSincronizacao() {
   }, [])
 
   React.useEffect(() => {
-    ler()
+    const primeira = setTimeout(ler, 0)
     const t = setInterval(ler, 3000)
-    return () => clearInterval(t)
+    return () => {
+      clearTimeout(primeira)
+      clearInterval(t)
+    }
   }, [ler])
 
   if (!st) return null
