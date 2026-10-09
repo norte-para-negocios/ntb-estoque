@@ -76,6 +76,15 @@ function limiteJanelaQuente(): string {
   return new Date(Date.now() - JANELA_QUENTE_DIAS * 86400000).toISOString().slice(0, 10)
 }
 
+// Corte dos relatorios baseados em NOTA FISCAL (Compras, Auditoria Fiscal, Fat x Compras). O banco principal
+// (supabase-db) ja tem TODO o historico de NF desde 2025-06 -- mais notas que o Contabo-frio em todas as lojas
+// ativas (conferido 08/10/2026: loja 5 = 3348 contra 3229; itens 66.587 contra 65.749 nas lojas 2-6). Buscar o
+// "pedaco antigo" no Contabo e reagregar em JS custava ~3s por tela para trazer menos dado. Data bem antiga =
+// as telas nunca clampam o inicio nem completam com o frio, e a RPC le o periodo inteiro direto (40-500 ms).
+export function limiteJanelaQuenteNF(): string {
+  return '2000-01-01'
+}
+
 function foraDaJanelaQuente(dataInicio?: string | null): boolean {
   if (!dataInicio) return true // sem filtro de data = a leitura espera "tudo"
   return dataInicio < limiteJanelaQuente()

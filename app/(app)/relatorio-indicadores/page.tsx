@@ -9,7 +9,7 @@ import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
 import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
 import { type CampoFiltro, valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { buscarFamilias } from '@/lib/actions/produto'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { buscarItensNFFrio, filtrarItensCompras, agregarComprasMatriz } from '@/lib/relatorio-frio-nf'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
@@ -149,7 +149,7 @@ export default async function RelatorioIndicadoresPage({
   // Janela quente cobre ~90 dias; RPC clampa o início, e o pedaço antigo vem
   // do Contabo reagregado em JS (lib/relatorio-frio-nf.ts) — sem isso o lado
   // Compras da razão ficava truncado, distorcendo o indicador principal.
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const compIniRpc = compIni < corte ? corte : compIni
   const comp = await rpcTodos<LinhaMatriz>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',

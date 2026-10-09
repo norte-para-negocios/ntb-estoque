@@ -5,7 +5,7 @@ import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/ex
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import {
   buscarItensNFFrio,
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
   // A janela quente (Supabase) so cobre ~90 dias; a RPC nunca deve pedir algo
   // mais antigo (linhas ja podadas), entao clampa o inicio. A fatia antiga
   // (ini < corte) vem do Contabo, reagregada em JS (mesmo padrao da page.tsx).
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const iniRpc = ini < corte ? corte : ini
 
   const [detalheRaw, matrizRaw] = await Promise.all([

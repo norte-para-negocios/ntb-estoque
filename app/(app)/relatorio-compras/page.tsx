@@ -16,7 +16,7 @@ import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { descreverCFOP } from '@/lib/cfop'
 import { buscarFamilias } from '@/lib/actions/produto'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import {
   buscarItensNFFrio,
   filtrarItensCompras,
@@ -181,7 +181,7 @@ export default async function RelatorioComprasPage({
   // A janela quente (Supabase) só cobre ~90 dias; a RPC nunca deve pedir algo
   // mais antigo (linhas já podadas), então clampa o início. A fatia antiga
   // (ini < corte) vem do Contabo, reagregada em JS abaixo.
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const iniRpc = ini < corte ? corte : ini
 
   const [{ data: totalRows, error: erroTotal }, matrizRaw, { data: cfopDimRaw, error: erroDim }] = await Promise.all([

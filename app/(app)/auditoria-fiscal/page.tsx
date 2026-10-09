@@ -12,7 +12,7 @@ import type { CampoFiltro } from '@/components/ui-kit/Filtros'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { buscarFamilias } from '@/lib/actions/produto'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import {
   buscarItensNFFrio,
   filtrarItensAuditoria,
@@ -138,7 +138,7 @@ export default async function AuditoriaFiscalPage({
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
   // Janela quente cobre ~90 dias; RPC clampa o início e a fatia antiga
   // ([ini, corte)) vem do Contabo reagregada em JS (lib/relatorio-frio-nf.ts).
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const iniRpc = ini < corte ? corte : ini
   const { data: cfopRaw, error: erroCfop } = await supabase.rpc('relatorio_auditoria_fiscal_cfop', {
     p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim,

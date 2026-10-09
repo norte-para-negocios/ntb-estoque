@@ -2,7 +2,7 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { gerarPlanilha, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { descreverCFOP } from '@/lib/cfop'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { buscarItensNFFrio, filtrarItensAuditoria, agregarAuditoriaCfop } from '@/lib/relatorio-frio-nf'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const status = searchParams.get('status') || 'CONCLUIDA'
 
   const supabase = createServiceClient()
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const iniRpc = ini < corte ? corte : ini
   // Achado real (auditoria 2026-08-09, Task 15): nem a RPC nem a paginação de
   // `produtos` checavam `error`, e `buscarItensNFFrio` era chamado sem o

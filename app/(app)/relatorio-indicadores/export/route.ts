@@ -2,7 +2,7 @@ import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
-import { limiteJanelaQuente } from '@/lib/historico-contabo'
+import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { buscarItensNFFrio, filtrarItensCompras, agregarComprasMatriz } from '@/lib/relatorio-frio-nf'
 import { gerarPlanilha, planilhaResponse, mesLabelCurto, type ColunaExcel } from '@/lib/excel'
 import { descreverCFOP } from '@/lib/cfop'
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
   // do Contabo reagregado em JS -- igual a page.tsx (sem isso o lado Compras
   // ficava truncado pra qualquer export que cruzasse os 90 dias, que é o
   // caso comum já que o período padrão é o ano inteiro).
-  const corte = limiteJanelaQuente()
+  const corte = limiteJanelaQuenteNF()
   const compIniRpc = compIni < corte ? corte : compIni
   const compRows = await rpcTodos<Linha>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',
