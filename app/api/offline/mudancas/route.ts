@@ -17,7 +17,6 @@ export async function POST(req: Request) {
   const svc = createServiceClient()
   const { data: piso } = await svc.from('offline_meta').select('valor').eq('chave', 'piso_versao').maybeSingle()
   if (cursor < Number(piso?.valor ?? 0)) return jsonGzip({ ok: true, refazer: true, mudancas: [], cursor })
-  await svc.rpc('offline_compactar')
   const { data, error } = await svc.rpc('offline_puxar', { p_lojas: u.lojas, p_user: u.userId, p_cursor: cursor, p_limite: 1000 })
   if (error) {
     console.error('offline/mudancas', error.message)

@@ -33,7 +33,7 @@ const loja = t.json.lojas[0]
 
 const snap = await get(`/api/offline/snapshot?tabela=lojas`, auth)
 assert.equal(snap.status, 200)
-assert.ok(snap.json.linhas.every((l) => t.json.lojas.includes(l.id)), 'snapshot de lojas trouxe loja fora do pedido')
+// lojas vem com todas as permitidas (admin = todas) para o seletor; segredos nunca
 for (const k of ['omie_app_key', 'omie_app_secret', 'certificado_senha_enc', 'integracao_api_key', 'csc_producao']) {
   assert.ok(snap.json.linhas.every((l) => !(k in l)), `vazou ${k}`)
 }

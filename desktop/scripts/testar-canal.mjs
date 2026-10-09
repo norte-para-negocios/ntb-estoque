@@ -25,6 +25,7 @@ try {
   const [antes, indice] = sql.split(/^create index concurrently/m)
   await c.query(antes)
   await c.query('create index concurrently' + indice.split('\n-- outbox_capture original')[0])
+  await c.query(fs.readFileSync(MIG.replace('157_canal_offline.sql', '158_offline_compactar_leve.sql'), 'utf8'))
 
   // dados
   await q(`insert into lojas (id, cnpj, nome, omie_app_key, omie_app_secret, integracao_api_key) values
@@ -63,7 +64,7 @@ try {
   const ultimo = Number((await q(`select (valor #>> '{}')::bigint v from offline_meta where chave='ultimo_outbox'`))[0].v)
   // (para o MESMO registro a ordem é garantida pelo lock da linha; o caso real é outro registro)
   await q(`insert into familias (id, loja_id, nome) values (12, 1, 'Atrasada')`)
-  const livre = (await q(`select g from generate_series(greatest($1::bigint - 40000, 1), $1::bigint - 1) g where not exists (select 1 from outbox o where o.id = g) limit 1`, [ultimo]))[0].g
+  const livre = (await q(`select g from generate_series(greatest($1::bigint - 4000, 1), $1::bigint - 1) g where not exists (select 1 from outbox o where o.id = g) limit 1`, [ultimo]))[0].g
   await q(`update outbox set id = $1 where id = (select max(id) from outbox)`, [livre])
   assert.ok((await q('select offline_compactar() n'))[0].n >= 1, 'mudança atrasada não foi compactada')
   r = await puxar([1], U1, cursor)
