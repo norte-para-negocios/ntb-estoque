@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -9,6 +11,7 @@ import { criptografar } from '@/lib/cripto'
 // para o bucket privado 'certificados'; a senha e gravada criptografada. Nada
 // sensivel (arquivo/senha) e logado.
 export async function salvarCertificado(formData: FormData) {
+  const __d = viaDesktop('certificado#salvarCertificado', salvarCertificado, [formData]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Sem permissão' }
 
   const lojaId = Number(formData.get('loja_id'))

@@ -1,11 +1,14 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 // Salva a meta diaria de faturamento da loja ativa (uma linha por loja).
 export async function salvarMetaFaturamento(valor: number): Promise<{ ok: true } | { error: string }> {
+  const __d = viaDesktop('meta-faturamento#salvarMetaFaturamento', salvarMetaFaturamento, [valor]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão' }
   if (!Number.isFinite(valor) || valor < 0) return { error: 'Informe um valor maior ou igual a zero' }

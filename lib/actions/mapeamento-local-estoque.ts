@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -16,6 +18,7 @@ export async function salvarMapeamentoLocalEstoque(
   cozinhaCodigo: number | null,
   barCodigo: number | null
 ) {
+  const __d = viaDesktop('mapeamento-local-estoque#salvarMapeamentoLocalEstoque', salvarMapeamentoLocalEstoque, [lojaId, cozinhaCodigo, barCodigo]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
 
   const supabase = createServiceClient()

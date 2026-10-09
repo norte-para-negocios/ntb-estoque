@@ -1,10 +1,13 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getUser } from '@/lib/auth'
 
 export async function setCurrentLoja(lojaId: number) {
+  const __d = viaDesktop('loja-selector#setCurrentLoja', setCurrentLoja, [lojaId]); if (__d) return __d as never
   const user = await getUser()
   const supabase = await createClient()
 

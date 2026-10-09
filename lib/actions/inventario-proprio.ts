@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -44,6 +46,7 @@ export async function abrirInventario(dados: {
   classe?: 'A' | 'B' | 'C' | null
   descricao?: string
 }): Promise<{ ok: true; id: number; itens: number } | Erro> {
+  const __d = viaDesktop('inventario-proprio#abrirInventario', abrirInventario, [dados]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Criar')
   if ('error' in ctx) return ctx
   if (dados.tipo === 'ciclica' && !dados.classe) return { error: 'Escolha a curva (A, B ou C) da contagem cíclica.' }
@@ -60,6 +63,7 @@ export async function abrirInventario(dados: {
 
 /** Grava a quantidade contada. NUNCA devolve o saldo do sistema (contagem cega). */
 export async function contarItem(dados: { inventarioId: number; codigoProduto: number; contado: number | string }): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('inventario-proprio#contarItem', contarItem, [dados]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Criar')
   if ('error' in ctx) return ctx
   const inv = await inventarioDaLoja(ctx.lojaId, dados.inventarioId)
@@ -75,6 +79,7 @@ export async function contarItem(dados: { inventarioId: number; codigoProduto: n
 }
 
 export async function definirMotivoItem(dados: { inventarioId: number; codigoProduto: number; motivo: string }): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('inventario-proprio#definirMotivoItem', definirMotivoItem, [dados]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Editar')
   if ('error' in ctx) return ctx
   if (!(await inventarioDaLoja(ctx.lojaId, dados.inventarioId))) return { error: 'Contagem não encontrada.' }
@@ -86,6 +91,7 @@ export async function definirMotivoItem(dados: { inventarioId: number; codigoPro
 }
 
 export async function fecharInventario(inventarioId: number): Promise<{ ok: true; ajustes: number; valor: number; duplicado: boolean } | Erro> {
+  const __d = viaDesktop('inventario-proprio#fecharInventario', fecharInventario, [inventarioId]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Editar')
   if ('error' in ctx) return ctx
   if (!(await inventarioDaLoja(ctx.lojaId, inventarioId))) return { error: 'Contagem não encontrada.' }
@@ -98,6 +104,7 @@ export async function fecharInventario(inventarioId: number): Promise<{ ok: true
 }
 
 export async function cancelarInventario(inventarioId: number): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('inventario-proprio#cancelarInventario', cancelarInventario, [inventarioId]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Editar')
   if ('error' in ctx) return ctx
   if (!(await inventarioDaLoja(ctx.lojaId, inventarioId))) return { error: 'Contagem não encontrada.' }
@@ -112,6 +119,7 @@ export type ProdutoBusca = { codigoProduto: number; codigo: string; descricao: s
 
 /** Busca para "achei um item que não está na lista". Sem saldo, de propósito. */
 export async function buscarProdutosParaContagem(termo: string): Promise<ProdutoBusca[] | Erro> {
+  const __d = viaDesktop('inventario-proprio#buscarProdutosParaContagem', buscarProdutosParaContagem, [termo]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Criar')
   if ('error' in ctx) return ctx
   const t = termo.trim().replace(/[%,()]/g, ' ')
@@ -126,6 +134,7 @@ export async function buscarProdutosParaContagem(termo: string): Promise<Produto
 }
 
 export async function salvarLimiteMotivo(valor: number | string): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('inventario-proprio#salvarLimiteMotivo', salvarLimiteMotivo, [valor]); if (__d) return __d as never
   const ctx = await contexto('Inventarios - Editar')
   if ('error' in ctx) return ctx
   const n = lerQuantidade(valor)

@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -16,6 +18,7 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { confirmarEntradaNF, desfazerEntradaNF, excluirNotaProprio } from '@/lib/actions/nota-fiscal-proprio'
 
 export async function setQuantidadeNFItem(itemId: number, quantidade: number | null) {
+  const __d = viaDesktop('nota-fiscal#setQuantidadeNFItem', setQuantidadeNFItem, [itemId, quantidade]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { error } = await supabase
@@ -29,6 +32,7 @@ export async function setQuantidadeNFItem(itemId: number, quantidade: number | n
 }
 
 export async function setCategoriaContabilNFItem(itemId: number, categoriaId: number | null) {
+  const __d = viaDesktop('nota-fiscal#setCategoriaContabilNFItem', setCategoriaContabilNFItem, [itemId, categoriaId]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { error } = await supabase
@@ -84,6 +88,7 @@ async function carregarNFdaLoja(notaId: number, permissao: string) {
  * junto à SEFAZ, que a API da Omie não expõe).
  */
 export async function manifestarNF(notaId: number) {
+  const __d = viaDesktop('nota-fiscal#manifestarNF', manifestarNF, [notaId]); if (__d) return __d as never
   // Loja de estoque proprio: 'manifestar' = confirmar a entrada no estoque (sem Omie).
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await confirmarEntradaNF(notaId)
@@ -119,6 +124,7 @@ export async function manifestarNF(notaId: number) {
 
 /** Reverte a conclusão -- volta a nota pra Pendente. */
 export async function reverterManifestacaoNF(notaId: number) {
+  const __d = viaDesktop('nota-fiscal#reverterManifestacaoNF', reverterManifestacaoNF, [notaId]); if (__d) return __d as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await desfazerEntradaNF(notaId)
     return 'error' in r ? { error: r.error } : { ok: true as const }
@@ -155,6 +161,7 @@ export async function reverterManifestacaoNF(notaId: number) {
  * do lado da Omie -- a UI precisa confirmar antes de chamar isso.
  */
 export async function excluirRecebimentoNF(notaId: number) {
+  const __d = viaDesktop('nota-fiscal#excluirRecebimentoNF', excluirRecebimentoNF, [notaId]); if (__d) return __d as never
   if ((await modoDaLoja(await getCurrentLojaId())) === 'proprio') {
     const r = await excluirNotaProprio(notaId)
     return 'error' in r ? { error: r.error } : { ok: true as const, fantasma: false }

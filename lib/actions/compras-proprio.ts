@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -48,6 +50,7 @@ export type PreviaCompra = {
 
 /** Lê o XML e sugere o produto de cada item (de-para do fornecedor, depois descrição igual). Não grava nada. */
 export async function previaXml(xml: string): Promise<{ ok: true; previa: PreviaCompra } | { error: string }> {
+  const __d = viaDesktop('compras-proprio#previaXml', previaXml, [xml]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!xml || xml.length > TAMANHO_MAX_XML) return { error: 'Arquivo vazio ou grande demais (máximo 900 KB).' }
@@ -88,6 +91,7 @@ async function chamarLancar(lojaId: number, compra: Record<string, unknown>, loc
 
 /** Importa o XML: relê no servidor (nunca confia nos valores do navegador), aplica o mapeamento e lança no ledger. */
 export async function lancarCompraXml(dados: { xml: string; codigoLocal: number; icmsRecuperavel?: boolean; mapeamentos: Mapeamento[] }): Promise<ResultadoLancamento> {
+  const __d = viaDesktop('compras-proprio#lancarCompraXml', lancarCompraXml, [dados]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!dados.codigoLocal) return { error: 'Escolha o local que recebe a mercadoria.' }
@@ -117,6 +121,7 @@ export async function lancarCompraManual(dados: {
   codigoLocal: number; fornecedorNome?: string; fornecedorCnpj?: string; numero?: string; emissao?: string
   frete?: number | string; desconto?: number | string; obs?: string; itens: ItemManual[]
 }): Promise<ResultadoLancamento> {
+  const __d = viaDesktop('compras-proprio#lancarCompraManual', lancarCompraManual, [dados]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!dados.codigoLocal) return { error: 'Escolha o local que recebe a mercadoria.' }
@@ -185,6 +190,7 @@ async function criarNotaDaCompraManual(
 
 /** Mapeia os itens pendentes de uma compra já importada e lança só eles. */
 export async function mapearPendentes(dados: { compraId: number; mapeamentos: Mapeamento[] }): Promise<ResultadoLancamento> {
+  const __d = viaDesktop('compras-proprio#mapearPendentes', mapearPendentes, [dados]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   const { data: compra } = await createServiceClient().from('compras_proprio').select('id, codigo_local_estoque').eq('id', dados.compraId).eq('loja_id', ctx.lojaId).maybeSingle()
@@ -202,6 +208,7 @@ export async function mapearPendentes(dados: { compraId: number; mapeamentos: Ma
 }
 
 export async function estornarCompra(compraId: number): Promise<{ ok: true; estornados: number } | { error: string }> {
+  const __d = viaDesktop('compras-proprio#estornarCompra', estornarCompra, [compraId]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
@@ -218,6 +225,7 @@ export async function estornarCompra(compraId: number): Promise<{ ok: true; esto
 export type ProdutoBusca = { codigoProduto: number; codigo: string; descricao: string; unidade: string }
 
 export async function buscarProdutosCompra(termo: string): Promise<ProdutoBusca[]> {
+  const __d = viaDesktop('compras-proprio#buscarProdutosCompra', buscarProdutosCompra, [termo]); if (__d) return __d as never
   const ctx = await contexto('Compras')
   if ('error' in ctx) return []
   const q = termo.trim().replace(/[%,()]/g, ' ')
@@ -229,6 +237,7 @@ export async function buscarProdutosCompra(termo: string): Promise<ProdutoBusca[
 
 /** Cria o produto na hora, com código por tipo (90 revenda, 80 matéria-prima, 70 intermediário, 60 consumo, 50 outros). */
 export async function criarProdutoRapido(dados: { descricao: string; unidade: string; tipoItem: string; ncm?: string | null }): Promise<{ ok: true; produto: ProdutoBusca } | { error: string }> {
+  const __d = viaDesktop('compras-proprio#criarProdutoRapido', criarProdutoRapido, [dados]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!(await requirePermissao(ctx.lojaId, 'Produtos - Criar'))) return { error: 'Sem permissão para criar produto' }

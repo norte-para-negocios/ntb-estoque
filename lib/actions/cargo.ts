@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao } from '@/lib/auth'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -15,6 +17,7 @@ export type CargoComPermissoes = {
 // Lista todos os cargos (globais) com os ids de permissão de cada. Leitura para
 // montar a tela de Cargos e o dropdown no usuário.
 export async function listarCargos(): Promise<CargoComPermissoes[]> {
+  const __d = viaDesktop('cargo#listarCargos', listarCargos, []); if (__d) return __d as never
   const supabase = createServiceClient()
   const { data: cargos } = await supabase.from('cargos').select('id, nome, descricao').order('nome')
   const { data: vinc } = await supabase.from('cargo_permissao').select('cargo_id, permissao_id')
@@ -48,6 +51,7 @@ async function setPermissoesDoCargo(cargoId: number, permissaoIds: number[]) {
 }
 
 export async function criarCargo(input: { nome: string; descricao?: string; permissaoIds: number[] }) {
+  const __d = viaDesktop('cargo#criarCargo', criarCargo, [input]); if (__d) return __d as never
   const g = await gerirOuErro()
   if ('error' in g) return g
   const nome = input.nome.trim()
@@ -66,6 +70,7 @@ export async function criarCargo(input: { nome: string; descricao?: string; perm
 }
 
 export async function editarCargo(id: number, input: { nome: string; descricao?: string; permissaoIds: number[] }) {
+  const __d = viaDesktop('cargo#editarCargo', editarCargo, [id, input]); if (__d) return __d as never
   const g = await gerirOuErro()
   if ('error' in g) return g
   const nome = input.nome.trim()
@@ -80,6 +85,7 @@ export async function editarCargo(id: number, input: { nome: string; descricao?:
 }
 
 export async function excluirCargo(id: number) {
+  const __d = viaDesktop('cargo#excluirCargo', excluirCargo, [id]); if (__d) return __d as never
   const g = await gerirOuErro()
   if ('error' in g) return g
   const supabase = createServiceClient()
@@ -94,6 +100,7 @@ export async function excluirCargo(id: number) {
 
 // Define (ou remove, com cargoId null) o cargo de um usuário NUMA loja.
 export async function definirCargoUsuario(userId: string, lojaId: number, cargoId: number | null) {
+  const __d = viaDesktop('cargo#definirCargoUsuario', definirCargoUsuario, [userId, lojaId, cargoId]); if (__d) return __d as never
   const g = await gerirOuErro()
   if ('error' in g) return g
   // AdminLoja só mexe nas lojas dele.

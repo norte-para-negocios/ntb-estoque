@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { headersDoContexto } from '@/lib/offline/contexto'
 
 // O app roda 100% no stack self-hosted do Contabo desde a migracao de
 // 2026-07-31 (NEXT_PUBLIC_SUPABASE_URL aponta pro loopback 127.0.0.1:8100 --
@@ -22,7 +23,10 @@ export function urlEChaveAtuais(tipo: 'anon' | 'service') {
 export async function createClient() {
   const cookieStore = await cookies()
   const { url, key } = urlEChaveAtuais('anon')
+  const headers = headersDoContexto()
   return createServerClient(url, key, {
+    // Ação vinda do app desktop: o id do intent vai junto para a outbox/rastreio (lib/offline/contexto.ts).
+    ...(headers ? { global: { headers } } : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -44,7 +48,9 @@ export async function createClient() {
 // (syncs Omie, webhook, escritas administrativas). NUNCA expor ao browser.
 export function createServiceClient() {
   const { url, key } = urlEChaveAtuais('service')
+  const headers = headersDoContexto()
   return createServerClient(url, key, {
+    ...(headers ? { global: { headers } } : {}),
     cookies: {
       getAll() {
         return []

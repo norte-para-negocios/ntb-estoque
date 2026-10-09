@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 
 // Cadastro publico. Tres caminhos, na ordem de prioridade do codigo informado:
@@ -12,6 +14,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 //  (3) SEM codigo: a pessoa cria a conta e fica PENDENTE (admin aprova, vincula loja
 //      e define as permissoes na tela de Usuarios). Comportamento original.
 export async function cadastrar(_prevState: unknown, formData: FormData) {
+  const __d = viaDesktop('cadastro#cadastrar', cadastrar, [_prevState, formData]); if (__d) return __d as never
   const name = (formData.get('name') as string)?.trim()
   const email = (formData.get('email') as string)?.trim().toLowerCase()
   const password = formData.get('password') as string

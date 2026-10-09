@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -70,6 +72,7 @@ function normalizarDados(dados: LojaInput) {
 }
 
 export async function criarLoja(dados: LojaInput, criarNoVendasTambem?: boolean) {
+  const __d = viaDesktop('loja#criarLoja', criarLoja, [dados, criarNoVendasTambem]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
   if (!dados.cnpj.trim() || !dados.nome.trim()) {
     return { error: 'CNPJ e nome são obrigatórios' }
@@ -145,6 +148,7 @@ async function criarLojaNoNtbVendas(lojaId: number, nome: string, cnpj: string, 
 }
 
 export async function editarLoja(lojaId: number, dados: LojaInput) {
+  const __d = viaDesktop('loja#editarLoja', editarLoja, [lojaId, dados]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
   if (!dados.cnpj.trim() || !dados.nome.trim()) {
     return { error: 'CNPJ e nome são obrigatórios' }
@@ -175,6 +179,7 @@ export async function editarLoja(lojaId: number, dados: LojaInput) {
 
 /** Ativa ou desativa a loja (sem apagar nada). Loja inativa some das integrações. */
 export async function alternarAtivoLoja(lojaId: number, ativo: boolean) {
+  const __d = viaDesktop('loja#alternarAtivoLoja', alternarAtivoLoja, [lojaId, ativo]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
   const supabase = createServiceClient()
   const { data: alvo } = await supabase.from('lojas').select('nome').eq('id', lojaId).maybeSingle()
@@ -187,6 +192,7 @@ export async function alternarAtivoLoja(lojaId: number, ativo: boolean) {
 }
 
 export async function excluirLoja(lojaId: number) {
+  const __d = viaDesktop('loja#excluirLoja', excluirLoja, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
 
   const supabase = createServiceClient()
@@ -201,6 +207,7 @@ export async function excluirLoja(lojaId: number) {
 }
 
 export async function forceSyncLoja(lojaId: number) {
+  const __d = viaDesktop('loja#forceSyncLoja', forceSyncLoja, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
 
   const supabase = createServiceClient()
@@ -224,6 +231,7 @@ export async function forceSyncLoja(lojaId: number) {
  * razao social, IE/IM, CNAE, regime, CSC, contador, endereco. Nao escreve no Omie.
  */
 export async function puxarEmpresaDoOmie(lojaId: number) {
+  const __d = viaDesktop('loja#puxarEmpresaDoOmie', puxarEmpresaDoOmie, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Somente administradores' }
 
   const supabase = createServiceClient()

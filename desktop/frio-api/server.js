@@ -595,6 +595,39 @@ app.post('/ordens_producao_bulk', checkAuth, async (req, res) => {
   }
 });
 
+// Exportação paginada do fato de faturamento para o app desktop offline (canal /api/offline/frio
+// do NTB Estoque). Keyset pela chave primária; `desde` limita aos cupons com data >= desde.
+const EXPORT_TABELAS = {
+  fat_cupons: { pk: ['n_id_cupom'], sql: 'select c.* from fat_cupons c where c.loja_id = $1 and ($2::date is null or c.data >= $2::date)' },
+  fat_cupom_itens: { pk: ['id_item'], sql: 'select i.* from fat_cupom_itens i join fat_cupons c on c.loja_id = i.loja_id and c.n_id_cupom = i.n_id_cupom where i.loja_id = $1 and ($2::date is null or c.data >= $2::date)' },
+  fat_cupom_pagamentos: { pk: ['n_id_cupom', 'sequencia'], sql: 'select p.* from fat_cupom_pagamentos p join fat_cupons c on c.loja_id = p.loja_id and c.n_id_cupom = p.n_id_cupom where p.loja_id = $1 and ($2::date is null or c.data >= $2::date)' },
+};
+app.get('/export', checkAuth, async (req, res) => {
+  const t = EXPORT_TABELAS[req.query.tabela];
+  const lojaId = Number(req.query.loja_id);
+  if (!t || !Number.isInteger(lojaId)) return res.status(400).json({ error: 'tabela/loja_id invalidos' });
+  const desde = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.desde || '')) ? req.query.desde : null;
+  const limite = Math.min(Math.max(Number(req.query.limite) || 5000, 1), 5000);
+  let depois = null;
+  try { depois = req.query.depois ? JSON.parse(String(req.query.depois)) : null; } catch { return res.status(400).json({ error: 'depois invalido' }); }
+  const alias = req.query.tabela === 'fat_cupons' ? 'c' : req.query.tabela === 'fat_cupom_itens' ? 'i' : 'p';
+  const cols = t.pk.map((c) => `${alias}.${c}`).join(', ');
+  const params = [lojaId, desde];
+  let filtroDepois = '';
+  if (depois) {
+    const vals = t.pk.map((c) => { params.push(depois[c]); return `$${params.length}::bigint`; });
+    filtroDepois = ` and (${cols}) > (${vals.join(', ')})`;
+  }
+  params.push(limite);
+  try {
+    const r = await pool.query(`${t.sql}${filtroDepois} order by ${cols} limit $${params.length}`, params);
+    res.json({ rows: r.rows });
+  } catch (e) {
+    console.error('Erro GET /export:', e);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 const port = process.env.PORT || 3001;

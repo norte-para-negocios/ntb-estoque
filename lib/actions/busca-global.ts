@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
@@ -18,6 +20,7 @@ export type BuscaItem = {
  * Retorna sempre um array (vazio em qualquer erro ou termo curto), nunca quebra.
  */
 export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
+  const __d = viaDesktop('busca-global#buscaGlobal', buscaGlobal, [termo]); if (__d) return __d as never
   const t = (termo ?? '').trim()
   if (t.length < 2) return []
 

@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
@@ -21,6 +23,7 @@ export type DetalheKardex =
 
 /** Detalhe de um movimento: documento de origem (OP, NF/compra, inventário, venda, transferência) e movimentos ligados (estorno, pernas). */
 export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex> {
+  const __d = viaDesktop('movimentacoes-proprio#detalheMovimentoProprio', detalheMovimentoProprio, [id]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) return { error: 'Sem permissão' }
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Esta loja não usa o estoque próprio.' }

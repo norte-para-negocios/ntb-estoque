@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getUser, getAtorGestao, type AtorGestao } from '@/lib/auth'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -87,6 +89,7 @@ export async function criarUsuario(input: {
   // Quando ausente/undefined, concede TODAS (compatibilidade com chamadas antigas).
   permissaoIds?: number[]
 }) {
+  const __d = viaDesktop('usuario#criarUsuario', criarUsuario, [input]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para criar usuários.' }
   if (!input.name || !input.email) return { error: 'Nome e e-mail obrigatórios' }
@@ -174,6 +177,7 @@ export async function editarUsuario(
   userId: string,
   input: { name: string; perfil: PerfilUsuario; lojaIds: number[] }
 ) {
+  const __d = viaDesktop('usuario#editarUsuario', editarUsuario, [userId, input]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para editar usuários.' }
   if (!input.name) return { error: 'Nome obrigatório' }
@@ -285,6 +289,7 @@ export async function aprovarUsuario(
   userId: string,
   input: { perfil: PerfilUsuario; lojaIds: number[]; permissaoIds?: number[] }
 ) {
+  const __d = viaDesktop('usuario#aprovarUsuario', aprovarUsuario, [userId, input]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para aprovar usuários.' }
 
@@ -358,6 +363,7 @@ export async function aprovarUsuario(
 
 // Recusa um cadastro pendente: remove a conta de auth (cascade apaga o profile).
 export async function recusarUsuario(userId: string) {
+  const __d = viaDesktop('usuario#recusarUsuario', recusarUsuario, [userId]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
   const supabase = createServiceClient()
@@ -377,6 +383,7 @@ export async function recusarUsuario(userId: string) {
 // Exclui um usuario ja existente: remove a conta de auth (cascade apaga profile,
 // vinculos de loja, permissoes e locais). O admin nao pode excluir a propria conta.
 export async function excluirUsuario(userId: string) {
+  const __d = viaDesktop('usuario#excluirUsuario', excluirUsuario, [userId]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para excluir usuários.' }
   const me = await getUser()
@@ -399,6 +406,7 @@ export async function togglePermissao(
   permissaoId: number,
   ativar: boolean
 ) {
+  const __d = viaDesktop('usuario#togglePermissao', togglePermissao, [userId, lojaId, permissaoId, ativar]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
   // Escopo: AdminLoja so mexe nas permissoes de lojas dele e em usuarios dele.
@@ -433,6 +441,7 @@ export async function togglePermissao(
 }
 
 export async function redefinirSenha(userId: string) {
+  const __d = viaDesktop('usuario#redefinirSenha', redefinirSenha, [userId]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
   const supabase = createServiceClient()
@@ -451,6 +460,7 @@ export async function toggleLocal(
   localEstoqueId: number,
   ativar: boolean
 ) {
+  const __d = viaDesktop('usuario#toggleLocal', toggleLocal, [userId, lojaId, localEstoqueId, ativar]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
   if (!ator.isAdminGlobal && !ator.lojaIds.includes(lojaId)) {

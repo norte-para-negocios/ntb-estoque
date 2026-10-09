@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -18,6 +20,7 @@ function gerarCodigo(): string {
 // Gera (ou regenera) o codigo de onboarding de uma loja. Apenas admin global.
 // Regenerar invalida o codigo anterior (quem tinha o antigo nao consegue mais usar).
 export async function gerarCodigoLoja(lojaId: number) {
+  const __d = viaDesktop('onboarding-loja#gerarCodigoLoja', gerarCodigoLoja, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
 
@@ -40,6 +43,7 @@ export async function gerarCodigoLoja(lojaId: number) {
 
 // Remove o codigo (desliga o onboarding por codigo daquela loja). Apenas admin.
 export async function removerCodigoLoja(lojaId: number) {
+  const __d = viaDesktop('onboarding-loja#removerCodigoLoja', removerCodigoLoja, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
   const { error } = await supabase

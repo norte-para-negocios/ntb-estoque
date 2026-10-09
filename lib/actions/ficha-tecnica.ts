@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -37,6 +39,7 @@ export async function salvarFichaTecnica(dados: {
   expandirNaVenda?: boolean
   obs?: string
 }): Promise<{ ok: true; versao: number } | Erro> {
+  const __d = viaDesktop('ficha-tecnica#salvarFichaTecnica', salvarFichaTecnica, [dados]); if (__d) return __d as never
   const ctx = await contexto('Produtos - Editar')
   if ('error' in ctx) return ctx
   const erros = validarFicha(dados.codigoProduto, dados.rendimento, dados.itens)
@@ -56,6 +59,7 @@ export async function salvarFichaTecnica(dados: {
 
 /** Desativa a receita: o produto volta a baixar a si mesmo na venda. */
 export async function desativarFichaTecnica(codigoProduto: number): Promise<{ ok: true } | Erro> {
+  const __d = viaDesktop('ficha-tecnica#desativarFichaTecnica', desativarFichaTecnica, [codigoProduto]); if (__d) return __d as never
   const ctx = await contexto('Produtos - Editar')
   if ('error' in ctx) return ctx
   try {
@@ -78,6 +82,7 @@ export async function produzirLoteAction(dados: {
   /** Chave de idempotência da tela (um duplo clique não produz duas vezes). */
   ref?: string
 }): Promise<{ ok: true; custoUnitario: number; custoTotal: number; duplicado: boolean } | Erro> {
+  const __d = viaDesktop('ficha-tecnica#produzirLoteAction', produzirLoteAction, [dados]); if (__d) return __d as never
   const ctx = await contexto('Ordem de Producao - Criar')
   if ('error' in ctx) return ctx
   if (!(dados.quantidade > 0)) return { error: 'Informe a quantidade a produzir.' }

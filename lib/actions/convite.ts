@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -34,6 +36,7 @@ export async function gerarConvite(input: {
   // Validade opcional em dias (null/0 = nao expira).
   validadeDias?: number
 }) {
+  const __d = viaDesktop('convite#gerarConvite', gerarConvite, [input]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão para gerar convites.' }
 
@@ -103,6 +106,7 @@ export async function gerarConvite(input: {
 // Revoga (exclui) um convite ainda nao usado. Escopado: o ator so mexe nos convites
 // das lojas que ele gere.
 export async function revogarConvite(conviteId: number) {
+  const __d = viaDesktop('convite#revogarConvite', revogarConvite, [conviteId]); if (__d) return __d as never
   const ator = await getAtorGestao()
   if (!ator.podeGerir) return { error: 'Sem permissão.' }
 

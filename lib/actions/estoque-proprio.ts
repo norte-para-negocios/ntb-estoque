@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { revalidatePath } from 'next/cache'
 import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -54,6 +56,7 @@ export async function entradaManual(dados: {
   lote?: string | null
   validade?: string | null
 }): Promise<Resposta> {
+  const __d = viaDesktop('estoque-proprio#entradaManual', entradaManual, [dados]); if (__d) return __d as never
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const lote = dados.lote?.trim() || null
@@ -93,6 +96,7 @@ export async function ajusteManual(dados: {
   saldoAtual?: number
   motivo: string
 }): Promise<Resposta> {
+  const __d = viaDesktop('estoque-proprio#ajusteManual', ajusteManual, [dados]); if (__d) return __d as never
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if (!dados.motivo?.trim()) return { error: 'Informe o motivo do ajuste.' }
@@ -126,6 +130,7 @@ export async function definirMinimo(dados: {
   codigoLocal: number
   minimo: number | string | null
 }): Promise<Resposta> {
+  const __d = viaDesktop('estoque-proprio#definirMinimo', definirMinimo, [dados]); if (__d) return __d as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const minimo = dados.minimo === '' || dados.minimo == null ? null : numero(dados.minimo)
@@ -148,6 +153,7 @@ export async function transferirEntreLocais(dados: {
   quantidade: number | string
   obs?: string
 }): Promise<Resposta> {
+  const __d = viaDesktop('estoque-proprio#transferirEntreLocais', transferirEntreLocais, [dados]); if (__d) return __d as never
   const ctx = await contexto('Transferencias - Criar')
   if ('error' in ctx) return ctx
   const quantidade = numero(dados.quantidade)
@@ -171,6 +177,7 @@ export async function transferirEntreLocais(dados: {
 }
 
 export async function estornarMovimento(idMovimento: number): Promise<Resposta> {
+  const __d = viaDesktop('estoque-proprio#estornarMovimento', estornarMovimento, [idMovimento]); if (__d) return __d as never
   const ctx = await contexto('Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   // Só estorna movimento desta loja.

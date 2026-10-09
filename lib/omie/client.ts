@@ -90,6 +90,11 @@ export async function omieRequest<T = unknown>({
   call,
   data,
 }: OmieRequestParams): Promise<T> {
+  // App desktop (banco local): não tem as chaves do Omie; ações que falam com o Omie vão ao
+  // servidor (ou à fila sem internet) antes de chegar aqui -- isto é só a trava final.
+  if (process.env.NTB_MODO_LOCAL === '1') {
+    throw new OmieError('Esta operação precisa de internet (Omie).')
+  }
   if (is_test && ehChamadaDeEscrita(call)) {
     const simulada = respostaSimulada()
     await logIntegrationAttempt({

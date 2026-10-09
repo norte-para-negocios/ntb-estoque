@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -26,6 +28,7 @@ export async function reprocessarSync(
   lojaId: number,
   model: SyncModel
 ): Promise<{ ok: boolean; erro?: string }> {
+  const __d = viaDesktop('sync-status#reprocessarSync', reprocessarSync, [lojaId, model]); if (__d) return __d as never
   if (!SYNCS[model]) {
     return { ok: false, erro: 'Model invalido.' }
   }

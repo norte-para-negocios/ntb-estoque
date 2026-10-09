@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId } from '@/lib/auth'
 import { escapeIlikeOr } from '@/lib/utils-busca'
@@ -17,6 +19,7 @@ export async function buscarProdutos(
   termo: string,
   filtros?: { tipo?: string; familia?: string }
 ): Promise<ProdutoBusca[]> {
+  const __d = viaDesktop('produtos-search#buscarProdutos', buscarProdutos, [termo, filtros]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = await createClient()
   const t = termo.trim()
@@ -67,6 +70,7 @@ export async function buscarProdutos(
 }
 
 export async function buscarProdutoPorCodigo(codigo: string): Promise<ProdutoBusca | null> {
+  const __d = viaDesktop('produtos-search#buscarProdutoPorCodigo', buscarProdutoPorCodigo, [codigo]); if (__d) return __d as never
   const termo = codigo.trim()
   if (!termo) return null
   const lojaId = await getCurrentLojaId()

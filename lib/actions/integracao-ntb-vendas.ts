@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -30,6 +32,7 @@ function urlPublica(): string {
 // depois (mesmo principio de write-only ja usado no CSC/senha do certificado
 // deste projeto e do ntb-vendas). Regenerar invalida a chave anterior.
 export async function gerarChaveIntegracaoNtbVendas(lojaId: number) {
+  const __d = viaDesktop('integracao-ntb-vendas#gerarChaveIntegracaoNtbVendas', gerarChaveIntegracaoNtbVendas, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
 
@@ -53,6 +56,7 @@ export async function gerarChaveIntegracaoNtbVendas(lojaId: number) {
 // ntb-vendas passa a receber 401 dessa loja até uma chave nova ser gerada
 // e reconfigurada do outro lado). Apenas admin.
 export async function removerChaveIntegracaoNtbVendas(lojaId: number) {
+  const __d = viaDesktop('integracao-ntb-vendas#removerChaveIntegracaoNtbVendas', removerChaveIntegracaoNtbVendas, [lojaId]); if (__d) return __d as never
   if (!(await isAdmin())) return { error: 'Apenas administradores' }
   const supabase = createServiceClient()
   const { error } = await supabase

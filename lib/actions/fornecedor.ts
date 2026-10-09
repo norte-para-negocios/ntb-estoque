@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -58,6 +60,7 @@ async function getLoja(lojaId: number) {
  * Se o Omie falhar, retorna erro e nao salva localmente para manter sincronia.
  */
 export async function criarFornecedor(dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
+  const __d = viaDesktop('fornecedor#criarFornecedor', criarFornecedor, [dados]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Criar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -84,6 +87,7 @@ export async function criarFornecedor(dados: ParceiroInput): Promise<{ ok?: bool
 }
 
 export async function editarFornecedor(id: number, dados: ParceiroInput): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
+  const __d = viaDesktop('fornecedor#editarFornecedor', editarFornecedor, [id, dados]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Editar'))) return { error: 'Sem permissão' }
   if (!dados.razao_social.trim()) return { error: 'Informe a razão social' }
@@ -133,6 +137,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput): Promis
 }
 
 export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; error?: string; omieError?: string }> {
+  const __d = viaDesktop('fornecedor#excluirFornecedor', excluirFornecedor, [id]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Excluir'))) return { error: 'Sem permissão' }
 
@@ -165,6 +170,7 @@ export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; err
 }
 
 export async function puxarFornecedoresDoOmie() {
+  const __d = viaDesktop('fornecedor#puxarFornecedoresDoOmie', puxarFornecedoresDoOmie, []); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Fornecedores - Sincronizar'))) return { error: 'Sem permissão' }
 

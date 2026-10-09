@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -34,6 +36,7 @@ const clamp = (n: number, min: number, max: number, fallback: number) =>
 // Edita SÓ os dados de negócio/endereço da loja atual. CNPJ, razão, chaves Omie e
 // ativo continuam só com o admin global (pela tela Lojas).
 export async function editarLojaNegocio(dados: LojaNegocioInput) {
+  const __d = viaDesktop('minha-loja#editarLojaNegocio', editarLojaNegocio, [dados]); if (__d) return __d as never
   const lojaId = await lojaGerivel()
   if (!lojaId) return { error: 'Sem permissão para editar esta loja' }
 
@@ -64,6 +67,7 @@ export async function editarLojaNegocio(dados: LojaNegocioInput) {
 
 // Salva o padrão da etiqueta da loja atual (upsert em etiqueta_config).
 export async function salvarEtiquetaConfig(form: EtiquetaFormValores) {
+  const __d = viaDesktop('minha-loja#salvarEtiquetaConfig', salvarEtiquetaConfig, [form]); if (__d) return __d as never
   const lojaId = await lojaGerivel()
   if (!lojaId) return { error: 'Sem permissão para editar esta loja' }
   const ator = await getAtorGestao()

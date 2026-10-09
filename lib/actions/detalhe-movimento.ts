@@ -1,5 +1,7 @@
 'use server'
 
+import { viaDesktop } from '@/lib/offline/via-desktop'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -23,6 +25,7 @@ export type DetalheOP = {
 }
 
 export async function buscarDetalheOP(opId: number): Promise<{ error: string } | DetalheOP> {
+  const __d = viaDesktop('detalhe-movimento#buscarDetalheOP', buscarDetalheOP, [opId]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const { data: opSupabase } = await supabase
@@ -91,6 +94,7 @@ export type DetalheTransferencia = {
 // ordens_producao, webhooks -- ver AGENTS.md). Nao ha fonte fria pra completar,
 // entao le so o Supabase, igual a tela de referencia /transferencia/[id]/contagem.
 export async function buscarDetalheTransferencia(id: number): Promise<{ error: string } | DetalheTransferencia> {
+  const __d = viaDesktop('detalhe-movimento#buscarDetalheTransferencia', buscarDetalheTransferencia, [id]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const podeEditar = await requirePermissao(lojaId, 'Transferencias - Editar')
@@ -167,6 +171,7 @@ export type DetalheNotaFiscal = {
 }
 
 export async function buscarDetalheNotaFiscal(id: string): Promise<{ error: string } | DetalheNotaFiscal> {
+  const __d = viaDesktop('detalhe-movimento#buscarDetalheNotaFiscal', buscarDetalheNotaFiscal, [id]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
 
@@ -229,6 +234,7 @@ export type DetalheInventario = {
 // propria lista de SLD em MovimentosTab so vem do Supabase (invItems sem
 // complementarMovimentos), entao toda linha de inventario exibida ja existe aqui.
 export async function buscarDetalheInventario(id: number): Promise<{ error: string } | DetalheInventario> {
+  const __d = viaDesktop('detalhe-movimento#buscarDetalheInventario', buscarDetalheInventario, [id]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   const supabase = createServiceClient()
   const podeEditar = await requirePermissao(lojaId, 'Inventarios - Editar')
