@@ -8,7 +8,7 @@ import {
   buscarMovimentosHistoricoBrutos,
   agregarMovimentacaoJS,
   filtrarLinhasMovHistorico,
-  limiteJanelaQuente,
+  limiteJanelaQuenteNF,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
@@ -196,7 +196,9 @@ export async function GET(request: Request) {
     return todos
   }
 
-  const cutoff = limiteJanelaQuente()
+  // movimentos_historico do banco principal tem o historico inteiro (backfill 2026-10-08):
+  // sem complemento no Contabo, so a RPC.
+  const cutoff = limiteJanelaQuenteNF()
   const iniRpc = ini < cutoff ? cutoff : ini
   // Mesmo fix de app/(app)/relatorio-movimentacao/page.tsx (achado real,
   // auditoria de relatorios 2026-07-26): sem corteExcl, o dia exato do corte
