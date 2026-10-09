@@ -1,0 +1,72 @@
+{
+  "name": "ntb-estoque-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Norte Estoque — app desktop (Windows) que funciona sem internet",
+  "main": "electron/main.js",
+  "scripts": {
+    "schema": "bash scripts/gerar-schema.sh",
+    "binarios": "node scripts/baixar-binarios.mjs",
+    "build:web": "bash scripts/build-web.sh",
+    "dev": "npm run build:web && electron .",
+    "dist": "npm run build:web && node scripts/baixar-binarios.mjs win32-x64 && electron-builder --win --x64",
+    "testar": "node scripts/testar-banco.mjs && node scripts/testar-canal.mjs && node scripts/testar-gateway.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "electron-updater": "^6.3.9",
+    "embedded-postgres": "17.10.0-beta.17",
+    "express": "^5.2.1",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.norteparanegocios.ntbestoque",
+    "productName": "Norte Estoque",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "frio-api/**/*",
+      "schema/**/*",
+      "carga.html",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "web",
+        "to": "web"
+      },
+      {
+        "from": "vendor/${platform}-${arch}",
+        "to": "vendor"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/@embedded-postgres/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "compression": "normal",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://updates.norteparanegocios.com.br/ntb-estoque-desktop/"
+    }
+  },
+  "allowScripts": {
+    "@embedded-postgres/darwin-arm64@17.10.0-beta.17": true,
+    "electron@33.4.11": true
+  }
+}
