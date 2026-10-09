@@ -58,7 +58,12 @@ function criarRemoto({ base, versao, cofre, log = () => {} }) {
       renovando = (async () => {
         const { status, json } = await chamar('/api/offline/sessao', { metodo: 'POST', corpo: { acao: 'renovar', refresh: s.refresh_token }, semAuth: true })
         if (status === 401 || status === 403) {
+          // Servidor recusou (usuário bloqueado, senha trocada): acaba também o acesso local e o
+          // login offline; só um novo login com internet volta a liberar.
           cofre.gravar('sessaoRemota', undefined)
+          cofre.gravar('refreshLocal', undefined)
+          const u = cofre.ler('usuario')
+          if (u) cofre.gravar('usuario', { ...u, verificador: null })
           throw new ErroSessao(json.erro ?? 'Sessão expirada. Entre de novo com internet.')
         }
         if (!json.ok) throw new ErroRede(json.erro ?? 'falha ao renovar sessão')

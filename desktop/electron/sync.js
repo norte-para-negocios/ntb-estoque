@@ -6,7 +6,7 @@
 //    que foi feito localmente e traz a versão do servidor.
 const { ErroRede, ErroSessao, ErroVersao } = require('./remoto')
 const aplicar = require('./aplicar')
-const { ehProvisorio, reescreverIds } = require('./compartilhado/ids-provisorios')
+const { reescreverIds, pkProvisorio } = require('./compartilhado/ids-provisorios')
 const { parear } = require('./compartilhado/pareamento')
 
 const INTERVALO_PULL = 20_000
@@ -120,7 +120,14 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     const { json: info } = await chamar(() => remoto.get('/api/offline/tabelas', { headers: lojas ? { 'x-ntb-lojas': lojas.join(',') } : {} }))
     if (!info.ok) throw new Error(info.erro)
     await meta('tabelas', info.tabelas)
-    const cursorInicial = info.cursor
+    // Carga retomada depois de queda: usa o cursor de quando ela COMEÇOU (as tabelas já baixadas
+    // foram lidas a partir dele; um cursor novo pularia o que mudou no meio).
+    let cursorInicial = info.cursor
+    if (!lojas) {
+      const salvo = await meta('cursor_carga')
+      if (salvo !== null && salvo !== undefined) cursorInicial = Number(salvo)
+      else await meta('cursor_carga', cursorInicial)
+    }
     const feitas = new Set((lojas ? [] : (await meta('carga_feitas'))) ?? [])
     const lista = info.tabelas.map((t) => t.tabela)
     let i = 0
@@ -146,6 +153,7 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
       await meta('cursor', cursorInicial)
       await meta('carga_completa', true)
       await meta('carga_feitas', [])
+      await meta('cursor_carga', null)
     }
     ultimoFoto = Date.now()
     ultimoFrio = Date.now()
@@ -162,8 +170,17 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
       const { json } = await chamar(() => remoto.post('/api/offline/mudancas', { cursor }))
       if (!json.ok) throw new Error(json.erro)
       if (json.refazer) {
-        log('cursor abaixo do piso: refazendo a carga')
-        await meta('carga_completa', false)
+        // Muito tempo sem sincronizar: refaz do zero num banco limpo (upsert por cima deixaria
+        // linhas que o servidor apagou). Com fila pendente espera ela esvaziar.
+        if (fila.itens().length) {
+          log('cursor abaixo do piso, mas há fila: recarga adiada')
+          return
+        }
+        log('cursor abaixo do piso: recriando o banco local e refazendo a carga')
+        await fecharConexoes()
+        await banco.recriar()
+        aplicar.limparCache()
+        carga = { pronta: false, fase: 'Atualizando os dados deste computador', pct: 1 }
         await primeiraCarga()
         return
       }
@@ -298,6 +315,19 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     throw new ErroRede('servidor ocupado')
   }
 
+  // Ids que este computador criou sem internet: só esses podem ser trocados nos argumentos.
+  async function candidatos() {
+    const c = await conexao()
+    const faixas = (await meta('faixas')) ?? {}
+    const conj = new Set(fila.mapa().keys())
+    const rows = (await c.query("select tabela, pk from ntb_local.alteracoes where op = 'INSERT'")).rows
+    for (const r of rows) {
+      if (!pkProvisorio(r.tabela, r.pk, faixas)) continue
+      for (const v of Object.values(r.pk)) if (typeof v === 'number') conj.add(v)
+    }
+    return conj
+  }
+
   function pendentes() {
     return fila.itens().filter((i) => i.estado === 'pendente' || i.estado === 'aguardando_local')
   }
@@ -312,7 +342,7 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
           // sem internet: segue para o caminho offline
         }
       }
-      const reescrito = reescreverIds(args, fila.mapa())
+      const reescrito = reescreverIds(args, fila.mapa(), await candidatos())
       const temFila = pendentes().length > 0
       if (!temFila && remoto.temSessao()) {
         if (reescrito.faltando.length) {
@@ -340,15 +370,22 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
         aoMudarEstado()
         return { tipo: 'enfileirado' }
       }
-      return { tipo: 'erro', erro: temFila && online ? 'Aguarde: o app ainda está enviando as operações feitas sem internet.' : 'Sem internet. Esta ação precisa de conexão.' }
+      return {
+        tipo: 'erro',
+        erro: temFila && online
+          ? 'Aguarde: o app ainda está enviando as operações feitas sem internet.'
+          : 'Sem conexão com o servidor. Esta ação precisa de internet; se ela chegou a ser enviada, confira na tela antes de refazer.',
+      }
     })
   }
 
   async function resultadoLocal({ intentId, ok, valor, erro }) {
     const it = fila.achar(intentId)
     if (!it) return
-    if (!ok) {
-      log(`ação local falhou (${it.acao}): ${erro}`)
+    const recusada = valor && typeof valor === 'object' && !Array.isArray(valor) && valor.error
+    if (!ok || recusada) {
+      // A ação recusou no banco local (validação): não há o que enviar.
+      log(`ação local falhou (${it.acao}): ${erro ?? valor.error}`)
       fila.remover(intentId)
     } else {
       fila.atualizar(intentId, { estado: 'pendente', resultadoLocal: valor })
@@ -358,11 +395,12 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
 
   async function enviarFila() {
     const c = await conexao()
+    const cand = await candidatos()
     for (const it of [...fila.itens()]) {
       // FIFO: uma ação ainda rodando no banco local segura as seguintes.
       if (it.estado === 'aguardando_local') break
       if (it.estado !== 'pendente') continue
-      const { json: args, faltando } = reescreverIds(it.args, fila.mapa())
+      const { json: args, faltando } = reescreverIds(it.args, fila.mapa(), cand)
       if (faltando.length) {
         fila.atualizar(it.intentId, { estado: 'erro', erro: 'Depende de uma operação anterior que não foi aceita pelo servidor.' })
         continue
@@ -406,13 +444,14 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     if (!rows.length) return
     const maxSeq = Math.max(...rows.map((r) => Number(r.seq)))
     const sincronizadas = new Set(((await meta('tabelas')) ?? []).map((t) => t.tabela))
+    const faixas = (await meta('faixas')) ?? {}
     const porTabela = new Map()
     for (const r of rows) porTabela.set(r.tabela, [...(porTabela.get(r.tabela) ?? []), r.pk])
     const atuais = []
     const itens = []
     for (const [tabela, pks] of porTabela) {
       if (!sincronizadas.has(tabela)) continue
-      const reais = pks.filter((pk) => !Object.values(pk).some((v) => typeof v === 'number' && ehProvisorio(v)))
+      const reais = pks.filter((pk) => !pkProvisorio(tabela, pk, faixas))
       for (let j = 0; j < reais.length; j += 1000) itens.push({ tabela, pks: reais.slice(j, j + 1000) })
     }
     for (let i = 0; i < itens.length; i += 50) {
@@ -424,7 +463,7 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
     try {
       await aplicar.modoAplicacao(c)
       for (const [tabela, pks] of porTabela) {
-        const prov = pks.filter((pk) => Object.values(pk).some((v) => typeof v === 'number' && ehProvisorio(v)))
+        const prov = pks.filter((pk) => pkProvisorio(tabela, pk, faixas))
         await aplicar.apagar(c, tabela, prov)
         if (!sincronizadas.has(tabela)) continue
         const destaTabela = atuais.filter((a) => a.tabela === tabela)
@@ -471,6 +510,15 @@ function criarSync({ banco, remoto, cofre, fila, log = () => {}, aoMudarEstado =
   }
 
   async function iniciar() {
+    // Ação que estava rodando no banco local quando o app caiu: se chegou a gravar, segue para
+    // envio; se não gravou nada, vira erro para o usuário conferir (nunca trava a fila).
+    for (const it of fila.itens().filter((i) => i.estado === 'aguardando_local')) {
+      const c = await conexao()
+      const n = Number((await c.query('select count(*) as n from ntb_local.alteracoes where intent_id = $1', [it.intentId])).rows[0].n)
+      fila.atualizar(it.intentId, n
+        ? { estado: 'pendente' }
+        : { estado: 'erro', erro: 'O app fechou no meio desta operação. Confira na tela e refaça se precisar.' })
+    }
     const completa = await meta('carga_completa')
     carga = completa ? { pronta: true, fase: null, pct: 100 } : { pronta: false, fase: 'Aguardando login', pct: 0 }
     timers.push(setInterval(() => ciclo(), INTERVALO_PULL))

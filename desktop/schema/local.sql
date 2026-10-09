@@ -106,3 +106,17 @@ begin
   end loop;
   return saida;
 end $$;
+
+-- O PostgREST local escuta em 127.0.0.1 e qualquer programa do computador alcança a porta. No
+-- servidor o papel anon tem grants herdados do Supabase (funções SECURITY DEFINER sem checagem
+-- de usuário, tabelas sem RLS); aqui ele não precisa de nada: o app sempre fala com JWT de usuário
+-- ou de serviço assinados com o segredo desta instalação.
+do $$
+begin
+  execute 'revoke all on all tables in schema public from anon';
+  execute 'revoke all on all sequences in schema public from anon';
+  execute 'revoke execute on all functions in schema public from anon, public';
+  execute 'grant execute on all functions in schema public to authenticated, service_role';
+  execute 'alter default privileges in schema public revoke all on tables from anon';
+  execute 'alter default privileges in schema public revoke execute on functions from anon, public';
+end $$;

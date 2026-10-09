@@ -34,6 +34,11 @@ async function injetarSessaoDesktop(request: NextRequest, url: string, key: stri
 }
 
 export async function proxy(request: NextRequest) {
+  // App desktop: o Next local só atende pedidos que passaram pelo gateway (que confere Host/Origin);
+  // acesso direto à porta dele (outro site, DNS rebinding) é recusado.
+  if (process.env.NTB_MODO_LOCAL === '1' && request.headers.get('x-ntb-gw') !== process.env.NTB_GATEWAY_TOKEN) {
+    return new NextResponse('Bloqueado', { status: 403 })
+  }
   const { url, key } = urlEChaveAtuais('anon')
   await injetarSessaoDesktop(request, url, key)
 

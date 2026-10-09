@@ -33,6 +33,7 @@ export async function POST(req: Request) {
   const { error: erroReserva } = await svc
     .from('offline_execucoes')
     .insert({ intent_id: intentId, user_id: u.userId, acao, status: 'em_andamento' })
+  if (erroReserva && erroReserva.code !== '23505') return erro(503, 'Banco indisponível, tente de novo.', { tipo: 'processando' })
   if (erroReserva) {
     // Já existe: devolve o que ficou gravado (só para o mesmo usuário).
     const { data: ant } = await svc.from('offline_execucoes').select('*').eq('intent_id', intentId).maybeSingle()
@@ -50,7 +51,14 @@ export async function POST(req: Request) {
   try {
     const args = desserializarArgs(body.args ?? [])
     const valor = await comContexto({ intentId }, () => fn(...args))
-    resultado = { ok: true, valor: await serializarValor(valor) }
+    // As ações devolvem erro de negócio como { error: '...' } (sem lançar): isso é recusa, não sucesso.
+    const msg = valor && typeof valor === 'object' && 'error' in valor ? (valor as { error?: unknown }).error : null
+    if (msg) {
+      status = 'erro'
+      resultado = { ok: false, tipo: 'negocio', erro: String(msg), valor: await serializarValor(valor) }
+    } else {
+      resultado = { ok: true, valor: await serializarValor(valor) }
+    }
   } catch (e) {
     const interrupcao = lerDigest(e)
     if (interrupcao?.tipo === 'redirect') {

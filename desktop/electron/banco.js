@@ -106,7 +106,13 @@ async function iniciar(o) {
   await est.end()
 
   let recriado = false
-  if (esquemaAtual !== hash) {
+  let desatualizado = false
+  // Esquema novo (app atualizado) com fila pendente ou sem internet: recriar apagaria os dados
+  // locais e o trabalho offline. Segue com o banco atual e recria na próxima abertura possível.
+  if (esquemaAtual && esquemaAtual !== hash && o.adiarRecriacao) {
+    log('estrutura nova adiada: há operações pendentes ou sem internet')
+    desatualizado = true
+  } else if (esquemaAtual !== hash) {
     log(esquemaAtual ? 'Atualizando estrutura do banco local...' : 'Preparando estrutura do banco local...')
     await recriarBancos(conectar, o, hash)
     recriado = true
@@ -127,7 +133,7 @@ async function iniciar(o) {
     await recriarBancos(conectar, o, hash)
   }
 
-  return { conectar, parar, recriar, recriado, hash }
+  return { conectar, parar, recriar, recriado, desatualizado, hash }
 }
 
 async function recriarBancos(conectar, o, hash) {

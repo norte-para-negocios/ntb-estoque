@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { POLITICA, politicaDe, modoEfetivo } from './politica.ts'
 import { serializarArgs, desserializarArgs, lerDigest, serializarValor, desserializarValor } from './serializacao.ts'
-import { ehProvisorio, reescreverIds, tabelaDoProvisorio, provisoriosEm } from './ids-provisorios.ts'
+import { ehProvisorio, reescreverIds, tabelaDoProvisorio, provisoriosEm, pkProvisorio } from './ids-provisorios.ts'
 import { parear } from './pareamento.ts'
 
 test('política: toda ação listada existe em lib/actions', () => {
@@ -62,10 +62,16 @@ test('ids provisórios: faixas int4/int8 e reescrita em número e texto', () => 
   assert.equal(tabelaDoProvisorio(5_000_000_020_000_001, faixas), 'movimentos')
   assert.equal(tabelaDoProvisorio(2_004_000_000, faixas), null)
   const mapa = new Map([[2_003_000_002, 512]])
-  const r = reescreverIds([2_003_000_002, { id: '2003000002', url: '/inventario/2003000002?x=1', outro: 2_003_000_009 }, 'nota 123'], mapa)
-  assert.deepEqual(r.json, [512, { id: '512', url: '/inventario/512?x=1', outro: 2_003_000_009 }, 'nota 123'])
+  const cand = new Set([2_003_000_002, 2_003_000_009])
+  const r = reescreverIds([2_003_000_002, { id: '2003000002', url: '/inventario/2003000002?x=1', outro: 2_003_000_009, fone: '2133334444' }, 'nota 123'], mapa, cand)
+  assert.deepEqual(r.json, [512, { id: '512', url: '/inventario/512?x=1', outro: 2_003_000_009, fone: '2133334444' }, 'nota 123'])
   assert.deepEqual(r.faltando, [2_003_000_009])
-  assert.deepEqual(provisoriosEm({ a: [2_000_000_001] }), [2_000_000_001])
+  // sem nada criado offline, nada é tocado (telefone na faixa não vira "dependência")
+  assert.deepEqual(reescreverIds({ fone: 2133334444 }, new Map(), new Set()), { json: { fone: 2133334444 }, faltando: [] })
+  assert.deepEqual(provisoriosEm({ a: [2_000_000_001] }, new Set([2_000_000_001])), [2_000_000_001])
+  assert.equal(pkProvisorio('inventarios', { id: 2_003_000_002 }, faixas), true)
+  assert.equal(pkProvisorio('inventarios', { id: 2_100_000_000 }, faixas), false)
+  assert.equal(pkProvisorio('produtos', { id: 2_003_000_002 }, faixas), false)
 })
 
 test('pareamento: por tabela, na ordem; contagem diferente = divergente', () => {

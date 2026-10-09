@@ -66,6 +66,7 @@ function criarProcessos({ dirVendor, dirWeb, dirDados, log }) {
         PGRST_SERVER_HOST: '127.0.0.1',
         PGRST_SERVER_PORT: String(porta),
         PGRST_LOG_LEVEL: 'error',
+        PGRST_SERVER_CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:54398',
       })
       await esperarPorta(porta)
     },

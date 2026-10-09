@@ -27,12 +27,16 @@ const NUM_EM_TEXTO = /(?<![\d.])(\d{10,16})(?![\d.])/g
 
 /**
  * Troca ids provisórios por reais em qualquer número (ou trecho numérico de texto, como
- * '/inventario/2000000005') do JSON. Devolve os provisórios que não têm par no mapa.
+ * '/inventario/2000000005') do JSON. Só mexe nos números que este computador de fato criou
+ * (`candidatos`: chaves do mapa + ids das linhas criadas sem internet); um telefone ou código que
+ * caia na mesma faixa passa intacto. Devolve os candidatos que não têm par no mapa.
  */
-export function reescreverIds(json: Json, mapa: Map<number, number>): { json: Json; faltando: number[] } {
+export function reescreverIds(json: Json, mapa: Map<number, number>, candidatos?: Set<number>): { json: Json; faltando: number[] } {
   const faltando = new Set<number>()
+  const conhecidos = candidatos ?? new Set(mapa.keys())
+  if (!conhecidos.size) return { json, faltando: [] }
   const troca = (n: number): number => {
-    if (!ehProvisorio(n)) return n
+    if (!conhecidos.has(n)) return n
     const real = mapa.get(n)
     if (real === undefined) {
       faltando.add(n)
@@ -57,7 +61,15 @@ export function reescreverIds(json: Json, mapa: Map<number, number>): { json: Js
   return { json: visitar(json), faltando: [...faltando] }
 }
 
-/** Todos os ids provisórios citados num JSON (para saber de quais ações uma ação depende). */
-export function provisoriosEm(json: Json): number[] {
-  return reescreverIds(json, new Map()).faltando
+/** Os candidatos citados num JSON (para saber de quais ações uma ação depende). */
+export function provisoriosEm(json: Json, candidatos: Set<number>): number[] {
+  return reescreverIds(json, new Map(), candidatos).faltando
+}
+
+/** Um pk é provisório se cai na faixa da PRÓPRIA tabela (faixas vindas de ntb_local.meta). */
+export function pkProvisorio(tabela: string, pk: Record<string, unknown>, faixas: Faixas): boolean {
+  const f = faixas[tabela]
+  if (!f) return false
+  const passo = f.tipo === 'int4' ? PASSO_INT4 : PASSO_INT8
+  return Object.values(pk).some((v) => typeof v === 'number' && v >= f.base && v < f.base + passo)
 }

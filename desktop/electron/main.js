@@ -59,8 +59,19 @@ async function subir() {
   if (!cofre.persistente) log('AVISO: safeStorage indisponível, segredos só em memória')
   const seg = cofre.segredosBase()
 
+  // Só recria o banco (versão nova do app com esquema novo) com fila vazia e servidor acessível.
+  const filaTemItens = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(dirDados, 'fila.json'), 'utf8')).itens.length > 0
+    } catch {
+      return false
+    }
+  })()
+  const servidorAcessivel = await fetch(`${SERVIDOR}/login`, { method: 'HEAD', signal: AbortSignal.timeout(5000) }).then((r) => r.status < 500, () => false)
+
   log('subindo banco local')
   const b = await banco.iniciar({
+    adiarRecriacao: filaTemItens || !servidorAcessivel,
     dataDir: path.join(dirDados, 'banco'),
     porta: PORTAS.postgres,
     senhaAdmin: seg.senhaAdmin,
@@ -126,14 +137,21 @@ function criarJanela() {
   })
   const origem = `http://127.0.0.1:${PORTAS.gateway}`
   // Navegação só na origem local; link externo abre no navegador.
+  const mesmaOrigem = (url) => {
+    try {
+      return new URL(url).origin === origem
+    } catch {
+      return false
+    }
+  }
   janela.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(origem)) {
+    if (!mesmaOrigem(url)) {
       e.preventDefault()
       shell.openExternal(url)
     }
   })
   janela.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(origem)) return { action: 'allow' }
+    if (mesmaOrigem(url)) return { action: 'allow' }
     shell.openExternal(url)
     return { action: 'deny' }
   })

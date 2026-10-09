@@ -122,7 +122,9 @@ function criarGateway(o) {
       if (tipo === 'refresh_token') {
         const atual = cofre.ler('refreshLocal')
         const usuario = cofre.ler('usuario')
-        const ok = atual && usuario && typeof corpo.refresh_token === 'string' && atual.userId === usuario.id &&
+        const ok = atual && usuario && cofre.ler('sessaoRemota') && usuario.verificador &&
+          Date.now() - (usuario.ultimaValidacao ?? 0) <= TRINTA_DIAS &&
+          typeof corpo.refresh_token === 'string' && atual.userId === usuario.id &&
           corpo.refresh_token.length === atual.token.length &&
           crypto.timingSafeEqual(Buffer.from(corpo.refresh_token), Buffer.from(atual.token))
         if (!ok) return erroAuth(res, 'Sessão expirada.')
@@ -242,6 +244,14 @@ function criarGateway(o) {
         return res.end()
       }
       const url = new URL(req.url, origemLocal)
+      // Pedido vindo de outro site aberto no navegador (CSRF): nada passa. A janela do app e o
+      // Next local mandam Origin local ou nenhum.
+      const origem = req.headers.origin
+      const site = req.headers['sec-fetch-site']
+      if ((origem && origem !== origemLocal) || (site && site !== 'same-origin' && site !== 'none')) {
+        res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+        return res.end('Bloqueado')
+      }
       if (url.pathname.startsWith('/rest/v1/')) return rotaRest(req, res, url)
       if (url.pathname.startsWith('/auth/v1/')) return await rotaAuth(req, res, url)
       if (url.pathname.startsWith('/__ntb/')) return await rotaNtb(req, res, url)
@@ -254,7 +264,8 @@ function criarGateway(o) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
         return res.end(fs.readFileSync(paginaCarga))
       }
-      const headers = { ...req.headers, 'x-forwarded-host': req.headers.host, 'x-forwarded-proto': 'http' }
+      // x-ntb-gw: o Next local só atende o que passou por aqui (proxy.ts confere).
+      const headers = { ...req.headers, 'x-forwarded-host': req.headers.host, 'x-forwarded-proto': 'http', 'x-ntb-gw': o.tokenInterno }
       return encaminhar(req, res, portas.next, req.url, headers)
     } catch (e) {
       log(`gateway: ${e.stack ?? e.message}`)

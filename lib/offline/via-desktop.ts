@@ -71,7 +71,7 @@ async function executar(nome: string, fn: Acao, args: unknown[], modo: ModoOffli
   }
 
   const r = resp.resultado
-  if (!r.ok) return { error: r.erro ?? 'Não foi possível concluir.' }
+  if (!r.ok) return r.valor !== undefined ? desserializarValor(r.valor) : { error: r.erro ?? 'Não foi possível concluir.' }
   revalidatePath('/', 'layout')
   if (r.redirect) redirect(r.redirect.url, r.redirect.modo === 'push' ? RedirectType.push : RedirectType.replace)
   if (r.notFound) notFound()
