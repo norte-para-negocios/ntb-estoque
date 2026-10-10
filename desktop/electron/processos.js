@@ -16,9 +16,13 @@ function portaLivre(porta) {
   })
 }
 
-async function esperarPorta(porta, timeoutMs = 60_000) {
+async function esperarPorta(porta, timeoutMs = 60_000, filho = null) {
   const fim = Date.now() + timeoutMs
   while (Date.now() < fim) {
+    // Fechou na partida (ex.: DLL faltando no Windows, código 3221225781): não adianta esperar.
+    if (filho && filho.exitCode !== null) {
+      throw new Error(`serviço local da porta ${porta} fechou ao iniciar (código ${filho.exitCode})`)
+    }
     const ok = await new Promise((resolve) => {
       const s = net.connect(porta, '127.0.0.1')
       s.once('connect', () => {
@@ -54,8 +58,12 @@ function criarProcessos({ dirVendor, dirWeb, dirDados, log }) {
   return {
     async postgrest({ porta, portaDb, senhaAuthenticator, jwtSecret }) {
       const bin = path.join(dirVendor, `postgrest${EXE}`)
-      iniciar('postgrest', bin, [], {
+      // No Windows o postgrest.exe carrega a LIBPQ.dll (e libssl/libcrypto/libintl), que vêm na
+      // pasta do Postgres: sem ela no PATH o processo morre antes de abrir a porta.
+      const binPg = path.join(dirVendor, 'pgsql', 'bin')
+      const p = iniciar('postgrest', bin, [], {
         ...nodeEnv,
+        PATH: [binPg, nodeEnv.PATH].filter(Boolean).join(path.delimiter),
         PGRST_DB_URI: `postgres://authenticator:${encodeURIComponent(senhaAuthenticator)}@127.0.0.1:${portaDb}/estoque`,
         PGRST_DB_SCHEMAS: 'public',
         PGRST_DB_ANON_ROLE: 'anon',
@@ -68,7 +76,7 @@ function criarProcessos({ dirVendor, dirWeb, dirDados, log }) {
         PGRST_LOG_LEVEL: 'error',
         PGRST_SERVER_CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:54398',
       })
-      await esperarPorta(porta)
+      await esperarPorta(porta, 60_000, p)
     },
     async frio({ porta, portaDb, senhaAdmin, chave }) {
       iniciar('frio-api', process.execPath, [path.join(__dirname, '..', 'frio-api', 'server.js')], {
