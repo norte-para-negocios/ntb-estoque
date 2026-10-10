@@ -1,0 +1,181 @@
+name: Desktop Windows (teste de partida)
+
+# Instala o instalador publicado num Windows real e confere se o app sobe: Postgres, PostgREST,
+# frio-api, Next e gateway. Roda 3 vezes: 1ª abertura (cria o banco), reabertura e reabertura
+# sem acesso ao servidor (simula loja sem internet). Logs e prints viram artefato.
+
+on:
+  workflow_dispatch:
+    inputs:
+      instalador:
+        description: URL do instalador (padrão = o publicado; use a pasta -teste antes de publicar)
+        default: https://updates.norteparanegocios.com.br/ntb-estoque-desktop/Norte-Estoque-Setup.exe
+
+jobs:
+  partida:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Baixar e instalar
+        shell: pwsh
+        run: |
+          $url = '${{ inputs.instalador }}'
+          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\setup.exe"
+          $p = Start-Process "$env:RUNNER_TEMP\setup.exe" -ArgumentList '/S' -Wait -PassThru
+          "instalador saiu com $($p.ExitCode)"
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs", 'C:\Program Files' -Recurse -Filter 'Norte Estoque.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw 'exe não encontrado após instalar' }
+          "EXE=$($exe.FullName)" | Out-File -Append $env:GITHUB_ENV
+          $exe.FullName
+
+      - name: Script de teste
+        shell: pwsh
+        run: |
+          @'
+          param([string]$Rodada)
+          $portas = 54394, 54395, 54396, 54397, 54398
+          $app = Start-Process $env:EXE -PassThru
+          $ok = $false
+          $fim = (Get-Date).AddMinutes(6)
+          while ((Get-Date) -lt $fim) {
+            try {
+              $r = Invoke-WebRequest 'http://127.0.0.1:54398/login' -UseBasicParsing -TimeoutSec 10 -MaximumRedirection 0 -SkipHttpErrorCheck
+              if ($r.StatusCode -lt 500) { $ok = $true; "[$Rodada] gateway /login respondeu $($r.StatusCode)"; break }
+            } catch {}
+            if ($app.HasExited) { "[$Rodada] app fechou sozinho (código $($app.ExitCode))"; break }
+            Start-Sleep 3
+          }
+          foreach ($p in $portas) {
+            $t = Test-NetConnection 127.0.0.1 -Port $p -WarningAction SilentlyContinue
+            "[$Rodada] porta $p aberta: $($t.TcpTestSucceeded)"
+          }
+          if ($ok) {
+            foreach ($rota in '/login', '/home', '/sincronizacao') {
+              try {
+                $r = Invoke-WebRequest "http://127.0.0.1:54398$rota" -UseBasicParsing -TimeoutSec 60 -MaximumRedirection 0 -SkipHttpErrorCheck
+                "[$Rodada] GET $rota -> $($r.StatusCode) ($($r.Content.Length) bytes)"
+              } catch { "[$Rodada] GET $rota falhou: $_" }
+            }
+            Start-Sleep 8
+            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\saida" | Out-Null
+            $bmp.Save("$env:RUNNER_TEMP\saida\tela-$Rodada.png")
+          }
+          # Fecha como o usuário fecharia (janela) e confere se o Postgres parou junto.
+          Get-Process 'Norte Estoque' -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+          Start-Sleep 15
+          "[$Rodada] processos restantes: " + ((Get-Process 'Norte Estoque', postgres, postgrest -ErrorAction SilentlyContinue | Select-Object -Expand Name) -join ', ')
+          Get-Process 'Norte Estoque', postgres, postgrest -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 3
+          if (-not $ok) { exit 1 }
+          '@ | Out-File "$env:RUNNER_TEMP\rodada.ps1"
+
+      - name: 1ª abertura (cria o banco)
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP\rodada.ps1" primeira'
+
+      - name: Reabertura
+        if: always()
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP\rodada.ps1" reabertura'
+
+      - name: Script de login (conta QA)
+        shell: pwsh
+        run: |
+          @'
+          param([string]$Rodada, [int]$MinutosCarga = 0)
+          $G = 'http://127.0.0.1:54398'
+          $H = @{ apikey = 'ntb-desktop-anon' }
+          $app = Start-Process $env:EXE -PassThru
+          $fim = (Get-Date).AddMinutes(6)
+          while ((Get-Date) -lt $fim) {
+            try { if ((Invoke-WebRequest "$G/login" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck).StatusCode -eq 200) { break } } catch {}
+            Start-Sleep 3
+          }
+          $corpo = @{ email = 'claude.qa@ntb-estoque.dev'; password = $env:QA_SENHA } | ConvertTo-Json
+          $r = Invoke-WebRequest "$G/auth/v1/token?grant_type=password" -Method Post -Headers $H -ContentType 'application/json' -Body $corpo -UseBasicParsing -SkipHttpErrorCheck
+          "[$Rodada] login -> $($r.StatusCode)"
+          if ($r.StatusCode -ne 200) { $r.Content; exit 1 }
+          $sessao = $r.Content | ConvertFrom-Json
+          if ($MinutosCarga -gt 0) {
+            $fim = (Get-Date).AddMinutes($MinutosCarga)
+            Start-Sleep 5
+            while ((Get-Date) -lt $fim) {
+              $st = Invoke-RestMethod "$G/__ntb/status"
+              "[$Rodada] $(Get-Date -Format HH:mm:ss) carga pronta=$($st.carga.pronta) $($st.carga.pct)% $($st.carga.fase) erro=$($st.erro)"
+              if ($st.carga.pronta -and $st.ultimaSync) { break }
+              Start-Sleep 20
+            }
+          }
+          "[$Rodada] status: " + (Invoke-RestMethod "$G/__ntb/status" | ConvertTo-Json -Compress)
+          $HA = @{ apikey = 'ntb-desktop-anon'; authorization = "Bearer $($sessao.access_token)"; prefer = 'count=exact' }
+          foreach ($t in 'lojas', 'produtos', 'movimentos', 'inventarios', 'local_estoques') {
+            $x = Invoke-WebRequest "$G/rest/v1/$t`?select=*&limit=1" -Headers $HA -UseBasicParsing -SkipHttpErrorCheck
+            "[$Rodada] REST $t -> $($x.StatusCode) total=$($x.Headers['Content-Range'])"
+          }
+          # Cookie de sessão igual ao que a janela guarda (supabase/ssr).
+          $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($r.Content)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+          $ws = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+          $ws.Cookies.Add((New-Object System.Net.Cookie('sb-127-auth-token', "base64-$b64", '/', '127.0.0.1')))
+          foreach ($rota in '/home', '/estoque', '/movimentacoes', '/inventario', '/faturamento', '/produto', '/minha-loja/etiqueta-teste') {
+            $t0 = Get-Date
+            $x = Invoke-WebRequest "$G$rota" -WebSession $ws -Headers @{ accept = 'text/html' } -UseBasicParsing -TimeoutSec 120 -MaximumRedirection 0 -SkipHttpErrorCheck
+            $erro = if ($x.Content -match 'Application error|Internal Server Error') { ' COM ERRO' } else { '' }
+            "[$Rodada] GET $rota -> $($x.StatusCode) $($x.Headers['Location']) ($($x.Content.Length) bytes, $([int]((Get-Date) - $t0).TotalMilliseconds) ms)$erro"
+          }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\saida" | Out-Null
+          $bmp.Save("$env:RUNNER_TEMP\saida\tela-$Rodada.png")
+          Get-Process 'Norte Estoque' -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+          Start-Sleep 15
+          Get-Process 'Norte Estoque', postgres, postgrest -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 3
+          '@ | Out-File "$env:RUNNER_TEMP\login.ps1"
+
+      - name: Login online e carga da loja
+        if: always()
+        shell: pwsh
+        env:
+          QA_SENHA: ${{ secrets.QA_SENHA }}
+        run: '& "$env:RUNNER_TEMP\login.ps1" login-online 25'
+
+      - name: Reabertura sem acesso ao servidor
+        if: always()
+        shell: pwsh
+        run: |
+          Add-Content C:\Windows\System32\drivers\etc\hosts "`n127.0.0.9 app-estoque.norteparanegocios.com.br`n127.0.0.9 updates.norteparanegocios.com.br"
+          ipconfig /flushdns | Out-Null
+          & "$env:RUNNER_TEMP\rodada.ps1" sem-internet
+
+      - name: Login sem internet
+        if: always()
+        shell: pwsh
+        env:
+          QA_SENHA: ${{ secrets.QA_SENHA }}
+        run: '& "$env:RUNNER_TEMP\login.ps1" login-offline'
+
+      - name: Juntar logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\saida" | Out-Null
+          foreach ($d in "$env:APPDATA\ntb-estoque-desktop", "$env:APPDATA\Norte Estoque") {
+            if (Test-Path $d) {
+              "== $d"; Get-ChildItem $d -Recurse -Filter *.log | ForEach-Object {
+                "---- $($_.FullName)"; Get-Content $_.FullName -Tail 60
+                Copy-Item $_.FullName "$env:RUNNER_TEMP\saida\$($_.Directory.Name)-$($_.Name)"
+              }
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-windows
+          path: ${{ runner.temp }}\saida

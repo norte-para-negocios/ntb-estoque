@@ -1,6 +1,6 @@
 {
   "name": "ntb-estoque-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Norte Estoque — app desktop (Windows) que funciona sem internet",
   "main": "electron/main.js",
@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^26.17.0"
   },
   "build": {
     "appId": "com.norteparanegocios.ntbestoque",
@@ -38,8 +38,11 @@
     ],
     "extraResources": [
       {
-        "from": "web",
-        "to": "web"
+        "from": ".",
+        "to": ".",
+        "filter": [
+          "web/**/*"
+        ]
       }
     ],
     "win": {
