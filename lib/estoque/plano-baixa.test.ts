@@ -62,3 +62,13 @@ test('reenviar só um subconjunto dos itens mantém as mesmas chaves (linha não
   assert.equal(inteiro[1].produto, soUm[0].produto)
   assert.equal(inteiro[1].local, soUm[0].local)
 })
+
+test('serviço (taxa de serviço, tipo 09) não baixa estoque, nem exige local', () => {
+  const servicos = new Set(['50001'])
+  const prods = new Map([...produtos, ['50001', 2001]])
+  const [taxa, prato] = planejarBaixa([{ codigo: '50001', quantidade: 1 }, { codigo: '90001', quantidade: 1 }] as never[], loja, localDaVenda, prods, null, locais, servicos)
+  assert.equal(taxa.servico, true)
+  assert.equal(taxa.pulo, undefined)
+  assert.equal(prato.servico, undefined)
+  assert.equal(prato.pulo?.baixa, 'sem local de estoque')
+})

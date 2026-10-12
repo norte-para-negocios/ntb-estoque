@@ -16,6 +16,8 @@ export type PlanoItem = {
   local?: number
   /** n-esima ocorrencia do mesmo (produto, local) no pedido: parte da chave de idempotencia. */
   linha: number
+  /** Serviço (tipo de item 09, ex.: taxa de serviço): conta como baixado, sem movimento de estoque. */
+  servico?: boolean
   pulo?: { op: 'pulada' | 'sem_estrutura'; baixa: string; erro: string }
 }
 
@@ -39,7 +41,8 @@ export function planejarBaixa(
   resolverLocal: (loja: any, item: any) => number | null,
   produtoPorCodigo: Map<string, number>,
   localPadrao: number | null,
-  locaisDaLoja: Set<number>
+  locaisDaLoja: Set<number>,
+  servicos: Set<string> = new Set()
 ): PlanoItem[] {
   const ocorrencias = new Map<string, number>()
   return itens.map((item, indice) => {
@@ -52,6 +55,8 @@ export function planejarBaixa(
     if (!produto) {
       return { ...base, pulo: { op: 'pulada', baixa: 'pulada', erro: 'Produto sem cadastro correspondente no ntb-estoque' } }
     }
+    // Serviço não tem estoque: nada a baixar (antes da checagem de local, que não se aplica).
+    if (servicos.has(item.codigo)) return { ...base, produto, servico: true }
     const local = resolverLocal(loja, item) ?? localPadrao
     if (!local) {
       return { ...base, produto, pulo: { op: 'sem_estrutura', baixa: 'sem local de estoque', erro: 'Sem local de estoque para a saída' } }

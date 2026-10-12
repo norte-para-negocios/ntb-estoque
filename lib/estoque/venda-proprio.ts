@@ -22,32 +22,38 @@ export async function baixarVendaProprio(
 ): Promise<ResultadoItemProprio[]> {
   const codigos = Array.from(new Set(itens.map((i) => i?.codigo).filter((c): c is string => !!c)))
   const produtoPorCodigo = new Map<string, number>()
+  const servicos = new Set<string>()
   if (codigos.length) {
-    const { data } = await supabase.from('produtos').select('codigo, codigo_produto').eq('loja_id', loja.id).in('codigo', codigos)
-    for (const p of (data ?? []) as { codigo: string; codigo_produto: number }[]) produtoPorCodigo.set(p.codigo, Number(p.codigo_produto))
+    const { data } = await supabase.from('produtos').select('codigo, codigo_produto, tipo_item').eq('loja_id', loja.id).in('codigo', codigos)
+    for (const p of (data ?? []) as { codigo: string; codigo_produto: number; tipo_item: string | null }[]) {
+      produtoPorCodigo.set(p.codigo, Number(p.codigo_produto))
+      if (p.tipo_item === '09') servicos.add(p.codigo)
+    }
   }
   const { data: locais } = await supabase.from('local_estoques').select('codigo_local_estoque, padrao, inativo').eq('loja_id', loja.id)
   const locaisDaLoja = new Set<number>(((locais ?? []) as { codigo_local_estoque: number }[]).map((l) => Number(l.codigo_local_estoque)))
   const padrao = ((locais ?? []) as { codigo_local_estoque: number; padrao: string | null }[]).find((l) => l.padrao === 'S')
-  const plano = planejarBaixa(itens, loja, localDaVenda, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja)
+  const plano = planejarBaixa(itens, loja, localDaVenda, produtoPorCodigo, padrao ? Number(padrao.codigo_local_estoque) : null, locaisDaLoja, servicos)
 
   const ref = pedidoRef ?? `sem-ref:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
   const resultados = new Array<ResultadoItemProprio>(plano.length)
 
   for (const p of plano) {
     if (p.pulo) resultados[p.indice] = { codigo: p.codigo, ok: false, op: p.pulo.op, baixa: p.pulo.baixa, erro: p.pulo.erro }
+    // Taxa de serviço e outros serviços: ok sem tocar no estoque.
+    else if (p.servico) resultados[p.indice] = { codigo: p.codigo, ok: true, op: 'sem_estrutura', baixa: 'Concluido' }
   }
 
   // Produto com ficha técnica ativa baixa os INSUMOS pela receita; sem ficha, baixa o próprio produto (como antes).
   const comReceita = new Set<number>()
-  const produtosPlano = Array.from(new Set(plano.filter((p) => !p.pulo).map((p) => p.produto!)))
+  const produtosPlano = Array.from(new Set(plano.filter((p) => !p.pulo && !p.servico).map((p) => p.produto!)))
   if (produtosPlano.length) {
     const { data: fichas } = await supabase.from('fichas_tecnicas').select('codigo_produto').eq('loja_id', loja.id).eq('ativa', true).in('codigo_produto', produtosPlano)
     for (const f of (fichas ?? []) as { codigo_produto: number }[]) comReceita.add(Number(f.codigo_produto))
   }
 
   const executaveis = plano
-    .filter((p) => !p.pulo)
+    .filter((p) => !p.pulo && !p.servico)
     .sort((a, b) => (a.produto! - b.produto!) || (a.local! - b.local!) || (a.indice - b.indice))
   for (const p of executaveis) {
     try {
