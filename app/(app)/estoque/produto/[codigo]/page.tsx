@@ -9,6 +9,9 @@ import { Kardex } from '@/components/estoque-proprio/Kardex'
 import { carregarEstoque, carregarMovimentos, situacaoDe, TIPOS_ITEM } from '../../dados'
 import { carregarEstoqueOmie } from '../../dados-omie'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
+import { KardexOmie, type LinhaKardexTela } from '@/components/estoque-proprio/KardexOmie'
+import { marcarSaltosCmc, type LinhaKardexOmie } from '@/lib/estoque/kardex-omie-puro'
+import { createClient } from '@/lib/supabase/server'
 import { formatCustoUnit } from '@/lib/num-br'
 
 export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
@@ -28,6 +31,26 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
   const p = visao.linhas.find((l) => l.codigoProduto === cod)
   if (!p) notFound()
   const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod }, 100)
+
+  // Loja Omie: kardex espelhado (kardex_omie, migration 157). Sem a tabela, a seção avisa em vez de quebrar.
+  let kardexOmie: LinhaKardexTela[] = []
+  let kardexAtivo = true
+  if (ehOmie) {
+    const supabase = await createClient()
+    const { data, error } = await supabase.from('kardex_omie')
+      .select('loja_id, id_mov, n_cod_prod, codigo_local_estoque, data_mov, cod_origem, des_origem, tipo, quantidade, valor_unit, cmc_apos, saldo_apos, num_doc, num_pedido, id_ajuste, id_cupom, cancelado')
+      .eq('loja_id', lojaId).eq('n_cod_prod', cod)
+      .order('data_mov', { ascending: false }).order('id_mov', { ascending: false }).limit(300)
+    if (error) kardexAtivo = false
+    const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
+    kardexOmie = marcarSaltosCmc(((data ?? []) as LinhaKardexOmie[]).map((m) => ({
+      ...m, quantidade: Number(m.quantidade), valor_unit: m.valor_unit == null ? null : Number(m.valor_unit),
+      cmc_apos: m.cmc_apos == null ? null : Number(m.cmc_apos), saldo_apos: m.saldo_apos == null ? null : Number(m.saldo_apos),
+      id_mov: Number(m.id_mov), codigo_local_estoque: Number(m.codigo_local_estoque),
+    })))
+      .reverse()
+      .map((m) => ({ ...m, local: nomeLocal.get(m.codigo_local_estoque) ?? String(m.codigo_local_estoque) }))
+  }
 
   const locaisAtivos = visao.locais.filter((l) => !l.inativo)
   const saldos = p.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))
@@ -84,6 +107,9 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
       {ehOmie ? (
         <section aria-label="Movimentos no Omie">
           <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos no Omie</h2>
+          {kardexAtivo
+            ? <KardexOmie codigoProduto={p.codigoProduto} unidade={p.unidade} linhas={kardexOmie} podeCarregar />
+            : <p className="text-[13px] text-text-muted">Kardex do Omie ainda não ativado.</p>}
         </section>
       ) : (
         <section aria-label="Kardex">
