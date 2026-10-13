@@ -91,3 +91,22 @@ export function precisaConsultarItens(row: { full_object: unknown; itens_consult
   const itens = (row.full_object as { itensDetalhes?: unknown[] } | null)?.itensDetalhes
   return !(Array.isArray(itens) && itens.length > 0)
 }
+
+/**
+ * OP local que deve estar na lista de abertas do Omie: a que o cron já viu aberta (mesmo que o sync-ops já tenha
+ * marcado a conclusão: senão aberta_omie ficaria true para sempre) e a nunca vista que não está concluída aqui.
+ * Mesma regra do filtro PostgREST FILTRO_CANDIDATAS_SAIDA.
+ */
+export function candidataASair(row: { aberta_omie: boolean | null; concluida: boolean | null }): boolean {
+  return row.aberta_omie === true || (row.aberta_omie == null && row.concluida !== true)
+}
+export const FILTRO_CANDIDATAS_SAIDA = 'aberta_omie.is.true,and(aberta_omie.is.null,concluida.not.is.true)'
+
+/**
+ * A lista do Omie pode deslocar entre páginas enquanto é lida (OP concluída no meio da leitura empurra outras para
+ * páginas já lidas). Só marca como fora da lista a OP ausente em DUAS leituras completas seguidas.
+ */
+export function confirmarSaidas(pendentesAnteriores: number[], candidatosAgora: number[]): { marcar: number[]; pendentes: number[] } {
+  const antes = new Set(pendentesAnteriores)
+  return { marcar: candidatosAgora.filter((n) => antes.has(n)), pendentes: candidatosAgora.filter((n) => !antes.has(n)) }
+}

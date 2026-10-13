@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { origemDaOP, linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens, type OPOmieLista } from './ops-abertas-puro.ts'
+import { origemDaOP, linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens, candidataASair, confirmarSaidas, type OPOmieLista } from './ops-abertas-puro.ts'
 
 test('origemDaOP: vendas, app, script, cupom (obs ou WEBSERVICE) e manual', () => {
   assert.equal(origemDaOP({ cCodIntOP: 'NTBV17283' }), 'vendas')
@@ -59,4 +59,19 @@ test('precisaConsultarItens: só sem itens gravados e nunca consultada', () => {
   assert.equal(precisaConsultarItens({ full_object: { itensDetalhes: [] }, itens_consultados_em: null }), true)
   assert.equal(precisaConsultarItens({ full_object: { itensDetalhes: [{ a: 1 }] }, itens_consultados_em: null }), false)
   assert.equal(precisaConsultarItens({ full_object: null, itens_consultados_em: '2026-10-13T10:00:00Z' }), false)
+})
+
+test('candidataASair: aberta no Omie mesmo já concluída aqui (sync-ops marca a conclusão antes); nunca vista e não concluída', () => {
+  assert.equal(candidataASair({ aberta_omie: true, concluida: true }), true)
+  assert.equal(candidataASair({ aberta_omie: true, concluida: false }), true)
+  assert.equal(candidataASair({ aberta_omie: null, concluida: false }), true)
+  assert.equal(candidataASair({ aberta_omie: null, concluida: null }), true)
+  assert.equal(candidataASair({ aberta_omie: null, concluida: true }), false)
+  assert.equal(candidataASair({ aberta_omie: false, concluida: false }), false)
+})
+
+test('confirmarSaidas: só marca a OP ausente em duas leituras completas seguidas (lista do Omie pode deslocar entre páginas)', () => {
+  assert.deepEqual(confirmarSaidas([], [1, 2]), { marcar: [], pendentes: [1, 2] })
+  assert.deepEqual(confirmarSaidas([1, 2], [2, 3]), { marcar: [2], pendentes: [3] })
+  assert.deepEqual(confirmarSaidas([1], []), { marcar: [], pendentes: [] })
 })

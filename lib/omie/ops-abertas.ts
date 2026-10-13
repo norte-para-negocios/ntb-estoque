@@ -7,15 +7,18 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { omieRequest, OmieError, type LojaOmie } from './client'
 import { pareceOPNaoExiste } from './ordem-producao'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, sleep } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
 import {
-  linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens, type LinhaOPAberta, type OPOmieLista,
+  confirmarSaidas, FILTRO_CANDIDATAS_SAIDA, linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens,
+  type LinhaOPAberta, type OPOmieLista,
 } from '@/lib/estoque/ops-abertas-puro'
 
 const INTERVALO_S = 30 * 60      // a trava fica de pé 30 min depois de um ciclo bom = intervalo entre leituras
 const CONSULTAS_POR_CICLO = 30
 const PAUSA_MS = 700
+const MAX_PAGINAS = 30           // 3.000 OPs abertas; acima disso a lista é tratada como incompleta (não marca saída)
+const TETO_MS = 150_000
 const COLUNAS = 'id, identificacao_n_cod_op, num_ordem, identificacao_c_cod_int_op, identificacao_c_num_op, identificacao_n_cod_produto, identificacao_d_dt_previsao, identificacao_n_qtde, identificacao_codigo_local_estoque, dt_inclusao, dt_ultima_alteracao_omie, alterado_por_omie, incluido_por_omie, obs_omie, origem_op, aberta_omie, full_object, itens_consultados_em'
 
 export type ResumoOps = {
@@ -33,12 +36,16 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
   const supabase = createServiceClient()
   const base = { loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test, endpoint: 'v1/produtos/op', semRepetir: true }
   let cicloBom = false
+  const t0 = Date.now()
   try {
+    const anterior = ((await lerEstadoSync(loja.id, 'ops-abertas')) ?? {}) as { pendentes_saida?: number[] }
     // 1. Lista completa das abertas (para no 1º erro sem marcar nada).
     const lista: OPOmieLista[] = []
+    let listaCompleta = true
     try {
       let pagina = 1, total = 1
       do {
+        if (pagina > MAX_PAGINAS) { listaCompleta = false; break }
         if (pagina > 1) await sleep(PAUSA_MS)
         const resp = await omieRequest<{ total_de_paginas?: number; cadastros?: OPOmieLista[] }>({
           ...base, call: 'ListarOrdemProducao', data: { pagina, registros_por_pagina: 100, cConcluida: 'N' },
@@ -49,7 +56,7 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
       } while (pagina <= total)
     } catch (e) {
       r.parouPor = motivo(e)
-      await gravarEstadoSync(loja.id, 'ops-abertas', { ...r, em: new Date().toISOString() }, r.parouPor)
+      await gravarEstadoSync(loja.id, 'ops-abertas', { ...anterior, ...r, em: new Date().toISOString() }, r.parouPor)
       return r
     }
     const novasLinhas = new Map<number, LinhaOPAberta>()
@@ -81,16 +88,17 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
     r.novas = inserir.length
     r.atualizadas = atualizar.length
 
-    // 3. Abertas aqui que não vieram na lista → aberta_omie = false.
+    // 3. Abertas aqui que não vieram na lista em DUAS leituras completas seguidas → aberta_omie = false.
     let leituraOk = true
     const locais = await buscarTodasLinhas<{ id: number; identificacao_n_cod_op: number }>(
       (from, to) => supabase.from('ordens_producao').select('id, identificacao_n_cod_op')
-        .eq('loja_id', loja.id).not('concluida', 'is', true).not('aberta_omie', 'is', false)
+        .eq('loja_id', loja.id).or(FILTRO_CANDIDATAS_SAIDA)
         .not('identificacao_n_cod_op', 'is', null).order('id').range(from, to),
       undefined,
       () => { leituraOk = false },
     )
-    const sairam = opsQueSairamDaLista(locais.map((l) => Number(l.identificacao_n_cod_op)), new Set(ids), leituraOk)
+    const candidatos = opsQueSairamDaLista(locais.map((l) => Number(l.identificacao_n_cod_op)), new Set(ids), leituraOk && listaCompleta)
+    const { marcar: sairam, pendentes: pendentesSaida } = confirmarSaidas(anterior.pendentes_saida ?? [], candidatos)
     for (let i = 0; i < sairam.length; i += 100) {
       const { error } = await supabase.from('ordens_producao').update({ aberta_omie: false })
         .eq('loja_id', loja.id).in('identificacao_n_cod_op', sairam.slice(i, i + 100))
@@ -104,6 +112,7 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
       .sort((a, b) => b - a)
       .slice(0, CONSULTAS_POR_CICLO)
     for (const nCodOP of pendentes) {
+      if (Date.now() - t0 > TETO_MS) break
       await sleep(PAUSA_MS)
       const agoraISO = new Date().toISOString()
       try {
@@ -126,7 +135,9 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
         break
       }
     }
-    await gravarEstadoSync(loja.id, 'ops-abertas', { ...r, lista_completa_em: new Date().toISOString() }, r.parouPor)
+    await gravarEstadoSync(loja.id, 'ops-abertas', {
+      ...r, pendentes_saida: pendentesSaida, lista_completa: listaCompleta, lido_em: new Date().toISOString(),
+    }, r.parouPor)
     cicloBom = true
     return r
   } finally {
