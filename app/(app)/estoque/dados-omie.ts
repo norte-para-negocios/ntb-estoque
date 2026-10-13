@@ -41,3 +41,17 @@ export async function carregarSaldoEmData(lojaId: number, data: string): Promise
     undefined, (e) => { erro = e.message })
   return { rows, erro }
 }
+
+export type MovPosteriorRow = { n_cod_prod: number; codigo_local_estoque: number; quantidade: number; saldo_apos: number | null; cmc_apos: number | null; data_mov: string }
+
+/** 1º movimento depois da data por produto/local (RPC primeiro_mov_apos, migration 161). */
+export async function carregarPrimeiroMovApos(lojaId: number, data: string): Promise<{ rows: MovPosteriorRow[]; erro: string | null }> {
+  const supabase = await createClient()
+  let erro: string | null = null
+  const rows = await buscarTodasLinhas<MovPosteriorRow>((from, to) =>
+    supabase.rpc('primeiro_mov_apos', { p_loja_id: lojaId, p_data: data })
+      .select('n_cod_prod, codigo_local_estoque, quantidade, saldo_apos, cmc_apos, data_mov')
+      .order('n_cod_prod').order('codigo_local_estoque').range(from, to) as unknown as PromiseLike<{ data: MovPosteriorRow[] | null; error: { message: string } | null }>,
+    undefined, (e) => { erro = e.message })
+  return { rows, erro }
+}

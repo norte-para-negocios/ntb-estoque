@@ -13,7 +13,7 @@ import { BarraSaldo, fmtBRL, Indicador, Saldo, SituacaoPill } from '@/components
 import { FiltrosEstoque } from '@/components/estoque-proprio/FiltrosEstoque'
 import { ModalEntrada } from '@/components/estoque-proprio/Acoes'
 import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from './dados'
-import { carregarEstoqueOmie, carregarSaldoEmData } from './dados-omie'
+import { carregarEstoqueOmie, carregarPrimeiroMovApos, carregarSaldoEmData } from './dados-omie'
 import { historicoKardexDesde, fmtDataBR } from './dados-comum'
 import { aplicarSaldoEmData, avaliarDataSaldo, type MotivoDataInvalida } from '@/lib/estoque/saldo-data-puro'
 import { SeletorData } from '@/components/estoque-proprio/SeletorData'
@@ -64,12 +64,12 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       }
       avisoData = `${motivos[av.motivo]} Mostrando o saldo de hoje.`
     } else if (sp.data !== hoje) {
-      const { rows, erro } = await carregarSaldoEmData(lojaId, sp.data)
-      if (erro) avisoData = 'Saldo em data ainda não ativado nesta loja. Mostrando o saldo de hoje.'
+      const [ate, depois] = await Promise.all([carregarSaldoEmData(lojaId, sp.data), carregarPrimeiroMovApos(lojaId, sp.data)])
+      if (ate.erro || depois.erro) avisoData = 'Saldo em data ainda não ativado nesta loja. Mostrando o saldo de hoje.'
       else {
         dataSaldo = sp.data
         const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
-        linhasBase = aplicarSaldoEmData(visao.linhas, rows, nomeLocal)
+        linhasBase = aplicarSaldoEmData(visao.linhas, ate.rows, nomeLocal, depois.rows)
       }
     }
   }
@@ -178,7 +178,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       {ehOmie && (
         <div className="space-y-1.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 u-card">
           <SeletorData min={cobertura.desde} max={hoje} />
-          {dataSaldo && <p className="text-[13px] text-text">Saldo no fim do dia <b>{fmtDataBR(dataSaldo)}</b>, pelo kardex do Omie. Produtos sem nenhum movimento desde {fmtDataBR(cobertura.desde)} não aparecem.</p>}
+          {dataSaldo && <p className="text-[13px] text-text">Saldo no fim do dia <b>{fmtDataBR(dataSaldo)}</b>, pelo kardex do Omie. Produto sem movimento desde {fmtDataBR(cobertura.desde)} aparece com o saldo de hoje (não mudou desde então).</p>}
           {!dataSaldo && !avisoData && <p className="text-[12px] text-text-muted">{cobertura.desde ? `Escolha uma data a partir de ${fmtDataBR(cobertura.desde)} para ver o saldo daquele dia.` : 'O histórico do kardex ainda está sendo lido do Omie.'}</p>}
           {avisoData && <p className="text-[13px] text-warn">{avisoData}</p>}
         </div>

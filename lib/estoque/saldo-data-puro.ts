@@ -31,38 +31,54 @@ function situacaoDe(saldo: number, minimo: number | null): Situacao {
 }
 const plausivel = (c: number) => c > 0 && c < CMC_MAX_PLAUSIVEL
 
+export type MovPosterior = { n_cod_prod: number; codigo_local_estoque: number; quantidade: number; saldo_apos: number | null; cmc_apos: number | null; data_mov: string }
+type Saida = { saldo: number; cmc: number; valor: number; situacao: Situacao; ultimoMov: string | null; custoSuspeito: boolean }
+
 /**
- * Troca saldo/custo/valor/situação de cada produto pelo que o kardex dizia na data. Só ficam os produtos com
- * movimento até a data (os outros não têm saldo conhecido pelo kardex). Valor = soma de saldo × custo de cada local
- * (custo fora de 0..1e7 vale 0, como na tela de hoje).
+ * Troca saldo/custo/valor/situação de cada produto pelo que valia no fim do dia escolhido. Por produto + local:
+ *  1. último movimento até a data (saldo_em_data) → saldo/custo dele;
+ *  2. senão, o 1º movimento depois da data (primeiro_mov_apos) → saldo antes dele = saldo_apos − quantidade
+ *     (custo dele só se for saída; entrada muda o custo, aí vale o custo do produto);
+ *  3. senão (nenhum movimento desde o início do histórico) → o saldo de hoje não mudou desde então.
+ * Valor = soma de saldo × custo de cada local (custo fora de 0..1e7 vale 0, como na tela de hoje).
  */
-export function aplicarSaldoEmData<L extends { codigoProduto: number; locais: LocalSaldo[]; minimo: number | null }>(
-  linhas: L[], rows: LinhaSaldoData[], nomeLocal: Map<number, string> = new Map(),
-): (L & { saldo: number; cmc: number; valor: number; situacao: Situacao; ultimoMov: string; custoSuspeito: boolean })[] {
-  const porProduto = new Map<number, LinhaSaldoData[]>()
-  for (const r of rows) {
-    const k = Number(r.n_cod_prod)
-    porProduto.set(k, [...(porProduto.get(k) ?? []), r])
+export function aplicarSaldoEmData<L extends { codigoProduto: number; locais: LocalSaldo[]; minimo: number | null; cmc?: number }>(
+  linhas: L[], rows: LinhaSaldoData[], nomeLocal: Map<number, string> = new Map(), posteriores: MovPosterior[] = [],
+): (L & Saida)[] {
+  const agrupar = <T extends { n_cod_prod: number }>(l: T[]) => {
+    const m = new Map<number, T[]>()
+    for (const r of l) m.set(Number(r.n_cod_prod), [...(m.get(Number(r.n_cod_prod)) ?? []), r])
+    return m
   }
-  const out: (L & { saldo: number; cmc: number; valor: number; situacao: Situacao; ultimoMov: string; custoSuspeito: boolean })[] = []
-  for (const l of linhas) {
-    const rs = porProduto.get(l.codigoProduto)
-    if (!rs?.length) continue
-    const minimoLocal = new Map(l.locais.map((x) => [x.codigoLocal, x.minimo]))
-    const locais: LocalSaldo[] = rs.map((r) => ({
-      codigoLocal: Number(r.codigo_local_estoque),
-      local: nomeLocal.get(Number(r.codigo_local_estoque)) ?? l.locais.find((x) => x.codigoLocal === Number(r.codigo_local_estoque))?.local ?? String(r.codigo_local_estoque),
-      saldo: Number(r.saldo ?? 0),
-      minimo: minimoLocal.get(Number(r.codigo_local_estoque)) ?? null,
-    })).sort((a, b) => a.codigoLocal - b.codigoLocal)
+  const ate = agrupar(rows)
+  const depois = agrupar(posteriores)
+  return linhas.map((l) => {
+    const rs = ate.get(l.codigoProduto) ?? []
+    const ps = depois.get(l.codigoProduto) ?? []
     const recentes = [...rs].sort((a, b) => b.data_mov.localeCompare(a.data_mov))
-    const cmc = Number(recentes.find((r) => Number(r.cmc ?? 0) > 0)?.cmc ?? 0)
-    const saldo = locais.reduce((a, x) => a + x.saldo, 0)
-    const valor = rs.reduce((a, r) => a + (plausivel(Number(r.cmc ?? 0)) ? Number(r.saldo ?? 0) * Number(r.cmc) : 0), 0)
-    out.push({
-      ...l, locais, saldo, cmc, valor, situacao: situacaoDe(saldo, l.minimo), ultimoMov: recentes[0].data_mov,
-      custoSuspeito: cmc !== 0 && !plausivel(cmc),
+    const cmcAteData = Number(recentes.find((r) => Number(r.cmc ?? 0) > 0)?.cmc ?? 0)
+    const cmcProduto = cmcAteData || Number(l.cmc ?? 0)
+    const codigos = new Set<number>([...rs.map((r) => Number(r.codigo_local_estoque)), ...ps.map((p) => Number(p.codigo_local_estoque)), ...l.locais.map((x) => x.codigoLocal)])
+    const minimoLocal = new Map(l.locais.map((x) => [x.codigoLocal, x.minimo]))
+    let valor = 0
+    const locais: LocalSaldo[] = [...codigos].sort((a, b) => a - b).map((cod) => {
+      const r = rs.find((x) => Number(x.codigo_local_estoque) === cod)
+      const p = ps.find((x) => Number(x.codigo_local_estoque) === cod)
+      let saldo: number
+      let cmc: number
+      if (r) { saldo = Number(r.saldo ?? 0); cmc = Number(r.cmc ?? 0) || cmcProduto }
+      else if (p) { saldo = Number(p.saldo_apos ?? 0) - Number(p.quantidade); cmc = Number(p.quantidade) < 0 && Number(p.cmc_apos ?? 0) > 0 ? Number(p.cmc_apos) : cmcProduto }
+      else { saldo = l.locais.find((x) => x.codigoLocal === cod)?.saldo ?? 0; cmc = Number(l.cmc ?? 0) }
+      if (plausivel(cmc)) valor += saldo * cmc
+      return {
+        codigoLocal: cod, saldo, minimo: minimoLocal.get(cod) ?? null,
+        local: nomeLocal.get(cod) ?? l.locais.find((x) => x.codigoLocal === cod)?.local ?? String(cod),
+      }
     })
-  }
-  return out
+    const saldo = locais.reduce((a, x) => a + x.saldo, 0)
+    return {
+      ...l, locais, saldo, cmc: cmcProduto, valor, situacao: situacaoDe(saldo, l.minimo), ultimoMov: recentes[0]?.data_mov ?? null,
+      custoSuspeito: cmcProduto !== 0 && !plausivel(cmcProduto),
+    }
+  })
 }
