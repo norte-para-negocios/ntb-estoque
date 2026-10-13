@@ -26,3 +26,19 @@ export function origemDoAjuste(a: { obs?: string | null; cod_int_ajuste?: string
   if (a.imp_api === 'S') return 'api'
   return 'omie'
 }
+
+/**
+ * Quantos ajustes da página estão FORA da janela pedida (data dd/mm/aaaa). > 0 = o Omie ignorou
+ * data_movimento_de/ate: o cron para e a loja volta, nesse ciclo, ao modo pelo maior id_ajuste.
+ * Data ilegível não conta (ajusteParaMovimento já a descarta).
+ */
+export function ajustesForaDaJanela(lista: { data?: string | null }[], ini: string, fim: string): number {
+  let n = 0
+  for (const a of lista) {
+    const m = (a.data ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (!m) continue
+    const iso = `${m[3]}-${m[2]}-${m[1]}`
+    if (iso < ini || iso > fim) n++
+  }
+  return n
+}

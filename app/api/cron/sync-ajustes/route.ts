@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getLojasAtivas, getLojasEspelhoCompleto, assertCronAuth } from '@/lib/omie/sync-all'
-import { syncAjustes, syncAjustesJanela } from '@/lib/omie/sync-ajustes'
+import { FILTRO_IGNORADO, syncAjustes, syncAjustesJanela } from '@/lib/omie/sync-ajustes'
 import { janelaProibida } from '@/lib/estoque/espelho-lojas'
 
 export const maxDuration = 300
@@ -27,6 +27,8 @@ export async function GET(request: Request) {
       if (!espelho.has(loja.id)) return { modo: 'id' as const, linhas: await syncAjustes(loja) }
       if (proibido) return { modo: 'janela' as const, linhas: 0, pulado: 'janela 00:00-07:00' }
       const r = await syncAjustesJanela(loja)
+      // Omie ignorou data_movimento_de/ate: não fica sem ajuste nenhum, cai no modo de sempre neste ciclo.
+      if (r.parouPor?.startsWith(FILTRO_IGNORADO)) return { modo: 'id' as const, linhas: await syncAjustes(loja), parouPor: r.parouPor }
       return { modo: 'janela' as const, linhas: r.linhas, parouPor: r.parouPor, historicoDesde: r.historicoDesde }
     })
   )

@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest, OmieError, type LojaOmie } from './client'
-import { autorDoAjuste, origemDoAjuste } from '@/lib/estoque/ajuste-autor'
+import { ajustesForaDaJanela, autorDoAjuste, origemDoAjuste } from '@/lib/estoque/ajuste-autor'
 import { aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
 import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
@@ -198,6 +198,8 @@ export async function syncAjustes(loja: LojaOmie): Promise<number> {
 // Lojas com espelho completo ("nosso Omie", Fase 1): por JANELA DE DATA, não pelo maior id_ajuste (que pula
 // ajuste antigo lançado depois, e o app grava id_ajuste direto em movimentos). Frente recente = últimos 3 dias a
 // cada 30 min; backfill até 2026-07-01 com cursor de data (espelho_sync_estado, frente 'ajustes').
+/** Prefixo de parouPor quando o Omie ignora o filtro de data: a rota cai no modo pelo maior id_ajuste. */
+export const FILTRO_IGNORADO = 'filtro de data ignorado pelo Omie'
 export const CFG_AJUSTES: ConfigFrentes = { diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30 }
 const PAGINAS_AJUSTES_POR_CICLO = 8
 const PAUSA_AJUSTES_MS = 700
@@ -231,6 +233,12 @@ export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Pro
       }
       resumo.paginas++
       const ajustes = resp?.ajuste_estoque_lista ?? []
+      const fora = ajustesForaDaJanela(ajustes, p.cursor.ini, p.cursor.fim)
+      if (fora > 0) {
+        resumo.parouPor = `${FILTRO_IGNORADO}: ${fora} ajuste(s) fora de ${p.cursor.ini}..${p.cursor.fim}`
+        await gravarEstadoSync(loja.id, 'ajustes', p.estado, resumo.parouPor)
+        break
+      }
       // Mesmo id_ajuste 2x no lote quebraria o ON CONFLICT da RPC: fica a última ocorrência.
       const porId = new Map<number, MovimentoRow>()
       for (const a of ajustes) {
