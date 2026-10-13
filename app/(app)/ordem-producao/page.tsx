@@ -616,6 +616,9 @@ export default async function OrdemProducaoPage({
                 }}
                 persistirEm="/ordem-producao"
               />
+              <Link href="/ordem-producao/abertas" className={btnClass('outline')} title="Todas as OPs abertas, com origem, autor, idade e ficha gravada">
+                <Factory className="size-4" /> OPs abertas
+              </Link>
               <a
                 href={`/ordem-producao/export?${exportParams.toString()}`}
                 className={btnClass('outline')}
