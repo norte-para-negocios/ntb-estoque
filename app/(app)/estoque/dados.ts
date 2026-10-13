@@ -21,6 +21,8 @@ export type LinhaEstoque = {
   minimo: number | null
   situacao: Situacao
   locais: SaldoLocal[]
+  /** Loja Omie: CMC do espelho fora do plausível (tratado como 0 no valor). */
+  custoSuspeito?: boolean
 }
 
 export type LocalInfo = { codigoLocal: number; descricao: string; inativo: boolean }
