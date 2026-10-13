@@ -94,21 +94,36 @@ export function oscilacoesContagem(c: Contagem[]): { produto: number; local: num
   return r.sort((x, y) => x.produto - y.produto || x.data.localeCompare(y.data))
 }
 
-export type OPAbertaMin = { id: number; produto: number | null; origem: string | null }
+export type OPAbertaMin = { id: number; produto: number | null; origem: string | null; local?: number | null }
 
-/** Sobrando: OP aberta do PDV (cupom) de produto com saldo >= 0. Faltando: PA/PI com saldo < 0 sem nenhuma OP aberta. */
+/**
+ * Sobrando: OP aberta do PDV (cupom) de produto com saldo >= 0. Faltando: PA/PI com saldo < 0 sem nenhuma OP aberta.
+ * Com `saldosLocal` (chave `produto:local`), vale o saldo do LOCAL da OP (OP sem local = total) e faltando passa a ser
+ * "prato negativo num local sem OP aberta naquele local" (OP sem local cobre todos).
+ */
 export function opsSobrandoFaltando(
   saldos: Map<number, number>, tipos: Map<number, string | null>, abertas: OPAbertaMin[], listaOk = true,
+  saldosLocal?: Map<string, number>,
 ): { sobrando: OPAbertaMin[]; faltando: number[]; indisponivel: boolean } {
   // Sem a lista de OPs (erro de leitura), "sem OP" acusaria todo prato negativo: não classifica.
   if (!listaOk) return { sobrando: [], faltando: [], indisponivel: true }
-  const comOP = new Set(abertas.map((o) => o.produto).filter((p): p is number => p != null))
-  const sobrando = abertas.filter((o) => o.origem === 'cupom' && o.produto != null && saldos.has(o.produto) && (saldos.get(o.produto) ?? 0) >= 0)
-  const faltando = [...saldos.entries()]
-    .filter(([p, s]) => s < 0 && TIPOS_PRODUCAO.has(tipos.get(p) ?? '') && !comOP.has(p))
-    .map(([p]) => p)
-    .sort((a, b) => a - b)
-  return { sobrando, faltando, indisponivel: false }
+  const saldoDaOP = (o: OPAbertaMin) => (saldosLocal && o.local ? (saldosLocal.get(`${o.produto}:${o.local}`) ?? 0) : (saldos.get(o.produto!) ?? 0))
+  const sobrando = abertas.filter((o) => o.origem === 'cupom' && o.produto != null && saldos.has(o.produto) && saldoDaOP(o) >= 0)
+  let faltando: number[]
+  if (saldosLocal) {
+    const cobreTudo = new Set(abertas.filter((o) => o.produto != null && !o.local).map((o) => o.produto as number))
+    const comOPLocal = new Set(abertas.filter((o) => o.produto != null && o.local).map((o) => `${o.produto}:${o.local}`))
+    const f = new Set<number>()
+    for (const [chave, s] of saldosLocal) {
+      const p = Number(chave.split(':')[0])
+      if (s < 0 && TIPOS_PRODUCAO.has(tipos.get(p) ?? '') && !cobreTudo.has(p) && !comOPLocal.has(chave)) f.add(p)
+    }
+    faltando = [...f]
+  } else {
+    const comOP = new Set(abertas.map((o) => o.produto).filter((p): p is number => p != null))
+    faltando = [...saldos.entries()].filter(([p, s]) => s < 0 && TIPOS_PRODUCAO.has(tipos.get(p) ?? '') && !comOP.has(p)).map(([p]) => p)
+  }
+  return { sobrando, faltando: faltando.sort((a, b) => a - b), indisponivel: false }
 }
 
 export type ItemFichaLocal = { produto: number; insumo: number; local: number | null }

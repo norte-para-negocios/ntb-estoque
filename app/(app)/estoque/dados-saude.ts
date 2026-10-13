@@ -141,14 +141,19 @@ async function saudeOmie(lojaId: number): Promise<SaudeDados> {
   const { ops, completa, erro: erroOps } = await carregarOPsAbertas(lojaId, 'omie')
   if (erroOps) avisos.push(`Não foi possível ler as OPs abertas: ${erroOps}`)
   const saldos = new Map(linhas.map((l) => [l.codigoProduto, l.saldo]))
-  const so = opsSobrandoFaltando(saldos, tipos, ops.map((o) => ({ id: o.id, produto: o.identificacao_n_cod_produto == null ? null : Number(o.identificacao_n_cod_produto), origem: o.origem_op })), !erroOps)
+  // Sobrando/faltando pelo saldo do LOCAL da OP (o prato pode estar positivo no total e negativo no local da OP).
+  const saldosLocal = new Map(linhas.flatMap((l) => l.locais.map((x) => [`${l.codigoProduto}:${x.codigoLocal}`, x.saldo] as [string, number])))
+  const so = opsSobrandoFaltando(saldos, tipos, ops.map((o) => ({
+    id: o.id, produto: o.identificacao_n_cod_produto == null ? null : Number(o.identificacao_n_cod_produto), origem: o.origem_op,
+    local: o.identificacao_codigo_local_estoque ? Number(o.identificacao_codigo_local_estoque) : null,
+  })), !erroOps, saldosLocal)
   if (!completa) avisos.push('Esta loja não tem o espelho completo das OPs ligado: a lista de OPs abertas pode estar incompleta.')
   const opsSobrando: SecaoSaude = {
     chave: 'ops-sobrando', titulo: 'OPs do PDV sobrando', explicacao: 'OP aberta pela venda (cupom) de um prato que já não está negativo. Pode ser concluída ou excluída.',
     itens: so.sobrando.map((o) => {
       const op = ops.find((x) => x.id === o.id)!
       const p = prod.get(o.produto!)
-      return { ...item(p, o.produto!, `op-${o.id}`, `OP ${op.identificacao_c_num_op ?? op.num_ordem ?? op.id} · ${qtd(Number(op.identificacao_n_qtde ?? op.quantidade ?? 0))} ${p?.unidade ?? ''} · saldo do prato ${qtd(p?.saldo ?? 0)}`, 'aviso'), href: `/ordem-producao/abertas?q=${encodeURIComponent(op.identificacao_c_num_op ?? String(op.id))}` }
+      return { ...item(p, o.produto!, `op-${o.id}`, `OP ${op.identificacao_c_num_op ?? op.num_ordem ?? op.id} · ${qtd(Number(op.identificacao_n_qtde ?? op.quantidade ?? 0))} ${p?.unidade ?? ''} · saldo ${o.local ? 'no local da OP' : 'do prato'} ${qtd(o.local ? (saldosLocal.get(`${o.produto}:${o.local}`) ?? 0) : (p?.saldo ?? 0))}`, 'aviso'), href: `/ordem-producao/abertas?q=${encodeURIComponent(op.identificacao_c_num_op ?? String(op.id))}` }
     }),
   }
   const opsFaltando: SecaoSaude = {

@@ -12,6 +12,7 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Indicador } from '@/components/estoque-proprio/Apresentacao'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { idadeDias, itensDaOPGravada, situacaoDaOP, ROTULO_ORIGEM_OP, type SituacaoOP } from '@/lib/estoque/ops-tela-puro'
+import { saldoNoLocalDaOP } from '@/lib/estoque/escrita-omie-puro'
 import { carregarOPsAbertas } from '../../estoque/dados-ops'
 import { carregarEstoqueOmie } from '../../estoque/dados-omie'
 import { carregarEstoque } from '../../estoque/dados'
@@ -23,8 +24,8 @@ const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 const SIT: Record<Exclude<SituacaoOP, null>, { rotulo: string; cor: string; dica: string }> = {
-  sobrando: { rotulo: 'Sobrando', cor: 'text-warn', dica: 'OP do PDV e o prato já não está negativo' },
-  faltando: { rotulo: 'Faltando concluir', cor: 'text-err', dica: 'O prato ainda está negativo' },
+  sobrando: { rotulo: 'Sobrando', cor: 'text-warn', dica: 'OP do PDV e o prato já não está negativo no local da OP' },
+  faltando: { rotulo: 'Faltando concluir', cor: 'text-err', dica: 'O prato ainda está negativo no local da OP' },
   ok: { rotulo: 'Em dia', cor: 'text-text-muted', dica: '' },
 }
 
@@ -51,7 +52,9 @@ export default async function OPsAbertasPage({ searchParams }: { searchParams: P
     const origem = fonte === 'proprio' ? (o.venda_ref ? 'vendas' : 'app') : o.origem_op
     const autor = (fonte === 'proprio' ? o.criada_por : o.incluido_por_omie) ?? null
     const idade = idadeDias(o.dt_inclusao ?? o.created_at, hoje)
-    const saldo = p ? p.saldo : null
+    // Sobrando/faltando pelo saldo do LOCAL da OP (sem local na OP = total do prato).
+    const localOP = o.identificacao_codigo_local_estoque ? Number(o.identificacao_codigo_local_estoque) : null
+    const saldo = p ? saldoNoLocalDaOP(p.locais, localOP, p.saldo) : null
     return {
       o, cod, p, origem, autor, idade, saldo,
       numero: o.identificacao_c_num_op ?? o.num_ordem ?? String(o.id),
@@ -125,7 +128,7 @@ export default async function OPsAbertasPage({ searchParams }: { searchParams: P
                   </div>
                   <div className="text-right text-[12px]">
                     {l.situacao && l.situacao !== 'ok' && <div className={`font-semibold ${SIT[l.situacao].cor}`} title={SIT[l.situacao].dica}>{SIT[l.situacao].rotulo}</div>}
-                    {l.saldo != null && <div className="num text-text-muted">saldo do prato {fmtQ(l.saldo)}</div>}
+                    {l.saldo != null && <div className="num text-text-muted">{l.o.identificacao_codigo_local_estoque ? 'saldo no local' : 'saldo do prato'} {fmtQ(l.saldo)}</div>}
                   </div>
                   <ChevronDown className="size-4 shrink-0 self-center text-text-muted transition-transform group-open:rotate-180" />
                 </summary>

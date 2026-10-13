@@ -123,3 +123,22 @@ test('quaisVenderam: consulta cada produto (um que vende muito não esconde os o
   assert.deepEqual([...r].sort((a, b) => a - b), [3, 6, 9, 12])
   assert.equal(chamados.length, 12)
 })
+
+test('opsSobrandoFaltando: com saldo por local, a OP olha o saldo do local dela', () => {
+  const saldos = new Map([[1, 5], [2, -1]])
+  const tipos = new Map<number, string | null>([[1, '04'], [2, '04']])
+  // prato 1: total +5, mas o local 2 da OP está em -1 → não está sobrando
+  // prato 2: local 3 negativo e a única OP é do local 2 → faltando
+  const saldosLocal = new Map([['1:1', 6], ['1:2', -1], ['2:2', 0], ['2:3', -1]])
+  const abertas = [{ id: 10, produto: 1, origem: 'cupom', local: 2 }, { id: 11, produto: 2, origem: 'manual', local: 2 }]
+  const r = opsSobrandoFaltando(saldos, tipos, abertas, true, saldosLocal)
+  assert.deepEqual(r.sobrando.map((o) => o.id), [])
+  assert.deepEqual(r.faltando, [2])
+  // OP sem local usa o total e cobre todos os locais
+  const r2 = opsSobrandoFaltando(saldos, tipos, [{ id: 12, produto: 1, origem: 'cupom', local: null }, { id: 13, produto: 2, origem: 'manual', local: null }], true, saldosLocal)
+  assert.deepEqual(r2.sobrando.map((o) => o.id), [12])
+  assert.deepEqual(r2.faltando, [])
+  // OP do cupom no local 1 (saldo 6) sobra
+  const r3 = opsSobrandoFaltando(saldos, tipos, [{ id: 14, produto: 1, origem: 'cupom', local: 1 }], true, saldosLocal)
+  assert.deepEqual(r3.sobrando.map((o) => o.id), [14])
+})
