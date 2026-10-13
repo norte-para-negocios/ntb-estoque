@@ -8,6 +8,7 @@ import {
   custoAbsurdo, cmcPorLocalAtual, insumosSemCustoNoLocal, negativoDesde, opsSobrandoFaltando, oscilacoesContagem,
   produtosSemFichaQueVendem, saltosRecentes, ultimoCmcAnterior, type MovSaldo,
 } from '@/lib/estoque/saude-puro'
+import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
 import { carregarEstoqueOmieComPosicoes } from './dados-omie'
 import { carregarEstoque, type LinhaEstoque } from './dados'
 import { carregarOPsAbertas } from './dados-ops'
@@ -160,8 +161,8 @@ async function saudeOmie(lojaId: number): Promise<SaudeDados> {
   type SRow = { id: number; id_prod: number; codigo_local_estoque: number; data: string; quan: number }
   const sld = await buscarTodasLinhas<SRow>((from, to) =>
     supabase.from('movimentos').select('id, id_prod, codigo_local_estoque, data, quan').eq('loja_id', lojaId).eq('tipo', 'SLD')
-      .gte('data', `${addDias(hoje, -DIAS_CONTAGEM)}T00:00:00-03:00`).order('id').range(from, to), undefined, erro('as contagens'))
-  const osc = oscilacoesContagem(sld.map((s) => ({ produto: Number(s.id_prod), local: Number(s.codigo_local_estoque), data: s.data.slice(0, 10), ordem: Number(s.id), qtd: Number(s.quan) })))
+      .gte('data', `${addDias(hoje, -DIAS_CONTAGEM)}T00:00:00Z`).order('id').range(from, to), undefined, erro('as contagens'))
+  const osc = oscilacoesContagem(sld.map((s) => ({ produto: Number(s.id_prod), local: Number(s.codigo_local_estoque), data: diaDoMovimento(s.data), ordem: Number(s.id), qtd: Number(s.quan) })))
   const ultimaOsc = new Map<string, (typeof osc)[number]>()
   for (const o of osc) ultimaOsc.set(`${o.produto}:${o.local}`, o)
   const contagem: SecaoSaude = {

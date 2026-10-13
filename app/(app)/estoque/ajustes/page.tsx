@@ -9,6 +9,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { addDias } from '@/lib/estoque/espelho-lojas'
 import { formatCustoUnit } from '@/lib/num-br'
 import { lerPeriodo } from '@/lib/estoque/kardex-loja-puro'
+import { diaDoMovimento, ehSoData, janelaDeConsulta } from '@/lib/estoque/quem-mexeu-puro'
 import { custoForaDoNormal, valorDoAjuste, ROTULO_ORIGEM_AJUSTE, ROTULO_TIPO_AJUSTE } from '@/lib/estoque/ajustes-tela-puro'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
@@ -24,7 +25,9 @@ import { nomesDeUsuarios } from '../dados-comum'
 
 const POR_PAGINA = 50
 const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
-const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+// Ajuste do Omie vem só com a data (meia-noite UTC no banco): mostra a data, sem hora inventada.
+const quando = (iso: string) => ehSoData(iso) ? diaDoMovimento(iso).split('-').reverse().join('/').replace(/^(\d\d\/\d\d\/)\d\d(\d\d)$/, '$1$2')
+  : new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 type SP = { data_inicio?: string; data_final?: string; q?: string; autor?: string; origem?: string; tipo?: string; fora?: string; page?: string }
@@ -42,9 +45,10 @@ async function ajustesOmie(lojaId: number, ini: string, fim: string): Promise<{ 
   const supabase = await createClient()
   const avisos: string[] = []
   const base = 'id, id_prod, tipo, quan, valor, codigo_local_estoque, codigo_local_estoque_destino, data, motivo, obs, status'
+  const j = janelaDeConsulta(ini, fim)
   const ler = (cols: string, onErro: (e: { message: string }) => void) => buscarTodasLinhas<MovRow>((from, to) =>
     supabase.from('movimentos').select(cols).eq('loja_id', lojaId)
-      .gte('data', `${ini}T00:00:00-03:00`).lt('data', `${addDias(fim, 1)}T00:00:00-03:00`)
+      .gte('data', j.de).lt('data', j.ate)
       // Venda do PDV também vira linha em movimentos (origem PDV / motivo PDV): não é ajuste.
       .or('origem.is.null,origem.neq.PDV').or('motivo.is.null,motivo.neq.PDV')
       .order('id').range(from, to) as unknown as PromiseLike<{ data: MovRow[] | null; error: { message: string } | null }>, undefined, onErro)
@@ -56,7 +60,7 @@ async function ajustesOmie(lojaId: number, ini: string, fim: string): Promise<{ 
   }
   return {
     avisos,
-    ajustes: rows.map((r) => ({
+    ajustes: rows.filter((r) => { const d = diaDoMovimento(r.data); return d >= ini && d <= fim }).map((r) => ({
       id: Number(r.id), quando: r.data, produto: Number(r.id_prod), local: r.codigo_local_estoque == null ? null : Number(r.codigo_local_estoque),
       destino: r.codigo_local_estoque_destino == null ? null : Number(r.codigo_local_estoque_destino), tipo: r.tipo,
       quantidade: Number(r.quan ?? 0), custoUnit: r.valor == null ? null : Number(r.valor), autor: r.autor ?? null,

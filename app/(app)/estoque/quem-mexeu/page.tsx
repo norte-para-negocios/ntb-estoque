@@ -8,7 +8,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { addDias } from '@/lib/estoque/espelho-lojas'
 import { lerPeriodo } from '@/lib/estoque/kardex-loja-puro'
-import { chavePessoa, linhaDoTempo, resumoPorPessoa, type Evento, type EventoTipo } from '@/lib/estoque/quem-mexeu-puro'
+import { chavePessoa, diaDoMovimento, ehSoData, janelaDeConsulta, linhaDoTempo, resumoPorPessoa, type Evento, type EventoTipo } from '@/lib/estoque/quem-mexeu-puro'
 import { ROTULO_ORIGEM_AJUSTE, ROTULO_TIPO_AJUSTE } from '@/lib/estoque/ajustes-tela-puro'
 import { ROTULO_ORIGEM_OP } from '@/lib/estoque/ops-tela-puro'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
@@ -21,7 +21,7 @@ import { fmtDataBR, nomesDeUsuarios } from '../dados-comum'
 
 const MAX_EVENTOS = 300
 const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
-const hora = (q: string) => (q.length > 10 ? new Date(q).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' }) : '')
+const hora = (q: string) => (!ehSoData(q) ? new Date(q).toLocaleTimeString('pt-BR', { timeZone: 'America/Bahia', hour: '2-digit', minute: '2-digit' }) : '')
 const ICONE: Record<EventoTipo, typeof ClipboardList> = { ajuste: ClipboardList, op: Factory, ficha: BookOpen }
 const ROTULO_EVENTO: Record<EventoTipo, string> = { ajuste: 'ajustes', op: 'OPs', ficha: 'fichas' }
 
@@ -34,10 +34,12 @@ async function eventosOmie(c: Ctx): Promise<Evento[]> {
   type M = { id: number; id_prod: number; tipo: string; quan: number | null; data: string; autor: string | null; origem_ajuste: string | null; motivo: string | null; codigo_local_estoque: number | null }
   const movs = await buscarTodasLinhas<M>((from, to) =>
     supabase.from('movimentos').select('id, id_prod, tipo, quan, data, autor, origem_ajuste, motivo, codigo_local_estoque').eq('loja_id', c.lojaId)
-      .gte('data', `${c.ini}T00:00:00-03:00`).lt('data', `${addDias(c.fim, 1)}T00:00:00-03:00`)
+      .gte('data', janelaDeConsulta(c.ini, c.fim).de).lt('data', janelaDeConsulta(c.ini, c.fim).ate)
       .or('origem.is.null,origem.neq.PDV').or('motivo.is.null,motivo.neq.PDV').order('id').range(from, to),
     undefined, (e) => c.avisos.push(`Ajustes com autor indisponíveis (${e.message}).`))
   for (const m of movs) {
+    const dia = diaDoMovimento(m.data)
+    if (dia < c.ini || dia > c.fim) continue
     ev.push({
       pessoa: m.autor, quando: m.data, tipo: 'ajuste',
       titulo: `${ROTULO_TIPO_AJUSTE[m.tipo] ?? m.tipo}: ${fmtQ(Number(m.quan ?? 0))} ${c.produtos.get(Number(m.id_prod))?.unidade ?? ''} de ${c.nome(Number(m.id_prod))}`,

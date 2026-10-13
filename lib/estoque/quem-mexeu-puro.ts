@@ -12,15 +12,34 @@ export function chavePessoa(nome: string | null): string {
   return k || SEM_NOME
 }
 
-/** Instante do evento (data pura = meio-dia na Bahia, sem horário de verão: UTC-3). */
-function instante(q: string): number {
-  return q.length <= 10 ? Date.parse(`${q}T12:00:00-03:00`) : Date.parse(q)
+/**
+ * O sync-ajustes grava a data do Omie SEM hora ('YYYY-MM-DD' → meia-noite UTC no banco); o app grava a hora real
+ * (Bahia). Meia-noite UTC exata = só data (aquele dia); qualquer outra hora = dia da Bahia (UTC-3, sem horário de verão).
+ */
+export function ehSoData(q: string): boolean {
+  if (q.length <= 10) return true
+  const t = Date.parse(q)
+  return !Number.isNaN(t) && t % 86_400_000 === 0
 }
-/** Dia do evento na Bahia. */
-export function diaBahia(q: string): string {
+export function diaDoMovimento(q: string): string {
   if (q.length <= 10) return q
   const t = Date.parse(q)
-  return Number.isNaN(t) ? q.slice(0, 10) : new Date(t - 3 * 3_600_000).toISOString().slice(0, 10)
+  if (Number.isNaN(t)) return q.slice(0, 10)
+  return new Date(ehSoData(q) ? t : t - 3 * 3_600_000).toISOString().slice(0, 10)
+}
+/** Mantido por compatibilidade: dia do evento (ver diaDoMovimento). */
+export const diaBahia = diaDoMovimento
+
+/** Faixa de timestamps a pedir ao banco para os dias [ini, fim]: cobre o "só data" (00:00Z) e o dia da Bahia (até fim+1 03:00Z). Filtrar depois por diaDoMovimento. */
+export function janelaDeConsulta(ini: string, fim: string): { de: string; ate: string } {
+  const d = new Date(`${fim}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return { de: `${ini}T00:00:00Z`, ate: `${d.toISOString().slice(0, 10)}T03:00:00Z` }
+}
+
+/** Instante do evento para ordenar (só data = meio-dia na Bahia). */
+function instante(q: string): number {
+  return ehSoData(q) ? Date.parse(`${diaDoMovimento(q)}T12:00:00-03:00`) : Date.parse(q)
 }
 
 export function resumoPorPessoa(ev: Evento[]): { chave: string; nome: string; total: number; porTipo: Record<EventoTipo, number>; ultimo: string }[] {
@@ -45,7 +64,7 @@ export function linhaDoTempo(ev: Evento[], chave: string | null): { dia: string;
   const dias = new Map<string, Evento[]>()
   for (const e of ev) {
     if (chave != null && chavePessoa(e.pessoa) !== chave) continue
-    const d = diaBahia(e.quando)
+    const d = diaDoMovimento(e.quando)
     dias.set(d, [...(dias.get(d) ?? []), e])
   }
   return [...dias.entries()]

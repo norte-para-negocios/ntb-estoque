@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { addDias } from '@/lib/estoque/espelho-lojas'
+import { janelaDeConsulta } from '@/lib/estoque/quem-mexeu-puro'
 import type { FiltrosKardexLoja } from '@/lib/estoque/kardex-loja-puro'
 import { emLotes } from './dados-comum'
 
@@ -34,7 +35,7 @@ async function resolver(lojaId: number, f: FiltrosKardexLoja): Promise<Resolvido
   if (f.autor) {
     const { data } = await supabase.from('movimentos').select('id_ajuste').eq('loja_id', lojaId)
       .ilike('autor', `%${escapeIlike(f.autor)}%`).not('id_ajuste', 'is', null)
-      .gte('data', `${f.ini}T00:00:00-03:00`).lt('data', `${addDias(f.fim, 1)}T00:00:00-03:00`)
+      .gte('data', janelaDeConsulta(f.ini, f.fim).de).lt('data', janelaDeConsulta(f.ini, f.fim).ate)
       .order('id').limit(MAX_IDS_FILTRO + 1)
     let ids = [...new Set((data ?? []).map((m) => Number(m.id_ajuste)))]
     if (ids.length > MAX_IDS_FILTRO) { ids = ids.slice(0, MAX_IDS_FILTRO); truncado = `Muitos ajustes de "${f.autor}" no período: mostrando só parte. Diminua o período.` }

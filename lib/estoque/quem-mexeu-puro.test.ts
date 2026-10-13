@@ -32,3 +32,20 @@ test('linhaDoTempo: agrupa por dia (desc), eventos desc no dia, filtra pela pess
   const ana = linhaDoTempo(evs, chavePessoa('Ana'))
   assert.deepEqual(ana.flatMap((d) => d.eventos.map((e) => e.titulo)), ['d', 'b', 'a'])
 })
+
+test('diaDoMovimento: data do Omie gravada à meia-noite UTC é o próprio dia; hora real vai para o dia da Bahia', async () => {
+  const { diaDoMovimento, ehSoData, janelaDeConsulta } = await import('./quem-mexeu-puro.ts')
+  assert.equal(diaDoMovimento('2026-10-01T00:00:00+00:00'), '2026-10-01')
+  assert.equal(ehSoData('2026-10-01T00:00:00+00:00'), true)
+  assert.equal(diaDoMovimento('2026-10-02T01:30:00+00:00'), '2026-10-01')
+  assert.equal(ehSoData('2026-10-02T01:30:00+00:00'), false)
+  assert.equal(diaDoMovimento('2026-10-01T15:00:00-03:00'), '2026-10-01')
+  assert.equal(diaDoMovimento('2026-10-01'), '2026-10-01')
+  assert.deepEqual(janelaDeConsulta('2026-10-01', '2026-10-03'), { de: '2026-10-01T00:00:00Z', ate: '2026-10-04T03:00:00Z' })
+})
+
+test('linhaDoTempo: ajuste do Omie (meia-noite UTC) fica no próprio dia, não no anterior', () => {
+  const d = linhaDoTempo([ev('Ana', '2026-10-01T00:00:00+00:00', 'ajuste', 'omie'), ev('Ana', '2026-10-01T10:00:00-03:00', 'ajuste', 'app')], null)
+  assert.deepEqual(d.map((x) => x.dia), ['2026-10-01'])
+  assert.equal(d[0].eventos.length, 2)
+})
