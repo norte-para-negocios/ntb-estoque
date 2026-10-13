@@ -153,7 +153,8 @@ export function movimentosPrevistosDaOP(op: OPMin, itens: ItemFichaOP[]): MovPre
     r.push({ n_cod_prod: Number(op.identificacao_n_cod_produto), local: localOP, quantidade: Number(op.identificacao_n_qtde) || 0, origem: 'op_producao' })
   }
   for (const i of itens) {
-    if (!i.nIdProdutoMalha || i.cUtilizarDoEstoque === 'N') continue
+    // cUtilizarDoEstoque 'N' NÃO quer dizer "não consome": na loja 5 todo insumo MP vem 'N' e sai do estoque no Omie.
+    if (!i.nIdProdutoMalha) continue
     const local = i.codigo_local_estoque != null && i.codigo_local_estoque !== '' ? Number(i.codigo_local_estoque) : localOP
     r.push({ n_cod_prod: Number(i.nIdProdutoMalha), local, quantidade: -Math.abs(Number(i.nQtde) || 0), origem: 'op_consumo' })
   }

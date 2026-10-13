@@ -78,7 +78,7 @@ const OP: OPMin = {
   dt_conclusao_real: '2026-10-10', concluida: true,
 }
 
-test('movimentos previstos da OP: entrada + consumo (sem os que não usam estoque)', () => {
+test('movimentos previstos da OP: entrada + consumo de todos os insumos (cUtilizarDoEstoque N também consome)', () => {
   const r = movimentosPrevistosDaOP(OP, [
     { nIdProdutoMalha: 20, nQtde: 0.5, codigo_local_estoque: '200' },
     { nIdProdutoMalha: 21, nQtde: 1 },
@@ -88,6 +88,7 @@ test('movimentos previstos da OP: entrada + consumo (sem os que não usam estoqu
     { n_cod_prod: 10, local: 100, quantidade: 2, origem: 'op_producao' },
     { n_cod_prod: 20, local: 200, quantidade: -0.5, origem: 'op_consumo' },
     { n_cod_prod: 21, local: 100, quantidade: -1, origem: 'op_consumo' },
+    { n_cod_prod: 22, local: 100, quantidade: -3, origem: 'op_consumo' },
   ])
   assert.deepEqual(movimentosPrevistosDaOP({ ...OP, concluida: false, dt_conclusao_real: null }, []), [])
 })
