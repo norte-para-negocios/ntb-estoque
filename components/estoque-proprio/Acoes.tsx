@@ -83,11 +83,13 @@ function botao(rotulo: string, icone: React.ReactNode, { variante = 'outline', c
 function useEnvio(onDone: () => void) {
   const [pending, start] = useTransition()
   const router = useRouter()
-  function enviar(fn: () => Promise<{ error: string } | { ok: true; saldo?: number; negativo?: boolean; aviso?: string }>, sucesso: string) {
+  function enviar(fn: () => Promise<{ error: string } | { ok: true; saldo?: number; negativo?: boolean; aviso?: string; alerta?: boolean }>, sucesso: string) {
     start(async () => {
       const r = await fn()
       if ('error' in r) { toast.error('Não foi possível salvar', { description: r.error }); return }
-      toast.success(sucesso, { description: r.aviso ?? (r.negativo ? 'Atenção: o saldo ficou negativo.' : undefined) })
+      // alerta: gravado, mas ainda não confirmado no Omie (fica pendente; lançar de novo duplicaria).
+      if (r.alerta) toast.warning(sucesso, { description: r.aviso, duration: 15000 })
+      else toast.success(sucesso, { description: r.aviso ?? (r.negativo ? 'Atenção: o saldo ficou negativo.' : undefined) })
       onDone()
       router.refresh()
     })

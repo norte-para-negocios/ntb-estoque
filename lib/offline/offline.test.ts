@@ -91,3 +91,10 @@ test('pareamento: por tabela, na ordem; contagem diferente = divergente', () => 
   assert.deepEqual([...r.mapa.entries()], [[2_003_000_000, 700], [2_002_000_000, 9001], [2_002_000_001, 9002]])
   assert.deepEqual(r.divergentes, ['audit_log'])
 })
+
+test('politica: escritas no Omie que dependem do momento (contagem, correção de custo, troca de insumo) nunca vão para a fila', () => {
+  for (const n of ['estoque-omie#ajusteOmie', 'estoque-omie#corrigirCustoAjuste', 'estoque-omie#relancarCorrecaoCusto', 'fichas-omie#trocarInsumoNoPrato']) {
+    assert.equal(politicaDe(n), null, n)
+  }
+  assert.equal(politicaDe('estoque-omie#entradaOmie'), 'depende')
+})

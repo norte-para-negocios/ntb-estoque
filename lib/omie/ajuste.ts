@@ -5,6 +5,14 @@ import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
  * inventário/transferência já processados). Espelha OmieService::excluirAjusteEstoque.
  */
 export async function excluirAjusteEstoque(loja: LojaOmie, idAjuste: number): Promise<boolean> {
+  return (await excluirAjusteDetalhado(loja, idAjuste)).ok
+}
+
+/**
+ * Igual a excluirAjusteEstoque, mas devolve a mensagem do erro: a correção de custo precisa distinguir "o Omie
+ * recusou" (nada mudou) de "o Omie não respondeu" (pode ter excluído).
+ */
+export async function excluirAjusteDetalhado(loja: LojaOmie, idAjuste: number): Promise<{ ok: true } | { ok: false; msg: string }> {
   try {
     await omieRequest({
       loja_id: loja.id,
@@ -21,7 +29,7 @@ export async function excluirAjusteEstoque(loja: LojaOmie, idAjuste: number): Pr
       request: JSON.stringify({ id_ajuste: idAjuste }),
       code: '200',
     })
-    return true
+    return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     // Ajuste já não existe no Omie (excluído antes / nunca existiu) = idempotente: ok.
@@ -35,7 +43,7 @@ export async function excluirAjusteEstoque(loja: LojaOmie, idAjuste: number): Pr
       error: !naoExiste,
       error_message: msg,
     })
-    return naoExiste
+    return naoExiste ? { ok: true } : { ok: false, msg }
   }
 }
 

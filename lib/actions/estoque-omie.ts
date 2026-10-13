@@ -10,10 +10,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getUser } from '@/lib/auth'
 import { contextoEscritaOmie, type LojaEscrita } from '@/lib/estoque/contexto-escrita-omie'
 import {
-  codIntCorrecao, deltaDoAjuste, isoParaBR, mesDoAjusteFechado, motivoNaoCorrige, proximaEtapaCorrecao, validarCustoNovo,
+  codIntCorrecao, decidirRelancamento, deltaDoAjuste, isoParaBR, mesDoAjusteFechado, motivoNaoCorrige, proximaEtapaCorrecao,
+  respostaDoLancamento, statusAposExclusao, validarCustoNovo, type RespostaLancamento,
 } from '@/lib/estoque/escrita-omie-puro'
 import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
-import { excluirAjusteEstoque, incluirAjusteComCusto, listarAjustesDoDia } from '@/lib/omie/ajuste'
+import { excluirAjusteDetalhado, incluirAjusteComCusto, listarAjustesDoDia } from '@/lib/omie/ajuste'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { formatCustoUnit } from '@/lib/num-br'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
@@ -21,7 +22,7 @@ import { dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { criarAjusteManual } from '@/lib/actions/movimentacoes'
 import { addMovimento, createTransferencia, enviarMovimento, finishTransferencia, salvarObservacaoTransferencia } from '@/lib/actions/transferencia'
 
-type Resposta = { ok: true; aviso?: string } | { error: string }
+type Resposta = RespostaLancamento
 
 const PERM = 'Estoque - Lancar no Omie'
 
@@ -38,14 +39,6 @@ function atualizarTelas() {
   revalidatePath('/movimentacoes')
 }
 
-/** Resultado do criarAjusteManual (Omie) → resposta da tela. 'Sem CMC' fica gravado e o cron reenvia. */
-function respostaDoAjuste(r: { error?: string; status?: string; erro?: string }, sucesso: string): Resposta {
-  if (r.error) return { error: r.error }
-  if (r.status === 'Concluido') return { ok: true, aviso: sucesso }
-  if (r.status === 'Sem CMC') return { ok: true, aviso: 'Gravado, mas o produto está sem custo médio no Omie: o lançamento fica pendente e o sistema reenvia sozinho quando o custo aparecer.' }
-  return { error: r.erro ?? 'O Omie recusou o lançamento. Ele fica pendente e o sistema tenta de novo.' }
-}
-
 /** Entrada no Omie (ENT) pelo custo médio atual do produto (lido na hora). */
 export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: number; quantidade: number | string; obs?: string }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#entradaOmie', entradaOmie, [dados]); if (__d) return __d as never
@@ -58,7 +51,7 @@ export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: n
     motivo: dados.obs?.trim() || 'Entrada pela tela de estoque',
   })
   atualizarTelas()
-  return respostaDoAjuste(r, ctx.loja.is_test ? 'Loja de teste: lançamento simulado, nada foi enviado ao Omie.' : 'Lançada no Omie.')
+  return respostaDoLancamento(r as { error?: string; status?: string; erro?: string; id?: number }, ctx.loja.is_test ? 'Loja de teste: lançamento simulado, nada foi enviado ao Omie.' : 'Lançada no Omie.')
 }
 
 /**
@@ -91,7 +84,7 @@ export async function ajusteOmie(dados: {
   })
   atualizarTelas()
   const feito = `${d.tipo === 'ENT' ? 'Entrada' : 'Saída'} de ${d.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}${contagem ? ` (saldo no Omie era ${saldoAtual.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})` : ''}`
-  return respostaDoAjuste(r, ctx.loja.is_test ? `Loja de teste: ${feito} simulada, nada foi enviado ao Omie.` : `${feito} lançada no Omie.`)
+  return respostaDoLancamento(r as { error?: string; status?: string; erro?: string; id?: number }, ctx.loja.is_test ? `Loja de teste: ${feito} simulada, nada foi enviado ao Omie.` : `${feito} lançada no Omie.`)
 }
 
 /**
@@ -121,8 +114,9 @@ export async function transferirOmie(dados: { codigoProduto: number; de: number;
     await finishTransferencia(id)
     return { ok: true, aviso: ctx.loja.is_test ? 'Loja de teste: transferência simulada, nada foi enviado ao Omie.' : 'Transferida no Omie.' }
   }
-  if (envio.status === 'Sem CMC') return { ok: true, aviso: `Transferência ${id} gravada, mas o produto está sem custo médio no Omie: fica pendente e o sistema reenvia sozinho.` }
-  return { error: `Transferência ${id} gravada, mas o Omie não confirmou (${envio.descricao_status ?? envio.error ?? envio.status}). Ela fica pendente e o sistema tenta de novo; acompanhe em Transferências.` }
+  // Gravada: o item fica pendente e o cron reenvia. Devolver erro levaria a pessoa a transferir de novo (duplicaria).
+  if (envio.status === 'Sem CMC') return { ok: true, alerta: true, aviso: `Transferência ${id} gravada, mas o produto está sem custo médio no Omie: fica pendente e o sistema reenvia sozinho. NÃO transfira de novo.` }
+  return { ok: true, alerta: true, aviso: `Transferência ${id} gravada, mas o Omie não confirmou (${envio.descricao_status ?? envio.error ?? envio.status}). O sistema tenta de novo: NÃO transfira de novo; acompanhe em Transferências.` }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -198,9 +192,11 @@ async function relancar(loja: LojaEscrita, c: CorrecaoRow, procurarAntes: boolea
   }
   if (procurarAntes && !loja.is_test) {
     try {
-      const { ajustes } = await listarAjustesDoDia(loja, dataBR)
+      const { ajustes, completa } = await listarAjustesDoDia(loja, dataBR)
       const ja = ajustes.find((a) => a.cod_int_ajuste === codIntCorrecao(c.id))
-      if (ja) return finalizarCorrecao(loja, c, Number(ja.id_ajuste), obs)
+      const passo = decidirRelancamento({ achado: !!ja, completa })
+      if (passo === 'finalizar') return finalizarCorrecao(loja, c, Number(ja!.id_ajuste), obs)
+      if (passo === 'parar') return pendente(`o dia tem ajustes demais para conferir se ${codIntCorrecao(c.id)} já entrou: confira no Omie antes de refazer`)
     } catch (e) {
       return pendente(`não deu para conferir no Omie se já foi relançado: ${msgDe(e)}`)
     }
@@ -295,10 +291,14 @@ export async function corrigirCustoAjuste(input: {
     await dormir(1000)
   }
 
-  const excluiu = await excluirAjusteEstoque(loja, idAntigo)
-  if (!excluiu) {
-    await marcar(corr.id, 'falha_exclusao', { erro: 'ExcluirAjusteEstoque falhou' })
-    return { error: 'O Omie não excluiu o ajuste (veja a saúde da integração). Nada foi mudado.' }
+  const exc = await excluirAjusteDetalhado(loja, idAntigo)
+  if (!exc.ok) {
+    const st = statusAposExclusao(exc.msg)
+    await marcar(corr.id, st, { erro: `ExcluirAjusteEstoque: ${exc.msg}`.slice(0, 1000) })
+    telasDeAjuste()
+    return st === 'falha_exclusao'
+      ? { error: `O Omie recusou excluir o ajuste (${exc.msg}). Nada foi mudado.` }
+      : { error: `O Omie não respondeu à exclusão (${exc.msg}): o ajuste pode ter sido excluído. A correção ficou em "Correções pendentes"; em 10 minutos use Refazer (ele confere no Omie antes de relançar).`, pendente: true }
   }
   await marcar(corr.id, 'relancando')
   if (!loja.is_test) await dormir(1000)

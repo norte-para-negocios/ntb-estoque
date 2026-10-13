@@ -168,3 +168,39 @@ export function isoParaBR(iso: string): string {
   const [a, m, d] = iso.slice(0, 10).split('-')
   return `${d}/${m}/${a}`
 }
+
+/**
+ * Refazer de uma correção: o CUSTO-<id> já está no Omie → só finalizar; não está e a lista do dia veio inteira →
+ * incluir; não achou mas a lista veio cortada → parar (o relançado pode estar nas páginas não lidas: incluir
+ * duplicaria).
+ */
+export function decidirRelancamento(r: { achado: boolean; completa: boolean }): 'finalizar' | 'incluir' | 'parar' {
+  if (r.achado) return 'finalizar'
+  return r.completa ? 'incluir' : 'parar'
+}
+
+/**
+ * Depois de um ExcluirAjusteEstoque que deu erro: sem resposta (timeout, rede, HTTP 5xx) o Omie pode ter excluído →
+ * 'excluindo' (o Refazer confere no Omie depois); recusa de fato (bloqueio, regra do Omie) → 'falha_exclusao'.
+ */
+export function statusAposExclusao(msg: string): 'excluindo' | 'falha_exclusao' {
+  return /n.o respondeu|TIMEOUT|fetch failed|network|ECONN|socket|ETIMEDOUT|EAI_AGAIN|HTTP 5\d\d/i.test(msg) ? 'excluindo' : 'falha_exclusao'
+}
+
+export type RespostaLancamento = { ok: true; aviso?: string; alerta?: boolean } | { error: string }
+
+/**
+ * Resultado do criarAjusteManual (Omie) → resposta da tela. Com a linha já gravada (id), 'Sem CMC' e 'Erro' NÃO são
+ * "não salvou": o cron reenvia a linha, e lançar de novo pela tela duplicaria no Omie.
+ */
+export function respostaDoLancamento(r: { error?: string; status?: string; erro?: string; id?: number }, sucesso: string): RespostaLancamento {
+  if (r.error) return { error: r.error }
+  if (r.status === 'Concluido') return { ok: true, aviso: sucesso }
+  if (r.id != null && r.status === 'Sem CMC') {
+    return { ok: true, alerta: true, aviso: 'Gravado, mas o produto está sem custo médio no Omie: o lançamento fica pendente e o sistema reenvia sozinho quando o custo aparecer. NÃO lance de novo.' }
+  }
+  if (r.id != null) {
+    return { ok: true, alerta: true, aviso: `Gravado, mas o Omie não confirmou (${r.erro ?? r.status ?? 'sem resposta'}). O sistema reenvia sozinho: NÃO lance de novo; acompanhe em Movimentações.` }
+  }
+  return { error: r.erro ?? 'O Omie recusou o lançamento.' }
+}

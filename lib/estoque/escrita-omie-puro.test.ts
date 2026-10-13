@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   bloqueioDeEscrita, deltaDoAjuste, mesDoAjusteFechado, impactoCorrecaoCusto, validarCustoNovo, motivoNaoCorrige,
   codIntCorrecao, proximaEtapaCorrecao, montarTrocas, conferirAntesDaTroca, conferirTroca, intMalhaDaTroca, ehLimiteOmie,
-  selecionarLoteOPs, saldoNoLocalDaOP, isoParaBR, type AjusteParaCorrigir,
+  selecionarLoteOPs, saldoNoLocalDaOP, isoParaBR, decidirRelancamento, statusAposExclusao, respostaDoLancamento, type AjusteParaCorrigir,
 } from './escrita-omie-puro.ts'
 
 test('bloqueioDeEscrita: loja 4 e loja fora do modo omie são bloqueadas', () => {
@@ -173,4 +173,30 @@ test('saldoNoLocalDaOP: saldo do local; sem local = total; local sem saldo = 0',
 test('isoParaBR', () => {
   assert.equal(isoParaBR('2026-09-05'), '05/09/2026')
   assert.equal(isoParaBR('2026-09-05T00:00:00Z'), '05/09/2026')
+})
+
+test('decidirRelancamento: só inclui de novo quando a lista do dia veio completa e sem o CUSTO-<id>', () => {
+  assert.equal(decidirRelancamento({ achado: true, completa: true }), 'finalizar')
+  assert.equal(decidirRelancamento({ achado: true, completa: false }), 'finalizar')
+  assert.equal(decidirRelancamento({ achado: false, completa: true }), 'incluir')
+  assert.equal(decidirRelancamento({ achado: false, completa: false }), 'parar')
+})
+
+test('statusAposExclusao: sem resposta do Omie = incerto (excluindo, Refazer confere); recusa = falha_exclusao', () => {
+  assert.equal(statusAposExclusao('Omie não respondeu em 30s (ExcluirAjusteEstoque). Tente novamente.'), 'excluindo')
+  assert.equal(statusAposExclusao('fetch failed'), 'excluindo')
+  assert.equal(statusAposExclusao('read ECONNRESET'), 'excluindo')
+  assert.equal(statusAposExclusao('Omie HTTP 502'), 'excluindo')
+  assert.equal(statusAposExclusao('API do Omie bloqueada para esta loja por consumo indevido'), 'falha_exclusao')
+  assert.equal(statusAposExclusao('Período fechado para movimentação de estoque'), 'falha_exclusao')
+})
+
+test('respostaDoLancamento: Erro com linha gravada NÃO convida a lançar de novo', () => {
+  assert.deepEqual(respostaDoLancamento({ status: 'Concluido', id: 1 }, 'ok'), { ok: true, aviso: 'ok' })
+  const sem = respostaDoLancamento({ status: 'Sem CMC', id: 1 }, 'ok')
+  assert.ok('ok' in sem && sem.alerta === true)
+  const erro = respostaDoLancamento({ status: 'Erro', id: 7, erro: 'Omie não respondeu em 30s' }, 'ok')
+  assert.ok('ok' in erro && erro.alerta === true && /NÃO lance de novo/.test(erro.aviso ?? ''))
+  assert.deepEqual(respostaDoLancamento({ error: 'Sem permissao' }, 'ok'), { error: 'Sem permissao' })
+  assert.ok('error' in respostaDoLancamento({ status: 'Erro' }, 'ok')) // sem linha gravada: erro de verdade
 })
