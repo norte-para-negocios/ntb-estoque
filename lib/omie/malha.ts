@@ -17,6 +17,12 @@ export interface EstruturaItem {
   percPerdaProdMalha: number
   pesoLiqProdMalha: number
   pesoBrutoProdMalha: number
+  // Autor/data da linha da ficha (lidos pelo cron sync-fichas). O local de consumo normalmente NÃO vem na leitura.
+  dIncProdMalha?: string
+  uIncProdMalha?: string
+  dAltProdMalha?: string
+  uAltProdMalha?: string
+  codigo_local_estoque?: number | null
 }
 
 export interface EstruturaIdent {
@@ -110,7 +116,8 @@ export async function excluirEstrutura(loja: LojaOmie, idProduto: number, idMalh
  */
 export async function consultarEstrutura(
   loja: LojaOmie,
-  idProduto: number
+  idProduto: number,
+  opcoes: { semRepetir?: boolean } = {}
 ): Promise<EstruturaResp | null> {
   try {
     const res = await omieRequest<EstruturaResp>({
@@ -121,6 +128,7 @@ export async function consultarEstrutura(
       endpoint: 'v1/geral/malha',
       call: 'ConsultarEstrutura',
       data: { idProduto },
+      semRepetir: opcoes.semRepetir,
     })
     if (!res?.ident && !res?.itens?.length) return null
     return res
