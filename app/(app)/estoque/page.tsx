@@ -13,6 +13,8 @@ import { BarraSaldo, fmtBRL, Indicador, Saldo, SituacaoPill } from '@/components
 import { FiltrosEstoque } from '@/components/estoque-proprio/FiltrosEstoque'
 import { ModalEntrada } from '@/components/estoque-proprio/Acoes'
 import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from './dados'
+import { carregarEstoqueOmie } from './dados-omie'
+import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
 
 const POR_PAGINA = 50
@@ -27,12 +29,17 @@ function semAcento(s: string) {
 
 export default async function EstoquePage({ searchParams }: { searchParams: Promise<SP> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  const modo = await modoDaLoja(lojaId)
+  if (modo !== 'proprio' && modo !== 'omie') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
-  const podeMovimentar = await requirePermissao(lojaId, 'Movimentacoes - Criar')
+  // Loja Omie: a tela é o espelho do Omie, só leitura (as escritas seguem pelos fluxos Omie: Movimentações, Transferência, Inventário).
+  const ehOmie = modo === 'omie'
+  const podeMovimentar = !ehOmie && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+  const podeAtualizar = ehOmie && (await requirePermissao(lojaId, 'Produtos - Sincronizar'))
 
   const sp = await searchParams
-  const visao = await carregarEstoque(lojaId)
+  const espelho = ehOmie ? await carregarEstoqueOmie(lojaId) : null
+  const visao = espelho ?? (await carregarEstoque(lojaId))
   const localSel = sp.local ? Number(sp.local) : null
 
   // Com um local escolhido, cada produto passa a mostrar o saldo DAQUELE local.
@@ -119,7 +126,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         </div>
       ),
     },
-    { label: 'Custo médio', alinhar: 'right', ocultarMobile: true, render: (l) => <span className="num">{l.cmc ? formatCustoUnit(l.cmc) : '-'}</span> },
+    { label: 'Custo médio', alinhar: 'right', ocultarMobile: true, render: (l) => l.custoSuspeito ? <span className="text-warn">suspeito</span> : <span className="num">{l.cmc ? formatCustoUnit(l.cmc) : '-'}</span> },
     { label: 'Valor', alinhar: 'right', sort: 'valor', render: (l) => <span className={`num ${l.valor < 0 ? 'text-err' : ''}`}>{fmtBRL(l.valor)}</span> },
     { label: 'Situação', sort: 'situacao', render: (l) => <SituacaoPill situacao={l.situacao} /> },
   ]
@@ -129,8 +136,10 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Estoque" description="Saldo, custo e situação de cada produto, em cada local" />
+        <PageHeader title="Estoque" description={ehOmie ? 'Saldo, custo e situação de cada produto, em cada local (espelho do Omie)' : 'Saldo, custo e situação de cada produto, em cada local'} />
       </ListaHeader>
+
+      {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Boxes} rotulo="Produtos" valor={String(totalSkus)} dica={localSel ? 'neste local' : 'cadastrados'} />
@@ -144,7 +153,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
           <div className="flex items-center gap-2 text-[14px] font-semibold text-err">
             <AlertTriangle className="size-4" /> Itens com saldo negativo
           </div>
-          <p className="mt-0.5 text-[12px] text-text-muted">Venderam antes da entrada ser lançada. Lance a compra ou faça um ajuste para normalizar.</p>
+          <p className="mt-0.5 text-[12px] text-text-muted">{ehOmie ? 'Saldo negativo no Omie. Abra o produto e confira os movimentos para ver a origem.' : 'Venderam antes da entrada ser lançada. Lance a compra ou faça um ajuste para normalizar.'}</p>
           <ul className="mt-3 divide-y divide-[var(--border)]">
             {negativosTop.map((l) => (
               <li key={l.codigoProduto} className="flex items-center justify-between gap-3 py-2 text-[13px]">
@@ -166,6 +175,15 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         locais={locaisAtivos.map((l) => ({ value: String(l.codigoLocal), label: l.descricao }))}
       />
 
+      {ehOmie && (
+        <div className="flex flex-wrap gap-1.5 text-[12px] text-text-muted">
+          Lançar no Omie:
+          <Link href="/movimentacoes" className="rounded-full bg-surface-2 px-2.5 py-0.5 hover:text-text">Movimentações</Link>
+          <Link href="/transferencia" className="rounded-full bg-surface-2 px-2.5 py-0.5 hover:text-text">Transferência</Link>
+          <Link href="/inventario" className="rounded-full bg-surface-2 px-2.5 py-0.5 hover:text-text">Inventário</Link>
+        </div>
+      )}
+
       {locaisAtivos.length > 0 && (
         <div className="flex flex-wrap gap-1.5 text-[12px] text-text-muted">
           Locais:
@@ -183,7 +201,9 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
             locais={locaisAtivos.map((x) => ({ codigoLocal: x.codigoLocal, descricao: x.descricao }))}
             saldos={l.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))} localInicial={localSel ?? undefined} />
         ) : undefined}
-        vazio={<EmptyState icon={Boxes} title={visao.linhas.length ? 'Nenhum produto neste filtro' : 'Nenhum produto cadastrado ainda'} hint={visao.linhas.length ? 'Ajuste os filtros para ver mais itens.' : 'Cadastre produtos para começar a controlar o estoque.'} />}
+        vazio={espelho && !espelho.atualizadoEm
+          ? <EmptyState icon={Boxes} title="Sem leitura do Omie ainda" hint="Clique em Atualizar do Omie para trazer o saldo." />
+          : <EmptyState icon={Boxes} title={visao.linhas.length ? 'Nenhum produto neste filtro' : 'Nenhum produto cadastrado ainda'} hint={visao.linhas.length ? 'Ajuste os filtros para ver mais itens.' : 'Cadastre produtos para começar a controlar o estoque.'} />}
       />
 
       <Paginacao basePath="/estoque" page={page} temProxima={page * POR_PAGINA < filtradas.length} total={filtradas.length} porPagina={POR_PAGINA} />

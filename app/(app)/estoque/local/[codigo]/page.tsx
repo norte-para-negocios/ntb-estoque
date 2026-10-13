@@ -8,21 +8,27 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { BarraSaldo, fmtBRL, Indicador, Saldo, SituacaoPill } from '@/components/estoque-proprio/Apresentacao'
 import { Kardex } from '@/components/estoque-proprio/Kardex'
 import { carregarEstoque, carregarMovimentos, situacaoDe } from '../../dados'
+import { carregarEstoqueOmie } from '../../dados-omie'
+import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 
 export default async function LocalEstoqueProprioPage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  const modo = await modoDaLoja(lojaId)
+  if (modo !== 'proprio' && modo !== 'omie') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
-  const podeMovimentar = await requirePermissao(lojaId, 'Movimentacoes - Criar')
+  const ehOmie = modo === 'omie'
+  const podeMovimentar = !ehOmie && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
 
   const { codigo } = await params
   const cod = Number(codigo)
   if (!Number.isFinite(cod)) notFound()
 
-  const visao = await carregarEstoque(lojaId)
+  const espelho = ehOmie ? await carregarEstoqueOmie(lojaId) : null
+  const visao = espelho ?? (await carregarEstoque(lojaId))
   const local = visao.locais.find((l) => l.codigoLocal === cod)
   if (!local) notFound()
-  const movimentos = await carregarMovimentos(lojaId, { codigoLocal: cod }, 50)
+  // estoque_movimentos é só do modo próprio; na loja Omie os movimentos ficam na página do produto.
+  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoLocal: cod }, 50)
 
   const itens = visao.linhas.flatMap((l) => {
     const s = l.locais.find((x) => x.codigoLocal === cod)
@@ -35,7 +41,8 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
 
   return (
     <div className="space-y-5">
-      <PageHeader voltarHref="/estoque" title={local.descricao} description="Itens, valor e movimentos deste local de estoque" />
+      <PageHeader voltarHref="/estoque" title={local.descricao} description={ehOmie ? 'Itens e valor deste local de estoque (espelho do Omie)' : 'Itens, valor e movimentos deste local de estoque'} />
+      {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura.filter((n) => n === local.descricao)} custoSuspeito={0} podeAtualizar={false} />}
 
       <div className="grid grid-cols-3 gap-3">
         <Indicador icon={Boxes} rotulo="Itens com saldo" valor={String(itens.filter((i) => i.saldoLocal !== 0).length)} />
@@ -46,7 +53,7 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
       <section aria-label="Itens do local">
         <h2 className="mb-2 text-[15px] font-semibold text-text">Itens</h2>
         {itens.length === 0 ? (
-          <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Boxes} title="Nada neste local ainda" hint="Registre uma entrada ou transfira de outro local." /></div>
+          <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Boxes} title="Nada neste local ainda" hint={ehOmie ? 'O Omie não tem saldo neste local na última leitura.' : 'Registre uma entrada ou transfira de outro local.'} /></div>
         ) : (
           <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--r-lg)] bg-surface u-card">
             {itens.map((i) => (
@@ -67,10 +74,14 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
         )}
       </section>
 
-      <section aria-label="Movimentos recentes">
-        <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos recentes</h2>
-        <Kardex movimentos={movimentos} mostrarProduto podeEstornar={podeMovimentar} />
-      </section>
+      {ehOmie ? (
+        <p className="text-[13px] text-text-muted">Os movimentos do Omie ficam na página de cada produto.</p>
+      ) : (
+        <section aria-label="Movimentos recentes">
+          <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos recentes</h2>
+          <Kardex movimentos={movimentos} mostrarProduto podeEstornar={podeMovimentar} />
+        </section>
+      )}
     </div>
   )
 }

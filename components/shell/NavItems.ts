@@ -45,11 +45,13 @@ export type NavItem = {
   superAdmin?: boolean
   // soEstoqueProprio: so aparece quando a loja atual usa o estoque proprio (modo_estoque='proprio').
   soEstoqueProprio?: boolean
+  // comEstoque: aparece em loja de estoque proprio OU Omie (espelho); some so em modo 'nenhum'.
+  comEstoque?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/home', label: 'Início', icon: LayoutDashboard, group: 'Operação' },
-  { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', soEstoqueProprio: true },
+  { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', comEstoque: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },

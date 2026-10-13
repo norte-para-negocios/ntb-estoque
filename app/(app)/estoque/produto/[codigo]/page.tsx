@@ -7,22 +7,27 @@ import { BarraSaldo, fmtBRL, fmtQtd, Indicador, Saldo, SituacaoPill } from '@/co
 import { AcoesProduto } from '@/components/estoque-proprio/Acoes'
 import { Kardex } from '@/components/estoque-proprio/Kardex'
 import { carregarEstoque, carregarMovimentos, situacaoDe, TIPOS_ITEM } from '../../dados'
+import { carregarEstoqueOmie } from '../../dados-omie'
+import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
 
 export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  const modo = await modoDaLoja(lojaId)
+  if (modo !== 'proprio' && modo !== 'omie') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
-  const podeMovimentar = await requirePermissao(lojaId, 'Movimentacoes - Criar')
+  const ehOmie = modo === 'omie'
+  const podeMovimentar = !ehOmie && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
 
   const { codigo } = await params
   const cod = Number(codigo)
   if (!Number.isFinite(cod)) notFound()
 
-  const visao = await carregarEstoque(lojaId)
+  const espelho = ehOmie ? await carregarEstoqueOmie(lojaId) : null
+  const visao = espelho ?? (await carregarEstoque(lojaId))
   const p = visao.linhas.find((l) => l.codigoProduto === cod)
   if (!p) notFound()
-  const movimentos = await carregarMovimentos(lojaId, { codigoProduto: cod }, 100)
+  const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod }, 100)
 
   const locaisAtivos = visao.locais.filter((l) => !l.inativo)
   const saldos = p.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))
@@ -49,6 +54,8 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         ) : undefined}
       />
 
+      {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} custoSuspeito={p.custoSuspeito ? 1 : 0} podeAtualizar={false} />}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Layers} rotulo="Saldo total" valor={`${fmtQtd(p.saldo)} ${p.unidade}`} tom={p.situacao === 'negativo' ? 'erro' : p.situacao === 'baixo' ? 'aviso' : undefined} dica={p.situacao === 'negativo' ? 'Saldo negativo: lance a entrada' : undefined} />
         <Indicador icon={Coins} rotulo="Custo médio" valor={p.cmc ? formatCustoUnit(p.cmc) : '-'} dica={`por ${p.unidade}`} />
@@ -74,11 +81,17 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         </div>
       </section>
 
-      <section aria-label="Kardex">
-        <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos (kardex)</h2>
-        <Kardex movimentos={movimentos} unidade={p.unidade} podeEstornar={podeMovimentar} />
-        <p className="mt-2 text-[12px] text-text-muted">* entrada sem custo informado: o custo médio não foi alterado.</p>
-      </section>
+      {ehOmie ? (
+        <section aria-label="Movimentos no Omie">
+          <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos no Omie</h2>
+        </section>
+      ) : (
+        <section aria-label="Kardex">
+          <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos (kardex)</h2>
+          <Kardex movimentos={movimentos} unidade={p.unidade} podeEstornar={podeMovimentar} />
+          <p className="mt-2 text-[12px] text-text-muted">* entrada sem custo informado: o custo médio não foi alterado.</p>
+        </section>
+      )}
     </div>
   )
 }

@@ -40,8 +40,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: lojas } = await lojasQuery
 
-  // Item "Estoque" do menu: só para loja em modo estoque próprio (lojas Omie não veem nada novo).
-  const estoqueProprio = profile.current_loja_id != null && (await modoDaLoja(profile.current_loja_id)) === 'proprio'
+  // Itens soEstoqueProprio do menu: só para loja em modo estoque próprio.
+  const modoEstoque = profile.current_loja_id != null ? await modoDaLoja(profile.current_loja_id) : null
+  const estoqueProprio = modoEstoque === 'proprio'
+  // Tela de Estoque vale para loja propria e para loja Omie (espelho); some so em 'nenhum'.
+  const temEstoque = modoEstoque === 'proprio' || modoEstoque === 'omie'
 
   return (
     <AppShell
@@ -50,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       podeGerirUsuarios={podeGerirUsuarios}
       rotasVisiveis={rotasVisiveis}
       estoqueProprio={estoqueProprio}
+      temEstoque={temEstoque}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >
