@@ -128,8 +128,9 @@ export default async function QuemMexeuPage({ searchParams }: { searchParams: Pr
   const sel = sp.pessoa ? chavePessoa(sp.pessoa) : null
   const pessoaSel = pessoas.find((p) => p.chave === sel)
   const dias = linhaDoTempo(eventos, sel)
-  let restantes = MAX_EVENTOS
-  const diasCortados = dias.map((d) => { const e = d.eventos.slice(0, Math.max(0, restantes)); restantes -= e.length; return { ...d, eventos: e } }).filter((d) => d.eventos.length)
+  // Corta nos MAX_EVENTOS mais recentes (os dias já vêm do mais novo para o mais velho).
+  const antesDoDia = dias.reduce<number[]>((acc, d, i) => [...acc, i === 0 ? 0 : acc[i - 1] + dias[i - 1].eventos.length], [])
+  const diasCortados = dias.map((d, i) => ({ ...d, eventos: d.eventos.slice(0, Math.max(0, MAX_EVENTOS - antesDoDia[i])) })).filter((d) => d.eventos.length)
   const totalTimeline = dias.reduce((a, d) => a + d.eventos.length, 0)
   const hrefPessoa = (nome: string | null) => {
     const p = new URLSearchParams()
