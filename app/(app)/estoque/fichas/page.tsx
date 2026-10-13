@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { AlertTriangle, BookOpen } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
 import { agruparFichas, ondeEUsado, type LinhaFichaTela } from '@/lib/estoque/fichas-tela-puro'
@@ -15,12 +15,14 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { carregarLocais, carregarProdutosMin, type ProdutoMin } from '../dados-produtos'
 import { fmtDataBR } from '../dados-comum'
+import { LOJA_BLOQUEADA, montarTrocas } from '@/lib/estoque/escrita-omie-puro'
+import { ConfirmarTroca, FormTrocaInsumo, type LinhaPrevia } from '@/components/estoque-proprio/TrocarInsumo'
 
 const POR_PAGINA = 30
 const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 4 })
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-type SP = { q?: string; insumo?: string; page?: string }
+type SP = { q?: string; insumo?: string; page?: string; trocar?: string; troca_de?: string; troca_para?: string; troca_qtd?: string }
 type CacheRow = {
   codigo_produto: number; codigo_produto_insumo: number; descricao_insumo: string | null; quantidade: number; percentual_perda: number | null
   unidade: string | null; codigo_local_estoque?: number | null; local_fonte?: string | null; incluido_por?: string | null
@@ -64,6 +66,48 @@ async function fichasProprio(lojaId: number): Promise<{ linhas: LinhaFichaTela[]
   return { linhas, avisos: ['No estoque próprio o local de consumo é escolhido na produção, não na ficha. Quantidades por 1 unidade do prato (já com o fator de correção).'], lidas: null }
 }
 
+/**
+ * Dados da troca de insumo em massa ("nosso Omie" Fase 4). Loja de teste lê as fichas da loja real de origem (só
+ * leitura; a loja de teste não tem fichas lidas e a escrita lá é simulada), por isso o service client.
+ */
+async function dadosTroca(lojaFicha: number, sp: SP) {
+  const svc = createServiceClient()
+  type C = { codigo_produto: number; codigo_produto_insumo: number; quantidade: number; percentual_perda: number | null }
+  type P = { codigo_produto: number; codigo: string | null; descricao: string | null; unidade: string | null; inativo: boolean | null }
+  const [cache, prods] = await Promise.all([
+    buscarTodasLinhas<C>((from, to) => svc.from('estrutura_produto_cache').select('id, codigo_produto, codigo_produto_insumo, quantidade, percentual_perda')
+      .eq('loja_id', lojaFicha).order('id').range(from, to)),
+    buscarTodasLinhas<P>((from, to) => svc.from('produtos').select('id, codigo_produto, codigo, descricao, unidade, inativo')
+      .eq('loja_id', lojaFicha).order('id').range(from, to)),
+  ])
+  const prod = new Map(prods.map((p) => [Number(p.codigo_produto), p]))
+  const rotulo = (c: number) => { const p = prod.get(c); return p ? `${p.descricao ?? c} (${p.codigo ?? c})` : `Produto ${c}` }
+  const insumos = [...new Set(cache.map((c) => Number(c.codigo_produto_insumo)))].map((c) => ({ value: String(c), label: rotulo(c) }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+  const produtos = prods.filter((p) => !p.inativo).map((p) => ({ value: String(p.codigo_produto), label: rotulo(Number(p.codigo_produto)) }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+  const de = Number(sp.troca_de), para = Number(sp.troca_para)
+  const qtdTxt = (sp.troca_qtd ?? '').trim().replace(',', '.')
+  const fixa = qtdTxt ? Number(qtdTxt) : null
+  let previa: { de: number; para: number; fixa: number | null; linhas: LinhaPrevia[] } | null = null
+  let aviso: string | null = null
+  if (sp.troca_de && sp.troca_para) {
+    if (!(de > 0 && para > 0) || de === para) aviso = 'Escolha dois insumos diferentes.'
+    else if (fixa != null && !(Number.isFinite(fixa) && fixa > 0)) aviso = 'Quantidade inválida.'
+    else if (!prod.get(para) || prod.get(para)!.inativo) aviso = 'O insumo novo não está ativo nesta loja.'
+    else {
+      const trocas = montarTrocas(cache.map((c) => ({ produto: Number(c.codigo_produto), insumo: Number(c.codigo_produto_insumo), quantidade: Number(c.quantidade), perda: Number(c.percentual_perda ?? 0) })), de, para, fixa)
+      previa = {
+        de, para, fixa,
+        linhas: trocas.map((t) => ({ produto: t.produto, nome: rotulo(t.produto), atual: t.quantidadeAtual, nova: t.quantidadeNova, unidade: prod.get(de)?.unidade ?? '', jaTemNovo: t.jaTemNovo }))
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+      }
+      if (!trocas.length) aviso = 'Nenhuma ficha lida usa este insumo.'
+    }
+  }
+  return { insumos, produtos, previa, aviso, rotulo }
+}
+
 export default async function FichasPage({ searchParams }: { searchParams: Promise<SP> }) {
   const lojaId = await getCurrentLojaId()
   const modo = await modoDaLoja(lojaId)
@@ -77,6 +121,32 @@ export default async function FichasPage({ searchParams }: { searchParams: Promi
     carregarLocais(lojaId),
   ])
   const nome = (c: number) => produtos.get(c)?.descricao ?? `Produto ${c}`
+
+  // Trocar insumo em massa (só loja Omie, fora a loja 4, com "Fichas - Trocar insumo").
+  const podeTrocar = modo === 'omie' && lojaId !== LOJA_BLOQUEADA && (await requirePermissao(lojaId, 'Fichas - Trocar insumo'))
+  const abrirTroca = podeTrocar && !!(sp.trocar || sp.troca_de)
+  let troca: Awaited<ReturnType<typeof dadosTroca>> | null = null
+  let lojaTeste = false
+  if (abrirTroca) {
+    const { data: l } = await createServiceClient().from('lojas').select('id, is_test, loja_origem_id').eq('id', lojaId).maybeSingle<{ id: number; is_test: boolean; loja_origem_id: number | null }>()
+    lojaTeste = !!l?.is_test
+    troca = await dadosTroca(lojaTeste && l?.loja_origem_id ? l.loja_origem_id : lojaId, sp)
+  }
+  const secaoTroca = abrirTroca && troca ? (
+    <section className="space-y-3 rounded-[var(--r-lg)] bg-surface p-4 u-card" aria-label="Trocar insumo em massa">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[15px] font-semibold text-text">Trocar insumo em massa (no Omie)</h2>
+        <Link href="/estoque/fichas" className="text-[13px] text-text-muted hover:underline">Fechar</Link>
+      </div>
+      <FormTrocaInsumo key={JSON.stringify(sp)} insumos={troca.insumos} produtos={troca.produtos} de={sp.troca_de ?? ''} para={sp.troca_para ?? ''} qtd={sp.troca_qtd ?? ''} />
+      {troca.aviso && <p className="text-[13px] text-warn">{troca.aviso}</p>}
+      {troca.previa && troca.previa.linhas.length > 0 && (
+        <ConfirmarTroca key={`${troca.previa.de}-${troca.previa.para}-${troca.previa.fixa}`} de={troca.previa.de} para={troca.previa.para}
+          nomeDe={troca.rotulo(troca.previa.de)} nomePara={troca.rotulo(troca.previa.para)} quantidadeFixa={troca.previa.fixa}
+          linhas={troca.previa.linhas} simulado={lojaTeste} />
+      )}
+    </section>
+  ) : null
   const und = (c: number, fallback: string | null) => produtos.get(c)?.unidade ?? fallback ?? ''
   const candidatos = [...produtos.values()].filter((p: ProdutoMin) => !p.inativo && ['03', '04'].includes(p.tipo_item ?? '')).length
 
@@ -121,6 +191,9 @@ export default async function FichasPage({ searchParams }: { searchParams: Promi
         {avisos.map((a) => <p key={a} className="mt-0.5 flex items-start gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {a}</p>)}
         <p className="mt-0.5">Clique num insumo para ver em quais pratos ele é usado.</p>
       </div>
+
+      {secaoTroca}
+      {podeTrocar && !abrirTroca && <Link href="/estoque/fichas?trocar=1" className="inline-block text-[13px] font-medium text-brand hover:underline">Trocar um insumo em várias fichas (no Omie)</Link>}
 
       <Filtros key={JSON.stringify(sp)} basePath="/estoque/fichas" defaults={{ q: sp.q ?? '' }} campos={[{ tipo: 'texto', nome: 'q', label: 'Prato ou insumo' }]} />
 
