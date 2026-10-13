@@ -17,6 +17,7 @@ import { CustoProduto, type LinhaPrato } from '@/components/estoque-proprio/Cust
 import { custoDoPrato, entradasQueFormaramCusto, serieCustoMedio, type MovCusto } from '@/lib/estoque/custo-produto-puro'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
+import { LOJA_BLOQUEADA } from '@/lib/estoque/escrita-omie-puro'
 
 export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -24,7 +25,12 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
   if (modo !== 'proprio' && modo !== 'omie') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
   const ehOmie = modo === 'omie'
-  const podeMovimentar = !ehOmie && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+  // Loja Omie: escreve direto no Omie com "Estoque - Lancar no Omie" ("nosso Omie" Fase 4); loja 4 bloqueada nesta rodada.
+  const lojaBloqueada = ehOmie && lojaId === LOJA_BLOQUEADA
+  const podeLancar = (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+    && (!ehOmie || (!lojaBloqueada && (await requirePermissao(lojaId, 'Estoque - Lancar no Omie'))))
+  // Estorno pelo kardex só existe no ledger próprio.
+  const podeMovimentar = !ehOmie && podeLancar
 
   const { codigo } = await params
   const cod = Number(codigo)
@@ -133,8 +139,9 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         voltarHref="/estoque"
         title={p.descricao}
         description={`Código ${p.codigo} · ${p.familia}${p.tipoItem ? ` · ${TIPOS_ITEM[p.tipoItem] ?? p.tipoItem}` : ''} · unidade ${p.unidade}`}
-        actions={podeMovimentar ? (
+        actions={podeLancar && locaisAtivos.length ? (
           <AcoesProduto
+            destino={ehOmie ? 'omie' : 'proprio'}
             produto={{ codigoProduto: p.codigoProduto, codigo: p.codigo, descricao: p.descricao, unidade: p.unidade }}
             locais={locaisAtivos.map((l) => ({ codigoLocal: l.codigoLocal, descricao: l.descricao }))}
             saldos={saldos}
@@ -145,6 +152,8 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
       <EstoqueAtalhos atual="estoque" />
 
       {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} custoSuspeito={p.custoSuspeito ? 1 : 0} podeAtualizar={false} />}
+      {lojaBloqueada && <p className="rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-warn">A escrita no Omie por esta tela está bloqueada na loja 4 nesta rodada.</p>}
+      {ehOmie && podeLancar && <p className="text-[12px] text-text-muted">Entrada, ajuste e transferência vão direto para o Omie. O saldo desta tela é a última leitura do Omie: depois de lançar, clique em Atualizar do Omie na tela de Estoque para ver o saldo novo.</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Layers} rotulo="Saldo total" valor={`${fmtQtd(p.saldo)} ${p.unidade}`} tom={p.situacao === 'negativo' ? 'erro' : p.situacao === 'baixo' ? 'aviso' : undefined} dica={p.situacao === 'negativo' ? 'Saldo negativo: lance a entrada' : undefined} />

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { btnClass, btnLinhaClass, RotuloAcao, type BtnVariant } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { ajusteManual, definirMinimo, entradaManual, transferirEntreLocais } from '@/lib/actions/estoque-proprio'
+import { ajusteOmie, entradaOmie, transferirOmie } from '@/lib/actions/estoque-omie'
 
 export type ProdutoAcao = { codigoProduto: number; codigo: string; descricao: string; unidade: string }
 export type LocalAcao = { codigoLocal: number; descricao: string }
@@ -65,9 +66,11 @@ function Moldura({
   )
 }
 
-type Gatilho = { variante?: BtnVariant; compacto?: boolean }
+/** Para onde vai o lançamento: ledger próprio (padrão) ou Omie (loja de estoque Omie, "nosso Omie" Fase 4). */
+export type Destino = 'proprio' | 'omie'
+type Gatilho = { variante?: BtnVariant; compacto?: boolean; destino?: Destino }
 
-function botao(rotulo: string, icone: React.ReactNode, { variante = 'outline', compacto }: Gatilho) {
+function botao(rotulo: string, icone: React.ReactNode, { variante = 'outline', compacto }: Omit<Gatilho, 'destino'>) {
   return compacto ? (
     <button type="button" aria-label={rotulo} title={rotulo} className={btnLinhaClass(variante)}>
       {icone}<RotuloAcao>{rotulo}</RotuloAcao>
@@ -102,8 +105,10 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
   const [validade, setValidade] = useState('')
   const { pending, enviar } = useEnvio(() => { setOpen(false); setQtd(''); setCusto(''); setObs(''); setLote(''); setValidade('') })
 
+  const omie = g.destino === 'omie'
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
+    if (omie) return enviar(() => entradaOmie({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, obs }), 'Entrada registrada')
     enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs, lote, validade }), 'Entrada registrada')
   }
   return (
@@ -111,6 +116,11 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
       gatilho={botao('Entrada', <ArrowDownToLine className="size-4" />, { variante: 'primary', ...g })}
       rodape={<button type="button" className={btnClass('primary')} onClick={salvar} disabled={pending}>{pending && <Spinner />}Registrar entrada</button>}>
       <div className="space-y-2"><Label>Local</Label><SelectLocal locais={locais} value={local} onChange={setLocal} saldos={saldos} unidade={produto.unidade} /></div>
+      {omie ? (<>
+      <div className="space-y-2"><Label>Quantidade</Label>
+        <CampoComUnidade unidade={produto.unidade}><input inputMode="decimal" className={`${campo} pr-12`} value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="0" /></CampoComUnidade></div>
+      <p className="text-[12px] text-text-muted">Vai direto para o Omie pelo custo médio atual do produto (lido na hora), sem mudar o custo. Compra com custo novo entra pela nota fiscal.</p>
+      </>) : (<>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2"><Label>Quantidade</Label>
           <CampoComUnidade unidade={produto.unidade}><input inputMode="decimal" className={`${campo} pr-12`} value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="0" /></CampoComUnidade></div>
@@ -125,6 +135,7 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
           <input id="ent-val" type="date" className={campo} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
       </div>
       <p className="text-[12px] text-text-muted">Com validade, o lote aparece na tela Validade e sai primeiro nas vendas (o que vence antes sai antes).</p>
+      </>)}
       <div className="space-y-2"><Label>Observação (opcional)</Label><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: nota 1234, compra do mercado" /></div>
     </Moldura>
   )
@@ -141,8 +152,13 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
   const n = Number(valor.replace(',', '.'))
   const previa = valor !== '' && Number.isFinite(n) ? (modo === 'contagem' ? n - atual : n) : null
 
+  const omie = g.destino === 'omie'
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
+    if (omie) return enviar(() => ajusteOmie({
+      codigoProduto: produto.codigoProduto, codigoLocal: local, motivo,
+      ...(modo === 'contagem' ? { novoSaldo: valor } : { diferenca: valor }),
+    }), 'Ajuste registrado')
     enviar(() => ajusteManual({
       codigoProduto: produto.codigoProduto, codigoLocal: local, motivo,
       ...(modo === 'contagem' ? { novoSaldo: valor } : { diferenca: valor }),
@@ -170,6 +186,7 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
           </p>
         )}
       </div>
+      {omie && <p className="text-[12px] text-text-muted">No Omie, o saldo contado é comparado com o saldo do Omie lido na hora; a diferença vira uma entrada ou saída pelo custo médio.</p>}
       <div className="space-y-2"><Label>Motivo</Label><input className={campo} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: contagem do mês, quebra, perda" /></div>
     </Moldura>
   )
@@ -185,6 +202,7 @@ export function ModalTransferencia({ produto, locais, saldos, localInicial, ...g
 
   function salvar() {
     if (de === '' || para === '') return toast.error('Escolha origem e destino')
+    if (g.destino === 'omie') return enviar(() => transferirOmie({ codigoProduto: produto.codigoProduto, de, para, quantidade: qtd, obs }), 'Transferência registrada')
     enviar(() => transferirEntreLocais({ codigoProduto: produto.codigoProduto, de, para, quantidade: qtd, obs }), 'Transferência registrada')
   }
   return (
@@ -222,13 +240,13 @@ export function ModalMinimo({ produto, locais, saldos, localInicial, ...g }: { p
 }
 
 /** As quatro ações de um produto, na ordem de uso. */
-export function AcoesProduto(props: { produto: ProdutoAcao; locais: LocalAcao[]; saldos: SaldoAcao[]; localInicial?: number }) {
+export function AcoesProduto(props: { produto: ProdutoAcao; locais: LocalAcao[]; saldos: SaldoAcao[]; localInicial?: number; destino?: Destino }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <ModalEntrada {...props} />
       <ModalAjuste {...props} />
       <ModalTransferencia {...props} />
-      <ModalMinimo {...props} />
+      {props.destino !== 'omie' && <ModalMinimo {...props} />}
     </div>
   )
 }

@@ -21,6 +21,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
+import { LOJA_BLOQUEADA } from '@/lib/estoque/escrita-omie-puro'
 
 const POR_PAGINA = 50
 const ORDEM_SITUACAO: Record<Situacao, number> = { negativo: 0, baixo: 1, zerado: 2, ok: 3 }
@@ -37,9 +38,12 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
   const modo = await modoDaLoja(lojaId)
   if (modo !== 'proprio' && modo !== 'omie') notFound()
   if (!(await requirePermissao(lojaId, 'Movimentacoes'))) notFound()
-  // Loja Omie: a tela é o espelho do Omie, só leitura (as escritas seguem pelos fluxos Omie: Movimentações, Transferência, Inventário).
+  // Loja Omie: a tela é o espelho do Omie; com a permissão "Estoque - Lancar no Omie" ("nosso Omie" Fase 4) a entrada
+  // vai direto para o Omie (custo médio lido na hora). Loja 4 bloqueada nesta rodada.
   const ehOmie = modo === 'omie'
-  const podeMovimentar = !ehOmie && (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+  const lojaBloqueada = ehOmie && lojaId === LOJA_BLOQUEADA
+  const podeMovimentar = (await requirePermissao(lojaId, 'Movimentacoes - Criar'))
+    && (!ehOmie || (!lojaBloqueada && (await requirePermissao(lojaId, 'Estoque - Lancar no Omie'))))
   const podeAtualizar = ehOmie && (await requirePermissao(lojaId, 'Produtos - Sincronizar'))
 
   const sp = await searchParams
@@ -222,6 +226,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         locais={locaisAtivos.map((l) => ({ value: String(l.codigoLocal), label: l.descricao }))}
       />
 
+      {lojaBloqueada && <p className="rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-warn">A escrita no Omie por esta tela está bloqueada na loja 4 nesta rodada. Use Movimentações, Transferência e Inventário.</p>}
+
       {ehOmie && (
         <div className="flex flex-wrap gap-1.5 text-[12px] text-text-muted">
           Lançar no Omie:
@@ -243,8 +249,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         linhas={pagina}
         chaveLinha={(l) => l.codigoProduto}
         sortAtual={ord} dirAtual={dir} sortHref={sortHref}
-        acao={podeMovimentar && locaisAtivos.length ? (l) => (
-          <ModalEntrada compacto produto={{ codigoProduto: l.codigoProduto, codigo: l.codigo, descricao: l.descricao, unidade: l.unidade }}
+        acao={podeMovimentar && !dataSaldo && locaisAtivos.length ? (l) => (
+          <ModalEntrada compacto destino={ehOmie ? 'omie' : 'proprio'} produto={{ codigoProduto: l.codigoProduto, codigo: l.codigo, descricao: l.descricao, unidade: l.unidade }}
             locais={locaisAtivos.map((x) => ({ codigoLocal: x.codigoLocal, descricao: x.descricao }))}
             saldos={l.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))} localInicial={localSel ?? undefined} />
         ) : undefined}

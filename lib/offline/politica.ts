@@ -80,6 +80,12 @@ const local = [
 ]
 
 const depende = [
+  // "nosso Omie" Fase 4: escrevem no Omie (loja Omie) -> só com internet, sem internet entram na fila como criarAjusteManual.
+  // corrigirCustoAjuste, relancarCorrecaoCusto e trocarInsumoNoPrato ficam FORA da política de propósito: excluir/relançar
+  // com uma prévia velha, reenviado horas depois, é perigoso -> sem internet devolvem "precisa de internet".
+  'estoque-omie#ajusteOmie',
+  'estoque-omie#entradaOmie',
+  'estoque-omie#transferirOmie',
   'inventario#editQuantidadeInventarioItem',
   'inventario#enviarInventarioItem',
   'inventario#excluirInventario',
