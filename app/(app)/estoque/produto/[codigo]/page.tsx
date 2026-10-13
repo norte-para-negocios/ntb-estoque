@@ -13,6 +13,10 @@ import { KardexOmie, type LinhaKardexTela } from '@/components/estoque-proprio/K
 import { marcarSaltosCmc, type LinhaKardexOmie } from '@/lib/estoque/kardex-omie-puro'
 import { createClient } from '@/lib/supabase/server'
 import { formatCustoUnit } from '@/lib/num-br'
+import { CustoProduto, type LinhaPrato } from '@/components/estoque-proprio/CustoProduto'
+import { custoDoPrato, entradasQueFormaramCusto, serieCustoMedio, type MovCusto } from '@/lib/estoque/custo-produto-puro'
+import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
+import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 
 export default async function ProdutoEstoquePage({ params }: { params: Promise<{ codigo: string }> }) {
   const lojaId = await getCurrentLojaId()
@@ -41,7 +45,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
     const { data, error } = await supabase.from('kardex_omie')
       .select('loja_id, id_mov, n_cod_prod, codigo_local_estoque, data_mov, cod_origem, des_origem, tipo, quantidade, valor_unit, cmc_apos, saldo_apos, num_doc, num_pedido, id_ajuste, id_cupom, cancelado')
       .eq('loja_id', lojaId).eq('n_cod_prod', cod)
-      .order('data_mov', { ascending: false }).order('id_mov', { ascending: false }).limit(300)
+      .order('data_mov', { ascending: false }).order('id_mov', { ascending: false }).limit(1000)
     if (error) kardexAtivo = false
     const { data: carga } = await supabase.from('kardex_omie_carga').select('carregado_em, movimentos')
       .eq('loja_id', lojaId).eq('n_cod_prod', cod).maybeSingle()
@@ -54,6 +58,63 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
     })))
       .reverse()
       .map((m) => ({ ...m, local: nomeLocal.get(m.codigo_local_estoque) ?? String(m.codigo_local_estoque) }))
+  }
+
+  // Custo do produto: série do custo médio, entradas que formaram o custo e custo do prato pela ficha.
+  const nomeLocalCusto = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
+  let movsCusto: MovCusto[] = []
+  if (ehOmie) {
+    movsCusto = kardexOmie.map((m) => ({
+      data: m.data_mov, ordem: m.id_mov, local: m.codigo_local_estoque, quantidade: m.quantidade, valorUnit: m.valor_unit,
+      cmc: m.cmc_apos, saldo: m.saldo_apos, cancelado: m.cancelado, doc: m.num_pedido ?? m.num_doc, origem: m.des_origem || m.cod_origem || null,
+    }))
+  } else {
+    const supabase = await createClient()
+    const { data } = await supabase.from('estoque_movimentos')
+      .select('id, data_ref, codigo_local_estoque, quantidade, custo_unitario, cmc_apos, saldo_apos, origem, ref, reverses_id')
+      .eq('loja_id', lojaId).eq('codigo_produto', cod).order('id', { ascending: false }).limit(1000)
+    const rows = (data ?? []) as { id: number; data_ref: string; codigo_local_estoque: number; quantidade: number; custo_unitario: number | null; cmc_apos: number | null; saldo_apos: number; origem: string; ref: string; reverses_id: number | null }[]
+    const estornados = new Set(rows.map((r) => r.reverses_id).filter((x): x is number => x != null).map(Number))
+    movsCusto = rows.map((r) => ({
+      data: r.data_ref, ordem: Number(r.id), local: Number(r.codigo_local_estoque), quantidade: Number(r.quantidade),
+      valorUnit: r.custo_unitario == null ? null : Number(r.custo_unitario), cmc: r.cmc_apos == null ? null : Number(r.cmc_apos),
+      saldo: Number(r.saldo_apos), cancelado: estornados.has(Number(r.id)) || r.reverses_id != null, doc: r.ref, origem: r.origem,
+    }))
+  }
+  const ehPrato = p.tipoItem === '03' || p.tipoItem === '04'
+  const porCodigo = new Map(visao.linhas.map((l) => [l.codigoProduto, l]))
+  let prato: { total: number; linhas: LinhaPrato[]; semCusto: number } | null = null
+  let notaFicha: string | undefined
+  if (ehPrato) {
+    const supabase = await createClient()
+    let itens: { insumo: number; qtdPorUnidade: number; descricao: string | null; unidade: string | null }[] = []
+    if (ehOmie) {
+      const { data } = await supabase.from('estrutura_produto_cache')
+        .select('codigo_produto_insumo, descricao_insumo, quantidade, percentual_perda, unidade')
+        .eq('loja_id', lojaId).eq('codigo_produto', cod).order('id')
+      itens = (data ?? []).map((r) => ({
+        insumo: Number(r.codigo_produto_insumo), qtdPorUnidade: Number(r.quantidade) * (1 + Number(r.percentual_perda ?? 0) / 100),
+        descricao: r.descricao_insumo as string | null, unidade: r.unidade as string | null,
+      }))
+    } else {
+      const ficha = (await carregarFichasAtivas(supabase, lojaId).catch(() => new Map())).get(cod)
+      itens = (ficha?.itens ?? []).map((i: { codigoInsumo: number; quantidadeLiquida: number; fatorCorrecao: number; perdaPct: number }) => ({
+        insumo: i.codigoInsumo, qtdPorUnidade: (i.quantidadeLiquida * i.fatorCorrecao * (1 + i.perdaPct / 100)) / (ficha?.rendimento || 1),
+        descricao: null, unidade: null,
+      }))
+    }
+    if (itens.length) {
+      const r = custoDoPrato(itens.map((i) => ({ insumo: i.insumo, qtdPorUnidade: i.qtdPorUnidade, cmc: porCodigo.get(i.insumo)?.custoSuspeito ? null : (porCodigo.get(i.insumo)?.cmc ?? null) })))
+      prato = {
+        total: r.total, semCusto: r.semCusto.length,
+        linhas: r.linhas.map((l, k) => ({
+          ...l, descricao: porCodigo.get(l.insumo)?.descricao ?? itens[k].descricao ?? `Produto ${l.insumo}`,
+          unidade: porCodigo.get(l.insumo)?.unidade ?? itens[k].unidade ?? '',
+        })),
+      }
+    } else {
+      notaFicha = ehOmie ? 'Ficha técnica ainda não lida do Omie (ou o produto não tem ficha).' : 'Este produto não tem ficha técnica ativa.'
+    }
   }
 
   const locaisAtivos = visao.locais.filter((l) => !l.inativo)
@@ -80,6 +141,8 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
           />
         ) : undefined}
       />
+
+      <EstoqueAtalhos atual="estoque" />
 
       {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} custoSuspeito={p.custoSuspeito ? 1 : 0} podeAtualizar={false} />}
 
@@ -108,11 +171,13 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         </div>
       </section>
 
+      <CustoProduto series={serieCustoMedio(movsCusto)} entradas={entradasQueFormaramCusto(movsCusto)} nomeLocal={nomeLocalCusto} unidade={p.unidade} prato={prato} notaFicha={notaFicha} />
+
       {ehOmie ? (
         <section aria-label="Movimentos no Omie">
-          <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos no Omie</h2>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-[15px] font-semibold text-text">Movimentos no Omie</h2><a href={`/estoque/kardex?produto=${p.codigoProduto}&data_inicio=2026-07-01`} className="text-[13px] font-medium text-brand hover:underline">Ver todo o histórico no kardex da loja</a></div>
           {kardexAtivo
-            ? <KardexOmie codigoProduto={p.codigoProduto} unidade={p.unidade} linhas={kardexOmie} podeCarregar ultimaCarga={ultimaCarga} />
+            ? <KardexOmie codigoProduto={p.codigoProduto} unidade={p.unidade} linhas={kardexOmie.slice(0, 300)} podeCarregar ultimaCarga={ultimaCarga} />
             : <p className="text-[13px] text-text-muted">Kardex do Omie ainda não ativado.</p>}
         </section>
       ) : (
