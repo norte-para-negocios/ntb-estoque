@@ -70,6 +70,9 @@ alter table public.movimentos add column if not exists cod_int_ajuste text;  -- 
 
 -- Mesmo INSERT ... ON CONFLICT da 079 (índice único PARCIAL: .upsert() do supabase-js não serve), agora com as
 -- 3 colunas novas e só regravando quando algo mudou (o cron relê janelas de data e não pode encher a outbox).
+-- Linha criada pelo PRÓPRIO APP (movimentação manual/transferência: cod_int_ajuste 'MOV-<id da linha>' ou
+-- transferencia_id preenchido) só recebe autor/origem/código: quan assinado (SAI negativa), data com hora da Bahia,
+-- motivo e obs digitados pelo usuário nunca são sobrescritos pelo que o Omie devolve.
 create or replace function public.upsert_movimentos_ajuste(p_rows jsonb)
 returns void
 language plpgsql
@@ -77,6 +80,17 @@ security definer
 set search_path = public
 as $$
 begin
+  update movimentos m set
+    autor = x.autor, origem_ajuste = x.origem_ajuste, cod_int_ajuste = x.cod_int_ajuste, updated_at = now()
+  from (
+    select (r->>'loja_id')::bigint as loja_id, (r->>'id_ajuste')::bigint as id_ajuste,
+           r->>'autor' as autor, r->>'origem_ajuste' as origem_ajuste, r->>'cod_int_ajuste' as cod_int_ajuste
+    from jsonb_array_elements(p_rows) as r
+  ) x
+  where m.loja_id = x.loja_id and m.id_ajuste = x.id_ajuste
+    and (m.transferencia_id is not null or x.cod_int_ajuste = 'MOV-' || m.id)
+    and (m.autor, m.origem_ajuste, m.cod_int_ajuste) is distinct from (x.autor, x.origem_ajuste, x.cod_int_ajuste);
+
   insert into movimentos (
     loja_id, id_ajuste, id_prod, tipo, quan, valor, codigo_local_estoque,
     codigo_local_estoque_destino, data, motivo, obs, origem, status, autor, origem_ajuste, cod_int_ajuste
@@ -115,7 +129,9 @@ begin
     origem_ajuste = excluded.origem_ajuste,
     cod_int_ajuste = excluded.cod_int_ajuste,
     updated_at = now()
-  where (movimentos.id_prod, movimentos.tipo, movimentos.quan, movimentos.valor, movimentos.codigo_local_estoque,
+  where movimentos.transferencia_id is null
+    and excluded.cod_int_ajuste is distinct from 'MOV-' || movimentos.id
+    and (movimentos.id_prod, movimentos.tipo, movimentos.quan, movimentos.valor, movimentos.codigo_local_estoque,
          movimentos.codigo_local_estoque_destino, movimentos.data, movimentos.motivo, movimentos.obs, movimentos.origem,
          movimentos.status, movimentos.autor, movimentos.origem_ajuste, movimentos.cod_int_ajuste)
     is distinct from
