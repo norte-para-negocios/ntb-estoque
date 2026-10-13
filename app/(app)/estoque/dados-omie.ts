@@ -6,6 +6,11 @@ export type { VisaoEspelho }
 
 /** Estoque da loja Omie a partir do espelho (posicao_estoques): só as 2 fotos mais recentes existem na tabela. */
 export async function carregarEstoqueOmie(lojaId: number): Promise<VisaoEspelho> {
+  return (await carregarEstoqueOmieComPosicoes(lojaId)).visao
+}
+
+/** Igual a carregarEstoqueOmie, devolvendo também as linhas cruas da posição (custo por local na Saúde do estoque). */
+export async function carregarEstoqueOmieComPosicoes(lojaId: number): Promise<{ visao: VisaoEspelho; posicoes: PosicaoRow[] }> {
   const supabase = await createClient()
   const [produtos, posicoes, locaisRes, famRes] = await Promise.all([
     buscarTodasLinhas<ProdutoRow>((from, to) =>
@@ -19,5 +24,6 @@ export async function carregarEstoqueOmie(lojaId: number): Promise<VisaoEspelho>
     supabase.from('local_estoques').select('codigo_local_estoque, descricao, inativo').eq('loja_id', lojaId).order('descricao'),
     supabase.from('familias').select('codigo_familia, nome').eq('loja_id', lojaId).order('nome'),
   ])
-  return montarVisaoOmie({ produtos, posicoes, locais: locaisRes.data ?? [], familias: famRes.data ?? [] })
+  const visao = montarVisaoOmie({ produtos, posicoes, locais: locaisRes.data ?? [], familias: famRes.data ?? [] })
+  return { visao, posicoes }
 }
