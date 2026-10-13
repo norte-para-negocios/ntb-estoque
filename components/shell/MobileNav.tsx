@@ -18,6 +18,7 @@ import {
 import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from './NavItems'
+import { hrefAtivo } from '@/lib/nav-ativo'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -89,6 +90,8 @@ export function MobileNav({
     () => GRUPOS.filter((g) => itens.some((i) => i.group === g)),
     [itens]
   )
+
+  const ativoHref = useMemo(() => hrefAtivo(pathname, itens.map((i) => i.href)), [itens, pathname])
 
   const grupoDaRota = useMemo<Grupo | null>(() => {
     const atual = itens.find(
@@ -235,7 +238,7 @@ export function MobileNav({
                       {list.map((item) => {
                         const Icon = item.icon
                         const active =
-                          pathname === item.href || pathname.startsWith(item.href + '/')
+                          item.href === ativoHref
                         const bloqueada = !!item.cadeadoSemAdmin && !isAdmin
                         return (
                           <Link

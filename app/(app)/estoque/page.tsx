@@ -16,6 +16,7 @@ import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from '.
 import { carregarEstoqueOmie } from './dados-omie'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
+import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 
 const POR_PAGINA = 50
 const ORDEM_SITUACAO: Record<Situacao, number> = { negativo: 0, baixo: 1, zerado: 2, ok: 3 }
@@ -138,6 +139,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       <ListaHeader>
         <PageHeader title="Estoque" description={ehOmie ? 'Saldo, custo e situação de cada produto, em cada local (espelho do Omie)' : 'Saldo, custo e situação de cada produto, em cada local'} />
       </ListaHeader>
+
+      <EstoqueAtalhos atual="estoque" />
 
       {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} locaisSemSaldo={espelho.locaisSemSaldo} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
 

@@ -8,6 +8,7 @@ import { ChevronDown, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react'
 import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS, type NavItem } from './NavItems'
+import { hrefAtivo } from '@/lib/nav-ativo'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -80,6 +81,8 @@ export function Sidebar({
   )
 
   // Qual grupo contém a rota atual? Ele começa aberto.
+  const ativoHref = React.useMemo(() => hrefAtivo(pathname, itens.map((i) => i.href)), [itens, pathname])
+
   const grupoDaRota = React.useMemo<Grupo | null>(() => {
     const atual = itens.find(
       (i) => pathname === i.href || pathname.startsWith(i.href + '/')
@@ -198,7 +201,7 @@ export function Sidebar({
                       item={item}
                       isAdmin={isAdmin}
                       active={
-                        pathname === item.href || pathname.startsWith(item.href + '/')
+                        item.href === ativoHref
                       }
                     />
                   ))}
