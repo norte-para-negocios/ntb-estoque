@@ -42,7 +42,7 @@ OPs/fichas — entregas seguintes (ver lista aprovada em 13/10).
 - **Limite do Omie**: o botão de atualizar e o kardex sob demanda passam pelo `omieRequest` existente (pacing, MISUSE,
   REDUNDANT já tratados). Kardex: no máximo 1 carga por produto a cada 10 min.
 - **Lojas**: qualquer loja `omie` não teste vê a tela (é só leitura). Nenhuma escrita no Omie nesta entrega.
-- **Migração** `157_kardex_omie.sql`: manual, como as demais (AGENTS.md). Deploy e migration só com OK do dono.
+- **Migração** `159_kardex_omie.sql`: manual, como as demais (AGENTS.md). Deploy e migration só com OK do dono.
 
 ## 4. Testes
 

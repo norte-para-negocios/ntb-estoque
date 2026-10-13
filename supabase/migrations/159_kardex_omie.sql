@@ -1,6 +1,6 @@
--- 157 — Kardex do Omie (ListarMovimentoEstoque) espelhado por produto, sob demanda pela tela de Estoque.
+-- 159 — Kardex do Omie (ListarMovimentoEstoque) espelhado por produto, sob demanda pela tela de Estoque.
 -- NÃO aplicada automaticamente (migrations deste projeto são manuais, ver AGENTS.md).
--- Aplicar: docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 157_kardex_omie.sql
+-- Aplicar: docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 159_kardex_omie.sql
 create table if not exists public.kardex_omie (
   id                  bigint generated always as identity primary key,
   loja_id             bigint not null references public.lojas(id) on delete cascade,

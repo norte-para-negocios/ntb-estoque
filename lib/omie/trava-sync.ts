@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 
 /**
- * Trava por loja + recurso (migration 157, `pegar_trava_sync`/`soltar_trava_sync`): impede duas leituras
+ * Trava por loja + recurso (migration 159, `pegar_trava_sync`/`soltar_trava_sync`): impede duas leituras
  * iguais do Omie ao mesmo tempo (botão da tela x cron), o que estoura "Já existe uma requisição" ou
  * MISUSE_API_PROCESS e bloqueia a chave da loja. Se a função não existir (migration não aplicada),
  * segue sem trava, como era antes, só registrando no log.

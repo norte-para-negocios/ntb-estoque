@@ -32,7 +32,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
   if (!p) notFound()
   const movimentos = ehOmie ? [] : await carregarMovimentos(lojaId, { codigoProduto: cod }, 100)
 
-  // Loja Omie: kardex espelhado (kardex_omie, migration 157). Sem a tabela, a seção avisa em vez de quebrar.
+  // Loja Omie: kardex espelhado (kardex_omie, migration 159). Sem a tabela, a seção avisa em vez de quebrar.
   let kardexOmie: LinhaKardexTela[] = []
   let kardexAtivo = true
   let ultimaCarga: { carregadoEm: string; movimentos: number } | null = null
