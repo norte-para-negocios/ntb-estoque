@@ -21,10 +21,15 @@ test('filtros: padrão 7 dias, invertido troca, limite por modo', () => {
   const kardex = lerFiltrosMovimentacoes({ data_inicio: '2026-01-01' }, HOJE, false)
   assert.equal(kardex.ini, '2026-01-01')
   assert.equal(kardex.erro, null)
-  const lixo = lerFiltrosMovimentacoes({ data_inicio: 'xx', page: '-3', local: '12a', produto: '55' }, HOJE, false)
+  const lixo = lerFiltrosMovimentacoes({ data_inicio: 'xx', page: '-3', local: '12a', cod: '55' }, HOJE, false)
   assert.equal(lixo.page, 1)
   assert.equal(lixo.local, null)
   assert.equal(lixo.produto, 55)
+  // links antigos de outras telas mandam ?produto=<nome ou código> (texto): vira a busca
+  const antigo = lerFiltrosMovimentacoes({ produto: 'LEITE DE COCO' }, HOJE, true)
+  assert.equal(antigo.q, 'LEITE DE COCO')
+  assert.equal(antigo.produto, null)
+  assert.equal(lerFiltrosMovimentacoes({ produto: 'x', q: 'y' }, HOJE, true).q, 'y')
   assert.equal(lixo.ini, '2026-10-07')
 })
 

@@ -51,9 +51,10 @@ const fmtBR = (iso: string) => iso.split('-').reverse().join('/')
  * produto/documento no filtro (poucas linhas); 92 dias na lista reconstruída da loja inteira (consulta pesada).
  */
 export function lerFiltrosMovimentacoes(sp: Record<string, string | undefined>, hoje: string, reconstruido: boolean): FiltrosMov {
-  const q = (sp.q ?? '').trim()
+  // ?cod= = código do produto no Omie (link "só este"); ?produto= é texto (links antigos de outras telas) e vira a busca.
+  const q = (sp.q ?? sp.produto ?? '').trim()
   const doc = (sp.doc ?? '').trim()
-  const produto = inteiro(sp.produto)
+  const produto = inteiro(sp.cod)
   let fim = dataValida(sp.data_final) ? sp.data_final! : hoje
   let ini = dataValida(sp.data_inicio) ? sp.data_inicio! : addDias(fim, -(PADRAO_DIAS - 1))
   if (ini > fim) [ini, fim] = [fim, ini]
