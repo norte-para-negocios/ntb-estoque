@@ -8,13 +8,15 @@ import type { LinhaKardexOmie } from '@/lib/estoque/kardex-omie-puro'
 import { formatCustoUnit } from '@/lib/num-br'
 
 const fmt = (n: number | null, d = 3) => (n == null ? '-' : n.toLocaleString('pt-BR', { maximumFractionDigits: d }))
+const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Bahia', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 const dia = (iso: string) => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${a.slice(2)}` }
 
 export type LinhaKardexTela = LinhaKardexOmie & { saltoCmc: boolean; local: string }
 
 /** Kardex do Omie (ListarMovimentoEstoque) de um produto, mais recente primeiro; carga sob demanda (só leitura do Omie). */
-export function KardexOmie({ codigoProduto, unidade, linhas, podeCarregar }: {
+export function KardexOmie({ codigoProduto, unidade, linhas, podeCarregar, ultimaCarga = null }: {
   codigoProduto: number; unidade: string; linhas: LinhaKardexTela[]; podeCarregar: boolean
+  ultimaCarga?: { carregadoEm: string; movimentos: number } | null
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -39,8 +41,9 @@ export function KardexOmie({ codigoProduto, unidade, linhas, podeCarregar }: {
           <RefreshCw className={`size-3.5 ${pending ? 'animate-spin' : ''}`} /> {pending ? 'Lendo o Omie…' : 'Carregar movimentos do Omie'}
         </button>
       )}
+      {ultimaCarga && <p className="text-[12px] text-text-muted">Lido do Omie em {quando(ultimaCarga.carregadoEm)} (últimos 55 dias).</p>}
       {!linhas.length ? (
-        <p className="px-1 py-6 text-center text-[13px] text-text-muted">Nenhum movimento carregado. Clique em Carregar movimentos do Omie (últimos 55 dias).</p>
+        <p className="px-1 py-6 text-center text-[13px] text-text-muted">{ultimaCarga ? 'Nenhum movimento no Omie nos últimos 55 dias.' : 'Nenhum movimento carregado. Clique em Carregar movimentos do Omie (últimos 55 dias).'}</p>
       ) : (
         <div className="overflow-x-auto rounded-[var(--r-lg)] bg-surface u-card">
           <table className="w-full min-w-[820px] text-left text-[13px]">

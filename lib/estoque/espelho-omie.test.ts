@@ -69,3 +69,24 @@ test('sem nenhuma foto: lista produtos com saldo 0 e atualizadoEm null', () => {
   assert.ok(v.linhas.every((l) => l.saldo === 0 && l.situacao === 'zerado'))
   assert.deepEqual(v.locaisSemLeitura, [])
 })
+
+test('foto de hoje só com sentinela (sync em andamento): saldos vêm da foto anterior', () => {
+  const e = base()
+  e.posicoes = [
+    { data_posicao: '2026-10-14', codigo_local_estoque: 0, n_cod_prod: 1, n_saldo: 0, n_cmc: 70, estoque_minimo: 2, updated_at: '2026-10-14T00:01:00Z' },
+    ...e.posicoes.filter((p) => p.data_posicao === '2026-10-13'),
+  ]
+  const v = montarVisaoOmie(e)
+  assert.equal(v.dataPosicao, '2026-10-13')
+  const p1 = v.linhas.find((l) => l.codigoProduto === 1)!
+  assert.equal(p1.saldo, 2)
+  assert.equal(p1.cmc, 70) // CMC mais novo (sentinela de hoje) continua valendo
+})
+
+test('local ativo sem nenhuma linha em nenhuma foto vai para locaisSemSaldo', () => {
+  const e = base()
+  e.locais.push({ codigo_local_estoque: 400, descricao: 'ADEGA', inativo: 'N' })
+  const v = montarVisaoOmie(e)
+  assert.deepEqual(v.locaisSemSaldo, ['ADEGA'])
+  assert.deepEqual(v.locaisSemLeitura, ['BAR'])
+})

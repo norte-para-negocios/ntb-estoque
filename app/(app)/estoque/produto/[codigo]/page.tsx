@@ -35,6 +35,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
   // Loja Omie: kardex espelhado (kardex_omie, migration 157). Sem a tabela, a seção avisa em vez de quebrar.
   let kardexOmie: LinhaKardexTela[] = []
   let kardexAtivo = true
+  let ultimaCarga: { carregadoEm: string; movimentos: number } | null = null
   if (ehOmie) {
     const supabase = await createClient()
     const { data, error } = await supabase.from('kardex_omie')
@@ -42,6 +43,9 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
       .eq('loja_id', lojaId).eq('n_cod_prod', cod)
       .order('data_mov', { ascending: false }).order('id_mov', { ascending: false }).limit(300)
     if (error) kardexAtivo = false
+    const { data: carga } = await supabase.from('kardex_omie_carga').select('carregado_em, movimentos')
+      .eq('loja_id', lojaId).eq('n_cod_prod', cod).maybeSingle()
+    if (carga) ultimaCarga = { carregadoEm: carga.carregado_em as string, movimentos: Number(carga.movimentos) }
     const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
     kardexOmie = marcarSaltosCmc(((data ?? []) as LinhaKardexOmie[]).map((m) => ({
       ...m, quantidade: Number(m.quantidade), valor_unit: m.valor_unit == null ? null : Number(m.valor_unit),
@@ -108,7 +112,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         <section aria-label="Movimentos no Omie">
           <h2 className="mb-2 text-[15px] font-semibold text-text">Movimentos no Omie</h2>
           {kardexAtivo
-            ? <KardexOmie codigoProduto={p.codigoProduto} unidade={p.unidade} linhas={kardexOmie} podeCarregar />
+            ? <KardexOmie codigoProduto={p.codigoProduto} unidade={p.unidade} linhas={kardexOmie} podeCarregar ultimaCarga={ultimaCarga} />
             : <p className="text-[13px] text-text-muted">Kardex do Omie ainda não ativado.</p>}
         </section>
       ) : (

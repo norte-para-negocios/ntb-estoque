@@ -33,7 +33,7 @@ export default async function LocalEstoqueProprioPage({ params }: { params: Prom
   const itens = visao.linhas.flatMap((l) => {
     const s = l.locais.find((x) => x.codigoLocal === cod)
     if (!s || s.saldo === 0 && s.minimo == null) return []
-    return [{ ...l, saldoLocal: s.saldo, minimoLocal: s.minimo, valorLocal: s.saldo * l.cmc, situacaoLocal: situacaoDe(s.saldo, s.minimo) }]
+    return [{ ...l, saldoLocal: s.saldo, minimoLocal: s.minimo, valorLocal: l.cmc === 0 ? 0 : s.saldo * l.cmc, situacaoLocal: situacaoDe(s.saldo, s.minimo) }]
   }).sort((a, b) => a.saldoLocal - b.saldoLocal || a.descricao.localeCompare(b.descricao, 'pt-BR'))
 
   const valor = itens.reduce((a, i) => a + i.valorLocal, 0)

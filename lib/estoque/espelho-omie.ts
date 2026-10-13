@@ -36,6 +36,8 @@ export type VisaoEspelho = {
   atualizadoEm: string | null
   dataPosicao: string | null
   locaisSemLeitura: string[]
+  /** Locais ativos sem nenhuma linha nas fotos guardadas: sem saldo no Omie ou nunca lidos. */
+  locaisSemSaldo: string[]
   custoSuspeito: number
 }
 
@@ -48,9 +50,16 @@ export function situacaoDe(saldo: number, minimo: number | null): Situacao {
 
 export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
   const datas = [...new Set(e.posicoes.map((p) => p.data_posicao))].sort().reverse()
-  const [dataAtual = null, dataAnterior = null] = datas
+  // Foto dos SALDOS = a mais recente que já tem linha de algum local real. O sync grava primeiro
+  // a sentinela (local 0) e depois local por local: enquanto a foto do dia só tem sentinela, os
+  // saldos continuam vindo da foto anterior (senão tudo apareceria zerado durante o sync).
+  const comLocal = new Set(e.posicoes.filter((p) => Number(p.codigo_local_estoque) !== 0).map((p) => p.data_posicao))
+  const dataAtual = datas.find((d) => comLocal.has(d)) ?? null
+  const dataAnterior = datas.find((d) => dataAtual != null && d < dataAtual) ?? null
   const atual = e.posicoes.filter((p) => p.data_posicao === dataAtual)
   const anterior = e.posicoes.filter((p) => p.data_posicao === dataAnterior)
+  // CMC: a sentinela mais nova com custo > 0 (mesmo de uma foto só com sentinela).
+  const sentinelas = datas.map((d) => e.posicoes.filter((p) => p.data_posicao === d && Number(p.codigo_local_estoque) === 0))
 
   const locais = e.locais.map((l) => ({
     codigoLocal: Number(l.codigo_local_estoque), descricao: l.descricao ?? String(l.codigo_local_estoque), inativo: l.inativo === 'S',
@@ -59,8 +68,11 @@ export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
   const familias = e.familias.map((f) => ({ codigo: Number(f.codigo_familia), nome: f.nome ?? String(f.codigo_familia) }))
   const nomeFamilia = new Map(familias.map((f) => [f.codigo, f.nome]))
 
-  const cmcDe = (rows: PosicaoRow[]) => new Map(rows.filter((r) => Number(r.codigo_local_estoque) === 0).map((r) => [Number(r.n_cod_prod), Number(r.n_cmc ?? 0)]))
-  const cmcAtual = cmcDe(atual), cmcAnterior = cmcDe(anterior)
+  const cmcPorProduto = new Map<number, number>()
+  for (const rows of sentinelas) for (const r of rows) {
+    const cod = Number(r.n_cod_prod), c = Number(r.n_cmc ?? 0)
+    if (!cmcPorProduto.has(cod) && c !== 0) cmcPorProduto.set(cod, c)
+  }
   const minimoOmie = new Map(atual.filter((r) => Number(r.codigo_local_estoque) === 0 && Number(r.estoque_minimo ?? 0) > 0).map((r) => [Number(r.n_cod_prod), Number(r.estoque_minimo)]))
 
   const saldos = new Map<number, SaldoLocal[]>()
@@ -77,7 +89,7 @@ export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
     const cod = Number(p.codigo_produto)
     const locs = saldos.get(cod) ?? []
     const saldo = locs.reduce((a, l) => a + l.saldo, 0)
-    const bruto = (cmcAtual.get(cod) ?? 0) > 0 ? cmcAtual.get(cod)! : (cmcAnterior.get(cod) ?? 0)
+    const bruto = cmcPorProduto.get(cod) ?? 0
     const suspeito = bruto < 0 || bruto >= CMC_MAX_PLAUSIVEL
     if (suspeito) nSuspeito++
     const cmc = suspeito ? 0 : bruto
@@ -96,7 +108,9 @@ export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
   const locaisSemLeitura = locais
     .filter((l) => !l.inativo && l.codigoLocal !== 0 && locaisOntem.has(l.codigoLocal) && !locaisHoje.has(l.codigoLocal))
     .map((l) => l.descricao)
+  const locaisComLinha = new Set(e.posicoes.map((r) => Number(r.codigo_local_estoque)))
+  const locaisSemSaldo = locais.filter((l) => !l.inativo && l.codigoLocal !== 0 && !locaisComLinha.has(l.codigoLocal)).map((l) => l.descricao)
 
   const atualizadoEm = atual.reduce<string | null>((m, r) => (r.updated_at && (!m || r.updated_at > m) ? r.updated_at : m), null)
-  return { linhas, locais, familias, atualizadoEm, dataPosicao: dataAtual, locaisSemLeitura, custoSuspeito: nSuspeito }
+  return { linhas, locais, familias, atualizadoEm, dataPosicao: dataAtual, locaisSemLeitura, locaisSemSaldo, custoSuspeito: nSuspeito }
 }

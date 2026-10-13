@@ -50,7 +50,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       if (!s) return []
       const minimo = s.minimo ?? null
       const situacao: Situacao = s.saldo < 0 ? 'negativo' : s.saldo === 0 ? 'zerado' : minimo != null && minimo > 0 && s.saldo < minimo ? 'baixo' : 'ok'
-      return [{ ...l, saldo: s.saldo, valor: s.saldo * l.cmc, minimo, situacao }]
+      return [{ ...l, saldo: s.saldo, valor: l.cmc === 0 ? 0 : s.saldo * l.cmc, minimo, situacao }]
     })
   }
 
@@ -139,7 +139,11 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         <PageHeader title="Estoque" description={ehOmie ? 'Saldo, custo e situação de cada produto, em cada local (espelho do Omie)' : 'Saldo, custo e situação de cada produto, em cada local'} />
       </ListaHeader>
 
-      {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
+      {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} locaisSemSaldo={espelho.locaisSemSaldo} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
+
+      {espelho && !espelho.dataPosicao ? (
+        <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Boxes} title="Sem leitura do Omie ainda" hint="Clique em Atualizar do Omie para trazer o saldo." /></div>
+      ) : (<>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicador icon={Boxes} rotulo="Produtos" valor={String(totalSkus)} dica={localSel ? 'neste local' : 'cadastrados'} />
@@ -201,12 +205,11 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
             locais={locaisAtivos.map((x) => ({ codigoLocal: x.codigoLocal, descricao: x.descricao }))}
             saldos={l.locais.map((x) => ({ codigoLocal: x.codigoLocal, saldo: x.saldo, minimo: x.minimo }))} localInicial={localSel ?? undefined} />
         ) : undefined}
-        vazio={espelho && !espelho.atualizadoEm
-          ? <EmptyState icon={Boxes} title="Sem leitura do Omie ainda" hint="Clique em Atualizar do Omie para trazer o saldo." />
-          : <EmptyState icon={Boxes} title={visao.linhas.length ? 'Nenhum produto neste filtro' : 'Nenhum produto cadastrado ainda'} hint={visao.linhas.length ? 'Ajuste os filtros para ver mais itens.' : 'Cadastre produtos para começar a controlar o estoque.'} />}
+        vazio={<EmptyState icon={Boxes} title={visao.linhas.length ? 'Nenhum produto neste filtro' : 'Nenhum produto cadastrado ainda'} hint={visao.linhas.length ? 'Ajuste os filtros para ver mais itens.' : 'Cadastre produtos para começar a controlar o estoque.'} />}
       />
 
       <Paginacao basePath="/estoque" page={page} temProxima={page * POR_PAGINA < filtradas.length} total={filtradas.length} porPagina={POR_PAGINA} />
+      </>)}
     </div>
   )
 }

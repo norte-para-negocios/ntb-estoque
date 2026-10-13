@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { syncPosicaoEstoque } from '@/lib/omie/posicao-estoque'
 import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
+import { pegarTravaSync, soltarTravaSync } from '@/lib/omie/trava-sync'
 
 export const maxDuration = 300
 
@@ -46,11 +47,15 @@ export async function GET(request: Request) {
   // sem deixar uma loja permanentemente quebrada bloquear as demais.
   const falhas: { loja_id: number; erro: string }[] = []
   for (const { loja } of ultimas) {
+    // Mesma trava do botão "Atualizar do Omie" (/api/sync/posicao): nunca dois syncs da mesma loja juntos.
+    if (!(await pegarTravaSync(loja.id, 'posicao', 600))) { falhas.push({ loja_id: loja.id, erro: 'sync em andamento' }); continue }
     try {
       const registros = await syncPosicaoEstoque(loja)
       return NextResponse.json({ ok: true, loja: loja.id, registros, puladas: falhas })
     } catch (e) {
       falhas.push({ loja_id: loja.id, erro: e instanceof Error ? e.message : String(e) })
+    } finally {
+      await soltarTravaSync(loja.id, 'posicao')
     }
   }
   return NextResponse.json({ ok: false, msg: 'todas as lojas falharam', falhas }, { status: 502 })
