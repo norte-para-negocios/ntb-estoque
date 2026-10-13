@@ -98,3 +98,28 @@ test('cmcPorLocalAtual: foto mais recente com local real; sentinela 0 ignorada',
   assert.equal(r.get('100:1'), 3)
   assert.equal(r.has('100:0'), false)
 })
+
+test('rotuloNegativoDesde: sem histórico do kardex não inventa data; trecho que começa antes da janela vira "antes de"', async () => {
+  const { rotuloNegativoDesde } = await import('./saude-puro.ts')
+  assert.deepEqual(rotuloNegativoDesde({ desde: '2026-09-10', primeiraData: '2026-09-10', saldoAntesDaPrimeira: -2, coberturaIni: null }), { tipo: 'sem_historico', data: null })
+  assert.deepEqual(rotuloNegativoDesde({ desde: undefined, primeiraData: undefined, saldoAntesDaPrimeira: null, coberturaIni: '2026-08-15' }), { tipo: 'antes', data: '2026-08-15' })
+  // 1º movimento lido já era negativo e o saldo antes dele também: começou antes da janela.
+  assert.deepEqual(rotuloNegativoDesde({ desde: '2026-09-10', primeiraData: '2026-09-10', saldoAntesDaPrimeira: -2, coberturaIni: '2026-08-15' }), { tipo: 'antes', data: '2026-08-15' })
+  // 1º movimento lido deixou negativo (antes estava >= 0): começou nele.
+  assert.deepEqual(rotuloNegativoDesde({ desde: '2026-09-10', primeiraData: '2026-09-10', saldoAntesDaPrimeira: 3, coberturaIni: '2026-08-15' }), { tipo: 'desde', data: '2026-09-10' })
+  assert.deepEqual(rotuloNegativoDesde({ desde: '2026-09-20', primeiraData: '2026-09-10', saldoAntesDaPrimeira: -2, coberturaIni: '2026-08-15' }), { tipo: 'desde', data: '2026-09-20' })
+})
+
+test('opsSobrandoFaltando: sem a lista de OPs (erro de leitura) não acusa prato "sem OP"', () => {
+  const r = opsSobrandoFaltando(new Map([[2, -3]]), new Map<number, string | null>([[2, '04']]), [], false)
+  assert.deepEqual(r, { sobrando: [], faltando: [], indisponivel: true })
+  assert.equal(opsSobrandoFaltando(new Map([[2, -3]]), new Map<number, string | null>([[2, '04']]), []).indisponivel, false)
+})
+
+test('quaisVenderam: consulta cada produto (um que vende muito não esconde os outros)', async () => {
+  const { quaisVenderam } = await import('./saude-puro.ts')
+  const chamados: number[] = []
+  const r = await quaisVenderam([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], async (c) => { chamados.push(c); return { data: c % 3 === 0 ? [{}] : [] } })
+  assert.deepEqual([...r].sort((a, b) => a - b), [3, 6, 9, 12])
+  assert.equal(chamados.length, 12)
+})

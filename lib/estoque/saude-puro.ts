@@ -98,15 +98,17 @@ export type OPAbertaMin = { id: number; produto: number | null; origem: string |
 
 /** Sobrando: OP aberta do PDV (cupom) de produto com saldo >= 0. Faltando: PA/PI com saldo < 0 sem nenhuma OP aberta. */
 export function opsSobrandoFaltando(
-  saldos: Map<number, number>, tipos: Map<number, string | null>, abertas: OPAbertaMin[],
-): { sobrando: OPAbertaMin[]; faltando: number[] } {
+  saldos: Map<number, number>, tipos: Map<number, string | null>, abertas: OPAbertaMin[], listaOk = true,
+): { sobrando: OPAbertaMin[]; faltando: number[]; indisponivel: boolean } {
+  // Sem a lista de OPs (erro de leitura), "sem OP" acusaria todo prato negativo: não classifica.
+  if (!listaOk) return { sobrando: [], faltando: [], indisponivel: true }
   const comOP = new Set(abertas.map((o) => o.produto).filter((p): p is number => p != null))
   const sobrando = abertas.filter((o) => o.origem === 'cupom' && o.produto != null && saldos.has(o.produto) && (saldos.get(o.produto) ?? 0) >= 0)
   const faltando = [...saldos.entries()]
     .filter(([p, s]) => s < 0 && TIPOS_PRODUCAO.has(tipos.get(p) ?? '') && !comOP.has(p))
     .map(([p]) => p)
     .sort((a, b) => a - b)
-  return { sobrando, faltando }
+  return { sobrando, faltando, indisponivel: false }
 }
 
 export type ItemFichaLocal = { produto: number; insumo: number; local: number | null }
@@ -141,6 +143,32 @@ export function cmcPorLocalAtual(posicoes: { data_posicao: string; codigo_local_
   for (const p of posicoes) {
     if (p.data_posicao !== ultima || Number(p.codigo_local_estoque) === 0) continue
     r.set(`${Number(p.n_cod_prod)}:${Number(p.codigo_local_estoque)}`, Number(p.n_cmc ?? 0))
+  }
+  return r
+}
+
+/**
+ * Texto do "negativo desde" honesto com a cobertura do histórico: sem histórico completo do kardex não há data;
+ * se o trecho negativo começa no 1º movimento lido e o saldo antes dele já era negativo (ou não há movimento na
+ * janela), ele começou antes do início da janela (`coberturaIni`).
+ */
+export function rotuloNegativoDesde(p: { desde: string | undefined; primeiraData: string | undefined; saldoAntesDaPrimeira: number | null; coberturaIni: string | null }):
+  { tipo: 'sem_historico' | 'antes' | 'desde'; data: string | null } {
+  if (!p.coberturaIni) return { tipo: 'sem_historico', data: null }
+  if (!p.desde) return { tipo: 'antes', data: p.coberturaIni }
+  if (p.desde === p.primeiraData && (p.saldoAntesDaPrimeira == null || p.saldoAntesDaPrimeira < 0)) return { tipo: 'antes', data: p.coberturaIni }
+  return { tipo: 'desde', data: p.desde }
+}
+
+/**
+ * Produtos que tiveram pelo menos 1 venda: uma consulta (com `limit(1)`) por produto, 10 por vez. Uma consulta por
+ * lote com limite de linhas perdia produtos quando um deles vendia muito e ocupava o limite.
+ */
+export async function quaisVenderam(cods: number[], consulta: (cod: number) => PromiseLike<{ data: unknown[] | null }>): Promise<Set<number>> {
+  const r = new Set<number>()
+  for (let i = 0; i < cods.length; i += 10) {
+    const res = await Promise.all(cods.slice(i, i + 10).map(async (c) => ({ c, vendeu: !!(await consulta(c)).data?.length })))
+    for (const x of res) if (x.vendeu) r.add(x.c)
   }
   return r
 }
