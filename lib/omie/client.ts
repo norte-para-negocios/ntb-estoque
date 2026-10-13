@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { bloqueioDaResposta, msRestantesBloqueio, registrarBloqueio } from './erros-omie'
+import { bloqueioDaResposta, msRestantesBloqueio, podeRepetirLimite, registrarBloqueio } from './erros-omie'
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/'
 
@@ -18,6 +18,8 @@ export interface OmieRequestParams {
   endpoint: string // ex: 'v1/geral/produtos'
   call: string // ex: 'ListarProdutos'
   data: Record<string, unknown>
+  /** Não esperar e repetir em limite/consumo redundante: lança na 1a recusa (crons do espelho completo). */
+  semRepetir?: boolean
 }
 
 export class OmieError extends Error {
@@ -89,6 +91,7 @@ export async function omieRequest<T = unknown>({
   endpoint,
   call,
   data,
+  semRepetir = false,
 }: OmieRequestParams): Promise<T> {
   // App desktop (banco local): não tem as chaves do Omie; ações que falam com o Omie vão ao
   // servidor (ou à fila sem internet) antes de chegar aqui -- isto é só a trava final.
@@ -150,7 +153,7 @@ export async function omieRequest<T = unknown>({
           registrarBloqueio(omie_app_key, segBloqueio)
           throw lastError
         }
-        if (attempt < 2) {
+        if (podeRepetirLimite(attempt, semRepetir)) {
           await sleep(60_000)
           continue
         }
@@ -177,7 +180,7 @@ export async function omieRequest<T = unknown>({
         // Limite de concorrencia / consumo redundante do Omie: vem como faultstring,
         // nao HTTP 429. Aguarda (honrando "Aguarde N segundos" quando informado) e retenta.
         if (/j. existe uma requisi|consumo redundante|too many requests|aguarde/i.test(msg)) {
-          if (attempt < 2) {
+          if (podeRepetirLimite(attempt, semRepetir)) {
             const pedido = msg.match(/aguarde\s+(\d+)\s*segundos/i)
             const espera = pedido ? Math.min(Number(pedido[1]) + 2, 60) * 1000 : 5000 * (attempt + 1)
             await sleep(espera)

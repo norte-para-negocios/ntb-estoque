@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizarMovOmie, marcarSaltosCmc, type MovOmie } from './kardex-omie-puro.ts'
+import { normalizarMovOmie, marcarSaltosCmc, deduplicarMovs, type MovOmie } from './kardex-omie-puro.ts'
 
 const mov = (o: Partial<MovOmie>): MovOmie => ({
   idMov: 1, idProd: 9, codigo_local_estoque: 100, dtMov: '16/08/2026', codOrigem: 'PDV', desOrigem: 'Movimento Gerado pelo PDV',
@@ -32,4 +32,15 @@ test('marca salto de CMC de 10x ou mais em relação ao movimento anterior', () 
   ]
   const r = marcarSaltosCmc(ls)
   assert.deepEqual(r.map((x) => [x.id_mov, x.saltoCmc]), [[1, false], [2, true], [3, false]])
+})
+
+test('deduplicarMovs: mesmo id_mov no mesmo local fica uma vez só (a última); locais diferentes ficam os dois', () => {
+  const ls = [
+    normalizarMovOmie(mov({ idMov: 7, codigo_local_estoque: 100, qtde: 1 }), 5),
+    normalizarMovOmie(mov({ idMov: 7, codigo_local_estoque: 200, qtde: -1 }), 5),
+    normalizarMovOmie(mov({ idMov: 7, codigo_local_estoque: 100, qtde: 2 }), 5),
+  ]
+  const r = deduplicarMovs(ls)
+  assert.equal(r.length, 2)
+  assert.equal(r.find((x) => x.codigo_local_estoque === 100)?.quantidade, 2)
 })

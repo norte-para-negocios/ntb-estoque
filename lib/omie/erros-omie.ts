@@ -106,3 +106,9 @@ export function proximaTentativa(tentativas: number, agora = Date.now()): string
   return new Date(agora + min * 60_000).toISOString()
 }
 
+
+// "Já existe uma requisição"/consumo redundante/429 sem bloqueio: omieRequest espera e repete ate 2x.
+// Os crons do espelho completo (Fase 1 do "nosso Omie") pedem semRepetir: param o ciclo na 1a recusa.
+export function podeRepetirLimite(tentativa: number, semRepetir: boolean): boolean {
+  return !semRepetir && tentativa < 2
+}

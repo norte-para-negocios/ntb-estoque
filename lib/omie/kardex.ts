@@ -2,7 +2,7 @@
 import { omieRequest, type LojaOmie } from './client'
 import type { MovOmie } from '@/lib/estoque/kardex-omie-puro'
 
-export { normalizarMovOmie, marcarSaltosCmc, type MovOmie, type LinhaKardexOmie } from '@/lib/estoque/kardex-omie-puro'
+export { normalizarMovOmie, marcarSaltosCmc, deduplicarMovs, type MovOmie, type LinhaKardexOmie } from '@/lib/estoque/kardex-omie-puro'
 
 type RespMov = { nTotPaginas?: number; movProdutoListar?: MovOmie[] }
 
@@ -27,4 +27,22 @@ export async function buscarKardexOmie(loja: LojaOmie, idProd: number, codigoLoc
     pagina++
   } while (pagina <= total)
   return out
+}
+
+/**
+ * Uma página do kardex de UM local, todos os produtos (sem idProd), para o cron sync-kardex.
+ * Sem `codigo_local_estoque` o Omie devolve só o local padrão, por isso é sempre por local.
+ * "Não existem registros" vem como {} de omieRequest: totalPaginas 0 = local sem movimento na janela.
+ */
+export async function buscarPaginaKardexLocal(
+  loja: LojaOmie, codigoLocal: number, dIni: string, dFim: string, pagina: number
+): Promise<{ totalPaginas: number; movs: MovOmie[] }> {
+  const r = await omieRequest<RespMov>({
+    loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test,
+    endpoint: 'v1/estoque/consulta', call: 'ListarMovimentoEstoque',
+    data: { nPagina: pagina, nRegPorPagina: 100, dDtInicial: dIni, dDtFinal: dFim, codigo_local_estoque: codigoLocal },
+    semRepetir: true,
+  })
+  const movs = r?.movProdutoListar ?? []
+  return { totalPaginas: movs.length ? Number(r.nTotPaginas) || 1 : Number(r?.nTotPaginas) || 0, movs }
 }

@@ -38,3 +38,10 @@ export function marcarSaltosCmc(linhas: LinhaKardexOmie[]): (LinhaKardexOmie & {
     return { ...l, saltoCmc }
   })
 }
+
+/** Um upsert não pode tocar a mesma linha duas vezes: mantém a última ocorrência de (id_mov, local). */
+export function deduplicarMovs<T extends { id_mov: number; codigo_local_estoque: number }>(linhas: T[]): T[] {
+  const m = new Map<string, T>()
+  for (const l of linhas) m.set(`${l.id_mov}:${l.codigo_local_estoque}`, l)
+  return [...m.values()]
+}

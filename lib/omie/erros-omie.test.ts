@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -73,4 +73,11 @@ test('proximaTentativa: 10, 20, 40, 80, 120 min e para em 120', () => {
   const t0 = Date.UTC(2026, 8, 28, 12, 0, 0)
   const min = (n: number) => (new Date(proximaTentativa(n, t0)).getTime() - t0) / 60000
   assert.deepEqual([1, 2, 3, 4, 5, 9].map(min), [10, 20, 40, 80, 120, 120])
+})
+
+test('podeRepetirLimite: até 2 repetições, nunca quando o chamador pede semRepetir (crons do espelho)', () => {
+  assert.equal(podeRepetirLimite(0, false), true)
+  assert.equal(podeRepetirLimite(1, false), true)
+  assert.equal(podeRepetirLimite(2, false), false)
+  assert.equal(podeRepetirLimite(0, true), false)
 })
