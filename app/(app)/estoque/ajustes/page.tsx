@@ -20,7 +20,9 @@ import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { carregarEstoqueOmie } from '../dados-omie'
 import { carregarEstoque } from '../dados'
 import { carregarLocais, carregarProdutosMin } from '../dados-produtos'
-import { nomesDeUsuarios } from '../dados-comum'
+import { lojaEspelho, nomesDeUsuarios } from '../dados-comum'
+import { LOJA_BLOQUEADA, motivoNaoCorrige } from '@/lib/estoque/escrita-omie-puro'
+import { CorrigirCusto, RefazerCorrecao } from '@/components/estoque-proprio/CorrigirCusto'
 
 const POR_PAGINA = 50
 const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
@@ -33,17 +35,20 @@ type SP = { data_inicio?: string; data_final?: string; q?: string; autor?: strin
 type Ajuste = {
   id: number; quando: string; produto: number; local: number | null; destino: number | null; tipo: string; quantidade: number
   custoUnit: number | null; autor: string | null; origem: string | null; motivo: string | null; obs: string | null; status: string | null
+  // Para "Corrigir custo" (loja Omie): dados do lançamento no Omie.
+  idAjuste?: number | null; transferenciaId?: number | null; codInt?: string | null; origemMov?: string | null
 }
 type MovRow = {
   id: number; id_prod: number; tipo: string; quan: number | null; valor: number | null; codigo_local_estoque: number | null
   codigo_local_estoque_destino: number | null; data: string; motivo: string | null; obs: string | null; status: string | null
   autor?: string | null; origem_ajuste?: string | null
+  id_ajuste?: number | null; transferencia_id?: number | null; cod_int_ajuste?: string | null; origem?: string | null
 }
 
 async function ajustesOmie(lojaId: number, ini: string, fim: string): Promise<{ ajustes: Ajuste[]; avisos: string[] }> {
   const supabase = await createClient()
   const avisos: string[] = []
-  const base = 'id, id_prod, tipo, quan, valor, codigo_local_estoque, codigo_local_estoque_destino, data, motivo, obs, status'
+  const base = 'id, id_prod, tipo, quan, valor, codigo_local_estoque, codigo_local_estoque_destino, data, motivo, obs, status, id_ajuste, transferencia_id, origem'
   const j = janelaDeConsulta(ini, fim)
   const ler = (cols: string, onErro: (e: { message: string }) => void) => buscarTodasLinhas<MovRow>((from, to) =>
     supabase.from('movimentos').select(cols).eq('loja_id', lojaId)
@@ -52,7 +57,7 @@ async function ajustesOmie(lojaId: number, ini: string, fim: string): Promise<{ 
       .or('origem.is.null,origem.neq.PDV').or('motivo.is.null,motivo.neq.PDV')
       .order('id').range(from, to) as unknown as PromiseLike<{ data: MovRow[] | null; error: { message: string } | null }>, undefined, onErro)
   let falhou = false
-  let rows = await ler(`${base}, autor, origem_ajuste`, () => { falhou = true })
+  let rows = await ler(`${base}, autor, origem_ajuste, cod_int_ajuste`, () => { falhou = true })
   if (falhou) {
     avisos.push('Autor e origem dos ajustes ainda não disponíveis (migration 160 pendente).')
     rows = await ler(base, (e) => avisos.push(`Não foi possível ler os ajustes: ${e.message}`))
@@ -64,6 +69,7 @@ async function ajustesOmie(lojaId: number, ini: string, fim: string): Promise<{ 
       destino: r.codigo_local_estoque_destino == null ? null : Number(r.codigo_local_estoque_destino), tipo: r.tipo,
       quantidade: Number(r.quan ?? 0), custoUnit: r.valor == null ? null : Number(r.valor), autor: r.autor ?? null,
       origem: r.origem_ajuste ?? null, motivo: r.motivo, obs: r.obs, status: r.status,
+      idAjuste: r.id_ajuste == null ? null : Number(r.id_ajuste), transferenciaId: r.transferencia_id ?? null, codInt: r.cod_int_ajuste ?? null, origemMov: r.origem ?? null,
     })),
   }
 }
@@ -104,6 +110,19 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
     modo === 'omie' ? carregarEstoqueOmie(lojaId) : carregarEstoque(lojaId),
   ])
   const cmcAtual = new Map(visao.linhas.map((l) => [l.codigoProduto, l.custoSuspeito ? null : l.cmc]))
+
+  // Corrigir custo de um ajuste no Omie ("nosso Omie" Fase 4): loja Omie, fora a loja 4, com "Estoque - Corrigir custo".
+  const podeCorrigir = modo === 'omie' && lojaId !== LOJA_BLOQUEADA && (await requirePermissao(lojaId, 'Estoque - Corrigir custo'))
+  const lojaTeste = podeCorrigir ? (await lojaEspelho(lojaId)).isTest : false
+  const fechadoAte = process.env.ESTOQUE_MES_FECHADO_ATE ?? null
+  type Pendente = { id: number; id_prod: number; data_ajuste: string; tipo: string; quantidade: number; custo_antigo: number | null; custo_novo: number; status: string; erro: string | null; user_nome: string | null; updated_at: string }
+  let pendentes: Pendente[] = []
+  if (modo === 'omie') {
+    const { data } = await (await createClient()).from('estoque_correcao_custo')
+      .select('id, id_prod, data_ajuste, tipo, quantidade, custo_antigo, custo_novo, status, erro, user_nome, updated_at')
+      .eq('loja_id', lojaId).in('status', ['excluindo', 'relancando', 'pendente_relancar']).order('id', { ascending: false }).limit(50)
+    pendentes = (data ?? []) as Pendente[] // sem a migration 162: erro, lista vazia
+  }
   const nome = (c: number) => produtos.get(c)?.descricao ?? `Produto ${c}`
 
   const linhas = ajustes.map((a) => ({ ...a, valor: valorDoAjuste(a), fora: custoForaDoNormal(a.custoUnit, cmcAtual.get(a.produto) ?? null) }))
@@ -137,6 +156,24 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
         <div className="rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-warn">
           {[erro, ...avisos].filter(Boolean).map((a) => <p key={a!} className="flex items-start gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {a}</p>)}
         </div>
+      )}
+
+      {pendentes.length > 0 && (
+        <section className="space-y-2 rounded-[var(--r-lg)] bg-surface p-4 u-card" aria-label="Correções de custo pendentes">
+          <h2 className="flex items-center gap-1.5 text-[14px] font-semibold text-err"><AlertTriangle className="size-4" /> Correções de custo pendentes</h2>
+          <p className="text-[12px] text-text-muted">O ajuste antigo foi (ou pode ter sido) excluído no Omie e o novo ainda não entrou. Refazer confere no Omie antes de lançar, para não duplicar.</p>
+          <ul className="divide-y divide-[var(--border)] text-[13px]">
+            {pendentes.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-text">{nome(Number(c.id_prod))} · {c.tipo === 'ENT' ? 'entrada' : 'saída'} de {fmtQ(Number(c.quantidade))} em {c.data_ajuste.split('-').reverse().join('/')}</div>
+                  <div className="text-[12px] text-text-muted">custo {formatCustoUnit(c.custo_antigo)} → {formatCustoUnit(c.custo_novo)} · {c.status === 'pendente_relancar' ? 'falta relançar' : c.status === 'relancando' ? 'relançando' : 'excluindo'}{c.user_nome ? ` · ${c.user_nome}` : ''}{c.erro ? ` · ${c.erro}` : ''}</div>
+                </div>
+                {podeCorrigir && <RefazerCorrecao id={c.id} />}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -186,6 +223,13 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
                     <td className={`num whitespace-nowrap px-2 py-2 text-right ${a.fora ? 'font-semibold text-err' : ''}`}>
                       {a.custoUnit != null ? formatCustoUnit(a.custoUnit) : '-'}
                       {a.fora && <div className="text-[11px] font-normal" title="Custo de R$ 1.000 ou mais, ou 20 vezes acima/abaixo do custo médio atual">fora do normal · médio {formatCustoUnit(cmcAtual.get(a.produto) ?? null)}</div>}
+                      {podeCorrigir && a.custoUnit != null && (a.tipo === 'ENT' || a.tipo === 'SAI') && !motivoNaoCorrige({
+                        tipo: a.tipo, id_ajuste: a.idAjuste ?? null, transferencia_id: a.transferenciaId ?? null, cod_int_ajuste: a.codInt ?? null,
+                        origem: a.origemMov ?? null, motivo: a.motivo, origem_ajuste: a.origem, quan: a.quantidade, valor: a.custoUnit, codigo_local_estoque: a.local,
+                      }, { aceitaIdSimulado: lojaTeste }) && (
+                        <div className="font-normal"><CorrigirCusto movimentoId={a.id} tipo={a.tipo} quantidade={a.quantidade} custoAtual={a.custoUnit}
+                          dataISO={diaDoMovimento(a.quando)} produto={nome(a.produto)} unidade={p?.unidade ?? ''} hoje={hoje} fechadoAte={fechadoAte} simulado={lojaTeste} /></div>
+                      )}
                     </td>
                     <td className="num whitespace-nowrap px-2 py-2 text-right">{a.tipo === 'SLD' ? <span className="text-text-muted">contagem</span> : fmtBRL(a.valor)}</td>
                     <td className="whitespace-nowrap px-2 py-2">

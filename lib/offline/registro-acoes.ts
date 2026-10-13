@@ -85,6 +85,8 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'estoque-omie#entradaOmie': m10.entradaOmie as Acao,
   'estoque-omie#ajusteOmie': m10.ajusteOmie as Acao,
   'estoque-omie#transferirOmie': m10.transferirOmie as Acao,
+  'estoque-omie#corrigirCustoAjuste': m10.corrigirCustoAjuste as Acao,
+  'estoque-omie#relancarCorrecaoCusto': m10.relancarCorrecaoCusto as Acao,
   'estoque-proprio#entradaManual': m11.entradaManual as Acao,
   'estoque-proprio#ajusteManual': m11.ajusteManual as Acao,
   'estoque-proprio#definirMinimo': m11.definirMinimo as Acao,
