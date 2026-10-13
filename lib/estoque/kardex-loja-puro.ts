@@ -2,7 +2,7 @@
 // node --test lib/estoque/kardex-loja-puro.test.ts.
 
 export type FiltrosKardexLoja = {
-  ini: string; fim: string; produto: number | null; q: string; local: number | null; origem: string; autor: string
+  ini: string; fim: string; produto: number | null; q: string; local: number | null; origem: string; autor: string; doc: string
   page: number; erro: string | null
 }
 
@@ -37,7 +37,7 @@ export function lerFiltrosKardex(sp: Record<string, string | undefined>, hoje: s
   const page = inteiro(sp.page)
   return {
     ini, fim, produto: inteiro(sp.produto), q: (sp.q ?? '').trim(), local: inteiro(sp.local), origem: (sp.origem ?? '').trim(),
-    autor: (sp.autor ?? '').trim(), page: page && page > 0 ? page : 1, erro,
+    autor: (sp.autor ?? '').trim(), doc: (sp.doc ?? '').trim(), page: page && page > 0 ? page : 1, erro,
   }
 }
 

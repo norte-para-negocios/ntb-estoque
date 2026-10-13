@@ -55,6 +55,7 @@ export async function buscarKardexLoja(lojaId: number, f: FiltrosKardexLoja, fai
   if (r.ajustes) q = q.in('id_ajuste', r.ajustes)
   if (f.local != null) q = q.eq('codigo_local_estoque', f.local)
   if (f.origem) q = q.eq('cod_origem', f.origem)
+  if (f.doc) { const d = escapeIlikeOr(f.doc); q = q.or(`num_doc.ilike.%${d}%,num_pedido.ilike.%${d}%`) }
   const { data, count, error } = await q.order('data_mov', { ascending: false }).order('id_mov', { ascending: false })
     .order('id', { ascending: false }).range(faixa.from, faixa.to)
   if (error) return { linhas: [], total: 0, aviso: r.truncado, erro: error.message }

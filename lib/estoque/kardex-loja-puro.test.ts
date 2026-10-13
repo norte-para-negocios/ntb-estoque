@@ -71,3 +71,8 @@ test('lerPeriodo: padrão e limite configuráveis', async () => {
   assert.equal(r.ini, '2026-07-14')
   assert.match(r.erro ?? '', /92/)
 })
+
+test('filtros: documento (nota, OP, pedido) aparado', () => {
+  assert.equal(lerFiltrosKardex({ doc: ' 123 ' }, HOJE).doc, '123')
+  assert.equal(lerFiltrosKardex({}, HOJE).doc, '')
+})
