@@ -86,6 +86,7 @@ const depende = [
   'estoque-omie#ajusteOmie',
   'estoque-omie#entradaOmie',
   'estoque-omie#transferirOmie',
+  'ops-lote#acaoOPLote',
   'inventario#editQuantidadeInventarioItem',
   'inventario#enviarInventarioItem',
   'inventario#excluirInventario',

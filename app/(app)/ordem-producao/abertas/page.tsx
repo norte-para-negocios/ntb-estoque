@@ -12,7 +12,8 @@ import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { Indicador } from '@/components/estoque-proprio/Apresentacao'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
 import { idadeDias, itensDaOPGravada, situacaoDaOP, ROTULO_ORIGEM_OP, type SituacaoOP } from '@/lib/estoque/ops-tela-puro'
-import { saldoNoLocalDaOP } from '@/lib/estoque/escrita-omie-puro'
+import { LOJA_BLOQUEADA, saldoNoLocalDaOP } from '@/lib/estoque/escrita-omie-puro'
+import { CheckOP, LoteOPsProvider } from '@/components/estoque-proprio/LoteOPs'
 import { carregarOPsAbertas } from '../../estoque/dados-ops'
 import { carregarEstoqueOmie } from '../../estoque/dados-omie'
 import { carregarEstoque } from '../../estoque/dados'
@@ -38,6 +39,14 @@ export default async function OPsAbertasPage({ searchParams }: { searchParams: P
   const fonte: 'omie' | 'proprio' = modo === 'proprio' ? 'proprio' : 'omie'
   const sp = await searchParams
   const hoje = hojeBahiaISO()
+  // Ações em lote no Omie ("nosso Omie" Fase 4): loja Omie, fora a loja 4, com "OP - Acoes em lote" + a permissão da ação.
+  const podeLote = modo === 'omie' && lojaId !== LOJA_BLOQUEADA && (await requirePermissao(lojaId, 'OP - Acoes em lote'))
+  const pode = {
+    concluir: podeLote && (await requirePermissao(lojaId, 'Ordens de Producao - Concluir')),
+    excluir: podeLote && (await requirePermissao(lojaId, 'Ordens de Producao - Excluir')),
+    data: podeLote && (await requirePermissao(lojaId, 'Ordens de Producao - Editar')),
+  }
+  const loteAtivo = pode.concluir || pode.excluir || pode.data
 
   const [{ ops, completa, erro }, visao] = await Promise.all([
     carregarOPsAbertas(lojaId, fonte),
@@ -113,10 +122,12 @@ export default async function OPsAbertasPage({ searchParams }: { searchParams: P
       {!pagina.length ? (
         <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Factory} title={linhas.length ? 'Nenhuma OP neste filtro' : 'Nenhuma OP aberta'} hint={linhas.length ? 'Ajuste os filtros.' : undefined} /></div>
       ) : (
+        <LoteOPsProvider ativo={loteAtivo} pode={pode} idsPagina={pagina.map((l) => l.o.id)} numeros={Object.fromEntries(pagina.map((l) => [l.o.id, l.numero]))}>
         <ul className="space-y-2">
           {pagina.map((l) => (
-            <li key={l.o.id} className="rounded-[var(--r-lg)] bg-surface u-card">
-              <details className="group">
+            <li key={l.o.id} className="flex items-start rounded-[var(--r-lg)] bg-surface u-card">
+              <CheckOP id={l.o.id} numero={l.numero} />
+              <details className="group min-w-0 flex-1">
                 <summary className="flex cursor-pointer list-none flex-wrap items-start gap-x-4 gap-y-1 p-4 [&::-webkit-details-marker]:hidden">
                   <div className="min-w-0 flex-1 basis-56">
                     <div className="truncate text-[14px] font-medium text-text">{l.p?.descricao ?? (l.cod != null ? `Produto ${l.cod}` : 'Produto não informado')}</div>
@@ -159,6 +170,7 @@ export default async function OPsAbertasPage({ searchParams }: { searchParams: P
             </li>
           ))}
         </ul>
+        </LoteOPsProvider>
       )}
 
       <Paginacao basePath="/ordem-producao/abertas" page={page} temProxima={page * POR_PAGINA < filtradas.length} total={filtradas.length} porPagina={POR_PAGINA} />

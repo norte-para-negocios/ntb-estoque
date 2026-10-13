@@ -31,16 +31,17 @@ import * as m27 from '@/lib/actions/movimentacoes'
 import * as m28 from '@/lib/actions/nota-fiscal-proprio'
 import * as m29 from '@/lib/actions/nota-fiscal'
 import * as m30 from '@/lib/actions/onboarding-loja'
-import * as m31 from '@/lib/actions/ordem-producao'
-import * as m32 from '@/lib/actions/produto-minimo'
-import * as m33 from '@/lib/actions/produto-substituicao'
-import * as m34 from '@/lib/actions/produto'
-import * as m35 from '@/lib/actions/produtos-search'
-import * as m36 from '@/lib/actions/sintegra'
-import * as m37 from '@/lib/actions/sync-status'
-import * as m38 from '@/lib/actions/transferencia'
-import * as m39 from '@/lib/actions/usuario'
-import * as m40 from '@/lib/actions/validade-proprio'
+import * as m31 from '@/lib/actions/ops-lote'
+import * as m32 from '@/lib/actions/ordem-producao'
+import * as m33 from '@/lib/actions/produto-minimo'
+import * as m34 from '@/lib/actions/produto-substituicao'
+import * as m35 from '@/lib/actions/produto'
+import * as m36 from '@/lib/actions/produtos-search'
+import * as m37 from '@/lib/actions/sintegra'
+import * as m38 from '@/lib/actions/sync-status'
+import * as m39 from '@/lib/actions/transferencia'
+import * as m40 from '@/lib/actions/usuario'
+import * as m41 from '@/lib/actions/validade-proprio'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Acao = (...args: any[]) => Promise<unknown>
@@ -156,53 +157,54 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'nota-fiscal#excluirRecebimentoNF': m29.excluirRecebimentoNF as Acao,
   'onboarding-loja#gerarCodigoLoja': m30.gerarCodigoLoja as Acao,
   'onboarding-loja#removerCodigoLoja': m30.removerCodigoLoja as Acao,
-  'ordem-producao#criarOrdemProducao': m31.criarOrdemProducao as Acao,
-  'ordem-producao#criarOrdensProducao': m31.criarOrdensProducao as Acao,
-  'ordem-producao#saldoAtualProdutos': m31.saldoAtualProdutos as Acao,
-  'ordem-producao#setValidadeOP': m31.setValidadeOP as Acao,
-  'ordem-producao#setQuantidadeOP': m31.setQuantidadeOP as Acao,
-  'ordem-producao#setDataOP': m31.setDataOP as Acao,
-  'ordem-producao#setQtdPlanejadaOP': m31.setQtdPlanejadaOP as Acao,
-  'ordem-producao#finishOP': m31.finishOP as Acao,
-  'ordem-producao#excluirOP': m31.excluirOP as Acao,
-  'ordem-producao#reverterOP': m31.reverterOP as Acao,
-  'ordem-producao#retryOPsPendentes': m31.retryOPsPendentes as Acao,
-  'ordem-producao#finishOPsEmLote': m31.finishOPsEmLote as Acao,
-  'ordem-producao#reverterOPsEmLote': m31.reverterOPsEmLote as Acao,
-  'produto-minimo#setEstoqueMinimo': m32.setEstoqueMinimo as Acao,
-  'produto-substituicao#criarProdutoSubstituicao': m33.criarProdutoSubstituicao as Acao,
-  'produto-substituicao#excluirProdutoSubstituicao': m33.excluirProdutoSubstituicao as Acao,
-  'produto#buscarFamilias': m34.buscarFamilias as Acao,
-  'produto#sugerirProximoCodigo': m34.sugerirProximoCodigo as Acao,
-  'produto#criarProduto': m34.criarProduto as Acao,
-  'produto#editarProduto': m34.editarProduto as Acao,
-  'produto#excluirProduto': m34.excluirProduto as Acao,
-  'produtos-search#buscarProdutos': m35.buscarProdutos as Acao,
-  'produtos-search#buscarProdutoPorCodigo': m35.buscarProdutoPorCodigo as Acao,
-  'sintegra#consultarCnpj': m36.consultarCnpj as Acao,
-  'sintegra#importarParceiro': m36.importarParceiro as Acao,
-  'sync-status#reprocessarSync': m37.reprocessarSync as Acao,
-  'transferencia#createTransferencia': m38.createTransferencia as Acao,
-  'transferencia#addMovimento': m38.addMovimento as Acao,
-  'transferencia#enviarMovimento': m38.enviarMovimento as Acao,
-  'transferencia#salvarObservacaoTransferencia': m38.salvarObservacaoTransferencia as Acao,
-  'transferencia#salvarObservacaoItem': m38.salvarObservacaoItem as Acao,
-  'transferencia#removeMovimento': m38.removeMovimento as Acao,
-  'transferencia#finishTransferencia': m38.finishTransferencia as Acao,
-  'transferencia#forceSyncTransferencia': m38.forceSyncTransferencia as Acao,
-  'transferencia#retryMovimentosTransferenciaPendentes': m38.retryMovimentosTransferenciaPendentes as Acao,
-  'transferencia#duplicarTransferencia': m38.duplicarTransferencia as Acao,
-  'transferencia#excluirTransferencia': m38.excluirTransferencia as Acao,
-  'transferencia#editQuantidadeMovimento': m38.editQuantidadeMovimento as Acao,
-  'usuario#criarUsuario': m39.criarUsuario as Acao,
-  'usuario#editarUsuario': m39.editarUsuario as Acao,
-  'usuario#aprovarUsuario': m39.aprovarUsuario as Acao,
-  'usuario#recusarUsuario': m39.recusarUsuario as Acao,
-  'usuario#excluirUsuario': m39.excluirUsuario as Acao,
-  'usuario#togglePermissao': m39.togglePermissao as Acao,
-  'usuario#redefinirSenha': m39.redefinirSenha as Acao,
-  'usuario#toggleLocal': m39.toggleLocal as Acao,
-  'validade-proprio#baixarLoteVencido': m40.baixarLoteVencido as Acao,
-  'validade-proprio#salvarAlertaValidade': m40.salvarAlertaValidade as Acao,
-  'validade-proprio#reconciliarLotes': m40.reconciliarLotes as Acao,
+  'ops-lote#acaoOPLote': m31.acaoOPLote as Acao,
+  'ordem-producao#criarOrdemProducao': m32.criarOrdemProducao as Acao,
+  'ordem-producao#criarOrdensProducao': m32.criarOrdensProducao as Acao,
+  'ordem-producao#saldoAtualProdutos': m32.saldoAtualProdutos as Acao,
+  'ordem-producao#setValidadeOP': m32.setValidadeOP as Acao,
+  'ordem-producao#setQuantidadeOP': m32.setQuantidadeOP as Acao,
+  'ordem-producao#setDataOP': m32.setDataOP as Acao,
+  'ordem-producao#setQtdPlanejadaOP': m32.setQtdPlanejadaOP as Acao,
+  'ordem-producao#finishOP': m32.finishOP as Acao,
+  'ordem-producao#excluirOP': m32.excluirOP as Acao,
+  'ordem-producao#reverterOP': m32.reverterOP as Acao,
+  'ordem-producao#retryOPsPendentes': m32.retryOPsPendentes as Acao,
+  'ordem-producao#finishOPsEmLote': m32.finishOPsEmLote as Acao,
+  'ordem-producao#reverterOPsEmLote': m32.reverterOPsEmLote as Acao,
+  'produto-minimo#setEstoqueMinimo': m33.setEstoqueMinimo as Acao,
+  'produto-substituicao#criarProdutoSubstituicao': m34.criarProdutoSubstituicao as Acao,
+  'produto-substituicao#excluirProdutoSubstituicao': m34.excluirProdutoSubstituicao as Acao,
+  'produto#buscarFamilias': m35.buscarFamilias as Acao,
+  'produto#sugerirProximoCodigo': m35.sugerirProximoCodigo as Acao,
+  'produto#criarProduto': m35.criarProduto as Acao,
+  'produto#editarProduto': m35.editarProduto as Acao,
+  'produto#excluirProduto': m35.excluirProduto as Acao,
+  'produtos-search#buscarProdutos': m36.buscarProdutos as Acao,
+  'produtos-search#buscarProdutoPorCodigo': m36.buscarProdutoPorCodigo as Acao,
+  'sintegra#consultarCnpj': m37.consultarCnpj as Acao,
+  'sintegra#importarParceiro': m37.importarParceiro as Acao,
+  'sync-status#reprocessarSync': m38.reprocessarSync as Acao,
+  'transferencia#createTransferencia': m39.createTransferencia as Acao,
+  'transferencia#addMovimento': m39.addMovimento as Acao,
+  'transferencia#enviarMovimento': m39.enviarMovimento as Acao,
+  'transferencia#salvarObservacaoTransferencia': m39.salvarObservacaoTransferencia as Acao,
+  'transferencia#salvarObservacaoItem': m39.salvarObservacaoItem as Acao,
+  'transferencia#removeMovimento': m39.removeMovimento as Acao,
+  'transferencia#finishTransferencia': m39.finishTransferencia as Acao,
+  'transferencia#forceSyncTransferencia': m39.forceSyncTransferencia as Acao,
+  'transferencia#retryMovimentosTransferenciaPendentes': m39.retryMovimentosTransferenciaPendentes as Acao,
+  'transferencia#duplicarTransferencia': m39.duplicarTransferencia as Acao,
+  'transferencia#excluirTransferencia': m39.excluirTransferencia as Acao,
+  'transferencia#editQuantidadeMovimento': m39.editQuantidadeMovimento as Acao,
+  'usuario#criarUsuario': m40.criarUsuario as Acao,
+  'usuario#editarUsuario': m40.editarUsuario as Acao,
+  'usuario#aprovarUsuario': m40.aprovarUsuario as Acao,
+  'usuario#recusarUsuario': m40.recusarUsuario as Acao,
+  'usuario#excluirUsuario': m40.excluirUsuario as Acao,
+  'usuario#togglePermissao': m40.togglePermissao as Acao,
+  'usuario#redefinirSenha': m40.redefinirSenha as Acao,
+  'usuario#toggleLocal': m40.toggleLocal as Acao,
+  'validade-proprio#baixarLoteVencido': m41.baixarLoteVencido as Acao,
+  'validade-proprio#salvarAlertaValidade': m41.salvarAlertaValidade as Acao,
+  'validade-proprio#reconciliarLotes': m41.reconciliarLotes as Acao,
 })
