@@ -204,3 +204,16 @@ export function totaisDe(linhas: { quantidade: number; contagem?: boolean; cance
   }
   return { entradas, saidas }
 }
+
+/**
+ * Condições do `.or()` da busca de OP (texto JÁ escapado com escapeIlikeOr): número da OP, código do Omie (só dígitos,
+ * até 18), observação do app e do Omie (cupom), e os produtos cujo nome/código casou. A data vai à parte (previsão ou conclusão).
+ */
+export function clausulasBuscaOP(b: { texto: string; numero: string | null; data: string | null }, idsProduto: number[]): string[] {
+  if (!b.texto) return []
+  const c = [`identificacao_c_num_op.ilike.%${b.texto}%`]
+  if (b.numero && /^\d{1,18}$/.test(b.numero)) c.push(`identificacao_n_cod_op.eq.${b.numero}`)
+  c.push(`observacao.ilike.%${b.texto}%`, `obs_omie.ilike.%${b.texto}%`)
+  if (idsProduto.length) c.push(`identificacao_n_cod_produto.in.(${idsProduto.join(',')})`)
+  return c
+}

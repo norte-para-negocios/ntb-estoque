@@ -6,6 +6,7 @@ import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { complementarOrdensProducao, limiteJanelaQuente } from '@/lib/historico-contabo'
+import { resolverBuscaOP, aplicarBuscaOP } from '@/lib/ordem-producao/busca-op'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { resolverFiltrosOPProprio, aplicarFiltrosOPProprio, carregarExtrasOPProprio } from '@/lib/estoque/op-proprio-consulta'
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
     local: searchParams.get('local') || undefined,
     op_insumo: searchParams.get('op_insumo') || undefined,
     op_usuario: searchParams.get('op_usuario') || undefined,
+    q: searchParams.get('q') || undefined,
   }
   const proprio = (await modoDaLoja(lojaId)) === 'proprio'
   const filtrosProprio = proprio ? await resolverFiltrosOPProprio(supabase, lojaId, { local: sp.local, usuario: sp.op_usuario, insumo: sp.op_insumo }) : null
@@ -48,6 +50,8 @@ export async function GET(request: Request) {
   // selecionado na tela. Mesma logica de baseQuery() em page.tsx.
   const filtroStatus = sp.op_status ?? ''
   const hojeISO = hojeBahiaISO()
+  // Mesma barra de pesquisa da tela (?q=): com busca, só o banco principal (sem Contabo), como a tela.
+  const busca = await resolverBuscaOP(supabase, lojaId, sp.q, hojeISO)
 
   // Mesma lógica da page: cruza via produtos para obter os codigo_produto.
   // tipo_produto/familia vem da URL como lista separada por vírgula (multi-select).
@@ -118,7 +122,7 @@ export async function GET(request: Request) {
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
     if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
-    return q
+    return aplicarBuscaOP(q, busca)
   }
 
   for (let pagina = 0; ; pagina++) {
@@ -133,7 +137,7 @@ export async function GET(request: Request) {
   // o filtro de periodo aqui e sobre identificacao_d_dt_previsao (linhas acima),
   // nao dt_conclusao_real (default do helper, usado por lib/resumo-dia.ts). O CSV
   // precisa bater com o que a tela mostra.
-  const ordens = (!proprio && (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente()))
+  const ordens = (!proprio && !busca.ativa && (!sp.data_inicio || sp.data_inicio < limiteJanelaQuente()))
     ? await complementarOrdensProducao(ordensRaw, { lojaId, dataInicio: sp.data_inicio, dataFinal: sp.data_final, campo: 'previsao' })
     : ordensRaw
 

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   lerFiltrosMovimentacoes, origemDoKardex, hrefDocumento, numerosCandidatos, interpretarBuscaOP,
-  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, type OPMin, type KardexMin,
+  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, clausulasBuscaOP, type OPMin, type KardexMin,
 } from './movimentacoes-puro.ts'
 
 const HOJE = '2026-10-13'
@@ -125,4 +125,16 @@ test('totais: contagem e cancelado fora', () => {
     totaisDe([{ quantidade: 5 }, { quantidade: -2 }, { quantidade: 9, contagem: true }, { quantidade: -4, cancelado: true }]),
     { entradas: 5, saidas: 2 },
   )
+})
+
+test('cláusulas da busca de OP (texto já escapado)', () => {
+  assert.deepEqual(clausulasBuscaOP({ texto: '396850', numero: '396850', data: null }, []), [
+    'identificacao_c_num_op.ilike.%396850%', 'identificacao_n_cod_op.eq.396850', 'observacao.ilike.%396850%', 'obs_omie.ilike.%396850%',
+  ])
+  assert.deepEqual(clausulasBuscaOP({ texto: 'cupom 55', numero: null, data: null }, [11, 12]), [
+    'identificacao_c_num_op.ilike.%cupom 55%', 'observacao.ilike.%cupom 55%', 'obs_omie.ilike.%cupom 55%', 'identificacao_n_cod_produto.in.(11,12)',
+  ])
+  assert.deepEqual(clausulasBuscaOP({ texto: '', numero: null, data: '2026-10-13' }, []), [])
+  // código do Omie só quando cabe num bigint
+  assert.ok(!clausulasBuscaOP({ texto: '2026/0001', numero: '2026/0001', data: null }, []).some((c) => c.startsWith('identificacao_n_cod_op')))
 })

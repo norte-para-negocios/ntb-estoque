@@ -23,6 +23,8 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { isOpConcluida, opStatus } from '@/lib/op-status'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { resolverFiltrosOPProprio, aplicarFiltrosOPProprio } from '@/lib/estoque/op-proprio-consulta'
+import { resolverBuscaOP, aplicarBuscaOP } from '@/lib/ordem-producao/busca-op'
+import { BuscaOP } from '@/components/ordem-producao/BuscaOP'
 import { Factory, Download, ChevronsUpDown, ArrowUp, ArrowDown, ShoppingCart } from 'lucide-react'
 import {
   complementarOrdensProducao,
@@ -59,6 +61,7 @@ export default async function OrdemProducaoPage({
     op_usuario?: string
     ord?: string
     page?: string
+    q?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -93,8 +96,12 @@ export default async function OrdemProducaoPage({
   const [anoAtual, mesAtual] = hojeISO.split('-').map(Number)
   const primeiroDiaMes = `${hojeISO.slice(0, 7)}-01`
   const ultimoDiaMes = `${hojeISO.slice(0, 7)}-${String(new Date(anoAtual, mesAtual, 0).getDate()).padStart(2, '0')}`
-  const dataInicio = sp.data_inicio ?? primeiroDiaMes
-  const dataFinal = sp.data_final ?? ultimoDiaMes
+  // Barra de pesquisa (?q=): com busca, o mês corrente deixa de ser o padrão (a OP procurada pode ser de outro mês)
+  // e a lista lê só o banco principal (ele tem todo o histórico; o Contabo ainda guarda OPs já excluídas).
+  const busca = await resolverBuscaOP(supabase, lojaId, sp.q, hojeISO)
+  const dataInicio = sp.data_inicio ?? (busca.ativa ? '' : primeiroDiaMes)
+  const dataFinal = sp.data_final ?? (busca.ativa ? '' : ultimoDiaMes)
+  const usarContabo = !busca.ativa && !!dataInicio && dataInicio < limiteJanelaQuente()
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Este mês', dataIni: primeiroDiaMes, dataFim: ultimoDiaMes })
 
   // Filtro de status: concluida (S/N) ou status granular (prevista/pendente/atrasada).
@@ -105,14 +112,9 @@ export default async function OrdemProducaoPage({
   const filtroStatus = sp.op_status ?? ''
 
   // Familias distintas (produtos com ordens) para o select (melhor esforco).
-  const { data: produtosFamilia } = await supabase
-    .from('produtos')
-    .select('descricao_familia')
-    .eq('loja_id', lojaId)
-    .not('descricao_familia', 'is', null)
-  const familias = [
-    ...new Set((produtosFamilia ?? []).map((p) => p.descricao_familia).filter(Boolean)),
-  ].sort() as string[]
+  // Famílias pela tabela de famílias (antes: a coluna de todos os produtos, cortada em 1000 linhas e lenta).
+  const { data: familiasRaw } = await supabase.from('familias').select('nome').eq('loja_id', lojaId).order('nome')
+  const familias = [...new Set((familiasRaw ?? []).map((f) => f.nome as string).filter(Boolean))]
 
   // Filtros op_produto / tipo_produto / familia: as colunas produto_* em
   // ordens_producao sao 100% NULL. Cruzamos via a tabela produtos para obter os
@@ -160,7 +162,7 @@ export default async function OrdemProducaoPage({
   // So precisa buscar tudo em memoria para ordenar por NOME do produto (vem do
   // join, nao da query), ou quando o periodo cruza a janela quente (o Contabo
   // pode ter linhas no meio do intervalo, paginacao nativa nao e confiavel nesse caso).
-  const precisaBuscarTudo = ordEmMemoria || (!proprio && dataInicio < limiteJanelaQuente())
+  const precisaBuscarTudo = ordEmMemoria || (!proprio && usarContabo)
 
   function baseQuery() {
     let q = supabase
@@ -193,6 +195,7 @@ export default async function OrdemProducaoPage({
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
     if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
+    q = aplicarBuscaOP(q, busca)
     // Ordenacao no banco (qtd/validade/codigo do produto). produto_az/za sao
     // reordenados em memoria depois. O desempate por id mantem a janela .range
     // estavel quando a chave de ordem nao e unica.
@@ -244,7 +247,7 @@ export default async function OrdemProducaoPage({
       if (lote.length < LOTE) break
       if (i === MAX_LOTES - 1) truncado = true // saiu pelo teto com lote cheio: ha mais
     }
-    const completouComContabo = !proprio && dataInicio < limiteJanelaQuente()
+    const completouComContabo = !proprio && usarContabo
     // campo: 'previsao' -- o filtro de periodo desta tela e sobre
     // identificacao_d_dt_previsao (data planejada), nao dt_conclusao_real (default
     // do helper). Achado real 2026-07-19: sem isso, o complemento frio filtrava
@@ -365,7 +368,7 @@ export default async function OrdemProducaoPage({
       q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
     }
     if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
-    return q
+    return aplicarBuscaOP(q, busca)
   }
 
   type TotalRow = { id: number; identificacao_n_cod_op: number; concluida: boolean | null; identificacao_d_dt_previsao: string | null }
@@ -380,7 +383,7 @@ export default async function OrdemProducaoPage({
   // pra caber no lote), nao o valor exato -- avisamos em vez de mostrar errado.
   let totaisParciais = false
 
-  if (!proprio && dataInicio < limiteJanelaQuente()) {
+  if (!proprio && usarContabo) {
     function totaisRowsQuery() {
       let q = supabase
         .from('ordens_producao')
@@ -481,6 +484,7 @@ export default async function OrdemProducaoPage({
       if (sp.ordem_producao) q = q.ilike('identificacao_c_num_op', `%${escapeIlike(sp.ordem_producao)}%`)
       if (codigosFiltro !== null) q = q.in('identificacao_n_cod_produto', codigosFiltro.length ? codigosFiltro : [-1])
       if (filtrosProprio) q = aplicarFiltrosOPProprio(q, filtrosProprio)
+      q = aplicarBuscaOP(q, busca)
       const { data: lote, error: erroLote } = await q.order('id', { ascending: true }).range(off, off + 999)
       if (erroLote) { console.error('ordem-producao: falha ao somar custos', erroLote.message); break }
       const rows = (lote ?? []) as { concluida: boolean | null; custo_total: number | null }[]
@@ -494,8 +498,8 @@ export default async function OrdemProducaoPage({
 
   const exportParams = new URLSearchParams()
   // Usa o periodo efetivo (mes corrente por default) para o CSV bater com a tela.
-  exportParams.set('data_inicio', dataInicio)
-  exportParams.set('data_final', dataFinal)
+  if (dataInicio) exportParams.set('data_inicio', dataInicio)
+  if (dataFinal) exportParams.set('data_final', dataFinal)
   if (sp.ordem_producao) exportParams.set('ordem_producao', sp.ordem_producao)
   if (sp.op_produto) exportParams.set('op_produto', sp.op_produto)
   if (sp.tipo_produto) exportParams.set('tipo_produto', sp.tipo_produto)
@@ -503,6 +507,7 @@ export default async function OrdemProducaoPage({
   if (sp.op_concluido) exportParams.set('op_concluido', sp.op_concluido)
   if (sp.op_status) exportParams.set('op_status', sp.op_status)
   if (sp.origem) exportParams.set('origem', sp.origem)
+  if (sp.q) exportParams.set('q', sp.q)
   if (proprio) {
     if (sp.local) exportParams.set('local', sp.local)
     if (sp.op_insumo) exportParams.set('op_insumo', sp.op_insumo)
@@ -596,6 +601,7 @@ export default async function OrdemProducaoPage({
         {/* Título numa linha própria; ações na linha de baixo (mesma ordem). No celular
             a barra rola na horizontal (com fade nas pontas) em vez de quebrar/estourar. */}
         <PageHeader title="Ordens de Produção" icon={Factory} />
+        <BuscaOP valorAtual={sp.q ?? ''} />
         <div className="flex flex-wrap items-center gap-2">
               <FiltrosGaveta
                 basePath="/ordem-producao"
@@ -626,21 +632,21 @@ export default async function OrdemProducaoPage({
                 <Download className="size-4" /> Excel
               </a>
               <a
-                href={`/ordem-producao/programacao?mes=${dataInicio.slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                href={`/ordem-producao/programacao?mes=${(dataInicio || primeiroDiaMes).slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Matriz produto x dia do mês, com espaço para anotar o produzido"
               >
                 <Factory className="size-4" /> Imprimir Programação
               </a>
               <a
-                href={`/ordem-producao/programacao?mes=${dataInicio.slice(0, 7)}&atraso=1${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                href={`/ordem-producao/programacao?mes=${(dataInicio || primeiroDiaMes).slice(0, 7)}&atraso=1${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Só as ordens ainda não concluídas com previsão já vencida"
               >
                 <Factory className="size-4" /> Imprimir Atrasadas
               </a>
               <a
-                href={`/ordem-producao/necessidade-mp?mes=${dataInicio.slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
+                href={`/ordem-producao/necessidade-mp?mes=${(dataInicio || primeiroDiaMes).slice(0, 7)}${sp.local ? `&local=${sp.local}` : ''}${sp.tipo_produto ? `&tipo_produto=${encodeURIComponent(sp.tipo_produto)}` : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Quantidade de matéria-prima necessária por dia, calculada a partir da ficha técnica das ordens previstas"
               >
@@ -682,7 +688,11 @@ export default async function OrdemProducaoPage({
       )}
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-[13px] text-text-muted">Período: <span className="num">{fmtDataBR(dataInicio)}</span> a <span className="num">{fmtDataBR(dataFinal)}</span></span>
+        {dataInicio || dataFinal ? (
+          <span className="text-[13px] text-text-muted">Período: <span className="num">{fmtDataBR(dataInicio) ?? 'início'}</span> a <span className="num">{fmtDataBR(dataFinal) ?? 'hoje'}</span></span>
+        ) : (
+          <span className="text-[13px] text-text-muted">Busca em todas as datas{busca.data ? ` (previstas ou concluídas em ${fmtDataBR(busca.data)})` : ''}</span>
+        )}
       </div>
 
       {truncado && (
