@@ -19,15 +19,21 @@ function addDias(iso: string, n: number): string {
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000)
 const inteiro = (v: string | undefined) => (v && /^\d+$/.test(v.trim()) ? Number(v.trim()) : null)
 
-export function lerFiltrosKardex(sp: Record<string, string | undefined>, hoje: string): FiltrosKardexLoja {
+/** Período da URL (data_inicio/data_final): padrão = últimos `padraoDias`; invertido troca; acima de `maxDias` corta e avisa. */
+export function lerPeriodo(sp: Record<string, string | undefined>, hoje: string, padraoDias: number, maxDias: number): { ini: string; fim: string; erro: string | null } {
   let fim = sp.data_final && ISO.test(sp.data_final) ? sp.data_final : hoje
-  let ini = sp.data_inicio && ISO.test(sp.data_inicio) ? sp.data_inicio : addDias(fim, -6)
+  let ini = sp.data_inicio && ISO.test(sp.data_inicio) ? sp.data_inicio : addDias(fim, -(padraoDias - 1))
   if (ini > fim) [ini, fim] = [fim, ini]
   let erro: string | null = null
-  if (diasEntre(ini, fim) > MAX_DIAS_KARDEX - 1) {
-    ini = addDias(fim, -(MAX_DIAS_KARDEX - 1))
-    erro = `Período limitado a ${MAX_DIAS_KARDEX} dias: mostrando a partir de ${ini.split('-').reverse().join('/')}.`
+  if (diasEntre(ini, fim) > maxDias - 1) {
+    ini = addDias(fim, -(maxDias - 1))
+    erro = `Período limitado a ${maxDias} dias: mostrando a partir de ${ini.split('-').reverse().join('/')}.`
   }
+  return { ini, fim, erro }
+}
+
+export function lerFiltrosKardex(sp: Record<string, string | undefined>, hoje: string): FiltrosKardexLoja {
+  const { ini, fim, erro } = lerPeriodo(sp, hoje, 7, MAX_DIAS_KARDEX)
   const page = inteiro(sp.page)
   return {
     ini, fim, produto: inteiro(sp.produto), q: (sp.q ?? '').trim(), local: inteiro(sp.local), origem: (sp.origem ?? '').trim(),

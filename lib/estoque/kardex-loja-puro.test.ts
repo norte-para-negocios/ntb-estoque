@@ -63,3 +63,11 @@ test('rotuloOrigemKardex: código com descrição, ou só um deles', () => {
   assert.equal(rotuloOrigemKardex('VEN', null), 'VEN')
   assert.equal(rotuloOrigemKardex('', null), '-')
 })
+
+test('lerPeriodo: padrão e limite configuráveis', async () => {
+  const { lerPeriodo } = await import('./kardex-loja-puro.ts')
+  assert.deepEqual(lerPeriodo({}, HOJE, 30, 92), { ini: '2026-09-14', fim: '2026-10-13', erro: null })
+  const r = lerPeriodo({ data_inicio: '2026-01-01', data_final: '2026-10-13' }, HOJE, 30, 92)
+  assert.equal(r.ini, '2026-07-14')
+  assert.match(r.erro ?? '', /92/)
+})
