@@ -1,5 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { omieRequest, type LojaOmie } from './client'
+import { omieRequest, OmieError, type LojaOmie } from './client'
+import { autorDoAjuste, origemDoAjuste } from '@/lib/estoque/ajuste-autor'
+import { aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
+import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
+import { pegarTravaSync, soltarTravaSync } from './trava-sync'
+import { gravarEstadoSync, lerEstadoSync, type ResumoCiclo } from './espelho-estado'
 
 interface OmieAjuste {
   id_ajuste: number
@@ -13,6 +18,8 @@ interface OmieAjuste {
   motivo: string
   obs: string
   origem: string
+  cod_int_ajuste?: string
+  imp_api?: string
 }
 
 interface OmieAjusteResponse {
@@ -36,6 +43,9 @@ interface MovimentoRow {
   obs: string | null
   origem: string
   status: string
+  autor: string | null
+  origem_ajuste: string
+  cod_int_ajuste: string | null
 }
 
 const LOTE_MOVIMENTOS = 200
@@ -50,7 +60,8 @@ async function gravarMovimentosNoFrio(lojaId: number, linhas: MovimentoRow[]): P
   const key = process.env.NTB_FRIO_API_KEY
   if (!url || !linhas.length) return
   for (let i = 0; i < linhas.length; i += LOTE_MOVIMENTOS) {
-    const lote = linhas.slice(i, i + LOTE_MOVIMENTOS)
+    // Colunas da migration 160 (autor/origem_ajuste/cod_int_ajuste) não existem no Contabo: fora do envio.
+    const lote = linhas.slice(i, i + LOTE_MOVIMENTOS).map(({ autor: _a, origem_ajuste: _o, cod_int_ajuste: _c, ...resto }) => resto)
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 15000)
@@ -96,6 +107,9 @@ function ajusteParaMovimento(lojaId: number, a: OmieAjuste): MovimentoRow | null
     obs: a.obs || null,
     origem: a.origem === 'PDV' ? 'PDV' : 'AJU',
     status: 'Concluido',
+    autor: autorDoAjuste(a.obs),
+    origem_ajuste: origemDoAjuste(a),
+    cod_int_ajuste: a.cod_int_ajuste || null,
   }
 }
 
@@ -178,4 +192,66 @@ export async function syncAjustes(loja: LojaOmie): Promise<number> {
   }
 
   return totalSalvos
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Lojas com espelho completo ("nosso Omie", Fase 1): por JANELA DE DATA, não pelo maior id_ajuste (que pula
+// ajuste antigo lançado depois, e o app grava id_ajuste direto em movimentos). Frente recente = últimos 3 dias a
+// cada 30 min; backfill até 2026-07-01 com cursor de data (espelho_sync_estado, frente 'ajustes').
+export const CFG_AJUSTES: ConfigFrentes = { diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30 }
+const PAGINAS_AJUSTES_POR_CICLO = 8
+const PAUSA_AJUSTES_MS = 700
+const TETO_AJUSTES_MS = 150_000
+
+export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Promise<ResumoCiclo> {
+  const resumo: ResumoCiclo = { loja: loja.id, paginas: 0, linhas: 0, parouPor: null, historicoDesde: null }
+  if (!(await pegarTravaSync(loja.id, 'ajustes', 600))) return { ...resumo, parouPor: 'trava (outro ciclo em andamento)' }
+  const supabase = createServiceClient()
+  const t0 = Date.now()
+  try {
+    let estado = lerEstado(await lerEstadoSync(loja.id, 'ajustes'))
+    const { hoje } = relogioBahia(agora)
+    while (resumo.paginas < PAGINAS_AJUSTES_POR_CICLO && Date.now() - t0 < TETO_AJUSTES_MS) {
+      const p = proximaLeitura(estado, CFG_AJUSTES, hoje, Date.now(), [null])
+      if (!p) break
+      if (resumo.paginas > 0) await sleep(PAUSA_AJUSTES_MS)
+      let resp: OmieAjusteResponse
+      try {
+        resp = await omieRequest<OmieAjusteResponse>({
+          loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test,
+          endpoint: 'v1/estoque/ajuste', call: 'ListarAjusteEstoque',
+          data: { pagina: p.cursor.pagina, registros_por_pagina: 50, data_movimento_de: isoParaBr(p.cursor.ini), data_movimento_ate: isoParaBr(p.cursor.fim) },
+          semRepetir: true,
+        })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        resumo.parouPor = `${ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined) ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
+        await gravarEstadoSync(loja.id, 'ajustes', p.estado, resumo.parouPor)
+        break
+      }
+      resumo.paginas++
+      const ajustes = resp?.ajuste_estoque_lista ?? []
+      // Mesmo id_ajuste 2x no lote quebraria o ON CONFLICT da RPC: fica a última ocorrência.
+      const porId = new Map<number, MovimentoRow>()
+      for (const a of ajustes) {
+        const r = ajusteParaMovimento(loja.id, a)
+        if (r) porId.set(Number(r.id_ajuste), r)
+      }
+      const linhas = [...porId.values()]
+      if (linhas.length) {
+        // Índice único PARCIAL em movimentos(loja_id, id_ajuste): .upsert() não serve, só a RPC (migration 079/160).
+        const { error } = await supabase.rpc('upsert_movimentos_ajuste', { p_rows: linhas })
+        if (error) throw new Error(`upsert_movimentos_ajuste loja ${loja.id}: ${error.message}`)
+        await gravarMovimentosNoFrio(loja.id, linhas)
+      }
+      resumo.linhas += linhas.length
+      const total = ajustes.length ? Number(resp.total_de_paginas) || 1 : Number(resp?.total_de_paginas) || 0
+      estado = aposLeitura(p.estado, p.frente, total, [null], CFG_AJUSTES, new Date().toISOString())
+      await gravarEstadoSync(loja.id, 'ajustes', estado, null)
+    }
+    resumo.historicoDesde = historicoDesde(estado)
+    return resumo
+  } finally {
+    await soltarTravaSync(loja.id, 'ajustes')
+  }
 }
