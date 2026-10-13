@@ -47,6 +47,14 @@ hit /api/cron/retry-integracao-vendas
 # migrado pro crontab do Contabo -- so existia no vercel.json (inativo desde
 # que producao saiu do Vercel), morto ha 7+ dias sem nenhum sinal de erro.
 hit /api/cron/sync-ajustes
+# "Nosso Omie" Fase 1 (espelho completo, migration 160): so lojas com lojas.espelho_completo (hoje a 5), nunca
+# loja de teste nem a 4, nunca entre 00:00 e 07:00 da Bahia (a faxina do Mac usa a mesma chave do Omie). Cada um e
+# pequeno por ciclo e guarda cursor no banco: kardex da loja inteira (12 paginas/ciclo, dia a dia + backfill ate
+# 01/07/2026), OPs abertas (lista completa no maximo a cada 30 min + ate 30 consultas da ficha da OP) e fichas
+# tecnicas (ate 20 produtos/ciclo, refaz a cada 7 dias).
+hit /api/cron/sync-kardex
+hit /api/cron/sync-ops-abertas
+hit /api/cron/sync-fichas
 hit /api/cron/sync-posicao
 hit /api/cron/projetar-posicao-proprio
 # Achado real (usuario reportou 01/08: ficava excluindo OP direto no Omie e o
@@ -79,6 +87,8 @@ if [ "$bloco" -eq 3 ]; then hit /api/cron/sync-faturamento; fi
 # pra uma tabela cache (produto_preco_recente) -- esse endpoint mantem ela
 # atualizada. E so um refresh local (nao chama o Omie), roda rapido.
 if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-preco-movimentacao; fi
+# Familias de produto (PesquisarFamilias, 1-2 paginas por loja): existia a rota mas nunca entrou aqui.
+if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-familias; fi
 # Reenvia ao Contabo o faturamento das lojas de estoque proprio que nao chegou no fechamento (so local, sem Omie).
 if [ "$bloco" -eq 5 ]; then hit /api/cron/sync-fechamentos-frio; fi
 
