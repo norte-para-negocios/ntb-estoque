@@ -200,7 +200,10 @@ export async function syncAjustes(loja: LojaOmie): Promise<number> {
 // cada 30 min; backfill até 2026-07-01 com cursor de data (espelho_sync_estado, frente 'ajustes').
 /** Prefixo de parouPor quando o Omie ignora o filtro de data: a rota cai no modo pelo maior id_ajuste. */
 export const FILTRO_IGNORADO = 'filtro de data ignorado pelo Omie'
-export const CFG_AJUSTES: ConfigFrentes = { diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30 }
+// Revisão 1x/dia dos 35 dias anteriores: ajuste lançado hoje com data antiga (o "buraco" do cursor por id).
+export const CFG_AJUSTES: ConfigFrentes = {
+  diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30, diasRevisao: 35, intervaloRevisaoHoras: 24,
+}
 const PAGINAS_AJUSTES_POR_CICLO = 8
 const PAUSA_AJUSTES_MS = 700
 const TETO_AJUSTES_MS = 150_000

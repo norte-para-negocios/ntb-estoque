@@ -1,15 +1,19 @@
 // Cron sync-kardex ("nosso Omie", Fase 1): kardex da loja INTEIRA (ListarMovimentoEstoque sem idProd, um local
 // por vez, 100 por página) em kardex_omie. Frente recente = ontem + hoje a cada 30 min; backfill = para trás em
-// janelas de até 30 dias até 2026-07-01. Poucas páginas por ciclo; para no 1º erro do Omie sem repetir.
+// janelas de até 30 dias até 2026-07-01; revisão = 1x/dia relê os 35 dias anteriores já cobertos (lançamento com data
+// antiga, saldo/CMC recalculado) e apaga o que sumiu do Omie nessa janela. Poucas páginas por ciclo; para no 1º erro
+// do Omie sem repetir.
 import { createServiceClient } from '@/lib/supabase/server'
 import { OmieError, type LojaOmie } from './client'
 import { buscarPaginaKardexLocal, normalizarMovOmie, deduplicarMovs } from './kardex'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
 import { gravarEstadoSync, lerEstadoSync, locaisAtivos, sleep, type ResumoCiclo } from './espelho-estado'
-import { aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
+import { aposLeitura, historicoDesde, janelaFechada, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
 import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
 
-export const CFG_KARDEX: ConfigFrentes = { diasRecentes: 2, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30 }
+export const CFG_KARDEX: ConfigFrentes = {
+  diasRecentes: 2, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30, diasRevisao: 35, intervaloRevisaoHoras: 24,
+}
 const PAGINAS_POR_CICLO = 12
 const PAUSA_MS = 700
 const TETO_MS = 150_000
@@ -52,6 +56,13 @@ export async function sincronizarKardexLoja(loja: LojaOmie, agora = new Date()):
         if (error) throw new Error(`kardex_omie_carga: ${error.message}`)
       }
       estado = aposLeitura(p.estado, p.frente, pagina.totalPaginas, locais, CFG_KARDEX, agoraISO)
+      if (p.frente === 'revisao' && p.cursor.iniciado_em && janelaFechada('revisao', p.cursor, estado)) {
+        // Janela relida inteira (todos os locais): o que não foi visto nela foi excluído/estornado no Omie.
+        const { error } = await supabase.from('kardex_omie').delete().eq('loja_id', loja.id)
+          .gte('data_mov', p.cursor.ini).lte('data_mov', p.cursor.fim).in('codigo_local_estoque', locais)
+          .lt('carregado_em', p.cursor.iniciado_em)
+        if (error) throw new Error(`kardex_omie (apagar sumidos): ${error.message}`)
+      }
       await gravarEstadoSync(loja.id, FRENTE, estado, null)
     }
     resumo.historicoDesde = historicoDesde(estado)
