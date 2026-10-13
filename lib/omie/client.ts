@@ -200,7 +200,10 @@ export async function omieRequest<T = unknown>({
       if (escrita && e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
         throw new OmieError(`Omie não respondeu em 30s (${call}). Tente novamente.`, 'TIMEOUT')
       }
-      if (attempt < 2) await sleep(2000 * (attempt + 1))
+      // semRepetir (crons do espelho): rede/timeout também não repete -- o Omie pode seguir processando a
+      // chamada e a repetição vira "já existe uma requisição" (e conta para o bloqueio).
+      if (!podeRepetirLimite(attempt, semRepetir)) throw e
+      await sleep(2000 * (attempt + 1))
     }
   }
 
