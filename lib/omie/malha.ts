@@ -74,6 +74,28 @@ export async function incluirEstrutura(
   })
 }
 
+/**
+ * Inclui UM item na ficha com `intMalha` (código de integração do item, obrigatório: sem ele o Omie devolve
+ * Client-103). Formato validado pela faxina no Omie real em 11/10/2026 (troca Coca → Pepsi):
+ * `itemMalhaIncluir: [{ intMalha, idProdMalha, quantProdMalha, percPerdaProdMalha }]`.
+ * O local de consumo NÃO vai aqui (só no AlterarEstrutura, depois que o item existe).
+ */
+export async function incluirItemEstrutura(
+  loja: LojaOmie,
+  idProduto: number,
+  item: { intMalha: string; idProdMalha: number; quantProdMalha: number; percPerdaProdMalha: number }
+) {
+  return omieRequest<EstruturaResp>({
+    loja_id: loja.id,
+    omie_app_key: loja.omie_app_key,
+    omie_app_secret: loja.omie_app_secret,
+    is_test: loja.is_test,
+    endpoint: 'v1/geral/malha',
+    call: 'IncluirEstrutura',
+    data: { idProduto, itemMalhaIncluir: [item] },
+  })
+}
+
 export async function alterarEstrutura(
   loja: LojaOmie,
   idProduto: number,

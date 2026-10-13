@@ -4,7 +4,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { OmieError, type LojaOmie } from './client'
-import { consultarEstrutura } from './malha'
+import { consultarEstrutura, type EstruturaItem } from './malha'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
 import { sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
@@ -52,40 +52,53 @@ export async function sincronizarFichasLoja(loja: LojaOmie): Promise<ResumoFicha
         break
       }
       r.lidas++
-      const { data: op, error: errOp } = await supabase.from('ordens_producao').select('full_object')
-        .eq('loja_id', loja.id).eq('identificacao_n_cod_produto', codigoProduto).not('full_object', 'is', null)
-        .order('id', { ascending: false }).limit(1).maybeSingle()
-      if (errOp) throw new Error(`ordens_producao (local da OP): ${errOp.message}`)
-      const linhas = itensDaEstrutura(est?.itens ?? [], {
-        lojaId: loja.id, codigoProduto, tipoPorCodigo, localPorInsumoOP: localPorInsumoDaOP(op?.full_object ?? null),
-      })
-      if (!linhas.length) r.semFicha++
-
-      const { data: atuais, error: errAtuais } = await supabase.from('estrutura_produto_cache').select('*')
-        .eq('loja_id', loja.id).eq('codigo_produto', codigoProduto)
-      if (errAtuais) throw new Error(`estrutura_produto_cache: ${errAtuais.message}`)
-      const porInsumo = new Map(((atuais ?? []) as Record<string, unknown>[]).map((a) => [Number(a.codigo_produto_insumo), a]))
-      const agoraISO = new Date().toISOString()
-      const mudadas = linhas.filter((l) => { const a = porInsumo.get(l.codigo_produto_insumo); return !a || fichaMudou(a, l) })
-        .map((l) => ({ ...l, sincronizado_em: agoraISO }))
-      if (mudadas.length) {
-        const { error } = await supabase.from('estrutura_produto_cache').upsert(mudadas, { onConflict: 'loja_id,codigo_produto,codigo_produto_insumo' })
-        if (error) throw new Error(`estrutura_produto_cache (gravar): ${error.message}`)
-        r.gravadas += mudadas.length
-      }
-      const sairam = insumosQueSairam([...porInsumo.keys()], linhas.map((l) => l.codigo_produto_insumo))
-      if (sairam.length) {
-        const { error } = await supabase.from('estrutura_produto_cache').delete()
-          .eq('loja_id', loja.id).eq('codigo_produto', codigoProduto).in('codigo_produto_insumo', sairam)
-        if (error) throw new Error(`estrutura_produto_cache (apagar): ${error.message}`)
-        r.removidas += sairam.length
-      }
-      const { error: errSync } = await supabase.from('estrutura_produto_sync')
-        .upsert({ loja_id: loja.id, codigo_produto: codigoProduto, sincronizado_em: agoraISO, itens: linhas.length }, { onConflict: 'loja_id,codigo_produto' })
-      if (errSync) throw new Error(`estrutura_produto_sync: ${errSync.message}`)
+      const g = await gravarFichaLida(supabase, loja.id, codigoProduto, est?.itens ?? [], tipoPorCodigo)
+      if (!g.itens) r.semFicha++
+      r.gravadas += g.gravadas
+      r.removidas += g.removidas
     }
     return r
   } finally {
     await soltarTravaSync(loja.id, 'fichas')
   }
+}
+
+type ClienteServico = ReturnType<typeof createServiceClient>
+
+/**
+ * Grava em estrutura_produto_cache a ficha de UM produto recém-lida do Omie (ConsultarEstrutura): local de consumo
+ * pela última OP do produto, só as linhas que mudaram, apaga os insumos que saíram e marca estrutura_produto_sync.
+ * Usada pelo cron sync-fichas e pela troca de insumo (Fase 4) logo depois de reler a ficha.
+ */
+export async function gravarFichaLida(
+  supabase: ClienteServico, lojaId: number, codigoProduto: number, itensOmie: EstruturaItem[], tipoPorCodigo: Map<number, string | null>,
+): Promise<{ itens: number; gravadas: number; removidas: number }> {
+  const { data: op, error: errOp } = await supabase.from('ordens_producao').select('full_object')
+    .eq('loja_id', lojaId).eq('identificacao_n_cod_produto', codigoProduto).not('full_object', 'is', null)
+    .order('id', { ascending: false }).limit(1).maybeSingle()
+  if (errOp) throw new Error(`ordens_producao (local da OP): ${errOp.message}`)
+  const linhas = itensDaEstrutura(itensOmie, {
+    lojaId, codigoProduto, tipoPorCodigo, localPorInsumoOP: localPorInsumoDaOP(op?.full_object ?? null),
+  })
+  const { data: atuais, error: errAtuais } = await supabase.from('estrutura_produto_cache').select('*')
+    .eq('loja_id', lojaId).eq('codigo_produto', codigoProduto)
+  if (errAtuais) throw new Error(`estrutura_produto_cache: ${errAtuais.message}`)
+  const porInsumo = new Map(((atuais ?? []) as Record<string, unknown>[]).map((a) => [Number(a.codigo_produto_insumo), a]))
+  const agoraISO = new Date().toISOString()
+  const mudadas = linhas.filter((l) => { const a = porInsumo.get(l.codigo_produto_insumo); return !a || fichaMudou(a, l) })
+    .map((l) => ({ ...l, sincronizado_em: agoraISO }))
+  if (mudadas.length) {
+    const { error } = await supabase.from('estrutura_produto_cache').upsert(mudadas, { onConflict: 'loja_id,codigo_produto,codigo_produto_insumo' })
+    if (error) throw new Error(`estrutura_produto_cache (gravar): ${error.message}`)
+  }
+  const sairam = insumosQueSairam([...porInsumo.keys()], linhas.map((l) => l.codigo_produto_insumo))
+  if (sairam.length) {
+    const { error } = await supabase.from('estrutura_produto_cache').delete()
+      .eq('loja_id', lojaId).eq('codigo_produto', codigoProduto).in('codigo_produto_insumo', sairam)
+    if (error) throw new Error(`estrutura_produto_cache (apagar): ${error.message}`)
+  }
+  const { error: errSync } = await supabase.from('estrutura_produto_sync')
+    .upsert({ loja_id: lojaId, codigo_produto: codigoProduto, sincronizado_em: agoraISO, itens: linhas.length }, { onConflict: 'loja_id,codigo_produto' })
+  if (errSync) throw new Error(`estrutura_produto_sync: ${errSync.message}`)
+  return { itens: linhas.length, gravadas: mudadas.length, removidas: sairam.length }
 }

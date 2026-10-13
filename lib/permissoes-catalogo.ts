@@ -78,6 +78,18 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Escrever no Omie pela tela',
+    grupo: 'Operação',
+    // "Nosso Omie" Fase 4 (migration 162), só loja de estoque Omie. Cada uma também exige a permissão de
+    // sempre da ação (ex.: Movimentacoes - Criar, Ordens de Producao - Concluir).
+    permissoes: [
+      { nome: 'Estoque - Lancar no Omie', label: 'Entrada, ajuste e transferência no estoque' },
+      { nome: 'OP - Acoes em lote', label: 'OPs em lote' },
+      { nome: 'Fichas - Trocar insumo', label: 'Trocar insumo nas fichas' },
+      { nome: 'Estoque - Corrigir custo', label: 'Corrigir custo de ajuste' },
+    ],
+  },
+  {
     modulo: 'Compras',
     grupo: 'Operação',
     // Estoque proprio: nota de entrada (XML ou manual) que da entrada no ledger.
