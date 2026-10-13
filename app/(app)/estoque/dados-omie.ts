@@ -27,3 +27,17 @@ export async function carregarEstoqueOmieComPosicoes(lojaId: number): Promise<{ 
   const visao = montarVisaoOmie({ produtos, posicoes, locais: locaisRes.data ?? [], familias: famRes.data ?? [] })
   return { visao, posicoes }
 }
+
+export type LinhaSaldoDataRow = { n_cod_prod: number; codigo_local_estoque: number; saldo: number | null; cmc: number | null; data_mov: string }
+
+/** Saldo e custo de cada produto/local numa data, pelo kardex do Omie (RPC saldo_em_data, migration 160). */
+export async function carregarSaldoEmData(lojaId: number, data: string): Promise<{ rows: LinhaSaldoDataRow[]; erro: string | null }> {
+  const supabase = await createClient()
+  let erro: string | null = null
+  const rows = await buscarTodasLinhas<LinhaSaldoDataRow>((from, to) =>
+    supabase.rpc('saldo_em_data', { p_loja_id: lojaId, p_data: data })
+      .select('n_cod_prod, codigo_local_estoque, saldo, cmc, data_mov')
+      .order('n_cod_prod').order('codigo_local_estoque').range(from, to) as unknown as PromiseLike<{ data: LinhaSaldoDataRow[] | null; error: { message: string } | null }>,
+    undefined, (e) => { erro = e.message })
+  return { rows, erro }
+}

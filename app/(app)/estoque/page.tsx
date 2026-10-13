@@ -13,7 +13,11 @@ import { BarraSaldo, fmtBRL, Indicador, Saldo, SituacaoPill } from '@/components
 import { FiltrosEstoque } from '@/components/estoque-proprio/FiltrosEstoque'
 import { ModalEntrada } from '@/components/estoque-proprio/Acoes'
 import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from './dados'
-import { carregarEstoqueOmie } from './dados-omie'
+import { carregarEstoqueOmie, carregarSaldoEmData } from './dados-omie'
+import { historicoKardexDesde, fmtDataBR } from './dados-comum'
+import { aplicarSaldoEmData, avaliarDataSaldo, type MotivoDataInvalida } from '@/lib/estoque/saldo-data-puro'
+import { SeletorData } from '@/components/estoque-proprio/SeletorData'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { EspelhoOmieBarra } from '@/components/estoque-proprio/EspelhoOmieBarra'
 import { formatCustoUnit } from '@/lib/num-br'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
@@ -22,7 +26,7 @@ const POR_PAGINA = 50
 const ORDEM_SITUACAO: Record<Situacao, number> = { negativo: 0, baixo: 1, zerado: 2, ok: 3 }
 const COLUNAS_SORT = ['descricao', 'saldo', 'valor', 'situacao'] as const
 
-type SP = { q?: string; familia?: string; tipo?: string; local?: string; sit?: string; ord?: string; dir?: string; page?: string }
+type SP = { data?: string; q?: string; familia?: string; tipo?: string; local?: string; sit?: string; ord?: string; dir?: string; page?: string }
 
 function semAcento(s: string) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -43,8 +47,35 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
   const visao = espelho ?? (await carregarEstoque(lojaId))
   const localSel = sp.local ? Number(sp.local) : null
 
+  // Saldo em data (só loja Omie): troca as linhas pelo que o kardex do Omie dizia no fim do dia escolhido.
+  const hoje = hojeBahiaISO()
+  const cobertura = ehOmie ? await historicoKardexDesde(lojaId) : { desde: null, ativo: false }
+  let dataSaldo: string | null = null
+  let avisoData: string | null = null
+  let linhasBase: LinhaEstoque[] = visao.linhas
+  if (ehOmie && sp.data) {
+    const av = avaliarDataSaldo(sp.data, cobertura.desde, hoje)
+    if (!av.ok) {
+      const motivos: Record<MotivoDataInvalida, string> = {
+        invalida: 'Data inválida.',
+        futuro: 'Essa data ainda não chegou.',
+        sem_historico: 'O histórico do kardex desta loja ainda está sendo lido do Omie: o saldo em data fica disponível quando a leitura terminar a primeira semana.',
+        antes_cobertura: `O histórico completo começa em ${fmtDataBR(cobertura.desde)}. Escolha uma data a partir daí.`,
+      }
+      avisoData = `${motivos[av.motivo]} Mostrando o saldo de hoje.`
+    } else if (sp.data !== hoje) {
+      const { rows, erro } = await carregarSaldoEmData(lojaId, sp.data)
+      if (erro) avisoData = 'Saldo em data ainda não ativado nesta loja. Mostrando o saldo de hoje.'
+      else {
+        dataSaldo = sp.data
+        const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
+        linhasBase = aplicarSaldoEmData(visao.linhas, rows, nomeLocal)
+      }
+    }
+  }
+
   // Com um local escolhido, cada produto passa a mostrar o saldo DAQUELE local.
-  let linhas: LinhaEstoque[] = visao.linhas
+  let linhas: LinhaEstoque[] = linhasBase
   if (localSel != null) {
     linhas = linhas.flatMap((l) => {
       const s = l.locais.find((x) => x.codigoLocal === localSel)
@@ -90,7 +121,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
 
   function sortHref(key: string, d: 'asc' | 'desc') {
     const p = new URLSearchParams()
-    for (const k of ['q', 'familia', 'tipo', 'local', 'sit'] as const) if (sp[k]) p.set(k, sp[k]!)
+    for (const k of ['data', 'q', 'familia', 'tipo', 'local', 'sit'] as const) if (sp[k]) p.set(k, sp[k]!)
     p.set('ord', key); p.set('dir', d)
     return `/estoque?${p.toString()}`
   }
@@ -143,6 +174,15 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       <EstoqueAtalhos atual="estoque" />
 
       {espelho && <EspelhoOmieBarra atualizadoEm={espelho.atualizadoEm} locaisSemLeitura={espelho.locaisSemLeitura} locaisSemSaldo={espelho.locaisSemSaldo} custoSuspeito={espelho.custoSuspeito} podeAtualizar={podeAtualizar} />}
+
+      {ehOmie && (
+        <div className="space-y-1.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 u-card">
+          <SeletorData min={cobertura.desde} max={hoje} />
+          {dataSaldo && <p className="text-[13px] text-text">Saldo no fim do dia <b>{fmtDataBR(dataSaldo)}</b>, pelo kardex do Omie. Produtos sem nenhum movimento desde {fmtDataBR(cobertura.desde)} não aparecem.</p>}
+          {!dataSaldo && !avisoData && <p className="text-[12px] text-text-muted">{cobertura.desde ? `Escolha uma data a partir de ${fmtDataBR(cobertura.desde)} para ver o saldo daquele dia.` : 'O histórico do kardex ainda está sendo lido do Omie.'}</p>}
+          {avisoData && <p className="text-[13px] text-warn">{avisoData}</p>}
+        </div>
+      )}
 
       {espelho && !espelho.dataPosicao ? (
         <div className="rounded-[var(--r-lg)] bg-surface u-card"><EmptyState icon={Boxes} title="Sem leitura do Omie ainda" hint="Clique em Atualizar do Omie para trazer o saldo." /></div>
