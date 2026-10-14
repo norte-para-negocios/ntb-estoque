@@ -14,6 +14,8 @@ import { HistoricoEdicoesOP } from '@/components/ordem-producao/HistoricoEdicoes
 import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
 import { detalheOPProprio } from '@/lib/estoque/op-proprio'
 import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
+import { MovimentosDaOP } from '@/components/ordem-producao/MovimentosDaOP'
+import type { ItemFichaOP } from '@/lib/movimentacoes/movimentacoes-puro'
 
 const STATUS_INFO: Record<OpStatus, { label: string; token: CorToken }> = {
   concluida: { label: 'Concluída', token: 'ok' },
@@ -68,7 +70,7 @@ export default async function OrdemProducaoDetalhePage({
   const { data: opSupabase, error: opErro } = await supabase
     .from('ordens_producao')
     .select(
-      'id, loja_id, identificacao_n_cod_op, identificacao_c_num_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, conclusao_status, conclusao_erro_msg, conclusao_tentativas, conclusao_ultima_tentativa_em, conclusao_qtde_desejada, conclusao_data_desejada, full_object'
+      'id, loja_id, identificacao_n_cod_op, identificacao_c_num_op, identificacao_c_cod_int_op, num_ordem, identificacao_n_cod_produto, identificacao_n_qtde, identificacao_codigo_local_estoque, identificacao_d_dt_previsao, validade, quantidade, concluida, dt_conclusao_real, conclusao_status, conclusao_erro_msg, conclusao_tentativas, conclusao_ultima_tentativa_em, conclusao_qtde_desejada, conclusao_data_desejada, full_object'
     )
     .eq('id', id)
     .eq('loja_id', lojaId)
@@ -143,31 +145,9 @@ export default async function OrdemProducaoDetalhePage({
 
   // Ingredientes: mesmo padrao de app/(app)/ordem-producao/page.tsx (le
   // full_object.itensDetalhes, resolve nome/unidade via produtos).
-  type ItemDetalhe = { nIdProdutoMalha: number; nQtde: number }
-  const itensDetalhes =
-    ((op.full_object as { itensDetalhes?: ItemDetalhe[] } | null)?.itensDetalhes) ?? []
+  const itensBrutos = (op.full_object as { itensDetalhes?: unknown } | null)?.itensDetalhes
+  const itensDetalhes: ItemFichaOP[] = Array.isArray(itensBrutos) ? (itensBrutos as ItemFichaOP[]) : []
   const insumoCodes = [...new Set(itensDetalhes.filter((i) => i.nIdProdutoMalha).map((i) => i.nIdProdutoMalha))]
-  const { data: insumoProds, error: insumoProdsErro } = insumoCodes.length
-    ? await supabase
-        .from('produtos')
-        .select('codigo_produto, descricao, unidade')
-        .eq('loja_id', lojaId)
-        .in('codigo_produto', insumoCodes)
-    : { data: [] as { codigo_produto: number; descricao: string; unidade: string }[], error: null }
-  logErro('produtos dos insumos')(insumoProdsErro)
-  const insumoMap = new Map((insumoProds ?? []).map((p) => [p.codigo_produto, p]))
-  const ingredientes = itensDetalhes
-    .filter((i) => i.nIdProdutoMalha)
-    .map((i) => {
-      const p = insumoMap.get(i.nIdProdutoMalha)
-      return {
-        cod: i.nIdProdutoMalha,
-        nome: formatarNomeProduto(p?.descricao) || `#${i.nIdProdutoMalha}`,
-        unidade: p?.unidade ?? '',
-        qtd: Number(i.nQtde),
-      }
-    })
-
   const hojeISO = hojeBahiaISO()
   const concluida = isOpConcluida(op)
   const status = opStatus(op, hojeISO)
@@ -241,22 +221,6 @@ export default async function OrdemProducaoDetalhePage({
           <Campo label="Data prevista"><span className="num">{fmtDataBR(op.identificacao_d_dt_previsao) ?? '-'}</span></Campo>
           <Campo label="Data de conclusão"><span className="num">{fmtDataBR(op.dt_conclusao_real) ?? '-'}</span></Campo>
         </dl>
-        {ingredientes.length > 0 && (
-          <div className="mt-4 border-t border-border/60 pt-3">
-            <p className="mb-1.5 text-[13px] font-semibold text-text-muted">Ingredientes</p>
-            <div className="flex flex-wrap gap-x-5 gap-y-1">
-              {ingredientes.map((i) => (
-                <span key={i.cod} className="text-[13px] text-text">
-                  {i.nome}{' '}
-                  <span className="num text-text-muted">
-                    {i.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
-                    {i.unidade ? ` ${i.unidade}` : ''}
-                  </span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {proprio && (
@@ -292,6 +256,20 @@ export default async function OrdemProducaoDetalhePage({
           conclusaoDataDesejada: op.conclusao_data_desejada ?? null,
         }}
       />}
+
+      {!proprio && (
+        <MovimentosDaOP
+          lojaId={lojaId}
+          itens={itensDetalhes}
+          op={{
+            id: Number(op.id), identificacao_n_cod_op: op.identificacao_n_cod_op ?? null, identificacao_c_num_op: op.identificacao_c_num_op ?? op.num_ordem ?? null,
+            identificacao_c_cod_int_op: (op as { identificacao_c_cod_int_op?: string | null }).identificacao_c_cod_int_op ?? null,
+            identificacao_n_cod_produto: op.identificacao_n_cod_produto ?? null, identificacao_n_qtde: op.identificacao_n_qtde ?? null,
+            identificacao_codigo_local_estoque: op.identificacao_codigo_local_estoque ?? null, dt_conclusao_real: op.dt_conclusao_real ?? null,
+            concluida: concluida,
+          }}
+        />
+      )}
 
       <InventariosRelacionadosOP
         lojaId={lojaId}
