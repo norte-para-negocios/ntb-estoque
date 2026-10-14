@@ -132,3 +132,9 @@ revoke all on function public.central_ops_pdv(bigint, date, date) from public, a
 grant execute on function public.central_ops_pdv(bigint, date, date) to authenticated;
 
 commit;
+
+-- 8. Índices (fora da transação: concurrently). Aplicar o arquivo SEM -1/--single-transaction.
+--    OPs abertas da loja (Central e /ordem-producao/abertas): 153 ms → poucos ms (o índice de previsão lia 127 mil linhas).
+create index concurrently if not exists ordens_producao_abertas_omie_idx on public.ordens_producao (loja_id, id) where aberta_omie;
+--    "Esta OP da Central já existe?" (cCodIntOP determinístico) e conferências por código de integração.
+create index concurrently if not exists ordens_producao_loja_cod_int_idx on public.ordens_producao (loja_id, identificacao_c_cod_int_op);
