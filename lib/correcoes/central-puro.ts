@@ -496,3 +496,168 @@ export function decidirRetomadaOP(r: { status: string; atualizadoEm: string } | 
   if ((r.status === 'incluindo' || r.status === 'incluida') && Number.isFinite(t) && agoraMs - t < EM_ANDAMENTO_MS) return 'em_andamento'
   return 'retomar'
 }
+
+// ================================================================================================================
+// Opções de correção e prévia do efeito
+// ================================================================================================================
+export type CampoDef = { id: string; rotulo: string; tipo: 'numero' | 'data' | 'texto'; sufixo?: string; inicial: string }
+export type OpcaoDef = { acao: AcaoId; titulo: string; descricao: string; botao: string; feito: string; campos: CampoDef[] }
+export type Previa = { vazio: string } | { linhas: { rot: string; de: string; para: string }[]; omie: string; aviso?: string }
+
+/** '4,658' → 4.658; '1.234,5' → 1234.5; '' → null. */
+export function lerNumeroBR(s: string | null | undefined): number | null {
+  const t = String(s ?? '').trim().replace(/\s/g, '')
+  if (!t) return null
+  const norm = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
+  if (!/^-?\d+(\.\d+)?$/.test(norm)) return null
+  const n = Number(norm)
+  return Number.isFinite(n) ? n : null
+}
+const numBR = (n: number | null | undefined) => (n == null ? '' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 6, useGrouping: false }).format(n))
+
+/** Local em que a ação de saldo age: o 1º local negativo, senão o local do problema. */
+export function localDaAcao(p: Problema): { local: number | null; nome: string; saldo: number } {
+  const n = p.d.locaisNeg?.[0]
+  if (n) return { local: n.local, nome: n.nome, saldo: n.saldo }
+  return { local: p.d.local ?? null, nome: '', saldo: p.d.saldo ?? 0 }
+}
+
+export function opcoesDoProblema(p: Problema, hoje: string): OpcaoDef[] {
+  const un = unidadeCurta(p.d.unidade)
+  const loc = localDaAcao(p)
+  const nomeAlvo = p.grupo === 'op' ? `a ${p.titulo.split(' · ')[0]}` : p.titulo
+  const defs: Record<AcaoId, () => OpcaoDef> = {
+    zerar: () => ({ acao: 'zerar', titulo: 'Zerar o saldo', descricao: 'Prato é feito na hora e não fica guardado. O saldo certo é zero.', botao: 'Zerar saldo', feito: 'Saldo zerado', campos: [] }),
+    contagem: () => ({ acao: 'contagem', titulo: 'Ajustar para o que foi contado', descricao: 'Use se alguém contou agora. O sistema lança só a diferença.', botao: 'Lançar ajuste', feito: 'Ajuste pelo saldo contado', campos: [{ id: 'contado', rotulo: loc.nome ? `Quanto tem em ${loc.nome}?` : 'Quanto tem agora?', tipo: 'numero', sufixo: un, inicial: '' }] }),
+    op_prato: () => ({ acao: 'op_prato', titulo: 'Lançar OP do prato', descricao: 'Registra a produção que não foi lançada. Baixa os insumos da ficha.', botao: 'Lançar OP', feito: 'OP do prato lançada', campos: [{ id: 'qtd', rotulo: 'Quantidade', tipo: 'numero', sufixo: un, inicial: numBR(p.d.sugerida) }, { id: 'data', rotulo: 'Data da produção', tipo: 'data', inicial: hoje }] }),
+    op_preparo: () => ({ acao: 'op_preparo', titulo: 'Lançar OP de preparo', descricao: 'Registra a produção que não foi lançada. Baixa os insumos da ficha.', botao: 'Lançar OP', feito: 'OP de preparo lançada', campos: [{ id: 'qtd', rotulo: 'Quantidade', tipo: 'numero', sufixo: un, inicial: numBR(p.d.sugerida) }, { id: 'data', rotulo: 'Data da produção', tipo: 'data', inicial: hoje }] }),
+    corrigir_custo: () => ({ acao: 'corrigir_custo', titulo: 'Corrigir o custo do lançamento errado', descricao: 'Escolha o ajuste de entrada que trouxe o custo errado e informe o custo certo. O ajuste é excluído e relançado no Omie.', botao: 'Corrigir custo', feito: 'Custo corrigido', campos: [{ id: 'custo', rotulo: `Custo certo por ${un}`, tipo: 'numero', sufixo: 'R$', inicial: p.d.ref ? numBR(Math.round(p.d.ref * 10000) / 10000) : '' }] }),
+    concluir: () => ({ acao: 'concluir', titulo: 'Concluir a OP', descricao: 'O produto entra no saldo e os insumos saem.', botao: 'Concluir OP', feito: 'OP concluída', campos: [{ id: 'data', rotulo: 'Data da conclusão', tipo: 'data', inicial: hoje }] }),
+    mudar_data: () => ({ acao: 'mudar_data', titulo: 'Mudar a data prevista', descricao: 'Para concluir na data certa depois. O saldo não muda.', botao: 'Mudar data', feito: 'Data da OP alterada', campos: [{ id: 'data', rotulo: 'Nova data', tipo: 'data', inicial: hoje }] }),
+    excluir: () => ({ acao: 'excluir', titulo: 'Excluir a OP', descricao: p.d.sentido === 'sobrando' ? 'O saldo já está positivo. Excluir evita entrada em dobro.' : 'Use se a produção nunca aconteceu.', botao: 'Excluir OP', feito: 'OP excluída', campos: [] }),
+    corrigir_contagem: () => ({ acao: 'corrigir_contagem', titulo: 'Corrigir a contagem', descricao: 'Lança a diferença entre a contagem digitada e a certa. O saldo acompanha.', botao: 'Corrigir contagem', feito: 'Contagem corrigida', campos: [{ id: 'para', rotulo: 'Contagem certa', tipo: 'numero', sufixo: un, inicial: numBR(p.d.contagem?.sugerida) }] }),
+    nao_controla: () => ({ acao: 'nao_controla', titulo: 'Marcar como "não controla estoque"', descricao: 'É serviço, não mercadoria. Sai da Central e das próximas leituras daqui (o cadastro no Omie não muda).', botao: 'Marcar', feito: 'Marcado como "não controla estoque"', campos: [] }),
+    criar_ops_cupom: () => ({ acao: 'criar_ops_cupom', titulo: 'Criar as OPs que faltam', descricao: 'Uma OP por prato, concluída com a data do cupom. Confira antes se a integração do PDV não reprocessou.', botao: 'Criar OPs', feito: 'OPs do cupom criadas', campos: [] }),
+    ramon: () => {
+      const neg = p.grupo === 'pa' || p.grupo === 'pi' || p.grupo === 'mp'
+      const msg = neg || p.grupo === 'contagem' ? `Ramon, pode contar ${p.titulo}${loc.nome ? ` em ${loc.nome}` : ''} hoje?` : `Ramon, pode olhar ${nomeAlvo}? ${p.causa}`
+      return { acao: 'ramon', titulo: p.grupo === 'contagem' ? 'Pedir recontagem ao Ramon' : neg ? 'Pedir contagem ao Ramon' : 'Perguntar ao Ramon', descricao: 'Fica como "Esperando Ramon" até ele responder. Nada é enviado: a mensagem fica guardada aqui.', botao: 'Guardar pedido', feito: 'Pedido ao Ramon', campos: [{ id: 'msg', rotulo: 'Mensagem', tipo: 'texto', inicial: msg }] }
+    },
+  }
+  return p.acoes.map((a) => defs[a]())
+}
+
+export function previaAcao(acao: AcaoId, p: Problema, v: Record<string, string>, ctx: { nome: (cod: number) => string; cmc: (cod: number) => number; hoje: string }): Previa {
+  const un = p.d.unidade ?? 'UN'
+  const ref = p.d.ref ?? 0
+  const loc = localDaAcao(p)
+  const r = (n: number) => Math.round(n * 1e6) / 1e6
+  const emLocal = loc.nome ? ` em ${loc.nome}` : ''
+  switch (acao) {
+    case 'zerar':
+      return {
+        linhas: [{ rot: `Saldo${emLocal}`, de: fmtQtd(loc.saldo, un), para: fmtQtd(0, un) }, { rot: 'Valor do saldo', de: fmtBRL(r(loc.saldo * ref)), para: fmtBRL(0) }],
+        omie: `Lança no Omie um ajuste de ${loc.saldo < 0 ? 'entrada' : 'saída'} de ${fmtQtd(Math.abs(loc.saldo), un)}${emLocal}, pelo custo médio atual.`,
+      }
+    case 'contagem': {
+      const n = lerNumeroBR(v.contado)
+      if (n == null || n < 0) return { vazio: 'Digite o que foi contado para ver o efeito no saldo.' }
+      const dif = r(n - loc.saldo)
+      if (dif === 0) return { vazio: 'A contagem é igual ao saldo: nada a ajustar.' }
+      return {
+        linhas: [{ rot: `Saldo${emLocal}`, de: fmtQtd(loc.saldo, un), para: fmtQtd(n, un) }, { rot: 'Diferença', de: '', para: fmtQtdSinal(dif, un) }, { rot: 'Valor do saldo', de: fmtBRL(r(loc.saldo * ref)), para: fmtBRL(r(n * ref)) }],
+        omie: `Lança no Omie um ajuste de ${dif > 0 ? 'entrada' : 'saída'} de ${fmtQtd(Math.abs(dif), un)}${emLocal}. O saldo do Omie é relido na hora de lançar.`,
+      }
+    }
+    case 'op_prato':
+    case 'op_preparo': {
+      const q = lerNumeroBR(v.qtd)
+      if (q == null || q <= 0) return { vazio: 'Informe a quantidade produzida.' }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.data ?? '')) return { vazio: 'Escolha a data da produção.' }
+      if (v.data > ctx.hoje) return { vazio: 'A data da produção não pode ser no futuro.' }
+      const s0 = p.d.saldo ?? 0
+      const linhas = [{ rot: 'Saldo', de: fmtQtd(s0, un), para: fmtQtd(r(s0 + q), un) }]
+      if (p.d.fichaCusto) linhas.push({ rot: 'Custo dos insumos (ficha)', de: '', para: fmtBRL(r(p.d.fichaCusto * q)) })
+      return { linhas, omie: `Cria e conclui no Omie a OP de ${fmtQtd(q, un)} de ${p.titulo}, com data ${fmtDataLonga(v.data)}.`, aviso: p.depende.find((d) => d.chave?.startsWith('custo:') || d.chave === 'grupo:cupom')?.texto }
+    }
+    case 'corrigir_custo': {
+      const c = lerNumeroBR(v.custo)
+      if (c == null || c <= 0) return { vazio: 'Digite o custo certo para ver o efeito.' }
+      const s = p.d.saldo ?? 0
+      return {
+        linhas: [{ rot: 'Custo médio', de: `${fmtBRL(p.d.cmc ?? 0)}/${unidadeCurta(un)}`, para: `${fmtBRL(c)}/${unidadeCurta(un)} (aprox.)` }, { rot: 'Valor do saldo', de: fmtBRLCurto(r(s * (p.d.cmc ?? 0))), para: fmtBRLCurto(r(s * c)) }],
+        omie: 'Exclui no Omie o ajuste escolhido e relança igual, com o custo certo. O saldo não muda; o custo médio é recalculado pelo Omie.',
+      }
+    }
+    case 'concluir': {
+      const o = p.d.op
+      if (!o) return { vazio: 'OP não encontrada.' }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.data ?? '')) return { vazio: 'Escolha a data da conclusão.' }
+      if (v.data > ctx.hoje) return { vazio: 'A data da conclusão não pode ser no futuro.' }
+      const pu = p.d.unidade ?? 'UN'
+      const s0 = p.d.saldoLocal ?? p.d.saldo ?? 0
+      const linhas = [{ rot: `Saldo de ${o.produto != null ? ctx.nome(o.produto) : 'produto'}`, de: fmtQtd(s0, pu), para: fmtQtd(r(s0 + o.qtd), pu) }]
+      for (const i of [...o.insumos].sort((a, b) => b.qtd * ctx.cmc(b.produto) - a.qtd * ctx.cmc(a.produto)).slice(0, 3)) {
+        linhas.push({ rot: `Baixa ${ctx.nome(i.produto)}`, de: '', para: `−${fmtNum(i.qtd)}${ctx.cmc(i.produto) ? ` · ${fmtBRLCurto(i.qtd * ctx.cmc(i.produto))}` : ''}` })
+      }
+      const risco = p.depende.find((d) => d.chave?.startsWith('custo:') || d.chave?.startsWith('semcusto:'))
+      return { linhas, omie: `Conclui no Omie a OP ${o.numero} com data ${fmtDataLonga(v.data)}.`, aviso: risco ? `Cuidado: ${risco.texto}` : undefined }
+    }
+    case 'mudar_data': {
+      const o = p.d.op
+      if (!o || !/^\d{4}-\d{2}-\d{2}$/.test(v.data ?? '')) return { vazio: 'Escolha a nova data.' }
+      return { linhas: [{ rot: 'Previsão', de: fmtDataLonga(o.previsao), para: fmtDataLonga(v.data) }], omie: `Altera a previsão da OP ${o.numero} no Omie. O saldo não muda.` }
+    }
+    case 'excluir': {
+      const o = p.d.op
+      if (!o) return { vazio: 'OP não encontrada.' }
+      return { linhas: [{ rot: 'Saldo', de: '', para: 'não muda' }, { rot: 'OPs abertas', de: '', para: '−1' }], omie: `Exclui a OP ${o.numero} no Omie.` }
+    }
+    case 'corrigir_contagem': {
+      const c = p.d.contagem
+      const para = lerNumeroBR(v.para)
+      if (!c || para == null || para < 0) return { vazio: 'Digite a contagem certa.' }
+      const dif = r(para - c.para)
+      if (dif === 0) return { vazio: 'É a mesma contagem: nada a corrigir.' }
+      const s0 = p.d.saldo ?? 0
+      return {
+        linhas: [{ rot: 'Contagem', de: fmtQtd(c.para, un), para: fmtQtd(para, un) }, { rot: 'Diferença', de: '', para: fmtQtdSinal(dif, un) }, { rot: 'Saldo', de: fmtQtd(s0, un), para: fmtQtd(r(s0 + dif), un) }],
+        omie: `Lança no Omie um ajuste de ${dif > 0 ? 'entrada' : 'saída'} de ${fmtQtd(Math.abs(dif), un)} para corrigir a contagem.`,
+      }
+    }
+    case 'nao_controla':
+      return { linhas: [{ rot: 'Na Central', de: 'aparece', para: 'não aparece mais' }], omie: 'Nada muda no Omie: a marcação fica só aqui (dá para desfazer).' }
+    case 'criar_ops_cupom': {
+      const c = p.d.cupom
+      if (!c) return { vazio: 'Cupom não encontrado.' }
+      return {
+        linhas: c.itens.map((i) => ({ rot: i.nome, de: '', para: `OP de ${fmtNum(i.quantidade)}` })),
+        omie: `Cria e conclui no Omie ${c.itens.length === 1 ? '1 OP' : `${c.itens.length} OPs`} com data ${fmtDataLonga(c.data)}, uma por vez (para no primeiro bloqueio do Omie).`,
+        aviso: 'A integração do PDV pode reprocessar sozinha; confira antes. Se ela já criou a OP, esta não é lançada.',
+      }
+    }
+    case 'ramon':
+      if (!(v.msg ?? '').trim()) return { vazio: 'Escreva a mensagem para o Ramon.' }
+      return { linhas: [{ rot: 'Situação', de: 'Aberto', para: 'Esperando Ramon' }], omie: 'Nada muda no Omie e nada é enviado: o pedido fica guardado aqui até ele responder.' }
+  }
+}
+
+// ================================================================================================================
+// Busca rápida
+// ================================================================================================================
+export function interpretarBuscaRapida(q: string): { texto: string; numerosOP: string[]; cupomNum: string | null; nIdCupom: number | null } {
+  const texto = q.trim()
+  const numerosOP: string[] = []
+  if (/^\d{1,4}\/\d+$|^\d+$/.test(texto)) {
+    const add = (s: string) => { if (s && !numerosOP.includes(s)) numerosOP.push(s) }
+    add(texto)
+    const depois = texto.includes('/') ? texto.split('/')[1] : texto
+    add(depois.replace(/^0+/, ''))
+    add(texto.replace(/\D/g, '').replace(/^0+/, ''))
+  }
+  return {
+    texto, numerosOP,
+    cupomNum: /^\d{4,7}$/.test(texto) ? texto : null,
+    nIdCupom: /^\d{9,12}$/.test(texto) ? Number(texto) : null,
+  }
+}
