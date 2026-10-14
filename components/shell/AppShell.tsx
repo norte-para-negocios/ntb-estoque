@@ -43,6 +43,13 @@ export function AppShell({
         return
       }
 
+      // Cmd+K / Ctrl+K abre a busca em qualquer lugar (inclusive dentro de um campo).
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setBuscaAberta(true)
+        return
+      }
+
       // "/" abre a busca, desde que o foco nao esteja num campo editavel
       // e nao haja modificadores ativos.
       if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {

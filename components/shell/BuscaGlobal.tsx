@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 
@@ -12,10 +12,15 @@ import { buscaGlobal, type BuscaItem } from '@/lib/actions/busca-global'
 
 const GRUPOS: { tipo: BuscaItem['tipo']; titulo: string }[] = [
   { tipo: 'Produto', titulo: 'Produtos' },
-  { tipo: 'Nota', titulo: 'Notas fiscais' },
   { tipo: 'OP', titulo: 'Ordens de produção' },
+  { tipo: 'Nota', titulo: 'Notas fiscais' },
+  { tipo: 'Cupom', titulo: 'Cupons' },
 ]
 
+/**
+ * Busca rápida ("/" e Cmd/Ctrl+K): produto, OP (número com ou sem ano), nota e cupom. Setas + Enter escolhem.
+ * Na Central de correções a escolha abre o painel (ela cancela o evento 'ntb:abrir-painel'); fora dela, navega.
+ */
 export function BuscaGlobal({
   open,
   onOpenChange,
@@ -26,7 +31,17 @@ export function BuscaGlobal({
   const [termo, setTermo] = React.useState('')
   const [itens, setItens] = React.useState<BuscaItem[]>([])
   const [carregando, setCarregando] = React.useState(false)
+  const [sel, setSel] = React.useState(0)
   const reqId = React.useRef(0)
+  const router = useRouter()
+  const lista = React.useRef<HTMLDivElement>(null)
+
+  // Ordem de exibição (por grupo) = ordem das setas.
+  const ordenados = React.useMemo(() => GRUPOS.flatMap((g) => itens.filter((i) => i.tipo === g.tipo)), [itens])
+  React.useEffect(() => setSel(0), [itens])
+  React.useEffect(() => {
+    lista.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [sel])
 
   // Limpa o estado quando o dialog fecha.
   React.useEffect(() => {
@@ -65,7 +80,20 @@ export function BuscaGlobal({
     return () => clearTimeout(handle)
   }, [termo])
 
-  const fechar = () => onOpenChange(false)
+  const escolher = (item: BuscaItem | undefined) => {
+    if (!item) return
+    onOpenChange(false)
+    if (item.alvo) {
+      const ev = new CustomEvent('ntb:abrir-painel', { cancelable: true, detail: item.alvo })
+      if (!window.dispatchEvent(ev)) return
+    }
+    router.push(item.href)
+  }
+  const teclas = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel((x) => Math.min(x + 1, ordenados.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((x) => Math.max(x - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); escolher(ordenados[sel]) }
+  }
 
   const temResultado = itens.length > 0
   const termoValido = termo.trim().length >= 2
@@ -80,7 +108,7 @@ export function BuscaGlobal({
             'fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-0 overflow-hidden rounded-xl border border-border bg-surface text-text shadow-lg ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-lg data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95'
           )}
         >
-          <DialogPrimitive.Title className="sr-only">Busca global</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">Busca rápida</DialogPrimitive.Title>
 
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
             <Search className="size-4 shrink-0 text-text-muted" aria-hidden />
@@ -88,15 +116,16 @@ export function BuscaGlobal({
               autoFocus
               value={termo}
               onChange={(e) => setTermo(e.target.value)}
-              placeholder="Buscar produtos, notas, ordens..."
+              onKeyDown={teclas}
+              placeholder="Produto, nº da OP, nota, cupom…"
               className="h-7 border-0 bg-transparent px-0 text-sm focus-visible:ring-0 focus-visible:border-0"
             />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto py-1">
+          <div ref={lista} role="listbox" className="min-h-0 flex-1 overflow-y-auto py-1">
             {!termoValido && (
               <p className="px-3 py-6 text-center text-sm text-text-muted">
-                Digite ao menos 2 caracteres para buscar.
+                Digite ao menos 2 caracteres. Tente o nome, o número da OP (com ou sem o ano), a nota ou o cupom.
               </p>
             )}
 
@@ -106,7 +135,7 @@ export function BuscaGlobal({
 
             {termoValido && !carregando && !temResultado && (
               <p className="px-3 py-6 text-center text-sm text-text-muted">
-                Nenhum resultado para &quot;{termo.trim()}&quot;.
+                Nada encontrado para &quot;{termo.trim()}&quot;. Tente parte do nome ou só os números.
               </p>
             )}
 
@@ -117,30 +146,38 @@ export function BuscaGlobal({
                   if (doGrupo.length === 0) return null
                   return (
                     <div key={tipo} className="py-1">
-                      <p className="px-3 py-1 text-xs font-medium text-text-muted">
-                        {titulo}
-                      </p>
+                      <p className="px-3 py-1 text-xs font-medium text-text-muted">{titulo}</p>
                       <ul>
-                        {doGrupo.map((item, idx) => (
-                          <li key={`${tipo}-${idx}-${item.href}`}>
-                            <Link
-                              href={item.href}
-                              onClick={fechar}
-                              className="flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
-                            >
-                              <span className="truncate text-text">{item.label}</span>
-                              {item.sub && (
-                                <span className="shrink-0 text-xs text-text-muted">{item.sub}</span>
-                              )}
-                            </Link>
-                          </li>
-                        ))}
+                        {doGrupo.map((item, idx) => {
+                          const i = ordenados.indexOf(item)
+                          return (
+                            <li key={`${tipo}-${idx}-${item.href}`}>
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={i === sel}
+                                onMouseEnter={() => setSel(i)}
+                                onClick={() => escolher(item)}
+                                className={cn(
+                                  'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2 focus:outline-none',
+                                  i === sel && 'bg-brand-soft',
+                                )}
+                              >
+                                <span className="truncate text-text">{item.label}</span>
+                                {item.sub && <span className="shrink-0 text-xs text-text-muted">{item.sub}</span>}
+                              </button>
+                            </li>
+                          )
+                        })}
                       </ul>
                     </div>
                   )
                 })}
               </div>
             )}
+          </div>
+          <div className="hidden gap-4 border-t border-border px-3 py-2 text-xs text-text-muted sm:flex">
+            <span>↑ ↓ escolher</span><span>Enter abrir</span><span>Esc fechar</span>
           </div>
         </DialogPrimitive.Popup>
       </DialogPortal>
