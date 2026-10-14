@@ -108,4 +108,27 @@ begin
   end loop;
 end $$;
 
+-- 7. OPs do PDV agregadas (Central: cupons sem OP). Um jsonb só (sem o corte de 1000 linhas do PostgREST):
+--    cobertura = [data, produto, qtd] das OPs do caixa com previsão >= p_ini_cobertura; produtos = quem teve OP do caixa
+--    desde p_ini_produtos. OP do caixa = cCodIntOP só dígitos (integração do PDV), CP- (Central), obs "Cupom N" ou
+--    origem cupom. Conta OP em qualquer estado (aberta, concluída ou já excluída no Omie): errar para o lado de "tem OP"
+--    só esconde um cupom sem OP; o contrário criaria OP em dobro.
+create or replace function public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date)
+returns jsonb language sql stable security invoker set search_path = public as $fn$
+  with pdv as (
+    select identificacao_d_dt_previsao as data, identificacao_n_cod_produto as produto, identificacao_n_qtde as qtd
+    from ordens_producao
+    where loja_id = p_loja_id and identificacao_d_dt_previsao >= least(p_ini_cobertura, p_ini_produtos)
+      and identificacao_n_cod_produto is not null
+      and (identificacao_c_cod_int_op ~ '^[0-9]+$' or identificacao_c_cod_int_op ~* '^CP-'
+           or obs_omie ~* '^\s*Cupom\s+[0-9]' or origem_op = 'cupom')
+  )
+  select jsonb_build_object(
+    'cobertura', coalesce((select jsonb_agg(jsonb_build_array(data, produto, q)) from (
+        select data, produto, sum(qtd) q from pdv where data >= p_ini_cobertura group by 1, 2) c), '[]'::jsonb),
+    'produtos', coalesce((select jsonb_agg(distinct produto) from pdv where data >= p_ini_produtos), '[]'::jsonb))
+$fn$;
+revoke all on function public.central_ops_pdv(bigint, date, date) from public, anon;
+grant execute on function public.central_ops_pdv(bigint, date, date) to authenticated;
+
 commit;
