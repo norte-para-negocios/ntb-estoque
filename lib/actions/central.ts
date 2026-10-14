@@ -16,7 +16,6 @@ import { lancarOPCentral, type RespostaCentral } from '@/lib/correcoes/op-centra
 import { carregarPainelDados, type AlvoPainel, type PainelDados } from '@/lib/correcoes/painel-dados'
 import type { EstadoProblema } from '@/lib/correcoes/central-puro'
 
-export type { RespostaCentral }
 
 const ESTADOS: EstadoProblema[] = ['aberto', 'resolvido', 'ramon', 'ignorado']
 const CHAVE = /^[a-z]+:[a-z]+:[A-Za-z0-9:._-]{1,80}$/

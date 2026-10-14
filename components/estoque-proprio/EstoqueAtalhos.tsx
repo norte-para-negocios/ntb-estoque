@@ -1,10 +1,10 @@
 import Link from 'next/link'
 
-export type AtalhoEstoque = 'estoque' | 'saude' | 'kardex' | 'ajustes' | 'fichas' | 'ops' | 'quem-mexeu'
+export type AtalhoEstoque = 'estoque' | 'correcoes' | 'kardex' | 'ajustes' | 'fichas' | 'ops' | 'quem-mexeu'
 
 const ATALHOS: { chave: AtalhoEstoque; href: string; rotulo: string }[] = [
   { chave: 'estoque', href: '/estoque', rotulo: 'Saldos' },
-  { chave: 'saude', href: '/estoque/saude', rotulo: 'Saúde' },
+  { chave: 'correcoes', href: '/estoque/correcoes', rotulo: 'Correções' },
   { chave: 'kardex', href: '/estoque/kardex', rotulo: 'Kardex' },
   { chave: 'ajustes', href: '/estoque/ajustes', rotulo: 'Ajustes' },
   { chave: 'fichas', href: '/estoque/fichas', rotulo: 'Fichas' },

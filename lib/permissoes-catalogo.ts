@@ -185,6 +185,7 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
 export const MENU_PERMISSAO: Record<string, string> = {
   '/estoque': 'Movimentacoes',
   '/estoque/saude': 'Movimentacoes',
+  '/estoque/correcoes': 'Movimentacoes',
   '/producao-propria': 'Ordens de Producao',
   '/ficha-tecnica': 'Produtos',
   '/inventario-proprio': 'Inventarios - Ver',

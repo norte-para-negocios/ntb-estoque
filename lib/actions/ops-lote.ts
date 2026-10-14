@@ -46,7 +46,7 @@ export async function acaoOPLote(input: { acao: AcaoLoteOP; opId: number; dataIS
   const trava = `op:${input.opId}`
   if (!(await pegarTravaSync(ctx.lojaId, trava, 120))) return { error: 'Esta OP já está sendo alterada (outra aba ou pessoa). Tente de novo em instantes.', parar: false }
   try {
-    const r = input.acao === 'concluir' ? await finishOP(input.opId)
+    const r = input.acao === 'concluir' ? await finishOP(input.opId, input.dataISO && /^\d{4}-\d{2}-\d{2}$/.test(input.dataISO) ? input.dataISO : null)
       : input.acao === 'excluir' ? await excluirOP(input.opId)
       : await setDataOP(input.opId, input.dataISO!)
     if ('error' in r && r.error) return { error: r.error, parar: ehLimiteOmie(r.error) }
@@ -56,7 +56,7 @@ export async function acaoOPLote(input: { acao: AcaoLoteOP; opId: number; dataIS
       await registrarAuditoria('concluir', 'ordem de produção', op?.identificacao_n_cod_op ?? input.opId, 'OP concluída em lote (OPs abertas)')
     }
     revalidatePath('/ordem-producao/abertas')
-    revalidatePath('/estoque/saude')
+    revalidatePath('/estoque/correcoes')
     return { ok: true, simulado: ctx.loja.is_test }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
