@@ -200,3 +200,10 @@ test('respostaDoLancamento: Erro com linha gravada NÃO convida a lançar de nov
   assert.deepEqual(respostaDoLancamento({ error: 'Sem permissao' }, 'ok'), { error: 'Sem permissao' })
   assert.ok('error' in respostaDoLancamento({ status: 'Erro' }, 'ok')) // sem linha gravada: erro de verdade
 })
+
+import { recusaZerar } from './escrita-omie-puro.ts'
+test('I2: zerar só lança se o saldo do local ainda estiver negativo', () => {
+  assert.equal(recusaZerar(-3), null)
+  assert.match(recusaZerar(7) ?? '', /não está mais negativo/)
+  assert.match(recusaZerar(0) ?? '', /não está mais negativo/)
+})

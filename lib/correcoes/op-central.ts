@@ -15,7 +15,7 @@ import { ehLimiteOmie, isoParaBR } from '@/lib/estoque/escrita-omie-puro'
 import type { LojaEscrita } from '@/lib/estoque/contexto-escrita-omie'
 import { buscarFatCupomDetalhe, buscarFatCupomItens, buscarFatCupons } from '@/lib/faturamento-frio'
 import { decidirRetomadaOP } from './central-puro'
-import { codIntOPCorrecao, codIntOPCupom, coberturaAindaFalta, ehOPdoPDV, pareceOPJaExiste, validarPedidoOP } from './cupons-sem-op-puro'
+import { codIntOPCorrecao, codIntOPCupom, coberturaAindaFalta, ehOPdoPDV, lancadaContaComoCobertura, pareceOPJaExiste, precisaConferirCobertura, validarPedidoOP } from './cupons-sem-op-puro'
 
 export type RespostaCentral = { ok: true; aviso: string; simulado?: boolean; jaExistia?: boolean } | { error: string; parar?: boolean }
 export type PedidoOP = { origem: 'cupom' | 'correcao'; codigoProduto: number; quantidade: number; dataISO: string; nIdCupom?: number | null }
@@ -25,18 +25,19 @@ const msgDe = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const qtdTxt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 
 /** OPs do caixa (integração do PDV ou CP- da Central) já lançadas para o produto no dia: banco + registro da Central. */
-async function coberturaDoDia(lojaId: number, produto: number, dia: string): Promise<number> {
+async function coberturaDoDia(lojaId: number, produto: number, dia: string, semCod: string): Promise<number> {
   const db = createServiceClient()
   const [{ data: ops, error }, { data: lanc }] = await Promise.all([
     db.from('ordens_producao').select('identificacao_c_cod_int_op, obs_omie, origem_op, identificacao_n_qtde')
       .eq('loja_id', lojaId).eq('identificacao_n_cod_produto', produto).eq('identificacao_d_dt_previsao', dia).limit(2000),
-    db.from('central_op_lancada').select('cod_int_op, quantidade, status').eq('loja_id', lojaId).eq('codigo_produto', produto).eq('data_op', dia).eq('origem', 'cupom').limit(2000),
+    db.from('central_op_lancada').select('cod_int_op, quantidade, status, erro').eq('loja_id', lojaId).eq('codigo_produto', produto).eq('data_op', dia).eq('origem', 'cupom').limit(2000),
   ])
   if (error) throw new Error(`Não foi possível conferir as OPs do dia: ${error.message}`)
   const doBanco = (ops ?? []).filter((o) => ehOPdoPDV({ cCodInt: o.identificacao_c_cod_int_op, obs: o.obs_omie, origem: o.origem_op }))
   const codsBanco = new Set(doBanco.map((o) => o.identificacao_c_cod_int_op))
-  // Lançadas pela Central que ainda não chegaram em ordens_producao (loja de teste, ou sync pendente): contam também.
-  const extras = (lanc ?? []).filter((l) => l.status !== 'erro' && !codsBanco.has(l.cod_int_op))
+  // Lançadas pela Central que ainda não chegaram em ordens_producao (loja de teste, ou sync pendente): contam também,
+  // inclusive as de resultado desconhecido (timeout). A linha deste próprio pedido (semCod) fica de fora.
+  const extras = (lanc ?? []).filter((l) => l.cod_int_op !== semCod && lancadaContaComoCobertura(l) && !codsBanco.has(l.cod_int_op))
   return doBanco.reduce((s, o) => s + Number(o.identificacao_n_qtde ?? 0), 0) + extras.reduce((s, l) => s + Number(l.quantidade), 0)
 }
 
@@ -64,7 +65,7 @@ export async function lancarOPCentral(ctx: { lojaId: number; loja: LojaEscrita }
   let rotuloCupom = ''
   if (ped.origem === 'cupom') {
     if (!ped.nIdCupom) return { error: 'Cupom não informado.' }
-    const det = await buscarFatCupomDetalhe(lojaId, ped.nIdCupom)
+    const det = await buscarFatCupomDetalhe(lojaId, ped.nIdCupom, 8000)
     if (!det.cupom) return { error: 'Cupom não encontrado no histórico de vendas.' }
     if (det.cupom.cancelado) return { error: 'Cupom cancelado: não precisa de OP.' }
     quantidade = det.itens.filter((i) => Number(i.id_produto) === ped.codigoProduto).reduce((s, i) => s + Number(i.quant), 0)
@@ -112,26 +113,13 @@ export async function lancarOPCentral(ctx: { lojaId: number; loja: LojaEscrita }
   // Cupom: a trava é por produto + dia (duas abas em cupons diferentes do mesmo prato não conferem a cobertura juntas).
   const trava = ped.origem === 'cupom' ? `op-cupom:${ped.codigoProduto}:${dataISO}` : `op-central:${cod}`
   if (!(await pegarTravaSync(lojaId, trava, 150))) {
-    await db.from('central_op_lancada').update({ status: 'erro', erro: 'trava ocupada', atualizado_em: new Date().toISOString() }).eq('id', reg.id)
+    // Nada foi ao Omie: a linha nova sai (o próximo clique começa do zero); a retomada volta a 'erro'.
+    if (retomando) await db.from('central_op_lancada').update({ status: 'erro', erro: 'trava ocupada', atualizado_em: new Date().toISOString() }).eq('id', reg.id)
+    else await db.from('central_op_lancada').delete().eq('id', reg.id)
     return { error: 'Esta OP está sendo lançada agora (outra aba ou pessoa). Espere um pouco e atualize.' }
   }
   const marcar = (campos: Record<string, unknown>) => db.from('central_op_lancada').update({ ...campos, atualizado_em: new Date().toISOString() }).eq('id', reg.id)
   try {
-    // 3. Cupom: a integração do PDV pode ter reprocessado depois que a tela carregou.
-    if (ped.origem === 'cupom' && !retomando && !existente) {
-      const [cobertoTotal, vendidoDia] = await Promise.all([
-        coberturaDoDia(lojaId, ped.codigoProduto, dataISO),
-        vendidoNoDia(lojaId, ped.codigoProduto, dataISO),
-      ])
-      // A própria linha 'incluindo' já entrou em cobertoTotal (extras): tira para comparar.
-      const coberto = cobertoTotal - quantidade
-      if (vendidoDia == null) { await marcar({ status: 'erro', erro: 'vendas do dia indisponíveis' }); return { error: 'Não foi possível conferir as vendas do dia no histórico (Contabo). Nada foi lançado; tente de novo.' } }
-      if (!coberturaAindaFalta(vendidoDia, coberto, quantidade)) {
-        await db.from('central_op_lancada').delete().eq('id', reg.id)
-        return { error: `As OPs do caixa deste dia já cobrem ${nome} (vendido ${qtdTxt(vendidoDia)}, com OP ${qtdTxt(coberto)}). A integração do PDV pode ter reprocessado: nada foi lançado.` }
-      }
-    }
-
     // 4. nCodOP: do banco, do registro, ou procurando no Omie (retomada) antes de incluir.
     let nCodOP: number | null = existente?.identificacao_n_cod_op ? Number(existente.identificacao_n_cod_op) : reg.n_cod_op ? Number(reg.n_cod_op) : null
     let concluidaNoOmie = false
@@ -139,7 +127,21 @@ export async function lancarOPCentral(ctx: { lojaId: number; loja: LojaEscrita }
       const achada = await consultarOPPorCodInt(loja, cod)
       if (achada) { nCodOP = achada.nCodOP; concluidaNoOmie = achada.concluida }
     }
-    const obs = `Central de correções${rotuloCupom ? ` · cupom ${rotuloCupom}` : ''} · ${await carimboUsuario()}`
+    // 5. Cupom: a integração do PDV pode ter reprocessado depois que a tela carregou (ou entre um erro e a retomada).
+    //    Confere sempre que a OP ainda não existe (achado C1 da revisão final).
+    if (precisaConferirCobertura({ origem: ped.origem, nCodOPConhecido: !!nCodOP })) {
+      const [coberto, vendidoDia] = await Promise.all([
+        coberturaDoDia(lojaId, ped.codigoProduto, dataISO, cod),
+        vendidoNoDia(lojaId, ped.codigoProduto, dataISO),
+      ])
+      if (vendidoDia == null) { await marcar({ status: 'erro', erro: 'vendas do dia indisponíveis' }); return { error: 'Não foi possível conferir as vendas do dia no histórico (Contabo). Nada foi lançado; tente de novo.' } }
+      if (!coberturaAindaFalta(vendidoDia, coberto, quantidade)) {
+        await db.from('central_op_lancada').delete().eq('id', reg.id)
+        return { error: `As OPs do caixa deste dia já cobrem ${nome} (vendido ${qtdTxt(vendidoDia)}, com OP ${qtdTxt(coberto)}). A integração do PDV pode ter reprocessado: nada foi lançado.` }
+      }
+    }
+    // A obs começa com "Cupom N" (como a da integração do PDV): a Central e as telas reconhecem a OP do cupom.
+    const obs = `${rotuloCupom ? `Cupom ${rotuloCupom} · ` : ''}Central de correções · ${await carimboUsuario()}`
     const dData = isoParaBR(dataISO)
     if (!nCodOP) {
       try {
@@ -196,8 +198,8 @@ export async function lancarOPCentral(ctx: { lojaId: number; loja: LojaEscrita }
 async function vendidoNoDia(lojaId: number, produto: number, dia: string): Promise<number | null> {
   let falhou = false
   const [cupons, itens] = await Promise.all([
-    buscarFatCupons({ lojaId, dataInicio: dia, dataFinal: dia, onTruncado: () => { falhou = true } }),
-    buscarFatCupomItens({ lojaId, dataInicio: dia, dataFinal: dia, onTruncado: () => { falhou = true } }),
+    buscarFatCupons({ lojaId, dataInicio: dia, dataFinal: dia, onTruncado: () => { falhou = true }, timeoutMs: 8000, tentativas: 1 }),
+    buscarFatCupomItens({ lojaId, dataInicio: dia, dataFinal: dia, onTruncado: () => { falhou = true }, timeoutMs: 8000, tentativas: 1 }),
   ])
   if (falhou) return null
   const validos = new Set(cupons.filter((c) => !c.cancelado).map((c) => Number(c.n_id_cupom)))

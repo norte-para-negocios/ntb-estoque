@@ -64,16 +64,16 @@ export type CupomFat = {
 // 31038 cupons e 213669 itens desde 01/07/2025 (so ~16%/9% vinha antes do
 // fix). Servidor ganhou suporte a `offset` (mesmo padrao de /notas_fiscais);
 // client agora pagina igual aos outros dominios frios.
-export async function buscarFatCupons(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void }): Promise<CupomFat[]> {
+export async function buscarFatCupons(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void; timeoutMs?: number; tentativas?: number }): Promise<CupomFat[]> {
   const rows = await buscarFrioTudo<CupomFat & { valor: string | number }>('/fat_cupons', {
     loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal,
-  }, 5000, opts.onTruncado)
+  }, 5000, opts.onTruncado, { timeoutMs: opts.timeoutMs, tentativas: opts.tentativas })
   return rows.map((r) => ({ ...r, valor: Number(r.valor) || 0 }))
 }
 
-export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void }): Promise<ItemFat[]> {
+export async function buscarFatCupomItens(opts: { lojaId: number; dataInicio: string; dataFinal: string; onTruncado?: () => void; timeoutMs?: number; tentativas?: number }): Promise<ItemFat[]> {
   const rows = await buscarFrioTudo<ItemFat & { quant: string | number; v_unit: string | number; v_desc: string | number; v_item: string | number }>(
-    '/fat_cupom_itens', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000, opts.onTruncado,
+    '/fat_cupom_itens', { loja_id: opts.lojaId, data_inicio: opts.dataInicio, data_final: opts.dataFinal }, 20000, opts.onTruncado, { timeoutMs: opts.timeoutMs, tentativas: opts.tentativas },
   )
   return rows.map((i) => ({ ...i, quant: Number(i.quant) || 0, v_unit: Number(i.v_unit) || 0, v_desc: Number(i.v_desc) || 0, v_item: Number(i.v_item) || 0 }))
 }
@@ -361,13 +361,14 @@ export async function buscarFatAgregadoPorSituacao(opts: {
 export async function buscarFatCupomDetalhe(
   lojaId: number,
   nIdCupom: number,
+  timeoutMs?: number,
 ): Promise<{ cupom: CupomFat | null; itens: ItemFat[]; pagamentos: PagamentoFat[] }> {
   const [cuponsRaw, itensRaw, pagamentosRaw] = await Promise.all([
-    buscarFrio<CupomFat & { valor: string | number }>('/fat_cupons', { loja_id: lojaId, n_id_cupom: nIdCupom }),
+    buscarFrio<CupomFat & { valor: string | number }>('/fat_cupons', { loja_id: lojaId, n_id_cupom: nIdCupom }, timeoutMs),
     buscarFrio<ItemFat & { quant: string | number; v_unit: string | number; v_desc: string | number; v_item: string | number }>(
-      '/fat_cupom_itens', { loja_id: lojaId, n_id_cupom: nIdCupom },
+      '/fat_cupom_itens', { loja_id: lojaId, n_id_cupom: nIdCupom }, timeoutMs,
     ),
-    buscarFrio<PagamentoFat & { valor: string | number }>('/fat_cupom_pagamentos', { loja_id: lojaId, n_id_cupom: nIdCupom }),
+    buscarFrio<PagamentoFat & { valor: string | number }>('/fat_cupom_pagamentos', { loja_id: lojaId, n_id_cupom: nIdCupom }, timeoutMs),
   ])
   const cupons = cuponsRaw ?? []
   const itens = itensRaw ?? []

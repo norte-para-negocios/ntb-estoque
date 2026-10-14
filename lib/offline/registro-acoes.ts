@@ -73,6 +73,7 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'central#marcarNaoControla': m6.marcarNaoControla as Acao,
   'central#lancarOPCorrecao': m6.lancarOPCorrecao as Acao,
   'central#carregarPainel': m6.carregarPainel as Acao,
+  'central#corrigirContagemCentral': m6.corrigirContagemCentral as Acao,
   'certificado#salvarCertificado': m7.salvarCertificado as Acao,
   'compras-proprio#previaXml': m8.previaXml as Acao,
   'compras-proprio#lancarCompraXml': m8.lancarCompraXml as Acao,

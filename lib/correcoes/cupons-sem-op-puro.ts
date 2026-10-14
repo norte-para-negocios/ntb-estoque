@@ -101,3 +101,17 @@ export function validarPedidoOP(p: { quantidade: number; dataISO: string; tipo: 
   if (p.tipo !== '03' && p.tipo !== '04') return 'Só dá para lançar OP de prato ou preparo (produto acabado ou em processo).'
   return null
 }
+
+/**
+ * Conferir vendido × OPs do caixa do dia antes de incluir? Sempre que a OP ainda não existe (inclusive na retomada
+ * depois de um erro: o PDV pode ter reprocessado nesse meio-tempo). Revisão final, achado C1.
+ */
+export function precisaConferirCobertura(i: { origem: 'cupom' | 'correcao'; nCodOPConhecido: boolean }): boolean {
+  return i.origem === 'cupom' && !i.nCodOPConhecido
+}
+
+/** Lançamento da Central que conta como OP do caixa: tudo menos erro de recusa clara (timeout = resultado desconhecido). */
+export function lancadaContaComoCobertura(l: { status: string; erro: string | null }): boolean {
+  if (l.status !== 'erro') return true
+  return /n.o respondeu|TIMEOUT|fetch failed|network|ECONN|socket|ETIMEDOUT|EAI_AGAIN|HTTP 5\d\d/i.test(l.erro ?? '')
+}

@@ -131,6 +131,38 @@ $fn$;
 revoke all on function public.central_ops_pdv(bigint, date, date) from public, anon;
 grant execute on function public.central_ops_pdv(bigint, date, date) to authenticated;
 
+-- 7b. "Negativo desde" de cada produto/local negativo, calculado no banco (achado I5 da revisão final: ler o kardex de
+--     60 dias de todos os produtos negativos no app podia passar de centenas de milhares de linhas). Por produto/local
+--     cujo último movimento da janela deixou o saldo negativo: a data do 1º movimento do trecho negativo atual
+--     (depois do último saldo >= 0). Sem saldo >= 0 na janela: a 1ª linha da janela, com comeca_antes = true quando o
+--     saldo antes dela já era negativo (a tela diz "desde antes de <início>"). Mesma regra de negativoDesde/
+--     rotuloNegativoDesde (lib/estoque/saude-puro.ts). Teste: scripts/testes-sql/171_central_negativo_desde.sql.
+create or replace function public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date)
+returns table (n_cod_prod bigint, codigo_local_estoque bigint, desde date, comeca_antes boolean)
+language sql stable security invoker set search_path = public as $fn$
+  with k as (
+    select k.n_cod_prod, k.codigo_local_estoque, k.data_mov, k.saldo_apos, k.quantidade,
+           row_number() over (partition by k.n_cod_prod, k.codigo_local_estoque order by k.data_mov desc, k.id_mov desc) as rn
+    from kardex_omie k
+    where k.loja_id = p_loja_id and k.n_cod_prod = any(p_produtos) and k.data_mov >= p_ini
+      and k.cancelado = false and k.saldo_apos is not null
+  ),
+  g as (
+    select k.n_cod_prod, k.codigo_local_estoque,
+           min(k.rn) filter (where k.saldo_apos >= 0) as rn_nao_neg,
+           max(k.rn) as rn_max,
+           bool_or(k.rn = 1 and k.saldo_apos < 0) as termina_neg
+    from k group by 1, 2
+  )
+  select k.n_cod_prod, k.codigo_local_estoque, k.data_mov as desde,
+         (g.rn_nao_neg is null and (k.saldo_apos - k.quantidade) < 0) as comeca_antes
+  from g join k on k.n_cod_prod = g.n_cod_prod and k.codigo_local_estoque = g.codigo_local_estoque
+   and k.rn = coalesce(g.rn_nao_neg - 1, g.rn_max)
+  where g.termina_neg
+$fn$;
+revoke all on function public.central_negativo_desde(bigint, bigint[], date) from public, anon;
+grant execute on function public.central_negativo_desde(bigint, bigint[], date) to authenticated;
+
 commit;
 
 -- 8. Índices (fora da transação: concurrently). Aplicar o arquivo SEM -1/--single-transaction.

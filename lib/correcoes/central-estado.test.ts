@@ -55,3 +55,9 @@ test('retomada da OP lançada pela Central', () => {
   assert.equal(decidirRetomadaOP({ status: 'incluindo', atualizadoEm: '2026-10-13T11:40:00Z' }, agora), 'retomar')
   assert.equal(decidirRetomadaOP({ status: 'erro', atualizadoEm: '2026-10-13T11:59:00Z' }, agora), 'retomar')
 })
+
+test('C2: contagem resolvida não volta enquanto a contagem for a mesma (corrigir de novo duplicaria)', () => {
+  const c = P({ chave: 'contagem:produto:30:1', grupo: 'contagem', assinatura: '2026-08-31:4658' })
+  assert.equal(estadoEfetivo(R({ chave: c.chave, estado: 'resolvido', assinatura: '2026-08-31:4658', atualizado_em: '2026-10-09T12:00:00Z' }), c, H, dia).estado, 'resolvido')
+  assert.equal(estadoEfetivo(R({ chave: c.chave, estado: 'resolvido', assinatura: '2026-08-31:4658', atualizado_em: '2026-10-09T12:00:00Z' }), { ...c, assinatura: '2026-10-12:900' }, H, dia).estado, 'aberto')
+})

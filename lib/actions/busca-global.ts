@@ -112,8 +112,8 @@ export async function buscaGlobal(termo: string): Promise<BuscaItem[]> {
     try {
       const hoje = hojeBahiaISO()
       const achados = q.nIdCupom
-        ? [(await buscarFatCupomDetalhe(loja, q.nIdCupom)).cupom].filter((c): c is NonNullable<typeof c> => !!c)
-        : (await buscarFatCupons({ lojaId: loja, dataInicio: addDias(hoje, -DIAS_CUPOM), dataFinal: hoje })).filter((c) => String(c.num ?? '').replace(/^0+/, '') === q.cupomNum!.replace(/^0+/, ''))
+        ? [(await buscarFatCupomDetalhe(loja, q.nIdCupom, 3000)).cupom].filter((c): c is NonNullable<typeof c> => !!c)
+        : (await buscarFatCupons({ lojaId: loja, dataInicio: addDias(hoje, -DIAS_CUPOM), dataFinal: hoje, timeoutMs: 3000, tentativas: 1 })).filter((c) => String(c.num ?? '').replace(/^0+/, '') === q.cupomNum!.replace(/^0+/, ''))
       return achados.slice(0, 6).map((c) => ({
         tipo: 'Cupom' as const,
         label: `Cupom ${c.num ?? c.n_id_cupom}`,

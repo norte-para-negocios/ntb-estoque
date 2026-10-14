@@ -11,7 +11,7 @@ import { carimboUsuario, getUser } from '@/lib/auth'
 import { contextoEscritaOmie, type LojaEscrita } from '@/lib/estoque/contexto-escrita-omie'
 import {
   codIntCorrecao, decidirRelancamento, deltaDoAjuste, isoParaBR, mesDoAjusteFechado, motivoNaoCorrige, proximaEtapaCorrecao,
-  respostaDoLancamento, statusAposExclusao, validarCustoNovo, type RespostaLancamento,
+  recusaZerar, respostaDoLancamento, statusAposExclusao, validarCustoNovo, type RespostaLancamento,
 } from '@/lib/estoque/escrita-omie-puro'
 import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
 import { excluirAjusteDetalhado, incluirAjusteComCusto, listarAjustesDoDia } from '@/lib/omie/ajuste'
@@ -60,6 +60,8 @@ export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: n
  */
 export async function ajusteOmie(dados: {
   codigoProduto: number; codigoLocal: number; motivo: string; novoSaldo?: number | string | null; diferenca?: number | string | null
+  /** "Zerar o saldo" (Central): recusa se o saldo lido agora no Omie já não é negativo (a tela pode estar velha). */
+  somenteSeNegativo?: boolean
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#ajusteOmie', ajusteOmie, [dados]); if (__d) return __d as never
   const ctx = await contextoEscritaOmie(PERM, 'Movimentacoes - Criar')
@@ -73,6 +75,10 @@ export async function ajusteOmie(dados: {
     try {
       const pos = await getPosicaoProduto(ctx.loja, dados.codigoLocal, dados.codigoProduto, dataOmieBR(null))
       saldoAtual = pos?.n_saldo ?? 0
+      if (dados.somenteSeNegativo) {
+        const recusa = recusaZerar(saldoAtual)
+        if (recusa) return { error: recusa }
+      }
     } catch (e) {
       return { error: `Não foi possível ler o saldo atual no Omie: ${e instanceof Error ? e.message : String(e)}` }
     }

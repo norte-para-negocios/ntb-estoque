@@ -12,7 +12,7 @@ import {
 import type { AjusteCusto, PainelDados } from '@/lib/correcoes/painel-dados'
 import { ajusteOmie, corrigirCustoAjuste } from '@/lib/actions/estoque-omie'
 import { acaoOPLote } from '@/lib/actions/ops-lote'
-import { lancarOPCorrecao, marcarEstadoProblema, marcarNaoControla } from '@/lib/actions/central'
+import { corrigirContagemCentral, lancarOPCorrecao, marcarEstadoProblema, marcarNaoControla } from '@/lib/actions/central'
 import { ehLimiteOmie } from '@/lib/estoque/escrita-omie-puro'
 
 export type Feito = { chave: string; estado: EstadoProblema; acao: string | null; motivo?: string | null; mensagem?: string | null; ate?: string | null }
@@ -138,7 +138,7 @@ function Opcoes(props: Props) {
       switch (def.acao) {
         case 'zerar': {
           for (const l of d.locaisNeg ?? []) {
-            const r = await ajusteOmie({ codigoProduto: d.produto!, codigoLocal: l.local, motivo: motivoBase, novoSaldo: 0 })
+            const r = await ajusteOmie({ codigoProduto: d.produto!, codigoLocal: l.local, motivo: motivoBase, novoSaldo: 0, somenteSeNegativo: true })
             if ('error' in r) return falha(`${l.nome}: ${r.error}`)
             setLog((x) => [...x, `${l.nome}: ${r.aviso ?? 'ok'}`])
             if (r.alerta) return falha(r.aviso ?? 'O Omie não confirmou: acompanhe em Movimentações.')
@@ -154,12 +154,10 @@ function Opcoes(props: Props) {
           break
         }
         case 'corrigir_contagem': {
-          const para = lerNumeroBR(v.para)!
-          const dif = Math.round((para - d.contagem!.para) * 1e6) / 1e6
-          const r = await ajusteOmie({ codigoProduto: d.produto!, codigoLocal: d.local!, motivo: `${motivoBase} (contagem de ${fmtData(d.contagem!.data)}: ${d.contagem!.para} → ${para})`, diferenca: String(dif) })
+          if (d.contagem?.movId == null) return falha('Não achei o lançamento desta contagem: corrija pela tela de Ajustes.')
+          const r = await corrigirContagemCentral({ movimentoId: d.contagem.movId, para: lerNumeroBR(v.para)! })
           if ('error' in r) return falha(r.error)
-          setLog([r.aviso ?? 'ok'])
-          if (r.alerta) return falha(r.aviso ?? '')
+          setLog([r.aviso])
           break
         }
         case 'op_preparo':
@@ -190,15 +188,19 @@ function Opcoes(props: Props) {
         }
         case 'criar_ops_cupom': {
           const c = d.cupom!
+          let falhas = 0
           for (const i of c.itens) {
             const r = await lancarOPCorrecao({ origem: 'cupom', codigoProduto: i.produto, quantidade: i.quantidade, dataISO: c.data, nIdCupom: c.nIdCupom })
             if ('error' in r) {
+              falhas++
               setLog((x) => [...x, `${i.nome}: ${r.error}`])
               if (r.parar || ehLimiteOmie(r.error)) return falha(`Parei no primeiro bloqueio do Omie (${i.nome}). Espere alguns minutos antes de continuar.`)
               continue
             }
             setLog((x) => [...x, `${i.nome}: ${r.aviso}`])
           }
+          // Só marca resolvido se todos os pratos ficaram com OP (achado I1 da revisão final).
+          if (falhas) return falha(`${falhas} ${falhas === 1 ? 'prato ficou' : 'pratos ficaram'} sem OP: veja o motivo acima. O cupom continua aberto.`)
           break
         }
         case 'nao_controla': {

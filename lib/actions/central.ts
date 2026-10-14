@@ -12,6 +12,7 @@ import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { contextoEscritaOmie } from '@/lib/estoque/contexto-escrita-omie'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { ajusteOmie } from '@/lib/actions/estoque-omie'
 import { lancarOPCentral, type RespostaCentral } from '@/lib/correcoes/op-central'
 import { carregarPainelDados, type AlvoPainel, type PainelDados } from '@/lib/correcoes/painel-dados'
 import type { EstadoProblema } from '@/lib/correcoes/central-puro'
@@ -100,4 +101,43 @@ export async function carregarPainel(alvo: AlvoPainel): Promise<PainelDados | { 
   } catch (e) {
     return { error: `Não foi possível carregar: ${e instanceof Error ? e.message : String(e)}` }
   }
+}
+
+/**
+ * Corrige uma contagem de inventário digitada errado (ex.: 4.658 kg no lugar de 4,658 kg) lançando a diferença no Omie.
+ * A contagem vem do banco (movimentos SLD), nunca da tela; trava por movimento: a marca `cc:mov:<id>` em
+ * central_problema_estado é única, então a mesma contagem nunca é corrigida duas vezes (duas abas, reenvio, problema
+ * que reaparece). Achado C2 da revisão final.
+ */
+export async function corrigirContagemCentral(i: { movimentoId: number; para: number }): Promise<RespostaCentral> {
+  const __d = viaDesktop('central#corrigirContagemCentral', corrigirContagemCentral, [i]); if (__d) return __d as never
+  const ctx = await contextoEscritaOmie('Correcoes - Executar')
+  if ('error' in ctx) return { error: ctx.error }
+  const para = Number(i.para)
+  if (!Number.isFinite(para) || para < 0) return { error: 'Informe a contagem certa (zero ou mais).' }
+  const db = createServiceClient()
+  const { data: m } = await db.from('movimentos').select('id, tipo, quan, data, id_prod, codigo_local_estoque').eq('loja_id', ctx.lojaId).eq('id', Number(i.movimentoId)).maybeSingle()
+  if (!m || m.tipo !== 'SLD') return { error: 'Contagem não encontrada nesta loja.' }
+  const dif = Math.round((para - Number(m.quan)) * 1e6) / 1e6
+  if (dif === 0) return { error: 'É a mesma contagem: nada a corrigir.' }
+  const u = await quem()
+  const chave = `cc:mov:${m.id}`
+  const ins = await db.from('central_problema_estado').insert({
+    loja_id: ctx.lojaId, chave, estado: 'resolvido', acao: `Contagem corrigida de ${m.quan} para ${para}`, mensagem: String(dif), user_id: u.id, user_nome: u.nome,
+  })
+  if (ins.error) {
+    if (ins.error.code === '23505') {
+      const { data: j } = await db.from('central_problema_estado').select('user_nome, atualizado_em').eq('loja_id', ctx.lojaId).eq('chave', chave).maybeSingle()
+      return { error: `Esta contagem já foi corrigida${j?.user_nome ? ` por ${j.user_nome}` : ''}. Nada foi lançado de novo.` }
+    }
+    return { error: /does not exist|42P01/.test(ins.error.message) ? 'A Central ainda não foi ativada neste banco (migration 171).' : `Não foi possível registrar: ${ins.error.message}` }
+  }
+  const r = await ajusteOmie({ codigoProduto: Number(m.id_prod), codigoLocal: Number(m.codigo_local_estoque), motivo: `Central de correções: contagem corrigida (${m.quan} → ${para})`, diferenca: String(dif) })
+  if ('error' in r) {
+    // Nada foi gravado: libera para tentar de novo.
+    await db.from('central_problema_estado').delete().eq('loja_id', ctx.lojaId).eq('chave', chave)
+    return { error: r.error }
+  }
+  revalidatePath('/estoque/correcoes')
+  return { ok: true, aviso: r.aviso ?? 'Contagem corrigida no Omie.' }
 }

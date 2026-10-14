@@ -266,14 +266,17 @@ export async function buscarFrioTudo<T>(
   params: Record<string, string | number | undefined>,
   tamanhoPagina: number,
   onTruncado?: () => void,
+  // Telas que precisam responder rápido (Central de correções, busca rápida): timeout curto e sem novas tentativas.
+  opcoes: { timeoutMs?: number; tentativas?: number } = {},
 ): Promise<T[]> {
   const tudo: T[] = []
+  const tentativas = Math.max(1, opcoes.tentativas ?? 3)
   for (let offset = 0; ; offset += tamanhoPagina) {
     let pagina: T[] | null = null
-    for (let tentativa = 0; tentativa < 3; tentativa++) {
-      pagina = await buscarFrio<T>(caminho, { ...params, offset })
+    for (let tentativa = 0; tentativa < tentativas; tentativa++) {
+      pagina = await buscarFrio<T>(caminho, { ...params, offset }, opcoes.timeoutMs)
       if (pagina !== null) break
-      if (tentativa < 2) await new Promise((r) => setTimeout(r, 500 * (tentativa + 1)))
+      if (tentativa < tentativas - 1) await new Promise((r) => setTimeout(r, 500 * (tentativa + 1)))
     }
     if (pagina === null) {
       console.error(

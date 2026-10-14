@@ -204,3 +204,8 @@ export function respostaDoLancamento(r: { error?: string; status?: string; erro?
   }
   return { error: r.erro ?? 'O Omie recusou o lançamento.' }
 }
+
+/** "Zerar o saldo" (Central): só lança se o saldo lido agora no Omie ainda é negativo (a tela pode estar velha). */
+export function recusaZerar(saldoAtual: number): string | null {
+  return saldoAtual < 0 ? null : `O saldo deste local não está mais negativo no Omie (${saldoAtual.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}): nada foi lançado.`
+}

@@ -8,7 +8,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { addDias } from '@/lib/estoque/espelho-lojas'
 import { getPermissoesNomes } from '@/lib/auth'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
-import { negativoDesde, oscilacoesContagem, cmcPorLocalAtual, insumosSemCustoNoLocal, rotuloNegativoDesde, ultimoCmcAnterior, type MovSaldo } from '@/lib/estoque/saude-puro'
+import { negativoDesde, oscilacoesContagem, cmcPorLocalAtual, insumosSemCustoNoLocal, ultimoCmcAnterior, type MovSaldo } from '@/lib/estoque/saude-puro'
 import { itensDaOPGravada } from '@/lib/estoque/ops-tela-puro'
 import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
 import { buscarFatCupomItens, buscarFatCupons } from '@/lib/faturamento-frio'
@@ -78,6 +78,7 @@ export async function carregarCentral(lojaId: number, modo: 'omie' | 'proprio'):
   tempos.total_leitura = Math.round(performance.now() - t0)
 
   entrada.naoControla = new Set(((naoRes.data ?? []) as NaoRow[]).map((r) => Number(r.codigo_produto)))
+  entrada.contagensCorrigidas = new Set(estados.filter((r) => r.chave.startsWith('cc:mov:')).map((r) => Number(r.chave.slice(7))))
   const problemas: Problema[] = classificarProblemas(entrada)
   const regPorChave = new Map(estados.map((r) => [r.chave, r]))
   const itens: ProblemaComEstado[] = problemas.map((p) => ({ p, e: estadoEfetivo(regPorChave.get(p.chave), p, hoje, diaBahia) }))
@@ -147,8 +148,8 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
     tudo<{ codigo_produto: number }>((f, t) => supabase.from('produtos').select('id, codigo_produto').eq('loja_id', lojaId).eq('inativo', true).order('id').range(f, t), erro('os produtos inativos')),
     supabase.from('notas_fiscais').select('id, c_numero_nfe').eq('loja_id', lojaId).eq('c_etapa', '40').is('deleted_at', null).gte('d_emissao_nfe', addDias(hoje, -30)).order('id').limit(200),
     supabase.rpc('central_ops_pdv', { p_loja_id: lojaId, p_ini_cobertura: addDias(hoje, -DIAS_CUPOM), p_ini_produtos: addDias(hoje, -DIAS_PDV) }),
-    buscarFatCupons({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false } }),
-    buscarFatCupomItens({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false } }),
+    buscarFatCupons({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
+    buscarFatCupomItens({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
   ])
   tempos.onda1 = Math.round(performance.now() - t1)
   const e = vazia(hoje, 'omie')
@@ -185,7 +186,13 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
   const osc = oscilacoesContagem(sld.map((s) => ({ produto: Number(s.id_prod), local: Number(s.codigo_local_estoque), data: diaDoMovimento(s.data), ordem: Number(s.id), qtd: Number(s.quan) })))
   const ultima = new Map<string, (typeof osc)[number]>()
   for (const o of osc) ultima.set(`${o.produto}:${o.local}`, o)
-  e.contagens = [...ultima.values()].filter((o) => prod.has(o.produto))
+  // Id do movimento SLD da contagem (a correção pela Central é travada por ele: nunca corrige a mesma contagem 2x).
+  const idSld = new Map<string, number>()
+  for (const x of sld) {
+    const k = `${Number(x.id_prod)}:${Number(x.codigo_local_estoque)}:${diaDoMovimento(x.data)}:${Number(x.quan)}`
+    idSld.set(k, Math.max(idSld.get(k) ?? 0, Number(x.id)))
+  }
+  e.contagens = [...ultima.values()].filter((o) => prod.has(o.produto)).map((o) => ({ ...o, movId: idSld.get(`${o.produto}:${o.local}:${o.data}:${o.para}`) }))
 
   // Notas esperando entrada (c_etapa 40) → produto.
   const nf = (notas.data ?? []) as NFRow[]
@@ -224,27 +231,21 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
   const COLS = 'id, n_cod_prod, codigo_local_estoque, data_mov, id_mov, quantidade, saldo_apos, cmc_apos'
   const negCods = e.produtos.filter((p) => p.locais.some((l) => l.saldo < 0)).map((p) => p.codigo)
   const iniNeg = cobertura.desde && cobertura.desde > addDias(hoje, -DIAS_NEGATIVO) ? cobertura.desde : addDias(hoje, -DIAS_NEGATIVO)
-  const lotes: number[][] = []
-  for (let i = 0; i < negCods.length; i += 60) lotes.push(negCods.slice(i, i + 60))
-  const [kNeg, kEnt] = cobertura.desde ? await Promise.all([
-    Promise.all(lotes.map((lote) => tudo<KRow>((f, t) => supabase.from('kardex_omie').select(COLS).eq('loja_id', lojaId).in('n_cod_prod', lote).gte('data_mov', iniNeg).eq('cancelado', false).order('id').range(f, t), erro('o kardex')))).then((x) => x.flat()),
+  type NegRow = { n_cod_prod: number; codigo_local_estoque: number; desde: string; comeca_antes: boolean }
+  // "Negativo desde" calculado no banco (central_negativo_desde, migration 171): o kardex de 60 dias de todos os
+  // produtos negativos não passa pelo app (achado I5 da revisão final). Lista por POST (RPC): sem 414.
+  const [negRes, kEnt] = cobertura.desde ? await Promise.all([
+    negCods.length ? supabase.rpc('central_negativo_desde', { p_loja_id: lojaId, p_produtos: negCods, p_ini: iniNeg }) : Promise.resolve({ data: [] as NegRow[], error: null }),
     tudo<KRow>((f, t) => supabase.from('kardex_omie').select(COLS).eq('loja_id', lojaId).gt('quantidade', 0).gte('data_mov', addDias(hoje, -DIAS_CUSTO)).eq('cancelado', false).order('id').range(f, t), erro('as entradas do kardex')),
-  ]) : [[], []]
+  ]) : [{ data: [] as NegRow[], error: null }, [] as KRow[]]
   tempos.onda2 = Math.round(performance.now() - t2)
+  if (negRes.error) avisos.push('"Negativo desde" ainda indisponível (função central_negativo_desde, migration 171).')
+  for (const r of (negRes.data ?? []) as NegRow[]) if (!r.comeca_antes && r.desde) e.desde.set(`${Number(r.n_cod_prod)}:${Number(r.codigo_local_estoque)}`, String(r.desde).slice(0, 10))
   const paraMov = (k: KRow) => ({ produto: Number(k.n_cod_prod), data: k.data_mov, ordem: Number(k.id_mov), local: Number(k.codigo_local_estoque), quantidade: Number(k.quantidade), saldo: k.saldo_apos == null ? null : Number(k.saldo_apos), cmc: k.cmc_apos == null ? null : Number(k.cmc_apos) })
   const porProduto = (rows: KRow[]) => {
     const m = new Map<number, (MovSaldo & { quantidade: number })[]>()
-    for (const r of rows.map(paraMov)) m.set(r.produto, [...(m.get(r.produto) ?? []), r])
+    for (const r of rows.map(paraMov)) { const l = m.get(r.produto); if (l) l.push(r); else m.set(r.produto, [r]) }
     return m
-  }
-  for (const [cod, movs] of porProduto(kNeg)) {
-    const desde = negativoDesde(movs)
-    const ord = [...movs].sort((a, b) => a.data.localeCompare(b.data) || a.ordem - b.ordem)
-    for (const [local, data] of desde) {
-      const p1 = ord.find((m) => m.local === local)
-      const r = rotuloNegativoDesde({ desde: data, primeiraData: p1?.data, coberturaIni: iniNeg, saldoAntesDaPrimeira: p1 && p1.saldo != null ? p1.saldo - p1.quantidade : null })
-      if (r.tipo === 'desde' && r.data) e.desde.set(`${cod}:${local}`, r.data)
-    }
   }
   for (const [cod, movs] of porProduto(kEnt)) {
     let melhor: { atual: number; anterior: number | null } | null = null
@@ -279,7 +280,10 @@ async function entradaProprio(lojaId: number, hoje: string, avisos: string[], er
   for (let i = 0; i < neg.length; i += 60) lotes.push(neg.slice(i, i + 60))
   const rows = (await Promise.all(lotes.map((lote) => tudo<MRow>((f, t) => supabase.from('estoque_movimentos').select('id, codigo_produto, codigo_local_estoque, data_ref, quantidade, saldo_apos, cmc_apos').eq('loja_id', lojaId).in('codigo_produto', lote).gte('data_ref', ini).order('id').range(f, t), erro('os movimentos'))))).flat()
   const m = new Map<number, MovSaldo[]>()
-  for (const r of rows) m.set(Number(r.codigo_produto), [...(m.get(Number(r.codigo_produto)) ?? []), { data: r.data_ref.slice(0, 10), ordem: Number(r.id), local: Number(r.codigo_local_estoque), saldo: Number(r.saldo_apos), cmc: r.cmc_apos == null ? null : Number(r.cmc_apos) }])
+  for (const r of rows) {
+    const x = { data: r.data_ref.slice(0, 10), ordem: Number(r.id), local: Number(r.codigo_local_estoque), saldo: Number(r.saldo_apos), cmc: r.cmc_apos == null ? null : Number(r.cmc_apos) }
+    const l = m.get(Number(r.codigo_produto)); if (l) l.push(x); else m.set(Number(r.codigo_produto), [x])
+  }
   for (const [cod, movs] of m) for (const [local, data] of negativoDesde(movs)) if (data > ini) e.desde.set(`${cod}:${local}`, data)
   return e
 }

@@ -74,3 +74,17 @@ test('pedido de OP: quantidade, data e produto', () => {
   assert.match(validarPedidoOP({ quantidade: 1, dataISO: '2026-10-13', tipo: '01' }, '2026-10-13') ?? '', /prato ou preparo/)
   assert.match(validarPedidoOP({ quantidade: 1, dataISO: '2026-06-01', tipo: '04' }, '2026-10-13') ?? '', /90 dias/)
 })
+
+import { precisaConferirCobertura, lancadaContaComoCobertura } from './cupons-sem-op-puro.ts'
+test('C1: cobertura conferida sempre que a OP ainda não existe, inclusive na retomada', () => {
+  assert.equal(precisaConferirCobertura({ origem: 'cupom', nCodOPConhecido: false }), true)
+  assert.equal(precisaConferirCobertura({ origem: 'cupom', nCodOPConhecido: true }), false)
+  assert.equal(precisaConferirCobertura({ origem: 'correcao', nCodOPConhecido: false }), false)
+})
+test('M3: lançamento com resultado desconhecido (timeout) conta como cobertura; recusa clara não', () => {
+  assert.ok(lancadaContaComoCobertura({ status: 'concluida', erro: null }))
+  assert.ok(lancadaContaComoCobertura({ status: 'incluindo', erro: null }))
+  assert.ok(lancadaContaComoCobertura({ status: 'erro', erro: 'Omie não respondeu em 30s (IncluirOrdemProducao). Tente novamente.' }))
+  assert.ok(!lancadaContaComoCobertura({ status: 'erro', erro: 'Produto não cadastrado' }))
+  assert.ok(!lancadaContaComoCobertura({ status: 'erro', erro: 'trava ocupada' }))
+})

@@ -89,7 +89,7 @@ export type DadosProblema = {
   produto?: number; unidade?: string; tipo?: string | null; saldo?: number; cmc?: number; ref?: number; fichaCusto?: number
   locaisNeg?: { local: number; nome: string; saldo: number }[]; local?: number; sugerida?: number; op?: OPAbertaC
   sentido?: 'sobrando' | 'faltando' | 'velha'; saldoLocal?: number
-  contagem?: { de: number; para: number; data: string; sugerida: number | null }; pratos?: number[]; cupom?: CupomSemOP
+  contagem?: { de: number; para: number; data: string; sugerida: number | null; movId?: number }; pratos?: number[]; cupom?: CupomSemOP
   desde?: string | null; notaPendente?: { id: number; numero: string }; cuponsSemOP?: number
 }
 export type Problema = {
@@ -109,7 +109,9 @@ export type EntradaCentral = {
   semCusto: { insumo: number; local: number; pratos: number[] }[]
   insumosInativos: Set<number>
   opsAbertas: OPAbertaC[]
-  contagens: { produto: number; local: number; data: string; de: number; para: number }[]
+  contagens: { produto: number; local: number; data: string; de: number; para: number; movId?: number }[]
+  /** Ids (movimentos SLD) de contagens já corrigidas pela Central: não voltam (corrigir de novo duplicaria). */
+  contagensCorrigidas?: Set<number>
   cuponsSemOP: CupomSemOP[]
   notasPendentes: Map<number, { id: number; numero: string }>
   naoControla: Set<number>
@@ -368,6 +370,7 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
   // Contagens estranhas: só a mais recente de cada produto/local.
   const ultimaContagem = new Map<string, EntradaCentral['contagens'][number]>()
   for (const c of e.contagens) {
+    if (c.movId != null && e.contagensCorrigidas?.has(c.movId)) continue
     const k = `${c.produto}:${c.local}`
     const a = ultimaContagem.get(k)
     if (!a || c.data >= a.data) ultimaContagem.set(k, c)
@@ -383,7 +386,7 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
       causa: causaContagem({ de: fmtQtd(c.de, un), para: fmtQtd(c.para, un), data: fmtData(c.data), sugerida: sug != null ? fmtQtd(sug, un) : null, subiu: c.para > c.de }),
       valor: Math.abs(c.para - c.de) * ref(c.produto), valorRotulo: 'de saldo em dúvida', lado: p ? fmtQtd(p.saldo, un) : '', ladoErro: !!p && p.saldo < 0,
       acoes: ['corrigir_contagem', 'contagem', 'ramon'], assinatura: `${c.data}:${c.para}`, depende: [],
-      d: { produto: c.produto, unidade: un, tipo: p?.tipo ?? null, saldo: p?.saldo, cmc: p?.cmc, ref: ref(c.produto), local: c.local, contagem: { de: c.de, para: c.para, data: c.data, sugerida: sug } },
+      d: { produto: c.produto, unidade: un, tipo: p?.tipo ?? null, saldo: p?.saldo, cmc: p?.cmc, ref: ref(c.produto), local: c.local, contagem: { de: c.de, para: c.para, data: c.data, sugerida: sug, movId: c.movId } },
     }, p?.cod ?? '')
   }
 
@@ -452,6 +455,9 @@ export function estadoEfetivo(reg: RegistroEstado | undefined, p: Problema, hoje
     if (reg.assinatura != null && reg.assinatura !== p.assinatura) return { estado: 'aberto', reaberto: dia, reg }
     return { estado: 'ignorado', reaberto: null, reg }
   }
+  // Contagem corrigida: a contagem errada continua no histórico (o ajuste é de diferença); com a mesma assinatura não
+  // reabre nunca (reoferecer a correção duplicaria o ajuste). Revisão final, achado C2.
+  if (p.grupo === 'contagem') return reg.assinatura != null && reg.assinatura !== p.assinatura ? { estado: 'aberto', reaberto: dia, reg } : { estado: 'resolvido', reaberto: null, reg }
   // resolvido: vale até o fim do dia seguinte (o Omie pode demorar a ser relido).
   return diasEntre(dia, hoje) <= 1 ? { estado: 'resolvido', reaberto: null, reg } : { estado: 'aberto', reaberto: dia, reg }
 }

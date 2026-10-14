@@ -132,3 +132,17 @@ test('prato negativo com custo fora do normal é valorado pela ficha, não pelo 
   assert.ok(ps.find((p) => p.chave === 'custo:produto:10'))
   assert.equal(ps.find((p) => p.chave === 'pa:produto:10')!.valor, 851)
 })
+
+test('C2: contagem já corrigida pela Central (marca no banco) não aparece de novo', () => {
+  const ps = classificarProblemas(base({
+    produtos: [prod({ codigo: 30, tipo: '01', unidade: 'KG', saldo: 4658, cmc: 17, locais: [{ local: 1, saldo: 4658 }] })],
+    contagens: [{ produto: 30, local: 1, data: '2026-08-31', de: 5, para: 4658, movId: 777 }],
+    contagensCorrigidas: new Set([777]),
+  }))
+  assert.equal(ps.filter((p) => p.grupo === 'contagem').length, 0)
+  const ps2 = classificarProblemas(base({
+    produtos: [prod({ codigo: 30, tipo: '01', unidade: 'KG', saldo: 4658, cmc: 17, locais: [{ local: 1, saldo: 4658 }] })],
+    contagens: [{ produto: 30, local: 1, data: '2026-08-31', de: 5, para: 4658, movId: 777 }],
+  }))
+  assert.equal(ps2.find((p) => p.grupo === 'contagem')!.d.contagem!.movId, 777)
+})
