@@ -20,11 +20,13 @@ const chip = 'rounded-full bg-surface px-3.5 py-1.5 text-[13px] text-text-muted 
 export async function MovimentosOmie({ sp, lojaId }: { sp: Record<string, string | undefined>; lojaId: number }) {
   const supabase = await createClient()
   const hoje = hojeBahiaISO()
-  const [{ filtros: f, res, origens }, { data: locaisRaw }, podeCriar] = await Promise.all([
+  const [{ filtros: f, res, origens }, { data: locaisRaw }, { data: familiasRaw }, podeCriar] = await Promise.all([
     carregarMovimentacoes(lojaId, sp, hoje, POR_PAGINA),
     supabase.from('local_estoques').select('codigo_local_estoque, descricao, inativo').eq('loja_id', lojaId).order('descricao'),
+    supabase.from('familias').select('nome').eq('loja_id', lojaId).eq('inativo', false).order('nome'),
     requirePermissao(lojaId, 'Movimentacoes - Criar'),
   ])
+  const familias = [...new Set(((familiasRaw ?? []) as { nome: string | null }[]).map((x) => x.nome).filter((x): x is string => !!x))]
   const locais = ((locaisRaw ?? []) as { codigo_local_estoque: number; descricao: string | null; inativo: string | null }[])
   const locaisAtivos = locais.filter((l) => l.inativo !== 'S')
 
@@ -71,11 +73,12 @@ export async function MovimentosOmie({ sp, lojaId }: { sp: Record<string, string
       </div>
 
       <Filtros key={base.toString()} basePath="/movimentacoes"
-        defaults={{ data_inicio: f.ini, data_final: f.fim, q: f.q, local: f.local != null ? String(f.local) : '', origem: f.origem, doc: f.doc, autor: f.autor }}
+        defaults={{ data_inicio: f.ini, data_final: f.fim, q: f.q, familia: f.familia, local: f.local != null ? String(f.local) : '', origem: f.origem, doc: f.doc, autor: f.autor }}
         campos={[
           { tipo: 'data', nome: 'data_inicio', label: 'De' },
           { tipo: 'data', nome: 'data_final', label: 'Até' },
           { tipo: 'texto', nome: 'q', label: 'Produto (nome ou código)' },
+          { tipo: 'select', nome: 'familia', label: 'Família', opcoes: familias.map((x) => ({ value: x, label: x })) },
           { tipo: 'select', nome: 'local', label: 'Local', opcoes: locaisAtivos.map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })) },
           { tipo: 'select', nome: 'origem', label: 'Origem', opcoes: origens },
           { tipo: 'texto', nome: 'doc', label: 'Documento (nº da nota, OP, ajuste)' },

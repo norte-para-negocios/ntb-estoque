@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   lerFiltrosMovimentacoes, origemDoKardex, hrefDocumento, numerosCandidatos, interpretarBuscaOP,
-  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, clausulasBuscaOP, type OPMin, type KardexMin,
+  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, clausulasBuscaOP, escolherFonte, type OPMin, type KardexMin,
 } from './movimentacoes-puro.ts'
 
 const HOJE = '2026-10-13'
@@ -30,6 +30,10 @@ test('filtros: padrão 7 dias, invertido troca, limite por modo', () => {
   assert.equal(antigo.q, 'LEITE DE COCO')
   assert.equal(antigo.produto, null)
   assert.equal(lerFiltrosMovimentacoes({ produto: 'x', q: 'y' }, HOJE, true).q, 'y')
+  // família conta como filtro de produto (teto de 366 dias também na reconstrução)
+  const fam = lerFiltrosMovimentacoes({ data_inicio: '2025-01-01', familia: ' BEBIDAS ' }, HOJE, true)
+  assert.equal(fam.familia, 'BEBIDAS')
+  assert.equal(fam.ini, '2025-10-13')
   assert.equal(lixo.ini, '2026-10-07')
 })
 
@@ -103,21 +107,25 @@ test('kardex × OP: documento primeiro, senão data+produto (provável)', () => 
     n_cod_prod: 10, data_mov: '2026-10-10', cod_origem: 'OPE', des_origem: null, quantidade: 2,
     num_doc: null, num_pedido: null, id_cupom: null, id_ajuste: null, ...o,
   })
+  const esp = [
+    { n_cod_prod: 10, local: 100, quantidade: 2, origem: 'op_producao' as const },
+    { n_cod_prod: 20, local: 100, quantidade: -1, origem: 'op_consumo' as const },
+  ]
   const porDoc = casarKardexComOP([
     k({ num_doc: '42' }), k({ num_doc: '43' }),
     k({ n_cod_prod: 20, quantidade: -0.5, cod_origem: 'OPS', num_doc: '2026/00000042' }),
-  ], OP, [10, 20])
+  ], OP, esp)
   assert.equal(porDoc.criterio, 'documento')
   assert.equal(porDoc.linhas.length, 2)
   assert.ok(porDoc.linhas.every((l) => !l.provavel))
   const porData = casarKardexComOP([
     k({}), k({ data_mov: '2026-10-11', n_cod_prod: 20, cod_origem: 'OPS', quantidade: -1 }),
     k({ data_mov: '2026-10-15' }), k({ n_cod_prod: 99 }), k({ cod_origem: 'PDV' }),
-  ], OP, [10, 20])
+  ], OP, esp)
   assert.equal(porData.criterio, 'data')
   assert.equal(porData.linhas.length, 2)
   assert.ok(porData.linhas.every((l) => l.provavel))
-  assert.equal(casarKardexComOP([], OP, [10]).criterio, 'nenhum')
+  assert.equal(casarKardexComOP([], OP, esp).criterio, 'nenhum')
 })
 
 test('totais: contagem e cancelado fora', () => {
@@ -137,4 +145,36 @@ test('cláusulas da busca de OP (texto já escapado)', () => {
   assert.deepEqual(clausulasBuscaOP({ texto: '', numero: null, data: '2026-10-13' }, []), [])
   // código do Omie só quando cabe num bigint
   assert.ok(!clausulasBuscaOP({ texto: '2026/0001', numero: '2026/0001', data: null }, []).some((c) => c.startsWith('identificacao_n_cod_op')))
+})
+
+test('fonte: kardex só quando o histórico completo cobre o início do período', () => {
+  assert.equal(escolherFonte({ espelho: false, desde: '2026-07-01', ini: '2026-10-01' }), 'reconstruido')
+  assert.equal(escolherFonte({ espelho: true, desde: null, ini: '2026-10-01' }), 'reconstruido')
+  assert.equal(escolherFonte({ espelho: true, desde: '2026-10-05', ini: '2026-10-01' }), 'reconstruido')
+  assert.equal(escolherFonte({ espelho: true, desde: '2026-10-01', ini: '2026-10-01' }), 'kardex')
+})
+
+test('kardex × OP por data: um movimento por esperado (quantidade igual, dia da conclusão primeiro), sem outras OPs', () => {
+  const k = (o: Partial<KardexMin>): KardexMin => ({
+    n_cod_prod: 10, data_mov: '2026-10-10', cod_origem: 'OPE', des_origem: null, quantidade: 2,
+    num_doc: null, num_pedido: null, id_cupom: null, id_ajuste: null, ...o,
+  })
+  const esperados = [
+    { n_cod_prod: 10, local: 100, quantidade: 2, origem: 'op_producao' as const },
+    { n_cod_prod: 20, local: 100, quantidade: -0.5, origem: 'op_consumo' as const },
+  ]
+  const linhas = [
+    k({ quantidade: 5 }), // outra OP do mesmo prato (quantidade diferente)
+    k({ data_mov: '2026-10-11' }), // mesma quantidade, dia seguinte
+    k({}), // mesma quantidade, dia da conclusão: a escolhida
+    k({ n_cod_prod: 20, cod_origem: 'OPS', quantidade: -0.5 }),
+    k({ n_cod_prod: 20, cod_origem: 'OPS', quantidade: -0.7 }),
+    k({ n_cod_prod: 20, cod_origem: 'OPS', quantidade: -0.5, data_mov: '2026-10-09' }),
+  ]
+  const r = casarKardexComOP(linhas, OP, esperados)
+  assert.equal(r.criterio, 'data')
+  assert.equal(r.linhas.length, 2)
+  assert.deepEqual(r.linhas.map((l) => [l.n_cod_prod, l.quantidade, l.data_mov]), [[10, 2, '2026-10-10'], [20, -0.5, '2026-10-10']])
+  assert.ok(r.linhas.every((l) => l.provavel))
+  assert.equal(r.empates, 0)
 })

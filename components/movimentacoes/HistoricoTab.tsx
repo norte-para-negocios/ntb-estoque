@@ -124,7 +124,11 @@ export async function HistoricoTab({ sp, lojaId, proprio = false }: { sp: SP; lo
     else if (filtroMov === 'saida') q = q.gt('saidas', 0)
     return q
   }
-  const { count } = codigosFiltro && !codigosFiltro.size ? { count: 0 } : await baseQuery('cod_prod', { count: 'exact', head: true })
+  // Falha de consulta vira aviso na tela (nunca "nenhum resultado" calado).
+  let falhaLeitura: string | null = null
+  const contagem = codigosFiltro && !codigosFiltro.size ? { count: 0, error: null } : await baseQuery('cod_prod', { count: 'exact', head: true })
+  if (contagem.error) falhaLeitura = contagem.error.message
+  const count = contagem.count
   const truncado = (count ?? 0) > TETO_LINHAS
   const numPaginas = Math.ceil(Math.min(count ?? 0, TETO_LINHAS) / 1000)
   const todas: LinhaHist[] = []
@@ -135,7 +139,10 @@ export async function HistoricoTab({ sp, lojaId, proprio = false }: { sp: SP; lo
         return baseQuery('cod_prod, codigo, descricao, data, entradas, saidas').order('data', { ascending: false }).order('cod_prod').range(p * 1000, p * 1000 + 999)
       })
     )
-    for (const r of onda) todas.push(...((r.data ?? []) as unknown as LinhaHist[]))
+    for (const r of onda) {
+      if (r.error) falhaLeitura = r.error.message
+      todas.push(...((r.data ?? []) as unknown as LinhaHist[]))
+    }
   }
   const ag = agregarHistorico(todas, {
     porMes, mov: filtroMov, codigos: codigosFiltro && !codigosNoBanco ? codigosFiltro : null, page, porPagina: POR_PAGINA,
@@ -204,6 +211,13 @@ export async function HistoricoTab({ sp, lojaId, proprio = false }: { sp: SP; lo
           )}
         </span>
       </div>
+
+      {falhaLeitura && (
+        <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-err" />
+          <span>Falha ao ler o histórico ({falhaLeitura}): os números abaixo podem estar incompletos. Recarregue a página.</span>
+        </div>
+      )}
 
       {truncado && (
         <div className="flex items-start gap-2.5 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] leading-relaxed text-text-muted shadow-[var(--shadow-sm)]">

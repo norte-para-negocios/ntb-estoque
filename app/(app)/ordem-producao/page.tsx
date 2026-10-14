@@ -695,6 +695,12 @@ export default async function OrdemProducaoPage({
         )}
       </div>
 
+      {busca.aviso && (
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]"><span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
+          {busca.aviso}
+        </p>
+      )}
+
       {truncado && (
         <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]"><span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warn" />
           Há muitas ordens. Mostrando uma parte. Use o filtro de data para refinar e ver tudo.

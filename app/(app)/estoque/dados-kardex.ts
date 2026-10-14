@@ -31,6 +31,12 @@ async function resolver(lojaId: number, f: FiltrosKardexLoja): Promise<Resolvido
     if (ids.length > MAX_IDS_FILTRO) { ids = ids.slice(0, MAX_IDS_FILTRO); truncado = `A busca "${f.q}" achou muitos produtos: mostrando só os ${MAX_IDS_FILTRO} primeiros. Refine a busca.` }
     produtos = produtos ? produtos.filter((p) => ids.includes(p)) : ids
   }
+  if (f.somenteProdutos) {
+    let ids = f.somenteProdutos
+    if (produtos) { const s = new Set(produtos); ids = ids.filter((p) => s.has(p)) }
+    if (ids.length > MAX_IDS_FILTRO) { ids = ids.slice(0, MAX_IDS_FILTRO); truncado = `O filtro tem muitos produtos: mostrando só os ${MAX_IDS_FILTRO} primeiros. Busque um produto.` }
+    produtos = ids
+  }
   let ajustes: number[] | null = null
   if (f.autor) {
     const { data } = await supabase.from('movimentos').select('id_ajuste').eq('loja_id', lojaId)

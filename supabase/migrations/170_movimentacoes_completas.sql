@@ -65,13 +65,16 @@ language sql stable security invoker set search_path = public as $$
   with u as (
     -- movimentos do Omie (ajustes, PDV, contagem, transferência). Data: o sync grava só a data (meia-noite UTC) e o
     -- app a hora real; meia-noite UTC exata = aquele dia, o resto = dia da Bahia (mesma regra de diaDoMovimento).
-    select 'm' || m.id as chave,
+    -- Transferência (TRF/TPQ com destino) vira DUAS linhas, como no kardex do Omie: saída na origem (lado 1) e
+    -- entrada no destino (lado 2). Assim o filtro de local mostra o sinal certo e os totais da loja se anulam.
+    select 'm' || m.id || case when lado.n = 2 then 'd' else '' end as chave,
            case when m.data = date_trunc('day', m.data, 'UTC') then (m.data at time zone 'UTC')::date
                 else (m.data at time zone 'America/Bahia')::date end as data,
-           m.data as momento, m.id_prod as n_cod_prod, m.codigo_local_estoque,
-           case when m.tipo in ('TRF', 'TPQ') then m.codigo_local_estoque_destino end as local_destino,
+           m.data as momento, m.id_prod as n_cod_prod,
+           case when lado.n = 2 then m.codigo_local_estoque_destino else m.codigo_local_estoque end as codigo_local_estoque,
+           case when lado.n = 1 and m.tipo in ('TRF', 'TPQ') then m.codigo_local_estoque_destino end as local_destino,
            case when m.tipo = 'SLD' then coalesce(m.quan, 0)
-                when m.tipo = 'ENT' then abs(coalesce(m.quan, 0))
+                when m.tipo = 'ENT' or lado.n = 2 then abs(coalesce(m.quan, 0))
                 else -abs(coalesce(m.quan, 0)) end as quantidade,
            m.tipo = 'SLD' as contagem,
            case when m.origem = 'PDV' then 'pdv'
@@ -93,6 +96,7 @@ language sql stable security invoker set search_path = public as $$
                 else 'Ajuste do app ' || m.id end as doc_rotulo,
            m.autor, m.obs
     from movimentos m
+    cross join lateral (values (1), (2)) as lado(n)
     left join lateral (
       select ii.inventario_id from inventario_items ii
       where m.tipo = 'SLD' and m.id_ajuste is not null and ii.loja_id = m.loja_id and ii.id_ajuste = m.id_ajuste
@@ -102,6 +106,7 @@ language sql stable security invoker set search_path = public as $$
       and m.data >= (p_ini::timestamp at time zone 'UTC')
       and m.data < ((p_fim + 1)::timestamp at time zone 'UTC') + interval '3 hours'
       and coalesce(m.status, 'Concluido') = 'Concluido'
+      and (lado.n = 1 or (m.tipo in ('TRF', 'TPQ') and m.codigo_local_estoque_destino is not null))
 
     union all
     -- produção: entrada do produto da OP concluída, no local da OP, na data de conclusão
@@ -145,7 +150,7 @@ language sql stable security invoker set search_path = public as $$
     select * from u
     where u.data between p_ini and p_fim
       and (p_produtos is null or u.n_cod_prod = any (p_produtos))
-      and (p_local is null or u.codigo_local_estoque = p_local or u.local_destino = p_local)
+      and (p_local is null or u.codigo_local_estoque = p_local)
       and (p_origem is null or p_origem = '' or u.origem = p_origem)
       and (p_doc is null or p_doc = '' or u.doc_rotulo ilike '%' || p_doc || '%')
       and (p_autor is null or p_autor = '' or u.autor ilike '%' || p_autor || '%')

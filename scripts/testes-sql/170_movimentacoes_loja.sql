@@ -44,6 +44,15 @@ begin
   if v_n <> 200 then raise exception 'paginacao repetiu: %', v_n; end if;
   -- 7. contagem (SLD) marcada e fora dos totais
   if exists (select 1 from movimentacoes_loja(5, '2026-09-01', '2026-10-07', p_origem => 'inventario', p_limit => 100000) where not contagem) then raise exception 'SLD sem contagem'; end if;
+  -- 8. transferência = duas linhas (saída na origem, entrada no destino) que se anulam nos totais
+  select count(*) into v_n from movimentacoes_loja(5, '2026-08-01', '2026-09-30', p_origem => 'transferencia', p_limit => 100000);
+  if v_n <> 2 * (select count(*) from movimentos where loja_id = 5 and tipo in ('TRF','TPQ') and coalesce(status,'Concluido') = 'Concluido'
+                   and codigo_local_estoque_destino is not null and data >= '2026-08-01' and data < '2026-10-02') then
+    raise exception 'transferencia sem as duas pontas: % linhas', v_n; end if;
+  select max(entradas) - max(saidas) into v_x from movimentacoes_loja(5, '2026-08-01', '2026-09-30', p_origem => 'transferencia', p_limit => 1);
+  if v_x <> 0 then raise exception 'transferencias nao se anulam: %', v_x; end if;
+  if exists (select 1 from movimentacoes_loja(5, '2026-08-01', '2026-09-30', p_origem => 'transferencia', p_local => 3778338070, p_limit => 100000) where quantidade <= 0) then
+    raise exception 'filtro do local de destino mostra a saida da origem'; end if;
   raise notice 'OK: % linhas na semana, entradas %, saidas %', v_tot, v_ent, v_sai;
 end $$;
 rollback;

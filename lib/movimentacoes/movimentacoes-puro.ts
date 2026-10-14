@@ -27,7 +27,7 @@ export type DocMov = {
 }
 
 export type FiltrosMov = {
-  ini: string; fim: string; q: string; produto: number | null; local: number | null; origem: string; doc: string; autor: string
+  ini: string; fim: string; q: string; produto: number | null; familia: string; local: number | null; origem: string; doc: string; autor: string
   page: number; erro: string | null
 }
 
@@ -55,10 +55,11 @@ export function lerFiltrosMovimentacoes(sp: Record<string, string | undefined>, 
   const q = (sp.q ?? sp.produto ?? '').trim()
   const doc = (sp.doc ?? '').trim()
   const produto = inteiro(sp.cod)
+  const familia = (sp.familia ?? '').trim()
   let fim = dataValida(sp.data_final) ? sp.data_final! : hoje
   let ini = dataValida(sp.data_inicio) ? sp.data_inicio! : addDias(fim, -(PADRAO_DIAS - 1))
   if (ini > fim) [ini, fim] = [fim, ini]
-  const max = !reconstruido || q || doc || produto != null ? MAX_DIAS_AMPLO : MAX_DIAS_RECONSTRUIDO
+  const max = !reconstruido || q || doc || familia || produto != null ? MAX_DIAS_AMPLO : MAX_DIAS_RECONSTRUIDO
   let erro: string | null = null
   if (diasEntre(ini, fim) > max - 1) {
     ini = addDias(fim, -(max - 1))
@@ -66,7 +67,7 @@ export function lerFiltrosMovimentacoes(sp: Record<string, string | undefined>, 
   }
   const page = inteiro(sp.page)
   return {
-    ini, fim, q, produto, local: inteiro(sp.local), origem: (sp.origem ?? '').trim(), doc, autor: (sp.autor ?? '').trim(),
+    ini, fim, q, produto, familia, local: inteiro(sp.local), origem: (sp.origem ?? '').trim(), doc, autor: (sp.autor ?? '').trim(),
     page: page && page > 0 ? page : 1, erro,
   }
 }
@@ -169,28 +170,45 @@ export type KardexMin = {
 
 /**
  * Movimentos do kardex que a OP gerou. 1º pelo número do documento (num_doc/num_pedido ≈ número, código do Omie ou
- * código de integração da OP); sem nenhum casamento por documento, por data (±1 dia da conclusão) + produto da OP ou
- * insumo + origem de OP, marcado como "provável".
+ * código de integração da OP). Sem nenhum casamento por documento, UM movimento por movimento esperado (entrada do
+ * prato e consumo de cada insumo da ficha gravada): mesmo produto, origem de OP, mesma quantidade, dia da conclusão
+ * primeiro e depois ±1 dia — marcado "provável". A loja faz centenas de OPs por dia: casar só por data e produto
+ * listaria os movimentos das outras OPs. `empates` = esperados com mais de um candidato igualmente bom.
  */
-export function casarKardexComOP<T extends KardexMin>(linhas: T[], op: OPMin, produtosDaOP: number[]): { linhas: (T & { provavel: boolean })[]; criterio: 'documento' | 'data' | 'nenhum' } {
-  const daOP = (l: T) => {
+export function casarKardexComOP<T extends KardexMin>(linhas: T[], op: OPMin, esperados: MovPrevisto[]): { linhas: (T & { provavel: boolean })[]; criterio: 'documento' | 'data' | 'nenhum'; empates: number } {
+  const ehOP = (l: T) => {
     const o = origemDoKardex(l)
-    return o === 'op_producao' || o === 'op_consumo' || o === 'outro'
+    return o === 'op_producao' || o === 'op_consumo'
   }
   const chaves = new Set(numerosCandidatos(op.identificacao_c_num_op, op.identificacao_n_cod_op, op.identificacao_c_cod_int_op))
-  const porDoc = linhas.filter((l) => daOP(l) && numerosCandidatos(l.num_doc, l.num_pedido).some((c) => chaves.has(c)))
-  if (porDoc.length) return { linhas: porDoc.map((l) => ({ ...l, provavel: false })), criterio: 'documento' }
-  if (!op.dt_conclusao_real) return { linhas: [], criterio: 'nenhum' }
+  const porDoc = linhas.filter((l) => (ehOP(l) || origemDoKardex(l) === 'outro') && numerosCandidatos(l.num_doc, l.num_pedido).some((c) => chaves.has(c)))
+  if (porDoc.length) return { linhas: porDoc.map((l) => ({ ...l, provavel: false })), criterio: 'documento', empates: 0 }
+  if (!op.dt_conclusao_real) return { linhas: [], criterio: 'nenhum', empates: 0 }
   const dia = op.dt_conclusao_real.slice(0, 10)
   const de = addDias(dia, -1)
   const ate = addDias(dia, 1)
-  const prods = new Set(produtosDaOP.map(Number))
-  const porData = linhas.filter((l) => {
-    const o = origemDoKardex(l)
-    return (o === 'op_producao' || o === 'op_consumo') && prods.has(Number(l.n_cod_prod)) && l.data_mov >= de && l.data_mov <= ate
-  })
-  if (porData.length) return { linhas: porData.map((l) => ({ ...l, provavel: true })), criterio: 'data' }
-  return { linhas: [], criterio: 'nenhum' }
+  const usados = new Set<number>()
+  const achados: (T & { provavel: boolean })[] = []
+  let empates = 0
+  for (const e of esperados) {
+    const tol = Math.max(1e-6, Math.abs(e.quantidade) * 1e-4)
+    const cands = linhas
+      .map((l, i) => ({ l, i }))
+      .filter(({ l, i }) => !usados.has(i) && ehOP(l) && Number(l.n_cod_prod) === e.n_cod_prod && l.data_mov >= de && l.data_mov <= ate
+        && Math.abs(Number(l.quantidade) - e.quantidade) <= tol)
+    if (!cands.length) continue
+    const noDia = cands.filter(({ l }) => l.data_mov === dia)
+    const melhores = noDia.length ? noDia : cands
+    if (melhores.length > 1) empates++
+    usados.add(melhores[0].i)
+    achados.push({ ...melhores[0].l, provavel: true })
+  }
+  return achados.length ? { linhas: achados, criterio: 'data', empates } : { linhas: [], criterio: 'nenhum', empates: 0 }
+}
+
+/** Kardex do Omie só quando a loja tem o espelho completo E o histórico completo já cobre o início do período. */
+export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string }): 'kardex' | 'reconstruido' {
+  return o.espelho && !!o.desde && o.desde <= o.ini ? 'kardex' : 'reconstruido'
 }
 
 /** Entradas e saídas (quantidade) de um conjunto de linhas: contagem de inventário e movimento cancelado não somam. */

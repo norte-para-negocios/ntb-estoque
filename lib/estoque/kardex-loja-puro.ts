@@ -3,6 +3,8 @@
 
 export type FiltrosKardexLoja = {
   ini: string; fim: string; produto: number | null; q: string; local: number | null; origem: string; autor: string; doc: string
+  /** Restrição extra de produtos (ex.: família em Movimentações); null = sem restrição. */
+  somenteProdutos?: number[] | null
   page: number; erro: string | null
 }
 
