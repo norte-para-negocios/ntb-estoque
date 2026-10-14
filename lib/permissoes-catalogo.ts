@@ -87,6 +87,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'OP - Acoes em lote', label: 'OPs em lote' },
       { nome: 'Fichas - Trocar insumo', label: 'Trocar insumo nas fichas' },
       { nome: 'Estoque - Corrigir custo', label: 'Corrigir custo de ajuste' },
+      // Central de correções (migration 171): lançar OP de preparo/prato/cupom pela Central (com a permissão de OP de sempre).
+      { nome: 'Correcoes - Executar', label: 'Corrigir pela Central de correções' },
     ],
   },
   {

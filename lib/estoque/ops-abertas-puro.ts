@@ -19,7 +19,7 @@ export type OPOmieLista = {
 export function origemDaOP(o: { cCodIntOP?: string | null; cObs?: string | null; uInc?: string | null }): OrigemOP {
   const cod = (o.cCodIntOP ?? '').trim()
   if (/^NTBV/i.test(cod)) return 'vendas'
-  if (/^NTB-/i.test(cod)) return 'app'
+  if (/^(NTB|CP|CT)-/i.test(cod)) return 'app' // CP-/CT-: Central de correções
   if (/^(OP|FPI|SEED|CORTE|FAX)-/i.test(cod)) return 'script'
   if (/^\s*Cupom \d+/i.test(o.cObs ?? '') || /^WEBSERVICE$/i.test((o.uInc ?? '').trim())) return 'cupom'
   return 'manual'

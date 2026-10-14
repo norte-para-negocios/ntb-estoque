@@ -75,3 +75,9 @@ test('confirmarSaidas: só marca a OP ausente em duas leituras completas seguida
   assert.deepEqual(confirmarSaidas([1, 2], [2, 3]), { marcar: [2], pendentes: [3] })
   assert.deepEqual(confirmarSaidas([1], []), { marcar: [], pendentes: [] })
 })
+
+test('origemDaOP: OPs da Central de correções (CP- cupom, CT- correção) são deste app', () => {
+  assert.equal(origemDaOP({ cCodIntOP: 'CP-11ab2c-19xtf1' }), 'app')
+  assert.equal(origemDaOP({ cCodIntOP: 'CT-0a1b2c3d4e5f6' }), 'app')
+  assert.equal(origemDaOP({ cCodIntOP: 'CPX-1' }), 'manual')
+})
