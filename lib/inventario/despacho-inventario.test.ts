@@ -46,5 +46,5 @@ test('o módulo do inventário próprio nunca importa o Omie', () => {
 test('as telas escolhem a aba pelo modo: Omie intacto, próprio usa o kardex', () => {
   const pagina = ler('app/(app)/movimentacoes/page.tsx')
   assert.match(pagina, /proprio\s*\n?\s*\? <MovimentosProprio/)
-  assert.match(pagina, /: <MovimentosTab/)
+  assert.match(pagina, /: <MovimentosOmie/)
 })

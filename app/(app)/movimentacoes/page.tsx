@@ -11,7 +11,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { ArrowLeftRight } from 'lucide-react'
 import { HistoricoTab } from '@/components/movimentacoes/HistoricoTab'
-import { MovimentosTab } from '@/components/movimentacoes/MovimentosTab'
+import { MovimentosOmie } from '@/components/movimentacoes/MovimentosOmie'
 import { MovimentosProprio } from '@/components/movimentacoes/MovimentosProprio'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 
@@ -30,6 +30,11 @@ export default async function MovimentacoesPage({
     page?: string
     aba?: string
     local?: string
+    q?: string
+    origem?: string
+    doc?: string
+    autor?: string
+    cod?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -37,7 +42,8 @@ export default async function MovimentacoesPage({
 
   const sp = await searchParams
   const proprio = (await modoDaLoja(lojaId)) === 'proprio'
-  const aba = sp.aba === 'movimentos' ? 'movimentos' : 'historico'
+  // Movimentos (lista completa) é a aba padrão; o Histórico (total do Omie por produto/dia) fica na segunda.
+  const aba = sp.aba === 'historico' ? 'historico' : 'movimentos'
 
   // FiltrosGaveta só aparece no Histórico
   let campos: CampoFiltro[] = []
@@ -72,7 +78,7 @@ export default async function MovimentacoesPage({
         <PageHeader
           title="Movimentações"
           icon={ArrowLeftRight}
-          description={proprio ? 'Histórico de entradas e saídas por produto e todos os movimentos do estoque' : 'Histórico de entradas e saídas por produto (2026)'}
+          description={proprio ? 'Todos os movimentos do estoque e o histórico de entradas e saídas por produto' : 'Todos os movimentos de estoque, com o documento de origem, e o total do Omie por produto/dia'}
           actions={
             aba === 'historico' ? (
               <FiltrosGaveta
@@ -99,8 +105,8 @@ export default async function MovimentacoesPage({
         basePath="/movimentacoes"
         param="aba"
         opcoes={[
-          { value: '', label: 'Histórico' },
-          { value: 'movimentos', label: 'Movimentos' },
+          { value: '', label: 'Movimentos' },
+          { value: 'historico', label: 'Histórico por dia' },
         ]}
       />
 
@@ -108,7 +114,7 @@ export default async function MovimentacoesPage({
         ? <HistoricoTab sp={sp} lojaId={lojaId} proprio={proprio} />
         : proprio
           ? <MovimentosProprio sp={sp} lojaId={lojaId} />
-          : <MovimentosTab sp={sp} lojaId={lojaId} />
+          : <MovimentosOmie sp={sp} lojaId={lojaId} />
       }
     </div>
   )
