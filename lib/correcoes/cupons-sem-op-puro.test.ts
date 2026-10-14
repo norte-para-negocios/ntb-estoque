@@ -57,3 +57,20 @@ test('cobertura ainda falta (PDV reprocessou?)', () => {
 test('resumo por dia', () => {
   assert.deepEqual(resumoCuponsPorDia([{ nIdCupom: 1, num: null, data: '2026-10-08', hora: null, itens: [{ produto: 1, nome: 'a', quantidade: 2 }] }]), [{ data: '2026-10-08', cupons: 1, itens: 2 }])
 })
+
+import { pareceOPJaExiste, validarPedidoOP } from './cupons-sem-op-puro.ts'
+test('erro do Omie de OP já cadastrada', () => {
+  assert.ok(pareceOPJaExiste('Ordem de Produção já cadastrada para o Código de Integração [CP-a-b]'))
+  assert.ok(pareceOPJaExiste('Já existe uma OP com o código de integração informado'))
+  assert.ok(!pareceOPJaExiste('Já existe uma requisição desse método em andamento'))
+  assert.ok(!pareceOPJaExiste('Produto não cadastrado'))
+})
+test('pedido de OP: quantidade, data e produto', () => {
+  assert.equal(validarPedidoOP({ quantidade: 2, dataISO: '2026-10-13', tipo: '04' }, '2026-10-13'), null)
+  assert.match(validarPedidoOP({ quantidade: 0, dataISO: '2026-10-13', tipo: '04' }, '2026-10-13') ?? '', /quantidade/)
+  assert.match(validarPedidoOP({ quantidade: 1e6, dataISO: '2026-10-13', tipo: '04' }, '2026-10-13') ?? '', /quantidade/)
+  assert.match(validarPedidoOP({ quantidade: 1, dataISO: '2026-10-14', tipo: '04' }, '2026-10-13') ?? '', /futuro/)
+  assert.match(validarPedidoOP({ quantidade: 1, dataISO: '13/10/2026', tipo: '04' }, '2026-10-13') ?? '', /data/)
+  assert.match(validarPedidoOP({ quantidade: 1, dataISO: '2026-10-13', tipo: '01' }, '2026-10-13') ?? '', /prato ou preparo/)
+  assert.match(validarPedidoOP({ quantidade: 1, dataISO: '2026-06-01', tipo: '04' }, '2026-10-13') ?? '', /90 dias/)
+})

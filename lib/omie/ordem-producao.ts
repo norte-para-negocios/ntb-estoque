@@ -528,3 +528,30 @@ function parseDate(d: string | null | undefined): string | null {
   if (!m) return null
   return `${m[3]}-${m[2]}-${m[1]}`
 }
+
+/**
+ * Procura uma OP no Omie pelo código de integração (ConsultarOrdemProducao { cCodIntOP }). Só LEITURA. Usado pela
+ * Central de correções antes de incluir de novo uma OP que pode ter sido criada numa tentativa que não respondeu
+ * (nunca duplica). "Não cadastrada" → null; outros erros sobem (inconclusivo: quem chama para).
+ */
+export async function consultarOPPorCodInt(loja: LojaOmie, cCodIntOP: string): Promise<{ nCodOP: number; concluida: boolean } | null> {
+  try {
+    const res = await omieRequest<OmieOP>({
+      loja_id: loja.id,
+      omie_app_key: loja.omie_app_key,
+      omie_app_secret: loja.omie_app_secret,
+      is_test: loja.is_test,
+      endpoint: 'v1/produtos/op',
+      call: 'ConsultarOrdemProducao',
+      data: { cCodIntOP },
+      semRepetir: true,
+    })
+    const n = Number(res?.identificacao?.nCodOP)
+    if (!n) return null
+    return { nCodOP: n, concluida: String(res?.outrasInf?.cConcluida ?? '').toUpperCase() === 'S' }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (pareceOPNaoExiste(msg) || /n[ãa]o (encontrad|existe)/i.test(msg)) return null
+    throw e
+  }
+}

@@ -85,3 +85,19 @@ export function resumoCuponsPorDia(c: CupomSemOP[]): { data: string; cupons: num
   }
   return [...m.values()].sort((a, b) => b.data.localeCompare(a.data))
 }
+
+/** O Omie recusou o IncluirOrdemProducao porque o código de integração já existe (≠ "já existe uma requisição"). */
+export function pareceOPJaExiste(msg: string): boolean {
+  if (/j. existe uma requisi/i.test(msg)) return false
+  return /j. cadastrad|j. existe.*(c.digo de integra|cCodIntOP|ordem|OP\b)/i.test(msg)
+}
+
+/** Validação do pedido de OP da Central (o servidor confere de novo o que a tela mandou). */
+export function validarPedidoOP(p: { quantidade: number; dataISO: string; tipo: string | null }, hoje: string): string | null {
+  if (!Number.isFinite(p.quantidade) || p.quantidade <= 0 || p.quantidade > 100_000) return 'Informe uma quantidade maior que zero (até 100.000).'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.dataISO) || Number.isNaN(Date.parse(`${p.dataISO}T12:00:00Z`))) return 'Escolha uma data válida.'
+  if (p.dataISO > hoje) return 'A data não pode ser no futuro (o Omie recusa concluir OP com data futura).'
+  if ((Date.parse(`${hoje}T12:00:00Z`) - Date.parse(`${p.dataISO}T12:00:00Z`)) / 86_400_000 > 90) return 'Data de mais de 90 dias atrás: lance pela tela de OPs, com cuidado com o mês fechado.'
+  if (p.tipo !== '03' && p.tipo !== '04') return 'Só dá para lançar OP de prato ou preparo (produto acabado ou em processo).'
+  return null
+}

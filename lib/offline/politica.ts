@@ -13,6 +13,7 @@ const leitura = [
   'auth#login',
   'auth#logout',
   'busca-global#buscaGlobal',
+  'central#carregarPainel',
   'cargo#listarCargos',
   'catalogo-proprio#carregarProdutoCatalogo',
   'catalogo-proprio#listarGrupos',
