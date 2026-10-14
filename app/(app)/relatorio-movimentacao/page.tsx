@@ -1,3 +1,4 @@
+import { paginasEmOndas } from '@/lib/supabase/paginas-em-ondas'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { notFound } from 'next/navigation'
@@ -848,10 +849,11 @@ export default async function RelatorioMovimentacaoPage({
   // MESMA chamada funciona na maioria das vezes (2,8-6s) -- retry resolve o
   // caso comum; quando falha as 3 vezes, `falhou=true` avisa a UI em vez de
   // mostrar dado incompleto calado.
+  // Páginas em ondas paralelas (13/10/2026): cada página reexecuta a RPC inteira; em série, um ano da loja 3
+  // (7 páginas) somava 7 execuções + 7 idas e voltas. Retry por página mantido.
   async function rpcTodos<T>(fn: string, args: Record<string, unknown>): Promise<{ rows: T[]; falhou: boolean }> {
     const PAGE = 1000
-    const todos: T[] = []
-    for (let p = 0; ; p++) {
+    const r = await paginasEmOndas<T>(async (p) => {
       let data: T[] | null = null
       let error: unknown = null
       for (let tentativa = 0; tentativa < 3; tentativa++) {
@@ -861,12 +863,9 @@ export default async function RelatorioMovimentacaoPage({
         if (!error) break
         console.error(`relatorio-movimentacao: falha na RPC ${fn} (tentativa ${tentativa + 1}/3)`, error)
       }
-      if (error) return { rows: todos, falhou: true }
-      if (!data?.length) break
-      todos.push(...data)
-      if (data.length < PAGE) break
-    }
-    return { rows: todos, falhou: false }
+      return { data, error }
+    }, PAGE, 4)
+    return { rows: r.linhas, falhou: r.falhou }
   }
 
   // movimentos_historico do banco principal tem o historico inteiro (backfill 2026-10-08):

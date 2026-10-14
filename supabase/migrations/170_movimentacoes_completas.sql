@@ -160,3 +160,43 @@ language sql stable security invoker set search_path = public as $$
 $$;
 revoke all on function public.movimentacoes_loja(bigint, date, date, bigint[], bigint, text, text, text, integer, integer) from public, anon;
 grant execute on function public.movimentacoes_loja(bigint, date, date, bigint[], bigint, text, text, text, integer, integer) to authenticated;
+
+-- 4. relatorio_movimentacao_matriz: mesma assinatura e mesmo resultado (conferido em 12 combinações loja×dim×sentido +
+--    filtros, scripts/testes-sql/170_relatorio_movimentacao_matriz.sql). Pela API (PostgREST passa os parâmetros como
+--    JSON, o plano não sabe p_dim) a versão antiga juntava `produtos` linha a linha: 60 mil buscas para o ano da loja 3,
+--    527–658 ms por página × 7 páginas. Agora soma por produto/descrição/mês primeiro (~6 mil grupos) e só então junta
+--    produtos e preço.
+create or replace function public.relatorio_movimentacao_matriz(
+  p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_sentido text,
+  p_cod_prods bigint[] default null::bigint[], p_produto text default null::text
+)
+returns table(rotulo text, mes text, qtde numeric, valor numeric)
+language sql stable as $$
+  with base as (
+    select m.cod_prod, m.descricao, to_char(m.data, 'YYYY-MM') as mes,
+           sum(case when p_sentido = 'entradas' then coalesce(m.entradas, 0) else coalesce(m.saidas, 0) end) as q
+    from movimentos_historico m
+    where m.loja_id = p_loja_id and m.data >= p_ini and m.data <= p_fim
+      and (p_cod_prods is null or m.cod_prod = any(p_cod_prods))
+      and (p_produto is null or p_produto = ''
+           or m.descricao ilike '%' || p_produto || '%'
+           or m.codigo    ilike '%' || p_produto || '%')
+    group by m.cod_prod, m.descricao, to_char(m.data, 'YYYY-MM')
+  )
+  select
+    coalesce(nullif(
+      case p_dim
+        when 'tipo'    then p.tipo_item::text
+        when 'familia' then p.descricao_familia::text
+        when 'produto' then b.descricao::text
+      end, ''), 'Sem classificação') as rotulo,
+    b.mes,
+    sum(b.q)::numeric as qtde,
+    sum(b.q * coalesce(pr.preco_unit, 0))::numeric as valor
+  from base b
+  left join produtos p on p.loja_id = p_loja_id and p.codigo_produto = b.cod_prod
+  left join produto_preco_recente pr on pr.loja_id = p_loja_id and pr.codigo_produto = b.cod_prod
+  group by 1, 2
+  having sum(b.q) <> 0
+  order by 1, 2;
+$$;

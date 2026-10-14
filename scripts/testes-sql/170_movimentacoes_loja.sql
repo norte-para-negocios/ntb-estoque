@@ -1,3 +1,4 @@
+-- Teste da 170 (RPC movimentacoes_loja). Rodar numa cópia local com o esquema de produção e dados da loja 5 (nunca em produção).
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"0c4e94fe-93be-4914-84b1-263efdbbb7f2","role":"authenticated"}', true) \g /dev/null
