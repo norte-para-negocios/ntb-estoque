@@ -73,6 +73,8 @@ export async function proxy(request: NextRequest) {
     path.startsWith('/api/webhook') ||
     path.startsWith('/api/cron') ||
     path.startsWith('/api/integracao') ||
+    // Ingestão das correções automáticas (robô): sem sessão, autenticada pela chave de integração da loja.
+    path === '/api/correcoes/ingest' ||
     // canal do app desktop: cada rota autentica pelo header (lib/offline/canal.ts)
     path.startsWith('/api/offline')
 

@@ -28,6 +28,7 @@ import {
   CookingPot,
   RefreshCw,
   HeartPulse,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -73,6 +74,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },
   { href: '/resumo', label: 'Resumo Operacional', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
+  { href: '/correcoes', label: 'Feito pelo robô', icon: Wrench, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3, group: 'Administração', gestaoUsuarios: true },
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
