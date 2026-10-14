@@ -568,6 +568,59 @@ end $$;
 
 
 --
+-- Name: central_negativo_desde(bigint, bigint[], date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date) RETURNS TABLE(n_cod_prod bigint, codigo_local_estoque bigint, desde date, comeca_antes boolean)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with k as (
+    select k.n_cod_prod, k.codigo_local_estoque, k.data_mov, k.saldo_apos, k.quantidade,
+           row_number() over (partition by k.n_cod_prod, k.codigo_local_estoque order by k.data_mov desc, k.id_mov desc) as rn
+    from kardex_omie k
+    where k.loja_id = p_loja_id and k.n_cod_prod = any(p_produtos) and k.data_mov >= p_ini
+      and k.cancelado = false and k.saldo_apos is not null
+  ),
+  g as (
+    select k.n_cod_prod, k.codigo_local_estoque,
+           min(k.rn) filter (where k.saldo_apos >= 0) as rn_nao_neg,
+           max(k.rn) as rn_max,
+           bool_or(k.rn = 1 and k.saldo_apos < 0) as termina_neg
+    from k group by 1, 2
+  )
+  select k.n_cod_prod, k.codigo_local_estoque, k.data_mov as desde,
+         (g.rn_nao_neg is null and (k.saldo_apos - k.quantidade) < 0) as comeca_antes
+  from g join k on k.n_cod_prod = g.n_cod_prod and k.codigo_local_estoque = g.codigo_local_estoque
+   and k.rn = coalesce(g.rn_nao_neg - 1, g.rn_max)
+  where g.termina_neg
+$$;
+
+
+--
+-- Name: central_ops_pdv(bigint, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $_$
+  with pdv as (
+    select identificacao_d_dt_previsao as data, identificacao_n_cod_produto as produto, identificacao_n_qtde as qtd
+    from ordens_producao
+    where loja_id = p_loja_id and identificacao_d_dt_previsao >= least(p_ini_cobertura, p_ini_produtos)
+      and identificacao_n_cod_produto is not null
+      and (identificacao_c_cod_int_op ~ '^[0-9]+$' or identificacao_c_cod_int_op ~* '^CP-'
+           or obs_omie ~* '^\s*Cupom\s+[0-9]' or origem_op = 'cupom')
+  )
+  select jsonb_build_object(
+    'cobertura', coalesce((select jsonb_agg(jsonb_build_array(data, produto, q)) from (
+        select data, produto, sum(qtd) q from pdv where data >= p_ini_cobertura group by 1, 2) c), '[]'::jsonb),
+    'produtos', coalesce((select jsonb_agg(distinct produto) from pdv where data >= p_ini_produtos), '[]'::jsonb))
+$_$;
+
+
+--
 -- Name: cmc_efetivo_proprio(bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4370,6 +4423,93 @@ ALTER TABLE public.categorias_contabeis ALTER COLUMN id ADD GENERATED ALWAYS AS 
 
 
 --
+-- Name: central_op_lancada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.central_op_lancada (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    cod_int_op text NOT NULL,
+    origem text NOT NULL,
+    codigo_produto bigint NOT NULL,
+    quantidade numeric NOT NULL,
+    data_op date NOT NULL,
+    n_id_cupom bigint,
+    n_cod_op bigint,
+    status text NOT NULL,
+    erro text,
+    simulado boolean DEFAULT false NOT NULL,
+    user_id uuid,
+    user_nome text,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    atualizado_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT central_op_lancada_origem_check CHECK ((origem = ANY (ARRAY['cupom'::text, 'correcao'::text]))),
+    CONSTRAINT central_op_lancada_quantidade_check CHECK ((quantidade > (0)::numeric)),
+    CONSTRAINT central_op_lancada_status_check CHECK ((status = ANY (ARRAY['incluindo'::text, 'incluida'::text, 'concluida'::text, 'erro'::text])))
+);
+
+
+--
+-- Name: central_op_lancada_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.central_op_lancada_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: central_op_lancada_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.central_op_lancada_id_seq OWNED BY public.central_op_lancada.id;
+
+
+--
+-- Name: central_problema_estado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.central_problema_estado (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    chave text NOT NULL,
+    estado text NOT NULL,
+    motivo text,
+    mensagem text,
+    acao text,
+    ate date,
+    assinatura text,
+    user_id uuid,
+    user_nome text,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    atualizado_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT central_problema_estado_estado_check CHECK ((estado = ANY (ARRAY['aberto'::text, 'resolvido'::text, 'ramon'::text, 'ignorado'::text])))
+);
+
+
+--
+-- Name: central_problema_estado_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.central_problema_estado_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: central_problema_estado_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.central_problema_estado_id_seq OWNED BY public.central_problema_estado.id;
+
+
+--
 -- Name: clientes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4681,6 +4821,47 @@ ALTER TABLE public.convites ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: correcoes_automaticas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.correcoes_automaticas (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    lote text NOT NULL,
+    modulo text NOT NULL,
+    acao text NOT NULL,
+    produto_cod text DEFAULT ''::text NOT NULL,
+    produto_desc text,
+    data_ref date NOT NULL,
+    quantidade numeric,
+    de_valor numeric,
+    para_valor numeric,
+    status text NOT NULL,
+    motivo text,
+    omie_ref text DEFAULT ''::text NOT NULL,
+    origem_ts timestamp with time zone NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    dados jsonb,
+    CONSTRAINT correcoes_automaticas_modulo_check CHECK ((modulo = ANY (ARRAY['faxina'::text, 'lancarPI'::text, 'corrigirAzeite'::text, 'relatorios'::text]))),
+    CONSTRAINT correcoes_automaticas_status_check CHECK ((status = ANY (ARRAY['ok'::text, 'falhou'::text, 'parado'::text, 'pendente_decisao'::text, 'desfeito'::text])))
+);
+
+
+--
+-- Name: correcoes_automaticas_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.correcoes_automaticas ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.correcoes_automaticas_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: espelho_sync_estado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4925,6 +5106,20 @@ ALTER TABLE public.estoque_movimentos ALTER COLUMN id ADD GENERATED ALWAYS AS ID
     NO MINVALUE
     NO MAXVALUE
     CACHE 1
+);
+
+
+--
+-- Name: estoque_nao_controla; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.estoque_nao_controla (
+    loja_id bigint NOT NULL,
+    codigo_produto bigint NOT NULL,
+    motivo text,
+    user_id uuid,
+    user_nome text,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -7256,6 +7451,20 @@ ALTER TABLE ONLY public.cargos ALTER COLUMN id SET DEFAULT nextval('public.cargo
 
 
 --
+-- Name: central_op_lancada id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_op_lancada ALTER COLUMN id SET DEFAULT nextval('public.central_op_lancada_id_seq'::regclass);
+
+
+--
+-- Name: central_problema_estado id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_problema_estado ALTER COLUMN id SET DEFAULT nextval('public.central_problema_estado_id_seq'::regclass);
+
+
+--
 -- Name: clientes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -7537,6 +7746,38 @@ ALTER TABLE ONLY public.categorias_contabeis
 
 
 --
+-- Name: central_op_lancada central_op_lancada_cod; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_op_lancada
+    ADD CONSTRAINT central_op_lancada_cod UNIQUE (loja_id, cod_int_op);
+
+
+--
+-- Name: central_op_lancada central_op_lancada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_op_lancada
+    ADD CONSTRAINT central_op_lancada_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: central_problema_estado central_problema_estado_chave; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_problema_estado
+    ADD CONSTRAINT central_problema_estado_chave UNIQUE (loja_id, chave);
+
+
+--
+-- Name: central_problema_estado central_problema_estado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_problema_estado
+    ADD CONSTRAINT central_problema_estado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: clientes clientes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7614,6 +7855,22 @@ ALTER TABLE ONLY public.convites
 
 ALTER TABLE ONLY public.convites
     ADD CONSTRAINT convites_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: correcoes_automaticas correcoes_automaticas_idem; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.correcoes_automaticas
+    ADD CONSTRAINT correcoes_automaticas_idem UNIQUE (loja_id, lote, acao, produto_cod, data_ref, omie_ref);
+
+
+--
+-- Name: correcoes_automaticas correcoes_automaticas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.correcoes_automaticas
+    ADD CONSTRAINT correcoes_automaticas_pkey PRIMARY KEY (id);
 
 
 --
@@ -7710,6 +7967,14 @@ ALTER TABLE ONLY public.estoque_movimentos
 
 ALTER TABLE ONLY public.estoque_movimentos
     ADD CONSTRAINT estoque_movimentos_reverses_id_key UNIQUE (reverses_id);
+
+
+--
+-- Name: estoque_nao_controla estoque_nao_controla_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_nao_controla
+    ADD CONSTRAINT estoque_nao_controla_pkey PRIMARY KEY (loja_id, codigo_produto);
 
 
 --
@@ -8559,6 +8824,20 @@ CREATE INDEX audit_log_loja_created_idx ON public.audit_log USING btree (loja_id
 
 
 --
+-- Name: central_op_lancada_loja_data; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX central_op_lancada_loja_data ON public.central_op_lancada USING btree (loja_id, data_op DESC);
+
+
+--
+-- Name: central_problema_estado_loja_atualizado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX central_problema_estado_loja_atualizado ON public.central_problema_estado USING btree (loja_id, atualizado_em DESC);
+
+
+--
 -- Name: compras_proprio_itens_compra; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8591,6 +8870,27 @@ CREATE INDEX convites_codigo_idx ON public.convites USING btree (codigo);
 --
 
 CREATE INDEX convites_loja_id_idx ON public.convites USING btree (loja_id);
+
+
+--
+-- Name: correcoes_automaticas_decisao_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX correcoes_automaticas_decisao_idx ON public.correcoes_automaticas USING btree (loja_id, origem_ts DESC) WHERE (status = ANY (ARRAY['parado'::text, 'pendente_decisao'::text]));
+
+
+--
+-- Name: correcoes_automaticas_loja_origem_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX correcoes_automaticas_loja_origem_idx ON public.correcoes_automaticas USING btree (loja_id, origem_ts DESC);
+
+
+--
+-- Name: correcoes_automaticas_lote_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX correcoes_automaticas_lote_idx ON public.correcoes_automaticas USING btree (lote);
 
 
 --
@@ -9130,6 +9430,20 @@ CREATE INDEX offline_versoes_versao ON public.offline_versoes USING btree (versa
 --
 
 CREATE INDEX op_historico_op ON public.op_historico USING btree (loja_id, n_cod_op, created_at);
+
+
+--
+-- Name: ordens_producao_abertas_omie_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ordens_producao_abertas_omie_idx ON public.ordens_producao USING btree (loja_id, id) WHERE aberta_omie;
+
+
+--
+-- Name: ordens_producao_loja_cod_int_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ordens_producao_loja_cod_int_idx ON public.ordens_producao USING btree (loja_id, identificacao_c_cod_int_op);
 
 
 --
@@ -9854,6 +10168,22 @@ ALTER TABLE ONLY public.categorias_contabeis
 
 
 --
+-- Name: central_op_lancada central_op_lancada_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_op_lancada
+    ADD CONSTRAINT central_op_lancada_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: central_problema_estado central_problema_estado_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.central_problema_estado
+    ADD CONSTRAINT central_problema_estado_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: clientes clientes_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9931,6 +10261,14 @@ ALTER TABLE ONLY public.convites
 
 ALTER TABLE ONLY public.convites
     ADD CONSTRAINT convites_usado_por_fkey FOREIGN KEY (usado_por) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: correcoes_automaticas correcoes_automaticas_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.correcoes_automaticas
+    ADD CONSTRAINT correcoes_automaticas_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
 
 
 --
@@ -10019,6 +10357,14 @@ ALTER TABLE ONLY public.estoque_movimentos
 
 ALTER TABLE ONLY public.estoque_movimentos
     ADD CONSTRAINT estoque_movimentos_reverses_id_fkey FOREIGN KEY (reverses_id) REFERENCES public.estoque_movimentos(id);
+
+
+--
+-- Name: estoque_nao_controla estoque_nao_controla_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_nao_controla
+    ADD CONSTRAINT estoque_nao_controla_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
 
 
 --
@@ -10766,6 +11112,32 @@ CREATE POLICY categorias_contabeis_select_por_loja ON public.categorias_contabei
 
 
 --
+-- Name: central_op_lancada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.central_op_lancada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: central_op_lancada central_op_lancada_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY central_op_lancada_select_por_loja ON public.central_op_lancada FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: central_problema_estado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.central_problema_estado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: central_problema_estado central_problema_estado_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY central_problema_estado_select_por_loja ON public.central_problema_estado FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: clientes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10854,6 +11226,19 @@ ALTER TABLE public.convites ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY convites_select_por_loja ON public.convites FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: correcoes_automaticas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.correcoes_automaticas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: correcoes_automaticas correcoes_automaticas_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY correcoes_automaticas_select_por_loja ON public.correcoes_automaticas FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -10964,6 +11349,19 @@ ALTER TABLE public.estoque_movimentos ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY estoque_movimentos_select_por_loja ON public.estoque_movimentos FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: estoque_nao_controla; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.estoque_nao_controla ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: estoque_nao_controla estoque_nao_controla_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estoque_nao_controla_select_por_loja ON public.estoque_nao_controla FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -12000,6 +12398,26 @@ GRANT ALL ON FUNCTION public.cancelar_inventario(p_inventario bigint, p_user tex
 REVOKE ALL ON FUNCTION public.cancelar_venda_proprio(p_loja bigint, p_ref text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.cancelar_venda_proprio(p_loja bigint, p_ref text) TO postgres;
 GRANT ALL ON FUNCTION public.cancelar_venda_proprio(p_loja bigint, p_ref text) TO service_role;
+
+
+--
+-- Name: FUNCTION central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date) TO postgres;
+GRANT ALL ON FUNCTION public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date) TO authenticated;
+GRANT ALL ON FUNCTION public.central_negativo_desde(p_loja_id bigint, p_produtos bigint[], p_ini date) TO service_role;
+
+
+--
+-- Name: FUNCTION central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date) TO postgres;
+GRANT ALL ON FUNCTION public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date) TO authenticated;
+GRANT ALL ON FUNCTION public.central_ops_pdv(p_loja_id bigint, p_ini_cobertura date, p_ini_produtos date) TO service_role;
 
 
 --
@@ -13190,6 +13608,44 @@ GRANT ALL ON SEQUENCE public.categorias_contabeis_id_seq TO service_role;
 
 
 --
+-- Name: TABLE central_op_lancada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.central_op_lancada TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.central_op_lancada TO authenticated;
+GRANT ALL ON TABLE public.central_op_lancada TO service_role;
+
+
+--
+-- Name: SEQUENCE central_op_lancada_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.central_op_lancada_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.central_op_lancada_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.central_op_lancada_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.central_op_lancada_id_seq TO service_role;
+
+
+--
+-- Name: TABLE central_problema_estado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.central_problema_estado TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.central_problema_estado TO authenticated;
+GRANT ALL ON TABLE public.central_problema_estado TO service_role;
+
+
+--
+-- Name: SEQUENCE central_problema_estado_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.central_problema_estado_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.central_problema_estado_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.central_problema_estado_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.central_problema_estado_id_seq TO service_role;
+
+
+--
 -- Name: TABLE clientes; Type: ACL; Schema: public; Owner: -
 --
 
@@ -13315,6 +13771,25 @@ GRANT ALL ON TABLE public.convites TO service_role;
 GRANT ALL ON SEQUENCE public.convites_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.convites_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.convites_id_seq TO service_role;
+
+
+--
+-- Name: TABLE correcoes_automaticas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.correcoes_automaticas TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.correcoes_automaticas TO authenticated;
+GRANT ALL ON TABLE public.correcoes_automaticas TO service_role;
+
+
+--
+-- Name: SEQUENCE correcoes_automaticas_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.correcoes_automaticas_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.correcoes_automaticas_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.correcoes_automaticas_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.correcoes_automaticas_id_seq TO service_role;
 
 
 --
@@ -13456,6 +13931,15 @@ GRANT ALL ON SEQUENCE public.estoque_movimentos_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.estoque_movimentos_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.estoque_movimentos_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.estoque_movimentos_id_seq TO service_role;
+
+
+--
+-- Name: TABLE estoque_nao_controla; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.estoque_nao_controla TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.estoque_nao_controla TO authenticated;
+GRANT ALL ON TABLE public.estoque_nao_controla TO service_role;
 
 
 --
