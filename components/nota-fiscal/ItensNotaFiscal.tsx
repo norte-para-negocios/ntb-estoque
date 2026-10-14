@@ -10,11 +10,13 @@ import { CategoriaContabilSelect } from '@/components/nota-fiscal/CategoriaConta
 import { DialogImprimirEtiqueta } from '@/components/etiqueta/DialogImprimirEtiqueta'
 import { FileText } from 'lucide-react'
 import { impostosItem } from '@/lib/nf-impostos-item'
+import Link from 'next/link'
 
 export type ItemNF = {
   id: number
   c_codigo_produto: string | null
   c_descricao_produto: string | null
+  n_id_produto?: number | null
   c_cfop: string | null
   n_qtde_nfe: number | null
   c_unidade_nfe: string | null
@@ -29,11 +31,29 @@ export function ItensNotaFiscal({
   notaId,
   itens,
   categorias,
+  ligacoes,
 }: {
   notaId: string
   itens: ItemNF[]
   categorias: { id: number; nome: string }[]
+  /** Loja Omie: cada item liga à página do produto e aos movimentos dele desde a emissão da nota. */
+  ligacoes?: { emissao: string | null; hoje: string } | null
 }) {
+  const produtoHref = (item: ItemNF) => (ligacoes && item.n_id_produto ? `/estoque/produto/${item.n_id_produto}` : null)
+  const movHref = (item: ItemNF) =>
+    ligacoes && item.n_id_produto && ligacoes.emissao
+      ? `/movimentacoes?cod=${item.n_id_produto}&data_inicio=${ligacoes.emissao.slice(0, 10)}&data_final=${ligacoes.hoje}`
+      : null
+  const nomeItem = (item: ItemNF) => {
+    const ph = produtoHref(item)
+    const mh = movHref(item)
+    return (
+      <>
+        {ph ? <Link href={ph} className="hover:underline" title="Abrir o produto">{item.c_descricao_produto}</Link> : item.c_descricao_produto}
+        {mh && <Link href={mh} className="ml-2 text-[12px] font-normal text-brand hover:underline" title="Movimentos deste produto desde a emissão da nota">movimentos</Link>}
+      </>
+    )
+  }
   const [sel, setSel] = useState<Set<number>>(new Set())
   const [expandido, setExpandido] = useState<Set<number>>(new Set())
 
@@ -133,7 +153,7 @@ export function ItensNotaFiscal({
                       />
                     </td>
                     <td className="num text-text-muted">{item.c_codigo_produto}</td>
-                    <td className="font-medium text-text">{item.c_descricao_produto}</td>
+                    <td className="font-medium text-text">{nomeItem(item)}</td>
                     <td className="num text-text-muted">{item.c_cfop || '-'}</td>
                     <td className="whitespace-nowrap text-right">
                       <Num value={item.n_qtde_nfe} frac={3} />{' '}
@@ -231,7 +251,7 @@ export function ItensNotaFiscal({
               />
               <div className="min-w-0 flex-1">
                 <div className="num text-[13px] text-text-muted">{item.c_codigo_produto}</div>
-                <div className="text-[15px] font-semibold text-text break-words">{item.c_descricao_produto}</div>
+                <div className="text-[15px] font-semibold text-text break-words">{nomeItem(item)}</div>
               </div>
             </div>
 

@@ -14,6 +14,7 @@ import { marcarSaltosCmc, type LinhaKardexOmie } from '@/lib/estoque/kardex-omie
 import { createClient } from '@/lib/supabase/server'
 import { formatCustoUnit } from '@/lib/num-br'
 import { CustoProduto, type LinhaPrato } from '@/components/estoque-proprio/CustoProduto'
+import { NotasDoProduto } from '@/components/estoque-proprio/NotasDoProduto'
 import { custoDoPrato, entradasQueFormaramCusto, serieCustoMedio, type MovCusto } from '@/lib/estoque/custo-produto-puro'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
 import { EstoqueAtalhos } from '@/components/estoque-proprio/EstoqueAtalhos'
@@ -187,6 +188,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
           <p className="mt-2 text-[12px] text-text-muted">* entrada sem custo informado: o custo médio não foi alterado.</p>
         </section>
       )}
+      <NotasDoProduto lojaId={lojaId} codigoProduto={p.codigoProduto} codigo={p.codigo} />
     </div>
   )
 }

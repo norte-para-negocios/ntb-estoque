@@ -11,7 +11,8 @@ import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { DetalhesFiscaisNF } from '@/components/nota-fiscal/DetalhesFiscaisNF'
 import { AcoesNF } from '@/components/nota-fiscal/AcoesNF'
 import { OPsRelacionadasNF } from '@/components/nota-fiscal/OPsRelacionadasNF'
-import { MovimentacoesGeradasNF } from '@/components/nota-fiscal/MovimentacoesGeradasNF'
+import { MovimentosDaNota } from '@/components/nota-fiscal/MovimentosDaNota'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { HistoricoStatusNF } from '@/components/nota-fiscal/HistoricoStatusNF'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
@@ -78,7 +79,7 @@ export default async function NotaFiscalItensPage({
   // full_object.itensAjustes.codigo_local_estoque, POR ITEM (nao por NF --
   // confirmado ao vivo que cada linha de nota_fiscal_items tem seu proprio
   // full_object.itensAjustes com o local daquele item especifico).
-  type ItemComFullObject = { n_id_produto: number | null; c_descricao_produto: string | null; full_object: unknown }
+  type ItemComFullObject = { n_id_produto: number | null; c_descricao_produto: string | null; n_qtde_nfe: number | null; full_object: unknown }
   const itensParaCruzamento = (itens ?? []) as unknown as ItemComFullObject[]
   const produtoCodes = [...new Set(itensParaCruzamento.map((i) => i.n_id_produto).filter((v): v is number => v != null))]
   const itensComLocal = itensParaCruzamento
@@ -90,6 +91,7 @@ export default async function NotaFiscalItensPage({
         n_id_produto: i.n_id_produto,
         codigo_local_estoque: localRaw != null ? Number(localRaw) : null,
         descricao: i.c_descricao_produto,
+        quantidade: Number(i.n_qtde_nfe) || 0,
       }
     })
 
@@ -195,7 +197,7 @@ export default async function NotaFiscalItensPage({
         <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
           podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} />
       )}
-      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} />
+      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }} />
 
       {proprio ? (
         <>
@@ -206,7 +208,13 @@ export default async function NotaFiscalItensPage({
         <>
           <OPsRelacionadasNF lojaId={lojaId} produtoCodes={produtoCodes} dataEmissao={nf.d_emissao_nfe ?? null} />
 
-          <MovimentacoesGeradasNF lojaId={lojaId} itens={itensComLocal} dataEmissao={nf.d_emissao_nfe ?? null} />
+          <MovimentosDaNota
+            lojaId={lojaId}
+            numero={nf.c_numero_nfe ?? null}
+            emissao={nf.d_emissao_nfe ?? null}
+            concluida={concluida}
+            itens={itensComLocal.map((i) => ({ n_id_produto: i.n_id_produto, codigo_local_estoque: i.codigo_local_estoque, quantidade: i.quantidade }))}
+          />
 
           <HistoricoStatusNF lojaId={lojaId} nIdReceb={nf.n_id_receb ?? null} numeroNFe={nf.c_numero_nfe ?? null} />
         </>
