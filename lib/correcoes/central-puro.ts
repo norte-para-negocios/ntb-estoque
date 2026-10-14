@@ -239,19 +239,30 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
   }
   const fichaCusto = new Map<number, number>()
   for (const [prato, itens] of e.fichas) fichaCusto.set(prato, custoPelaFicha(itens, cmcPlaus))
-  const ref = (c: number) => { const p = prod.get(c); return p ? custoRef(p, fichaCusto.get(c) ?? 0) : 0 }
+  // Custo de referência: produto com custo fora do normal não usa o próprio CMC (usa a ficha, senão o custo anterior).
+  const comCustoRuim = new Set<number>()
+  const ref = (c: number) => {
+    const p = prod.get(c)
+    if (!p) return 0
+    if (comCustoRuim.has(c)) return (fichaCusto.get(c) ?? 0) > 0 ? fichaCusto.get(c)! : (e.custoHist.get(c)?.anterior ?? 0)
+    return custoRef(p, fichaCusto.get(c) ?? 0)
+  }
   const ignora = (c: number) => e.naoControla.has(c)
   const out: Problema[] = []
-  const push = (p: Omit<Problema, 'busca'>, extra = '') =>
+  const vistas = new Set<string>()
+  // Chave repetida (dado de entrada duplicado) fica só a primeira: a chave identifica o estado guardado no banco.
+  const push = (p: Omit<Problema, 'busca'>, extra = '') => {
+    if (vistas.has(p.chave)) return
+    vistas.add(p.chave)
     out.push({ ...p, valor: arred2(p.valor), busca: normalizar(`${p.titulo} ${p.causa} ${extra}`) })
+  }
 
   const cuponsPorPrato = new Map<number, number>()
   for (const c of e.cuponsSemOP) for (const i of new Set(c.itens.map((x) => x.produto))) cuponsPorPrato.set(i, (cuponsPorPrato.get(i) ?? 0) + 1)
   const opsPorProduto = new Map<number, OPAbertaC[]>()
   for (const o of e.opsAbertas) if (o.produto != null) opsPorProduto.set(o.produto, [...(opsPorProduto.get(o.produto) ?? []), o])
 
-  // Custo fora do normal (antes: as OPs dependem dele).
-  const comCustoRuim = new Set<number>()
+  // Custo fora do normal (antes: as OPs e o custo de referência dependem dele).
   for (const p of e.produtos) {
     if (ignora(p.codigo) || p.tipo === '99' || !(p.cmc > 0)) continue
     const h = e.custoHist.get(p.codigo)
@@ -354,8 +365,14 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
     }, `${o.numero} ${numeroOP(o.numero)} ${o.cupom ?? ''}`)
   }
 
-  // Contagens estranhas.
+  // Contagens estranhas: só a mais recente de cada produto/local.
+  const ultimaContagem = new Map<string, EntradaCentral['contagens'][number]>()
   for (const c of e.contagens) {
+    const k = `${c.produto}:${c.local}`
+    const a = ultimaContagem.get(k)
+    if (!a || c.data >= a.data) ultimaContagem.set(k, c)
+  }
+  for (const c of ultimaContagem.values()) {
     if (ignora(c.produto)) continue
     const p = prod.get(c.produto)
     const un = p?.unidade ?? 'UN'

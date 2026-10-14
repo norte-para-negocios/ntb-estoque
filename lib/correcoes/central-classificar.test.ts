@@ -113,3 +113,22 @@ test('sugestão de contagem e custo pela ficha', () => {
   assert.equal(sugestaoContagem(5, 12), null)
   assert.equal(custoPelaFicha([{ insumo: 1, qtd: 2, perda: 10, local: null }], () => 3), 6.6)
 })
+
+test('duas contagens estranhas do mesmo produto/local viram um problema (a mais recente)', () => {
+  const ps = classificarProblemas(base({
+    produtos: [prod({ codigo: 30, tipo: '01', unidade: 'G', saldo: 7001, cmc: 0.01, locais: [{ local: 1, saldo: 7001 }] })],
+    contagens: [{ produto: 30, local: 1, data: '2026-09-15', de: 16500, para: 6.3 }, { produto: 30, local: 1, data: '2026-10-12', de: 800, para: 7000 }],
+  }))
+  const c = ps.filter((p) => p.chave === 'contagem:produto:30:1')
+  assert.equal(c.length, 1); assert.equal(c[0].d.contagem!.data, '2026-10-12')
+  assert.equal(new Set(ps.map((p) => p.chave)).size, ps.length)
+})
+
+test('prato negativo com custo fora do normal é valorado pela ficha, não pelo custo errado', () => {
+  const ps = classificarProblemas(base({
+    produtos: [prod({ codigo: 10, saldo: -185, cmc: 600, locais: [{ local: 1, saldo: -185 }] }), prod({ codigo: 20, tipo: '01', saldo: 10, cmc: 4.6, locais: [{ local: 1, saldo: 10 }] })],
+    fichas: new Map([[10, [{ insumo: 20, qtd: 1, perda: 0, local: 1 }]]]),
+  }))
+  assert.ok(ps.find((p) => p.chave === 'custo:produto:10'))
+  assert.equal(ps.find((p) => p.chave === 'pa:produto:10')!.valor, 851)
+})
