@@ -8,7 +8,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { addDias } from '@/lib/estoque/espelho-lojas'
 import { getPermissoesNomes } from '@/lib/auth'
 import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
-import { negativoDesde, oscilacoesContagem, cmcPorLocalAtual, insumosSemCustoNoLocal, ultimoCmcAnterior, type MovSaldo } from '@/lib/estoque/saude-puro'
+import { negativoDesde, contagemSuspeitaAtual, cmcPorLocalAtual, insumosSemCustoNoLocal, ultimoCmcAnterior, type MovSaldo } from '@/lib/estoque/saude-puro'
 import { itensDaOPGravada } from '@/lib/estoque/ops-tela-puro'
 import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
 import { buscarFatCupomItens, buscarFatCupons } from '@/lib/faturamento-frio'
@@ -182,17 +182,15 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
     insumos: itensDaOPGravada(o.full_object).map((i) => ({ produto: i.insumo, qtd: i.quantidade })),
   }))
 
-  // Contagens que oscilam (a última de cada produto/local).
-  const osc = oscilacoesContagem(sld.map((s) => ({ produto: Number(s.id_prod), local: Number(s.codigo_local_estoque), data: diaDoMovimento(s.data), ordem: Number(s.id), qtd: Number(s.quan) })))
-  const ultima = new Map<string, (typeof osc)[number]>()
-  for (const o of osc) ultima.set(`${o.produto}:${o.local}`, o)
+  // Contagem estranha que ainda vale: a última de cada produto/local, quando ela é o erro (não a que desfez um erro).
+  const suspeitas = contagemSuspeitaAtual(sld.map((s) => ({ produto: Number(s.id_prod), local: Number(s.codigo_local_estoque), data: diaDoMovimento(s.data), ordem: Number(s.id), qtd: Number(s.quan) })))
   // Id do movimento SLD da contagem (a correção pela Central é travada por ele: nunca corrige a mesma contagem 2x).
   const idSld = new Map<string, number>()
   for (const x of sld) {
     const k = `${Number(x.id_prod)}:${Number(x.codigo_local_estoque)}:${diaDoMovimento(x.data)}:${Number(x.quan)}`
     idSld.set(k, Math.max(idSld.get(k) ?? 0, Number(x.id)))
   }
-  e.contagens = [...ultima.values()].filter((o) => prod.has(o.produto)).map((o) => ({ ...o, movId: idSld.get(`${o.produto}:${o.local}:${o.data}:${o.para}`) }))
+  e.contagens = suspeitas.filter((o) => prod.has(o.produto)).map((o) => ({ ...o, movId: idSld.get(`${o.produto}:${o.local}:${o.data}:${o.para}`) }))
 
   // Notas esperando entrada (c_etapa 40) → produto.
   const nf = (notas.data ?? []) as NFRow[]

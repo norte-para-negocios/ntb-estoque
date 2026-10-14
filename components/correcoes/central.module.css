@@ -13,7 +13,7 @@
 .raiz { display: flex; flex-direction: column; gap: 28px; padding-bottom: 80px; }
 :global(.dark) .raiz, :global(.dark) .portal { --overlay: rgba(0, 0, 0, 0.55); --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.7); }
 
-.raiz button, .portal button { cursor: pointer; font: inherit; color: inherit; background: none; border: 0; padding: 0; }
+:where(.raiz, .portal) button { cursor: pointer; font: inherit; color: inherit; background: none; border: 0; padding: 0; }
 .raiz :focus-visible, .portal :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
 .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .muted { color: var(--text-muted); }

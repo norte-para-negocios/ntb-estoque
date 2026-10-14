@@ -142,3 +142,25 @@ test('opsSobrandoFaltando: com saldo por local, a OP olha o saldo do local dela'
   const r3 = opsSobrandoFaltando(saldos, tipos, [{ id: 14, produto: 1, origem: 'cupom', local: 1 }], true, saldosLocal)
   assert.deepEqual(r3.sobrando.map((o) => o.id), [14])
 })
+
+import { contagemSuspeitaAtual } from './saude-puro.ts'
+test('contagemSuspeitaAtual: só a última contagem, e só quando ela é o erro (não quando desfaz um erro)', () => {
+  const c = (produto: number, ordem: number, data: string, qtd: number) => ({ produto, local: 1, data, ordem, qtd })
+  const r = contagemSuspeitaAtual([
+    // 1: 2 → 3.000 (vírgula) e nada depois: suspeita.
+    c(1, 1, '2026-08-01', 2), c(1, 2, '2026-08-31', 3000),
+    // 2: 30 → 23.500 → 33: a última desfez o erro, nada a corrigir.
+    c(2, 3, '2026-08-01', 30), c(2, 4, '2026-08-20', 23500), c(2, 5, '2026-09-10', 33),
+    // 3: 5.500 → 4 sem histórico antes: a anterior era ~1000× (vírgula), a última é a certa.
+    c(3, 6, '2026-08-20', 5500), c(3, 7, '2026-09-10', 4),
+    // 4: 2 → 2 → 3.100: estável e a última pulou.
+    c(4, 8, '2026-08-01', 2), c(4, 9, '2026-08-20', 2), c(4, 10, '2026-09-10', 3100),
+    // 7: 3.000 → 2 → 3.100: a última voltou ao nível de antes (o 2 era o erro): nada.
+    c(7, 17, '2026-08-01', 3000), c(7, 18, '2026-08-20', 2), c(7, 19, '2026-09-10', 3100),
+    // 5: o erro ficou no meio, a última bate com a anterior: nada.
+    c(5, 11, '2026-08-01', 10), c(5, 12, '2026-08-20', 10000), c(5, 13, '2026-09-01', 11), c(5, 14, '2026-09-10', 12),
+    // 6: 40 → 5 (caiu 8×, sem cara de vírgula): suspeita.
+    c(6, 15, '2026-09-01', 40), c(6, 16, '2026-09-10', 5),
+  ])
+  assert.deepEqual(r.map((x) => [x.produto, x.de, x.para]), [[1, 2, 3000], [4, 2, 3100], [6, 40, 5]])
+})

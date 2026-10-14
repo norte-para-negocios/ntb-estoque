@@ -94,6 +94,38 @@ export function oscilacoesContagem(c: Contagem[]): { produto: number; local: num
   return r.sort((x, y) => x.produto - y.produto || x.data.localeCompare(y.data))
 }
 
+const osc = (a: number, b: number) => (a > 0 && b > 0 ? Math.max(a, b) / Math.min(a, b) >= OSCILACAO_VEZES : (a > 0) !== (b > 0) && (a > 0 || b > 0))
+/** A anterior parece a vírgula no lugar errado (5,5 digitado 5.500) e a última é a certa. */
+const anteriorEraVirgula = (de: number, para: number) => de >= 1000 && para > 0 && de / para >= 500
+
+/**
+ * Contagem estranha que ainda vale: só a ÚLTIMA contagem de cada produto/local, e só quando ela é o erro. Não entra
+ * a contagem que desfez um erro anterior (voltou ao nível de antes, ou a anterior tinha cara de vírgula errada).
+ */
+export function contagemSuspeitaAtual(c: Contagem[]): { produto: number; local: number; data: string; de: number; para: number }[] {
+  const grupos = new Map<string, Contagem[]>()
+  for (const x of ordenar(c)) {
+    const k = `${x.produto}:${x.local}`
+    const arr = grupos.get(k) ?? []
+    arr.push(x)
+    grupos.set(k, arr)
+  }
+  const r: { produto: number; local: number; data: string; de: number; para: number }[] = []
+  for (const lista of grupos.values()) {
+    const n = lista.length
+    if (n < 2) continue
+    const L = lista[n - 1].qtd, P = lista[n - 2].qtd
+    if (!osc(P, L)) continue
+    if (n >= 3) {
+      const Q = lista[n - 3].qtd
+      if (osc(Q, P) && !osc(Q, L)) continue
+    }
+    if (anteriorEraVirgula(P, L)) continue
+    r.push({ produto: lista[n - 1].produto, local: lista[n - 1].local, data: lista[n - 1].data, de: P, para: L })
+  }
+  return r.sort((x, y) => x.produto - y.produto)
+}
+
 export type OPAbertaMin = { id: number; produto: number | null; origem: string | null; local?: number | null }
 
 /**
