@@ -116,7 +116,7 @@ function Opcoes(props: Props) {
   const [log, setLog] = React.useState<string[]>([])
   const [ajusteSel, setAjusteSel] = React.useState<number | null>(null)
   const [mesFechado, setMesFechado] = React.useState(false)
-  React.useEffect(() => { setAcao(defs[0]?.acao ?? null); setEtapa('escolher'); setErro(null); setLog([]) }, [p.chave, defs])
+  React.useEffect(() => { setAcao(defs[0]?.acao ?? null); setEtapa('escolher'); setErro(null); setLog([]); setMesFechado(false) }, [p.chave, defs])
 
   const def = defs.find((d) => d.acao === acao) ?? defs[0]
   const ajustes: AjusteCusto[] = painel?.ajustesCusto ?? []
@@ -162,8 +162,11 @@ function Opcoes(props: Props) {
         }
         case 'op_preparo':
         case 'op_prato': {
-          const r = await lancarOPCorrecao({ origem: 'correcao', codigoProduto: d.produto!, quantidade: lerNumeroBR(v.qtd)!, dataISO: v.data })
-          if ('error' in r) return falha(r.error)
+          const r = await lancarOPCorrecao({ origem: 'correcao', codigoProduto: d.produto!, quantidade: lerNumeroBR(v.qtd)!, dataISO: v.data, confirmarMesFechado: mesFechado })
+          if ('error' in r) {
+            if (r.precisaConfirmarMesFechado) { setMesFechado(true); return falha(`${r.error} Marque a confirmação de mês fechado e confirme de novo.`) }
+            return falha(r.error)
+          }
           setLog([r.aviso])
           break
         }
@@ -190,8 +193,9 @@ function Opcoes(props: Props) {
           const c = d.cupom!
           let falhas = 0
           for (const i of c.itens) {
-            const r = await lancarOPCorrecao({ origem: 'cupom', codigoProduto: i.produto, quantidade: i.quantidade, dataISO: c.data, nIdCupom: c.nIdCupom })
+            const r = await lancarOPCorrecao({ origem: 'cupom', codigoProduto: i.produto, quantidade: i.quantidade, dataISO: c.data, nIdCupom: c.nIdCupom, confirmarMesFechado: mesFechado })
             if ('error' in r) {
+              if (r.precisaConfirmarMesFechado) { setMesFechado(true); return falha(`${r.error} Marque a confirmação de mês fechado e confirme de novo.`) }
               falhas++
               setLog((x) => [...x, `${i.nome}: ${r.error}`])
               if (r.parar || ehLimiteOmie(r.error)) return falha(`Parei no primeiro bloqueio do Omie (${i.nome}). Espere alguns minutos antes de continuar.`)
@@ -237,8 +241,8 @@ function Opcoes(props: Props) {
       <div className={`${s.confirma} ${s.entra}`}>
         <p><b>Confirme:</b> {pv.omie}</p>
         {pv.aviso && <p style={{ color: '#ffb340' }}>{pv.aviso}</p>}
-        {def.acao === 'corrigir_custo' && mesFechado && (
-          <label style={{ display: 'flex', gap: 8, fontSize: 13 }}><input type="checkbox" checked={mesFechado} onChange={(x) => setMesFechado(x.target.checked)} /> Sei que o mês do ajuste já foi fechado e quero corrigir mesmo assim.</label>
+        {mesFechado && (
+          <label style={{ display: 'flex', gap: 8, fontSize: 13 }}><input type="checkbox" checked={mesFechado} onChange={(x) => setMesFechado(x.target.checked)} /> Sei que o mês já foi enviado à contabilidade e quero {def.acao === 'corrigir_custo' ? 'corrigir' : 'lançar'} mesmo assim.</label>
         )}
         {log.length > 0 && <div className={s.resultado}>{log.map((l, i) => <span key={i}>{l}</span>)}</div>}
         <div className={s.acoesFim}>

@@ -102,6 +102,12 @@ export function validarPedidoOP(p: { quantidade: number; dataISO: string; tipo: 
   return null
 }
 
+/** OP com data em mês já enviado à contabilidade (mesDoAjusteFechado): só com a 2ª confirmação, na tela e no servidor. */
+export function bloqueioMesFechadoOP(i: { dataISO: string; fechado: boolean; confirmado: boolean }): string | null {
+  if (!i.fechado || i.confirmado) return null
+  return `O mês desta OP (${i.dataISO.slice(5, 7)}/${i.dataISO.slice(0, 4)}) já foi enviado à contabilidade. Confirme de novo para lançar mesmo assim.`
+}
+
 /**
  * Conferir vendido × OPs do caixa do dia antes de incluir? Sempre que a OP ainda não existe (inclusive na retomada
  * depois de um erro: o PDV pode ter reprocessado nesse meio-tempo). Revisão final, achado C1.

@@ -88,3 +88,10 @@ test('M3: lançamento com resultado desconhecido (timeout) conta como cobertura;
   assert.ok(!lancadaContaComoCobertura({ status: 'erro', erro: 'Produto não cadastrado' }))
   assert.ok(!lancadaContaComoCobertura({ status: 'erro', erro: 'trava ocupada' }))
 })
+
+import { bloqueioMesFechadoOP } from './cupons-sem-op-puro.ts'
+test('OP em mês já enviado à contabilidade exige 2ª confirmação', () => {
+  assert.equal(bloqueioMesFechadoOP({ dataISO: '2026-10-08', fechado: false, confirmado: false }), null)
+  assert.match(bloqueioMesFechadoOP({ dataISO: '2026-09-30', fechado: true, confirmado: false }) ?? '', /09\/2026.*contabilidade/)
+  assert.equal(bloqueioMesFechadoOP({ dataISO: '2026-09-30', fechado: true, confirmado: true }), null)
+})

@@ -75,14 +75,14 @@ export async function marcarNaoControla(i: { codigoProduto: number; motivo?: str
  * teste simulada. Uma OP por chamada (a tela chama em sequência e para no primeiro bloqueio do Omie).
  */
 export async function lancarOPCorrecao(i: {
-  origem: 'cupom' | 'correcao'; codigoProduto: number; quantidade: number; dataISO: string; nIdCupom?: number | null
+  origem: 'cupom' | 'correcao'; codigoProduto: number; quantidade: number; dataISO: string; nIdCupom?: number | null; confirmarMesFechado?: boolean
   chave?: string | null; assinatura?: string | null; acao?: string | null
 }): Promise<RespostaCentral> {
   const __d = viaDesktop('central#lancarOPCorrecao', lancarOPCorrecao, [i]); if (__d) return __d as never
   const ctx = await contextoEscritaOmie('Correcoes - Executar', 'Ordens de Producao - Criar', 'Ordens de Producao - Concluir')
   if ('error' in ctx) return { error: ctx.error, parar: true }
   if (i.origem !== 'cupom' && i.origem !== 'correcao') return { error: 'Pedido inválido.' }
-  const r = await lancarOPCentral(ctx, { origem: i.origem, codigoProduto: Number(i.codigoProduto), quantidade: Number(i.quantidade), dataISO: String(i.dataISO ?? ''), nIdCupom: i.nIdCupom == null ? null : Number(i.nIdCupom) })
+  const r = await lancarOPCentral(ctx, { origem: i.origem, codigoProduto: Number(i.codigoProduto), quantidade: Number(i.quantidade), dataISO: String(i.dataISO ?? ''), nIdCupom: i.nIdCupom == null ? null : Number(i.nIdCupom), confirmarMesFechado: i.confirmarMesFechado === true })
   revalidatePath('/estoque/correcoes')
   revalidatePath('/ordem-producao')
   return r

@@ -308,6 +308,8 @@ function FaixaCupons({ dados, itens, podeExecutar, onFim }: { dados: DadosCentra
         const r = await lancarOPCorrecao({ origem: 'cupom', codigoProduto: i.produto, quantidade: i.quantidade, dataISO: c.data, nIdCupom: c.nIdCupom })
         if ('error' in r) {
           tudoOk = false; falhas++
+          // Mês já enviado à contabilidade: o lote não confirma por ninguém; lança pelo próprio cupom, com a 2ª confirmação.
+          if (r.precisaConfirmarMesFechado) { setLog((x) => [`Cupom ${c.num ?? c.nIdCupom}: mês já enviado à contabilidade, pulei. Abra o cupom para lançar com confirmação.`, ...x].slice(0, 30)); break }
           setLog((x) => [`Cupom ${c.num ?? c.nIdCupom} · ${i.nome}: ${r.error}`, ...x].slice(0, 30))
           if (r.parar || ehLimiteOmie(r.error)) { setLog((x) => ['Parei no primeiro bloqueio do Omie. Espere alguns minutos antes de continuar.', ...x]); break fora }
           continue

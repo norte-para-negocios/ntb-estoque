@@ -11,14 +11,14 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { pegarTravaSync, soltarTravaSync } from '@/lib/omie/trava-sync'
 import { concluirOrdemProducao, consultarOPPorCodInt, fetchOrdemProducao, incluirOrdemProducao } from '@/lib/omie/ordem-producao'
-import { ehLimiteOmie, isoParaBR } from '@/lib/estoque/escrita-omie-puro'
+import { ehLimiteOmie, isoParaBR, mesDoAjusteFechado } from '@/lib/estoque/escrita-omie-puro'
 import type { LojaEscrita } from '@/lib/estoque/contexto-escrita-omie'
 import { buscarFatCupomDetalhe, buscarFatCupomItens, buscarFatCupons } from '@/lib/faturamento-frio'
 import { decidirRetomadaOP } from './central-puro'
-import { codIntOPCorrecao, codIntOPCupom, coberturaAindaFalta, ehOPdoPDV, lancadaContaComoCobertura, pareceOPJaExiste, precisaConferirCobertura, validarPedidoOP } from './cupons-sem-op-puro'
+import { bloqueioMesFechadoOP, codIntOPCorrecao, codIntOPCupom, coberturaAindaFalta, ehOPdoPDV, lancadaContaComoCobertura, pareceOPJaExiste, precisaConferirCobertura, validarPedidoOP } from './cupons-sem-op-puro'
 
-export type RespostaCentral = { ok: true; aviso: string; simulado?: boolean; jaExistia?: boolean } | { error: string; parar?: boolean }
-export type PedidoOP = { origem: 'cupom' | 'correcao'; codigoProduto: number; quantidade: number; dataISO: string; nIdCupom?: number | null }
+export type RespostaCentral = { ok: true; aviso: string; simulado?: boolean; jaExistia?: boolean } | { error: string; parar?: boolean; precisaConfirmarMesFechado?: boolean }
+export type PedidoOP = { origem: 'cupom' | 'correcao'; codigoProduto: number; quantidade: number; dataISO: string; nIdCupom?: number | null; confirmarMesFechado?: boolean }
 
 type Lancada = { id: number; status: string; atualizado_em: string; n_cod_op: number | null; quantidade: number; data_op: string; erro: string | null }
 const msgDe = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -75,6 +75,8 @@ export async function lancarOPCentral(ctx: { lojaId: number; loja: LojaEscrita }
   }
   const invalido = validarPedidoOP({ quantidade, dataISO, tipo: prod.tipo_item }, hoje)
   if (invalido) return { error: invalido }
+  const mesFechado = bloqueioMesFechadoOP({ dataISO, fechado: mesDoAjusteFechado(dataISO, hoje, process.env.ESTOQUE_MES_FECHADO_ATE ?? null), confirmado: ped.confirmarMesFechado === true })
+  if (mesFechado) return { error: mesFechado, precisaConfirmarMesFechado: true }
   const cod = ped.origem === 'cupom' ? codIntOPCupom(ped.nIdCupom!, ped.codigoProduto) : codIntOPCorrecao(lojaId, ped.codigoProduto, dataISO, quantidade)
   const nome = prod.descricao ?? String(ped.codigoProduto)
 
