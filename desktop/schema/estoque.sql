@@ -1659,6 +1659,117 @@ end $$;
 
 
 --
+-- Name: movimentacoes_loja(bigint, date, date, bigint[], bigint, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[] DEFAULT NULL::bigint[], p_local bigint DEFAULT NULL::bigint, p_origem text DEFAULT NULL::text, p_doc text DEFAULT NULL::text, p_autor text DEFAULT NULL::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(chave text, data date, momento timestamp with time zone, n_cod_prod bigint, codigo_local_estoque bigint, local_destino bigint, quantidade numeric, contagem boolean, origem text, doc_tipo text, doc_id bigint, doc_rotulo text, autor text, obs text, total bigint, entradas numeric, saidas numeric)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with u as (
+    -- movimentos do Omie (ajustes, PDV, contagem, transferência). Data: o sync grava só a data (meia-noite UTC) e o
+    -- app a hora real; meia-noite UTC exata = aquele dia, o resto = dia da Bahia (mesma regra de diaDoMovimento).
+    -- Transferência (TRF/TPQ com destino) vira DUAS linhas, como no kardex do Omie: saída na origem (lado 1) e
+    -- entrada no destino (lado 2). Assim o filtro de local mostra o sinal certo e os totais da loja se anulam.
+    select 'm' || m.id || case when lado.n = 2 then 'd' else '' end as chave,
+           case when m.data = date_trunc('day', m.data, 'UTC') then (m.data at time zone 'UTC')::date
+                else (m.data at time zone 'America/Bahia')::date end as data,
+           m.data as momento, m.id_prod as n_cod_prod,
+           case when lado.n = 2 then m.codigo_local_estoque_destino else m.codigo_local_estoque end as codigo_local_estoque,
+           case when lado.n = 1 and m.tipo in ('TRF', 'TPQ') then m.codigo_local_estoque_destino end as local_destino,
+           case when m.tipo = 'SLD' then coalesce(m.quan, 0)
+                when m.tipo = 'ENT' or lado.n = 2 then abs(coalesce(m.quan, 0))
+                else -abs(coalesce(m.quan, 0)) end as quantidade,
+           m.tipo = 'SLD' as contagem,
+           case when m.origem = 'PDV' then 'pdv'
+                when m.tipo = 'SLD' then 'inventario'
+                when m.tipo in ('TRF', 'TPQ') or m.transferencia_id is not null then 'transferencia'
+                else 'ajuste' end as origem,
+           case when m.origem = 'PDV' then null
+                when m.transferencia_id is not null then 'transferencia'
+                when m.tipo = 'SLD' and inv.inventario_id is not null then 'inventario'
+                else 'ajuste' end as doc_tipo,
+           case when m.origem = 'PDV' then null
+                when m.transferencia_id is not null then m.transferencia_id
+                when m.tipo = 'SLD' and inv.inventario_id is not null then inv.inventario_id
+                else coalesce(m.id_ajuste, m.id) end as doc_id,
+           case when m.origem = 'PDV' then 'Venda PDV'
+                when m.transferencia_id is not null then 'Transferência ' || m.transferencia_id
+                when m.tipo = 'SLD' and inv.inventario_id is not null then 'Inventário ' || inv.inventario_id
+                when m.id_ajuste is not null then 'Ajuste ' || m.id_ajuste
+                else 'Ajuste do app ' || m.id end as doc_rotulo,
+           m.autor, m.obs
+    from movimentos m
+    cross join lateral (values (1), (2)) as lado(n)
+    left join lateral (
+      select ii.inventario_id from inventario_items ii
+      where m.tipo = 'SLD' and m.id_ajuste is not null and ii.loja_id = m.loja_id and ii.id_ajuste = m.id_ajuste
+      limit 1
+    ) inv on true
+    where m.loja_id = p_loja_id
+      and m.data >= (p_ini::timestamp at time zone 'UTC')
+      and m.data < ((p_fim + 1)::timestamp at time zone 'UTC') + interval '3 hours'
+      and coalesce(m.status, 'Concluido') = 'Concluido'
+      and (lado.n = 1 or (m.tipo in ('TRF', 'TPQ') and m.codigo_local_estoque_destino is not null))
+
+    union all
+    -- produção: entrada do produto da OP concluída, no local da OP, na data de conclusão
+    select 'op' || o.id, o.dt_conclusao_real, null::timestamptz, o.identificacao_n_cod_produto,
+           o.identificacao_codigo_local_estoque, null::bigint, coalesce(o.identificacao_n_qtde, 0), false,
+           'op_producao', 'op', o.id, 'OP ' || coalesce(o.identificacao_c_num_op, o.num_ordem, o.id::text),
+           coalesce(o.concluida_por_nome, o.incluido_por_omie), null::text
+    from ordens_producao o
+    where o.loja_id = p_loja_id and o.concluida and o.dt_conclusao_real between p_ini and p_fim
+      and coalesce(o.identificacao_n_cod_produto, 0) <> 0
+
+    union all
+    -- consumo: cada insumo da ficha gravada na OP (itensDetalhes), no local do item (ou da OP). cUtilizarDoEstoque não
+    -- filtra: na loja 5 todo insumo MP vem 'N' e mesmo assim sai do estoque no Omie (conferido com movimentos_historico).
+    select 'oc' || o.id || '-' || i.n, o.dt_conclusao_real, null::timestamptz, (i.item->>'nIdProdutoMalha')::bigint,
+           coalesce(nullif(i.item->>'codigo_local_estoque', '')::bigint, o.identificacao_codigo_local_estoque), null::bigint,
+           -abs(coalesce(nullif(i.item->>'nQtde', '')::numeric, 0)), false,
+           'op_consumo', 'op', o.id, 'OP ' || coalesce(o.identificacao_c_num_op, o.num_ordem, o.id::text),
+           coalesce(o.concluida_por_nome, o.incluido_por_omie), null::text
+    from ordens_producao o
+    cross join lateral jsonb_array_elements(
+      case when jsonb_typeof(o.full_object->'itensDetalhes') = 'array' then o.full_object->'itensDetalhes' else '[]'::jsonb end
+    ) with ordinality as i(item, n)
+    where o.loja_id = p_loja_id and o.concluida and o.dt_conclusao_real between p_ini and p_fim
+      and coalesce(nullif(i.item->>'nIdProdutoMalha', '')::bigint, 0) <> 0
+
+    union all
+    -- entradas de nota fiscal concluída e não cancelada (quantidade e unidade da nota)
+    select 'nf' || it.id, nf.d_emissao_nfe, null::timestamptz, it.n_id_produto,
+           nullif(it.full_object->'itensAjustes'->>'codigo_local_estoque', '')::bigint, null::bigint,
+           abs(coalesce(it.n_qtde_nfe, 0)), false,
+           'nf', 'nf', nf.id, 'NF ' || coalesce(nf.c_numero_nfe, nf.id::text),
+           null::text, coalesce(nf.c_razao_social, nf.c_nome)
+    from notas_fiscais nf
+    join nota_fiscal_items it on it.loja_id = nf.loja_id and it.nota_fiscal_id = nf.id
+    where nf.loja_id = p_loja_id and nf.d_emissao_nfe between p_ini and p_fim and nf.deleted_at is null
+      and nf.c_etapa = '60' and coalesce(nf.full_object->'infoCadastro'->>'cCancelada', 'N') <> 'S'
+      and coalesce(it.n_id_produto, 0) <> 0
+  ),
+  f as (
+    select * from u
+    where u.data between p_ini and p_fim
+      and (p_produtos is null or u.n_cod_prod = any (p_produtos))
+      and (p_local is null or u.codigo_local_estoque = p_local)
+      and (p_origem is null or p_origem = '' or u.origem = p_origem)
+      and (p_doc is null or p_doc = '' or u.doc_rotulo ilike '%' || p_doc || '%')
+      and (p_autor is null or p_autor = '' or u.autor ilike '%' || p_autor || '%')
+  )
+  select f.*,
+         count(*) over () as total,
+         coalesce(sum(case when not f.contagem and f.quantidade > 0 then f.quantidade end) over (), 0) as entradas,
+         coalesce(sum(case when not f.contagem and f.quantidade < 0 then -f.quantidade end) over (), 0) as saidas
+  from f
+  order by f.data desc, f.momento desc nulls last, f.chave
+  limit greatest(p_limit, 0) offset greatest(p_offset, 0)
+$$;
+
+
+--
 -- Name: nf_bate_status(text, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1693,6 +1804,256 @@ CREATE FUNCTION public.novo_id_produto_proprio() RETURNS bigint
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$ select nextval('public.seq_id_produto_proprio') $$;
+
+
+--
+-- Name: offline_buscar_linhas(text, jsonb, bigint[], uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_buscar_linhas(p_tabela text, p_pks jsonb, p_lojas bigint[], p_user uuid) RETURNS TABLE(pk jsonb, dado jsonb)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  r offline_tabelas;
+  junta text;
+begin
+  select * into r from offline_tabelas where tabela = p_tabela;
+  if not found then
+    raise exception 'tabela % não é sincronizada', p_tabela;
+  end if;
+  select string_agg(format('t.%I = (k ->> %L)::%s', c, c, tp), ' and ')
+    into junta
+    from unnest(r.pk_cols, r.pk_tipos) as x(c, tp);
+  return query execute format(
+    'select k, %s from jsonb_array_elements($1) k join public.%I t on %s where %s',
+    offline_expr_linha(p_tabela), p_tabela, junta, offline_filtro(p_tabela)
+  ) using p_pks, p_lojas, p_user;
+end $_$;
+
+
+--
+-- Name: offline_compactar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_compactar() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_ultimo bigint;
+  v_max bigint;
+  n int;
+begin
+  if not pg_try_advisory_xact_lock(hashtext('offline_compactar')) then
+    return 0;
+  end if;
+  select (valor #>> '{}')::bigint into v_ultimo from offline_meta where chave = 'ultimo_outbox';
+  select max(id) into v_max from outbox;
+  if v_max is null or v_max <= coalesce(v_ultimo, 0) - 5000 then
+    return 0;
+  end if;
+
+  with fonte as (
+    select o.id, o.table_name, o.operation, o.row_data, t.pk_cols, t.regra, t.loja_col, t.pai_tabela, t.pai_fk
+    from outbox o
+    join offline_tabelas t on t.tabela = o.table_name and t.modo = 'log'
+    where o.id > greatest(coalesce(v_ultimo, 0) - 5000, 0) and o.id <= v_max
+  ), chaves as (
+    select distinct on (f.table_name, k.pk)
+      f.table_name, k.pk, f.id, f.operation,
+      case
+        when f.regra = 'loja' then (f.row_data ->> f.loja_col)::bigint
+        when f.regra = 'lojas' then (f.row_data ->> 'id')::bigint
+        when f.regra = 'pai' and f.pai_tabela = 'vendas_proprio' then
+          (select vp.loja_id from vendas_proprio vp where vp.id = (f.row_data ->> f.pai_fk)::bigint)
+        when f.regra = 'pai' and f.pai_tabela = 'ordens_producao_proprio' then
+          (select op.loja_id from ordens_producao_proprio op where op.id = (f.row_data ->> f.pai_fk)::bigint)
+        else null
+      end as loja_id
+    from fonte f
+    cross join lateral (
+      select jsonb_object_agg(c, f.row_data -> c) as pk from unnest(f.pk_cols) c
+    ) k
+    order by f.table_name, k.pk, f.id desc
+  )
+  insert into offline_versoes as v (tabela, pk, loja_id, versao, apagado, outbox_id, em)
+  select c.table_name, c.pk, c.loja_id, nextval('offline_versao_seq'), c.operation = 'DELETE', c.id, now()
+  from chaves c
+  -- já registrado (reprocessamento da folga): pula sem gastar versão nem escrever
+  where not exists (
+    select 1 from offline_versoes x where x.tabela = c.table_name and x.pk = c.pk and x.outbox_id >= c.id
+  )
+  on conflict (tabela, pk) do update
+    set versao = excluded.versao,
+        apagado = excluded.apagado,
+        outbox_id = excluded.outbox_id,
+        loja_id = coalesce(excluded.loja_id, v.loja_id),
+        em = excluded.em
+    where excluded.outbox_id > v.outbox_id;
+  get diagnostics n = row_count;
+
+  update offline_meta set valor = to_jsonb(v_max) where chave = 'ultimo_outbox';
+  return n;
+end $$;
+
+
+--
+-- Name: offline_criados(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_criados(p_intent text) RETURNS TABLE(tabela text, pk jsonb, outbox_id bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select o.table_name, (select jsonb_object_agg(c, o.row_data -> c) from unnest(t.pk_cols) c), o.id
+  from outbox o
+  join offline_tabelas t on t.tabela = o.table_name
+  where o.intent_id = p_intent and o.operation = 'INSERT'
+  order by o.id
+$$;
+
+
+--
+-- Name: offline_expr_linha(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_expr_linha(p_tabela text) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  r offline_tabelas;
+  e text;
+begin
+  select * into r from offline_tabelas where tabela = p_tabela;
+  e := 'to_jsonb(t)';
+  if array_length(r.ocultas, 1) > 0 then
+    e := format('(%s - %L::text[])', e, r.ocultas);
+  end if;
+  if r.regra = 'profiles' then
+    e := format('(case when t.id = $3 then %s else %s - ''email'' end)', e, e);
+  end if;
+  return e;
+end $_$;
+
+
+--
+-- Name: offline_filtro(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_filtro(p_tabela text) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  r offline_tabelas;
+begin
+  select * into r from offline_tabelas where tabela = p_tabela;
+  if not found then
+    raise exception 'tabela % não é sincronizada', p_tabela;
+  end if;
+  return case r.regra
+    when 'loja' then format('t.%I = any($2)', r.loja_col)
+    when 'lojas' then 't.id = any($2)'
+    when 'pai' then format('exists (select 1 from public.%I p where p.id = t.%I and p.loja_id = any($2))', r.pai_tabela, r.pai_fk)
+    when 'global' then 'true'
+    when 'profiles' then '(t.id = $3 or t.id in (select lu.user_id from public.loja_user lu where lu.loja_id = any($2)))'
+  end;
+end $_$;
+
+
+--
+-- Name: offline_podar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_podar() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_piso bigint;
+  n int;
+begin
+  select max(versao) into v_piso from offline_versoes where apagado and em < now() - interval '60 days';
+  if v_piso is null then
+    return 0;
+  end if;
+  delete from offline_versoes where apagado and versao <= v_piso;
+  get diagnostics n = row_count;
+  update offline_meta set valor = to_jsonb(greatest((valor #>> '{}')::bigint, v_piso)) where chave = 'piso_versao';
+  return n;
+end $$;
+
+
+--
+-- Name: offline_puxar(bigint[], uuid, bigint, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_puxar(p_lojas bigint[], p_user uuid, p_cursor bigint, p_limite integer) RETURNS TABLE(versao bigint, tabela text, pk jsonb, apagado boolean, dado jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  tb text;
+  pks jsonb;
+begin
+  create temp table if not exists _offline_lote (versao bigint, tabela text, pk jsonb, apagado boolean) on commit drop;
+  create temp table if not exists _offline_dados (tabela text, pk jsonb, dado jsonb) on commit drop;
+  truncate _offline_lote;
+  truncate _offline_dados;
+  insert into _offline_lote
+    select v.versao, v.tabela, v.pk, v.apagado
+    from offline_versoes v
+    where v.versao > p_cursor and (v.loja_id is null or v.loja_id = any(p_lojas))
+    order by v.versao
+    limit least(greatest(p_limite, 1), 5000);
+
+  for tb in select distinct l.tabela from _offline_lote l where not l.apagado loop
+    select jsonb_agg(l.pk) into pks from _offline_lote l where l.tabela = tb and not l.apagado;
+    insert into _offline_dados select tb, b.pk, b.dado from offline_buscar_linhas(tb, pks, p_lojas, p_user) b;
+  end loop;
+
+  -- Linha que existe mas não é visível para estas lojas (perfil de outra loja, por ex.) não vai.
+  -- A última versão do lote sempre vai (mesmo invisível, como marcador) para o cursor avançar.
+  return query
+    select l.versao, l.tabela, l.pk, l.apagado, d.dado
+    from _offline_lote l
+    left join _offline_dados d on d.tabela = l.tabela and d.pk = l.pk
+    where l.apagado or d.dado is not null or l.versao = (select max(x.versao) from _offline_lote x)
+    order by l.versao;
+end $$;
+
+
+--
+-- Name: offline_snapshot(text, bigint[], uuid, jsonb, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.offline_snapshot(p_tabela text, p_lojas bigint[], p_user uuid, p_depois jsonb, p_limite integer) RETURNS TABLE(pk jsonb, dado jsonb)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  r offline_tabelas;
+  cols text;
+  vals text;
+  pkexpr text;
+  ordem text;
+begin
+  select * into r from offline_tabelas where tabela = p_tabela;
+  if not found then
+    raise exception 'tabela % não é sincronizada', p_tabela;
+  end if;
+  select string_agg(format('t.%I', c), ', '), string_agg(format('($4 ->> %L)::%s', c, tp), ', '),
+         string_agg(format('%L, t.%I', c, c), ', ')
+    into cols, vals, pkexpr
+    from unnest(r.pk_cols, r.pk_tipos) as x(c, tp);
+  ordem := cols;
+  return query execute format(
+    'select jsonb_build_object(%s), %s from public.%I t where %s and ($4 is null or (%s) > (%s)) order by %s limit $5',
+    pkexpr, offline_expr_linha(p_tabela), p_tabela, offline_filtro(p_tabela), cols, vals, ordem
+  ) using null::jsonb, p_lojas, p_user, p_depois, least(greatest(p_limite, 1), 5000);
+end $_$;
 
 
 --
@@ -1989,19 +2350,47 @@ $_$;
 CREATE FUNCTION public.outbox_capture() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
+declare
+  h text;
+  v_intent text;
 begin
+  h := current_setting('request.headers', true);
+  if h is not null and h like '%x-ntb-intent%' then
+    v_intent := h::json ->> 'x-ntb-intent';
+  end if;
   if (tg_op = 'DELETE') then
-    insert into outbox (table_name, operation, row_data) values (tg_table_name, tg_op, row_to_json(old)::jsonb);
+    insert into outbox (table_name, operation, row_data, intent_id) values (tg_table_name, tg_op, row_to_json(old)::jsonb, v_intent);
     return old;
   end if;
   -- update sem mudança real (sync do Omie reescreve linhas iguais) não precisa de replay
   if (tg_op = 'UPDATE' and old is not distinct from new) then
     return new;
   end if;
-  insert into outbox (table_name, operation, row_data) values (tg_table_name, tg_op, row_to_json(new)::jsonb);
+  -- update em que só updated_at mudou (sync "tocando" a linha) também não
+  if (tg_op = 'UPDATE' and (to_jsonb(old) - 'updated_at') = (to_jsonb(new) - 'updated_at')) then
+    return new;
+  end if;
+  insert into outbox (table_name, operation, row_data, intent_id) values (tg_table_name, tg_op, row_to_json(new)::jsonb, v_intent);
   return new;
 end;
 $$;
+
+
+--
+-- Name: pegar_trava_sync(bigint, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.pegar_trava_sync(p_loja_id bigint, p_recurso text, p_segundos integer) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_ok boolean;
+begin
+  insert into sync_trava (loja_id, recurso, ate) values (p_loja_id, p_recurso, now() + make_interval(secs => p_segundos))
+  on conflict (loja_id, recurso) do update set ate = excluded.ate where sync_trava.ate < now()
+  returning true into v_ok;
+  return coalesce(v_ok, false);
+end $$;
 
 
 --
@@ -2017,6 +2406,22 @@ CREATE FUNCTION public.prefixo_codigo_por_tipo(p_tipo_item text) RETURNS text
     when '03' then '70' when '06' then '70' when '05' then '70'
     when '07' then '60' when '10' then '60'
     else '50' end
+$$;
+
+
+--
+-- Name: primeiro_mov_apos(bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.primeiro_mov_apos(p_loja_id bigint, p_data date) RETURNS TABLE(n_cod_prod bigint, codigo_local_estoque bigint, quantidade numeric, saldo_apos numeric, cmc_apos numeric, data_mov date)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select distinct on (k.n_cod_prod, k.codigo_local_estoque)
+         k.n_cod_prod, k.codigo_local_estoque, k.quantidade, k.saldo_apos, k.cmc_apos, k.data_mov
+  from kardex_omie k
+  where k.loja_id = p_loja_id and k.data_mov > p_data and not k.cancelado
+  order by k.n_cod_prod, k.codigo_local_estoque, k.data_mov, k.id_mov
 $$;
 
 
@@ -2971,26 +3376,32 @@ $$;
 CREATE FUNCTION public.relatorio_movimentacao_matriz(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_sentido text, p_cod_prods bigint[] DEFAULT NULL::bigint[], p_produto text DEFAULT NULL::text) RETURNS TABLE(rotulo text, mes text, qtde numeric, valor numeric)
     LANGUAGE sql STABLE
     AS $$
+  with base as (
+    select m.cod_prod, m.descricao, to_char(m.data, 'YYYY-MM') as mes,
+           sum(case when p_sentido = 'entradas' then coalesce(m.entradas, 0) else coalesce(m.saidas, 0) end) as q
+    from movimentos_historico m
+    where m.loja_id = p_loja_id and m.data >= p_ini and m.data <= p_fim
+      and (p_cod_prods is null or m.cod_prod = any(p_cod_prods))
+      and (p_produto is null or p_produto = ''
+           or m.descricao ilike '%' || p_produto || '%'
+           or m.codigo    ilike '%' || p_produto || '%')
+    group by m.cod_prod, m.descricao, to_char(m.data, 'YYYY-MM')
+  )
   select
     coalesce(nullif(
       case p_dim
-        when 'tipo'    then p.tipo_item
-        when 'familia' then p.descricao_familia
-        when 'produto' then m.descricao
+        when 'tipo'    then p.tipo_item::text
+        when 'familia' then p.descricao_familia::text
+        when 'produto' then b.descricao::text
       end, ''), 'Sem classificação') as rotulo,
-    to_char(m.data, 'YYYY-MM') as mes,
-    sum(case when p_sentido = 'entradas' then coalesce(m.entradas, 0) else coalesce(m.saidas, 0) end)::numeric as qtde,
-    sum((case when p_sentido = 'entradas' then coalesce(m.entradas, 0) else coalesce(m.saidas, 0) end) * coalesce(pr.preco_unit, 0))::numeric as valor
-  from movimentos_historico m
-  left join produtos p on p.loja_id = m.loja_id and p.codigo_produto = m.cod_prod
-  left join produto_preco_recente pr on pr.loja_id = m.loja_id and pr.codigo_produto = m.cod_prod
-  where m.loja_id = p_loja_id and m.data >= p_ini and m.data <= p_fim
-    and (p_cod_prods is null or m.cod_prod = any(p_cod_prods))
-    and (p_produto is null or p_produto = ''
-         or m.descricao ilike '%' || p_produto || '%'
-         or m.codigo    ilike '%' || p_produto || '%')
+    b.mes,
+    sum(b.q)::numeric as qtde,
+    sum(b.q * coalesce(pr.preco_unit, 0))::numeric as valor
+  from base b
+  left join produtos p on p.loja_id = p_loja_id and p.codigo_produto = b.cod_prod
+  left join produto_preco_recente pr on pr.loja_id = p_loja_id and pr.codigo_produto = b.cod_prod
   group by 1, 2
-  having sum(case when p_sentido = 'entradas' then coalesce(m.entradas, 0) else coalesce(m.saidas, 0) end) <> 0
+  having sum(b.q) <> 0
   order by 1, 2;
 $$;
 
@@ -3124,6 +3535,22 @@ CREATE FUNCTION public.rotulo_tipo_item(p_tipo text) RETURNS text
     when p_tipo = '06' then 'Produto intermediário' when p_tipo = '07' then 'Uso e consumo' when p_tipo = '08' then 'Ativo imobilizado'
     when p_tipo = '09' then 'Serviços' when p_tipo = '10' then 'Outros insumos' when p_tipo = '99' then 'Outras'
     else 'Tipo ' || p_tipo end
+$$;
+
+
+--
+-- Name: saldo_em_data(bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.saldo_em_data(p_loja_id bigint, p_data date) RETURNS TABLE(n_cod_prod bigint, codigo_local_estoque bigint, saldo numeric, cmc numeric, data_mov date, id_mov bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select distinct on (k.n_cod_prod, k.codigo_local_estoque)
+         k.n_cod_prod, k.codigo_local_estoque, k.saldo_apos, k.cmc_apos, k.data_mov, k.id_mov
+  from kardex_omie k
+  where k.loja_id = p_loja_id and k.data_mov <= p_data and not k.cancelado
+  order by k.n_cod_prod, k.codigo_local_estoque, k.data_mov desc, k.id_mov desc
 $$;
 
 
@@ -3279,6 +3706,18 @@ begin
    where id = n.id;
   return v_sit;
 end $$;
+
+
+--
+-- Name: soltar_trava_sync(bigint, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.soltar_trava_sync(p_loja_id bigint, p_recurso text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  delete from sync_trava where loja_id = p_loja_id and recurso = p_recurso;
+$$;
 
 
 --
@@ -3626,11 +4065,23 @@ end $$;
 
 CREATE FUNCTION public.upsert_movimentos_ajuste(p_rows jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
     AS $$
 begin
+  update movimentos m set
+    autor = x.autor, origem_ajuste = x.origem_ajuste, cod_int_ajuste = x.cod_int_ajuste, updated_at = now()
+  from (
+    select (r->>'loja_id')::bigint as loja_id, (r->>'id_ajuste')::bigint as id_ajuste,
+           r->>'autor' as autor, r->>'origem_ajuste' as origem_ajuste, r->>'cod_int_ajuste' as cod_int_ajuste
+    from jsonb_array_elements(p_rows) as r
+  ) x
+  where m.loja_id = x.loja_id and m.id_ajuste = x.id_ajuste
+    and (m.transferencia_id is not null or x.cod_int_ajuste = 'MOV-' || m.id)
+    and (m.autor, m.origem_ajuste, m.cod_int_ajuste) is distinct from (x.autor, x.origem_ajuste, x.cod_int_ajuste);
+
   insert into movimentos (
     loja_id, id_ajuste, id_prod, tipo, quan, valor, codigo_local_estoque,
-    codigo_local_estoque_destino, data, motivo, obs, origem, status
+    codigo_local_estoque_destino, data, motivo, obs, origem, status, autor, origem_ajuste, cod_int_ajuste
   )
   select
     (r->>'loja_id')::bigint,
@@ -3645,7 +4096,10 @@ begin
     r->>'motivo',
     r->>'obs',
     r->>'origem',
-    r->>'status'
+    r->>'status',
+    r->>'autor',
+    r->>'origem_ajuste',
+    r->>'cod_int_ajuste'
   from jsonb_array_elements(p_rows) as r
   on conflict (loja_id, id_ajuste) where id_ajuste is not null do update set
     id_prod = excluded.id_prod,
@@ -3659,7 +4113,19 @@ begin
     obs = excluded.obs,
     origem = excluded.origem,
     status = excluded.status,
-    updated_at = now();
+    autor = excluded.autor,
+    origem_ajuste = excluded.origem_ajuste,
+    cod_int_ajuste = excluded.cod_int_ajuste,
+    updated_at = now()
+  where movimentos.transferencia_id is null
+    and excluded.cod_int_ajuste is distinct from 'MOV-' || movimentos.id
+    and (movimentos.id_prod, movimentos.tipo, movimentos.quan, movimentos.valor, movimentos.codigo_local_estoque,
+         movimentos.codigo_local_estoque_destino, movimentos.data, movimentos.motivo, movimentos.obs, movimentos.origem,
+         movimentos.status, movimentos.autor, movimentos.origem_ajuste, movimentos.cod_int_ajuste)
+    is distinct from
+        (excluded.id_prod, excluded.tipo, excluded.quan, excluded.valor, excluded.codigo_local_estoque,
+         excluded.codigo_local_estoque_destino, excluded.data, excluded.motivo, excluded.obs, excluded.origem,
+         excluded.status, excluded.autor, excluded.origem_ajuste, excluded.cod_int_ajuste);
 end;
 $$;
 
@@ -4215,6 +4681,19 @@ ALTER TABLE public.convites ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: espelho_sync_estado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.espelho_sync_estado (
+    loja_id bigint NOT NULL,
+    frente text NOT NULL,
+    estado jsonb DEFAULT '{}'::jsonb NOT NULL,
+    ultimo_erro text,
+    atualizado_em timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: estoque_codigo_seq; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4238,6 +4717,56 @@ CREATE TABLE public.estoque_config (
     CONSTRAINT estoque_config_dias_curva_abc_check CHECK (((dias_curva_abc >= 7) AND (dias_curva_abc <= 730))),
     CONSTRAINT estoque_config_validade_alerta_dias_check CHECK (((validade_alerta_dias >= 1) AND (validade_alerta_dias <= 365)))
 );
+
+
+--
+-- Name: estoque_correcao_custo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.estoque_correcao_custo (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    movimento_id bigint NOT NULL,
+    id_ajuste_antigo bigint NOT NULL,
+    id_ajuste_novo bigint,
+    id_prod bigint NOT NULL,
+    codigo_local_estoque bigint NOT NULL,
+    tipo text NOT NULL,
+    quantidade numeric NOT NULL,
+    data_ajuste date NOT NULL,
+    motivo text,
+    obs_original text,
+    custo_antigo numeric,
+    custo_novo numeric NOT NULL,
+    mes_fechado boolean DEFAULT false NOT NULL,
+    status text NOT NULL,
+    erro text,
+    user_id uuid,
+    user_nome text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT estoque_correcao_custo_status_check CHECK ((status = ANY (ARRAY['excluindo'::text, 'relancando'::text, 'concluido'::text, 'pendente_relancar'::text, 'falha_exclusao'::text, 'cancelada'::text]))),
+    CONSTRAINT estoque_correcao_custo_tipo_check CHECK ((tipo = ANY (ARRAY['ENT'::text, 'SAI'::text])))
+);
+
+
+--
+-- Name: estoque_correcao_custo_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.estoque_correcao_custo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: estoque_correcao_custo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.estoque_correcao_custo_id_seq OWNED BY public.estoque_correcao_custo.id;
 
 
 --
@@ -4482,7 +5011,14 @@ CREATE TABLE public.estrutura_produto_cache (
     percentual_perda numeric(6,2) DEFAULT 0 NOT NULL,
     unidade character varying(10),
     tipo_insumo character varying(2),
-    sincronizado_em timestamp with time zone DEFAULT now() NOT NULL
+    sincronizado_em timestamp with time zone DEFAULT now() NOT NULL,
+    id_malha bigint,
+    codigo_local_estoque bigint,
+    local_fonte text,
+    incluido_por text,
+    incluido_em date,
+    alterado_por text,
+    alterado_em date
 );
 
 
@@ -4503,6 +5039,18 @@ CREATE SEQUENCE public.estrutura_produto_cache_id_seq
 --
 
 ALTER SEQUENCE public.estrutura_produto_cache_id_seq OWNED BY public.estrutura_produto_cache.id;
+
+
+--
+-- Name: estrutura_produto_sync; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.estrutura_produto_sync (
+    loja_id bigint NOT NULL,
+    codigo_produto bigint NOT NULL,
+    sincronizado_em timestamp with time zone DEFAULT now() NOT NULL,
+    itens integer DEFAULT 0 NOT NULL
+);
 
 
 --
@@ -5038,6 +5586,59 @@ ALTER TABLE public.inventarios_proprio ALTER COLUMN id ADD GENERATED ALWAYS AS I
 
 
 --
+-- Name: kardex_omie; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.kardex_omie (
+    id bigint NOT NULL,
+    loja_id bigint NOT NULL,
+    id_mov bigint NOT NULL,
+    n_cod_prod bigint NOT NULL,
+    codigo_local_estoque bigint NOT NULL,
+    data_mov date NOT NULL,
+    cod_origem text DEFAULT ''::text NOT NULL,
+    des_origem text,
+    tipo text,
+    quantidade numeric NOT NULL,
+    valor_unit numeric,
+    cmc_apos numeric,
+    saldo_apos numeric,
+    num_doc text,
+    num_pedido text,
+    id_ajuste bigint,
+    id_cupom bigint,
+    cancelado boolean DEFAULT false NOT NULL,
+    carregado_em timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: kardex_omie_carga; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.kardex_omie_carga (
+    loja_id bigint NOT NULL,
+    n_cod_prod bigint NOT NULL,
+    carregado_em timestamp with time zone DEFAULT now() NOT NULL,
+    movimentos integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: kardex_omie_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.kardex_omie ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.kardex_omie_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: local_estoque_user; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5224,6 +5825,7 @@ CREATE TABLE public.lojas (
     local_estoque_por_produto jsonb,
     modo_estoque text DEFAULT 'omie'::text NOT NULL,
     vendas_store_id uuid,
+    espelho_completo boolean DEFAULT false NOT NULL,
     CONSTRAINT lojas_meta_compras_pct_check CHECK (((meta_compras_pct >= (0)::numeric) AND (meta_compras_pct <= (100)::numeric))),
     CONSTRAINT lojas_modo_estoque_chk CHECK ((modo_estoque = ANY (ARRAY['omie'::text, 'proprio'::text, 'nenhum'::text])))
 );
@@ -5411,6 +6013,9 @@ CREATE TABLE public.movimentos (
     obs_item text,
     ledger_ref text,
     ledger_versao integer DEFAULT 0 NOT NULL,
+    autor text,
+    origem_ajuste text,
+    cod_int_ajuste text,
     CONSTRAINT movimentos_origem_check CHECK (((origem)::text = ANY ((ARRAY['AJU'::character varying, 'PDV'::character varying])::text[]))),
     CONSTRAINT movimentos_status_check CHECK (((status)::text = ANY ((ARRAY['Iniciado'::character varying, 'Processando'::character varying, 'Concluido'::character varying, 'Erro'::character varying, 'Sem CMC'::character varying])::text[]))),
     CONSTRAINT movimentos_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['ENT'::character varying, 'SAI'::character varying, 'SLD'::character varying, 'TRF'::character varying, 'TPQ'::character varying])::text[])))
@@ -5597,6 +6202,78 @@ ALTER SEQUENCE public.notas_fiscais_id_seq OWNED BY public.notas_fiscais.id;
 
 
 --
+-- Name: offline_execucoes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.offline_execucoes (
+    intent_id text NOT NULL,
+    user_id uuid NOT NULL,
+    acao text NOT NULL,
+    status text NOT NULL,
+    resultado jsonb,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    atualizado_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT offline_execucoes_status_check CHECK ((status = ANY (ARRAY['em_andamento'::text, 'ok'::text, 'erro'::text])))
+);
+
+
+--
+-- Name: offline_meta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.offline_meta (
+    chave text NOT NULL,
+    valor jsonb NOT NULL
+);
+
+
+--
+-- Name: offline_tabelas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.offline_tabelas (
+    tabela text NOT NULL,
+    pk_cols text[] NOT NULL,
+    pk_tipos text[] NOT NULL,
+    regra text NOT NULL,
+    loja_col text,
+    pai_tabela text,
+    pai_fk text,
+    ocultas text[] DEFAULT '{}'::text[] NOT NULL,
+    modo text DEFAULT 'log'::text NOT NULL,
+    CONSTRAINT offline_tabelas_modo_check CHECK ((modo = ANY (ARRAY['log'::text, 'foto'::text]))),
+    CONSTRAINT offline_tabelas_regra_check CHECK ((regra = ANY (ARRAY['loja'::text, 'lojas'::text, 'pai'::text, 'global'::text, 'profiles'::text])))
+);
+
+
+--
+-- Name: offline_versao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.offline_versao_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: offline_versoes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.offline_versoes (
+    tabela text NOT NULL,
+    pk jsonb NOT NULL,
+    loja_id bigint,
+    versao bigint NOT NULL,
+    apagado boolean DEFAULT false NOT NULL,
+    outbox_id bigint NOT NULL,
+    em timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: op_historico; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5708,7 +6385,12 @@ CREATE TABLE public.ordens_producao (
     ficha_versao integer,
     custo_total numeric(18,6),
     custo_unitario numeric(18,6),
-    venda_ref text
+    venda_ref text,
+    origem_op text,
+    incluido_por_omie text,
+    obs_omie text,
+    aberta_omie boolean,
+    itens_consultados_em timestamp with time zone
 );
 
 
@@ -5847,6 +6529,7 @@ CREATE TABLE public.outbox (
     operation text NOT NULL,
     row_data jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    intent_id text,
     CONSTRAINT outbox_new_operation_check CHECK ((operation = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'DELETE'::text])))
 );
 
@@ -6294,6 +6977,17 @@ ALTER TABLE public.sync_outbox ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
 
 
 --
+-- Name: sync_trava; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sync_trava (
+    loja_id bigint NOT NULL,
+    recurso text NOT NULL,
+    ate timestamp with time zone NOT NULL
+);
+
+
+--
 -- Name: transferencias; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6587,6 +7281,13 @@ ALTER TABLE ONLY public.contas_pagar ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.contas_receber ALTER COLUMN id SET DEFAULT nextval('public.contas_receber_id_seq'::regclass);
+
+
+--
+-- Name: estoque_correcao_custo id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_correcao_custo ALTER COLUMN id SET DEFAULT nextval('public.estoque_correcao_custo_id_seq'::regclass);
 
 
 --
@@ -6916,6 +7617,14 @@ ALTER TABLE ONLY public.convites
 
 
 --
+-- Name: espelho_sync_estado espelho_sync_estado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.espelho_sync_estado
+    ADD CONSTRAINT espelho_sync_estado_pkey PRIMARY KEY (loja_id, frente);
+
+
+--
 -- Name: estoque_codigo_seq estoque_codigo_seq_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6929,6 +7638,14 @@ ALTER TABLE ONLY public.estoque_codigo_seq
 
 ALTER TABLE ONLY public.estoque_config
     ADD CONSTRAINT estoque_config_pkey PRIMARY KEY (loja_id);
+
+
+--
+-- Name: estoque_correcao_custo estoque_correcao_custo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_correcao_custo
+    ADD CONSTRAINT estoque_correcao_custo_pkey PRIMARY KEY (id);
 
 
 --
@@ -7025,6 +7742,14 @@ ALTER TABLE ONLY public.estrutura_produto_cache
 
 ALTER TABLE ONLY public.estrutura_produto_cache
     ADD CONSTRAINT estrutura_produto_cache_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: estrutura_produto_sync estrutura_produto_sync_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estrutura_produto_sync
+    ADD CONSTRAINT estrutura_produto_sync_pkey PRIMARY KEY (loja_id, codigo_produto);
 
 
 --
@@ -7185,6 +7910,30 @@ ALTER TABLE ONLY public.inventarios
 
 ALTER TABLE ONLY public.inventarios_proprio
     ADD CONSTRAINT inventarios_proprio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: kardex_omie_carga kardex_omie_carga_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kardex_omie_carga
+    ADD CONSTRAINT kardex_omie_carga_pkey PRIMARY KEY (loja_id, n_cod_prod);
+
+
+--
+-- Name: kardex_omie kardex_omie_mov; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kardex_omie
+    ADD CONSTRAINT kardex_omie_mov UNIQUE (loja_id, id_mov, codigo_local_estoque);
+
+
+--
+-- Name: kardex_omie kardex_omie_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kardex_omie
+    ADD CONSTRAINT kardex_omie_pkey PRIMARY KEY (id);
 
 
 --
@@ -7361,6 +8110,38 @@ ALTER TABLE ONLY public.nota_fiscal_items
 
 ALTER TABLE ONLY public.notas_fiscais
     ADD CONSTRAINT notas_fiscais_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: offline_execucoes offline_execucoes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.offline_execucoes
+    ADD CONSTRAINT offline_execucoes_pkey PRIMARY KEY (intent_id);
+
+
+--
+-- Name: offline_meta offline_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.offline_meta
+    ADD CONSTRAINT offline_meta_pkey PRIMARY KEY (chave);
+
+
+--
+-- Name: offline_tabelas offline_tabelas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.offline_tabelas
+    ADD CONSTRAINT offline_tabelas_pkey PRIMARY KEY (tabela);
+
+
+--
+-- Name: offline_versoes offline_versoes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.offline_versoes
+    ADD CONSTRAINT offline_versoes_pkey PRIMARY KEY (tabela, pk);
 
 
 --
@@ -7596,6 +8377,14 @@ ALTER TABLE ONLY public.sync_outbox
 
 
 --
+-- Name: sync_trava sync_trava_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sync_trava
+    ADD CONSTRAINT sync_trava_pkey PRIMARY KEY (loja_id, recurso);
+
+
+--
 -- Name: transferencias transferencias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7802,6 +8591,20 @@ CREATE INDEX convites_codigo_idx ON public.convites USING btree (codigo);
 --
 
 CREATE INDEX convites_loja_id_idx ON public.convites USING btree (loja_id);
+
+
+--
+-- Name: estoque_correcao_custo_em_andamento; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX estoque_correcao_custo_em_andamento ON public.estoque_correcao_custo USING btree (loja_id, id_ajuste_antigo) WHERE (status = ANY (ARRAY['excluindo'::text, 'relancando'::text, 'pendente_relancar'::text]));
+
+
+--
+-- Name: estoque_correcao_custo_loja_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX estoque_correcao_custo_loja_status ON public.estoque_correcao_custo USING btree (loja_id, status, id DESC);
 
 
 --
@@ -8155,6 +8958,13 @@ CREATE INDEX idx_op_loja_cod ON public.ordens_producao USING btree (loja_id, ide
 
 
 --
+-- Name: idx_op_loja_produto; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_op_loja_produto ON public.ordens_producao USING btree (loja_id, identificacao_n_cod_produto, id DESC);
+
+
+--
 -- Name: idx_op_retry_pendente; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8218,6 +9028,13 @@ CREATE INDEX idx_webhooks_loja_message ON public.webhooks USING btree (loja_id, 
 
 
 --
+-- Name: inventario_items_loja_ajuste_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX inventario_items_loja_ajuste_idx ON public.inventario_items USING btree (loja_id, id_ajuste) WHERE (id_ajuste IS NOT NULL);
+
+
+--
 -- Name: inventario_proprio_itens_inv; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8239,10 +9056,38 @@ CREATE UNIQUE INDEX inventarios_proprio_um_aberto ON public.inventarios_proprio 
 
 
 --
+-- Name: kardex_omie_loja_data_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX kardex_omie_loja_data_idx ON public.kardex_omie USING btree (loja_id, data_mov DESC, id_mov DESC);
+
+
+--
+-- Name: kardex_omie_prod_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX kardex_omie_prod_idx ON public.kardex_omie USING btree (loja_id, n_cod_prod, data_mov DESC, id_mov DESC);
+
+
+--
+-- Name: kardex_omie_saldo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX kardex_omie_saldo_idx ON public.kardex_omie USING btree (loja_id, n_cod_prod, codigo_local_estoque, data_mov DESC, id_mov DESC);
+
+
+--
 -- Name: lojas_codigo_onboarding_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX lojas_codigo_onboarding_key ON public.lojas USING btree (codigo_onboarding) WHERE (codigo_onboarding IS NOT NULL);
+
+
+--
+-- Name: movimentos_loja_data_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX movimentos_loja_data_idx ON public.movimentos USING btree (loja_id, data DESC);
 
 
 --
@@ -8253,10 +9098,31 @@ CREATE UNIQUE INDEX movimentos_loja_id_ajuste_unique ON public.movimentos USING 
 
 
 --
+-- Name: movimentos_loja_prod_data_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX movimentos_loja_prod_data_idx ON public.movimentos USING btree (loja_id, id_prod, data DESC);
+
+
+--
+-- Name: nota_fiscal_items_loja_prod_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX nota_fiscal_items_loja_prod_idx ON public.nota_fiscal_items USING btree (loja_id, n_id_produto);
+
+
+--
 -- Name: notas_fiscais_loja_chave_nfe_unique; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX notas_fiscais_loja_chave_nfe_unique ON public.notas_fiscais USING btree (loja_id, c_chave_nfe) WHERE ((c_chave_nfe IS NOT NULL) AND (deleted_at IS NULL));
+
+
+--
+-- Name: offline_versoes_versao; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX offline_versoes_versao ON public.offline_versoes USING btree (versao);
 
 
 --
@@ -8267,10 +9133,38 @@ CREATE INDEX op_historico_op ON public.op_historico USING btree (loja_id, n_cod_
 
 
 --
+-- Name: ordens_producao_loja_conclusao_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ordens_producao_loja_conclusao_idx ON public.ordens_producao USING btree (loja_id, dt_conclusao_real) WHERE concluida;
+
+
+--
+-- Name: ordens_producao_loja_previsao_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ordens_producao_loja_previsao_idx ON public.ordens_producao USING btree (loja_id, identificacao_d_dt_previsao);
+
+
+--
+-- Name: ordens_producao_num_op_trgm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ordens_producao_num_op_trgm ON public.ordens_producao USING gin (identificacao_c_num_op extensions.gin_trgm_ops);
+
+
+--
 -- Name: outbox_created_at_idx_n; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX outbox_created_at_idx_n ON public.outbox USING btree (created_at);
+
+
+--
+-- Name: outbox_intent_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX outbox_intent_idx ON public.outbox USING btree (intent_id) WHERE (intent_id IS NOT NULL);
 
 
 --
@@ -8461,6 +9355,18 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: cargo_permissao outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: cargos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: categorias_contabeis outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8468,6 +9374,18 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 --
 -- Name: clientes outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: compras_proprio outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: compras_proprio_itens outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -8497,6 +9415,66 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: estoque_codigo_seq outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_config outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_custos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_local_saldos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_lote_movimentos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_lotes outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_movimentos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_receita_consumos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estoque_saldos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: estrutura_produto_cache outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: etiqueta_config outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8515,7 +9493,43 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: faturamento_importado outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: ficha_tecnica_itens outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: ficha_tecnica_local outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: fichas_tecnicas outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: fornecedor_produto_depara outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: fornecedores outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: grupos_produto outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -8539,7 +9553,19 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: inventario_proprio_itens outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: inventarios outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: inventarios_proprio outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -8581,6 +9607,24 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: margem_snapshot_diario outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: metas_faturamento outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: metas_mensais outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: movimentacao_import_meta outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8617,6 +9661,12 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: movimentos_locais outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: nota_fiscal_items outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8629,13 +9679,61 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: op_historico outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: op_numeracao outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: op_qtde_planejada outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: ordens_producao outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
 
 --
+-- Name: ordens_producao_proprio outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: ordens_producao_proprio_itens outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: ordens_producao_teste outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: permissao_user outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: permissoes outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: produto_sem_estrutura outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -8659,7 +9757,31 @@ CREATE TRIGGER op_historico_imutavel BEFORE DELETE OR UPDATE ON public.op_histor
 
 
 --
+-- Name: sync_divergencias outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
 -- Name: transferencias outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: vendas_proprio outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: vendas_proprio_itens outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
+--
+
+
+
+--
+-- Name: vendas_proprio_pagamentos outbox_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 
@@ -8812,6 +9934,14 @@ ALTER TABLE ONLY public.convites
 
 
 --
+-- Name: espelho_sync_estado espelho_sync_estado_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.espelho_sync_estado
+    ADD CONSTRAINT espelho_sync_estado_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: estoque_codigo_seq estoque_codigo_seq_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8825,6 +9955,14 @@ ALTER TABLE ONLY public.estoque_codigo_seq
 
 ALTER TABLE ONLY public.estoque_config
     ADD CONSTRAINT estoque_config_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id);
+
+
+--
+-- Name: estoque_correcao_custo estoque_correcao_custo_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estoque_correcao_custo
+    ADD CONSTRAINT estoque_correcao_custo_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
 
 
 --
@@ -8913,6 +10051,14 @@ ALTER TABLE ONLY public.estoque_saldos
 
 ALTER TABLE ONLY public.estrutura_produto_cache
     ADD CONSTRAINT estrutura_produto_cache_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: estrutura_produto_sync estrutura_produto_sync_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estrutura_produto_sync
+    ADD CONSTRAINT estrutura_produto_sync_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
 
 
 --
@@ -9089,6 +10235,22 @@ ALTER TABLE ONLY public.inventarios_proprio
 
 ALTER TABLE ONLY public.inventarios
     ADD CONSTRAINT inventarios_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: kardex_omie_carga kardex_omie_carga_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kardex_omie_carga
+    ADD CONSTRAINT kardex_omie_carga_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: kardex_omie kardex_omie_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.kardex_omie
+    ADD CONSTRAINT kardex_omie_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
 
 
 --
@@ -9482,6 +10644,14 @@ ALTER TABLE ONLY public.sync_outbox
 
 
 --
+-- Name: sync_trava sync_trava_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sync_trava
+    ADD CONSTRAINT sync_trava_loja_id_fkey FOREIGN KEY (loja_id) REFERENCES public.lojas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: transferencias transferencias_loja_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9687,6 +10857,19 @@ CREATE POLICY convites_select_por_loja ON public.convites FOR SELECT USING ((( S
 
 
 --
+-- Name: espelho_sync_estado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.espelho_sync_estado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: espelho_sync_estado espelho_sync_estado_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY espelho_sync_estado_select_por_loja ON public.espelho_sync_estado FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: estoque_codigo_seq; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -9703,6 +10886,19 @@ ALTER TABLE public.estoque_config ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY estoque_config_select_por_loja ON public.estoque_config FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: estoque_correcao_custo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.estoque_correcao_custo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: estoque_correcao_custo estoque_correcao_custo_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estoque_correcao_custo_select_por_loja ON public.estoque_correcao_custo FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -9807,6 +11003,19 @@ ALTER TABLE public.estrutura_produto_cache ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY estrutura_produto_cache_select_por_loja ON public.estrutura_produto_cache FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: estrutura_produto_sync; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.estrutura_produto_sync ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: estrutura_produto_sync estrutura_produto_sync_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estrutura_produto_sync_select_por_loja ON public.estrutura_produto_sync FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -10018,6 +11227,32 @@ CREATE POLICY inventarios_select_por_loja ON public.inventarios FOR SELECT USING
 
 
 --
+-- Name: kardex_omie; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.kardex_omie ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: kardex_omie_carga; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.kardex_omie_carga ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: kardex_omie_carga kardex_omie_carga_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY kardex_omie_carga_select_por_loja ON public.kardex_omie_carga FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
+-- Name: kardex_omie kardex_omie_select_por_loja; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY kardex_omie_select_por_loja ON public.kardex_omie FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
+
+
+--
 -- Name: local_estoque_user; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10066,7 +11301,7 @@ ALTER TABLE public.lojas ENABLE ROW LEVEL SECURITY;
 -- Name: lojas lojas_select_por_loja; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lojas_select_por_loja ON public.lojas FOR SELECT USING ((public.usuario_tem_acesso_loja(id) OR public.usuario_e_admin()));
+CREATE POLICY lojas_select_por_loja ON public.lojas FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -10202,7 +11437,7 @@ ALTER TABLE public.movimentos_historico ENABLE ROW LEVEL SECURITY;
 -- Name: movimentos_historico movimentos_historico_select_por_loja; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY movimentos_historico_select_por_loja ON public.movimentos_historico FOR SELECT USING ((public.usuario_tem_acesso_loja((loja_id)::bigint) OR public.usuario_e_admin()));
+CREATE POLICY movimentos_historico_select_por_loja ON public.movimentos_historico FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR ((loja_id)::bigint IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
 
 --
@@ -10250,6 +11485,30 @@ ALTER TABLE public.notas_fiscais ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY notas_fiscais_select_por_loja ON public.notas_fiscais FOR SELECT USING ((( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas))));
 
+
+--
+-- Name: offline_execucoes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.offline_execucoes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: offline_meta; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.offline_meta ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: offline_tabelas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.offline_tabelas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: offline_versoes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.offline_versoes ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: op_historico; Type: ROW SECURITY; Schema: public; Owner: -
@@ -10307,7 +11566,7 @@ ALTER TABLE public.ordens_producao_proprio_itens ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ordens_producao_proprio_itens_select ON public.ordens_producao_proprio_itens FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.ordens_producao_proprio o
-  WHERE ((o.id = ordens_producao_proprio_itens.ordem_id) AND (public.usuario_tem_acesso_loja(o.loja_id) OR public.usuario_e_admin())))));
+  WHERE ((o.id = ordens_producao_proprio_itens.ordem_id) AND (( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (o.loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas)))))));
 
 
 --
@@ -10506,6 +11765,12 @@ CREATE POLICY sync_outbox_select_por_loja ON public.sync_outbox FOR SELECT USING
 
 
 --
+-- Name: sync_trava; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sync_trava ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: transferencias; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10542,7 +11807,7 @@ ALTER TABLE public.vendas_proprio_itens ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY vendas_proprio_itens_select ON public.vendas_proprio_itens FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.vendas_proprio v
-  WHERE ((v.id = vendas_proprio_itens.venda_id) AND (public.usuario_tem_acesso_loja(v.loja_id) OR public.usuario_e_admin())))));
+  WHERE ((v.id = vendas_proprio_itens.venda_id) AND (( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (v.loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas)))))));
 
 
 --
@@ -10557,7 +11822,7 @@ ALTER TABLE public.vendas_proprio_pagamentos ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY vendas_proprio_pagamentos_select ON public.vendas_proprio_pagamentos FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.vendas_proprio v
-  WHERE ((v.id = vendas_proprio_pagamentos.venda_id) AND (public.usuario_tem_acesso_loja(v.loja_id) OR public.usuario_e_admin())))));
+  WHERE ((v.id = vendas_proprio_pagamentos.venda_id) AND (( SELECT public.usuario_e_admin() AS usuario_e_admin) OR (v.loja_id IN ( SELECT public.usuario_lojas() AS usuario_lojas)))))));
 
 
 --
@@ -11054,6 +12319,16 @@ GRANT ALL ON FUNCTION public.motivo_item_inventario(p_inventario bigint, p_produ
 
 
 --
+-- Name: FUNCTION movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[], p_local bigint, p_origem text, p_doc text, p_autor text, p_limit integer, p_offset integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[], p_local bigint, p_origem text, p_doc text, p_autor text, p_limit integer, p_offset integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[], p_local bigint, p_origem text, p_doc text, p_autor text, p_limit integer, p_offset integer) TO postgres;
+GRANT ALL ON FUNCTION public.movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[], p_local bigint, p_origem text, p_doc text, p_autor text, p_limit integer, p_offset integer) TO authenticated;
+GRANT ALL ON FUNCTION public.movimentacoes_loja(p_loja_id bigint, p_ini date, p_fim date, p_produtos bigint[], p_local bigint, p_origem text, p_doc text, p_autor text, p_limit integer, p_offset integer) TO service_role;
+
+
+--
 -- Name: FUNCTION nf_bate_status(p_c_etapa text, p_full_object jsonb, p_status text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -11078,6 +12353,78 @@ GRANT ALL ON FUNCTION public.novo_id_local_proprio() TO service_role;
 REVOKE ALL ON FUNCTION public.novo_id_produto_proprio() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.novo_id_produto_proprio() TO postgres;
 GRANT ALL ON FUNCTION public.novo_id_produto_proprio() TO service_role;
+
+
+--
+-- Name: FUNCTION offline_buscar_linhas(p_tabela text, p_pks jsonb, p_lojas bigint[], p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_buscar_linhas(p_tabela text, p_pks jsonb, p_lojas bigint[], p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_buscar_linhas(p_tabela text, p_pks jsonb, p_lojas bigint[], p_user uuid) TO postgres;
+GRANT ALL ON FUNCTION public.offline_buscar_linhas(p_tabela text, p_pks jsonb, p_lojas bigint[], p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION offline_compactar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_compactar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_compactar() TO postgres;
+GRANT ALL ON FUNCTION public.offline_compactar() TO service_role;
+
+
+--
+-- Name: FUNCTION offline_criados(p_intent text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_criados(p_intent text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_criados(p_intent text) TO postgres;
+GRANT ALL ON FUNCTION public.offline_criados(p_intent text) TO service_role;
+
+
+--
+-- Name: FUNCTION offline_expr_linha(p_tabela text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_expr_linha(p_tabela text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_expr_linha(p_tabela text) TO postgres;
+GRANT ALL ON FUNCTION public.offline_expr_linha(p_tabela text) TO service_role;
+
+
+--
+-- Name: FUNCTION offline_filtro(p_tabela text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_filtro(p_tabela text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_filtro(p_tabela text) TO postgres;
+GRANT ALL ON FUNCTION public.offline_filtro(p_tabela text) TO service_role;
+
+
+--
+-- Name: FUNCTION offline_podar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_podar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_podar() TO postgres;
+GRANT ALL ON FUNCTION public.offline_podar() TO service_role;
+
+
+--
+-- Name: FUNCTION offline_puxar(p_lojas bigint[], p_user uuid, p_cursor bigint, p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_puxar(p_lojas bigint[], p_user uuid, p_cursor bigint, p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_puxar(p_lojas bigint[], p_user uuid, p_cursor bigint, p_limite integer) TO postgres;
+GRANT ALL ON FUNCTION public.offline_puxar(p_lojas bigint[], p_user uuid, p_cursor bigint, p_limite integer) TO service_role;
+
+
+--
+-- Name: FUNCTION offline_snapshot(p_tabela text, p_lojas bigint[], p_user uuid, p_depois jsonb, p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.offline_snapshot(p_tabela text, p_lojas bigint[], p_user uuid, p_depois jsonb, p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.offline_snapshot(p_tabela text, p_lojas bigint[], p_user uuid, p_depois jsonb, p_limite integer) TO postgres;
+GRANT ALL ON FUNCTION public.offline_snapshot(p_tabela text, p_lojas bigint[], p_user uuid, p_depois jsonb, p_limite integer) TO service_role;
 
 
 --
@@ -11163,6 +12510,15 @@ GRANT ALL ON FUNCTION public.outbox_capture() TO service_role;
 
 
 --
+-- Name: FUNCTION pegar_trava_sync(p_loja_id bigint, p_recurso text, p_segundos integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.pegar_trava_sync(p_loja_id bigint, p_recurso text, p_segundos integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.pegar_trava_sync(p_loja_id bigint, p_recurso text, p_segundos integer) TO postgres;
+GRANT ALL ON FUNCTION public.pegar_trava_sync(p_loja_id bigint, p_recurso text, p_segundos integer) TO service_role;
+
+
+--
 -- Name: FUNCTION prefixo_codigo_por_tipo(p_tipo_item text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -11170,6 +12526,16 @@ GRANT ALL ON FUNCTION public.prefixo_codigo_por_tipo(p_tipo_item text) TO postgr
 GRANT ALL ON FUNCTION public.prefixo_codigo_por_tipo(p_tipo_item text) TO anon;
 GRANT ALL ON FUNCTION public.prefixo_codigo_por_tipo(p_tipo_item text) TO authenticated;
 GRANT ALL ON FUNCTION public.prefixo_codigo_por_tipo(p_tipo_item text) TO service_role;
+
+
+--
+-- Name: FUNCTION primeiro_mov_apos(p_loja_id bigint, p_data date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.primeiro_mov_apos(p_loja_id bigint, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.primeiro_mov_apos(p_loja_id bigint, p_data date) TO postgres;
+GRANT ALL ON FUNCTION public.primeiro_mov_apos(p_loja_id bigint, p_data date) TO authenticated;
+GRANT ALL ON FUNCTION public.primeiro_mov_apos(p_loja_id bigint, p_data date) TO service_role;
 
 
 --
@@ -11458,6 +12824,16 @@ GRANT ALL ON FUNCTION public.rotulo_tipo_item(p_tipo text) TO service_role;
 
 
 --
+-- Name: FUNCTION saldo_em_data(p_loja_id bigint, p_data date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.saldo_em_data(p_loja_id bigint, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.saldo_em_data(p_loja_id bigint, p_data date) TO postgres;
+GRANT ALL ON FUNCTION public.saldo_em_data(p_loja_id bigint, p_data date) TO authenticated;
+GRANT ALL ON FUNCTION public.saldo_em_data(p_loja_id bigint, p_data date) TO service_role;
+
+
+--
 -- Name: FUNCTION salvar_ficha(p_loja bigint, p_produto bigint, p_rendimento numeric, p_itens jsonb, p_expandir_na_venda boolean, p_user text, p_obs text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -11501,6 +12877,15 @@ GRANT ALL ON FUNCTION public.sigla_forma_pgto(p_metodo text) TO service_role;
 REVOKE ALL ON FUNCTION public.sincronizar_situacao_nota(p_loja bigint, p_nota bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.sincronizar_situacao_nota(p_loja bigint, p_nota bigint) TO postgres;
 GRANT ALL ON FUNCTION public.sincronizar_situacao_nota(p_loja bigint, p_nota bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION soltar_trava_sync(p_loja_id bigint, p_recurso text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.soltar_trava_sync(p_loja_id bigint, p_recurso text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.soltar_trava_sync(p_loja_id bigint, p_recurso text) TO postgres;
+GRANT ALL ON FUNCTION public.soltar_trava_sync(p_loja_id bigint, p_recurso text) TO service_role;
 
 
 --
@@ -11933,6 +13318,15 @@ GRANT ALL ON SEQUENCE public.convites_id_seq TO service_role;
 
 
 --
+-- Name: TABLE espelho_sync_estado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.espelho_sync_estado TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.espelho_sync_estado TO authenticated;
+GRANT ALL ON TABLE public.espelho_sync_estado TO service_role;
+
+
+--
 -- Name: TABLE estoque_codigo_seq; Type: ACL; Schema: public; Owner: -
 --
 
@@ -11947,6 +13341,25 @@ GRANT ALL ON TABLE public.estoque_codigo_seq TO service_role;
 GRANT ALL ON TABLE public.estoque_config TO postgres;
 GRANT ALL ON TABLE public.estoque_config TO service_role;
 GRANT SELECT ON TABLE public.estoque_config TO authenticated;
+
+
+--
+-- Name: TABLE estoque_correcao_custo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.estoque_correcao_custo TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.estoque_correcao_custo TO authenticated;
+GRANT ALL ON TABLE public.estoque_correcao_custo TO service_role;
+
+
+--
+-- Name: SEQUENCE estoque_correcao_custo_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.estoque_correcao_custo_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.estoque_correcao_custo_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.estoque_correcao_custo_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.estoque_correcao_custo_id_seq TO service_role;
 
 
 --
@@ -12091,6 +13504,15 @@ GRANT ALL ON SEQUENCE public.estrutura_produto_cache_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.estrutura_produto_cache_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.estrutura_produto_cache_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.estrutura_produto_cache_id_seq TO service_role;
+
+
+--
+-- Name: TABLE estrutura_produto_sync; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.estrutura_produto_sync TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.estrutura_produto_sync TO authenticated;
+GRANT ALL ON TABLE public.estrutura_produto_sync TO service_role;
 
 
 --
@@ -12419,6 +13841,34 @@ GRANT ALL ON SEQUENCE public.inventarios_proprio_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.inventarios_proprio_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.inventarios_proprio_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.inventarios_proprio_id_seq TO service_role;
+
+
+--
+-- Name: TABLE kardex_omie; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.kardex_omie TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.kardex_omie TO authenticated;
+GRANT ALL ON TABLE public.kardex_omie TO service_role;
+
+
+--
+-- Name: TABLE kardex_omie_carga; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.kardex_omie_carga TO postgres;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.kardex_omie_carga TO authenticated;
+GRANT ALL ON TABLE public.kardex_omie_carga TO service_role;
+
+
+--
+-- Name: SEQUENCE kardex_omie_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.kardex_omie_id_seq TO postgres;
+GRANT ALL ON SEQUENCE public.kardex_omie_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.kardex_omie_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.kardex_omie_id_seq TO service_role;
 
 
 --
@@ -12940,6 +14390,14 @@ GRANT SELECT(vendas_store_id) ON TABLE public.lojas TO authenticated;
 
 
 --
+-- Name: COLUMN lojas.espelho_completo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(espelho_completo) ON TABLE public.lojas TO anon;
+GRANT SELECT(espelho_completo) ON TABLE public.lojas TO authenticated;
+
+
+--
 -- Name: SEQUENCE lojas_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
@@ -13113,6 +14571,48 @@ GRANT ALL ON TABLE public.notas_fiscais TO service_role;
 GRANT ALL ON SEQUENCE public.notas_fiscais_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.notas_fiscais_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.notas_fiscais_id_seq TO service_role;
+
+
+--
+-- Name: TABLE offline_execucoes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.offline_execucoes TO postgres;
+GRANT ALL ON TABLE public.offline_execucoes TO service_role;
+
+
+--
+-- Name: TABLE offline_meta; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.offline_meta TO postgres;
+GRANT ALL ON TABLE public.offline_meta TO service_role;
+
+
+--
+-- Name: TABLE offline_tabelas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.offline_tabelas TO postgres;
+GRANT ALL ON TABLE public.offline_tabelas TO service_role;
+
+
+--
+-- Name: SEQUENCE offline_versao_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.offline_versao_seq TO postgres;
+GRANT ALL ON SEQUENCE public.offline_versao_seq TO anon;
+GRANT ALL ON SEQUENCE public.offline_versao_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.offline_versao_seq TO service_role;
+
+
+--
+-- Name: TABLE offline_versoes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.offline_versoes TO postgres;
+GRANT ALL ON TABLE public.offline_versoes TO service_role;
 
 
 --
@@ -13496,6 +14996,14 @@ GRANT ALL ON SEQUENCE public.sync_outbox_id_seq TO postgres;
 GRANT ALL ON SEQUENCE public.sync_outbox_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.sync_outbox_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.sync_outbox_id_seq TO service_role;
+
+
+--
+-- Name: TABLE sync_trava; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.sync_trava TO postgres;
+GRANT ALL ON TABLE public.sync_trava TO service_role;
 
 
 --
