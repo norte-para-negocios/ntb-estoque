@@ -1,5 +1,26 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { temPermissao } from '@/lib/permissao-puro'
+
+// Velocidade (13/10/2026): cada tela chamava auth.getUser() (ida ao servidor de login) e lia o perfil de novo em cada
+// requirePermissao/isAdmin/getCurrentLojaId — 5 a 15 idas em série por página. cache() do React guarda o resultado
+// só durante a mesma requisição (fora da renderização, ex. rota de API, não guarda nada: comportamento de antes).
+const usuarioDaRequisicao = cache(async () => {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+})
+
+const perfilDaRequisicao = cache(async (userId: string) => {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, name, current_loja_id, perfil, status, is_super_admin, loja:lojas(id, nome, nome_fantasia)')
+    .eq('id', userId)
+    .single<Profile>()
+  return data
+})
 
 export async function getUser() {
   const supabase = await createClient()
@@ -21,17 +42,10 @@ export type Profile = {
 }
 
 export async function getProfile(): Promise<Profile> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await usuarioDaRequisicao()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, name, current_loja_id, perfil, status, is_super_admin, loja:lojas(id, nome, nome_fantasia)')
-    .eq('id', user.id)
-    .single<Profile>()
+  const profile = await perfilDaRequisicao(user.id)
 
   if (!profile) redirect('/login')
   // Conta recem-criada pelo cadastro publico: sem acesso ate o admin aprovar.
@@ -101,68 +115,11 @@ export async function isAdminDaLoja(lojaId?: number): Promise<boolean> {
 }
 
 export async function requirePermissao(lojaId: number, permissaoNome: string): Promise<boolean> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await usuarioDaRequisicao()
   if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('perfil')
-    .eq('id', user.id)
-    .single<{ perfil: string | null }>()
-
-  // Admin global tem acesso a tudo.
-  if (profile?.perfil === 'Admin') return true
-
-  // Admin de loja: acesso total aos modulos da(s) loja(s) vinculada(s).
-  if (profile?.perfil === 'AdminLoja') {
-    const { data: vinculo } = await supabase
-      .from('loja_user')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('loja_id', lojaId)
-      .maybeSingle()
-    if (vinculo) return true
-  }
-
-  const { data: permissao } = await supabase
-    .from('permissoes')
-    .select('id')
-    .eq('nome', permissaoNome)
-    .single<{ id: number }>()
-
-  if (!permissao) return false
-
-  // Permissão DIRETA do usuário (override avulso por loja).
-  const { data: direta } = await supabase
-    .from('permissao_user')
-    .select('id')
-    .eq('loja_id', lojaId)
-    .eq('user_id', user.id)
-    .eq('permissao_id', permissao.id)
-    .maybeSingle()
-  if (direta) return true
-
-  // Permissão herdada do CARGO do usuário NESTA loja (loja_user.cargo_id).
-  const { data: vinc } = await supabase
-    .from('loja_user')
-    .select('cargo_id')
-    .eq('user_id', user.id)
-    .eq('loja_id', lojaId)
-    .maybeSingle<{ cargo_id: number | null }>()
-  if (vinc?.cargo_id) {
-    const { data: doCargo } = await supabase
-      .from('cargo_permissao')
-      .select('cargo_id')
-      .eq('cargo_id', vinc.cargo_id)
-      .eq('permissao_id', permissao.id)
-      .maybeSingle()
-    if (doCargo) return true
-  }
-
-  return false
+  // Mesma regra de sempre (Admin global; AdminLoja vinculado; permissão direta na loja; permissão do cargo na loja),
+  // calculada uma vez por requisição e loja em getPermissoesNomes.
+  return temPermissao(await getPermissoesNomes(lojaId), permissaoNome)
 }
 
 export async function getCurrentLojaId(): Promise<number> {
@@ -239,18 +196,12 @@ export async function getAtorGestao(): Promise<AtorGestao> {
 // Conjunto de NOMES de permissao que o usuario tem na loja informada.
 // Admin recebe '*' (tudo) para o chamador tratar como acesso total.
 // Usado pelo shell para esconder do menu o que o usuario nao pode ver (4.2).
-export async function getPermissoesNomes(lojaId: number | null): Promise<Set<string>> {
+export const getPermissoesNomes = cache(async (lojaId: number | null): Promise<Set<string>> => {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await usuarioDaRequisicao()
   if (!user) return new Set()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('perfil')
-    .eq('id', user.id)
-    .single<{ perfil: string | null }>()
+  const profile = await perfilDaRequisicao(user.id)
 
   if (profile?.perfil === 'Admin') return new Set(['*'])
   if (!lojaId) return new Set()
@@ -301,4 +252,4 @@ export async function getPermissoesNomes(lojaId: number | null): Promise<Set<str
     addNomes(doCargo)
   }
   return nomes
-}
+})
