@@ -147,7 +147,7 @@ async function atualizarCanceladoNoFrio(lojaId: number, nIdCupom: number): Promi
  * direto dos cupons fiscais do Omie, e substitui as linhas dessas 2 dimensões em
  * `faturamento_importado` para a loja. Retorna quantas linhas agregadas gravou.
  */
-export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: string }): Promise<number> {
+export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: string; meses?: number }): Promise<number> {
   const supabase = createServiceClient()
 
   // Mapa produto: codigo_produto -> { tipo, familia }. O PostgREST/Supabase
@@ -193,7 +193,11 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
     acc.set(k, (acc.get(k) ?? 0) + valor)
   }
 
-  for (let mes = 1; mes <= mesAtual; mes++) {
+  // 15/10/2026: o cron de hora em hora repuxava o ANO inteiro de todas as lojas e passou a estourar o tempo antes de chegar no mês
+  // corrente (cupons de 14/10 nunca entraram no fat_cupons). Com `meses`, só os últimos N meses do ano (cron: mês atual + anterior);
+  // o botão manual continua com o ano inteiro.
+  const mesInicio = opts?.meses ? Math.max(1, mesAtual - (opts.meses - 1)) : 1
+  for (let mes = mesInicio; mes <= mesAtual; mes++) {
     const mm = String(mes).padStart(2, '0')
     const mesISO = `${ano}-${mm}`
     const de = `01/${mm}/${ano}`
@@ -394,7 +398,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   // ANO CORRENTE -- o delete precisa ficar restrito ao mesmo intervalo,
   // senao meses de anos anteriores que um dia venham a ser gravados aqui
   // (backfill futuro) seriam apagados de novo no proximo sync.
-  const mesIniAno = `${ano}-01`
+  const mesIniAno = `${ano}-${String(mesInicio).padStart(2, '0')}`
   const mesFimAno = `${ano}-${String(mesAtual).padStart(2, '0')}`
   const { error: delErro } = await supabase
     .from('faturamento_importado')
