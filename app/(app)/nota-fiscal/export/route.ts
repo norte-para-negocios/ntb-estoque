@@ -174,6 +174,8 @@ export async function GET(request: Request) {
     else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
+    // Padrao da tela de Notas (15/10/2026): validas = tudo menos cancelada; TODAS = sem filtro.
+    else if (params.status === 'VALIDAS') q = q.or(NAO_CANCELADA_OR)
     // Achado real (revisão final, item I3): natureza nunca era aplicado aqui,
     // mesmo sendo repassado na URL -- mesma lógica de nota-fiscal/page.tsx.
     if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)

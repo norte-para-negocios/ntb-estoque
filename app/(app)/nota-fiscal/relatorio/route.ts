@@ -179,6 +179,8 @@ export async function GET(request: Request) {
     else if (status === 'P' || status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
     else if (status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
     else if (status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
+    // Padrao da tela de Notas (15/10/2026): validas = tudo menos cancelada; TODAS = sem filtro.
+    else if (status === 'VALIDAS') q = q.or(NAO_CANCELADA_OR)
     // Achado real (revisão final, item I3): natureza nunca era aplicado aqui,
     // mesmo sendo repassado na URL -- mesma lógica de nota-fiscal/page.tsx.
     if (natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(natureza)}%`)
@@ -260,7 +262,7 @@ export async function GET(request: Request) {
   const filtrosAtivos: string[] = []
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
-  if (status) filtrosAtivos.push(`Status: ${status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : status === 'MANIFESTADA' ? 'Manifestada' : 'Pendente'}`)
+  if (status && status !== 'TODAS') filtrosAtivos.push(`Status: ${status === 'VALIDAS' ? 'Válidas (sem canceladas)' : status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : status === 'MANIFESTADA' ? 'Manifestada' : 'Pendente'}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
   if (produto) filtrosAtivos.push(`Produto: ${produto}`)
   if (categoria) {

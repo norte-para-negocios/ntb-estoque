@@ -2,7 +2,7 @@ import type { DiaValor } from '@/lib/faturamento-dias'
 
 // Barras de faturamento por dia, com linha horizontal opcional da meta.
 // Barra cheia = bateu a meta; clara = nao bateu; cinza = dia em andamento (hoje).
-export function BarrasDiarias({ dias, meta, hoje }: { dias: DiaValor[]; meta?: number | null; hoje?: string }) {
+export function BarrasDiarias({ dias, meta, hoje, nome = 'Faturamento' }: { dias: DiaValor[]; meta?: number | null; hoje?: string; nome?: string }) {
   if (!dias.length) return null
   const W = 960, H = 160, PAD = 8
   const max = Math.max(1, meta ?? 0, ...dias.map((d) => d.valor))
@@ -11,7 +11,7 @@ export function BarrasDiarias({ dias, meta, hoje }: { dias: DiaValor[]; meta?: n
   const passo = Math.max(1, Math.ceil(dias.length / 10))
   const yMeta = meta && meta > 0 ? H - (meta / max) * H : null
   return (
-    <figure className="rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]" aria-label="Faturamento por dia">
+    <figure className="rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]" aria-label={`${nome} por dia`}>
       <figcaption className="mb-2 flex flex-wrap items-center gap-4 text-[12px] text-text-muted">
         <span className="font-semibold text-text">Dia a dia</span>
         {yMeta !== null && (

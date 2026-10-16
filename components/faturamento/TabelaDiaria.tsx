@@ -7,7 +7,7 @@ const rotuloDia = (iso: string) => {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} · ${DIAS_SEMANA[dow]}`
 }
 
-export function TabelaDiaria({ dias, meta, hoje }: { dias: DiaValor[]; meta?: number | null; hoje?: string }) {
+export function TabelaDiaria({ dias, meta, hoje, rotulo = 'Faturamento' }: { dias: DiaValor[]; meta?: number | null; hoje?: string; rotulo?: string }) {
   const comMeta = meta != null && meta > 0
   const th = 'px-3 py-2 text-[12px] font-semibold text-text-muted'
   return (
@@ -16,7 +16,7 @@ export function TabelaDiaria({ dias, meta, hoje }: { dias: DiaValor[]; meta?: nu
         <thead>
           <tr className="border-b border-border bg-surface">
             <th className={`text-left ${th}`}>Dia</th>
-            <th className={`text-right ${th}`}>Faturamento</th>
+            <th className={`text-right ${th}`}>{rotulo}</th>
             {comMeta && <th className={`text-right ${th}`}>Meta</th>}
             {comMeta && <th className={`text-right ${th}`}>Diferença</th>}
             {comMeta && <th className={`text-center ${th}`}>Situação</th>}

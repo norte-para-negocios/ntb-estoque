@@ -58,6 +58,8 @@ export const NAO_CANCELADA_OR =
 // funcao, em vez de cada um reimplementar a logica.
 export function statusBateFiltro(nf: { c_etapa: string | null; full_object: unknown }, status: string): boolean {
   const { label } = statusNF(nf.c_etapa, nf.full_object)
+  if (status === 'TODAS') return true
+  if (status === 'VALIDAS') return label !== 'Cancelada'
   if (status === 'C' || status === 'CONCLUIDA') return label === 'Concluída'
   if (status === 'P' || status === 'PENDENTE') return label !== 'Concluída' && label !== 'Cancelada'
   if (status === 'CANCELADA') return label === 'Cancelada'

@@ -47,7 +47,7 @@ export function nomeMes(mes: string): string {
   return (s.charAt(0).toUpperCase() + s.slice(1)).replace(' de ', ' ')
 }
 
-export function lerPeriodo(sp: { ini?: string; fim?: string; mes?: string }, hoje: string): { ini: string; fim: string; cortado: boolean } {
+export function lerPeriodo(sp: { ini?: string; fim?: string; mes?: string }, hoje: string, maxDias = MAX_DIAS): { ini: string; fim: string; cortado: boolean } {
   const padrao = periodoDoMes(hoje.slice(0, 7), hoje)
   let p = padrao
   if (sp.ini && ISO.test(sp.ini) && sp.ini <= hoje) {
@@ -56,6 +56,6 @@ export function lerPeriodo(sp: { ini?: string; fim?: string; mes?: string }, hoj
   } else if (sp.mes && MES.test(sp.mes) && sp.mes <= hoje.slice(0, 7)) {
     p = periodoDoMes(sp.mes, hoje)
   }
-  const minIni = addDias(p.fim, -(MAX_DIAS - 1))
+  const minIni = addDias(p.fim, -(maxDias - 1))
   return p.ini < minIni ? { ini: minIni, fim: p.fim, cortado: true } : { ...p, cortado: false }
 }

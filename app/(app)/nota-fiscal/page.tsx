@@ -1,92 +1,81 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { FileText, Download, FileUp, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
-import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
-import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
-import { ChipsStatus } from '@/components/ui-kit/ChipsStatus'
-import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
-import { valoresMulti } from '@/components/ui-kit/filtros-utils'
-import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
-import { SyncButton } from '@/components/SyncButton'
+import { hojeBahiaISO } from '@/lib/data-bahia'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
-import { ListaHeader } from '@/components/ui-kit/ListaHeader'
-import { Lista } from '@/components/ui-kit/Lista'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
-import { FUNDO_CLASSE } from '@/lib/status-cor'
-import { Paginacao } from '@/components/ui-kit/Paginacao'
 import { btnClass } from '@/components/ui-kit/Button'
-import { escapeIlike, escapeIlikeOr, buscarTudoPaginado, buscarTodosPorIds } from '@/lib/utils-busca'
-import { buscarFamilias } from '@/lib/actions/produto'
-import { FileText, Download, FileUp, PenLine } from 'lucide-react'
-import { modoDaLoja } from '@/lib/estoque/ledger'
+import { Paginacao } from '@/components/ui-kit/Paginacao'
+import { FiltrosGaveta } from '@/components/ui-kit/FiltrosGaveta'
+import { ChipsFiltrosAtivos } from '@/components/ui-kit/ChipsFiltrosAtivos'
+import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
+import { valoresMulti } from '@/components/ui-kit/filtros-utils'
+import { SyncButton } from '@/components/SyncButton'
 import { StatusSefaz, type EstadoSefaz } from '@/components/nota-fiscal/StatusSefaz'
-import { buscarFrioTudo, contarNotasFiscaisAntigas, limiteJanelaQuente } from '@/lib/historico-contabo'
-import { statusNF, NAO_CANCELADA_OR, statusBateFiltro } from '@/lib/nf-status'
-import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
-import { buscarNotaIdsFrio } from '@/lib/relatorio-frio-nf'
+import { FiltrosNotas } from '@/components/nota-fiscal/FiltrosNotas'
+import { ListaNotasCompra } from '@/components/nota-fiscal/ListaNotasCompra'
+import { DetalheItemCompra } from '@/components/nota-fiscal/DetalheItemCompra'
+import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
+import { RankingBarras } from '@/components/faturamento/RankingBarras'
+import { BarrasDiarias } from '@/components/faturamento/BarrasDiarias'
+import { TabelaDiaria } from '@/components/faturamento/TabelaDiaria'
+import { MatrizMensalTabela } from '@/components/faturamento/MatrizMensalTabela'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { CATEGORIAS_NF } from '@/lib/nota-fiscal-categoria'
+import { buscarFamilias } from '@/lib/actions/produto'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { lerPeriodo, addDias } from '@/lib/faturamento-periodo'
+import { filtrarPorNome, matrizMensal, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type LinhaRanking } from '@/lib/faturamento-itens'
+import {
+  VISOES, SEM_FAMILIA, filtrarNotas, fornecedoresDistintos, itemParaLinha, itensDasNotas, lerOrdem, notaParaLinha, ordenarNotas, type Visao,
+} from '@/lib/notas-compras'
+import { carregarItensCompra, carregarNotasCompra } from '@/lib/notas-compras-loader'
 
 const POR_PAGINA = 50
+// Notas: periodo livre (a tela antiga aceitava qualquer intervalo). Por dia mostra os 366 mais recentes.
+const MAX_DIAS_NOTAS = 3700
+const DIMS_MENSAL = [{ value: 'fornecedor', label: 'Fornecedor' }, { value: 'familia', label: 'Família' }, { value: 'produto', label: 'Produto' }] as const
+const ORDENS = [
+  { label: 'Mais recentes', ord: '', dir: '' },
+  { label: 'Mais antigas', ord: '', dir: 'asc' },
+  { label: 'Maior valor', ord: 'valor', dir: '' },
+  { label: 'Menor valor', ord: 'valor', dir: 'asc' },
+] as const
+const fmtDM = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const fmtPct = (n: number) => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+const plural = (n: number, um: string, varios: string) => `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`
 
-function fmtData(d: string | null): string {
-  if (!d) return '-'
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
-}
+type Sp = Record<string, string | undefined>
 
-type NotaCompleta = {
-  id: number
-  n_id_receb: string
-  d_emissao_nfe: string | null
-  c_numero_nfe: string | null
-  c_razao_social: string | null
-  c_nome: string | null
-  n_valor_nfe: number | string | null
-  c_etapa: string | null
-  c_natureza_operacao: string | null
-  c_modelo_nfe: string | null
-  c_serie_nfe: string | null
-  full_object: unknown
-}
-
-const COLUNAS_SORT = ['d_emissao_nfe', 'c_numero_nfe', 'c_razao_social', 'n_valor_nfe', 'c_etapa'] as const
-type ColSort = (typeof COLUNAS_SORT)[number]
-
-
-export default async function NotaFiscalPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    data_inicio?: string
-    data_final?: string
-    num_nfe?: string
-    fornecedor?: string
-    status?: string
-    tipo?: string
-    natureza?: string
-    produto?: string
-    categoria?: string
-    page?: string
-    ord?: string
-    dir?: string
-    familia?: string
-    local?: string
-  }>
-}) {
+export default async function NotaFiscalPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais'))) notFound()
-
-  const params = await searchParams
-  const page = Math.max(1, Number(params.page) || 1)
-  const ordRaw = params.ord ?? 'd_emissao_nfe'
-  const ord: ColSort = (COLUNAS_SORT as readonly string[]).includes(ordRaw) ? (ordRaw as ColSort) : 'd_emissao_nfe'
-  const dir = params.dir === 'asc' ? 'asc' : 'desc'
+  const sp = await searchParams
+  const hoje = hojeBahiaISO()
   const supabase = await createClient()
-  // Sync (Atualizar agora) virou admin-only. NF e importada do Omie (so leitura).
+
+  // Periodo: ini/fim/mes (padrao do Faturamento); data_inicio/data_final de links antigos continuam valendo.
+  const per = lerPeriodo({ ini: sp.ini ?? sp.data_inicio, fim: sp.fim ?? sp.data_final, mes: sp.mes }, hoje, MAX_DIAS_NOTAS)
+  const visao: Visao = VISOES.find((v) => v.value === sp.aba)?.value ?? 'notas'
+  const tipos = valoresMulti(sp.tipo)
+  const familias = valoresMulti(sp.familia)
+  const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
+  const status = sp.status ?? ''
+  const fornecedor = sp.fornecedor ?? ''
+  const q = (sp.q ?? '').slice(0, 80)
+  const { ord, dir } = lerOrdem(sp.ord, sp.dir)
+  const page = Math.max(1, Number(sp.page) || 1)
+  const porMensal = DIMS_MENSAL.find((d) => d.value === sp.por)?.value ?? 'fornecedor'
+  const ordemRank = sp.ordem === 'quant' ? 'quant' : 'valor'
+  const sentido = sp.sentido === 'menos' ? 'menos' : 'mais'
+
   const podeSync = await isAdmin()
-  // Loja de estoque proprio: as notas vem sozinhas da SEFAZ; importar XML e lancar sem XML ficam como opcoes secundarias.
-  const proprio = (await modoDaLoja(lojaId)) === 'proprio'
+  const modo = await modoDaLoja(lojaId)
+  const proprio = modo === 'proprio'
   const podeLancarManual = proprio && (await requirePermissao(lojaId, 'Compras - Criar'))
   let estadoSefaz: EstadoSefaz | null = null
   if (proprio) {
@@ -102,609 +91,279 @@ export default async function NotaFiscalPage({
     }
   }
 
-  const dataInicio =
-    params.data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
-  const dataFinal = params.data_final || new Date().toISOString().split('T')[0]
-
-  // Resolve categoria(s) -> clausula .or() combinada (multi-select: uma linha entra se
-  // casar com QUALQUER categoria selecionada). Reaplicada na query de lista e na de
-  // totais. Logica compartilhada com export/route.ts e relatorio/route.ts (antes vivia
-  // so aqui e os dois ignoravam esse filtro silenciosamente).
-  const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
-
-  // Minor da auditoria de retry Omie (2026-08-09/10, rollup em AGENTS.md
-  // "buscarItensNFFrio sem onErro"): este era o 4o call site sem onErro (via
-  // buscarNotaIdsFrio abaixo) -- mesmo padrao de errosConsulta/banner ja usado em
-  // relatorio-indicadores/auditoria-fiscal/pendencias-classificacao.
-  const errosConsulta: string[] = []
-
-  // Tipo: nota_fiscal_items nao tem tipo; cruza via produtos.tipo_item -> codigo_produto -> produto_codigo do item.
-  // Produto: itens cujo c_descricao_produto ou c_codigo_produto casem.
-  // Ambos resolvem nota_fiscal_id distintos em nota_fiscal_items -> notas_fiscais.id in (...).
-  // Resolvido ANTES da query para que lista e totais reusem o mesmo conjunto de ids.
-  // tipo vem como lista separada por virgula (multi-select) na URL.
-  const tiposArr = valoresMulti(params.tipo)
-  const familiasArr = valoresMulti(params.familia)
-  const localCod = params.local && !Number.isNaN(Number(params.local)) ? Number(params.local) : null
-  let notaIds: number[] | null = null
-  let codigos: string[] | null = null
-  if (tiposArr.length || familiasArr.length || params.produto || localCod !== null) {
-    if (tiposArr.length || familiasArr.length) {
-      // Paginado: produtos.tipo_item pode passar de 1000 linhas numa unica loja
-      // (ex: loja 6, tipo "99" tem 1143) -- sem .range() o PostgREST trunca em
-      // silencio e o filtro de tipo/familia some com notas validas.
-      const prodCodigos = await buscarTudoPaginado<{ codigo_produto: string | number }>((from, to) => {
-        let q = supabase.from('produtos').select('codigo_produto').eq('loja_id', lojaId).order('id', { ascending: true }).range(from, to)
-        if (tiposArr.length) q = q.in('tipo_item', tiposArr)
-        if (familiasArr.length) q = q.in('descricao_familia', familiasArr)
-        return q
-      })
-      codigos = prodCodigos.map((p) => String(p.codigo_produto))
-      if (codigos.length === 0) {
-        notaIds = []
-      }
-    }
-
-    if (notaIds === null) {
-      let itemRows: { nota_fiscal_id: number | null }[]
-      if (codigos) {
-        // Achado real (Task 10, 2026-08-05): `codigos` (produtos casando
-        // tipo/familia) pode ter centenas/milhares de elementos (ex.: loja 3,
-        // tipo=07 = Material de Uso e Consumo, 633 codigos) -- um
-        // `.in('produto_codigo', codigos)` direto sofre o MESMO 414 URI Too
-        // Long do filtro de id mais abaixo (buscarNotaIdsFrio/idsIn). Busca
-        // em lotes de codigo (buscarTodosPorIds, ver lib/utils-busca.ts) em
-        // vez de um `.in()` unico.
-        itemRows = await buscarTodosPorIds<{ nota_fiscal_id: number | null }>(codigos, (loteCodigos, from, to) => {
-          let q = supabase
-            .from('nota_fiscal_items')
-            .select('nota_fiscal_id')
-            .eq('loja_id', lojaId)
-            .in('produto_codigo', loteCodigos)
-            .order('id', { ascending: true })
-            .range(from, to)
-          if (params.produto) {
-            const p = escapeIlikeOr(params.produto)
-            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
-          }
-          if (localCod !== null) {
-            q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
-          }
-          return q
-        })
-      } else {
-        // Sem filtro de tipo/familia (so produto e/ou local ativos): sem
-        // lista grande de codigo envolvida, paginacao por OFFSET direta e
-        // segura. Paginado: nota_fiscal_items facilmente passa de 1000
-        // linhas por loja (toda loja ativa ja passa disso).
-        itemRows = await buscarTudoPaginado<{ nota_fiscal_id: number | null }>((from, to) => {
-          let q = supabase
-            .from('nota_fiscal_items')
-            .select('nota_fiscal_id')
-            .eq('loja_id', lojaId)
-            .order('id', { ascending: true })
-            .range(from, to)
-          if (params.produto) {
-            const p = escapeIlikeOr(params.produto)
-            q = q.or(`c_descricao_produto.ilike.%${p}%,c_codigo_produto.ilike.%${p}%`)
-          }
-          if (localCod !== null) {
-            q = q.eq('full_object->itensAjustes->>codigo_local_estoque', String(localCod))
-          }
-          return q
-        })
-      }
-      notaIds = Array.from(
-        new Set(itemRows.map((r) => r.nota_fiscal_id).filter((v): v is number => v != null)),
-      )
-    }
-  }
-  const idsIn = notaIds !== null ? (notaIds.length ? notaIds : [-1]) : null
-  // notaIdsFrioSet: mesma resolucao de filtro, mas no espaco de ID do
-  // Contabo -- ver Task 1 e a spec docs/superpowers/specs/2026-07-26-nf-filtro-cross-90-dias-design.md.
-  // So calculado quando o periodo de fato cruza os 90 dias (senao a fatia
-  // fria nem e buscada) E algum filtro que dependa de produto/local esta ativo.
-  const temFiltroProdLocal = tiposArr.length > 0 || familiasArr.length > 0 || !!params.produto || localCod !== null
-  const notaIdsFrioSet = temFiltroProdLocal && dataInicio < limiteJanelaQuente()
-    ? await buscarNotaIdsFrio({
-        lojaId,
-        dataInicio,
-        dataFinal,
-        codigosProduto: codigos,
-        produtoBusca: params.produto || null,
-        localCod,
-        onErro: () => errosConsulta.push('histórico do Contabo (NF > ~90 dias)'),
-      })
-    : null
-
-  const SELECT_LISTAGEM = 'id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object'
-
-  // Filtros comuns de texto/status/categoria/natureza, sem id nem paginacao --
-  // reaproveitados tanto pela query direta paginada (idsIn ausente) quanto
-  // pelos lotes de id abaixo (idsIn presente, ver achado grande logo abaixo).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- builder de query do supabase-js, tipo concreto muda a cada `.eq()/.ilike()/.or()` encadeado
-  function aplicarFiltrosNF(qIn: any): any {
-    let q = qIn
-    if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-    // Achado real (revisão final round 3, 2026-08-05): `escapeIlike` só escapa
-    // curingas de LIKE (`%`/`_`), não vírgula/parênteses -- dentro de um
-    // `.or()` do PostgREST esses dois caracteres são sintaxe própria (separam
-    // condições e agrupam), então um fornecedor com "," ou "(" no nome/razão
-    // social (ex.: "ELETRICA CAPITAL LTDA (1 MATRIZ)") quebrava o parsing da
-    // árvore lógica do filtro. Envolver o valor em aspas duplas dentro da
-    // string do `.or()` neutraliza `,`/`(`/`)` pro parser do PostgREST sem
-    // alterar o valor buscado (ao contrário de `escapeIlikeOr`, que apaga
-    // esses caracteres -- inaceitável aqui, pois eles fazem parte do nome real
-    // do fornecedor).
-    if (params.fornecedor) q = q.or(`c_razao_social.ilike."%${escapeIlike(params.fornecedor)}%",c_nome.ilike."%${escapeIlike(params.fornecedor)}%"`)
-    // Status: 'CONCLUIDA'/'PENDENTE'/'CANCELADA' (novos), 'C'/'P' (compat com
-    // links antigos) ou a etapa real direta (ex.: '60', '40') -- ver lib/nf-status.ts.
-    if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
-    else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
-    else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
-    else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
-    else if (params.status) q = q.eq('c_etapa', params.status)
-    if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-    if (categoriaOrClause) q = q.or(categoriaOrClause)
-    return q
-  }
-
-  let notasRaw: NotaCompleta[] | null
-  let totaisRaw: { id: number; n_id_receb: string; n_valor_nfe: number | string | null }[]
-  // Quando idsIn esta ativo, guarda o conjunto COMPLETO (todas as notas
-  // quentes que casam, sem fatiar por pagina) -- reaproveitado mais abaixo
-  // pelo merge quente+frio (que precisa de TODAS as notas quentes do
-  // periodo, nao so as da pagina atual), evitando refazer a mesma busca.
-  let notasQuentesCompletas: NotaCompleta[] | null = null
-
-  if (idsIn) {
-    // Achado real (Task 10, 2026-08-05, auditoria de filtros/relatorios): idsIn
-    // resolve o filtro de tipo/familia/produto/local em TODO o historico da
-    // loja (sem limite de data -- os ids so cruzam com o periodo pedido
-    // DEPOIS, na query abaixo), podendo chegar a milhares de elementos pra
-    // tipos/familias comuns (ex.: loja 3, tipo=01 = Materia Prima, 1626 notas
-    // historicas = lista de ~11KB). Um `.in('id', idsIn)` direto nessa escala
-    // faz o PostgREST/nginx responderem 414 URI Too Long -- e
-    // `buscarTudoPaginado` trata QUALQUER erro (inclusive 414) como
-    // "acabaram as paginas", entao o filtro virava silenciosamente "nenhuma
-    // nota" pra QUALQUER periodo, inclusive 100% dentro da janela quente (sem
-    // fallback do Contabo pra mascarar, ao contrario do caso que cruza os 90
-    // dias). Corrigido buscando as notas quentes em LOTES de id
-    // (`buscarTodosPorIds`, ver lib/utils-busca.ts -- cada lote fica bem
-    // abaixo do limite de URL) e ordenando/paginando em memoria, mesmo
-    // espirito do merge quente+frio logo abaixo.
-    notasQuentesCompletas = await buscarTodosPorIds<NotaCompleta>(idsIn, (lote, from, to) =>
-      aplicarFiltrosNF(
-        supabase
-          .from('notas_fiscais')
-          .select(SELECT_LISTAGEM)
-          .eq('loja_id', lojaId)
-          .gte('d_emissao_nfe', dataInicio)
-          .lte('d_emissao_nfe', dataFinal)
-          .is('deleted_at', null)
-          .in('id', lote)
-          .range(from, to),
-      ),
-    )
-    totaisRaw = notasQuentesCompletas.map((r) => ({ id: r.id, n_id_receb: r.n_id_receb, n_valor_nfe: r.n_valor_nfe }))
-    const ordenadas = [...notasQuentesCompletas].sort((a, b) => {
-      const av = a[ord] ?? ''
-      const bv = b[ord] ?? ''
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0
-      return dir === 'asc' ? cmp : -cmp
-    })
-    const inicio = (page - 1) * POR_PAGINA
-    notasRaw = ordenadas.slice(inicio, inicio + POR_PAGINA + 1)
-  } else {
-    // Caminho original, sem filtro de tipo/familia/produto/local: `.range()`
-    // direto e seguro (o `.in('id', ...)` que causa o 414 acima nunca entra
-    // em jogo quando idsIn e null).
-    let query = supabase
-      .from('notas_fiscais')
-      .select(SELECT_LISTAGEM)
-      .eq('loja_id', lojaId)
-      .gte('d_emissao_nfe', dataInicio)
-      .lte('d_emissao_nfe', dataFinal)
-      .is('deleted_at', null)
-      .order(ord, { ascending: dir === 'asc' })
-      .range((page - 1) * POR_PAGINA, page * POR_PAGINA) // busca N+1 para detectar próxima
-    query = aplicarFiltrosNF(query)
-
-    // Query dos totais (mesmos filtros, sem paginacao visivel ao usuario): soma R$ + count.
-    // Paginada por baixo dos panos -- confirmado empiricamente que o PostgREST trunca
-    // em 1000 linhas mesmo com `.limit(100000)` explicito (nao ha erro, so silencio),
-    // e nenhuma loja hoje passa disso em notas_fiscais mas o numero cresce todo dia.
-    function buildTotaisQuery(from: number, to: number) {
-      const q = supabase
-        .from('notas_fiscais')
-        .select('id, n_id_receb, n_valor_nfe')
-        .eq('loja_id', lojaId)
-        .gte('d_emissao_nfe', dataInicio)
-        .lte('d_emissao_nfe', dataFinal)
-        .is('deleted_at', null)
-        .order('id', { ascending: true })
-        .range(from, to)
-      return aplicarFiltrosNF(q)
-    }
-
-    const [{ data }, totais] = await Promise.all([
-      query,
-      buscarTudoPaginado<{ id: number; n_id_receb: string; n_valor_nfe: number | string | null }>(buildTotaisQuery),
-    ])
-    notasRaw = data
-    totaisRaw = totais
-  }
-
-  let notas = notasRaw
-  let temProxima = (notasRaw?.length ?? 0) > POR_PAGINA
-  let qtdNotas = totaisRaw.length
-  let totalValor = totaisRaw.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
-  let totaisParciais = false
-
-  if (dataInicio < limiteJanelaQuente()) {
-    // Periodo cruza a janela quente: nao da pra confiar na paginacao nativa do
-    // Supabase sozinha (o Contabo pode ter linhas no meio do intervalo pedido) --
-    // busca tudo dos dois lados (com os MESMOS filtros da query principal), ordena
-    // e pagina em memoria.
-    //
-    // Busca a fatia fria UMA vez so (mesmos filtros loja/data/busca servem tanto
-    // pro badge quanto pra lista paginada -- antes eram 2 chamadas identicas ao
-    // Contabo, uma por complementarNotasFiscais em cada uso) e cruza com uma
-    // contagem real de referencia (count=true, sem LIMIT) pra saber se a
-    // paginacao trouxe tudo. Achado real (auditoria Notas Fiscais 2026-07-19):
-    // o badge variava a CADA carregamento (loja 5, "desde o inicio": 1423,
-    // depois 1932, valor real 2629) por causa de timeout intermitente numa
-    // pagina do meio da paginacao fria (raiz corrigida em lib/historico-
-    // contabo.ts: timeout curto demais + falha tratada igual a "acabaram as
-    // paginas") -- esse aviso fica como cinto-de-seguranca, mesmo padrao ja
-    // usado em ordem-producao/page.tsx.
-    // Base da query quente (Supabase) usada tanto pra contar (count=true, sem
-    // trazer linha) quanto pra buscar as paginas -- os mesmos filtros nos dois
-    // casos, sem duplicar a logica condicional.
-    const montarQueryNF = (selectCols: string, opts?: { count: 'exact'; head: true }) => {
-      let q = supabase
-        .from('notas_fiscais')
-        .select(selectCols, opts)
-        .eq('loja_id', lojaId)
-        .gte('d_emissao_nfe', dataInicio)
-        .lte('d_emissao_nfe', dataFinal)
-        .is('deleted_at', null)
-      if (params.num_nfe) q = q.ilike('c_numero_nfe', `%${escapeIlike(params.num_nfe)}%`)
-      // Mesmo fix de comma/parenteses aplicado acima em aplicarFiltrosNF -- ver comentario la.
-      if (params.fornecedor) q = q.or(`c_razao_social.ilike."%${escapeIlike(params.fornecedor)}%",c_nome.ilike."%${escapeIlike(params.fornecedor)}%"`)
-      if (params.status === 'C' || params.status === 'CONCLUIDA') q = q.eq('c_etapa', '60').or(NAO_CANCELADA_OR)
-      else if (params.status === 'P' || params.status === 'PENDENTE') q = q.neq('c_etapa', '60').or(NAO_CANCELADA_OR)
-      else if (params.status === 'CANCELADA') q = q.eq('full_object->infoCadastro->>cCancelada', 'S')
-      else if (params.status === 'MANIFESTADA') q = q.eq('full_object->infoCadastro->>cRecebido', 'S')
-      else if (params.status) q = q.eq('c_etapa', params.status)
-      if (params.natureza) q = q.ilike('c_natureza_operacao', `%${escapeIlike(params.natureza)}%`)
-      if (categoriaOrClause) q = q.or(categoriaOrClause)
-      // NAO aplica idsIn aqui: quando idsIn esta ativo, notasQuentesCompletas
-      // (calculado acima em lotes de id, ver achado do 414) ja cobre a fatia
-      // quente inteira -- montarQueryNF so e usado abaixo quando idsIn e null.
-      return q
-    }
-
-    // frias (Contabo) e a contagem da fatia quente sao todas independentes
-    // entre si -- disparadas juntas em vez de em serie. Quando idsIn esta
-    // ativo, notasQuentesCompletas ja tem a fatia quente inteira (buscada em
-    // lotes de id acima) -- pula a contagem via montarQueryNF (que sofreria o
-    // MESMO 414 se ainda aplicasse `.in('id', idsIn)`).
-    const busca = params.num_nfe || params.fornecedor
-    const [friasRaw, friasTotalReal, totalNFQuenteResp] = await Promise.all([
-      buscarFrioTudo<NotaCompleta>('/notas_fiscais', { loja_id: lojaId, data_inicio: dataInicio, data_final: dataFinal, busca }, 2000),
-      contarNotasFiscaisAntigas({ lojaId, dataInicio, dataFinal, busca }),
-      notasQuentesCompletas ? Promise.resolve(null) : montarQueryNF('id', { count: 'exact', head: true }),
-    ])
-    if (friasRaw.length < friasTotalReal) totaisParciais = true
-
-    // buscarFrioTudo (Contabo) so filtra por loja/data/busca -- nao conhece o
-    // filtro de status (mesma limitacao ja documentada abaixo pra tipo/familia/
-    // produto/local). Sem isso, qualquer periodo que cruze a janela quente
-    // trazia notas de QUALQUER status na fatia fria, inflando o badge e
-    // misturando situacoes na lista quando um filtro de Situacao estava ativo.
-    const statusAtivo = params.status
-    const friasFiltradas = friasRaw
-      .filter((nf) => !statusAtivo || statusBateFiltro(nf, statusAtivo))
-      .filter((nf) => !notaIdsFrioSet || notaIdsFrioSet.has(nf.id))
-
-    const vistosQuentes = new Set(totaisRaw.map((r) => r.n_id_receb))
-    const totaisCompletos = [...totaisRaw, ...friasFiltradas.filter((r) => !vistosQuentes.has(r.n_id_receb))]
-    qtdNotas = totaisCompletos.length
-    totalValor = totaisCompletos.reduce((a, r) => a + (Number(r.n_valor_nfe) || 0), 0)
-
-    // paginaCompletaRaw: TODAS as notas quentes do periodo (sem filtro de
-    // pagina do usuario). Quando idsIn esta ativo, reaproveita
-    // notasQuentesCompletas (ja buscado em lotes de id acima, ver achado do
-    // 414) -- senao (idsIn null, sem filtro de tipo/familia/produto/local),
-    // pagina por OFFSET como antes: a fatia quente tambem pode passar de 1000
-    // linhas -- mesmo estouro do PostgREST descrito acima, so que aqui
-    // truncaria a pagina em memoria (nao so o total exibido). totalNFQuente ja
-    // foi buscado acima (junto com frias) -- so falta buscar as paginas, em
-    // paralelo em vez de uma de cada vez.
-    let paginaCompletaRaw: NotaCompleta[]
-    if (notasQuentesCompletas) {
-      paginaCompletaRaw = notasQuentesCompletas
-    } else {
-      const numPaginasNF = Math.ceil((totalNFQuenteResp?.count ?? 0) / 1000)
-      const blocosNF = await Promise.all(
-        Array.from({ length: numPaginasNF }, (_, pagina) =>
-          montarQueryNF('id, n_id_receb, d_emissao_nfe, c_numero_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, c_modelo_nfe, c_serie_nfe, full_object')
-            .order('id', { ascending: true })
-            .range(pagina * 1000, pagina * 1000 + 999)
-        )
-      )
-      paginaCompletaRaw = blocosNF.flatMap((r) => (r.data ?? []) as unknown as NotaCompleta[])
-    }
-    // Reusa a mesma fatia fria (friasFiltradas), ja filtrada por status e por
-    // notaIdsFrioSet acima -- evita uma segunda ida identica ao Contabo.
-    const vistosQuentesLista = new Set(paginaCompletaRaw.map((r) => r.n_id_receb))
-    const todas = [...paginaCompletaRaw, ...friasFiltradas.filter((r) => !vistosQuentesLista.has(r.n_id_receb))]
-    todas.sort((a, b) => {
-      const av = a[ord] ?? ''
-      const bv = b[ord] ?? ''
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0
-      return dir === 'asc' ? cmp : -cmp
-    })
-    const inicio = (page - 1) * POR_PAGINA
-    const fatia = todas.slice(inicio, inicio + POR_PAGINA + 1)
-    temProxima = fatia.length > POR_PAGINA
-    notas = temProxima ? fatia.slice(0, POR_PAGINA) : fatia
-  } else {
-    notas = temProxima ? notasRaw!.slice(0, POR_PAGINA) : notasRaw
-  }
-
-  // Helper para construir URL de sort (mantém todos os searchParams existentes)
-  //
-  // Achado real (revisão final da auditoria de filtros/relatórios, 2026-08-05,
-  // item I3): familia/local faltavam aqui -- clicar num cabeçalho de coluna
-  // pra ordenar limpava esses 2 filtros silenciosamente (o resto do estado
-  // sobrevivia, só esses dois somem).
-  function buildSortHref(key: string, newDir: 'asc' | 'desc'): string {
-    const sp = new URLSearchParams()
-    if (params.data_inicio) sp.set('data_inicio', params.data_inicio)
-    if (params.data_final) sp.set('data_final', params.data_final)
-    if (params.num_nfe) sp.set('num_nfe', params.num_nfe)
-    if (params.fornecedor) sp.set('fornecedor', params.fornecedor)
-    if (params.status) sp.set('status', params.status)
-    if (params.tipo) sp.set('tipo', params.tipo)
-    if (params.natureza) sp.set('natureza', params.natureza)
-    if (params.produto) sp.set('produto', params.produto)
-    if (params.categoria) sp.set('categoria', params.categoria)
-    if (params.familia) sp.set('familia', params.familia)
-    if (params.local) sp.set('local', params.local)
-    sp.set('ord', key)
-    sp.set('dir', newDir)
-    return `/nota-fiscal?${sp.toString()}`
-  }
-
-  // Achado real (revisão final da auditoria de filtros/relatórios, 2026-08-05,
-  // item I3): relatorioParams (usado pelo Excel/PDF) nunca incluía
-  // familia/local -- a tela mostrava um número e o Excel/PDF exportavam outro
-  // (medido: loja 3, 01/05-05/08, família "Horti - Frut": 117 na tela x 516 no
-  // Excel/PDF, 4,4x de diferença). Corrigido incluindo os 2 aqui + tratando o
-  // filtro em export/route.ts e relatorio/route.ts (que também não tinham
-  // NENHUMA menção a natureza/familia/local antes deste fix).
-  const relatorioParams = new URLSearchParams()
-  relatorioParams.set('data_inicio', dataInicio)
-  relatorioParams.set('data_final', dataFinal)
-  if (params.num_nfe) relatorioParams.set('num_nfe', params.num_nfe)
-  if (params.fornecedor) relatorioParams.set('fornecedor', params.fornecedor)
-  if (params.status) relatorioParams.set('status', params.status)
-  if (params.tipo) relatorioParams.set('tipo', params.tipo)
-  if (params.natureza) relatorioParams.set('natureza', params.natureza)
-  if (params.produto) relatorioParams.set('produto', params.produto)
-  if (params.categoria) relatorioParams.set('categoria', params.categoria)
-  if (params.familia) relatorioParams.set('familia', params.familia)
-  if (params.local) relatorioParams.set('local', params.local)
-
-  const [familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+  const filtrosBanco = { tipos, familias, produto: sp.produto ?? '', local: localCod, natureza: sp.natureza ?? '', categoria: sp.categoria ?? '' }
+  const [{ notas: notasPeriodo, erros }, familiasOpcoes, { data: locaisRaw }] = await Promise.all([
+    carregarNotasCompra(lojaId, per.ini, per.fim, filtrosBanco),
     buscarFamilias(),
-    supabase
-      .from('local_estoques')
-      .select('codigo_local_estoque, descricao')
-      .eq('loja_id', lojaId)
-      .order('descricao'),
+    supabase.from('local_estoques').select('codigo_local_estoque, descricao').eq('loja_id', lojaId).order('descricao'),
   ])
+  // Fornecedores do filtro: os do periodo com os outros filtros (menos o proprio fornecedor).
+  const fornecedores = fornecedoresDistintos(filtrarNotas(notasPeriodo, { status, numero: sp.num_nfe }))
+  const notas = filtrarNotas(notasPeriodo, { status, fornecedor, numero: sp.num_nfe })
+  const linhasNotas = notas.map(notaParaLinha)
+  const kp = resumir(linhasNotas)
+  const rankForn = rankear(linhasNotas, 'produto')
+  const maiorForn = rankForn[0] ?? null
 
-  const campos: CampoFiltro[] = [
-    { tipo: 'data', nome: 'data_inicio', label: 'Data Início' },
-    { tipo: 'data', nome: 'data_final', label: 'Data Final' },
+  // Itens so quando a visao precisa (Produtos, Familias, Evolucao por familia/produto).
+  const precisaItens = visao === 'produtos' || visao === 'familias' || (visao === 'mensal' && porMensal !== 'fornecedor')
+  const { itens: itensTodos, erros: errosItens } = precisaItens
+    ? await carregarItensCompra(lojaId, notas, { produto: filtrosBanco.produto, local: localCod })
+    : { itens: [], erros: [] as string[] }
+  const itens = itensDasNotas(itensTodos, new Set(notas.map((n) => n.id)), { tipos, familias })
+  const linhasItens = itens.map(itemParaLinha)
+  const avisos = [...new Set([...erros, ...errosItens])]
+
+  // Parametros que atravessam links (periodo, visao, filtros, ordenacao, busca).
+  const base: Record<string, string> = {
+    ini: per.ini, fim: per.fim, aba: visao === 'notas' ? '' : visao,
+    fornecedor, familia: familias.join(','), status, tipo: tipos.join(','), local: sp.local ?? '', natureza: sp.natureza ?? '',
+    produto: sp.produto ?? '', categoria: sp.categoria ?? '', num_nfe: sp.num_nfe ?? '',
+    q, ord: sp.ord ?? '', dir: sp.dir ?? '', por: porMensal === 'fornecedor' ? '' : porMensal,
+    ordem: ordemRank === 'valor' ? '' : ordemRank, sentido: sentido === 'mais' ? '' : sentido,
+  }
+  const href = (over: Record<string, string>) => {
+    const u = new URLSearchParams()
+    for (const [k, v] of Object.entries({ ...base, ...over })) if (v) u.set(k, v)
+    return `/nota-fiscal${u.size ? `?${u}` : ''}`
+  }
+  // Excel e PDF: mesmo recorte da tela (rotas antigas leem data_inicio/data_final; situacao explicita).
+  const exportQs = new URLSearchParams()
+  exportQs.set('data_inicio', per.ini)
+  exportQs.set('data_final', per.fim)
+  exportQs.set('status', status || 'VALIDAS')
+  for (const k of ['fornecedor', 'num_nfe', 'tipo', 'natureza', 'produto', 'categoria', 'familia', 'local'] as const) if (base[k]) exportQs.set(k, base[k])
+
+  const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
+  const chipAtivo = `${chipBase} bg-brand-fill text-white`
+  const chipInativo = `${chipBase} bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text`
+
+  const situacoes = proprio
+    ? [{ value: '', label: 'Válidas (sem canceladas)' }, { value: 'CONCLUIDA', label: 'Lançadas no estoque' }, { value: 'PENDENTE', label: 'A conferir' }, { value: 'CANCELADA', label: 'Canceladas' }, { value: 'TODAS', label: 'Todas' }]
+    : [{ value: '', label: 'Válidas (sem canceladas)' }, { value: 'CONCLUIDA', label: 'Concluídas' }, { value: 'MANIFESTADA', label: 'Manifestadas' }, { value: 'PENDENTE', label: 'Pendentes' }, { value: 'CANCELADA', label: 'Canceladas' }, { value: 'TODAS', label: 'Todas' }]
+  if (status && !situacoes.some((s) => s.value === status)) situacoes.push({ value: status, label: status === 'C' ? 'Concluídas' : status === 'P' ? 'Pendentes' : `Etapa ${status}` })
+
+  // "Mais filtros": o que a tela antiga tinha e nao cabe na linha principal.
+  const camposMais: CampoFiltro[] = [
     { tipo: 'texto', nome: 'num_nfe', label: 'Nº NFe' },
-    { tipo: 'texto', nome: 'fornecedor', label: 'Fornecedor' },
-    {
-      tipo: 'select',
-      nome: 'status',
-      label: 'Situação',
-      opcoes: [
-        { value: 'CONCLUIDA', label: 'Concluída' },
-        { value: 'MANIFESTADA', label: 'Manifestada' },
-        { value: 'PENDENTE', label: 'Pendente' },
-        { value: 'CANCELADA', label: 'Cancelada' },
-      ],
-    },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo', opcoes: PRODUTO_TIPO_ITEM },
-    {
-      tipo: 'multi-select',
-      nome: 'familia',
-      label: 'Família',
-      opcoes: familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao })),
-    },
-    {
-      tipo: 'select',
-      nome: 'local',
-      label: 'Local de estoque',
-      opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })),
-    },
-    { tipo: 'texto', nome: 'natureza', label: 'Natureza da operacao' },
+    { tipo: 'select', nome: 'local', label: 'Local de estoque', opcoes: (locaisRaw ?? []).map((l) => ({ value: String(l.codigo_local_estoque), label: l.descricao ?? String(l.codigo_local_estoque) })) },
+    { tipo: 'texto', nome: 'natureza', label: 'Natureza da operação' },
     { tipo: 'texto', nome: 'produto', label: 'Produto' },
-    {
-      tipo: 'multi-select',
-      nome: 'categoria',
-      label: 'Categoria',
-      opcoes: CATEGORIAS_NF.map((c) => ({ value: c.value, label: c.label })),
-    },
+    { tipo: 'multi-select', nome: 'categoria', label: 'Categoria', opcoes: CATEGORIAS_NF.map((c) => ({ value: c.value, label: c.label })) },
   ]
+
+  // ---- dados de cada visao ----
+  const notasOrdenadas = visao === 'notas' ? ordenarNotas(filtrarNotas(notas, { q, status: 'TODAS' }), ord, dir) : []
+  const notasPagina = notasOrdenadas.slice((page - 1) * POR_PAGINA, page * POR_PAGINA)
+  const temProxima = notasOrdenadas.length > page * POR_PAGINA
+
+  const rankFornVis = visao === 'fornecedores' ? ordenarRanking(filtrarPorNome(rankForn, q), ordemRank, sentido) : []
+  const rankItensTodos = visao === 'produtos' ? rankear(linhasItens, 'produto') : visao === 'familias' ? rankear(linhasItens, 'familia') : []
+  const rankItensVis = ordenarRanking(filtrarPorNome(rankItensTodos, q), visao === 'familias' ? 'valor' : ordemRank, sentido)
+  const unidadeDe = new Map<string, string>()
+  for (const i of itens) {
+    const k = i.idProduto != null ? String(i.idProduto) : `nome:${i.produto}`
+    if (!unidadeDe.has(k) && i.unidade) unidadeDe.set(k, i.unidade)
+  }
+
+  const selecionado = visao === 'produtos' && sp.item ? rankItensTodos.find((r) => r.chave === sp.item) : undefined
+  const itensSel = selecionado ? itens.filter((i) => (i.idProduto != null ? String(i.idProduto) : `nome:${i.produto}`) === selecionado.chave) : []
+  const notaPorId = new Map(notas.map((n) => [n.id, n]))
+  const notasSel = (() => {
+    const m = new Map<number, { quant: number; valor: number }>()
+    for (const i of itensSel) {
+      const g = m.get(i.notaId) ?? { quant: 0, valor: 0 }
+      g.quant += i.quant
+      g.valor += i.valor
+      m.set(i.notaId, g)
+    }
+    return [...m.entries()].flatMap(([id, g]) => { const nota = notaPorId.get(id); return nota ? [{ nota, ...g }] : [] })
+      .sort((a, b) => b.nota.dia.localeCompare(a.nota.dia) || b.nota.id - a.nota.id)
+  })()
+
+  const iniSerie = per.ini < addDias(per.fim, -365) ? addDias(per.fim, -365) : per.ini
+  const serie = visao === 'dias' ? serieDiaria(linhasNotas, iniSerie, per.fim) : []
+  const mensal = visao === 'mensal' ? (porMensal === 'fornecedor' ? matrizMensal(linhasNotas, 'produto', per.ini, per.fim) : matrizMensal(linhasItens, porMensal, per.ini, per.fim)) : null
+
+  const legendaForn = (l: LinhaRanking) => `${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
+  const legendaProd = (l: LinhaRanking) => `${fmtQtd(l.quant)} ${unidadeDe.get(l.chave) ?? 'un'} · ${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
+  const legendaFam = (l: LinhaRanking) => `${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
+  const rotuloBusca = visao === 'fornecedores' ? 'fornecedor' : visao === 'produtos' ? 'produto' : visao === 'familias' ? 'família' : 'fornecedor, nº ou natureza'
+
+  const formBusca = (
+    <form action="/nota-fiscal" className="flex w-full flex-wrap items-center gap-2">
+      {Object.entries(base).filter(([k, v]) => v && !['q', 'ord', 'dir', 'ordem', 'sentido'].includes(k)).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
+      {(['ord', 'dir', 'ordem', 'sentido'] as const).map((k) => base[k] ? <input key={k} type="hidden" name={k} value={base[k]} /> : null)}
+      <input name="q" defaultValue={q} placeholder={`Buscar ${rotuloBusca}…`} className="h-9 min-w-0 flex-1 rounded-[var(--r-md)] border border-border bg-surface px-3 text-sm text-text sm:w-64 sm:flex-none" />
+      <button type="submit" className={chipInativo}>Buscar</button>
+      {visao === 'notas' ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {ORDENS.map((o) => {
+            const ativo = (o.ord === 'valor' ? ord === 'valor' : ord === 'dia') && (o.dir === 'asc' ? dir === 'asc' : dir === 'desc')
+            return <Link key={o.label} href={href({ ord: o.ord, dir: o.dir, page: '' })} className={ativo ? chipAtivo : chipInativo}>{o.label}</Link>
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Link href={href({ sentido: '' })} className={sentido === 'mais' ? chipAtivo : chipInativo}>Mais comprados</Link>
+          <Link href={href({ sentido: 'menos' })} className={sentido === 'menos' ? chipAtivo : chipInativo}>Menos comprados</Link>
+          {visao !== 'familias' && (
+            <>
+              <span className="text-[12px] text-text-muted">por</span>
+              <Link href={href({ ordem: '' })} className={ordemRank === 'valor' ? chipAtivo : chipInativo}>R$</Link>
+              <Link href={href({ ordem: 'quant' })} className={ordemRank === 'quant' ? chipAtivo : chipInativo}>{visao === 'fornecedores' ? 'Nº de notas' : 'Quantidade'}</Link>
+            </>
+          )}
+        </div>
+      )}
+    </form>
+  )
+
+  const vazioPeriodo = (
+    <EmptyState
+      icon={FileText}
+      title="Nenhuma nota no período"
+      hint={proprio ? 'Mude o período, limpe os filtros, clique em Buscar na SEFAZ ou importe um XML.' : 'Mude o período ou limpe os filtros de fornecedor, família e situação.'}
+    />
+  )
 
   return (
     <div className="space-y-4">
-      <ListaHeader>
-        <PageHeader
-          title="Notas Fiscais"
-          icon={FileText}
-          actions={
-            // Uma linha só: no celular rola na horizontal (mesma ordem de botões)
-            // em vez de quebrar e deixar o Atualizar sozinho numa linha.
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <FiltrosGaveta
-                basePath="/nota-fiscal"
-                naoContar={['data_inicio', 'data_final']}
-                campos={campos}
-                defaults={{
-                  data_inicio: dataInicio,
-                  data_final: dataFinal,
-                  num_nfe: params.num_nfe ?? '',
-                  fornecedor: params.fornecedor ?? '',
-                  status: params.status ?? '',
-                  tipo: params.tipo ?? '',
-                  natureza: params.natureza ?? '',
-                  produto: params.produto ?? '',
-                  categoria: params.categoria ?? '',
-                  familia: params.familia ?? '',
-                  local: params.local ?? '',
-                }}
-                persistirEm="/nota-fiscal"
-              />
-              <a
-                href={`/nota-fiscal/relatorio?${relatorioParams.toString()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={btnClass('outline')}
-              >
-                <FileText className="size-4" /> Relatório PDF
-              </a>
-              <a
-                href={`/nota-fiscal/export?${relatorioParams.toString()}`}
-                className={btnClass('outline')}
-              >
-                <Download className="size-4" /> Excel
-              </a>
-              {podeLancarManual && (
-                <>
-                  <a href="/nota-fiscal/importar" className={btnClass('outline')}><FileUp className="size-4" /> Importar XML</a>
-                  <a href="/nota-fiscal/nova" className={btnClass('outline')}><PenLine className="size-4" /> Lançar sem XML</a>
-                </>
-              )}
-              {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label={proprio ? 'Buscar na SEFAZ' : 'Atualizar agora'} />}
-            </div>
-          }
-        />
-        {estadoSefaz && <StatusSefaz estado={estadoSefaz} podeConfigurar={podeSync} />}
-        <ChipsStatus
-          basePath="/nota-fiscal"
-          param="status"
-          opcoes={proprio ? [
-            { value: '', label: 'Todas' },
-            { value: 'CONCLUIDA', label: 'Lançadas no estoque' },
-            { value: 'PENDENTE', label: 'A conferir' },
-            { value: 'CANCELADA', label: 'Canceladas' },
-          ] : [
-            { value: '', label: 'Todas' },
-            { value: 'CONCLUIDA', label: 'Concluídas' },
-            { value: 'MANIFESTADA', label: 'Manifestadas' },
-            { value: 'PENDENTE', label: 'Pendentes' },
-            { value: 'CANCELADA', label: 'Canceladas' },
-          ]}
-        />
-        <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={campos} naoMostrar={['data_inicio', 'data_final', 'status']} persistirEm="/nota-fiscal" />
-      </ListaHeader>
-
-      {errosConsulta.length > 0 && (
-        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
-          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
-          <span>
-          Falha ao consultar: <strong className="text-warn">{[...new Set(errosConsulta)].join(', ')}</strong> — o
-          filtro por produto/família/local pode estar incompleto para o período antigo. Recarregue a página; se
-          persistir, avise o suporte.
-          </span>
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 px-1 text-[15px] text-text-muted">
-        <span>
-          <span className="num font-semibold text-text">{qtdNotas}</span> {qtdNotas === 1 ? 'nota' : 'notas'} de{' '}
-          <span className="num">{fmtData(dataInicio)}</span> a <span className="num">{fmtData(dataFinal)}</span>
-        </span>
-        <span>
-          Total <Money value={totalValor} className="font-semibold text-text" />
-        </span>
-      </div>
-
-      {totaisParciais && (
-        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
-          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
-          <span>
-          Período muito longo: a contagem e o total acima podem estar abaixo do real (falha temporária ao
-          buscar o histórico completo). Tente recarregar a página ou use um período mais curto.
-          </span>
-        </p>
-      )}
-
-      <Lista
-        linhas={notas ?? []}
-        chaveLinha={(nf) => nf.id}
-        sortAtual={ord}
-        dirAtual={dir}
-        sortHref={buildSortHref}
-        colunas={[
-          {
-            label: 'Fornecedor',
-            primaria: true,
-            sort: 'c_razao_social',
-            render: (nf) => (
-              <div className="min-w-0">
-                <div className="truncate text-text">{nf.c_razao_social || nf.c_nome || '-'}</div>
-                {nf.c_natureza_operacao && (
-                  <div className="truncate text-[13px] text-text-muted" title={nf.c_natureza_operacao}>{nf.c_natureza_operacao}</div>
-                )}
-              </div>
-            ),
-          },
-          { label: 'Emissão', sort: 'd_emissao_nfe', larguraDesktop: 'w-28', render: (nf) => <span className="num text-text-muted">{fmtData(nf.d_emissao_nfe)}</span> },
-          { label: 'NFe', sort: 'c_numero_nfe', larguraDesktop: 'w-28', render: (nf) => (<span className="num">{nf.c_numero_nfe ?? '-'}{nf.c_serie_nfe ? <span className="text-text-muted">/{nf.c_serie_nfe}</span> : null}</span>) },
-          {
-            label: 'Situação',
-            sort: 'c_etapa',
-            larguraDesktop: 'w-36',
-            render: (nf) => {
-              const { label, tom } = statusNF(nf.c_etapa, nf.full_object)
-              return (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-text">
-                  <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[tom]}`} aria-hidden />
-                  {label}
-                </span>
-              )
-            },
-          },
-          { label: 'Valor', sort: 'n_valor_nfe', alinhar: 'right', larguraDesktop: 'w-32', render: (nf) => <Money value={nf.n_valor_nfe == null ? null : Number(nf.n_valor_nfe)} /> },
-        ]}
-        acao={(nf) => (
-          <Link href={`/nota-fiscal/${nf.id}`} className="whitespace-nowrap font-semibold text-brand hover:underline">
-            Ver
-          </Link>
-        )}
-        vazio={
-          <EmptyState
-            icon={FileText}
-            title="Nenhuma nota fiscal no período"
-            hint={proprio ? 'Clique em Buscar na SEFAZ, importe um XML ou ajuste os filtros.' : 'Sincronize com o Omie ou ajuste os filtros.'}
-          />
+      <PageHeader
+        title="Notas Fiscais"
+        icon={FileText}
+        description="Compras recebidas: escolha o período, filtre e veja quanto e de quem você comprou."
+        actions={
+          <>
+            <a href={`/nota-fiscal/relatorio?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><FileText className="size-4" /> Relatório PDF</a>
+            <a href={`/nota-fiscal/export?${exportQs}`} className={btnClass('outline')}><Download className="size-4" /> Excel</a>
+            {podeLancarManual && (
+              <>
+                <Link href="/nota-fiscal/importar" className={btnClass('outline')}><FileUp className="size-4" /> Importar XML</Link>
+                <Link href="/nota-fiscal/nova" className={btnClass('outline')}><PenLine className="size-4" /> Lançar sem XML</Link>
+              </>
+            )}
+            {podeSync && <SyncButton endpoint="/api/sync/notas-fiscais" label={proprio ? 'Buscar na SEFAZ' : 'Atualizar agora'} />}
+          </>
         }
       />
+      {estadoSefaz && <StatusSefaz estado={estadoSefaz} podeConfigurar={podeSync} />}
 
-      {(page > 1 || temProxima) && (
-        <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} total={qtdNotas} porPagina={POR_PAGINA} />
+      <PeriodoBar basePath="/nota-fiscal" params={{ ...base, page: '', item: '' }} ini={per.ini} fim={per.fim} hoje={hoje} />
+      <FiltrosNotas
+        fornecedores={fornecedores}
+        familias={familiasOpcoes.map((f) => ({ value: f.descricao, label: f.descricao }))}
+        situacoes={situacoes}
+      >
+        <FiltrosGaveta
+          basePath="/nota-fiscal"
+          campos={camposMais}
+          defaults={Object.fromEntries(camposMais.map((c) => [c.nome, sp[c.nome] ?? '']))}
+        />
+      </FiltrosNotas>
+      <ChipsFiltrosAtivos basePath="/nota-fiscal" campos={camposMais} />
+
+      {per.cortado && <p className="text-[13px] text-text-muted">Período limitado a 10 anos: mostrando os mais recentes.</p>}
+      {avisos.length > 0 && (
+        <p className="flex items-start gap-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span className="mt-[5px] size-2 shrink-0 rounded-full bg-warn" aria-hidden />
+          <span>Falha ao consultar: <strong className="text-warn">{avisos.join(', ')}</strong>. Os números podem estar incompletos; recarregue a página.</span>
+        </p>
       )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card titulo="Total comprado" valor={<Money value={kp.faturado} />} />
+        <Card titulo="Notas" valor={kp.cupons.toLocaleString('pt-BR')} sub={plural(rankForn.length, 'fornecedor', 'fornecedores')} />
+        <Card titulo="Ticket médio por nota" valor={kp.ticket == null ? '—' : <Money value={kp.ticket} />} />
+        <Card titulo="Maior fornecedor" valor={maiorForn ? <Money value={maiorForn.valor} /> : '—'} sub={maiorForn ? `${maiorForn.rotulo} · ${fmtPct(maiorForn.pct)}` : undefined} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {VISOES.map((v) => <Link key={v.value} href={href({ aba: v.value === 'notas' ? '' : v.value, item: '', page: '', q: '' })} className={visao === v.value ? chipAtivo : chipInativo}>{v.label}</Link>)}
+      </div>
+
+      {notas.length === 0 ? vazioPeriodo : visao === 'notas' ? (
+        <div className="space-y-3">
+          {formBusca}
+          <p className="px-1 text-[13px] text-text-muted">
+            {plural(notasOrdenadas.length, 'nota', 'notas')}{q ? ` com “${q}”` : ''} · <Money value={notasOrdenadas.reduce((s, n) => s + n.valor, 0)} />
+          </p>
+          {notasOrdenadas.length === 0
+            ? <EmptyState icon={FileText} title="Nada encontrado" hint="Nenhuma nota bate com a busca." />
+            : <ListaNotasCompra notas={notasPagina} maxValor={Math.max(...notasOrdenadas.map((n) => n.valor))} />}
+          {(page > 1 || temProxima) && <Paginacao basePath="/nota-fiscal" page={page} temProxima={temProxima} total={notasOrdenadas.length} porPagina={POR_PAGINA} />}
+        </div>
+      ) : visao === 'fornecedores' ? (
+        <div className="space-y-3">
+          {formBusca}
+          {rankFornVis.length === 0
+            ? <EmptyState icon={FileText} title="Nada encontrado" hint="Nenhum fornecedor bate com a busca." />
+            : <RankingBarras linhas={rankFornVis} ordem={ordemRank} legenda={legendaForn} hrefDe={(chave) => href({ aba: '', fornecedor: chave.replace(/^nome:/, ''), q: '', ordem: '', sentido: '' })} />}
+          <p className="px-1 text-[12px] text-text-muted">Toque num fornecedor para ver as notas dele.</p>
+        </div>
+      ) : visao === 'produtos' || visao === 'familias' ? (
+        <div className="space-y-3">
+          {selecionado && (
+            <DetalheItemCompra
+              item={selecionado}
+              unidade={unidadeDe.get(selecionado.chave) ?? ''}
+              posicao={posicaoNoRanking(rankItensTodos, selecionado.chave)}
+              total={rankItensTodos.length}
+              serie={serieDiaria(itensSel.map(itemParaLinha), iniSerie, per.fim)}
+              notas={notasSel}
+              fecharHref={href({ item: '' })}
+              produtoHref={modo !== 'nenhum' && !selecionado.chave.startsWith('nome:') ? `/estoque/produto/${selecionado.chave}` : undefined}
+            />
+          )}
+          {formBusca}
+          {rankItensVis.length === 0 ? (
+            <EmptyState icon={FileText} title={itens.length ? 'Nada encontrado' : 'Sem itens nas notas'} hint={itens.length ? 'Nenhum item bate com a busca.' : 'As notas do período não têm itens com esses filtros.'} />
+          ) : (
+            <RankingBarras
+              linhas={rankItensVis}
+              ordem={visao === 'familias' ? 'valor' : ordemRank}
+              selecionado={sp.item}
+              legenda={visao === 'produtos' ? legendaProd : legendaFam}
+              hrefDe={visao === 'produtos'
+                ? (chave) => href({ item: chave })
+                : (chave) => (chave === SEM_FAMILIA ? undefined : href({ aba: 'produtos', familia: chave, q: '', item: '' }))}
+            />
+          )}
+          <p className="px-1 text-[12px] text-text-muted">
+            Valor dos itens (quantidade × preço unitário), sem frete e impostos da nota.{visao === 'familias' ? ' Toque numa família para ver os produtos dela.' : ' Toque num produto para ver as notas em que ele veio.'}
+          </p>
+        </div>
+      ) : visao === 'dias' ? (
+        <div className="space-y-3">
+          {iniSerie !== per.ini && <p className="text-[13px] text-text-muted">Por dia mostra os 366 dias mais recentes do período.</p>}
+          <BarrasDiarias dias={serie} nome="Compra" />
+          <TabelaDiaria dias={[...serie].reverse()} hoje={hoje} rotulo="Comprado" />
+        </div>
+      ) : mensal ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[12px] text-text-muted">Por</span>
+            {DIMS_MENSAL.map((d) => <Link key={d.value} href={href({ por: d.value === 'fornecedor' ? '' : d.value })} className={porMensal === d.value ? chipAtivo : chipInativo}>{d.label}</Link>)}
+          </div>
+          <MatrizMensalTabela matriz={mensal} titulo={DIMS_MENSAL.find((d) => d.value === porMensal)?.label ?? 'Item'} />
+          {porMensal !== 'fornecedor' && <p className="px-1 text-[12px] text-text-muted">Família e produto somam o valor dos itens (sem frete e impostos da nota).</p>}
+        </div>
+      ) : null}
+
+      {kp.melhorDia && visao !== 'dias' && (
+        <p className="px-1 text-[12px] text-text-muted">Dia de maior compra: {fmtDM(kp.melhorDia.dia)} (<Money value={kp.melhorDia.valor} />).</p>
+      )}
+    </div>
+  )
+}
+
+function Card({ titulo, valor, sub }: { titulo: string; valor: React.ReactNode; sub?: string }) {
+  return (
+    <div className="min-w-0 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
+      <div className="text-[13px] text-text-muted">{titulo}</div>
+      <div className="num mt-1 truncate text-[18px] font-semibold leading-tight tracking-[-0.02em] text-text sm:text-[22px] sm:leading-none">{valor}</div>
+      {sub && <div className="mt-1.5 truncate text-[12px] text-text-muted" title={sub}>{sub}</div>}
     </div>
   )
 }
