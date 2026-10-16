@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual, motivoAjusteValido, motivoOmieDoAjuste } from './motivo-ajuste.ts'
+import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual, encerrarOuEnviarAjusteManual, motivoAjusteValido, motivoOmieDoAjuste } from './motivo-ajuste.ts'
 
 const ler = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
 const semComentarios = (s: string) => s.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n')
@@ -74,16 +74,81 @@ test('criarAjusteManual grava e manda o motivo INV, não o tipo', () => {
   assert.equal((corpo.match(/motivo:\s*MOTIVO_AJUSTE_MANUAL/g) ?? []).length, 2, 'insert e envio na hora devem usar MOTIVO_AJUSTE_MANUAL')
 })
 
-test('retry do manual decide (enviar/encerrar) antes de chamar o Omie', () => {
-  const corpo = semComentarios(corpoDe(ler('lib/actions/movimentacoes.ts'), 'retryMovimentosManuaisPendentes'))
-  const iDecide = corpo.indexOf('decidirReenvioAjusteManual(')
-  const iEnvio = corpo.indexOf('reenviarMovimentoManual(')
-  assert.ok(iDecide >= 0, 'retry não decide o reenvio')
-  assert.ok(iDecide < iEnvio, 'decide depois de enviar')
-})
-
 test('correção de custo relança com motivoOmieDoAjuste, não com o tipo', () => {
   const src = semComentarios(ler('lib/actions/estoque-omie.ts'))
   assert.ok(!/\?\s*c\.motivo\s*:\s*c\.tipo/.test(src), 'ainda cai no tipo')
   assert.ok(src.includes('motivoOmieDoAjuste(c.tipo, c.motivo)'))
+})
+
+// Comportamento do retry (revisão 15/10): a decisão sozinha não basta, o que trava a 1323129 é o retry NÃO chamar o
+// envio quando encerra. Fakes no lugar do supabase/Omie; mutações "nunca encerrar" e "encerrar e enviar mesmo assim"
+// precisam quebrar estes testes.
+function fakesRetry() {
+  const gravados: { id: number; patch: Record<string, unknown> }[] = []
+  const enviados: { id: number; motivo: string | null | undefined }[] = []
+  return {
+    gravados,
+    enviados,
+    deps: {
+      gravarEncerramento: async (id: number, patch: Record<string, unknown>) => {
+        gravados.push({ id, patch })
+        return { error: null }
+      },
+      enviar: async (mov: { id: number; motivo: string | null | undefined }) => {
+        enviados.push({ id: mov.id, motivo: mov.motivo })
+        return { status: 'Concluido' }
+      },
+    },
+  }
+}
+
+test('retry: linha com motivo SAI (caso 1323129) é encerrada no teto e o Omie NÃO é chamado', async () => {
+  const f = fakesRetry()
+  const r = await encerrarOuEnviarAjusteManual({ id: 1323129, tipo: 'SAI', motivo: 'SAI', tentativas: 9 }, 30, f.deps)
+  assert.equal(r.resultado, 'encerrada')
+  assert.equal(f.enviados.length, 0, 'não pode ir ao Omie')
+  assert.equal(f.gravados.length, 1)
+  assert.equal(f.gravados[0].id, 1323129)
+  assert.equal(f.gravados[0].patch.tentativas, 30)
+  assert.equal(f.gravados[0].patch.status, 'Erro')
+})
+
+test('retry: linha com motivo ENT também é encerrada sem envio', async () => {
+  const f = fakesRetry()
+  const r = await encerrarOuEnviarAjusteManual({ id: 7, tipo: 'ENT', motivo: 'ENT', tentativas: 0 }, 30, f.deps)
+  assert.equal(r.resultado, 'encerrada')
+  assert.equal(f.enviados.length, 0)
+})
+
+test('retry: linha com motivo INV é enviada e não é encerrada', async () => {
+  const f = fakesRetry()
+  const r = await encerrarOuEnviarAjusteManual({ id: 8, tipo: 'SAI', motivo: 'INV', tentativas: 2 }, 30, f.deps)
+  assert.equal(r.resultado, 'sucesso')
+  assert.deepEqual(f.enviados, [{ id: 8, motivo: 'INV' }])
+  assert.equal(f.gravados.length, 0)
+})
+
+test('retry: envio recusado conta como falha; erro ao gravar encerramento conta como falha e não envia', async () => {
+  const f = fakesRetry()
+  const r1 = await encerrarOuEnviarAjusteManual({ id: 9, tipo: 'SAI', motivo: 'INV', tentativas: 0 }, 30, {
+    ...f.deps,
+    enviar: async () => ({ status: 'Erro' }),
+  })
+  assert.equal(r1.resultado, 'falha')
+  const r2 = await encerrarOuEnviarAjusteManual({ id: 10, tipo: 'SAI', motivo: 'SAI', tentativas: 0 }, 30, {
+    ...f.deps,
+    gravarEncerramento: async () => ({ error: { message: 'boom' } }),
+  })
+  assert.equal(r2.resultado, 'falha')
+  assert.match(r2.erro ?? '', /boom/)
+  assert.equal(f.enviados.length, 0)
+})
+
+test('retryMovimentosManuaisPendentes passa por encerrarOuEnviarAjusteManual e não chama o envio por fora', () => {
+  const corpo = semComentarios(corpoDe(ler('lib/actions/movimentacoes.ts'), 'retryMovimentosManuaisPendentes'))
+  assert.ok(corpo.includes('encerrarOuEnviarAjusteManual('), 'retry não usa o helper testado')
+  assert.equal((corpo.match(/reenviarMovimentoManual\(/g) ?? []).length, 1, 'envio fora do helper')
+  const iHelper = corpo.indexOf('encerrarOuEnviarAjusteManual(')
+  const iEnvio = corpo.indexOf('reenviarMovimentoManual(')
+  assert.ok(iEnvio > iHelper, 'o envio deve estar dentro do deps.enviar do helper')
 })

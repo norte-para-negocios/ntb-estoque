@@ -9,7 +9,7 @@ import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
-import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual } from '@/lib/omie/motivo-ajuste'
+import { MOTIVO_AJUSTE_MANUAL, encerrarOuEnviarAjusteManual } from '@/lib/omie/motivo-ajuste'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
 
@@ -365,22 +365,6 @@ export async function retryMovimentosManuaisPendentes(
         }
         continue
       }
-      // Linha antiga com motivo inválido (gravado = tipo, antes de 15/10): o Omie recusou todas as vezes e a
-      // diferença é do saldo daquele momento. Sai do retry sem ir ao Omie (lib/omie/motivo-ajuste.ts).
-      const decisao = decidirReenvioAjusteManual({ tipo: mov.tipo, motivo: mov.motivo, tentativas: mov.tentativas }, ERRO_MAX_TENTATIVAS)
-      if (decisao.acao === 'encerrar') {
-        const { error: erroEncerrar } = await supabase
-          .from('movimentos')
-          .update({ status: decisao.status, tentativas: decisao.tentativas, descricao_status: decisao.descricao_status })
-          .eq('id', mov.id)
-        if (erroEncerrar) {
-          errosEstorno.push(`encerrar movimento ${mov.id} (motivo invalido) falhou: ${erroEncerrar.message}`)
-          falhas++
-        } else {
-          encerradas++
-        }
-        continue
-      }
       if (mov.quan === null) {
         // quan anulada entre a selecao e agora -- estado realmente invalido
         // pra reprocessar. So estorna pra 'Erro' e deixa o proximo ciclo do
@@ -392,24 +376,39 @@ export async function retryMovimentosManuaisPendentes(
         falhas++
         continue
       }
-      const resultado = await reenviarMovimentoManual(
-        {
-          id: mov.id,
-          codigo_local_estoque: mov.codigo_local_estoque,
-          id_prod: mov.id_prod,
-          quan: mov.quan,
-          tipo: mov.tipo,
-          motivo: mov.motivo,
-          origem: (mov as { origem?: string | null }).origem ?? null,
-          obs: mov.obs,
-          data: mov.data ?? '',
-          tentativas: mov.tentativas,
+      const quan = mov.quan
+      // Linha antiga com motivo inválido (gravado = tipo, antes de 15/10): o Omie recusou todas as vezes e a
+      // diferença é do saldo daquele momento. Sai do retry sem ir ao Omie; motivo válido segue para o envio.
+      // Comportamento testado em lib/omie/motivo-ajuste.test.ts (encerrarOuEnviarAjusteManual).
+      const passo = await encerrarOuEnviarAjusteManual(mov, ERRO_MAX_TENTATIVAS, {
+        gravarEncerramento: async (id, patch) => {
+          const { error } = await supabase.from('movimentos').update(patch).eq('id', id)
+          return { error: error ? { message: error.message } : null }
         },
-        loja,
-        loja.id
-      )
-      if (resultado.status === 'Concluido') sucesso++
-      else falhas++
+        enviar: (m) =>
+          reenviarMovimentoManual(
+            {
+              id: m.id,
+              codigo_local_estoque: m.codigo_local_estoque,
+              id_prod: m.id_prod,
+              quan,
+              tipo: m.tipo,
+              motivo: m.motivo,
+              origem: (m as { origem?: string | null }).origem ?? null,
+              obs: m.obs,
+              data: m.data ?? '',
+              tentativas: m.tentativas,
+            },
+            loja,
+            loja.id
+          ),
+      })
+      if (passo.resultado === 'encerrada') encerradas++
+      else if (passo.resultado === 'sucesso') sucesso++
+      else {
+        if (passo.erro) errosEstorno.push(passo.erro)
+        falhas++
+      }
     }
 
     resultados.push({

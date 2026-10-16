@@ -54,3 +54,33 @@ export function decidirReenvioAjusteManual(
       `se ainda faltar corrigir, lance de novo pela tela.`,
   }
 }
+
+/**
+ * Passo do retry de 1 linha de ajuste manual: encerra (grava o teto e a explicação, SEM chamar o envio) ou envia.
+ * Separado de `retryMovimentosManuaisPendentes` para ter teste de comportamento com fakes: é isto que impede uma
+ * linha antiga com motivo inválido (1323129) de ir ao Omie com INV por cima de uma correção feita à mão.
+ */
+export async function encerrarOuEnviarAjusteManual<M extends { id: number; tipo: TipoAjusteManual; motivo: string | null | undefined; tentativas: number | null | undefined }>(
+  mov: M,
+  tetoTentativas: number,
+  deps: {
+    gravarEncerramento: (
+      id: number,
+      patch: { status: 'Erro'; tentativas: number; descricao_status: string }
+    ) => Promise<{ error: { message: string } | null }>
+    enviar: (mov: M) => Promise<{ status: string }>
+  }
+): Promise<{ resultado: 'encerrada' | 'sucesso' | 'falha'; erro?: string }> {
+  const decisao = decidirReenvioAjusteManual(mov, tetoTentativas)
+  if (decisao.acao === 'encerrar') {
+    const { error } = await deps.gravarEncerramento(mov.id, {
+      status: decisao.status,
+      tentativas: decisao.tentativas,
+      descricao_status: decisao.descricao_status,
+    })
+    if (error) return { resultado: 'falha', erro: `encerrar movimento ${mov.id} (motivo invalido) falhou: ${error.message}` }
+    return { resultado: 'encerrada' }
+  }
+  const r = await deps.enviar(mov)
+  return { resultado: r.status === 'Concluido' ? 'sucesso' : 'falha' }
+}
