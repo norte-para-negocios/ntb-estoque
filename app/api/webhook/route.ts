@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // falha, descartando o webhook em silêncio.
   const { data: loja, error } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test')
+    .select('id, omie_app_key, omie_app_secret, is_test, espelho_completo')
     .eq('omie_app_key', body.appKey)
     .eq('ativo', true)
     .eq('is_test', false)
@@ -78,7 +78,10 @@ export async function POST(request: Request) {
     if (topic.startsWith('RecebimentoProduto.') && body.event?.nIdReceb) {
       await fetchNotaFiscal(loja, body.event.nIdReceb)
     } else if (topic.startsWith('OrdemProducao.') && topic !== 'OrdemProducao.Excluida' && body.event?.nCodOP) {
-      await fetchOrdemProducao(loja, body.event.nCodOP)
+      // Faxina em andamento (espelho_completo=false): não consulta a OP a cada aviso. Uma escrita gera 3-4 avisos
+      // (Incluida/Alterada/Concluida) e as consultas repetidas da mesma OP bloqueiam a API da loja (MISUSE, 16/10).
+      // O sync de OPs (cron) continua atualizando o espelho.
+      if ((loja as { espelho_completo?: boolean | null }).espelho_completo !== false) await fetchOrdemProducao(loja, body.event.nCodOP)
     } else if (topic.startsWith('LocalEstoque.')) {
       await syncLocaisEstoque(loja)
     }
