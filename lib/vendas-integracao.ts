@@ -20,7 +20,7 @@ import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
-import { localDaVenda, origemDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
+import { localDaVenda, obsDaBaixa, origemDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
 
 export type LojaVenda = LojaOmie & LojaLocais
 
@@ -143,7 +143,8 @@ async function darSaida(
   quantidade: number,
   local: number,
   obs: string,
-  origem: 'PDV' | 'AJU'
+  origem: 'PDV' | 'AJU',
+  marca: string | null = null
 ): Promise<{ ok: boolean; status: string; erro?: string }> {
   const data = dataCriacaoBahia(hojeBahiaISO())!
   const { data: mov, error } = await supabase
@@ -158,6 +159,8 @@ async function darSaida(
       codigo_local_estoque: local,
       quan: -Math.abs(quantidade),
       obs,
+      // Obs "Cupom N" (venda com nota): a marca da venda fica aqui para o estorno achar a saída.
+      ...(marca ? { obs_item: marca } : {}),
       status: 'Processando',
     })
     .select('id, tentativas')
@@ -180,7 +183,7 @@ async function darSaida(
   return { ok: r.status === 'Concluido', status: r.status, erro: r.erro }
 }
 
-export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null; localEstoque?: number | null; comNota?: boolean | null }
+export type ItemVenda = { codigo: string; quantidade: number; destination?: 'kitchen' | 'bar' | null; setor?: string | null; localEstoque?: number | null; comNota?: boolean | null; cupom?: string | number | null }
 
 export type ResultadoItemVenda = {
   codigo: string
@@ -196,7 +199,7 @@ export async function processarItemVenda(
   supabase: SupabaseClient,
   loja: LojaVenda,
   item: ItemVenda,
-  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number }
+  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number; cupom?: string | number | null }
 ): Promise<ResultadoItemVenda> {
   const { data: produto } = await supabase
     .from('produtos')
@@ -243,7 +246,8 @@ export async function processarItemVenda(
 
   let baixa = 'sem local de estoque'
   if (local) {
-    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, `${ctx.obs} · saída automática da venda`, origemDaVenda(item.comNota))
+    const o = obsDaBaixa(ctx.obs, item.comNota, item.cupom ?? ctx.cupom)
+    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, o.obs, origemDaVenda(item.comNota), o.marca)
     baixa = s.status
   }
 

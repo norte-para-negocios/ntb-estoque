@@ -50,3 +50,15 @@ export function origemDaVenda(comNota: boolean | null | undefined): 'PDV' | 'AJU
 export function origemDoAjuste(motivo: string | null | undefined, origemGravada: string | null | undefined): 'PDV' | 'AJU' {
   return motivo === 'PDV' && origemGravada === 'PDV' ? 'PDV' : 'AJU'
 }
+
+/**
+ * Obs da saída de estoque de um item vendido (pedido do Ramon, 15/10/2026): venda COM nota (movimento "Integração
+ * com o PDV" no Omie) leva só "Cupom <número da NFC-e>", para achar a nota no painel de NFC-e. A marca da venda
+ * ("Venda ntb-vendas #<pedido>") continua guardada em `movimentos.obs_item` (`marca`): o estorno acha a saída por ela.
+ * Sem o número da nota (ainda não autorizada) ou venda sem nota: obs de sempre.
+ */
+export function obsDaBaixa(obsVenda: string, comNota: boolean | null | undefined, cupom: string | number | null | undefined): { obs: string; marca: string | null } {
+  const n = cupom == null ? '' : String(cupom).trim()
+  if (comNota === true && /^\d{1,9}$/.test(n) && Number(n) > 0) return { obs: `Cupom ${Number(n)}`, marca: obsVenda }
+  return { obs: `${obsVenda} · saída automática da venda`, marca: null }
+}

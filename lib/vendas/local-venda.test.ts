@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { localDaVenda, origemDoAjuste, origemDaVenda } from './local-venda.ts'
+import { localDaVenda, origemDoAjuste, origemDaVenda, obsDaBaixa } from './local-venda.ts'
 
 const loja = {
   local_estoque_cozinha_codigo: 5906914581,
@@ -49,4 +49,14 @@ test('origemDaVenda: com nota = PDV, sem nota ou sem informação = AJU', () => 
   assert.equal(origemDaVenda(true), 'PDV')
   assert.equal(origemDaVenda(false), 'AJU')
   assert.equal(origemDaVenda(undefined), 'AJU')
+})
+
+test('obs da baixa: venda com nota e número da NFC-e = só "Cupom N" (pedido do Ramon, 15/10); o resto não muda', () => {
+  const obs = 'Venda ntb-vendas #8dc2c82c-337f-4b13-bb89-c36b72543e82 [Produção]'
+  assert.deepEqual(obsDaBaixa(obs, true, '171456'), { obs: 'Cupom 171456', marca: obs })
+  assert.deepEqual(obsDaBaixa(obs, true, 171456), { obs: 'Cupom 171456', marca: obs })
+  assert.deepEqual(obsDaBaixa(obs, true, null), { obs: `${obs} · saída automática da venda`, marca: null })
+  assert.deepEqual(obsDaBaixa(obs, false, '171456'), { obs: `${obs} · saída automática da venda`, marca: null })
+  assert.deepEqual(obsDaBaixa(obs, true, 'abc'), { obs: `${obs} · saída automática da venda`, marca: null })
+  assert.deepEqual(obsDaBaixa(obs, true, '0'), { obs: `${obs} · saída automática da venda`, marca: null })
 })

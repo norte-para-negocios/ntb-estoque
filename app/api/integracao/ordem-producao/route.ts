@@ -30,6 +30,8 @@ interface ItemPedido {
   // A venda deste item gerou nota fiscal? Com nota a saída vai como movimento do PDV;
   // sem nota, baixa comum (regra do dono, 30/09).
   comNota?: boolean | null
+  // Número da NFC-e da venda (15/10/2026): com nota, a obs da saída no Omie vira só "Cupom <número>".
+  cupom?: string | number | null
 }
 
 interface ResultadoItem {
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Authorization: Bearer <chave> ausente' }, { status: 401 })
   }
 
-  const body = (await request.json().catch(() => null)) as { itens?: ItemPedido[]; pedidoRef?: string; ambiente?: 'homologacao' | 'producao' | null } | null
+  const body = (await request.json().catch(() => null)) as { itens?: ItemPedido[]; pedidoRef?: string; ambiente?: 'homologacao' | 'producao' | null; cupom?: string | number | null } | null
   if (!body?.itens?.length) {
     return NextResponse.json({ error: 'Informe itens: [{ codigo, quantidade }]' }, { status: 400 })
   }
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
         itensReais.push({ codigo: item?.codigo ?? '?', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Item inválido' })
         continue
       }
-      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i }))
+      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, cupom: body.cupom ?? null }))
     }
     return NextResponse.json({ lojaId: loja.id, resultados: itensReais })
   }
