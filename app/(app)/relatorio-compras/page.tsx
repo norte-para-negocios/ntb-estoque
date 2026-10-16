@@ -56,11 +56,11 @@ const arrOrNull = (a: string[]): string[] | null => (a.length ? a : null)
 
 // Dimensões de abertura do relatório (espelham as planilhas do Ramon).
 const DIMS = [
-  { value: 'familia', label: 'Família', visao: 'Famílias' },
-  { value: 'fornecedor', label: 'Fornecedor', visao: 'Fornecedores' },
-  { value: 'produto', label: 'Produto', visao: 'Produtos' },
-  { value: 'tipo', label: 'Tipo', visao: 'Tipos' },
-  { value: 'cfop', label: 'CFOP', visao: 'CFOP' },
+  { value: 'familia', label: 'Família', visao: 'Famílias', num: 'numa família', nenhum: 'Nenhuma família' },
+  { value: 'fornecedor', label: 'Fornecedor', visao: 'Fornecedores', num: 'num fornecedor', nenhum: 'Nenhum fornecedor' },
+  { value: 'produto', label: 'Produto', visao: 'Produtos', num: 'num produto', nenhum: 'Nenhum produto' },
+  { value: 'tipo', label: 'Tipo', visao: 'Tipos', num: 'num tipo', nenhum: 'Nenhum tipo' },
+  { value: 'cfop', label: 'CFOP', visao: 'CFOP', num: 'num CFOP', nenhum: 'Nenhum CFOP' },
 ] as const
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
@@ -342,7 +342,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const maiorForn = rankForn[0] ?? null
   const ticket = nNotas > 0 ? total / nNotas : null
   const legenda = (l: LinhaRanking) => `${fmtPct(l.pct)} do total`
-  const rotuloBusca = (DIMS.find((d) => d.value === dimExibida)?.label ?? 'item').toLowerCase()
+  const dimInfo = DIMS.find((d) => d.value === dimExibida) ?? DIMS[0]
+  const rotuloBusca = dimInfo.value === 'cfop' ? 'CFOP' : dimInfo.label.toLowerCase()
 
   const formBusca = (
     <form action="/relatorio-compras" className="flex w-full flex-wrap items-center gap-2">
@@ -478,7 +479,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
         <div className="space-y-3">
           {formBusca}
           {rankVis.length === 0 ? (
-            <EmptyState icon={ShoppingCart} title="Nada encontrado" hint={`Nenhum(a) ${rotuloBusca} bate com a busca.`} />
+            <EmptyState icon={ShoppingCart} title="Nada encontrado" hint={`${dimInfo.nenhum} bate com a busca.`} />
           ) : (
             <RankingBarras linhas={rankPagina} ordem="valor" legenda={legenda} hrefDe={hrefDrill} />
           )}
@@ -486,7 +487,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
             <p className="px-1 text-[12px] text-text-muted">Mostrando {LIMITE_LINHAS} de {rankVis.length.toLocaleString('pt-BR')}. Use &quot;Baixar tudo&quot; para o completo.</p>
           )}
           <p className="px-1 text-[12px] text-text-muted">
-            {dimExibida === 'produto' ? 'Toque num produto para ver os itens comprados.' : `Toque num(a) ${rotuloBusca} para ver os produtos.`}
+            {dimExibida === 'produto' ? 'Toque num produto para ver os itens comprados.' : `Toque ${dimInfo.num} para ver os produtos.`}
           </p>
         </div>
       )}
