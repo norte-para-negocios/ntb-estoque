@@ -207,3 +207,9 @@ test('I2: zerar só lança se o saldo do local ainda estiver negativo', () => {
   assert.match(recusaZerar(7) ?? '', /não está mais negativo/)
   assert.match(recusaZerar(0) ?? '', /não está mais negativo/)
 })
+
+test('refazer inventário: a loja 4 libera só quando a ação permite (pedido do dono, 15/10)', () => {
+  assert.equal(bloqueioDeEscrita({ id: 4, modo: 'omie' }, { permitirLoja4: true }), null)
+  assert.match(bloqueioDeEscrita({ id: 4, modo: 'omie' }) ?? '', /loja 4/)
+  assert.match(bloqueioDeEscrita({ id: 4, modo: 'proprio' }, { permitirLoja4: true }) ?? '', /estoque Omie/)
+})

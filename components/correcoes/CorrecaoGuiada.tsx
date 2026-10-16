@@ -12,7 +12,8 @@ import {
 import type { AjusteCusto, PainelDados } from '@/lib/correcoes/painel-dados'
 import { ajusteOmie, corrigirCustoAjuste } from '@/lib/actions/estoque-omie'
 import { acaoOPLote } from '@/lib/actions/ops-lote'
-import { corrigirContagemCentral, lancarOPCorrecao, marcarEstadoProblema, marcarNaoControla } from '@/lib/actions/central'
+import { lancarOPCorrecao, marcarEstadoProblema, marcarNaoControla, previaRefazerInventario, refazerInventario } from '@/lib/actions/central'
+import type { PedidoRefazer, PreviaRefazer } from '@/lib/correcoes/refazer-inventario'
 import { ehLimiteOmie } from '@/lib/estoque/escrita-omie-puro'
 
 export type Feito = { chave: string; estado: EstadoProblema; acao: string | null; motivo?: string | null; mensagem?: string | null; ate?: string | null }
@@ -23,8 +24,10 @@ type Props = {
   onFeito: (f: Feito, toast: string, desfazer?: () => Promise<void>) => void
 }
 
-const OMIE: AcaoId[] = ['zerar', 'contagem', 'op_preparo', 'op_prato', 'corrigir_custo', 'concluir', 'mudar_data', 'excluir', 'corrigir_contagem', 'criar_ops_cupom']
-const PRECISA_CENTRAL: AcaoId[] = ['op_preparo', 'op_prato', 'criar_ops_cupom']
+const OMIE: AcaoId[] = ['zerar', 'contagem', 'op_preparo', 'op_prato', 'corrigir_custo', 'concluir', 'mudar_data', 'excluir', 'corrigir_contagem', 'refazer_inventario', 'criar_ops_cupom']
+const PRECISA_CENTRAL: AcaoId[] = ['op_preparo', 'op_prato', 'criar_ops_cupom', 'corrigir_contagem', 'refazer_inventario']
+/** Refazer inventário: o passo a passo vem do servidor (kardex do dia lido no Omie) antes de confirmar. */
+const REFAZER: AcaoId[] = ['corrigir_contagem', 'refazer_inventario']
 const STATUS: Record<EstadoProblema, [string, string]> = {
   aberto: ['var(--err)', 'Aberto'], resolvido: ['var(--brand)', 'Resolvido'], ramon: ['var(--warn)', 'Esperando Ramon'], ignorado: ['var(--text-muted)', 'Ignorado'],
 }
@@ -116,7 +119,9 @@ function Opcoes(props: Props) {
   const [log, setLog] = React.useState<string[]>([])
   const [ajusteSel, setAjusteSel] = React.useState<number | null>(null)
   const [mesFechado, setMesFechado] = React.useState(false)
-  React.useEffect(() => { setAcao(defs[0]?.acao ?? null); setEtapa('escolher'); setErro(null); setLog([]); setMesFechado(false) }, [p.chave, defs])
+  const [refazer, setRefazer] = React.useState<PreviaRefazer | null>(null)
+  const [buscando, setBuscando] = React.useState(false)
+  React.useEffect(() => { setAcao(defs[0]?.acao ?? null); setEtapa('escolher'); setErro(null); setLog([]); setMesFechado(false); setRefazer(null) }, [p.chave, defs])
 
   const def = defs.find((d) => d.acao === acao) ?? defs[0]
   const ajustes: AjusteCusto[] = painel?.ajustesCusto ?? []
@@ -125,6 +130,26 @@ function Opcoes(props: Props) {
   let pv = def ? previaAcao(def.acao, p, v, { nome: props.nome, cmc: props.cmc, hoje }) : { vazio: 'Nada a fazer aqui.' }
   if (def?.acao === 'corrigir_custo' && !('vazio' in pv) && ajusteSel == null) pv = { vazio: ajustes.length ? 'Escolha o ajuste que trouxe o custo errado.' : 'Nenhum ajuste de entrada dos últimos 90 dias para corrigir: o custo veio de OP ou nota. Corrija a origem (OP/nota) ou pergunte ao Ramon.' }
   if (def && (def.acao === 'zerar' || def.acao === 'contagem' || def.acao === 'corrigir_contagem') && localDaAcao(p).local == null) pv = { vazio: 'Não sei em qual local ajustar: abra a página do produto.' }
+
+  function pedidoRefazer(): PedidoRefazer | null {
+    if (def?.acao === 'corrigir_contagem') return p.d.contagem?.idAjuste != null ? { modo: 'contagem', idAjuste: p.d.contagem.idAjuste, contagemCerta: lerNumeroBR(v.para) } : null
+    if (def?.acao === 'refazer_inventario') return p.d.inventario ? { modo: 'fim_do_dia', idAjuste: p.d.inventario.idAjuste } : null
+    return null
+  }
+  async function verPassoAPasso() {
+    const ped = pedidoRefazer()
+    if (!ped) { setErro('Não achei o lançamento deste inventário no banco: corrija pela tela de Ajustes.'); return }
+    setBuscando(true); setErro(null); setLog([])
+    try {
+      const r = await previaRefazerInventario(ped)
+      if ('error' in r) { setErro(r.error); return }
+      setRefazer(r); setEtapa('confirmar')
+    } catch (x) {
+      setErro(x instanceof Error ? x.message : String(x))
+    } finally {
+      setBuscando(false)
+    }
+  }
 
   const set = (campo: string, valor: string) => setVals((x) => ({ ...x, [def!.acao]: { ...(x[def!.acao] ?? {}), [campo]: valor } }))
 
@@ -153,10 +178,16 @@ function Opcoes(props: Props) {
           if (r.alerta) return falha(r.aviso ?? '')
           break
         }
-        case 'corrigir_contagem': {
-          if (d.contagem?.movId == null) return falha('Não achei o lançamento desta contagem: corrija pela tela de Ajustes.')
-          const r = await corrigirContagemCentral({ movimentoId: d.contagem.movId, para: lerNumeroBR(v.para)! })
-          if ('error' in r) return falha(r.error)
+        case 'corrigir_contagem':
+        case 'refazer_inventario': {
+          const ped = pedidoRefazer()
+          if (!ped || !refazer) return falha('Veja o passo a passo antes de confirmar.')
+          const r = await refazerInventario({ ...ped, assinatura: refazer.assinatura })
+          if ('error' in r) {
+            if (r.previa) { setRefazer(r.previa); setErro(r.error); setEtapa('confirmar'); return }
+            setRefazer(null)
+            return falha(r.error)
+          }
           setLog([r.aviso])
           break
         }
@@ -239,15 +270,28 @@ function Opcoes(props: Props) {
   if (etapa !== 'escolher' && !('vazio' in pv)) {
     return (
       <div className={`${s.confirma} ${s.entra}`}>
-        <p><b>Confirme:</b> {pv.omie}</p>
-        {pv.aviso && <p style={{ color: '#ffb340' }}>{pv.aviso}</p>}
+        {refazer && REFAZER.includes(def.acao) ? (
+          <>
+            <p><b>{refazer.continuar ? 'Continuar o refazer que parou' : 'Passo a passo'}</b> · inventário de {refazer.dataBR} (lido agora no Omie)</p>
+            {refazer.continuar && <p style={{ color: '#ffb340' }}>Parou antes: {refazer.continuar.erro ?? 'sem resposta'}. {refazer.continuar.feitos} {refazer.continuar.feitos === 1 ? 'passo já feito' : 'passos já feitos'}; confirmar continua do próximo, sem repetir.</p>}
+            <ol style={{ margin: '4px 0 8px 18px', padding: 0, display: 'grid', gap: 4, fontSize: 14 }}>{refazer.passos.map((x, i) => <li key={i}>{x}</li>)}</ol>
+            {refazer.avisos.map((x, i) => <p key={i} style={{ color: '#ffb340' }}>{x}</p>)}
+            <p className={s.muted} style={{ fontSize: 13 }}>Uma escrita por vez no Omie; se alguma falhar, para ali e nada mais é escrito.</p>
+          </>
+        ) : (
+          <>
+            <p><b>Confirme:</b> {pv.omie}</p>
+            {pv.aviso && <p style={{ color: '#ffb340' }}>{pv.aviso}</p>}
+          </>
+        )}
+        {erro && <div className={s.alerta}><Ic n="alert" sm /><span>{erro}</span></div>}
         {mesFechado && (
           <label style={{ display: 'flex', gap: 8, fontSize: 13 }}><input type="checkbox" checked={mesFechado} onChange={(x) => setMesFechado(x.target.checked)} /> Sei que o mês já foi enviado à contabilidade e quero {def.acao === 'corrigir_custo' ? 'corrigir' : 'lançar'} mesmo assim.</label>
         )}
         {log.length > 0 && <div className={s.resultado}>{log.map((l, i) => <span key={i}>{l}</span>)}</div>}
         <div className={s.acoesFim}>
-          <button className={`${s.btn} ${s.btnS}`} disabled={etapa === 'executando'} onClick={() => setEtapa('escolher')}>Voltar</button>
-          <button className={`${s.btn} ${s.btnP}`} disabled={etapa === 'executando'} onClick={executar}><Ic n="check" sm />{etapa === 'executando' ? 'Fazendo…' : `Sim, ${def.botao.toLowerCase()}`}</button>
+          <button className={`${s.btn} ${s.btnS}`} disabled={etapa === 'executando'} onClick={() => { setEtapa('escolher'); setErro(null) }}>Voltar</button>
+          <button className={`${s.btn} ${s.btnP}`} disabled={etapa === 'executando'} onClick={executar}><Ic n="check" sm />{etapa === 'executando' ? 'Fazendo…' : REFAZER.includes(def.acao) ? (refazer?.continuar ? 'Sim, continuar' : 'Sim, refazer o inventário') : `Sim, ${def.botao.toLowerCase()}`}</button>
         </div>
       </div>
     )
@@ -314,7 +358,7 @@ function Opcoes(props: Props) {
       {log.length > 0 && <div className={s.resultado}>{log.map((l, i) => <span key={i}>{l}</span>)}</div>}
       <div className={s.acoesFim}>
         <div className={s.esq}><button className={`${s.btn} ${s.btnG}`} onClick={() => setIgnorando((x) => !x)}><Ic n="eyeoff" sm />Ignorar</button></div>
-        <button className={`${s.btn} ${s.btnP}`} disabled={'vazio' in pv || !!bloqueada(def)} onClick={() => setEtapa('confirmar')}>{def.botao}</button>
+        <button className={`${s.btn} ${s.btnP}`} disabled={'vazio' in pv || !!bloqueada(def) || buscando} onClick={() => (REFAZER.includes(def.acao) ? verPassoAPasso() : setEtapa('confirmar'))}>{buscando ? 'Lendo o Omie…' : def.botao}</button>
       </div>
       {ignorando && (
         <div className={`${s.ignorar} ${s.entra}`}>Por quê?

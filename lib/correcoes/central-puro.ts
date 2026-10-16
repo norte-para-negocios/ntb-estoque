@@ -69,11 +69,11 @@ export const normalizar = (s: string | null | undefined) =>
 // Tipos
 // ================================================================================================================
 
-export type Grupo = 'pa' | 'pi' | 'mp' | 'custo' | 'op' | 'contagem' | 'semcusto' | 'cupom' | 'taxa'
+export type Grupo = 'pa' | 'pi' | 'mp' | 'custo' | 'op' | 'contagem' | 'inventario' | 'semcusto' | 'cupom' | 'taxa'
 export type EstadoProblema = 'aberto' | 'resolvido' | 'ramon' | 'ignorado'
 export type AcaoId =
   | 'zerar' | 'contagem' | 'op_preparo' | 'op_prato' | 'ramon' | 'corrigir_custo' | 'concluir' | 'mudar_data' | 'excluir'
-  | 'corrigir_contagem' | 'nao_controla' | 'criar_ops_cupom'
+  | 'corrigir_contagem' | 'refazer_inventario' | 'nao_controla' | 'criar_ops_cupom'
 export type Alvo = { tipo: 'produto' | 'op' | 'cupom' | 'nota' | 'ajuste'; id: number }
 export type Dependencia = { texto: string; chave?: string; alvo?: Alvo }
 export type ProdutoC = {
@@ -89,7 +89,9 @@ export type DadosProblema = {
   produto?: number; unidade?: string; tipo?: string | null; saldo?: number; cmc?: number; ref?: number; fichaCusto?: number
   locaisNeg?: { local: number; nome: string; saldo: number }[]; local?: number; sugerida?: number; op?: OPAbertaC
   sentido?: 'sobrando' | 'faltando' | 'velha'; saldoLocal?: number
-  contagem?: { de: number; para: number; data: string; sugerida: number | null; movId?: number }; pratos?: number[]; cupom?: CupomSemOP
+  contagem?: { de: number; para: number; data: string; sugerida: number | null; movId?: number; idAjuste?: number }; pratos?: number[]; cupom?: CupomSemOP
+  /** Inventário que não ficou no fim do dia (vendas do mesmo dia registradas depois dele). */
+  inventario?: { idAjuste: number; data: string; contagem: number | null; n: number; soma: number }
   desde?: string | null; notaPendente?: { id: number; numero: string }; cuponsSemOP?: number
 }
 export type Problema = {
@@ -109,13 +111,19 @@ export type EntradaCentral = {
   semCusto: { insumo: number; local: number; pratos: number[] }[]
   insumosInativos: Set<number>
   opsAbertas: OPAbertaC[]
-  contagens: { produto: number; local: number; data: string; de: number; para: number; movId?: number }[]
+  contagens: { produto: number; local: number; data: string; de: number; para: number; movId?: number; idAjuste?: number }[]
+  /** Inventários seguidos, no mesmo dia, por vendas/produção que o Omie registrou depois (central_inventarios_fora_do_fim). */
+  inventariosForaDoFim?: InventarioForaDoFim[]
+  /** Ajustes de inventário já refeitos (ou com refazer em andamento): somem da Central. */
+  inventariosRefeitos?: Set<number>
   /** Ids (movimentos SLD) de contagens já corrigidas pela Central: não voltam (corrigir de novo duplicaria). */
   contagensCorrigidas?: Set<number>
   cuponsSemOP: CupomSemOP[]
   notasPendentes: Map<number, { id: number; numero: string }>
   naoControla: Set<number>
 }
+
+export type InventarioForaDoFim = { idAjuste: number; produto: number; local: number; dia: string; contagem: number | null; n: number; soma: number }
 
 export const GRUPOS: Record<Grupo, { nome: string; sub: string }> = {
   pa: { nome: 'Pratos negativos (PA)', sub: 'Vendidos com saldo abaixo de zero' },
@@ -124,6 +132,7 @@ export const GRUPOS: Record<Grupo, { nome: string; sub: string }> = {
   custo: { nome: 'Custo fora do normal', sub: 'Custo médio que não bate com a ficha ou com o anterior' },
   op: { nome: 'OPs abertas sobrando ou faltando', sub: 'Ordens de produção que ficaram abertas no Omie' },
   contagem: { nome: 'Contagens estranhas', sub: 'Contagem que pulou muito de uma vez' },
+  inventario: { nome: 'Inventário fora do fim do dia', sub: 'Vendas do dia entraram no Omie depois do inventário' },
   semcusto: { nome: 'Insumo sem custo ou inativo na ficha', sub: 'Pratos que usam insumo sem custo no local ou inativo' },
   cupom: { nome: 'Cupons sem OP', sub: 'Vendas do caixa de pratos com ficha que não geraram OP' },
   taxa: { nome: 'Taxas que não são estoque', sub: 'Serviços que baixam saldo à toa' },
@@ -371,6 +380,7 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
   const ultimaContagem = new Map<string, EntradaCentral['contagens'][number]>()
   for (const c of e.contagens) {
     if (c.movId != null && e.contagensCorrigidas?.has(c.movId)) continue
+    if (c.idAjuste != null && e.inventariosRefeitos?.has(c.idAjuste)) continue
     const k = `${c.produto}:${c.local}`
     const a = ultimaContagem.get(k)
     if (!a || c.data >= a.data) ultimaContagem.set(k, c)
@@ -386,7 +396,22 @@ export function classificarProblemas(e: EntradaCentral): Problema[] {
       causa: causaContagem({ de: fmtQtd(c.de, un), para: fmtQtd(c.para, un), data: fmtData(c.data), sugerida: sug != null ? fmtQtd(sug, un) : null, subiu: c.para > c.de }),
       valor: Math.abs(c.para - c.de) * ref(c.produto), valorRotulo: 'de saldo em dúvida', lado: p ? fmtQtd(p.saldo, un) : '', ladoErro: !!p && p.saldo < 0,
       acoes: ['corrigir_contagem', 'contagem', 'ramon'], assinatura: `${c.data}:${c.para}`, depende: [],
-      d: { produto: c.produto, unidade: un, tipo: p?.tipo ?? null, saldo: p?.saldo, cmc: p?.cmc, ref: ref(c.produto), local: c.local, contagem: { de: c.de, para: c.para, data: c.data, sugerida: sug, movId: c.movId } },
+      d: { produto: c.produto, unidade: un, tipo: p?.tipo ?? null, saldo: p?.saldo, cmc: p?.cmc, ref: ref(c.produto), local: c.local, contagem: { de: c.de, para: c.para, data: c.data, sugerida: sug, movId: c.movId, idAjuste: c.idAjuste } },
+    }, p?.cod ?? '')
+  }
+
+  // Inventário que não ficou no fim do dia (regra do dono: é feito com a casa fechada, fica sempre por último).
+  for (const v of e.inventariosForaDoFim ?? []) {
+    if (ignora(v.produto) || e.inventariosRefeitos?.has(v.idAjuste)) continue
+    const p = prod.get(v.produto)
+    const un = p?.unidade ?? 'UN'
+    push({
+      chave: `inventario:ajuste:${v.idAjuste}`, grupo: 'inventario', alvo: { tipo: 'produto', id: v.produto }, titulo: nome(v.produto),
+      tag: TAG_TIPO[p?.tipo ?? ''] ?? 'Outro',
+      causa: `Inventário de ${fmtData(v.dia)} em ${nomeLocal(v.local)} entrou antes de ${v.n === 1 ? '1 venda' : `${v.n} vendas`} do mesmo dia (${fmtQtdSinal(v.soma, un)}). Ele é feito com a casa fechada: deve ser o último do dia.`,
+      valor: Math.abs(v.soma) * ref(v.produto), valorRotulo: 'de saldo a mais/menos', lado: p ? fmtQtd(p.saldo, un) : '', ladoErro: !!p && p.saldo < 0,
+      acoes: ['refazer_inventario', 'ramon'], assinatura: `${v.dia}:${v.n}:${v.soma}`, depende: [],
+      d: { produto: v.produto, unidade: un, tipo: p?.tipo ?? null, saldo: p?.saldo, cmc: p?.cmc, ref: ref(v.produto), local: v.local, inventario: { idAjuste: v.idAjuste, data: v.dia, contagem: v.contagem, n: v.n, soma: v.soma } },
     }, p?.cod ?? '')
   }
 
@@ -558,7 +583,8 @@ export function opcoesDoProblema(p: Problema, hoje: string): OpcaoDef[] {
     concluir: () => ({ acao: 'concluir', titulo: 'Concluir a OP', descricao: 'O produto entra no saldo e os insumos saem.', botao: 'Concluir OP', feito: 'OP concluída', campos: [{ id: 'data', rotulo: 'Data da conclusão', tipo: 'data', inicial: hoje }] }),
     mudar_data: () => ({ acao: 'mudar_data', titulo: 'Mudar a data prevista', descricao: 'Para concluir na data certa depois. O saldo não muda.', botao: 'Mudar data', feito: 'Data da OP alterada', campos: [{ id: 'data', rotulo: 'Nova data', tipo: 'data', inicial: hoje }] }),
     excluir: () => ({ acao: 'excluir', titulo: 'Excluir a OP', descricao: p.d.sentido === 'sobrando' ? 'O saldo já está positivo. Excluir evita entrada em dobro.' : 'Use se a produção nunca aconteceu.', botao: 'Excluir OP', feito: 'OP excluída', campos: [] }),
-    corrigir_contagem: () => ({ acao: 'corrigir_contagem', titulo: 'Corrigir a contagem', descricao: 'Lança a diferença entre a contagem digitada e a certa. O saldo acompanha.', botao: 'Corrigir contagem', feito: 'Contagem corrigida', campos: [{ id: 'para', rotulo: 'Contagem certa', tipo: 'numero', sufixo: un, inicial: numBR(p.d.contagem?.sugerida) }] }),
+    corrigir_contagem: () => ({ acao: 'corrigir_contagem', titulo: `Refazer o inventário de ${fmtData(p.d.contagem?.data)}`, descricao: 'Exclui o inventário lançado errado (e a correção lançada depois, se houver) e lança de novo na mesma data, com a contagem certa. Mostra o passo a passo antes de confirmar.', botao: 'Ver o passo a passo', feito: 'Inventário refeito', campos: [{ id: 'para', rotulo: 'Contagem certa', tipo: 'numero', sufixo: un, inicial: numBR(p.d.contagem?.sugerida) }] }),
+    refazer_inventario: () => ({ acao: 'refazer_inventario', titulo: `Refazer o inventário de ${fmtData(p.d.inventario?.data)} no fim do dia`, descricao: 'As vendas do dia passam a contar antes do inventário e o saldo do fim do dia fica igual à contagem. Mostra o passo a passo antes de confirmar.', botao: 'Ver o passo a passo', feito: 'Inventário refeito no fim do dia', campos: [] }),
     nao_controla: () => ({ acao: 'nao_controla', titulo: 'Marcar como "não controla estoque"', descricao: 'É serviço, não mercadoria. Sai da Central e das próximas leituras daqui (o cadastro no Omie não muda).', botao: 'Marcar', feito: 'Marcado como "não controla estoque"', campos: [] }),
     criar_ops_cupom: () => ({ acao: 'criar_ops_cupom', titulo: 'Criar as OPs que faltam', descricao: 'Uma OP por prato, concluída com a data do cupom. Confira antes se a integração do PDV não reprocessou.', botao: 'Criar OPs', feito: 'OPs do cupom criadas', campos: [] }),
     ramon: () => {
@@ -642,10 +668,17 @@ export function previaAcao(acao: AcaoId, p: Problema, v: Record<string, string>,
       if (!c || para == null || para < 0) return { vazio: 'Digite a contagem certa.' }
       const dif = r(para - c.para)
       if (dif === 0) return { vazio: 'É a mesma contagem: nada a corrigir.' }
-      const s0 = p.d.saldo ?? 0
       return {
-        linhas: [{ rot: 'Contagem', de: fmtQtd(c.para, un), para: fmtQtd(para, un) }, { rot: 'Diferença', de: '', para: fmtQtdSinal(dif, un) }, { rot: 'Saldo', de: fmtQtd(s0, un), para: fmtQtd(r(s0 + dif), un) }],
-        omie: `Lança no Omie um ajuste de ${dif > 0 ? 'entrada' : 'saída'} de ${fmtQtd(Math.abs(dif), un)} para corrigir a contagem.`,
+        linhas: [{ rot: `Contagem de ${fmtData(c.data)}`, de: fmtQtd(c.para, un), para: fmtQtd(para, un) }, { rot: 'Diferença', de: '', para: fmtQtdSinal(dif, un) }],
+        omie: `Refaz no Omie o inventário de ${fmtDataLonga(c.data)}: exclui o inventário errado e lança o certo na mesma data. O passo a passo (lido agora no kardex do Omie) aparece antes de confirmar.`,
+      }
+    }
+    case 'refazer_inventario': {
+      const v = p.d.inventario
+      if (!v) return { vazio: 'Inventário não encontrado.' }
+      return {
+        linhas: [{ rot: `Inventário de ${fmtData(v.data)}`, de: `antes de ${v.n === 1 ? '1 venda' : `${v.n} vendas`}`, para: 'último do dia' }, { rot: 'Fim do dia', de: '', para: v.contagem != null ? `contagem ${fmtQtd(v.contagem, un)}` : 'igual à contagem' }],
+        omie: `Refaz no Omie o inventário de ${fmtDataLonga(v.data)}: exclui o lançamento e lança de novo na mesma data, depois das vendas. O passo a passo (lido agora no kardex do Omie) aparece antes de confirmar.`,
       }
     }
     case 'nao_controla':

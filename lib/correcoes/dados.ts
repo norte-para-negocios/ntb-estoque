@@ -40,6 +40,7 @@ export type DadosCentral = {
 const DIAS_CUPOM = 14
 const DIAS_PDV = 60
 const DIAS_CONTAGEM = 120
+const DIAS_INVENTARIO = 35
 const DIAS_CUSTO = 14
 const DIAS_NEGATIVO = 60
 const ATRASO_PDV_MS = 2 * 3_600_000
@@ -134,22 +135,25 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
   const supabase = await createClient()
   const t1 = performance.now()
   type FRow = { codigo_produto: number; codigo_produto_insumo: number; quantidade: number | null; percentual_perda: number | null; codigo_local_estoque: number | null }
-  type SRow = { id: number; id_prod: number; codigo_local_estoque: number; data: string; quan: number }
+  type SRow = { id: number; id_prod: number; codigo_local_estoque: number; data: string; quan: number; id_ajuste: number | null }
+  type InvRow = { id_ajuste: number; produto: number; local: number; dia: string; contagem: number | null; n: number; soma: number }
   type NFRow = { id: number; c_numero_nfe: string | null }
   type CupRow = { n_id_cupom: number; num: string | null; data: string; hora: string | null; cancelado: boolean }
   let freioOk = true
   const corte = instanteBahia(Date.now() - ATRASO_PDV_MS)
-  const [{ visao, posicoes }, opsRes, cobertura, fichas, sld, inativos, notas, pdvRes, cupons, itensCup] = await Promise.all([
+  const [{ visao, posicoes }, opsRes, cobertura, fichas, sld, inativos, notas, pdvRes, cupons, itensCup, invRes, refeitosRes] = await Promise.all([
     carregarEstoqueOmieComPosicoes(lojaId),
     carregarOPsAbertas(lojaId, 'omie'),
     historicoKardexDesde(lojaId),
     tudo<FRow>((f, t) => supabase.from('estrutura_produto_cache').select('id, codigo_produto, codigo_produto_insumo, quantidade, percentual_perda, codigo_local_estoque').eq('loja_id', lojaId).order('id').range(f, t) as unknown as PromiseLike<Res<FRow>>, erro('as fichas')),
-    tudo<SRow>((f, t) => supabase.from('movimentos').select('id, id_prod, codigo_local_estoque, data, quan').eq('loja_id', lojaId).eq('tipo', 'SLD').gte('data', `${addDias(hoje, -DIAS_CONTAGEM)}T00:00:00Z`).order('id').range(f, t), erro('as contagens')),
+    tudo<SRow>((f, t) => supabase.from('movimentos').select('id, id_prod, codigo_local_estoque, data, quan, id_ajuste').eq('loja_id', lojaId).eq('tipo', 'SLD').gte('data', `${addDias(hoje, -DIAS_CONTAGEM)}T00:00:00Z`).order('id').range(f, t), erro('as contagens')),
     tudo<{ codigo_produto: number }>((f, t) => supabase.from('produtos').select('id, codigo_produto').eq('loja_id', lojaId).eq('inativo', true).order('id').range(f, t), erro('os produtos inativos')),
     supabase.from('notas_fiscais').select('id, c_numero_nfe').eq('loja_id', lojaId).eq('c_etapa', '40').is('deleted_at', null).gte('d_emissao_nfe', addDias(hoje, -30)).order('id').limit(200),
     supabase.rpc('central_ops_pdv', { p_loja_id: lojaId, p_ini_cobertura: addDias(hoje, -DIAS_CUPOM), p_ini_produtos: addDias(hoje, -DIAS_PDV) }),
     buscarFatCupons({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
     buscarFatCupomItens({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
+    supabase.rpc('central_inventarios_fora_do_fim', { p_loja_id: lojaId, p_ini: addDias(hoje, -DIAS_INVENTARIO) }),
+    supabase.from('estoque_refazer_inventario').select('id_ajuste_inventario').eq('loja_id', lojaId).in('status', ['andamento', 'parado', 'concluido']).limit(5000),
   ])
   tempos.onda1 = Math.round(performance.now() - t1)
   const e = vazia(hoje, 'omie')
@@ -190,7 +194,19 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
     const k = `${Number(x.id_prod)}:${Number(x.codigo_local_estoque)}:${diaDoMovimento(x.data)}:${Number(x.quan)}`
     idSld.set(k, Math.max(idSld.get(k) ?? 0, Number(x.id)))
   }
-  e.contagens = suspeitas.filter((o) => prod.has(o.produto)).map((o) => ({ ...o, movId: idSld.get(`${o.produto}:${o.local}:${o.data}:${o.para}`) }))
+  const ajusteSld = new Map(sld.filter((x) => x.id_ajuste != null).map((x) => [Number(x.id), Number(x.id_ajuste)]))
+  e.contagens = suspeitas.filter((o) => prod.has(o.produto)).map((o) => {
+    const movId = idSld.get(`${o.produto}:${o.local}:${o.data}:${o.para}`)
+    return { ...o, movId, idAjuste: movId != null ? ajusteSld.get(movId) : undefined }
+  })
+
+  // Inventário que não ficou no fim do dia (central_inventarios_fora_do_fim, migration 172) e os já refeitos.
+  if (invRes.error) avisos.push(/central_inventarios_fora_do_fim|does not exist|PGRST202/i.test(invRes.error.message) ? 'Inventário fora do fim do dia: a função ainda não existe neste banco (migration 172).' : `Não foi possível ler os inventários do dia: ${invRes.error.message}`)
+  e.inventariosForaDoFim = ((invRes.data ?? []) as InvRow[]).filter((v) => prod.has(Number(v.produto))).map((v) => ({
+    idAjuste: Number(v.id_ajuste), produto: Number(v.produto), local: Number(v.local), dia: String(v.dia).slice(0, 10),
+    contagem: v.contagem == null ? null : Number(v.contagem), n: Number(v.n), soma: Number(v.soma),
+  }))
+  e.inventariosRefeitos = new Set(((refeitosRes.data ?? []) as { id_ajuste_inventario: number }[]).map((r) => Number(r.id_ajuste_inventario)))
 
   // Notas esperando entrada (c_etapa 40) → produto.
   const nf = (notas.data ?? []) as NFRow[]

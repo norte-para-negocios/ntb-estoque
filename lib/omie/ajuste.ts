@@ -78,11 +78,11 @@ export async function listarAjustesDoDia(loja: LojaOmie, dataBR: string, maxPagi
 export async function incluirAjusteComCusto(loja: LojaOmie, param: {
   codigo_local_estoque: number; id_prod: number; cod_int_ajuste: string; data: string; quan: number; valor: number
   obs: string; origem: string; tipo: 'ENT' | 'SAI'; motivo: string
-}): Promise<{ codigo_status?: string; descricao_status?: string; id_movest?: number; id_ajuste?: number }> {
+}, o: { model?: string; semRepetir?: boolean } = {}): Promise<{ codigo_status?: string; descricao_status?: string; id_movest?: number; id_ajuste?: number }> {
   const res = await omieRequest<{ codigo_status?: string; descricao_status?: string; id_movest?: number; id_ajuste?: number }>({
     loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test,
-    endpoint: 'v1/estoque/ajuste', call: 'IncluirAjusteEstoque', data: param,
+    endpoint: 'v1/estoque/ajuste', call: 'IncluirAjusteEstoque', data: param, semRepetir: o.semRepetir,
   })
-  await logIntegrationAttempt({ loja_id: loja.id, model: 'CorrecaoCusto', request: JSON.stringify(param), response: JSON.stringify(res), code: res.codigo_status ?? '200' })
+  await logIntegrationAttempt({ loja_id: loja.id, model: o.model ?? 'CorrecaoCusto', request: JSON.stringify(param), response: JSON.stringify(res), code: res.codigo_status ?? '200' })
   return res
 }

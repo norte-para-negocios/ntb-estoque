@@ -6,9 +6,12 @@ export const LOJA_BLOQUEADA = 4
 
 const arred = (n: number, casas = 6) => Math.round(n * 10 ** casas) / 10 ** casas
 
-/** Motivo para recusar a escrita pela tela nesta loja, ou null quando pode. */
-export function bloqueioDeEscrita(l: { id: number; modo: string }): string | null {
-  if (l.id === LOJA_BLOQUEADA) return 'A loja 4 (Sertão) está bloqueada para escrita no Omie pela tela nesta rodada. Use os fluxos de sempre.'
+/**
+ * Motivo para recusar a escrita pela tela nesta loja, ou null quando pode. `permitirLoja4`: só o "refazer inventário"
+ * da Central (pedido do dono em 15/10/2026, executado pelo próprio Ramon no botão).
+ */
+export function bloqueioDeEscrita(l: { id: number; modo: string }, o?: { permitirLoja4?: boolean }): string | null {
+  if (l.id === LOJA_BLOQUEADA && !o?.permitirLoja4) return 'A loja 4 (Sertão) está bloqueada para escrita no Omie pela tela nesta rodada. Use os fluxos de sempre.'
   if (l.modo !== 'omie') return 'Esta tela só escreve no Omie em loja de estoque Omie.'
   return null
 }
