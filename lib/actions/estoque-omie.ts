@@ -15,6 +15,7 @@ import {
 } from '@/lib/estoque/escrita-omie-puro'
 import { diaDoMovimento } from '@/lib/estoque/quem-mexeu-puro'
 import { excluirAjusteDetalhado, incluirAjusteComCusto, listarAjustesDoDia } from '@/lib/omie/ajuste'
+import { motivoOmieDoAjuste } from '@/lib/omie/motivo-ajuste'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { formatCustoUnit } from '@/lib/num-br'
 import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
@@ -132,7 +133,6 @@ export async function transferirOmie(dados: { codigoProduto: number; de: number;
 // cod_int_ajuste CUSTO-<id> no Omie antes de incluir de novo, para nunca duplicar).
 
 const PERM_CUSTO = 'Estoque - Corrigir custo'
-const MOTIVOS_OMIE = new Set(['INV', 'OPS', 'PER', 'PDV'])
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const msgDe = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -213,7 +213,7 @@ async function relancar(loja: LojaEscrita, c: CorrecaoRow, procurarAntes: boolea
     res = await incluirAjusteComCusto(loja, {
       codigo_local_estoque: c.codigo_local_estoque, id_prod: c.id_prod, cod_int_ajuste: codIntCorrecao(c.id), data: dataBR,
       quan: Math.abs(Number(c.quantidade)), valor: Number(c.custo_novo), obs, origem: 'AJU', tipo: c.tipo,
-      motivo: c.motivo && MOTIVOS_OMIE.has(c.motivo) ? c.motivo : c.tipo,
+      motivo: motivoOmieDoAjuste(c.tipo, c.motivo),
     })
   } catch (e) {
     return pendente(msgDe(e))

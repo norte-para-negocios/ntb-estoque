@@ -31,19 +31,22 @@ export async function GET(request: Request) {
   const tentadas = resultados.reduce((acc, r) => acc + r.tentadas, 0)
   const sucesso = resultados.reduce((acc, r) => acc + r.sucesso, 0)
   const falhas = resultados.reduce((acc, r) => acc + r.falhas, 0)
+  // Linha encerrada sem ir ao Omie (motivo inválido antigo, lib/omie/motivo-ajuste.ts) é trabalho resolvido, não falha.
+  const encerradas = resultadosManuais.reduce((acc, r) => acc + (r.encerradas ?? 0), 0)
   // 502 quando houve trabalho de verdade (algo pendente ou erro de query, em
   // qualquer uma das duas origens) e NENHUM sucesso real (Important #4, mesmo
   // padrao ja aplicado em snapshot-margem-diario/sync-preco-movimentacao nesta
   // mesma auditoria). Um ciclo sem nada pendente e o caso saudavel mais comum --
   // nao pode virar 502 so por falta de trabalho.
   const houveTrabalhoOuErro = tentadas > 0 || resultados.some((r) => r.erro)
-  const falhaTotal = houveTrabalhoOuErro && sucesso === 0
+  const falhaTotal = houveTrabalhoOuErro && sucesso === 0 && encerradas === 0
   return NextResponse.json(
     {
       lojas: lojas.length,
       tentadas,
       sucesso,
       falhas,
+      encerradas,
       transferencia: resultadosTransferencia,
       manuais: resultadosManuais,
     },

@@ -9,6 +9,7 @@ import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
+import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual } from '@/lib/omie/motivo-ajuste'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
 
@@ -84,7 +85,8 @@ export async function criarAjusteManual(input: {
       loja_id: lojaId,
       tipo: input.tipo,
       origem: 'AJU',
-      motivo: input.tipo,
+      // Motivo do Omie (INV), não o tipo: "SAI"/"ENT" o Omie recusa (15/10/2026). O texto digitado vai no obs.
+      motivo: MOTIVO_AJUSTE_MANUAL,
       data: dataCriacao,
       id_prod: input.idProd,
       codigo_local_estoque: input.codigoLocalEstoque,
@@ -103,6 +105,8 @@ export async function criarAjusteManual(input: {
       id_prod: input.idProd,
       quan,
       tipo: input.tipo,
+      motivo: MOTIVO_AJUSTE_MANUAL,
+      origem: 'AJU',
       obs: obsCarimbo,
       data: dataCriacao,
       tentativas: mov.tentativas,
@@ -189,11 +193,11 @@ type MovimentoManualElegivel = {
 export async function retryMovimentosManuaisPendentes(
   lojas: LojaOmie[],
   opts: { limitePorLoja?: number } = {}
-): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[]> {
+): Promise<{ loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[]> {
   const __d = viaDesktop('movimentacoes#retryMovimentosManuaisPendentes', retryMovimentosManuaisPendentes, [lojas, opts]); if (__d) return __d as never
   const limitePorLoja = opts.limitePorLoja ?? 30
   const supabase = createServiceClient()
-  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
+  const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[] = []
 
   for (const loja of lojas) {
     const { data: errosGenericos, error: erroErros } = await supabase
@@ -295,6 +299,7 @@ export async function retryMovimentosManuaisPendentes(
 
     let sucesso = 0
     let falhas = 0
+    let encerradas = 0
     const errosEstorno: string[] = []
 
     const { data: itensElegiveis, error: erroItens } = await supabase
@@ -360,6 +365,22 @@ export async function retryMovimentosManuaisPendentes(
         }
         continue
       }
+      // Linha antiga com motivo inválido (gravado = tipo, antes de 15/10): o Omie recusou todas as vezes e a
+      // diferença é do saldo daquele momento. Sai do retry sem ir ao Omie (lib/omie/motivo-ajuste.ts).
+      const decisao = decidirReenvioAjusteManual({ tipo: mov.tipo, motivo: mov.motivo, tentativas: mov.tentativas }, ERRO_MAX_TENTATIVAS)
+      if (decisao.acao === 'encerrar') {
+        const { error: erroEncerrar } = await supabase
+          .from('movimentos')
+          .update({ status: decisao.status, tentativas: decisao.tentativas, descricao_status: decisao.descricao_status })
+          .eq('id', mov.id)
+        if (erroEncerrar) {
+          errosEstorno.push(`encerrar movimento ${mov.id} (motivo invalido) falhou: ${erroEncerrar.message}`)
+          falhas++
+        } else {
+          encerradas++
+        }
+        continue
+      }
       if (mov.quan === null) {
         // quan anulada entre a selecao e agora -- estado realmente invalido
         // pra reprocessar. So estorna pra 'Erro' e deixa o proximo ciclo do
@@ -396,6 +417,7 @@ export async function retryMovimentosManuaisPendentes(
       tentadas: pendentes.length,
       sucesso,
       falhas,
+      ...(encerradas > 0 ? { encerradas } : {}),
       ...(errosEstorno.length > 0 ? { erro: errosEstorno.join(' | ') } : {}),
     })
   }

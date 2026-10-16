@@ -9,9 +9,7 @@ import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/cl
 import { dataOmieBR } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { origemDoAjuste } from '@/lib/vendas/local-venda'
-
-// Valores que o Omie aceita na tag `motivo` do IncluirAjusteEstoque.
-const MOTIVOS_OMIE = new Set(['INV', 'OPS', 'PER', 'PDV'])
+import { motivoOmieDoAjuste } from '@/lib/omie/motivo-ajuste'
 
 export type MovimentoManualRow = {
   id: number
@@ -19,7 +17,7 @@ export type MovimentoManualRow = {
   id_prod: number
   quan: number
   tipo: 'ENT' | 'SAI'
-  /** Motivo do ajuste no Omie (INV/OPS/PER/PDV). Venda do ntb-vendas grava 'PDV'. */
+  /** Motivo do ajuste no Omie (ver lib/omie/motivo-ajuste.ts). Venda do ntb-vendas grava 'PDV'; ajuste manual, 'INV'. */
   motivo?: string | null
   /** Origem gravada no movimento: 'PDV' só em venda com nota fiscal (regra 30/09); resto 'AJU'. */
   origem?: string | null
@@ -80,7 +78,8 @@ export async function reenviarMovimentoManual(
       // Venda com nota entra no Omie como movimento do PDV; venda sem nota e o resto, ajuste comum.
       origem: origemDoAjuste(mov.motivo, mov.origem),
       tipo: mov.tipo,
-      motivo: mov.motivo && MOTIVOS_OMIE.has(mov.motivo) ? mov.motivo : mov.tipo,
+      // Nunca o tipo: o Omie recusa motivo "SAI"/"ENT" (15/10/2026). Inválido/vazio vai como INV.
+      motivo: motivoOmieDoAjuste(mov.tipo, mov.motivo),
     }
 
     const res = await omieRequest<{
