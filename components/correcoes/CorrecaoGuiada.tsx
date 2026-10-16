@@ -273,7 +273,7 @@ function Opcoes(props: Props) {
         {refazer && REFAZER.includes(def.acao) ? (
           <>
             <p><b>{refazer.continuar ? 'Continuar o refazer que parou' : 'Passo a passo'}</b> · inventário de {refazer.dataBR} (lido agora no Omie)</p>
-            {refazer.continuar && <p style={{ color: '#ffb340' }}>Parou antes: {refazer.continuar.erro ?? 'sem resposta'}. {refazer.continuar.feitos} {refazer.continuar.feitos === 1 ? 'passo já feito' : 'passos já feitos'}; confirmar continua do próximo, sem repetir.</p>}
+            {refazer.continuar && <p style={{ color: '#ffb340' }}>{refazer.continuar.status === 'andamento' ? 'Em andamento' : 'Parou antes'}: {refazer.continuar.erro ?? 'sem resposta'}. {refazer.continuar.feitos} {refazer.continuar.feitos === 1 ? 'passo já feito' : 'passos já feitos'}; confirmar continua do próximo, sem repetir.</p>}
             <ol style={{ margin: '4px 0 8px 18px', padding: 0, display: 'grid', gap: 4, fontSize: 14 }}>{refazer.passos.map((x, i) => <li key={i}>{x}</li>)}</ol>
             {refazer.avisos.map((x, i) => <p key={i} style={{ color: '#ffb340' }}>{x}</p>)}
             <p className={s.muted} style={{ fontSize: 13 }}>Uma escrita por vez no Omie; se alguma falhar, para ali e nada mais é escrito.</p>

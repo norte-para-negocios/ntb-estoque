@@ -153,7 +153,8 @@ async function entradaOmie(lojaId: number, hoje: string, avisos: string[], erro:
     buscarFatCupons({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
     buscarFatCupomItens({ lojaId, dataInicio: addDias(hoje, -(DIAS_CUPOM - 1)), dataFinal: hoje, onTruncado: () => { freioOk = false }, timeoutMs: 4000, tentativas: 1 }),
     supabase.rpc('central_inventarios_fora_do_fim', { p_loja_id: lojaId, p_ini: addDias(hoje, -DIAS_INVENTARIO) }),
-    supabase.from('estoque_refazer_inventario').select('id_ajuste_inventario').eq('loja_id', lojaId).in('status', ['andamento', 'parado', 'concluido']).limit(5000),
+    // Só o concluído some: parado/andamento continua aparecendo para o "Continuar" (o Omie pode estar pela metade).
+    supabase.from('estoque_refazer_inventario').select('id_ajuste_inventario').eq('loja_id', lojaId).eq('status', 'concluido').limit(5000),
   ])
   tempos.onda1 = Math.round(performance.now() - t1)
   const e = vazia(hoje, 'omie')

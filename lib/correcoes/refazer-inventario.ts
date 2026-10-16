@@ -32,6 +32,10 @@ type Linha = {
 const COLS = 'id, loja_id, modo, id_ajuste_inventario, id_prod, codigo_local_estoque, data_inventario, contagem_certa, quan, cmc, excluir, excluidos, pendente, id_ajuste_novo, cod_int_ajuste, obs, passos, status, erro, user_nome, updated_at'
 const ABERTOS = ['andamento', 'parado', 'concluido']
 const PAUSA_MS = 1500
+/** Páginas de 50 ajustes ao procurar um ajuste num dia (dia cheio do Sertão passa de 150). */
+const PAGINAS_CONFERIR = 20
+/** Inclusão sem resposta: só concluir que "não entrou" depois disto (o Omie pode estar processando). */
+const ESPERA_CONFERIR_MS = 3 * 60_000
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const n = (v: unknown) => Number(v)
@@ -54,6 +58,25 @@ async function inventarioDoBanco(lojaId: number, idAjuste: number): Promise<InvD
 
 type Montado = { plano: Plano; previa: PreviaRefazer; inv: InvDb; obs: string; mesFechado: boolean }
 
+/** Inventários do produto no local a partir do dia (item do app, SLD do sync ou INVR- refeito): id do ajuste e dia. */
+async function inventariosDoProduto(lojaId: number, inv: InvDb): Promise<{ idAjuste: number; dia: string }[]> {
+  const db = createServiceClient()
+  const desde = new Date(Date.parse(`${inv.dia}T00:00:00Z`) - 86_400_000).toISOString()
+  const out: { idAjuste: number; dia: string }[] = []
+  const { data: invs } = await db.from('inventarios').select('id, data').eq('loja_id', lojaId).eq('codigo_local_estoque', inv.local).gte('data', desde).limit(2000)
+  const diaInv = new Map((invs ?? []).map((x) => [n(x.id), diaDoMovimento(String(x.data))]))
+  if (diaInv.size) {
+    const { data: its } = await db.from('inventario_items').select('id_ajuste, inventario_id').eq('loja_id', lojaId).eq('produto_codigo_produto', inv.produto)
+      .in('inventario_id', [...diaInv.keys()]).gt('id_ajuste', 0).limit(2000)
+    for (const x of its ?? []) out.push({ idAjuste: n(x.id_ajuste), dia: diaInv.get(n(x.inventario_id)) ?? '' })
+  }
+  const { data: ms } = await db.from('movimentos').select('id_ajuste, data, tipo, cod_int_ajuste').eq('loja_id', lojaId).eq('id_prod', inv.produto)
+    .eq('codigo_local_estoque', inv.local).eq('status', 'Concluido').gt('id_ajuste', 0).gte('data', desde)
+    .or('tipo.eq.SLD,cod_int_ajuste.like.INVR-*').limit(2000)
+  for (const x of ms ?? []) out.push({ idAjuste: n(x.id_ajuste), dia: diaDoMovimento(String(x.data)) })
+  return out.filter((x) => x.dia >= inv.dia)
+}
+
 /** Lê tudo (banco + kardex do dia no Omie, só leitura) e monta o plano e o passo a passo. */
 export async function montarRefazer(loja: LojaEscrita, pedido: PedidoRefazer): Promise<Montado | { error: string }> {
   const db = createServiceClient()
@@ -71,18 +94,26 @@ export async function montarRefazer(loja: LojaEscrita, pedido: PedidoRefazer): P
   const { data: vendas } = await db.from('movimentos').select('id_ajuste').eq('loja_id', lojaId).eq('id_prod', inv.produto)
     .eq('codigo_local_estoque', inv.local).eq('motivo', 'PDV').not('id_ajuste', 'is', null).gte('data', ini).lt('data', fim).limit(5000)
 
-  // Correções lançadas depois para o mesmo erro (saída da Central/faxina): só no modo contagem.
+  // Outros inventários do produto no local: no mesmo dia (outro depois deste = recusa) e nos dias seguintes (aviso).
+  const outrosInv = await inventariosDoProduto(lojaId, inv)
+  const proximoInv = outrosInv.filter((x) => x.idAjuste > n(pedido.idAjuste) && x.dia > inv.dia).reduce<number | null>((a, x) => (a == null || x.idAjuste < a ? x.idAjuste : a), null)
+  const diasDepois = [...new Set(outrosInv.filter((x) => x.dia > inv.dia).map((x) => x.dia))].sort()
+
+  // Correções lançadas depois para o mesmo erro (saída da Central/faxina): só no modo contagem, e só antes do
+  // próximo inventário do produto no local (correção de outro inventário não é deste).
   const correcoes: CorrecaoAExcluir[] = []
   if (pedido.modo === 'contagem') {
-    const { data: cs } = await db.from('movimentos').select('id_ajuste, data, tipo, quan')
+    let q = db.from('movimentos').select('id_ajuste, data, tipo, quan')
       .eq('loja_id', lojaId).eq('id_prod', inv.produto).eq('codigo_local_estoque', inv.local).eq('status', 'Concluido')
       .in('tipo', ['ENT', 'SAI']).gt('id_ajuste', n(pedido.idAjuste)).gte('data', ini)
+    if (proximoInv != null) q = q.lt('id_ajuste', proximoInv)
+    const { data: cs } = await q
       .or('obs.ilike.*contagem corrigida*,obs.ilike.Correção de contagem*')
-      .order('id_ajuste').limit(20)
+      .order('id_ajuste').limit(10)
     for (const c of cs ?? []) {
       const d = isoParaBR(diaDoMovimento(String(c.data)))
       if (!loja.is_test) {
-        const { ajustes, completa } = await listarAjustesDoDia(loja, d)
+        const { ajustes, completa } = await listarAjustesDoDia(loja, d, PAGINAS_CONFERIR)
         const achou = ajustes.some((a) => n(a.id_ajuste) === n(c.id_ajuste))
         if (!achou && !completa) return { error: `Não deu para conferir no Omie a correção ${c.id_ajuste} de ${d} (dia com ajustes demais). Confira no Omie antes de refazer.` }
         if (!achou) continue // já não existe no Omie
@@ -100,6 +131,7 @@ export async function montarRefazer(loja: LojaEscrita, pedido: PedidoRefazer): P
   const plano = planejarRefazer({
     modo: pedido.modo, idAjusteInventario: n(pedido.idAjuste), contagemCerta: pedido.contagemCerta, contagemDb: inv.contagem,
     correcoes: correcoes.map((c) => c.idAjuste), vendasAju: (vendas ?? []).map((v) => n(v.id_ajuste)),
+    inventariosDoDia: outrosInv.filter((x) => x.dia === inv.dia).map((x) => x.idAjuste),
     movs: movs.map((x) => ({
       idMov: n(x.idMov), idAjuste: x.idAjuste == null || n(x.idAjuste) === 0 ? null : n(x.idAjuste), codOrigem: String(x.codOrigem ?? ''),
       qtde: n(x.qtde ?? 0), saldo: x.saldo == null ? null : n(x.saldo), cmc: x.cmc == null ? null : n(x.cmc), cancelado: x.cancelamento === 'S',
@@ -110,7 +142,10 @@ export async function montarRefazer(loja: LojaEscrita, pedido: PedidoRefazer): P
   const passos = passosRefazer(plano, { dataBR, un, correcoes, mesFechado })
   return {
     plano, inv, mesFechado, obs: obsRefazer(plano, dataBR),
-    previa: { passos, avisos: plano.avisos, assinatura: assinaturaPlano(plano), produto: String(p?.descricao ?? inv.produto), dataBR },
+    previa: {
+      passos, assinatura: assinaturaPlano(plano), produto: String(p?.descricao ?? inv.produto), dataBR,
+      avisos: [...plano.avisos, ...(diasDepois.length ? [`Este produto tem inventário neste local depois de ${dataBR} (${diasDepois.slice(0, 5).map((d) => isoParaBR(d).slice(0, 5)).join(', ')}${diasDepois.length > 5 ? '…' : ''}): depois de refazer, confira no Omie se o saldo desses dias continua igual à contagem.`] : [])],
+    },
   }
 }
 
@@ -124,15 +159,22 @@ async function lerAberto(lojaId: number, idAjuste: number): Promise<Linha | null
 export async function previaRefazer(loja: LojaEscrita, pedido: PedidoRefazer): Promise<PreviaRefazer | { error: string }> {
   const aberto = await lerAberto(loja.id, n(pedido.idAjuste)).catch(() => null)
   if (aberto?.status === 'concluido') return { error: `Este inventário já foi refeito${aberto.user_nome ? ` por ${aberto.user_nome}` : ''}.` }
-  if (aberto) {
+  if (aberto && !nadaEscrito(aberto)) {
+    const { data: pr } = await createServiceClient().from('produtos').select('descricao').eq('loja_id', loja.id).eq('codigo_produto', aberto.id_prod).maybeSingle()
     return {
-      passos: aberto.passos ?? [], avisos: [], assinatura: '', produto: String(aberto.id_prod), dataBR: isoParaBR(aberto.data_inventario),
-      continuar: { status: aberto.status, erro: aberto.erro, feitos: (aberto.excluidos ?? []).length + (aberto.id_ajuste_novo ? 1 : 0) },
+      passos: aberto.passos ?? [], avisos: [], assinatura: `continuar:${aberto.id}`, produto: String(pr?.descricao ?? aberto.id_prod), dataBR: isoParaBR(aberto.data_inventario),
+      continuar: {
+        status: aberto.status, erro: aberto.status === 'andamento' ? 'está sendo feito agora (outra aba ou pessoa)' : aberto.erro,
+        feitos: (aberto.excluidos ?? []).length + (aberto.id_ajuste_novo ? 1 : 0),
+      },
     }
   }
   const m = await montarRefazer(loja, pedido)
   return 'error' in m ? m : m.previa
 }
+
+/** Parado antes de qualquer escrita (nem intenção gravada): pode ser descartado e planejado de novo. */
+const nadaEscrito = (l: Linha) => !(l.excluidos ?? []).length && !l.pendente && l.id_ajuste_novo == null
 
 /**
  * Executa (ou continua) o refazer. `assinatura` = o que a pessoa viu na prévia: se o kardex mudou, nada é escrito e
@@ -142,8 +184,17 @@ export async function executarRefazer(loja: LojaEscrita, pedido: PedidoRefazer, 
   const db = createServiceClient()
   const aberto = await lerAberto(loja.id, n(pedido.idAjuste))
   if (aberto?.status === 'concluido') return { error: `Este inventário já foi refeito${aberto.user_nome ? ` por ${aberto.user_nome}` : ''}. Nada foi lançado de novo.` }
-  if (aberto) {
-    if (aberto.status === 'andamento' && Date.now() - Date.parse(aberto.updated_at) < 10 * 60_000) return { error: 'Este inventário está sendo refeito agora (outra aba ou pessoa). Espere alguns minutos.' }
+  if (aberto && aberto.status === 'andamento' && Date.now() - Date.parse(aberto.updated_at) < 10 * 60_000) return { error: 'Este inventário está sendo refeito agora (outra aba ou pessoa). Espere alguns minutos.' }
+  if (aberto && nadaEscrito(aberto)) {
+    // Nada foi ao Omie: descarta e segue como um refazer novo (com o plano lido agora e conferido pela assinatura).
+    await db.from('estoque_refazer_inventario').update({ status: 'cancelado', erro: 'descartado: nada tinha sido escrito', updated_at: new Date().toISOString() })
+      .eq('id', aberto.id).eq('updated_at', aberto.updated_at)
+  } else if (aberto) {
+    // Continuar exige que a tela tenha mostrado o que já foi feito (prévia de "continuar"), nunca a prévia de um plano novo.
+    if (assinatura !== `continuar:${aberto.id}`) {
+      const pv = await previaRefazer(loja, pedido)
+      return { error: 'Já existe um refazer deste inventário que parou no meio: confira o que já foi feito e confirme para continuar.', ...('error' in pv ? {} : { previa: pv }) }
+    }
     const { data: pega } = await db.from('estoque_refazer_inventario').update({ status: 'andamento', updated_at: new Date().toISOString() })
       .eq('id', aberto.id).eq('status', aberto.status).eq('updated_at', aberto.updated_at).select('id')
     if (!pega?.length) return { error: 'Outra pessoa já está continuando este refazer.' }
@@ -200,8 +251,10 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
         await salvar({ excluidos: [...(l.excluidos ?? []), passo.id], pendente: null })
         feitos.push(`ajuste ${passo.id} excluído.`)
       } else if (passo.acao === 'conferir_inclusao') {
+        const desde = Date.parse(l.pendente?.em ?? '') || 0
+        if (Date.now() - desde < ESPERA_CONFERIR_MS) return parar(`o lançamento do inventário refeito ficou sem resposta do Omie há pouco; espere uns 3 minutos para o sistema conferir se ele entrou`, true)
         let lista
-        try { lista = await listarAjustesDoDia(loja, dataBR) } catch (e) { return parar(`não deu para conferir no Omie se o ajuste novo já entrou (${msg(e)})`, true) }
+        try { lista = await listarAjustesDoDia(loja, dataBR, PAGINAS_CONFERIR) } catch (e) { return parar(`não deu para conferir no Omie se o ajuste novo já entrou (${msg(e)})`, true) }
         const ja = lista.ajustes.find((a) => a.cod_int_ajuste === cod)
         if (ja) await salvar({ id_ajuste_novo: n(ja.id_ajuste), pendente: null })
         else if (lista.completa) await salvar({ pendente: null })
@@ -216,7 +269,8 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
           }, { model: 'RefazerInventario', semRepetir: true })
         } catch (e) {
           const m = msg(e)
-          return parar(`o Omie ${statusAposExclusao(m) === 'excluindo' ? 'não respondeu' : 'recusou'} ao lançar o inventário refeito (${m})`, statusAposExclusao(m) === 'excluindo')
+          // Mesmo recusa explícita mantém a intenção: o Continuar sempre confere no Omie antes de lançar de novo.
+          return parar(`o Omie ${statusAposExclusao(m) === 'excluindo' ? 'não respondeu' : 'recusou'} ao lançar o inventário refeito (${m})`, true)
         }
         if (res?.id_ajuste == null) return parar(`o Omie não devolveu o ajuste novo (${res?.descricao_status ?? 'sem resposta'})`, true)
         await salvar({ id_ajuste_novo: n(res.id_ajuste), pendente: null })
@@ -226,6 +280,8 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
   } catch (e) {
     return parar(msg(e), true)
   }
+  const fimDeVerdade = proximaEscrita({ excluir: (l.excluir ?? []).map(n), excluidos: (l.excluidos ?? []).map(n), tipo, idNovo: l.id_ajuste_novo == null ? null : n(l.id_ajuste_novo), pendente: l.pendente })
+  if (fimDeVerdade.acao !== 'fim') return parar('passos demais numa só vez', true)
   return concluir(loja, l, tipo, user)
 }
 
@@ -233,17 +289,27 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
 async function concluir(loja: LojaEscrita, l: Linha, tipo: 'ENT' | 'SAI' | null, user: { id: string | null; nome: string | null }): Promise<RespostaRefazer> {
   const db = createServiceClient()
   const excluidos = (l.excluidos ?? []).map(n)
-  const { data: apagar } = await db.from('movimentos').select('id, id_ajuste, tipo, quan, data, obs').eq('loja_id', loja.id).in('id_ajuste', excluidos)
-  if (apagar?.length) await db.from('movimentos').delete().eq('loja_id', loja.id).in('id', apagar.map((x) => x.id))
-  if (l.id_ajuste_novo != null && tipo) {
+  const avisos: string[] = []
+  const { data: apagar, error: eSel } = await db.from('movimentos').select('id, id_ajuste, tipo, quan, data, obs').eq('loja_id', loja.id).in('id_ajuste', excluidos)
+  if (eSel) avisos.push(`espelho local não lido: ${eSel.message}`)
+  if (apagar?.length) {
+    const { error } = await db.from('movimentos').delete().eq('loja_id', loja.id).in('id', apagar.map((x) => x.id))
+    if (error) avisos.push(`ajustes excluídos ainda aparecem aqui: ${error.message}`)
+  }
+  const { data: jaTem } = l.id_ajuste_novo != null
+    ? await db.from('movimentos').select('id').eq('loja_id', loja.id).eq('id_ajuste', l.id_ajuste_novo).limit(1)
+    : { data: [] as { id: number }[] }
+  if (l.id_ajuste_novo != null && tipo && !jaTem?.length) {
     const { error } = await db.from('movimentos').insert({
       loja_id: loja.id, tipo, origem: 'AJU', motivo: 'INV', data: dataCriacaoBahia(l.data_inventario), id_prod: l.id_prod,
       codigo_local_estoque: l.codigo_local_estoque, quan: tipo === 'SAI' ? -Math.abs(n(l.quan)) : Math.abs(n(l.quan)), valor: l.cmc,
       obs: l.obs, status: 'Concluido', id_ajuste: l.id_ajuste_novo, cod_int_ajuste: codIntRefazer(l.id), origem_ajuste: 'app', autor: user.nome,
     })
-    if (error) console.error(`[refazer-inventario] ${l.id}: movimento local não gravado: ${error.message}`)
+    if (error) avisos.push(`ajuste novo ainda não aparece aqui: ${error.message}`)
   }
-  await db.from('estoque_refazer_inventario').update({ status: 'concluido', erro: null, apagados_local: apagar ?? [], updated_at: new Date().toISOString() }).eq('id', l.id)
+  const { error: eFim } = await db.from('estoque_refazer_inventario').update({ status: 'concluido', erro: avisos.length ? avisos.join('; ').slice(0, 1000) : null, apagados_local: apagar ?? [], updated_at: new Date().toISOString() }).eq('id', l.id)
+  if (eFim) console.error(`[refazer-inventario] ${l.id}: concluído no Omie, status não gravado: ${eFim.message}`)
+  if (avisos.length) console.error(`[refazer-inventario] ${l.id}: ${avisos.join('; ')}`)
   await registrarAuditoria('editar', 'inventário', l.id_ajuste_inventario,
     `${loja.is_test ? '[simulado] ' : ''}inventário de ${isoParaBR(l.data_inventario)} refeito (${l.modo}): ajustes ${excluidos.join(', ')} excluídos${l.id_ajuste_novo ? `, lançado ${l.id_ajuste_novo}` : ', nada lançado'}`)
   return {

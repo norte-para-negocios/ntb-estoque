@@ -62,7 +62,7 @@ grant select on public.estoque_refazer_inventario to authenticated;
 -- Dia de um timestamp: meia-noite UTC exata = aquele dia (sync-ajustes grava só a data); o resto = dia da Bahia
 -- (mesma regra de diaDoMovimento, lib/estoque/quem-mexeu-puro.ts).
 create or replace function public.dia_do_movimento(p timestamptz)
-returns date language sql immutable set search_path = public as $fn$
+returns date language sql stable set search_path = public as $fn$
   select case when (p at time zone 'UTC')::time = '00:00' then (p at time zone 'UTC')::date
               else (p at time zone 'America/Bahia')::date end
 $fn$;

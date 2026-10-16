@@ -25,6 +25,8 @@ export type EntradaPlano = {
   correcoes?: number[]
   /** Ajustes AJU que são baixa de venda (venda sem nota vai ao Omie como ajuste comum). */
   vendasAju?: Iterable<number>
+  /** Ids dos ajustes de inventário do mesmo produto/local/dia (banco): outro depois deste = recusa. */
+  inventariosDoDia?: Iterable<number>
 }
 export type Plano = {
   modo: ModoRefazer; idAjusteInventario: number
@@ -76,6 +78,10 @@ export function planejarRefazer(e: EntradaPlano): Plano | { erro: string } {
     depoisDe = idx
     semMovimento = true
   }
+
+  const outrosInv = new Set([...(e.inventariosDoDia ?? [])].map(Number))
+  const invDepois = movs.slice(depoisDe).find((x) => x.idAjuste != null && x.idAjuste !== e.idAjusteInventario && outrosInv.has(x.idAjuste))
+  if (invDepois) return { erro: `Há outro inventário deste produto no mesmo local depois deste, no mesmo dia (ajuste ${invDepois.idAjuste}): refaça o último.` }
 
   const vendas = { n: 0, soma: 0 }
   const outros = { n: 0, soma: 0, origens: [] as string[] }

@@ -146,3 +146,11 @@ test('assinatura muda quando o plano muda; código interno do ajuste novo', () =
   assert.notEqual(assinaturaPlano(p), assinaturaPlano(r))
   assert.equal(codIntRefazer(7), 'INVR-7')
 })
+
+test('outro inventário do mesmo produto/local depois deste no mesmo dia: recusa (refaça o último)', () => {
+  const movs = [...AMSTEL.slice(0, 10), m(6961890000, 6961889998, 'AJU', 1, 74, 6.069153), AMSTEL[10]]
+  const r = planejarRefazer({ modo: 'fim_do_dia', movs, idAjusteInventario: INV, inventariosDoDia: [INV, 6961889998] })
+  assert.ok('erro' in r && /outro inventário/.test(r.erro))
+  const ok = planejarRefazer({ modo: 'fim_do_dia', movs: AMSTEL, idAjusteInventario: INV, inventariosDoDia: [INV] })
+  assert.ok(!('erro' in ok))
+})

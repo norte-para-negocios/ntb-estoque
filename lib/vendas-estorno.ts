@@ -65,13 +65,14 @@ export async function estornarVenda(supabase: SupabaseClient, loja: LojaOmie, pe
   }
 
   // 3) saídas de estoque (uma por item vendido)
-  const { data: movs } = await supabase
+  const { data: movs, error: eMovs } = await supabase
     .from('movimentos')
     .select('id, id_ajuste')
     .eq('loja_id', loja.id)
     .eq('tipo', 'SAI')
     // Venda com nota grava obs "Cupom N" e a marca da venda em obs_item (15/10/2026).
     .or(`obs.like.*Venda ntb-vendas #${pedidoRef}*,obs_item.like.*Venda ntb-vendas #${pedidoRef}*`)
+  if (eMovs) { r.falhas++; r.detalhes.push(`saídas de estoque: ${eMovs.message}`) }
   for (const m of (movs ?? []) as { id: number; id_ajuste: number | null }[]) {
     if (m.id_ajuste) {
       const ok = await excluirAjusteEstoque(loja, Number(m.id_ajuste))
