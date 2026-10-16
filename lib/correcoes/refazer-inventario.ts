@@ -178,6 +178,8 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
     if (error) throw new Error(`não foi possível gravar o andamento: ${error.message}`)
   }
   const dataBR = isoParaBR(l.data_inventario)
+  // Sempre derivado do id da linha (nunca da coluna, que pode ter ficado vazia se o update depois do insert falhou).
+  const cod = codIntRefazer(l.id)
   const tipo: 'ENT' | 'SAI' | null = n(l.quan) > 0 ? 'SAI' : n(l.quan) < 0 ? 'ENT' : null
   const feitos: string[] = []
   const parar = async (texto: string, manterPendente: boolean): Promise<RespostaRefazer> => {
@@ -200,16 +202,16 @@ async function continuar(loja: LojaEscrita, l: Linha, user: { id: string | null;
       } else if (passo.acao === 'conferir_inclusao') {
         let lista
         try { lista = await listarAjustesDoDia(loja, dataBR) } catch (e) { return parar(`não deu para conferir no Omie se o ajuste novo já entrou (${msg(e)})`, true) }
-        const ja = lista.ajustes.find((a) => a.cod_int_ajuste === l.cod_int_ajuste)
+        const ja = lista.ajustes.find((a) => a.cod_int_ajuste === cod)
         if (ja) await salvar({ id_ajuste_novo: n(ja.id_ajuste), pendente: null })
         else if (lista.completa) await salvar({ pendente: null })
-        else return parar(`o dia ${dataBR} tem ajustes demais para conferir se ${l.cod_int_ajuste} já entrou: confira no Omie`, true)
+        else return parar(`o dia ${dataBR} tem ajustes demais para conferir se ${cod} já entrou: confira no Omie`, true)
       } else {
         await salvar({ pendente: { acao: 'incluir', em: new Date().toISOString() } })
         let res
         try {
           res = await incluirAjusteComCusto(loja, {
-            codigo_local_estoque: n(l.codigo_local_estoque), id_prod: n(l.id_prod), cod_int_ajuste: l.cod_int_ajuste ?? codIntRefazer(l.id), data: dataBR,
+            codigo_local_estoque: n(l.codigo_local_estoque), id_prod: n(l.id_prod), cod_int_ajuste: cod, data: dataBR,
             quan: Math.abs(n(l.quan)), valor: Number(n(l.cmc).toFixed(4)), obs: `${l.obs ?? ''} · ${user.nome ?? 'NTB Estoque'}`.slice(0, 400), origem: 'AJU', tipo: tipo!, motivo: 'INV',
           }, { model: 'RefazerInventario', semRepetir: true })
         } catch (e) {
@@ -237,7 +239,7 @@ async function concluir(loja: LojaEscrita, l: Linha, tipo: 'ENT' | 'SAI' | null,
     const { error } = await db.from('movimentos').insert({
       loja_id: loja.id, tipo, origem: 'AJU', motivo: 'INV', data: dataCriacaoBahia(l.data_inventario), id_prod: l.id_prod,
       codigo_local_estoque: l.codigo_local_estoque, quan: tipo === 'SAI' ? -Math.abs(n(l.quan)) : Math.abs(n(l.quan)), valor: l.cmc,
-      obs: l.obs, status: 'Concluido', id_ajuste: l.id_ajuste_novo, cod_int_ajuste: l.cod_int_ajuste, origem_ajuste: 'app', autor: user.nome,
+      obs: l.obs, status: 'Concluido', id_ajuste: l.id_ajuste_novo, cod_int_ajuste: codIntRefazer(l.id), origem_ajuste: 'app', autor: user.nome,
     })
     if (error) console.error(`[refazer-inventario] ${l.id}: movimento local não gravado: ${error.message}`)
   }
