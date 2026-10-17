@@ -275,7 +275,7 @@ function GrupoBloco({ g, itens, u, setU, aberto, alternar, ativo, abrir, extra }
             </div></div>
           ) : vis.map(({ p, e }) => (
             <button key={p.chave} className={`${s.item} ${ativo === p.chave ? s.itemAtivo : ''}`} onClick={() => abrir(p)}>
-              <span className={s.l1}><Tag p={p} /><span className={s.nome}>{p.titulo}</span></span>
+              <span className={s.l1}><Tag p={p} /><span className={s.nome} title={p.titulo}>{p.titulo}</span></span>
               <span className={s.dir}>
                 <span className={`${s.saldo} ${s.num} ${p.ladoErro ? s.err : s.muted}`}>{p.lado}</span>
                 <span className={`${s.val} ${s.num}`}>{valorTxt(p.valor)}</span>

@@ -91,7 +91,7 @@ function Conteudo({ d, e, set, props, atual, problemas }: { d: PainelDados; e: E
         <h3>{d.titulo}</h3>
         {d.subtitulo && e.tipo !== 'produto' && <div className={s.pSub}>{d.subtitulo}</div>}
       </div>
-      {d.kpis.length > 0 && <div className={s.kpis}>{d.kpis.map((k) => <div key={k.rot} className={s.kpi}><span>{k.rot}</span><b className={`${s.num} ${k.erro ? s.err : ''}`}>{k.valor}</b></div>)}</div>}
+      {d.kpis.length > 0 && <div className={s.kpis}>{d.kpis.map((k) => <div key={k.rot} className={s.kpi}><span>{k.rot}</span><b className={`${s.num} ${k.erro ? s.err : ''}`} title={k.valor}>{k.valor}</b></div>)}</div>}
       <div className={s.abas}>
         <div className={s.seg} role="tablist">
           {([['resumo', 'Resumo', null], ['mov', 'Movimentos', d.movimentos.length], ['lig', 'Ligado a', nLig]] as const).map(([k, t, n]) => (
@@ -112,7 +112,7 @@ function Conteudo({ d, e, set, props, atual, problemas }: { d: PainelDados; e: E
                 <div className={s.ficha}>
                   {d.ficha.linhas.map((l, i) => (
                     <div key={i} className={s.f}>
-                      <button onClick={() => l.produto && abrir({ tipo: 'produto', id: l.produto })}>{l.nome}</button>
+                      <button onClick={() => l.produto && abrir({ tipo: 'produto', id: l.produto })} title={l.nome}>{l.nome}</button>
                       <span className={`${s.num} ${s.muted}`}>{l.qtd}</span>
                       <span className={`${s.num} ${l.semCusto ? s.err : ''}`}>{l.custo}</span>
                     </div>
@@ -164,7 +164,7 @@ function Ligado({ d, abrir, itens }: { d: PainelDados; abrir: (a: { tipo: Alvo['
           {g.itens.slice(0, 12).map((x, i) => (
             <button key={i} className={s.lig} onClick={() => abrir(x)}>
               <span className={`${s.ico} ${temProb(x.tipo, x.id) ? s.icoAlerta : ''}`}><Ic n={ICONE_ALVO[x.tipo]} sm /></span>
-              <span className={s.tx}><b>{x.titulo}</b><span>{x.sub}</span></span>
+              <span className={s.tx}><b title={x.titulo}>{x.titulo}</b><span title={x.sub}>{x.sub}</span></span>
               <span className={`${s.vv} ${s.num} ${x.erro ? s.err : ''}`}>{x.valor}</span>
               <span className={s.muted}><Ic n="chev" sm /></span>
             </button>

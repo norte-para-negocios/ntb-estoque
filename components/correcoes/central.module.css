@@ -59,9 +59,9 @@
 .card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .card:active { transform: translateY(0) scale(0.99); }
 .cardTopo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cardN { font-size: 12px; font-weight: 700; color: var(--brand); }
-.cardNome { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
-.cardCausa { font-size: 13px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cardN { font-size: 12px; font-weight: 700; color: var(--brand); min-width: 0; overflow-wrap: anywhere; }
+.cardNome { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+.cardCausa { overflow-wrap: anywhere; font-size: 13px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cardRodape { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .cardValor { font-size: 22px; font-weight: 700; letter-spacing: -0.025em; }
 .linkAcao { color: var(--brand); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
@@ -74,7 +74,7 @@
 .chev { color: var(--text-muted); transition: transform var(--dur-slow) var(--ease-in-out); }
 .grupoAberto .gCab .chev { transform: rotate(90deg); }
 .gTit { min-width: 0; }
-.gTit b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.015em; }
+.gTit b { display: block; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; letter-spacing: -0.015em; }
 .gTit span { display: block; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gPeso { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .gPeso .v { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
@@ -106,7 +106,7 @@
 .itemAtivo { background: var(--brand-soft); }
 .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .nome { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.causa { grid-column: 1 / -1; font-size: 13px; color: var(--text-muted); margin-top: -2px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.causa { grid-column: 1 / -1; overflow-wrap: anywhere; font-size: 13px; color: var(--text-muted); margin-top: -2px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .dir { display: flex; align-items: center; gap: 14px; }
 .saldo { font-size: 14px; font-weight: 600; white-space: nowrap; }
 .val { font-size: 14px; font-weight: 700; min-width: 84px; text-align: right; white-space: nowrap; }
@@ -116,6 +116,7 @@
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
 .vazio { padding: 26px 18px 30px; display: flex; gap: 14px; align-items: center; }
 .vazioIc { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
+.vazio > div { min-width: 0; overflow-wrap: anywhere; }
 .vazio b { display: block; font-size: 15px; }
 .vazio span { font-size: 13px; color: var(--text-muted); }
 .mais { margin: 0 12px 12px; height: 34px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--text); }
@@ -125,6 +126,7 @@
 .robo { background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-sm); padding: 8px 18px 14px; }
 .roboLinha { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
 .roboLinha:first-child { border-top: 0; }
+.roboLinha > * { min-width: 0; overflow-wrap: anywhere; }
 .roboLinha small { grid-column: 1 / -1; color: var(--text-muted); font-size: 12px; }
 
 /* ---------- botões ---------- */
@@ -156,7 +158,7 @@
 .sep { opacity: 0.5; flex: none; }
 .pCorpo { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 18px 18px 40px; display: flex; flex-direction: column; gap: 16px; }
 .pTipo { font-size: 13px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-.pCab h3 { margin: 4px 0 0; font-size: 24px; line-height: 1.15; letter-spacing: -0.024em; font-weight: 700; text-wrap: balance; }
+.pCab h3 { overflow-wrap: anywhere; margin: 4px 0 0; font-size: 24px; line-height: 1.15; letter-spacing: -0.024em; font-weight: 700; text-wrap: balance; }
 .pSub { margin-top: 4px; color: var(--text-muted); font-size: 14px; }
 .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .kpi { background: var(--surface); border-radius: var(--r-md); padding: 10px 12px; min-width: 0; box-shadow: var(--shadow-sm); }
@@ -170,7 +172,7 @@
 .bloco h4 small { font-size: 13px; font-weight: 500; color: var(--text-muted); }
 .problema { border-radius: var(--r-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .rot { font-size: 13px; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.frase { font-size: 16px; line-height: 1.4; letter-spacing: -0.01em; text-wrap: pretty; }
+.frase { overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; letter-spacing: -0.01em; text-wrap: pretty; }
 .outrosProb { display: flex; flex-wrap: wrap; gap: 6px; }
 .outrosProb button { height: 28px; padding: 0 10px; border-radius: 999px; background: var(--surface-2); font-size: 12px; font-weight: 600; }
 .outrosProb button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-strong); }
@@ -184,8 +186,8 @@
 .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--text-muted); margin-top: 2px; display: grid; place-items: center; }
 .opcao[aria-checked="true"] .radio { border-color: var(--brand); }
 .opcao[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
-.opcao > b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.opcaoD { grid-column: 2; font-size: 13px; color: var(--text-muted); }
+.opcao > b { overflow-wrap: anywhere; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.opcaoD { overflow-wrap: anywhere; grid-column: 2; font-size: 13px; color: var(--text-muted); }
 .opcaoOff { opacity: 0.55; }
 .form { grid-column: 2; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); flex: 1 1 140px; min-width: 0; }
@@ -202,6 +204,7 @@
 .previa { border-radius: var(--r-md); border: 1px dashed var(--border); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .previa .t { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .lin { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; font-size: 14px; align-items: baseline; }
+.lin > span:first-child { overflow-wrap: anywhere; }
 .dePara { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; font-weight: 600; }
 .dePara s { text-decoration: none; color: var(--text-muted); font-weight: 500; }
 .omie { font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 8px; }
@@ -223,7 +226,7 @@
 .mov { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 2px; border-top: 1px solid var(--border); align-items: baseline; }
 .mov:first-child { border-top: 0; }
 .dt { font-size: 13px; color: var(--text-muted); }
-.o { font-size: 14px; font-weight: 500; min-width: 0; }
+.o { font-size: 14px; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .o small { display: block; font-size: 12px; color: var(--text-muted); font-weight: 400; }
 .q { font-size: 14px; font-weight: 600; text-align: right; white-space: nowrap; }
 .q small { display: block; font-size: 12px; color: var(--text-muted); font-weight: 400; }
@@ -277,7 +280,7 @@
   .faixaCupom { margin: 0 14px 12px; }
   .lista { padding: 0 4px 6px; }
   .item { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 10px; }
-  .nome { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .nome { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .l1 { align-items: flex-start; }
   .dir { gap: 12px; justify-content: flex-start; }
   .dir > svg { display: none; }
