@@ -96,7 +96,7 @@ export async function editarFornecedor(id: number, dados: ParceiroInput): Promis
 
   const { data: atual } = await supabase
     .from('fornecedores')
-    .select('codigo_omie, razao_social')
+    .select('codigo_omie, razao_social, origem')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .single()
@@ -113,6 +113,9 @@ export async function editarFornecedor(id: number, dados: ParceiroInput): Promis
   await registrarAuditoria('editar', 'fornecedor', id, dados.razao_social.trim())
   revalidatePath('/fornecedor')
 
+  // Fornecedor criado a partir de nota da SEFAZ/XML (estoque próprio, migration 182): o código é da faixa própria e
+  // não existe no Omie; a alteração fica só aqui.
+  if (atual.origem === 'sefaz') return { ok: true }
   const codigoOmie = (atual.codigo_omie as number | null) ?? null
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key) return { ok: true, omieError: 'Loja sem chave do Omie: alteração salva localmente.' }
@@ -144,7 +147,7 @@ export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; err
   const supabase = createServiceClient()
   const { data: alvo } = await supabase
     .from('fornecedores')
-    .select('razao_social, codigo_omie')
+    .select('razao_social, codigo_omie, origem')
     .eq('id', id)
     .eq('loja_id', lojaId)
     .maybeSingle()
@@ -155,7 +158,8 @@ export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; err
   revalidatePath('/fornecedor')
 
   const codigoOmie = (alvo?.codigo_omie as number | null) ?? null
-  if (!codigoOmie) return { ok: true }
+  // Fornecedor da nota da SEFAZ/XML (migration 182): não existe no Omie.
+  if (!codigoOmie || alvo?.origem === 'sefaz') return { ok: true }
 
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key) return { ok: true }
