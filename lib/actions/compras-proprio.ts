@@ -1,5 +1,6 @@
 'use server'
 
+import { chaveIdempotenciaValida } from '@/lib/estoque/compra-manual-puro'
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { revalidatePath } from 'next/cache'
@@ -120,6 +121,8 @@ export type ItemManual = { codigoProduto: number; quantidade: number | string; v
 export async function lancarCompraManual(dados: {
   codigoLocal: number; fornecedorNome?: string; fornecedorCnpj?: string; numero?: string; emissao?: string
   frete?: number | string; desconto?: number | string; obs?: string; itens: ItemManual[]
+  /** UUID gerado pelo formulário: a mesma chave de novo (duplo clique, fila do desktop) não lança outra vez. */
+  chaveIdempotencia?: string
 }): Promise<ResultadoLancamento> {
   const __d = viaDesktop('compras-proprio#lancarCompraManual', lancarCompraManual, [dados]); if (__d) return __d as never
   const ctx = await contexto('Compras - Criar')
@@ -132,6 +135,7 @@ export async function lancarCompraManual(dados: {
     origem: 'manual', numero: dados.numero?.trim() || null, fornecedor_cnpj: dados.fornecedorCnpj || null,
     fornecedor_nome: dados.fornecedorNome?.trim() || null, emissao: dados.emissao || null,
     valor_frete: numero(dados.frete), valor_desconto: numero(dados.desconto), obs: dados.obs?.trim() || null,
+    chave_idempotencia: chaveIdempotenciaValida(dados.chaveIdempotencia),
     itens: itens.map((i, idx) => ({
       linha: idx + 1, c_prod: null, descricao: i.descricao ?? null, unidade_compra: i.unidade ?? null,
       quantidade: numero(i.quantidade), valor_unitario: numero(i.valorUnitario), valor_total: Math.round(numero(i.quantidade) * numero(i.valorUnitario) * 100) / 100,
@@ -140,6 +144,11 @@ export async function lancarCompraManual(dados: {
     })),
   }, dados.codigoLocal, ctx.userId)
   if ('error' in r) return r
+  if (r.duplicado) {
+    // Mesma compra enviada de novo: nada foi lançado; devolve a nota já criada na primeira vez.
+    const { data: c } = await createServiceClient().from('compras_proprio').select('nota_fiscal_id').eq('id', r.compraId).maybeSingle<{ nota_fiscal_id: number | null }>()
+    return { ...r, notaId: c?.nota_fiscal_id ?? null }
+  }
   // A compra manual também aparece em Notas Fiscais (sem chave de acesso: nota de papel).
   const notaId = await criarNotaDaCompraManual(ctx.lojaId, r.compraId, dados, itens)
   await registrarAuditoria('criar', 'compra (manual)', r.compraId, dados.fornecedorNome?.trim() || null)
