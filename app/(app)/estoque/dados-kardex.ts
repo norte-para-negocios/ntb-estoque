@@ -4,6 +4,7 @@ import { escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { addDias } from '@/lib/estoque/espelho-lojas'
 import { janelaDeConsulta } from '@/lib/estoque/quem-mexeu-puro'
 import type { FiltrosKardexLoja } from '@/lib/estoque/kardex-loja-puro'
+import { reordenarPagina } from '@/lib/estoque/kardex-cadeia-puro'
 import { emLotes } from './dados-comum'
 
 export type LinhaKardexLoja = {
@@ -50,7 +51,10 @@ async function resolver(lojaId: number, f: FiltrosKardexLoja): Promise<Resolvido
   return { produtos, ajustes, truncado, vazio: (produtos != null && !produtos.length) || (ajustes != null && !ajustes.length) }
 }
 
-/** Uma página do kardex (from..to), na ordem total data_mov, id_mov, id (decrescente), com nomes e autor. */
+/**
+ * Uma página do kardex (from..to), na ordem total data_mov, id_mov, id (decrescente), com nomes e autor. Dentro de cada
+ * produto+local+dia as linhas passam para a ordem do Omie (cadeia de saldo, `reordenarPagina`): id_mov não é a ordem real.
+ */
 export async function buscarKardexLoja(lojaId: number, f: FiltrosKardexLoja, faixa: { from: number; to: number }, contar = true): Promise<{ linhas: LinhaKardexLoja[]; total: number; aviso: string | null; erro: string | null }> {
   const r = await resolver(lojaId, f)
   if (r.vazio) return { linhas: [], total: 0, aviso: r.truncado, erro: null }
@@ -65,7 +69,7 @@ export async function buscarKardexLoja(lojaId: number, f: FiltrosKardexLoja, fai
   const { data, count, error } = await q.order('data_mov', { ascending: false }).order('id_mov', { ascending: false })
     .order('id', { ascending: false }).range(faixa.from, faixa.to)
   if (error) return { linhas: [], total: 0, aviso: r.truncado, erro: error.message }
-  const rows = (data ?? []) as unknown as Omit<LinhaKardexLoja, 'produto' | 'codigo' | 'unidade' | 'local' | 'autor'>[]
+  const rows = reordenarPagina((data ?? []) as unknown as Omit<LinhaKardexLoja, 'produto' | 'codigo' | 'unidade' | 'local' | 'autor'>[])
   return { linhas: await enriquecer(lojaId, rows), total: count ?? rows.length, aviso: r.truncado, erro: null }
 }
 
