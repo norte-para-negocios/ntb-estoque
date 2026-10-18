@@ -7,6 +7,7 @@
 // 076_auditoria_fiscal_produto_familia_local.sql). Se a função SQL mudar,
 // replicar aqui também — mesmo contrato do precedente agregarMovimentacaoJS.
 import { buscarFrio } from '@/lib/historico-contabo'
+import { custoEstoqueItemOmie, entradaCustoDoItem, itemMovimentaEstoque } from '@/lib/compras/custo-estoque-item'
 
 type Json = Record<string, unknown>
 
@@ -171,6 +172,10 @@ const cfopDocDe = (it: ItemNFFrio): string | null =>
 
 const valorDe = (it: ItemNFFrio): number => (Number(it.n_qtde_nfe) || 0) * (Number(it.n_preco_unit) || 0)
 
+// valor que o Omie põe no estoque (regra N3 corrigida, migration 175 / custo_estoque_item_omie)
+const valorEstoqueDe = (it: ItemNFFrio): number =>
+  custoEstoqueItemOmie(entradaCustoDoItem(it.full_object, it.n_qtde_nfe, it.n_preco_unit)).valorEstoque
+
 const right3 = (s: string | null): string => (s ?? '').replace(/\D/g, '').slice(-3)
 
 const ilike = (campo: string | null | undefined, termo: string): boolean =>
@@ -214,6 +219,7 @@ export function filtrarItensCompras(
 ): ItemNFFrio[] {
   return itens.filter((it) => {
     if (!itemBateStatus(it, f.status)) return false
+    if (!itemMovimentaEstoque(it.full_object)) return false // migration 176: o Omie não lança no estoque
     const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
     if (f.familias.length) {
       const fam = m?.familia ?? null
@@ -241,22 +247,24 @@ export function filtrarItensCompras(
   })
 }
 
-export function agregarComprasTotal(itens: ItemNFFrio[]): { valor: number; nNotas: number } {
+export function agregarComprasTotal(itens: ItemNFFrio[]): { valor: number; valorEstoque: number; nNotas: number } {
   const notas = new Set<number>()
   let valor = 0
+  let valorEstoque = 0
   for (const it of itens) {
     valor += valorDe(it)
+    valorEstoque += valorEstoqueDe(it)
     notas.add(it.nota_fiscal_id)
   }
-  return { valor, nNotas: notas.size }
+  return { valor, valorEstoque, nNotas: notas.size }
 }
 
 export function agregarComprasMatriz(
   itens: ItemNFFrio[],
   dim: string,
   meta: MetaProdutoNF
-): { rotulo: string; mes: string; valor: number }[] {
-  const grupos = new Map<string, { rotulo: string; mes: string; valor: number }>()
+): { rotulo: string; mes: string; valor: number; valor_estoque: number }[] {
+  const grupos = new Map<string, { rotulo: string; mes: string; valor: number; valor_estoque: number }>()
   for (const it of itens) {
     const m = it.n_id_produto != null ? meta.get(Number(it.n_id_produto)) : undefined
     const cru =
@@ -268,8 +276,9 @@ export function agregarComprasMatriz(
     const rotulo = cru || 'Sem classificação'
     const mes = it.nf_d_emissao_nfe.slice(0, 7)
     const k = `${rotulo}|${mes}`
-    const e = grupos.get(k) ?? { rotulo, mes, valor: 0 }
+    const e = grupos.get(k) ?? { rotulo, mes, valor: 0, valor_estoque: 0 }
     e.valor += valorDe(it)
+    e.valor_estoque += valorEstoqueDe(it)
     grupos.set(k, e)
   }
   return [...grupos.values()]
@@ -278,7 +287,7 @@ export function agregarComprasMatriz(
 export type LinhaDetalheCompra = {
   data: string; mes: string; nota: string; fornecedor: string
   tipo: string | null; familia: string | null; produto: string; codigo: string
-  ncm: string; cfop: string; unidade: string; qtde: number; preco_unit: number; total: number
+  ncm: string; cfop: string; unidade: string; qtde: number; preco_unit: number; total: number; valor_estoque: number
 }
 
 /** Espelha o SELECT de relatorio_compras_detalhe pro pedaço frio (migration 077). */
@@ -301,6 +310,7 @@ export function mapearComprasDetalhe(itens: ItemNFFrio[], meta: MetaProdutoNF): 
       qtde: Number(it.n_qtde_nfe) || 0,
       preco_unit: Number(it.n_preco_unit) || 0,
       total: valorDe(it),
+      valor_estoque: valorEstoqueDe(it),
     }
   })
 }
