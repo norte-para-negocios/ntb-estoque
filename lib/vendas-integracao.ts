@@ -15,7 +15,7 @@
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
-import { codIntOPVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
+import { codigoOPDaVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, patchOPNaoConcluida, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
@@ -126,11 +126,8 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
       // O sync do Omie não sobrescreve `observacao`, então a marca fica.
       await supabase
         .from('ordens_producao')
-        .update({
-          observacao: p.obs,
-          // OP criada mas não concluída: marca pro cron retry-op-conclusao concluir depois (antes ficava esquecida).
-          ...(erroConclusao ? { conclusao_status: 'Erro', conclusao_erro_msg: erroConclusao.slice(0, 500), conclusao_tentativas: 1, conclusao_ultima_tentativa_em: new Date().toISOString() } : {}),
-        })
+        // OP criada mas não concluída: marca pro cron retry-op-conclusao concluir depois (antes ficava esquecida).
+        .update(erroConclusao ? patchOPNaoConcluida(p.obs, erroConclusao, new Date().toISOString()) : { observacao: p.obs })
         .eq('loja_id', loja.id)
         .eq('identificacao_n_cod_op', nCodOP)
     }
@@ -271,8 +268,14 @@ async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p
       await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'concluida' })
       return { ok: true, nCodOP }
     } catch (e) {
-      // A OP existe no Omie: não reenfileirar (duplicaria); o retry-op-conclusao conclui depois.
-      return { ok: false, nCodOP, erro: e instanceof Error ? e.message : String(e), tipoErro: 'permanente' }
+      // A OP existe no Omie: não reenfileirar (duplicaria). Grava a OP local marcada para o retry-op-conclusao.
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!loja.is_test) {
+        await fetchOrdemProducao(loja, nCodOP).catch(() => {})
+        await supabase.from('ordens_producao').update(patchOPNaoConcluida(p.obs, msg, new Date().toISOString()))
+          .eq('loja_id', loja.id).eq('identificacao_n_cod_op', nCodOP)
+      }
+      return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
     }
   }
   const r = await tentarOp(supabase, loja, p)
@@ -318,10 +321,8 @@ export async function processarItemVenda(
   if (!sem) {
     // Com pedidoRef o código da OP sai do pedido (reenvio do mesmo pedido = mesmo código, migration 178); sem ele não
     // há como reconhecer o reenvio e fica o código por hora de sempre.
-    const cCodIntOP = ctx.pedidoRef
-      ? codIntOPVenda(ctx.pedidoRef, produto.codigo_produto, ctx.ocorrencia ?? 0)
-      : `NTBV${Date.now()}${ctx.indice}`.slice(0, 20)
-    if (!ctx.pedidoRef) console.warn('vendas-integracao: venda sem pedidoRef: sem proteção contra reenvio', item.codigo)
+    const { cCodIntOP, protegido } = codigoOPDaVenda(ctx.pedidoRef, produto.codigo_produto, ctx.ocorrencia ?? 0, Date.now(), ctx.indice)
+    if (!protegido) console.warn('vendas-integracao: venda sem pedidoRef: sem proteção contra reenvio', item.codigo)
     const payload: PayloadOp = {
       codigo: item.codigo,
       codigo_produto: produto.codigo_produto,

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda, opsParaEstornar, classificarErroSaidaVenda, type VinculoOP } from './venda-idempotente.ts'
+import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda, opsParaEstornar, classificarErroSaidaVenda, acaoConsultaEstorno, patchOPNaoConcluida, codigoOPDaVenda, type VinculoOP } from './venda-idempotente.ts'
 
 const REF = '3f6c2a9e-1b7d-4c55-9a0e-2d8f4b6c1e07'
 
@@ -44,4 +44,27 @@ test('erro ao gravar a saída: chave duplicada é duplicada, mesmo com "venda_ch
   assert.equal(classificarErroSaidaVenda({ code: '23505', message: 'x' }, null), 'erro')
   assert.equal(classificarErroSaidaVenda({ code: 'XX000', message: 'boom' }, 'VND-x'), 'erro')
   assert.equal(classificarErroSaidaVenda(null, 'VND-x'), 'ok')
+})
+
+test('estorno: OP sem nº procurada no Omie — só "não existe" marca o vínculo; erro passageiro é falha e fica para depois', () => {
+  assert.equal(acaoConsultaEstorno({ nCodOP: 123 }, null), 'excluir')
+  assert.equal(acaoConsultaEstorno(null, null), 'marcar_estornada')
+  assert.equal(acaoConsultaEstorno(null, new Error('Consumo redundante detectado')), 'falha')
+})
+
+test('OP criada e não concluída fica marcada para o retry-op-conclusao (conclusao_status preenchido)', () => {
+  const p = patchOPNaoConcluida('Venda ntb-vendas #abc', 'Movimentos pendentes de cálculo', '2026-10-18T12:00:00.000Z')
+  assert.equal(p.observacao, 'Venda ntb-vendas #abc')
+  assert.equal(p.conclusao_status, 'Erro')
+  assert.equal(p.conclusao_tentativas, 1)
+  assert.equal(p.conclusao_ultima_tentativa_em, '2026-10-18T12:00:00.000Z')
+  assert.equal(patchOPNaoConcluida('o', 'x'.repeat(900), 't').conclusao_erro_msg.length, 500)
+})
+
+test('sem pedidoRef cai no código por hora (como antes), sem proteção contra reenvio', () => {
+  const r = codigoOPDaVenda(null, 2459363119, 0, 1792345678901, 3)
+  assert.deepEqual(r, { cCodIntOP: 'NTBV17923456789013', protegido: false })
+  assert.ok(r.cCodIntOP.length <= 20)
+  const c = codigoOPDaVenda('3f6c2a9e-1b7d-4c55-9a0e-2d8f4b6c1e07', 2459363119, 0, 1792345678901, 3)
+  assert.deepEqual(c, { cCodIntOP: codIntOPVenda('3f6c2a9e-1b7d-4c55-9a0e-2d8f4b6c1e07', 2459363119, 0), protegido: true })
 })

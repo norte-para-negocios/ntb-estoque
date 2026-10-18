@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { excluirOrdemProducao, reverterOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
-import { opsParaEstornar, type VinculoOP } from '@/lib/vendas/venda-idempotente'
+import { acaoConsultaEstorno, opsParaEstornar, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 
 export type ResultadoEstornoVenda = {
   ajustesExcluidos: number
@@ -67,8 +67,16 @@ export async function estornarVenda(supabase: SupabaseClient, loja: LojaOmie, pe
     const codInt = 'codInt' in alvo ? alvo.codInt : null
     if (codInt) {
       // Vínculo sem nº da OP (a criação caiu no meio): procura no Omie pelo código antes de desistir.
-      const achada = await consultarOPPorCodInt(loja, codInt).catch(() => null)
-      if (!achada) { await marcarEstornada(supabase, loja.id, codInt, null); continue }
+      let achada: { nCodOP: number } | null = null
+      let erroConsulta: unknown = null
+      try { achada = await consultarOPPorCodInt(loja, codInt) } catch (e) { erroConsulta = e }
+      const acao = acaoConsultaEstorno(achada, erroConsulta)
+      if (acao === 'falha') {
+        r.falhas++
+        r.detalhes.push(`OP ${codInt}: não foi possível consultar no Omie (${erroConsulta instanceof Error ? erroConsulta.message : String(erroConsulta)})`)
+        continue
+      }
+      if (acao === 'marcar_estornada' || !achada) { await marcarEstornada(supabase, loja.id, codInt, null); continue }
       nCodOP = achada.nCodOP
     }
     if (!nCodOP) continue

@@ -80,3 +80,27 @@ export function classificarErroSaidaVenda(
   if ((error.code === 'PGRST204' || error.code === '42703') && /venda_chave/.test(error.message)) return 'sem_coluna'
   return 'erro'
 }
+
+/**
+ * Estorno de uma OP de venda cujo nº ainda não estava no vínculo: resultado da consulta pelo código no Omie.
+ * Achou → excluir; não existe (consulta devolveu null) → marcar o vínculo como estornado; erro (limite, rede) → falha,
+ * o vínculo fica como está para a próxima tentativa (senão a OP ficaria no Omie com os insumos consumidos).
+ */
+export function acaoConsultaEstorno(achada: { nCodOP: number } | null, erro: unknown): 'excluir' | 'marcar_estornada' | 'falha' {
+  if (erro) return 'falha'
+  return achada ? 'excluir' : 'marcar_estornada'
+}
+
+/**
+ * Marca local de uma OP de venda criada no Omie e não concluída: o cron retry-op-conclusao só pega OP com
+ * conclusao_status preenchido (idx_op_retry_pendente). Usado por tentarOp e pelo caminho consultar → concluir.
+ */
+export function patchOPNaoConcluida(obs: string, erro: string, agoraISO: string) {
+  return { observacao: obs, conclusao_status: 'Erro' as const, conclusao_erro_msg: erro.slice(0, 500), conclusao_tentativas: 1, conclusao_ultima_tentativa_em: agoraISO }
+}
+
+/** cCodIntOP da venda: com pedidoRef, derivado do pedido (protegido contra reenvio); sem ele, o código por hora de sempre. */
+export function codigoOPDaVenda(pedidoRef: string | null, codigoProduto: number, ocorrencia: number, agoraMs: number, indice: number): { cCodIntOP: string; protegido: boolean } {
+  if (pedidoRef) return { cCodIntOP: codIntOPVenda(pedidoRef, codigoProduto, ocorrencia), protegido: true }
+  return { cCodIntOP: `NTBV${agoraMs}${indice}`.slice(0, 20), protegido: false }
+}

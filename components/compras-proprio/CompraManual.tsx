@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { novaChaveIdempotencia } from '@/lib/estoque/compra-manual-puro'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,7 +19,7 @@ export function CompraManual({ locais }: { locais: { codigoLocal: number; descri
   const router = useRouter()
   const [local, setLocal] = useState<number | ''>(locais.find((l) => l.padrao)?.codigoLocal ?? (locais.length === 1 ? locais[0].codigoLocal : ''))
   // Uma chave por compra (renovada depois de lançar): duplo clique ou reenvio não lança duas vezes (migration 181).
-  const [chave, setChave] = useState(() => crypto.randomUUID())
+  const [chave, setChave] = useState(() => novaChaveIdempotencia())
   const [fornecedor, setFornecedor] = useState('')
   const [cnpj, setCnpj] = useState('')
   const [numero, setNumero] = useState('')
@@ -41,7 +42,7 @@ export function CompraManual({ locais }: { locais: { codigoLocal: number; descri
         itens: linhas.filter((l) => l.produto).map((l) => ({ codigoProduto: l.produto!.codigoProduto, quantidade: l.quantidade, valorUnitario: l.valor, unidade: l.produto!.unidade, descricao: l.produto!.descricao, lote: l.lote || null, validade: l.validade || null })),
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
-      setChave(crypto.randomUUID())
+      setChave(novaChaveIdempotencia())
       toast.success(r.duplicado ? 'Esta compra já tinha sido lançada' : 'Compra lançada no estoque')
       router.push(r.notaId ? `/nota-fiscal/${r.notaId}` : '/nota-fiscal')
     })
