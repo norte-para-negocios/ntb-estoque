@@ -19,6 +19,7 @@ import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
 import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
 import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
 import { ObservacaoNF } from '@/components/nota-fiscal/ObservacaoNF'
+import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
 
 export default async function NotaFiscalItensPage({
@@ -206,6 +207,9 @@ export default async function NotaFiscalItensPage({
           <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
           {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
           {conferencia && <OrigemSefazNF info={conferencia} />}
+          {/* loja própria: histórico de processamento (SEFAZ, conferência, estoque, manifestação) no lugar do HistoricoStatusNF do Omie */}
+          <HistoricoProcessamentoNF lojaId={lojaId} chave={nf.c_chave_nfe ?? null} compraId={conferencia?.compra?.id ?? null}
+            nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
         </>
       ) : (
         <>

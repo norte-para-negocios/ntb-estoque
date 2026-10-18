@@ -25,6 +25,8 @@ const ROTULO_SEFAZ: Record<string, StatusNF> = {
   parcial: { label: 'Parcial', tom: 'warn' },
   divergente: { label: 'Divergente', tom: 'err' },
   estornada: { label: 'Entrada desfeita', tom: 'warn' },
+  conferida: { label: 'Conferida', tom: 'warn' },
+  recusada: { label: 'Recusada na SEFAZ', tom: 'err' },
 }
 
 export function statusNF(cEtapa: string | null, fullObject: unknown): StatusNF {

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { FileText, Download, FileUp, PenLine } from 'lucide-react'
+import { FileText, Download, FileUp, KanbanSquare, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
@@ -249,6 +249,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
           <>
             <a href={`/nota-fiscal/relatorio?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><FileText className="size-4" /> Relatório PDF</a>
             <a href={`/nota-fiscal/export?${exportQs}`} className={btnClass('outline')}><Download className="size-4" /> Excel</a>
+            {proprio && <Link href="/nota-fiscal/etapas" className={btnClass('outline')}><KanbanSquare className="size-4" /> Etapas do recebimento</Link>}
             {podeLancarManual && (
               <>
                 <Link href="/nota-fiscal/importar" className={btnClass('outline')}><FileUp className="size-4" /> Importar XML</Link>

@@ -18,3 +18,10 @@ test('nota da SEFAZ: situação da conferência vira o rótulo; lançada continu
   assert.ok(statusBateFiltro({ c_etapa: '40', full_object: { sefaz: { situacao: 'parcial' } } }, 'PENDENTE'))
   assert.ok(!statusBateFiltro({ c_etapa: '60', full_object: { sefaz: { situacao: 'lancada' } } }, 'PENDENTE'))
 })
+
+test('nota do Omie: rótulos de sempre; nota própria ganha Conferida e Recusada', () => {
+  assert.equal(statusNF('40', {}).label, 'Pendente (etapa 40)')
+  assert.equal(statusNF('40', { sefaz: { situacao: 'conferida' } }).label, 'Conferida')
+  assert.equal(statusNF('40', { sefaz: { situacao: 'recusada' } }).label, 'Recusada na SEFAZ')
+  assert.equal(statusNF('40', { sefaz: { situacao: 'recusada' } }).tom, 'err')
+})
