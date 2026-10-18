@@ -33,14 +33,14 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 const TOPIC_LABEL: Record<string, string> = {
   Incluido: 'Recebimento incluído',
   Alterado: 'Recebimento alterado',
-  Concluido: 'Recebimento concluído (manifestado)',
-  Revertido: 'Manifestação revertida',
+  Concluido: 'Recebimento concluído',
+  Revertido: 'Conclusão revertida',
   Excluido: 'Recebimento excluído',
 }
 
 const ACAO_LABEL: Record<string, string> = {
-  concluir: 'Manifestada',
-  reverter: 'Manifestação revertida',
+  concluir: 'Recebimento concluído',
+  reverter: 'Conclusão revertida',
   excluir: 'Excluída',
 }
 

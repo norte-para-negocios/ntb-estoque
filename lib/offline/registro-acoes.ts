@@ -164,6 +164,7 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'nota-fiscal-proprio#configurarItemNF': m30.configurarItemNF as Acao,
   'nota-fiscal-proprio#marcarConferidaNF': m30.marcarConferidaNF as Acao,
   'nota-fiscal-proprio#salvarObservacaoNF': m30.salvarObservacaoNF as Acao,
+  'nota-fiscal-proprio#manifestarNotaSefaz': m30.manifestarNotaSefaz as Acao,
   'nota-fiscal#setQuantidadeNFItem': m31.setQuantidadeNFItem as Acao,
   'nota-fiscal#setCategoriaContabilNFItem': m31.setCategoriaContabilNFItem as Acao,
   'nota-fiscal#manifestarNF': m31.manifestarNF as Acao,

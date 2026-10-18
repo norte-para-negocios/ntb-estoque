@@ -45,3 +45,12 @@ test('a consulta à SEFAZ só fala com hosts fazenda.gov.br e nunca emite nem ca
   assert.ok(src.includes('fazenda\\.gov\\.br'))
   assert.ok(!/NFeAutorizacao|NFeRetAutorizacao|110111/.test(src))
 })
+
+test('manifestação só por botão: nenhum cron, sync ou lançamento chama enviarManifestacao/manifestarNotaSefaz', () => {
+  for (const f of ['lib/estoque/sefaz-sync.ts', 'lib/estoque/nf-sefaz.ts', 'app/api/cron/sync-sefaz/route.ts', 'app/api/sync/notas-fiscais/route.ts', 'lib/actions/compras-proprio.ts'])
+    assert.ok(!/enviarManifestacao|manifestarNotaSefaz/.test(semComentarios(ler(f))), f)
+})
+test('modo Omie: o botão diz "Concluir recebimento" e continua chamando manifestarNF', () => {
+  const src = ler('components/nota-fiscal/AcoesNF.tsx')
+  assert.ok(src.includes('Concluir recebimento') && !src.includes('Manifestar (marcar recebida)') && src.includes('manifestarNF(notaId)'))
+})

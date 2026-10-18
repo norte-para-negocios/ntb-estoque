@@ -34,6 +34,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Notas Fiscais - Manifestar', label: 'Manifestar' },
       { nome: 'Notas Fiscais - Reverter', label: 'Reverter' },
       { nome: 'Notas Fiscais - Excluir', label: 'Excluir' },
+      // Fase B: manifestação do destinatário na SEFAZ (só loja de estoque próprio; vai para a SEFAZ e não se desfaz)
+      { nome: 'Notas Fiscais - Manifestar na SEFAZ', label: 'Manifestar na SEFAZ' },
     ],
   },
   {

@@ -19,6 +19,7 @@ import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
 import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
 import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
 import { ObservacaoNF } from '@/components/nota-fiscal/ObservacaoNF'
+import { ManifestacaoNF } from '@/components/nota-fiscal/ManifestacaoNF'
 import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
 
@@ -36,6 +37,7 @@ export default async function NotaFiscalItensPage({
   const podeManifestar = await requirePermissao(lojaId, 'Notas Fiscais - Manifestar')
   const podeReverter = await requirePermissao(lojaId, 'Notas Fiscais - Reverter')
   const podeExcluir = await requirePermissao(lojaId, 'Notas Fiscais - Excluir')
+  const podeManifestarSefaz = await requirePermissao(lojaId, 'Notas Fiscais - Manifestar na SEFAZ')
 
   const { id } = await params
   const supabase = await createClient()
@@ -205,6 +207,10 @@ export default async function NotaFiscalItensPage({
       {proprio ? (
         <>
           <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
+          {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (
+            <ManifestacaoNF notaId={Number(id)} ciencia={{ em: conferencia.documento?.cienciaEm ?? null, cstat: conferencia.documento?.cienciaCstat ?? null }}
+              manifestacoes={conferencia.manifestacoes} temEntrada={!!conferencia.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'} />
+          )}
           {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
           {conferencia && <OrigemSefazNF info={conferencia} />}
           {/* loja própria: histórico de processamento (SEFAZ, conferência, estoque, manifestação) no lugar do HistoricoStatusNF do Omie */}

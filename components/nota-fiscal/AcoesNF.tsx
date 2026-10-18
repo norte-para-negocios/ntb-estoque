@@ -32,11 +32,11 @@ export function AcoesNF({
   const router = useRouter()
 
   function manifestar() {
-    if (!window.confirm('Marcar esta nota como recebida/concluída no Omie?')) return
+    if (!window.confirm('Concluir o recebimento desta nota no Omie? Ela passa para Concluída.')) return
     startTransition(async () => {
       const res = await manifestarNF(notaId)
       if (res?.error) toast.error(res.error)
-      else { toast.success('Nota marcada como concluída.'); router.refresh() }
+      else { toast.success('Recebimento concluído.'); router.refresh() }
     })
   }
 
@@ -67,7 +67,7 @@ export function AcoesNF({
     <div className="flex flex-wrap gap-2">
       {podeManifestar && !concluida && !cancelada && (
         <button type="button" disabled={pending} onClick={manifestar} className={btnClass('outline')}>
-          <CheckCircle2 className="size-4" /> Manifestar (marcar recebida)
+          <CheckCircle2 className="size-4" /> Concluir recebimento
         </button>
       )}
       {podeReverter && (concluida || temEntrada) && !cancelada && (

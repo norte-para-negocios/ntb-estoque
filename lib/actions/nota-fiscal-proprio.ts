@@ -12,6 +12,9 @@ import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
 import { sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
 import { carregarCmc } from '@/lib/estoque/nf-memoria'
+import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
+import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
+import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, validarJustificativa, type EstadoManifestacao, type TipoManifestacao } from '@/lib/estoque/sefaz-manifestacao'
 import { avaliarItemCompra, decidirConferencia, flagsParaTexto, validarConfigItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
@@ -276,4 +279,76 @@ export async function salvarObservacaoNF(notaId: number, obs: string): Promise<{
   await sb.from('compras_proprio_eventos').insert({ loja_id: ctx.lojaId, compra_id: compra.id, tipo: 'observacao', detalhe: { texto: texto.slice(0, 200) }, user_id: ctx.userId })
   revalidatePath(`/nota-fiscal/${notaId}`)
   return { ok: true }
+}
+
+// ---------------------------------------------------------------- Fase B: manifestação do destinatário (R12)
+
+/** Manifestação conclusiva na SEFAZ (Confirmar / Desconhecer / Operação não realizada). SÓ por botão, com confirmação na
+ *  tela; no máximo um envio em andamento por nota (índice único parcial + decidirEnvioManifestacao). Precisa de internet:
+ *  fica FORA da política do desktop offline. */
+export async function manifestarNotaSefaz(notaId: number, tipo: TipoManifestacao, justificativa?: string | null): Promise<{ ok: true; status: 'registrada' | 'recusada'; cStat: string | null; xMotivo: string | null } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#manifestarNotaSefaz', manifestarNotaSefaz, [notaId, tipo, justificativa]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar na SEFAZ')
+  if ('error' in ctx) return ctx
+  if (!ehTipoManifestacao(tipo)) return { error: 'Tipo de manifestação inválido.' }
+  const erroJust = validarJustificativa(tipo, justificativa)
+  if (erroJust) return { error: erroJust }
+  const sb = createServiceClient()
+  const [{ data: nota }, { data: loja }, { data: nsu }] = await Promise.all([
+    sb.from('notas_fiscais').select('id, c_chave_nfe').eq('id', notaId).eq('loja_id', ctx.lojaId).is('deleted_at', null).maybeSingle(),
+    sb.from('lojas').select('cnpj, is_test').eq('id', ctx.lojaId).maybeSingle(),
+    sb.from('sefaz_nsu').select('ambiente').eq('loja_id', ctx.lojaId).maybeSingle(),
+  ])
+  const chave = nota?.c_chave_nfe as string | null | undefined
+  if (!nota || !chave || !/^\d{44}$/.test(chave)) return { error: 'Esta nota não tem chave de acesso: não dá para manifestar na SEFAZ.' }
+  if (loja?.is_test) return { error: 'Loja de teste: a manifestação não vai para a SEFAZ.' }
+  const cnpj = String(loja?.cnpj ?? '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return { error: 'A loja precisa de um CNPJ válido.' }
+  const tpAmb: 1 | 2 = nsu?.ambiente === 2 ? 2 : 1
+
+  const { data: estados } = await sb.from('sefaz_manifestacoes').select('id, tp_evento, status, criado_em').eq('loja_id', ctx.lojaId).eq('chave', chave).order('id')
+  const linhas = (estados ?? []) as (EstadoManifestacao & { id: number })[]
+  const agora = new Date()
+  const decisao = decidirEnvioManifestacao(linhas, tipo, agora)
+  if (decisao.acao === 'bloquear') return { error: decisao.motivo }
+
+  let linhaId: number
+  if (decisao.acao === 'enviar') {
+    const { data: ins, error } = await sb.from('sefaz_manifestacoes')
+      .insert({ loja_id: ctx.lojaId, chave, tp_evento: tipo, status: 'enviando', justificativa: justificativa?.trim() || null, user_id: ctx.userId })
+      .select('id').single()
+    if (error) return { error: error.code === '23505' ? 'Já há um envio em andamento para esta nota.' : error.message }
+    linhaId = Number(ins.id)
+  } else {
+    // reenvio do MESMO envio que ficou sem resposta: a troca de estado é condicional (dois cliques ao mesmo tempo → só um passa)
+    const alvo = [...linhas].reverse().find((l) => l.tp_evento === tipo && (l.status === 'incerta' || l.status === 'enviando'))
+    if (!alvo) return { error: 'Envio anterior não encontrado: atualize a página.' }
+    let q = sb.from('sefaz_manifestacoes').update({ status: 'enviando', criado_em: agora.toISOString(), user_id: ctx.userId }).eq('id', alvo.id).eq('status', alvo.status)
+    if (alvo.status === 'enviando') q = q.lt('criado_em', new Date(agora.getTime() - 5 * 60 * 1000).toISOString())
+    const { data: upd, error } = await q.select('id')
+    if (error) return { error: error.code === '23505' ? 'Já há um envio em andamento para esta nota.' : error.message }
+    if (!upd?.length) return { error: 'Já há um envio em andamento para esta nota.' }
+    linhaId = alvo.id
+  }
+
+  let resultado: { cStat: string | null; xMotivo: string | null; protocolo: string | null }
+  try {
+    const cred = await carregarCredencialLoja(ctx.lojaId)
+    resultado = await enviarManifestacao({ chave, cnpj, tpAmb, tipo, justificativa, cred })
+  } catch (e) {
+    // tempo esgotado / rede: não se sabe se a SEFAZ registrou — fica "sem resposta" e o reenvio é do mesmo tipo (573 se já tinha)
+    const msg = (e instanceof Error ? e.message : String(e)).slice(0, 300)
+    await sb.from('sefaz_manifestacoes').update({ status: 'incerta', xmotivo: msg, respondido_em: new Date().toISOString() }).eq('id', linhaId)
+    await atualizarSituacao(ctx.lojaId, notaId)
+    return { error: `Sem resposta da SEFAZ: ${msg}. Tente de novo em alguns minutos (o mesmo envio é repetido).` }
+  }
+  const status = resultadoManifestacao(resultado.cStat)
+  await sb.from('sefaz_manifestacoes').update({ status, cstat: resultado.cStat, xmotivo: resultado.xMotivo, protocolo: resultado.protocolo, respondido_em: new Date().toISOString() }).eq('id', linhaId)
+  if (status === 'registrada' && tipo !== '210200') {
+    const compra = await compraDaNota(ctx.lojaId, notaId)
+    if (compra) await sb.from('compras_proprio_eventos').insert({ loja_id: ctx.lojaId, compra_id: compra.id, tipo: 'recusada', detalhe: { tp_evento: tipo, cstat: resultado.cStat }, user_id: ctx.userId })
+  }
+  await registrarAuditoria('editar', `nota fiscal (manifestação ${tipo})`, notaId, `${status} ${resultado.cStat ?? ''}`.trim())
+  await atualizarSituacao(ctx.lojaId, notaId)
+  return { ok: true, status, cStat: resultado.cStat, xMotivo: resultado.xMotivo }
 }

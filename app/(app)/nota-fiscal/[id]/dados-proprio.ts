@@ -14,6 +14,8 @@ export type ConferenciaCarregada = {
   locais: { codigo: number; descricao: string }[]
   sefaz: { origem: string | null; recebidoEm: string | null; nsu: string | null; completo: boolean; alertas: string[] }
   documento: { cienciaEm: string | null; cienciaCstat: string | null; tipo: string | null } | null
+  /** Fase B: manifestações do destinatário registradas/enviadas para esta chave (mais antiga primeiro). */
+  manifestacoes: { tpEvento: string; status: string; cstat: string | null; xmotivo: string | null; protocolo: string | null; criadoEm: string; respondidoEm: string | null }[]
 }
 
 export async function carregarConferencia(lojaId: number, notaId: number, fullObject: unknown, chave: string | null): Promise<ConferenciaCarregada> {
@@ -86,7 +88,10 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
   const locais = (locaisRaw ?? []).filter((l) => l.inativo !== 'S' && l.inativo !== true).map((l) => ({ codigo: Number(l.codigo_local_estoque), descricao: l.descricao as string }))
   const fo = (fullObject ?? {}) as { sefaz?: { origem?: string; recebidoEm?: string; nsu?: string; completo?: boolean; alertas?: string[] } }
   let documento: ConferenciaCarregada['documento'] = null
+  let manifestacoes: ConferenciaCarregada['manifestacoes'] = []
   if (chave) {
+    const { data: ms } = await sb.from('sefaz_manifestacoes').select('tp_evento, status, cstat, xmotivo, protocolo, criado_em, respondido_em').eq('loja_id', lojaId).eq('chave', chave).order('id')
+    manifestacoes = (ms ?? []).map((m) => ({ tpEvento: m.tp_evento, status: m.status, cstat: m.cstat, xmotivo: m.xmotivo, protocolo: m.protocolo, criadoEm: m.criado_em, respondidoEm: m.respondido_em }))
     const { data: d } = await sb.from('sefaz_documentos').select('ciencia_em, ciencia_cstat, tipo').eq('loja_id', lojaId).eq('chave', chave).order('id', { ascending: false }).limit(1).maybeSingle()
     if (d) documento = { cienciaEm: d.ciencia_em, cienciaCstat: d.ciencia_cstat, tipo: d.tipo }
   }
@@ -94,6 +99,6 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
     compra: c ? { id: Number(c.id), status: c.status, codigoLocal: c.codigo_local_estoque != null ? Number(c.codigo_local_estoque) : null, numero: c.numero, conferidaEm: c.conferida_em ?? null, obs: c.obs ?? null } : null,
     itens, locais,
     sefaz: { origem: fo.sefaz?.origem ?? null, recebidoEm: fo.sefaz?.recebidoEm ?? null, nsu: fo.sefaz?.nsu ?? null, completo: fo.sefaz?.completo !== false, alertas: fo.sefaz?.alertas ?? [] },
-    documento,
+    documento, manifestacoes,
   }
 }

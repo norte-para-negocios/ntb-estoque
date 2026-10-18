@@ -5,9 +5,11 @@ import {
   soapDistribuicao, soapEvento, urlDistribuicao, urlEventoNacional, type RetornoDist,
 } from './sefaz-distdfe'
 import type { CredencialLoja } from './sefaz-certificado'
+import { lerRetornoManifestacao, montarEventoManifestacao, type TipoManifestacao } from './sefaz-manifestacao'
 
-// Chamadas de rede à SEFAZ (Ambiente Nacional) com o certificado A1 da loja. Distribuição é SÓ LEITURA; a única escrita é a
-// manifestação de ciência da operação (210210), que não altera a nota. Nunca emite nem cancela nada.
+// Chamadas de rede à SEFAZ (Ambiente Nacional) com o certificado A1 da loja. Distribuição é SÓ LEITURA; as escritas são a
+// manifestação de ciência da operação (210210, automática pela configuração) e a manifestação conclusiva do destinatário
+// (210200/210220/210240, Fase B), que só sai por botão numa nota. Nunca emite nem cancela nada.
 
 function postSoap(url: string, soap: string, acao: string, cred: Pick<CredencialLoja, 'certPem' | 'keyPem'>, timeoutMs = 45000): Promise<{ status: number; body: string }> {
   const u = new URL(url)
@@ -76,4 +78,14 @@ export async function enviarCiencia(p: { chave: string; cnpj: string; tpAmb: 1 |
   if (!/ret(Env)?Evento/.test(body)) throw new Error(`Resposta inesperada da SEFAZ no evento (HTTP ${status}): ${body.replace(/\s+/g, ' ').slice(0, 200)}`)
   const r = lerRetornoEvento(body)
   return { ok: cienciaRegistrada(r.cStat), cStat: r.cStat, xMotivo: r.xMotivo }
+}
+
+/** Manifestação conclusiva do destinatário (Confirmação / Desconhecimento / Operação não realizada). Só por botão, com
+ *  confirmação explícita (manifestarNotaSefaz); nunca em cron, sync ou lançamento automático. */
+export async function enviarManifestacao(p: { chave: string; cnpj: string; tpAmb: 1 | 2; tipo: TipoManifestacao; justificativa?: string | null; cred: CredencialLoja }): Promise<{ cStat: string | null; xMotivo: string | null; protocolo: string | null }> {
+  const { xml, id } = montarEventoManifestacao({ chave: p.chave, cnpj: p.cnpj, tpAmb: p.tpAmb, tipo: p.tipo, justificativa: p.justificativa })
+  const assinado = assinarEvento(xml, id, p.cred.certPem, p.cred.keyPem)
+  const { status, body } = await postSoap(urlEventoNacional(p.tpAmb), soapEvento(assinado), ACAO_EVENTO, p.cred)
+  if (!/ret(Env)?Evento/.test(body)) throw new Error(`Resposta inesperada da SEFAZ no evento (HTTP ${status}): ${body.replace(/\s+/g, ' ').slice(0, 200)}`)
+  return lerRetornoManifestacao(body)
 }
