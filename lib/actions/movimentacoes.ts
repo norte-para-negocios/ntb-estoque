@@ -108,7 +108,7 @@ export async function criarAjusteManual(input: {
   let { data: mov, error: erroMov } = await gravar(true)
   // Banco ainda sem a coluna custo_informado (código publicado antes da migration 179): grava sem ela; o custo
   // digitado ainda vai neste envio (o retry é que voltaria ao custo médio).
-  if (erroMov && custoInformado && /custo_informado/.test(erroMov.message)) ({ data: mov, error: erroMov } = await gravar(false))
+  if (erroMov && custoInformado && (erroMov.code === 'PGRST204' || erroMov.code === '42703') && /custo_informado/.test(erroMov.message)) ({ data: mov, error: erroMov } = await gravar(false))
   if (!mov) return { error: 'Falha ao gravar o movimento' }
 
   const resultado = await reenviarMovimentoManual(

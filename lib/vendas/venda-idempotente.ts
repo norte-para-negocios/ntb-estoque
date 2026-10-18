@@ -64,3 +64,19 @@ export function opsParaEstornar(vinculos: VinculoOP[], legado: number[]): AlvoEs
   for (const n of legado) if (!vistos.has(n)) { vistos.add(n); out.push({ nCodOP: n }) }
   return out
 }
+
+/**
+ * Erro ao gravar a saída da venda em `movimentos`: 'duplicada' = a chave da venda já existe (reenvio: não grava de
+ * novo); 'sem_coluna' = o banco ainda não tem venda_chave (código antes da migration 178: grava sem a chave);
+ * 'erro' = outra falha. A mensagem de chave duplicada também cita "venda_chave", por isso o código vem antes.
+ */
+export function classificarErroSaidaVenda(
+  error: { code?: string | null; message: string } | null,
+  vendaChave: string | null
+): 'ok' | 'duplicada' | 'sem_coluna' | 'erro' {
+  if (!error) return 'ok'
+  if (!vendaChave) return 'erro'
+  if (error.code === '23505') return 'duplicada'
+  if ((error.code === 'PGRST204' || error.code === '42703') && /venda_chave/.test(error.message)) return 'sem_coluna'
+  return 'erro'
+}

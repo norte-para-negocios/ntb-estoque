@@ -15,7 +15,7 @@
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
-import { codIntOPVenda, chaveSaidaVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
+import { codIntOPVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
@@ -193,8 +193,8 @@ async function darSaida(
     .single<{ id: number; tentativas: number | null }>()
   let { data: mov, error } = await gravar(true)
   // Banco ainda sem a coluna venda_chave (código publicado antes da migration 178): grava como antes, sem a chave.
-  if (error && vendaChave && /venda_chave/.test(error.message)) ({ data: mov, error } = await gravar(false))
-  if (error?.code === '23505' && vendaChave) {
+  if (classificarErroSaidaVenda(error, vendaChave) === 'sem_coluna') ({ data: mov, error } = await gravar(false))
+  if (classificarErroSaidaVenda(error, vendaChave) === 'duplicada') {
     // Já existe a saída desta venda: devolve o estado dela sem enviar de novo (o cron retry-ajustes-movimentos cuida
     // da que não concluiu).
     const { data: jaTem } = await supabase

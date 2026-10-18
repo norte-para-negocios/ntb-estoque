@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda, opsParaEstornar, type VinculoOP } from './venda-idempotente.ts'
+import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda, opsParaEstornar, classificarErroSaidaVenda, type VinculoOP } from './venda-idempotente.ts'
 
 const REF = '3f6c2a9e-1b7d-4c55-9a0e-2d8f4b6c1e07'
 
@@ -34,4 +34,14 @@ test('decidirOPVenda', () => {
 test('opsParaEstornar junta vínculo e log antigo sem repetir', () => {
   const v: VinculoOP[] = [{ cod_int_op: 'NTBV-a', n_cod_op: 111, estado: 'concluida' }, { cod_int_op: 'NTBV-b', n_cod_op: null, estado: 'incluindo' }, { cod_int_op: 'NTBV-c', n_cod_op: 333, estado: 'estornada' }]
   assert.deepEqual(opsParaEstornar(v, [111, 222]), [{ nCodOP: 111 }, { codInt: 'NTBV-b' }, { nCodOP: 222 }])
+})
+
+test('erro ao gravar a saída: chave duplicada é duplicada, mesmo com "venda_chave" na mensagem', () => {
+  const dup = { code: '23505', message: 'duplicate key value violates unique constraint "movimentos_venda_chave_uq"' }
+  assert.equal(classificarErroSaidaVenda(dup, 'VND-x'), 'duplicada')
+  assert.equal(classificarErroSaidaVenda({ code: 'PGRST204', message: "Could not find the 'venda_chave' column of 'movimentos'" }, 'VND-x'), 'sem_coluna')
+  assert.equal(classificarErroSaidaVenda({ code: '42703', message: 'column "venda_chave" of relation "movimentos" does not exist' }, 'VND-x'), 'sem_coluna')
+  assert.equal(classificarErroSaidaVenda({ code: '23505', message: 'x' }, null), 'erro')
+  assert.equal(classificarErroSaidaVenda({ code: 'XX000', message: 'boom' }, 'VND-x'), 'erro')
+  assert.equal(classificarErroSaidaVenda(null, 'VND-x'), 'ok')
 })
