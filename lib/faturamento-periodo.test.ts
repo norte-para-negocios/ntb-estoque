@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { periodoDoAtalho, periodoDoMes, mesVizinho, nomeMes, lerPeriodo } from './faturamento-periodo.ts'
+import { periodoDoAtalho, periodoDoMes, mesVizinho, nomeMes, lerPeriodo, ultimoDiaDoMes } from './faturamento-periodo.ts'
 
 test('atalhos', () => {
   assert.deepEqual(periodoDoAtalho('hoje', '2026-10-08'), { ini: '2026-10-08', fim: '2026-10-08' })
@@ -56,4 +56,9 @@ test('lerPeriodo: mais de 366 dias mantém o trecho mais recente', () => {
   assert.equal(r.fim, '2026-10-08')
   assert.equal(r.ini, '2025-10-08')
   assert.equal(r.cortado, true)
+})
+
+test('ultimoDiaDoMes', () => {
+  assert.equal(ultimoDiaDoMes('2026-09'), '2026-09-30'); assert.equal(ultimoDiaDoMes('2026-02'), '2026-02-28')
+  assert.equal(ultimoDiaDoMes('2028-02'), '2028-02-29'); assert.equal(ultimoDiaDoMes('2026-12'), '2026-12-31')
 })

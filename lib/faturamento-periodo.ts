@@ -59,3 +59,10 @@ export function lerPeriodo(sp: { ini?: string; fim?: string; mes?: string }, hoj
   const minIni = addDias(p.fim, -(maxDias - 1))
   return p.ini < minIni ? { ini: minIni, fim: p.fim, cortado: true } : { ...p, cortado: false }
 }
+
+/** Último dia do mês ('YYYY-MM' → 'YYYY-MM-DD'). `${mes}-31` faz o Postgres recusar a data em 7 dos 12 meses. */
+export function ultimoDiaDoMes(mes: string): string {
+  const [a, m] = mes.split('-').map(Number)
+  const dia = new Date(Date.UTC(a, m, 0)).getUTCDate()
+  return `${mes}-${String(dia).padStart(2, '0')}`
+}

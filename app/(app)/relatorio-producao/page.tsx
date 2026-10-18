@@ -1,3 +1,4 @@
+import { ultimoDiaDoMes } from '@/lib/faturamento-periodo'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -123,7 +124,7 @@ export default async function RelatorioProducaoPage({
   // OPs que ainda estavam abertas naquele momento.
   const [divRes, capturaRes] = await Promise.all([
     supabase.rpc('relatorio_op_previsto_produzido', {
-      p_loja_id: lojaId, p_ini: `${mes}-01`, p_fim: `${mes}-31`,
+      p_loja_id: lojaId, p_ini: `${mes}-01`, p_fim: ultimoDiaDoMes(mes),
     }),
     supabase
       .from('op_qtde_planejada')
