@@ -1,6 +1,15 @@
 // Leitura de NF-e (procNFe / NFe) para a compra do Estoque próprio. Sem dependências: parser XML mínimo e tolerante
 // (ignora namespace, comentários, CDATA e declaração), puro e testável com `node --test`.
 
+/** Impostos e despesas do item como vêm no XML (grupo imposto + despesas de prod). Valores em R$; ausente = 0. */
+export type FiscalItemNfe = {
+  origem: string | null; cst: string | null; csosn: string | null
+  bcIcms: number; aliqIcms: number; icms: number; credIcmsSn: number; aliqCredSn: number
+  bcSt: number; st: number; fcpSt: number
+  cstIpi: string | null; ipi: number; cstPis: string | null; pis: number; cstCofins: string | null; cofins: number
+  frete: number; seguro: number; outras: number
+}
+
 export type ItemNfe = {
   linha: number
   cProd: string
@@ -14,6 +23,9 @@ export type ItemNfe = {
   valorTotal: number // vProd, antes do desconto do item
   desconto: number // vDesc do item
   icms: number // vICMS do item (informativo; só entra no custo se a compra marcar ICMS recuperável)
+  /** X1: vProd − vDesc + vIPI + vICMSST + vFCPST + vOutro + vFrete + vSeg do item (o `vTotalItem` do Omie). */
+  valorTotalItem: number
+  fiscal: FiscalItemNfe
   /** Rastreabilidade (grupo prod/rastro: nLote, dVal). Vem em produto com lote obrigatório; com vários lotes, o de validade mais próxima. */
   lote?: string | null
   validade?: string | null // YYYY-MM-DD
@@ -27,16 +39,28 @@ export type NfeLida = {
   modelo: string | null
   naturezaOperacao: string | null
   fornecedor: { cnpj: string; nome: string; fantasia: string | null; ie: string | null }
-  valores: { produtos: number; frete: number; desconto: number; descontoNota: number; total: number; icms: number }
+  /** `frete` = vFrete + vSeg + vOutro do total (caminho antigo); os outros campos são do ICMSTot, cada um separado. */
+  valores: {
+    produtos: number; frete: number; desconto: number; descontoNota: number; total: number; icms: number
+    vFrete: number; vSeg: number; vOutro: number; ipi: number; st: number; fcpSt: number; pis: number; cofins: number; icmsDesonerado: number
+  }
   itens: ItemNfe[]
   avisos: string[]
   // Extras (tela de detalhe das Notas Fiscais e conferência da entrada)
   destinatario: { cnpj: string; nome: string }
   tipoOperacao: string | null // tpNF: 0 = entrada (emitida pelo destinatário), 1 = saída do emitente
-  transporte: { modFrete: string | null; nome: string | null; cnpj: string | null; pesoBruto: number | null; pesoLiquido: number | null; volumes: string | null; especie: string | null }
+  transporte: {
+    modFrete: string | null; nome: string | null; cnpj: string | null; pesoBruto: number | null; pesoLiquido: number | null; volumes: string | null; especie: string | null
+    ie: string | null; uf: string | null; placa: string | null; ufPlaca: string | null; rntc: string | null; marca: string | null; numeracao: string | null; lacres: string[]
+  }
   parcelas: { seq: number; vencimento: string | null; valor: number }[]
   tributosAprox: number
   infCpl: string | null
+  crt: string | null // emit/CRT: 1/2/4 = Simples (CSOSN), 3 = regime normal (CST)
+  finalidade: string | null // ide/finNFe: 1 normal, 2 complementar, 3 ajuste, 4 devolução
+  ambiente: '1' | '2' | null // ide/tpAmb
+  protocolo: { cStat: string; nProt: string | null; chave: string | null; tpAmb: string | null } | null // protNFe/infProt
+  assinatura: { presente: boolean } // Signature com SignatureValue e X509Certificate não vazios
 }
 
 type No = { nome: string; attrs: Record<string, string>; filhos: No[]; texto: string }
@@ -106,6 +130,26 @@ function buscar(no: No, nome: string): No | undefined {
 
 const txt = (no: No | undefined, ...caminho: string[]): string => (achar(no, ...caminho)?.texto ?? '').trim()
 const num = (s: string): number => { const n = Number(s.replace(',', '.')); return Number.isFinite(n) ? n : 0 }
+const r2 = (n: number): number => Math.round(n * 100) / 100
+
+function lerFiscal(det: No, prod: No): FiscalItemNfe {
+  const icms = achar(det, 'imposto', 'ICMS')?.filhos[0]
+  const ipiNo = achar(det, 'imposto', 'IPI')
+  const ipi = achar(ipiNo, 'IPITrib') ?? achar(ipiNo, 'IPINT')
+  const pis = achar(det, 'imposto', 'PIS')?.filhos[0]
+  const cofins = achar(det, 'imposto', 'COFINS')?.filhos[0]
+  const ou = (s: string): string | null => s || null
+  return {
+    origem: ou(txt(icms, 'orig')), cst: ou(txt(icms, 'CST')), csosn: ou(txt(icms, 'CSOSN')),
+    bcIcms: num(txt(icms, 'vBC')), aliqIcms: num(txt(icms, 'pICMS')), icms: num(txt(icms, 'vICMS')),
+    credIcmsSn: num(txt(icms, 'vCredICMSSN')), aliqCredSn: num(txt(icms, 'pCredSN')),
+    bcSt: num(txt(icms, 'vBCST')), st: num(txt(icms, 'vICMSST')), fcpSt: num(txt(icms, 'vFCPST')),
+    cstIpi: ou(txt(ipi, 'CST')), ipi: num(txt(ipi, 'vIPI')),
+    cstPis: ou(txt(pis, 'CST')), pis: num(txt(pis, 'vPIS')),
+    cstCofins: ou(txt(cofins, 'CST')), cofins: num(txt(cofins, 'vCOFINS')),
+    frete: num(txt(prod, 'vFrete')), seguro: num(txt(prod, 'vSeg')), outras: num(txt(prod, 'vOutro')),
+  }
+}
 
 export function validarChave(c: string): boolean {
   return /^\d{44}$/.test(c)
@@ -149,6 +193,8 @@ export function lerNfe(xml: string): NfeLida {
       .map((r) => ({ lote: txt(r, 'nLote') || null, validade: /^\d{4}-\d{2}-\d{2}/.test(txt(r, 'dVal')) ? txt(r, 'dVal').slice(0, 10) : null }))
       .filter((r) => r.lote || r.validade)
       .sort((a, b) => (a.validade ?? '9999') < (b.validade ?? '9999') ? -1 : 1)
+    const fiscal = lerFiscal(det, prod)
+    const vProd = num(txt(prod, 'vProd'))
     if (rastros.length > 1) avisos.push(`Item ${det.attrs.nItem ?? itens.length + 1}: a nota traz ${rastros.length} lotes; entra como o de validade mais próxima (${rastros[0].lote ?? 'sem número'}).`)
     itens.push({
       linha: Number(det.attrs.nItem) || itens.length + 1,
@@ -160,9 +206,11 @@ export function lerNfe(xml: string): NfeLida {
       unidade: txt(prod, 'uCom') || 'UN',
       quantidade: num(txt(prod, 'qCom')),
       valorUnitario: num(txt(prod, 'vUnCom')),
-      valorTotal: num(txt(prod, 'vProd')),
+      valorTotal: vProd,
       desconto,
       icms: num(txt(icmsNo, 'vICMS')),
+      valorTotalItem: r2(vProd - desconto + fiscal.ipi + fiscal.st + fiscal.fcpSt + fiscal.outras + fiscal.frete + fiscal.seguro),
+      fiscal,
       ...(rastros[0] ? { lote: rastros[0].lote, validade: rastros[0].validade } : {}),
     })
   }
@@ -181,6 +229,9 @@ export function lerNfe(xml: string): NfeLida {
     descontoNota,
     total: num(txt(tot, 'vNF')) || vProdItens + frete - descTotal,
     icms: num(txt(tot, 'vICMS')),
+    vFrete: num(txt(tot, 'vFrete')), vSeg: num(txt(tot, 'vSeg')), vOutro: num(txt(tot, 'vOutro')),
+    ipi: num(txt(tot, 'vIPI')), st: num(txt(tot, 'vST')), fcpSt: num(txt(tot, 'vFCPST')),
+    pis: num(txt(tot, 'vPIS')), cofins: num(txt(tot, 'vCOFINS')), icmsDesonerado: num(txt(tot, 'vICMSDeson')),
   }
   if (tot && Math.abs(valores.produtos - vProdItens) > 0.05) avisos.push('A soma dos itens não bate com o total de produtos da nota.')
 
@@ -191,6 +242,14 @@ export function lerNfe(xml: string): NfeLida {
     seq: Number(txt(d, 'nDup')) || i + 1, vencimento: txt(d, 'dVenc') || null, valor: num(txt(d, 'vDup')),
   }))
   const vol = achar(transp, 'vol')
+  const veic = achar(transp, 'veicTransp')
+  const lacres = (transp?.filhos ?? []).filter((f) => f.nome === 'vol')
+    .flatMap((v) => v.filhos.filter((f) => f.nome === 'lacres').map((l) => txt(l, 'nLacre')).filter(Boolean))
+  const prot = buscar(raiz, 'infProt')
+  const sig = buscar(raiz, 'Signature')
+  const sigValor = sig ? (buscar(sig, 'SignatureValue')?.texto ?? '').trim() : ''
+  const sigCert = sig ? (buscar(sig, 'X509Certificate')?.texto ?? '').trim() : ''
+  const tpAmb = txt(ide, 'tpAmb')
   return {
     destinatario: { cnpj: (txt(dest, 'CNPJ') || txt(dest, 'CPF')).replace(/\D/g, ''), nome: txt(dest, 'xNome') },
     tipoOperacao: txt(ide, 'tpNF') || null,
@@ -199,10 +258,18 @@ export function lerNfe(xml: string): NfeLida {
       cnpj: (txt(transp, 'transporta', 'CNPJ') || txt(transp, 'transporta', 'CPF')).replace(/\D/g, '') || null,
       pesoBruto: vol && txt(vol, 'pesoB') ? num(txt(vol, 'pesoB')) : null, pesoLiquido: vol && txt(vol, 'pesoL') ? num(txt(vol, 'pesoL')) : null,
       volumes: txt(vol, 'qVol') || null, especie: txt(vol, 'esp') || null,
+      ie: txt(transp, 'transporta', 'IE') || null, uf: txt(transp, 'transporta', 'UF') || null,
+      placa: txt(veic, 'placa') || null, ufPlaca: txt(veic, 'UF') || null, rntc: txt(veic, 'RNTC') || null,
+      marca: txt(vol, 'marca') || null, numeracao: txt(vol, 'nVol') || null, lacres,
     },
     parcelas,
     tributosAprox: num(txt(tot, 'vTotTrib')),
     infCpl: txt(achar(inf, 'infAdic'), 'infCpl') || null,
+    crt: txt(emit, 'CRT') || null,
+    finalidade: txt(ide, 'finNFe') || null,
+    ambiente: tpAmb === '1' || tpAmb === '2' ? tpAmb : null,
+    protocolo: prot ? { cStat: txt(prot, 'cStat'), nProt: txt(prot, 'nProt') || null, chave: txt(prot, 'chNFe') || null, tpAmb: txt(prot, 'tpAmb') || null } : null,
+    assinatura: { presente: !!sigValor && !!sigCert },
     chave,
     numero: txt(ide, 'nNF'),
     serie: txt(ide, 'serie'),

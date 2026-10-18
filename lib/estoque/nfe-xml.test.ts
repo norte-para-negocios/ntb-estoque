@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { lerNfe, parseXml, dvChave } from './nfe-xml.ts'
+import { XML_CRBS_131055, CHAVE_CRBS } from './fixtures/nfe-crbs-131055.ts'
 
 const CHAVE = '29102611222333000144550010000012341000012342'
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -24,7 +25,9 @@ test('lê cabeçalho, fornecedor e itens do procNFe', () => {
   assert.equal(n.fornecedor.cnpj, '11222333000144')
   assert.equal(n.fornecedor.nome, 'Hortifruti & Cia Ltda')
   assert.equal(n.itens.length, 2)
-  assert.deepEqual(n.itens[0], { linha: 1, cProd: 'L1', ean: null, descricao: 'Limão Tahiti cx 20kg', ncm: '08055000', cfop: '5102', unidade: 'CX', quantidade: 2, valorUnitario: 100, valorTotal: 200, desconto: 10, icms: 0 })
+  assert.deepEqual(n.itens[0], { linha: 1, cProd: 'L1', ean: null, descricao: 'Limão Tahiti cx 20kg', ncm: '08055000', cfop: '5102', unidade: 'CX', quantidade: 2, valorUnitario: 100, valorTotal: 200, desconto: 10, icms: 0,
+    valorTotalItem: 190,
+    fiscal: { origem: '0', cst: null, csosn: '102', bcIcms: 0, aliqIcms: 0, icms: 0, credIcmsSn: 0, aliqCredSn: 0, bcSt: 0, st: 0, fcpSt: 0, cstIpi: null, ipi: 0, cstPis: null, pis: 0, cstCofins: null, cofins: 0, frete: 0, seguro: 0, outras: 0 } })
   assert.equal(n.itens[1].descricao, 'Cerveja <Pilsen> fardo')
   assert.equal(n.itens[1].ean, '7891234567895'); assert.equal(n.itens[1].icms, 18)
   assert.deepEqual(n.avisos, [])
@@ -94,4 +97,44 @@ test('rastro: lote e validade do item; com vários lotes, entra o de validade ma
   assert.ok(n.avisos.some((a) => a.includes('2 lotes')))
   assert.equal(n.itens[1].lote ?? null, null)
   assert.equal(n.itens[1].validade ?? null, null)
+})
+
+// Fixture (valores do Omie para a NF 131055, itens 0, 6 e 7):
+// 1 Água Mineral   qCom 10 CX vUnCom 16.2995160000 vProd 163.00 vOutro 13.41                     → vTotalItem 176.41
+// 2 Long Corona    qCom 4  CX vUnCom 158.1491010000 vProd 632.60 vIPI 20.04 vOutro 53.71 PIS 10.67 COFINS 48.98 → 706.35
+// 3 Tônica Diet    qCom 1  CX vUnCom 36.0755500000 vProd 36.08 vIPI 0.76 vOutro 3.03 PIS 0.62 COFINS 2.84     → 39.87
+test('X1: vTotalItem = vProd − vDesc + vIPI + vICMSST + vFCPST + vOutro + vFrete + vSeg (NF 131055)', () => {
+  const n = lerNfe(XML_CRBS_131055)
+  assert.deepEqual(n.itens.map((i) => i.valorTotalItem), [176.41, 706.35, 39.87])
+})
+test('impostos e despesas do item (CST 60, IPI, PIS/COFINS, outras)', () => {
+  const f = lerNfe(XML_CRBS_131055).itens[1].fiscal
+  assert.equal(f.cst, '60'); assert.equal(f.csosn, null); assert.equal(f.ipi, 20.04); assert.equal(f.outras, 53.71)
+  assert.equal(f.pis, 10.67); assert.equal(f.cofins, 48.98); assert.equal(f.st, 0); assert.equal(f.frete, 0)
+})
+test('CRT, finalidade, ambiente, protocolo e assinatura', () => {
+  const n = lerNfe(XML_CRBS_131055)
+  assert.equal(n.crt, '3'); assert.equal(n.finalidade, '1'); assert.equal(n.ambiente, '1')
+  assert.deepEqual(n.protocolo, { cStat: '100', nProt: '129260000000001', chave: CHAVE_CRBS, tpAmb: '1' })
+  assert.equal(n.assinatura.presente, true)
+  assert.equal(lerNfe(XML_CRBS_131055.replace(/<protNFe[\s\S]*<\/protNFe>/, '')).protocolo, null)
+})
+test('Simples: CSOSN 102 (NF 000000132) e crédito do Simples no CSOSN 101 (HIPÓTESE: sem caso real em D1)', () => {
+  const x = XML_CRBS_131055.replace('<ICMS60><orig>0</orig><CST>60</CST></ICMS60>', '<ICMSSN101><orig>0</orig><CSOSN>101</CSOSN><pCredSN>2.50</pCredSN><vCredICMSSN>4.08</vCredICMSSN></ICMSSN101>')
+  const f = lerNfe(x).itens[0].fiscal
+  assert.equal(f.csosn, '101'); assert.equal(f.cst, null); assert.equal(f.credIcmsSn, 4.08); assert.equal(f.aliqCredSn, 2.5)
+})
+test('transporte completo (aba Transporte do Omie)', () => {
+  const t = lerNfe(XML_CRBS_131055).transporte
+  assert.equal(t.ie, '123456789'); assert.equal(t.placa, 'ABC1D23'); assert.equal(t.rntc, '123456'); assert.equal(t.marca, 'AMBEV')
+  assert.equal(t.numeracao, '1-77'); assert.deepEqual(t.lacres, ['L001']); assert.equal(t.volumes, '77')
+  assert.equal(t.uf, 'BA'); assert.equal(t.ufPlaca, 'BA')
+})
+test('legado: valores.frete continua frete + seguro + outras do total', () => {
+  assert.equal(lerNfe(XML).valores.frete, 30) // fixture antiga do arquivo
+})
+test('totais novos do ICMSTot (NF 131055)', () => {
+  const v = lerNfe(XML_CRBS_131055).valores
+  assert.equal(v.ipi, 20.8); assert.equal(v.vOutro, 70.15); assert.equal(v.pis, 11.29); assert.equal(v.cofins, 51.82)
+  assert.equal(v.vFrete, 0); assert.equal(v.vSeg, 0); assert.equal(v.st, 0); assert.equal(v.fcpSt, 0); assert.equal(v.icmsDesonerado, 0)
 })
