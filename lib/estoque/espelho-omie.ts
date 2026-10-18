@@ -23,7 +23,8 @@ export type EntradaEspelho = {
   familias: { codigo_familia: number; nome: string | null }[]
 }
 
-export type SaldoLocal = { codigoLocal: number; local: string; saldo: number; minimo: number | null }
+/** cmc = custo médio DO LOCAL na foto (o Omie guarda custo por produto × local); ausente/0 = sem custo próprio. */
+export type SaldoLocal = { codigoLocal: number; local: string; saldo: number; minimo: number | null; cmc?: number }
 export type LinhaEspelho = {
   codigoProduto: number; codigo: string; descricao: string; unidade: string; tipoItem: string | null
   codigoFamilia: number | null; familia: string; saldo: number; cmc: number; valor: number
@@ -46,6 +47,16 @@ export function situacaoDe(saldo: number, minimo: number | null): Situacao {
   if (saldo === 0) return 'zerado'
   if (minimo != null && minimo > 0 && saldo < minimo) return 'baixo'
   return 'ok'
+}
+
+const plausivel = (c: number) => c > 0 && c < CMC_MAX_PLAUSIVEL
+
+/**
+ * Valor do produto = Σ saldo do local × custo DO LOCAL (como na Posição de Estoque do Omie: 89 de 91 produtos da loja 5
+ * com 2+ locais têm custo diferente por local). Local sem custo próprio plausível usa o custo do produto (sentinela).
+ */
+export function valorPorLocal(locs: SaldoLocal[], cmcProduto: number): number {
+  return locs.reduce((a, l) => a + l.saldo * (plausivel(Number(l.cmc ?? 0)) ? Number(l.cmc) : cmcProduto), 0)
 }
 
 export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
@@ -80,7 +91,7 @@ export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
     const loc = Number(r.codigo_local_estoque)
     if (loc === 0) continue
     const arr = saldos.get(Number(r.n_cod_prod)) ?? []
-    arr.push({ codigoLocal: loc, local: nomeLocal.get(loc) ?? String(loc), saldo: Number(r.n_saldo ?? 0), minimo: null })
+    arr.push({ codigoLocal: loc, local: nomeLocal.get(loc) ?? String(loc), saldo: Number(r.n_saldo ?? 0), minimo: null, cmc: Number(r.n_cmc ?? 0) })
     saldos.set(Number(r.n_cod_prod), arr)
   }
 
@@ -98,7 +109,7 @@ export function montarVisaoOmie(e: EntradaEspelho): VisaoEspelho {
       codigoProduto: cod, codigo: p.codigo ?? String(cod), descricao: p.descricao ?? '(sem descrição)', unidade: p.unidade ?? 'UN',
       tipoItem: p.tipo_item, codigoFamilia: p.codigo_familia == null ? null : Number(p.codigo_familia),
       familia: p.codigo_familia == null ? 'Sem família' : (nomeFamilia.get(Number(p.codigo_familia)) ?? 'Sem família'),
-      saldo, cmc, valor: cmc === 0 ? 0 : saldo * cmc, minimo, situacao: situacaoDe(saldo, minimo), locais: locs,
+      saldo, cmc, valor: valorPorLocal(locs, cmc), minimo, situacao: situacaoDe(saldo, minimo), locais: locs,
       ...(suspeito ? { custoSuspeito: true } : {}),
     }
   })

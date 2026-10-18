@@ -90,3 +90,28 @@ test('local ativo sem nenhuma linha em nenhuma foto vai para locaisSemSaldo', ()
   assert.deepEqual(v.locaisSemSaldo, ['ADEGA'])
   assert.deepEqual(v.locaisSemLeitura, ['BAR'])
 })
+
+test('valor soma saldo × CMC de CADA local (o Omie guarda custo por local): produto 70073, loja 5, 17/10', () => {
+  // PADRAO 145,31 a 8,515161 e local 07 com 1 a 8,90 — a sentinela traz só o custo do local padrão
+  const v = montarVisaoOmie({
+    produtos: [{ codigo_produto: 2809365604, codigo: '70073', descricao: 'Produto 70073', unidade: 'KG', tipo_item: '03', codigo_familia: null, estoque_minimo: null }],
+    posicoes: [
+      { data_posicao: '2026-10-17', codigo_local_estoque: 0, n_cod_prod: 2809365604, n_saldo: 0, n_cmc: 8.515161, estoque_minimo: 0, updated_at: null },
+      { data_posicao: '2026-10-17', codigo_local_estoque: 2424369390, n_cod_prod: 2809365604, n_saldo: 145.31, n_cmc: 8.515161, estoque_minimo: 0, updated_at: null },
+      { data_posicao: '2026-10-17', codigo_local_estoque: 3801903927, n_cod_prod: 2809365604, n_saldo: 1, n_cmc: 8.9, estoque_minimo: 0, updated_at: null },
+    ],
+    locais: [{ codigo_local_estoque: 2424369390, descricao: 'DEPOSITO', inativo: 'N' }, { codigo_local_estoque: 3801903927, descricao: 'DIRETORIA', inativo: 'N' }],
+    familias: [],
+  })
+  const p = v.linhas[0]
+  assert.ok(Math.abs(p.valor - (145.31 * 8.515161 + 1 * 8.9)) < 1e-9, `valor ${p.valor}`)
+  assert.deepEqual(p.locais.map((l) => l.cmc), [8.515161, 8.9])
+})
+
+test('local sem custo próprio (0 ou fora do normal) usa o custo do produto', () => {
+  const v = montarVisaoOmie(base())
+  const p1 = v.linhas.find((l) => l.codigoProduto === 1)!
+  assert.equal(p1.valor, 133) // 3 × 66,5 + (−1) × 66,5
+  const p2 = v.linhas.find((l) => l.codigoProduto === 2)!
+  assert.equal(p2.valor, 300) // local 100 com n_cmc 0 → custo do produto (30, da foto anterior)
+})
