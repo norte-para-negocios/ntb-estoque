@@ -10,7 +10,8 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
-import { sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
+import { importarNotaPorChave, sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
+import { lerCte, ratearFreteCte, validarCteImportado } from '@/lib/estoque/cte-xml'
 import { carregarCmc } from '@/lib/estoque/nf-memoria'
 import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
 import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
@@ -351,4 +352,106 @@ export async function manifestarNotaSefaz(notaId: number, tipo: TipoManifestacao
   await registrarAuditoria('editar', `nota fiscal (manifestação ${tipo})`, notaId, `${status} ${resultado.cStat ?? ''}`.trim())
   await atualizarSituacao(ctx.lojaId, notaId)
   return { ok: true, status, cStat: resultado.cStat, xMotivo: resultado.xMotivo }
+}
+
+// ---------------------------------------------------------------- Fase B: CT-e de frete (R13) e nota pela chave (R14)
+
+const TAMANHO_MAX_CTE = 900_000
+
+/** Liga um CT-e (XML do transportador) à nota: grava o CT-e (mesma chave = reaproveita), reparte entre as notas da loja
+ *  que ele transporta (pelo valor da nota) e dentro de cada nota pelo valor líquido do item. Só antes da entrada. */
+export async function importarCteNF(notaId: number, xml: string): Promise<{ ok: true; notas: number } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#importarCteNF', importarCteNF, [notaId, xml]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  if (!xml || xml.length > TAMANHO_MAX_CTE) return { error: 'Arquivo vazio ou grande demais.' }
+  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) return { error: 'O XML tem DOCTYPE/ENTITY: não é um CT-e válido.' }
+  let cte
+  try { cte = lerCte(xml) } catch (e) { return { error: e instanceof Error ? e.message : 'XML inválido' } }
+  const sb = createServiceClient()
+  const { data: loja } = await sb.from('lojas').select('cnpj, is_test').eq('id', ctx.lojaId).maybeSingle()
+  const erros = validarCteImportado(cte, String(loja?.cnpj ?? '').replace(/\D/g, '') || null)
+  if (erros.length) return { error: erros.join(' ') }
+  const compra = await compraDaNota(ctx.lojaId, notaId)
+  if (!compra) return { error: 'Esta nota ainda não tem itens (só o resumo chegou da SEFAZ).' }
+  const { data: nota } = await sb.from('notas_fiscais').select('c_chave_nfe').eq('id', notaId).eq('loja_id', ctx.lojaId).maybeSingle()
+  if (!nota?.c_chave_nfe || !cte.chavesNfe.includes(nota.c_chave_nfe)) return { error: 'Este CT-e não transporta esta nota.' }
+  // notas da loja que o CT-e transporta (as que ainda não chegaram ficam de fora: o rateio é entre as que existem)
+  const { data: compras } = await sb.from('compras_proprio').select('id, nota_fiscal_id, valor_total, chave_acesso').eq('loja_id', ctx.lojaId).in('chave_acesso', cte.chavesNfe)
+  const lista = (compras ?? []) as { id: number; nota_fiscal_id: number | null; valor_total: number | string; chave_acesso: string }[]
+  const ids = lista.map((c) => c.nota_fiscal_id).filter((x): x is number => x != null)
+  const { data: notas } = ids.length ? await sb.from('notas_fiscais').select('id, n_valor_nfe').eq('loja_id', ctx.lojaId).in('id', ids) : { data: [] as { id: number; n_valor_nfe: number }[] }
+  const valorNota = new Map((notas ?? []).map((n) => [Number(n.id), Number(n.n_valor_nfe) || 0]))
+  const rateio = ratearFreteCte(cte.valorPrestacao, lista.map((c) => ({ compraId: Number(c.id), valorNota: (c.nota_fiscal_id != null ? valorNota.get(Number(c.nota_fiscal_id)) : undefined) ?? (Number(c.valor_total) || 0) })))
+  // grava o CT-e (unique (loja_id, chave): mesma chave = o mesmo CT-e)
+  let cteId: number
+  const { data: existente } = await sb.from('compras_proprio_cte').select('id').eq('loja_id', ctx.lojaId).eq('chave', cte.chave).maybeSingle()
+  if (existente) cteId = Number(existente.id)
+  else {
+    const { data: ins, error } = await sb.from('compras_proprio_cte').insert({
+      loja_id: ctx.lojaId, chave: /^\d{44}$/.test(cte.chave) ? cte.chave : null, numero: cte.numero || null, serie: cte.serie || null, emissao: cte.emissao,
+      transportadora_cnpj: cte.emitente.cnpj || null, transportadora_nome: cte.emitente.nome || null, valor: cte.valorPrestacao, icms: cte.icms, cfop: cte.cfop,
+      origem: 'xml', xml, user_id: ctx.userId,
+    }).select('id').single()
+    if (error) {
+      if (error.code !== '23505') return { error: error.message }
+      const { data: outro } = await sb.from('compras_proprio_cte').select('id').eq('loja_id', ctx.lojaId).eq('chave', cte.chave).maybeSingle()
+      if (!outro) return { error: error.message }
+      cteId = Number(outro.id)
+    } else cteId = Number(ins.id)
+  }
+  const { data, error } = await sb.rpc('vincular_cte_compra', { p_loja: ctx.lojaId, p_cte: cteId, p_rateio: rateio.map((x) => ({ compra_id: x.compraId, valor: x.valor })), p_user: ctx.userId })
+  if (error) return { error: error.message }
+  for (const c of lista) if (c.nota_fiscal_id != null) await atualizarSituacao(ctx.lojaId, Number(c.nota_fiscal_id))
+  await registrarAuditoria('editar', 'nota fiscal (CT-e)', notaId, `CT-e ${cte.numero} · ${cte.valorPrestacao}`)
+  return { ok: true, notas: Number((data as { notas: number }).notas) || 0 }
+}
+
+/** Frete sem XML (valor digitado): CT-e "manual" só desta nota. */
+export async function informarFreteNF(notaId: number, dados: { valor: number; transportadora?: string; numero?: string }): Promise<{ ok: true } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#informarFreteNF', informarFreteNF, [notaId, dados]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const valor = Math.round(Number(dados.valor) * 100) / 100
+  if (!(valor > 0)) return { error: 'Informe o valor do frete.' }
+  const compra = await compraDaNota(ctx.lojaId, notaId)
+  if (!compra) return { error: 'Esta nota ainda não tem itens (só o resumo chegou da SEFAZ).' }
+  const sb = createServiceClient()
+  const { data: ins, error } = await sb.from('compras_proprio_cte').insert({
+    loja_id: ctx.lojaId, numero: dados.numero?.trim().slice(0, 30) || null, transportadora_nome: dados.transportadora?.trim().slice(0, 120) || null, valor, origem: 'manual', user_id: ctx.userId,
+  }).select('id').single()
+  if (error) return { error: error.message }
+  const { error: ev } = await sb.rpc('vincular_cte_compra', { p_loja: ctx.lojaId, p_cte: Number(ins.id), p_rateio: [{ compra_id: compra.id, valor }], p_user: ctx.userId })
+  if (ev) { await sb.from('compras_proprio_cte').delete().eq('id', ins.id).eq('loja_id', ctx.lojaId); return { error: ev.message } }
+  await registrarAuditoria('editar', 'nota fiscal (frete)', notaId, String(valor))
+  await atualizarSituacao(ctx.lojaId, notaId)
+  return { ok: true }
+}
+
+/** Desliga um CT-e das notas (o frete sai do custo dos itens). Só antes da entrada. */
+export async function desvincularCteNF(notaId: number, cteId: number): Promise<{ ok: true } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#desvincularCteNF', desvincularCteNF, [notaId, cteId]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const sb = createServiceClient()
+  const { data: ligadas } = await sb.from('compras_proprio_cte_compra').select('compra_id').eq('cte_id', cteId).eq('loja_id', ctx.lojaId)
+  const { error } = await sb.rpc('desvincular_cte_compra', { p_loja: ctx.lojaId, p_cte: cteId, p_user: ctx.userId })
+  if (error) return { error: error.message }
+  const compras = (ligadas ?? []).map((l) => Number(l.compra_id))
+  if (compras.length) {
+    const { data: cs } = await sb.from('compras_proprio').select('nota_fiscal_id').eq('loja_id', ctx.lojaId).in('id', compras)
+    for (const c of cs ?? []) if (c.nota_fiscal_id != null) await atualizarSituacao(ctx.lojaId, Number(c.nota_fiscal_id))
+  } else await atualizarSituacao(ctx.lojaId, notaId)
+  return { ok: true }
+}
+
+/** Busca na SEFAZ uma NF-e pela chave digitada (só leitura; 1 tentativa por chave por hora). Precisa de internet:
+ *  fica FORA da política do desktop offline. */
+export async function buscarNotaPorChaveNF(chave: string): Promise<{ ok: true; situacao: 'completa' | 'resumo' | 'nao_encontrada'; notaId: number | null } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#buscarNotaPorChaveNF', buscarNotaPorChaveNF, [chave]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Sincronizar')
+  if ('error' in ctx) return ctx
+  const r = await importarNotaPorChave(ctx.lojaId, chave)
+  revalidatePath('/nota-fiscal')
+  return r
 }

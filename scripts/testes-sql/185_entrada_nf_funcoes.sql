@@ -162,7 +162,7 @@ begin
   exception when sqlstate '22023' then null; end;
   begin perform configurar_item_compra(v_loja, it.id, '{"cfop_entrada": "5102"}', null); raise exception 'H: cfop 5102 aceito';
   exception when sqlstate '22023' then null; end;
-  begin perform configurar_item_compra(v_loja, (select id from compras_proprio_itens where compra_id = (select id from compras_proprio where chave_acesso = ch_a) and linha = 1), '{"quantidade_recebida": 1}', null); raise exception 'H: item lançado aceito';
+  begin perform configurar_item_compra(v_loja, (select id from compras_proprio_itens where compra_id = (select id from compras_proprio where loja_id = v_loja and chave_acesso = ch_a) and linha = 1), '{"quantidade_recebida": 1}', null); raise exception 'H: item lançado aceito';
   exception when sqlstate '22023' then null; end;
 
   -- I — Omie intacto: os 7 casos da 175 com a função nova
@@ -179,9 +179,9 @@ begin
   if custo_estoque_item_omie(jsonb_build_object('itensCabec', '{"vTotalItem":100}'::jsonb, 'itensCustoEstoque', nflags, 'sefaz', '{"vFrete":0,"vSeg":0,"freteCte":12.5}'::jsonb), 1, 100) <> 100 then raise exception 'I: CT-e N'; end if;
 
   -- J — eventos
-  select array_agg(e.tipo order by e.id) into tipos from compras_proprio_eventos e join compras_proprio c on c.id = e.compra_id where c.chave_acesso = ch_a;
+  select array_agg(e.tipo order by e.id) into tipos from compras_proprio_eventos e join compras_proprio c on c.id = e.compra_id where c.loja_id = v_loja and c.chave_acesso = ch_a;
   if tipos <> array['criada', 'lancada'] then raise exception 'J: eventos de A %', tipos; end if;
-  select array_agg(e.tipo order by e.id) into tipos from compras_proprio_eventos e join compras_proprio c on c.id = e.compra_id where c.chave_acesso = ch_h;
+  select array_agg(e.tipo order by e.id) into tipos from compras_proprio_eventos e join compras_proprio c on c.id = e.compra_id where c.loja_id = v_loja and c.chave_acesso = ch_h;
   if tipos <> array['criada', 'item_vinculado', 'conferida', 'item_configurado'] then raise exception 'J: eventos de H %', tipos; end if;
 
   -- memória: último item lançado com marcações, por produto e por código do fornecedor

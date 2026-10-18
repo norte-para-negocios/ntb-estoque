@@ -20,6 +20,7 @@ import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
 import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
 import { ObservacaoNF } from '@/components/nota-fiscal/ObservacaoNF'
 import { ManifestacaoNF } from '@/components/nota-fiscal/ManifestacaoNF'
+import { FreteCteNF } from '@/components/nota-fiscal/FreteCteNF'
 import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
 
@@ -207,6 +208,10 @@ export default async function NotaFiscalItensPage({
       {proprio ? (
         <>
           <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
+          {conferencia?.compra && (
+            <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
+              editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />
+          )}
           {conferencia && nf.c_chave_nfe && podeManifestarSefaz && (
             <ManifestacaoNF notaId={Number(id)} ciencia={{ em: conferencia.documento?.cienciaEm ?? null, cstat: conferencia.documento?.cienciaCstat ?? null }}
               manifestacoes={conferencia.manifestacoes} temEntrada={!!conferencia.itens.some((i) => i.lancado) && conferencia.compra?.status !== 'cancelada'} />

@@ -16,6 +16,8 @@ export type ConferenciaCarregada = {
   documento: { cienciaEm: string | null; cienciaCstat: string | null; tipo: string | null } | null
   /** Fase B: manifestações do destinatário registradas/enviadas para esta chave (mais antiga primeiro). */
   manifestacoes: { tpEvento: string; status: string; cstat: string | null; xmotivo: string | null; protocolo: string | null; criadoEm: string; respondidoEm: string | null }[]
+  /** Fase B: CT-e de frete ligados a esta nota e a parte que coube a ela. */
+  ctes: { id: number; chave: string | null; numero: string | null; transportadora: string | null; valorCte: number; valorNesta: number; percentual: number; origem: string }[]
 }
 
 export async function carregarConferencia(lojaId: number, notaId: number, fullObject: unknown, chave: string | null): Promise<ConferenciaCarregada> {
@@ -89,6 +91,19 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
   const fo = (fullObject ?? {}) as { sefaz?: { origem?: string; recebidoEm?: string; nsu?: string; completo?: boolean; alertas?: string[] } }
   let documento: ConferenciaCarregada['documento'] = null
   let manifestacoes: ConferenciaCarregada['manifestacoes'] = []
+  let ctes: ConferenciaCarregada['ctes'] = []
+  if (c) {
+    const { data: ligs } = await sb.from('compras_proprio_cte_compra').select('cte_id, valor, percentual').eq('loja_id', lojaId).eq('compra_id', c.id)
+    const idsCte = (ligs ?? []).map((l) => Number(l.cte_id))
+    if (idsCte.length) {
+      const { data: cts } = await sb.from('compras_proprio_cte').select('id, chave, numero, transportadora_nome, valor, origem').eq('loja_id', lojaId).in('id', idsCte)
+      const porId = new Map((cts ?? []).map((t) => [Number(t.id), t]))
+      ctes = (ligs ?? []).map((l) => {
+        const t = porId.get(Number(l.cte_id))
+        return { id: Number(l.cte_id), chave: t?.chave ?? null, numero: t?.numero ?? null, transportadora: t?.transportadora_nome ?? null, valorCte: Number(t?.valor ?? 0), valorNesta: Number(l.valor), percentual: Number(l.percentual), origem: t?.origem ?? 'manual' }
+      })
+    }
+  }
   if (chave) {
     const { data: ms } = await sb.from('sefaz_manifestacoes').select('tp_evento, status, cstat, xmotivo, protocolo, criado_em, respondido_em').eq('loja_id', lojaId).eq('chave', chave).order('id')
     manifestacoes = (ms ?? []).map((m) => ({ tpEvento: m.tp_evento, status: m.status, cstat: m.cstat, xmotivo: m.xmotivo, protocolo: m.protocolo, criadoEm: m.criado_em, respondidoEm: m.respondido_em }))
@@ -99,6 +114,6 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
     compra: c ? { id: Number(c.id), status: c.status, codigoLocal: c.codigo_local_estoque != null ? Number(c.codigo_local_estoque) : null, numero: c.numero, conferidaEm: c.conferida_em ?? null, obs: c.obs ?? null } : null,
     itens, locais,
     sefaz: { origem: fo.sefaz?.origem ?? null, recebidoEm: fo.sefaz?.recebidoEm ?? null, nsu: fo.sefaz?.nsu ?? null, completo: fo.sefaz?.completo !== false, alertas: fo.sefaz?.alertas ?? [] },
-    documento, manifestacoes,
+    documento, manifestacoes, ctes,
   }
 }

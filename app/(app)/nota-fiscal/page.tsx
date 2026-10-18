@@ -15,6 +15,7 @@ import type { CampoFiltro } from '@/components/ui-kit/filtros-utils'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { SyncButton } from '@/components/SyncButton'
 import { StatusSefaz, type EstadoSefaz } from '@/components/nota-fiscal/StatusSefaz'
+import { BuscarPorChave } from '@/components/nota-fiscal/BuscarPorChave'
 import { FiltrosNotas } from '@/components/nota-fiscal/FiltrosNotas'
 import { ListaNotasCompra } from '@/components/nota-fiscal/ListaNotasCompra'
 import { DetalheItemCompra } from '@/components/nota-fiscal/DetalheItemCompra'
@@ -81,6 +82,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   const modo = await modoDaLoja(lojaId)
   const proprio = modo === 'proprio'
   const podeLancarManual = proprio && (await requirePermissao(lojaId, 'Compras - Criar'))
+  const podeBuscarChave = proprio && (await requirePermissao(lojaId, 'Notas Fiscais - Sincronizar'))
   let estadoSefaz: EstadoSefaz | null = null
   if (proprio) {
     const [{ data: n }, { data: l }, { count: aConferir }] = await Promise.all([
@@ -250,6 +252,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
             <a href={`/nota-fiscal/relatorio?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><FileText className="size-4" /> Relatório PDF</a>
             <a href={`/nota-fiscal/export?${exportQs}`} className={btnClass('outline')}><Download className="size-4" /> Excel</a>
             {proprio && <Link href="/nota-fiscal/etapas" className={btnClass('outline')}><KanbanSquare className="size-4" /> Etapas do recebimento</Link>}
+            {podeBuscarChave && <BuscarPorChave />}
             {podeLancarManual && (
               <>
                 <Link href="/nota-fiscal/importar" className={btnClass('outline')}><FileUp className="size-4" /> Importar XML</Link>

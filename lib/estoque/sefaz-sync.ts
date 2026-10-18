@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { carregarCredencialLoja, type CredencialLoja } from './sefaz-certificado'
 import { consultarDistribuicao, consultarPorChave, enviarCiencia } from './sefaz-rede'
 import { lerEvento, lerResNFe, proximaConsulta, tipoDocumento, type DocDistribuido } from './sefaz-distdfe'
-import { lerNfe } from './nfe-xml'
+import { dvChave, lerNfe, validarChave } from './nfe-xml'
 import { validarNfeImportada, validarXmlBruto } from './nfe-validacao'
 import { assinaturaConfere } from './nfe-assinatura'
 import { cabecalhoDoResumo } from './nf-sefaz-mapa'
@@ -215,6 +215,58 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
     await sb.from('lojas').update({ nota_fiscal_status: 'Erro' }).eq('id', lojaId)
     return { ...r, ok: false, erro }
   }
+}
+
+/** Nota pela chave digitada (Fase B, A4/R14): só NF-e (a distribuição de NF-e não entrega CT-e), pela consulta consChNFe
+ *  (só leitura), no máximo 1 tentativa por chave por hora (sefaz_busca_chave). O bloqueado_ate da loja só barra a consulta
+ *  por NSU (igual a hoje); um 656 aqui grava a espera de 1 hora. procNFe → nota completa; só resNFe → o resumo (a ciência
+ *  segue a configuração da loja). */
+export async function importarNotaPorChave(lojaId: number, chave: string): Promise<{ ok: true; situacao: 'completa' | 'resumo' | 'nao_encontrada'; notaId: number | null } | { error: string }> {
+  const ch = (chave ?? '').replace(/\D/g, '')
+  if (!validarChave(ch) || dvChave(ch.slice(0, 43)) !== Number(ch[43])) return { error: 'Chave de acesso inválida (confira os 44 dígitos).' }
+  if (ch.slice(20, 22) !== '55') return { error: 'Só NF-e (modelo 55) pode ser buscada pela chave.' }
+  const sb = createServiceClient()
+  const { data: loja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, is_test, certificado_path').eq('id', lojaId).maybeSingle()
+  if (!loja || loja.modo_estoque !== 'proprio') return { error: 'A loja não usa estoque próprio.' }
+  const cnpj = String(loja.cnpj ?? '').replace(/\D/g, '')
+  if (cnpj.length !== 14) return { error: 'A loja precisa de um CNPJ válido para consultar a SEFAZ.' }
+  if (ch.slice(6, 20) === cnpj) return { error: 'Esta nota foi emitida pela própria loja.' }
+  if (!loja.certificado_path) return { error: 'A loja não tem certificado digital cadastrado.' }
+  const { data: tent } = await sb.from('sefaz_busca_chave').select('ultima_em').eq('loja_id', lojaId).eq('chave', ch).maybeSingle()
+  if (tent?.ultima_em && Date.now() - new Date(tent.ultima_em).getTime() < ESPERA_BUSCA_CHAVE_MS) return { error: 'Esta chave já foi consultada há menos de 1 hora.' }
+  const agoraIso = new Date().toISOString()
+  // a tentativa é gravada ANTES da consulta: dois cliques não consultam duas vezes
+  if (tent) {
+    const { data: upd } = await sb.from('sefaz_busca_chave').update({ ultima_em: agoraIso, cstat: null }).eq('loja_id', lojaId).eq('chave', ch).eq('ultima_em', tent.ultima_em).select('chave')
+    if (!upd?.length) return { error: 'Esta chave já foi consultada há menos de 1 hora.' }
+  } else {
+    const { error } = await sb.from('sefaz_busca_chave').insert({ loja_id: lojaId, chave: ch, ultima_em: agoraIso })
+    if (error) return { error: error.code === '23505' ? 'Esta chave já foi consultada há menos de 1 hora.' : error.message }
+  }
+  const { data: nsu } = await sb.from('sefaz_nsu').select('ambiente, auto_lancar, auto_ciencia').eq('loja_id', lojaId).maybeSingle()
+  const ctx: Ctx = { lojaId, cnpj, ambiente: nsu?.ambiente === 2 ? 2 : 1, autoLancar: !!nsu?.auto_lancar, autoCiencia: !!nsu?.auto_ciencia, uf: loja.uf }
+  let ret
+  try {
+    const cred = await carregarCredencialLoja(lojaId)
+    ret = await consultarPorChave({ cnpj, tpAmb: ctx.ambiente, chave: ch, uf: loja.uf, cred })
+  } catch (e) {
+    return { error: `Não foi possível consultar a SEFAZ: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  await sb.from('sefaz_busca_chave').update({ cstat: ret.cStat }).eq('loja_id', lojaId).eq('chave', ch)
+  if (ret.cStat === '656') {
+    await sb.from('sefaz_nsu').update({ bloqueado_ate: new Date(Date.now() + ESPERA_BUSCA_CHAVE_MS).toISOString(), ultimo_cstat: ret.cStat, ultimo_motivo: ret.xMotivo, updated_at: agoraIso }).eq('loja_id', lojaId)
+    return { error: 'A SEFAZ pediu para esperar 1 hora (consumo indevido).' }
+  }
+  const r = vazio(lojaId)
+  const docs = ret.docs.filter((x) => tipoDocumento(x.schema) === 'procNFe' || tipoDocumento(x.schema) === 'resNFe')
+  if (!docs.length) return { ok: true, situacao: 'nao_encontrada', notaId: null }
+  const linhas = docs.map((x) => ({ loja_id: lojaId, nsu: x.nsu, schema: x.schema, tipo: tipoDocumento(x.schema), completo: x.completo, xml: x.xml }))
+  const { error: eg } = await sb.from('sefaz_documentos').upsert(linhas, { onConflict: 'loja_id,nsu', ignoreDuplicates: true })
+  if (eg) return { error: 'Falha ao guardar o documento recebido: ' + eg.message }
+  for (const d of docs) await processarDocumento(ctx, d, r)
+  const nota = await notaPorChave(lojaId, ch)
+  const completa = docs.some((x) => tipoDocumento(x.schema) === 'procNFe')
+  return { ok: true, situacao: completa ? 'completa' : 'resumo', notaId: nota?.id ?? null }
 }
 
 /** Lojas de estoque próprio com certificado e consulta ligada (para o cron). */
