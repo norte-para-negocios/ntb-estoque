@@ -9,7 +9,7 @@ import { omieRequest, logIntegrationAttempt, type LojaOmie } from '@/lib/omie/cl
 import { dataOmieBR } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { origemDoAjuste } from '@/lib/vendas/local-venda'
-import { motivoOmieDoAjuste } from '@/lib/omie/motivo-ajuste'
+import { motivoOmieDoAjuste, valorDoAjusteManual } from '@/lib/omie/motivo-ajuste'
 
 export type MovimentoManualRow = {
   id: number
@@ -24,6 +24,8 @@ export type MovimentoManualRow = {
   obs: string | null
   data: string // data de criacao do movimento (coluna `data`); vira dataOmieBR(data) no lancamento
   tentativas: number | null
+  /** Entrada com custo digitado (migration 179): vai como valor no Omie, sem esperar o CMC. */
+  custo_informado?: number | string | null
 }
 
 /**
@@ -44,10 +46,12 @@ export async function reenviarMovimentoManual(
   const supabase = createServiceClient()
 
   try {
-    const posicao = await getPosicaoProduto(loja, mov.codigo_local_estoque, mov.id_prod, dataOmieBR(null))
-    const valor = posicao?.n_cmc ?? 0
+    const custo = mov.custo_informado == null ? null : Number(mov.custo_informado)
+    const informado = mov.tipo === 'ENT' && custo != null && custo > 0
+    const cmc = informado ? null : (await getPosicaoProduto(loja, mov.codigo_local_estoque, mov.id_prod, dataOmieBR(null)))?.n_cmc ?? 0
+    const v = valorDoAjusteManual(mov.tipo, custo, cmc)
 
-    if (valor <= 0) {
+    if ('semCmc' in v) {
       // Grava tentativas/ultima_tentativa_em tambem aqui (nao so no try/catch de
       // baixo) -- sem isso o throttle do retry automatico nunca reconhece uma
       // tentativa de 'Sem CMC' como "recente", e o cron reenviaria esse movimento a
@@ -73,7 +77,7 @@ export async function reenviarMovimentoManual(
       data: dataOmieBR(mov.data),
       // Omie exige quan > 0; a direcao vem de `tipo` (ENT/SAI). No banco o manual grava SAI negativo.
       quan: Math.abs(mov.quan),
-      valor,
+      valor: v.valor,
       obs: mov.obs,
       // Venda com nota entra no Omie como movimento do PDV; venda sem nota e o resto, ajuste comum.
       origem: origemDoAjuste(mov.motivo, mov.origem),

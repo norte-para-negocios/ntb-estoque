@@ -84,3 +84,33 @@ export async function encerrarOuEnviarAjusteManual<M extends { id: number; tipo:
   const r = await deps.enviar(mov)
   return { resultado: r.status === 'Concluido' ? 'sucesso' : 'falha' }
 }
+
+/**
+ * Motivo do ajuste manual escolhido pela pessoa (Fase A, Task 11): saída marcada como perda/quebra vai como PER
+ * (o Omie aceita PER só em SAI); todo o resto, INV como sempre. Sem escolha = INV (a Central não muda).
+ */
+export function motivoDoAjusteManual(tipo: TipoAjusteManual, escolha?: string | null): 'INV' | 'PER' {
+  return tipo === 'SAI' && escolha === 'PER' ? 'PER' : 'INV'
+}
+
+/** Custo unitário digitado na entrada: vazio = usa o custo médio de hoje; senão > 0 e < R$ 10.000.000. */
+export function validarCustoInformado(v: number | null | undefined): string | null {
+  if (v === null || v === undefined) return null
+  if (!Number.isFinite(v) || v <= 0) return 'Custo unitário precisa ser maior que zero (ou deixe em branco para usar o custo médio).'
+  if (v >= 1e7) return 'Custo unitário alto demais. Confira o valor.'
+  return null
+}
+
+/**
+ * Valor unitário mandado no IncluirAjusteEstoque: na entrada com custo digitado, o custo digitado (o Omie faz a média
+ * com ele, regra E9); no resto, o CMC lido na hora (como sempre). Sem CMC e sem custo = "Sem CMC" de sempre.
+ */
+export function valorDoAjusteManual(
+  tipo: TipoAjusteManual,
+  custoInformado: number | null | undefined,
+  cmcAtual: number | null | undefined
+): { valor: number; fonte: 'informado' | 'cmc' } | { semCmc: true } {
+  if (tipo === 'ENT' && custoInformado != null && custoInformado > 0) return { valor: custoInformado, fonte: 'informado' }
+  if (cmcAtual != null && cmcAtual > 0) return { valor: cmcAtual, fonte: 'cmc' }
+  return { semCmc: true }
+}

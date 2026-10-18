@@ -110,7 +110,7 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
   const omie = g.destino === 'omie'
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
-    if (omie) return enviar(() => entradaOmie({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, obs }), 'Entrada registrada')
+    if (omie) return enviar(() => entradaOmie({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, obs, custoUnitario: custo }), 'Entrada registrada')
     enviar(() => entradaManual({ codigoProduto: produto.codigoProduto, codigoLocal: local, quantidade: qtd, custo, obs, lote, validade }), 'Entrada registrada')
   }
   return (
@@ -119,9 +119,13 @@ export function ModalEntrada({ produto, locais, saldos, localInicial, ...g }: { 
       rodape={<button type="button" className={btnClass('primary')} onClick={salvar} disabled={pending}>{pending && <Spinner />}Registrar entrada</button>}>
       <div className="space-y-2"><Label>Local</Label><SelectLocal locais={locais} value={local} onChange={setLocal} saldos={saldos} unidade={produto.unidade} /></div>
       {omie ? (<>
-      <div className="space-y-2"><Label>Quantidade</Label>
-        <CampoComUnidade unidade={produto.unidade}><input inputMode="decimal" className={`${campo} pr-12`} value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="0" /></CampoComUnidade></div>
-      <p className="text-[12px] text-text-muted">Vai direto para o Omie pelo custo médio atual do produto (lido na hora), sem mudar o custo. Compra com custo novo entra pela nota fiscal.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2"><Label>Quantidade</Label>
+          <CampoComUnidade unidade={produto.unidade}><input inputMode="decimal" className={`${campo} pr-12`} value={qtd} onChange={(e) => setQtd(e.target.value)} placeholder="0" /></CampoComUnidade></div>
+        <div className="space-y-2"><Label>Custo unitário (opcional)</Label>
+          <CampoComUnidade unidade={`R$/${produto.unidade}`}><input inputMode="decimal" className={`${campo} pr-16`} value={custo} onChange={(e) => setCusto(e.target.value)} placeholder="0,00" /></CampoComUnidade></div>
+      </div>
+      <p className="text-[12px] text-text-muted">Com custo, o Omie faz a média com o custo que você digitou. Sem custo, vai pelo custo médio atual (não muda o custo). Compra com nota entra pela nota fiscal.</p>
       </>) : (<>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2"><Label>Quantidade</Label>
@@ -149,7 +153,8 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
   const [modo, setModo] = useState<'contagem' | 'diferenca'>('contagem')
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
-  const { pending, enviar } = useEnvio(() => { setOpen(false); setValor(''); setMotivo('') })
+  const [perda, setPerda] = useState(false)
+  const { pending, enviar } = useEnvio(() => { setOpen(false); setValor(''); setMotivo(''); setPerda(false) })
   const atual = saldos.find((s) => s.codigoLocal === local)?.saldo ?? 0
   const n = Number(valor.replace(',', '.'))
   const previa = valor !== '' && Number.isFinite(n) ? (modo === 'contagem' ? n - atual : n) : null
@@ -158,7 +163,7 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
   function salvar() {
     if (local === '') return toast.error('Escolha o local')
     if (omie) return enviar(() => ajusteOmie({
-      codigoProduto: produto.codigoProduto, codigoLocal: local, motivo,
+      codigoProduto: produto.codigoProduto, codigoLocal: local, motivo, perda,
       ...(modo === 'contagem' ? { novoSaldo: valor } : { diferenca: valor }),
     }), 'Ajuste registrado')
     enviar(() => ajusteManual({
@@ -189,6 +194,12 @@ export function ModalAjuste({ produto, locais, saldos, localInicial, ...g }: { p
         )}
       </div>
       {omie && <p className="text-[12px] text-text-muted">No Omie, o saldo contado é comparado com o saldo do Omie lido na hora; a diferença vira uma entrada ou saída pelo custo médio.</p>}
+      {omie && (
+        <label className="flex items-center gap-2 text-[13px] text-text">
+          <input type="checkbox" checked={perda} onChange={(e) => setPerda(e.target.checked)} />
+          É perda ou quebra (a saída vai como perda no Omie)
+        </label>
+      )}
       <div className="space-y-2"><Label>Motivo</Label><input className={campo} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: contagem do mês, quebra, perda" /></div>
     </Moldura>
   )

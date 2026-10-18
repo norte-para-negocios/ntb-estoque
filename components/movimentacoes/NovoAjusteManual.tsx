@@ -38,6 +38,8 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
   const [local, setLocal] = useState('')
   const [quantidade, setQuantidade] = useState('')
   const [motivo, setMotivo] = useState('')
+  const [custo, setCusto] = useState('')
+  const [perda, setPerda] = useState(false)
   const hojeBahia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
   const [data, setData] = useState(hojeBahia)
   const [pending, startTransition] = useTransition()
@@ -65,6 +67,9 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
         quantidade: qtd,
         motivo: motivo.trim(),
         data,
+        // Omie: entrada com custo digitado (vazio = custo médio); saída marcada como perda vai como PER.
+        ...(!proprio && tipo === 'ENT' && custo.trim() ? { custoUnitario: Number(custo.replace(',', '.')) } : {}),
+        ...(!proprio && tipo === 'SAI' && perda ? { motivoOmie: 'PER' as const } : {}),
       })
       if (res?.error) {
         toast.error(res.error)
@@ -82,6 +87,8 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
       setOpen(false)
       setQuantidade('')
       setMotivo('')
+      setCusto('')
+      setPerda(false)
       router.refresh()
     })
   }
@@ -153,6 +160,25 @@ export function NovoAjusteManual({ locais, produto, proprio = false }: { locais:
               className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
             />
           </div>
+          {!proprio && tipo === 'ENT' && (
+            <div className="space-y-2">
+              <Label>Custo unitário (opcional, R$)</Label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={custo}
+                onChange={(e) => setCusto(e.target.value)}
+                placeholder="Vazio = custo médio atual"
+                className="num w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40 max-sm:text-base"
+              />
+            </div>
+          )}
+          {!proprio && tipo === 'SAI' && (
+            <label className="flex items-center gap-2 text-[13px] text-text">
+              <input type="checkbox" checked={perda} onChange={(e) => setPerda(e.target.checked)} />
+              É perda ou quebra (vai como perda no Omie)
+            </label>
+          )}
           <div className="space-y-2">
             <Label>Data</Label>
             <input

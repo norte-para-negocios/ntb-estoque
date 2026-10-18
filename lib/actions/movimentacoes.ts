@@ -9,7 +9,7 @@ import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
-import { MOTIVO_AJUSTE_MANUAL, encerrarOuEnviarAjusteManual } from '@/lib/omie/motivo-ajuste'
+import { encerrarOuEnviarAjusteManual, motivoDoAjusteManual, validarCustoInformado } from '@/lib/omie/motivo-ajuste'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
 
@@ -28,6 +28,10 @@ export async function criarAjusteManual(input: {
   quantidade: number
   motivo: string
   data?: string // YYYY-MM-DD; vazio = hoje. Nao pode ser futura.
+  /** Entrada: custo unitário digitado (vazio = custo médio de hoje, como sempre). Saída: ignorado. */
+  custoUnitario?: number | null
+  /** 'PER' = saída por perda/quebra (vai como PER no Omie); vazio = INV, como sempre (a Central não passa nada). */
+  motivoOmie?: 'INV' | 'PER'
 }) {
   const __d = viaDesktop('movimentacoes#criarAjusteManual', criarAjusteManual, [input]); if (__d) return __d as never
   if (!TIPOS_MANUAIS.has(input.tipo)) {
@@ -39,6 +43,10 @@ export async function criarAjusteManual(input: {
   if (!input.motivo.trim()) {
     return { error: 'Informe o motivo do ajuste' }
   }
+  const custoInformado = input.tipo === 'ENT' ? input.custoUnitario ?? null : null
+  const erroCusto = validarCustoInformado(custoInformado)
+  if (erroCusto) return { error: erroCusto }
+  const motivoOmie = motivoDoAjusteManual(input.tipo, input.motivoOmie)
   const hojeBahia = hojeBahiaISO()
   if (input.data && input.data > hojeBahia) {
     return { error: 'A data nao pode ser futura' }
@@ -79,23 +87,28 @@ export async function criarAjusteManual(input: {
   const obsCarimbo = `${input.motivo.trim()} · ${await carimboUsuario()}`
   const quan = input.tipo === 'SAI' ? -Math.abs(input.quantidade) : Math.abs(input.quantidade)
 
-  const { data: mov } = await supabase
+  const gravar = (comCusto: boolean) => supabase
     .from('movimentos')
     .insert({
       loja_id: lojaId,
       tipo: input.tipo,
       origem: 'AJU',
-      // Motivo do Omie (INV), não o tipo: "SAI"/"ENT" o Omie recusa (15/10/2026). O texto digitado vai no obs.
-      motivo: MOTIVO_AJUSTE_MANUAL,
+      // Motivo do Omie (INV, ou PER na perda), nunca o tipo: "SAI"/"ENT" o Omie recusa (15/10/2026). O texto digitado vai no obs.
+      motivo: motivoOmie,
       data: dataCriacao,
       id_prod: input.idProd,
       codigo_local_estoque: input.codigoLocalEstoque,
       quan,
       obs: obsCarimbo,
+      ...(comCusto && custoInformado ? { custo_informado: custoInformado } : {}),
       status: 'Processando',
     })
     .select('id, tentativas')
     .single()
+  let { data: mov, error: erroMov } = await gravar(true)
+  // Banco ainda sem a coluna custo_informado (código publicado antes da migration 179): grava sem ela; o custo
+  // digitado ainda vai neste envio (o retry é que voltaria ao custo médio).
+  if (erroMov && custoInformado && /custo_informado/.test(erroMov.message)) ({ data: mov, error: erroMov } = await gravar(false))
   if (!mov) return { error: 'Falha ao gravar o movimento' }
 
   const resultado = await reenviarMovimentoManual(
@@ -105,11 +118,12 @@ export async function criarAjusteManual(input: {
       id_prod: input.idProd,
       quan,
       tipo: input.tipo,
-      motivo: MOTIVO_AJUSTE_MANUAL,
+      motivo: motivoOmie,
       origem: 'AJU',
       obs: obsCarimbo,
       data: dataCriacao,
       tentativas: mov.tentativas,
+      custo_informado: custoInformado,
     },
     loja,
     lojaId
@@ -304,7 +318,7 @@ export async function retryMovimentosManuaisPendentes(
 
     const { data: itensElegiveis, error: erroItens } = await supabase
       .from('movimentos')
-      .select('id, id_prod, codigo_local_estoque, tipo, motivo, origem, obs, data, quan, id_ajuste, tentativas')
+      .select('*') // inclui custo_informado (migration 179) quando a coluna existe
       .in('id', idsSelecionados)
 
     if (erroItens) {

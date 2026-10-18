@@ -40,19 +40,24 @@ function atualizarTelas() {
   revalidatePath('/movimentacoes')
 }
 
-/** Entrada no Omie (ENT) pelo custo médio atual do produto (lido na hora). */
-export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: number; quantidade: number | string; obs?: string }): Promise<Resposta> {
+/** Entrada no Omie (ENT) pelo custo digitado (opcional) ou pelo custo médio atual do produto (lido na hora). */
+export async function entradaOmie(dados: { codigoProduto: number; codigoLocal: number; quantidade: number | string; obs?: string; custoUnitario?: number | string | null }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#entradaOmie', entradaOmie, [dados]); if (__d) return __d as never
   const ctx = await contextoEscritaOmie(PERM, 'Movimentacoes - Criar')
   if ('error' in ctx) return ctx
   const quantidade = numero(dados.quantidade)
   if (quantidade == null || quantidade <= 0) return { error: 'Informe uma quantidade maior que zero.' }
+  const temCusto = dados.custoUnitario != null && String(dados.custoUnitario).trim() !== ''
+  const custo = temCusto ? numero(dados.custoUnitario) : null
+  if (temCusto && custo == null) return { error: 'Custo unitário inválido.' }
   const r = await criarAjusteManual({
     idProd: dados.codigoProduto, tipo: 'ENT', codigoLocalEstoque: dados.codigoLocal, quantidade,
     motivo: dados.obs?.trim() || 'Entrada pela tela de estoque',
+    custoUnitario: custo,
   })
   atualizarTelas()
-  return respostaDoLancamento(r as { error?: string; status?: string; erro?: string; id?: number }, ctx.loja.is_test ? 'Loja de teste: lançamento simulado, nada foi enviado ao Omie.' : 'Lançada no Omie.')
+  const pelo = custo ? 'pelo custo informado' : 'pelo custo médio atual'
+  return respostaDoLancamento(r as { error?: string; status?: string; erro?: string; id?: number }, ctx.loja.is_test ? `Loja de teste: lançamento simulado (${pelo}), nada foi enviado ao Omie.` : `Lançada no Omie ${pelo}.`)
 }
 
 /**
@@ -63,6 +68,8 @@ export async function ajusteOmie(dados: {
   codigoProduto: number; codigoLocal: number; motivo: string; novoSaldo?: number | string | null; diferenca?: number | string | null
   /** "Zerar o saldo" (Central): recusa se o saldo lido agora no Omie já não é negativo (a tela pode estar velha). */
   somenteSeNegativo?: boolean
+  /** Saída por perda/quebra: vai como PER no Omie (só vale para saída; sobra vira INV com aviso). */
+  perda?: boolean
 }): Promise<Resposta> {
   const __d = viaDesktop('estoque-omie#ajusteOmie', ajusteOmie, [dados]); if (__d) return __d as never
   const ctx = await contextoEscritaOmie(PERM, 'Movimentacoes - Criar')
@@ -88,9 +95,10 @@ export async function ajusteOmie(dados: {
   if ('erro' in d) return { error: d.erro }
   const r = await criarAjusteManual({
     idProd: dados.codigoProduto, tipo: d.tipo, codigoLocalEstoque: dados.codigoLocal, quantidade: d.quantidade, motivo: dados.motivo.trim(),
+    ...(dados.perda && d.tipo === 'SAI' ? { motivoOmie: 'PER' as const } : {}),
   })
   atualizarTelas()
-  const feito = `${d.tipo === 'ENT' ? 'Entrada' : 'Saída'} de ${d.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}${contagem ? ` (saldo no Omie era ${saldoAtual.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})` : ''}`
+  const feito = `${d.tipo === 'ENT' ? 'Entrada' : dados.perda ? 'Perda' : 'Saída'} de ${d.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}${contagem ? ` (saldo no Omie era ${saldoAtual.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})` : ''}${dados.perda && d.tipo === 'ENT' ? ' (sobra não é perda: lançada como inventário)' : ''}`
   return respostaDoLancamento(r as { error?: string; status?: string; erro?: string; id?: number }, ctx.loja.is_test ? `Loja de teste: ${feito} simulada, nada foi enviado ao Omie.` : `${feito} lançada no Omie.`)
 }
 

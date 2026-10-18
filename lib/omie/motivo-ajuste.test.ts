@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual, encerrarOuEnviarAjusteManual, motivoAjusteValido, motivoOmieDoAjuste } from './motivo-ajuste.ts'
+import { MOTIVO_AJUSTE_MANUAL, decidirReenvioAjusteManual, encerrarOuEnviarAjusteManual, motivoAjusteValido, motivoOmieDoAjuste, motivoDoAjusteManual, validarCustoInformado, valorDoAjusteManual } from './motivo-ajuste.ts'
 
 const ler = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
 const semComentarios = (s: string) => s.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n')
@@ -68,10 +68,11 @@ test('reenvio-manual: o payload usa motivoOmieDoAjuste e não cai mais no tipo',
   assert.ok(!/:\s*mov\.tipo,?\s*\n?\s*}/.test(src) && !/\?\s*mov\.motivo\s*:\s*mov\.tipo/.test(src), 'ainda cai no tipo')
 })
 
-test('criarAjusteManual grava e manda o motivo INV, não o tipo', () => {
+test('criarAjusteManual grava e manda o motivo do ajuste manual (INV, ou PER na perda), não o tipo', () => {
   const corpo = semComentarios(corpoDe(ler('lib/actions/movimentacoes.ts'), 'criarAjusteManual'))
   assert.ok(!/motivo:\s*input\.tipo/.test(corpo), 'ainda grava motivo = tipo')
-  assert.equal((corpo.match(/motivo:\s*MOTIVO_AJUSTE_MANUAL/g) ?? []).length, 2, 'insert e envio na hora devem usar MOTIVO_AJUSTE_MANUAL')
+  assert.ok(corpo.includes('motivoDoAjusteManual(input.tipo, input.motivoOmie)'), 'motivo não sai de motivoDoAjusteManual')
+  assert.equal((corpo.match(/motivo:\s*motivoOmie\b/g) ?? []).length, 2, 'insert e envio na hora devem usar o mesmo motivoOmie')
 })
 
 test('correção de custo relança com motivoOmieDoAjuste, não com o tipo', () => {
@@ -151,4 +152,27 @@ test('retryMovimentosManuaisPendentes passa por encerrarOuEnviarAjusteManual e n
   const iHelper = corpo.indexOf('encerrarOuEnviarAjusteManual(')
   const iEnvio = corpo.indexOf('reenviarMovimentoManual(')
   assert.ok(iEnvio > iHelper, 'o envio deve estar dentro do deps.enviar do helper')
+})
+
+test('PER só na saída', () => {
+  assert.equal(motivoDoAjusteManual('SAI', 'PER'), 'PER'); assert.equal(motivoDoAjusteManual('ENT', 'PER'), 'INV')
+  assert.equal(motivoDoAjusteManual('SAI', undefined), 'INV'); assert.equal(motivoDoAjusteManual('SAI', 'SAI'), 'INV')
+})
+
+test('regra de 15/10 intacta: PER é enviado, SAI/ENT gravado continua encerrado', () => {
+  assert.deepEqual(decidirReenvioAjusteManual({ tipo: 'SAI', motivo: 'PER', tentativas: 0 }, 30), { acao: 'enviar' })
+  assert.equal(decidirReenvioAjusteManual({ tipo: 'SAI', motivo: 'SAI', tentativas: 0 }, 30).acao, 'encerrar')
+})
+
+test('valor do ajuste: custo digitado só na entrada; sem custo segue o CMC (Central igual)', () => {
+  assert.deepEqual(valorDoAjusteManual('ENT', 41.53, 27.49), { valor: 41.53, fonte: 'informado' })
+  assert.deepEqual(valorDoAjusteManual('SAI', 41.53, 27.49), { valor: 27.49, fonte: 'cmc' })
+  assert.deepEqual(valorDoAjusteManual('ENT', 12, 0), { valor: 12, fonte: 'informado' })
+  assert.deepEqual(valorDoAjusteManual('ENT', undefined, 27.49), { valor: 27.49, fonte: 'cmc' })
+  assert.deepEqual(valorDoAjusteManual('ENT', null, 0), { semCmc: true })
+})
+
+test('validarCustoInformado', () => {
+  assert.equal(validarCustoInformado(undefined), null); assert.equal(validarCustoInformado(41.53), null)
+  assert.ok(validarCustoInformado(0)); assert.ok(validarCustoInformado(1e7))
 })
