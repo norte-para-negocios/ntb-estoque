@@ -13,10 +13,10 @@ import { espelharNotaNoFrio } from './nf-frio'
 
 export type ResultadoSync = {
   lojaId: number; ok: boolean; motivo?: string; erro?: string; bloqueadoAte?: string | null
-  consultas: number; documentos: number; notas: number; resumos: number; lancadas: number; aConferir: number; ciencias: number; cancelamentos: number; ignorados: number; falhas: number
+  consultas: number; documentos: number; notas: number; resumos: number; lancadas: number; aConferir: number; ciencias: number; cancelamentos: number; estornos: number; ignorados: number; falhas: number
 }
 
-const vazio = (lojaId: number): ResultadoSync => ({ lojaId, ok: true, consultas: 0, documentos: 0, notas: 0, resumos: 0, lancadas: 0, aConferir: 0, ciencias: 0, cancelamentos: 0, ignorados: 0, falhas: 0 })
+const vazio = (lojaId: number): ResultadoSync => ({ lojaId, ok: true, consultas: 0, documentos: 0, notas: 0, resumos: 0, lancadas: 0, aConferir: 0, ciencias: 0, cancelamentos: 0, estornos: 0, ignorados: 0, falhas: 0 })
 const MAX_LOTES_POR_EXECUCAO = 5
 const MAX_CIENCIAS_POR_EXECUCAO = 15
 
@@ -70,6 +70,8 @@ async function processarDocumento(ctx: Ctx, doc: DocDistribuido, r: ResultadoSyn
       const ev = lerEvento(doc.xml)
       if (ev.tpEvento === '110111' && ev.chave) {
         const { data } = await sb.rpc('sefaz_marcar_cancelada', { p_loja: ctx.lojaId, p_chave: ev.chave })
+        // Compra já lançada: a entrada é estornada pela própria função (migration 180).
+        if ((data as { estornada?: boolean } | null)?.estornada) r.estornos++
         if ((data as { nota?: boolean } | null)?.nota) {
           r.cancelamentos++
           const n = await notaPorChave(ctx.lojaId, ev.chave); if (n) void espelharNotaNoFrio(ctx.lojaId, n.id)

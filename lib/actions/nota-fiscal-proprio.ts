@@ -50,6 +50,7 @@ export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | 
   const { data, error } = await createServiceClient().rpc('lancar_compra', { p_compra: { loja_id: ctx.lojaId, id: compra.id, itens: [] }, p_local: local, p_user: ctx.userId })
   if (error) return { error: error.message }
   const r = data as { status: string; lancados: number; pendentes: number }
+  if (r.status === 'cancelada') return { error: 'Nota cancelada na SEFAZ: não entra no estoque.' }
   await registrarAuditoria('concluir', 'nota fiscal (entrada)', compra.numero ?? notaId, null)
   await atualizarSituacao(ctx.lojaId, notaId)
   return { ok: true, lancados: Number(r.lancados) || 0, pendentes: Number(r.pendentes) || 0, status: r.status }
