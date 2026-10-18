@@ -164,6 +164,14 @@ export function podeLancarSozinho(e: { casamentosSeguros: boolean; alertasNota: 
   return e.autoLancar && e.casamentosSeguros && e.alertasNota === 0 && !e.origensFlags.includes('padrao') && e.alertasItens.length === 0
 }
 
+/** Conferência: avisos de custo/quantidade só passam com "Conferi os avisos"; recebido menor/maior e complementar só informam. */
+export function decidirConferencia(alertas: { linha: number; alertas: AlertaItem[] }[], aceitarAvisos: boolean): { ok: true; aceitos: { linha: number; tipo: AlertaItem['tipo'] }[] } | { error: string } {
+  const bloqueiam = new Set<AlertaItem['tipo']>(['fator_suspeito', 'custo_fora', 'valor_zero'])
+  const aceitos = alertas.flatMap((a) => a.alertas.filter((x) => bloqueiam.has(x.tipo)).map((x) => ({ linha: a.linha, tipo: x.tipo })))
+  if (aceitos.length && !aceitarAvisos) return { error: 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' }
+  return { ok: true, aceitos }
+}
+
 // ---------- Configuração inicial e validação ----------
 
 export type MemoriaItem = { flags: string | null; cfopEntrada: string | null; codigoLocal: number | null }
@@ -212,4 +220,29 @@ export function previaCustoItem(e: { quantidadeNota: number; precoUnit: number; 
     flags: flagsParaOmie(e.flags, e.aliqCredPis, e.aliqCredCofins), vFrete: e.frete, vSeguro: e.seguro, freteExterno: e.freteCte,
   })
   return { valorEstoque: r.valorEstoque, custoUnitario: custoUnitarioEntrada(r.valorEstoque, e.quantidadeRecebida) }
+}
+
+/** Item já gravado em compras_proprio_itens (colunas da 184/185) → quantidade recebida, prévia do custo (R15) e avisos.
+ *  Tela da nota e servidor (marcarConferidaNF) usam esta mesma conta. Compra antiga (sem valor_total_item): sem prévia N3. */
+export type ItemCompraGravado = {
+  quantidade: number; valor_unitario: number; valor_total_item: number | null; desconto: number; ipi_valor: number; st_valor: number; fcp_st_valor: number
+  icms_valor: number; frete_valor: number; seguro_valor: number; outras_valor: number; frete_cte: number; flags: string | null
+  aliq_cred_pis: number; aliq_cred_cofins: number; quantidade_recebida: number | null; fator: number; unidade_compra: string | null
+  unidade_estoque: string | null; codigo_produto: number | null; movimenta_estoque: boolean
+}
+export function avaliarItemCompra(i: ItemCompraGravado, ctx: { cmc: number | null; finalidade: string | null }): { quantidadeRecebida: number; previa: { valorEstoque: number; custoUnitario: number | null } | null; alertas: AlertaItem[] } {
+  const fator = Number(i.fator) || 1
+  const quantidadeRecebida = i.quantidade_recebida != null ? Number(i.quantidade_recebida) : Number(i.quantidade) * fator
+  const flags = flagsDeTexto(i.flags) ?? flagsDeTexto(FLAGS_PADRAO)!
+  const previa = i.valor_total_item == null ? null : previaCustoItem({
+    quantidadeNota: Number(i.quantidade), precoUnit: Number(i.valor_unitario), valorTotalItem: Number(i.valor_total_item), desconto: Number(i.desconto),
+    ipi: Number(i.ipi_valor), st: Number(i.st_valor) + Number(i.fcp_st_valor), icms: Number(i.icms_valor), frete: Number(i.frete_valor),
+    seguro: Number(i.seguro_valor), freteCte: Number(i.frete_cte), flags, aliqCredPis: Number(i.aliq_cred_pis), aliqCredCofins: Number(i.aliq_cred_cofins),
+    quantidadeRecebida,
+  })
+  const alertas = i.codigo_produto == null ? [] : alertasDoItem({
+    unidadeNota: i.unidade_compra ?? 'UN', unidadeEstoque: i.unidade_estoque, fator, quantidadeNota: Number(i.quantidade), quantidadeRecebida,
+    custoUnitario: previa?.custoUnitario ?? null, cmcAtual: ctx.cmc, valorTotalItem: i.valor_total_item == null ? 1 : Number(i.valor_total_item), finalidade: ctx.finalidade,
+  })
+  return { quantidadeRecebida, previa, alertas }
 }

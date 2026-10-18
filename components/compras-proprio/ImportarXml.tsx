@@ -9,10 +9,10 @@ import { Label } from '@/components/ui/label'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { lancarCompraXml, previaXml, type PreviaCompra, type ProdutoBusca } from '@/lib/actions/compras-proprio'
-import { custoUnitarioBase } from '@/lib/estoque/custo-compra'
+import { previaCustoItem } from '@/lib/estoque/nf-item-regras'
 import { campoCompra, SeletorProduto } from './SeletorProduto'
 
-type Mapa = Record<number, { produto: ProdutoBusca | null; fator: string }>
+type Mapa = Record<number, { produto: ProdutoBusca | null; fator: string; local: number | '' }>
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtCnpj = (c: string) => c.length === 14 ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : c
@@ -41,13 +41,12 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
       setPrevia(r.previa)
       const m: Mapa = {}
       for (const i of r.previa.itens) {
-        m[i.linha] = { produto: i.produto && i.codigoProduto ? { codigoProduto: i.codigoProduto, codigo: i.produto.codigo, descricao: i.produto.descricao, unidade: i.produto.unidade } : null, fator: String(i.fator) }
+        m[i.linha] = { produto: i.produto && i.codigoProduto ? { codigoProduto: i.codigoProduto, codigo: i.produto.codigo, descricao: i.produto.descricao, unidade: i.produto.unidade } : null, fator: String(i.fator), local: i.config.codigoLocal ?? '' }
       }
       setMapa(m)
     })
   }
 
-  const itensCusto = previa?.itens.map((i) => ({ valorTotal: i.valorTotal, desconto: i.desconto, quantidade: i.quantidade, fator: Number((mapa[i.linha]?.fator ?? '1').replace(',', '.')) || 1, icms: i.icms })) ?? []
   const mapeados = previa ? previa.itens.filter((i) => mapa[i.linha]?.produto).length : 0
   const bloqueada = previa?.jaExiste && (previa.jaExiste.status === 'lancada' || previa.jaExiste.status === 'cancelada')
 
@@ -57,7 +56,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
     iniciarLancamento(async () => {
       const r = await lancarCompraXml({
         xml, codigoLocal: local, icmsRecuperavel: icms,
-        mapeamentos: previa.itens.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha]?.produto?.codigoProduto ?? null, fator: Number((mapa[i.linha]?.fator ?? '1').replace(',', '.')) || 1 })),
+        mapeamentos: previa.itens.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha]?.produto?.codigoProduto ?? null, fator: Number((mapa[i.linha]?.fator ?? '1').replace(',', '.')) || 1, codigoLocal: mapa[i.linha]?.local || null })),
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
       toast.success(r.status === 'lancada' ? 'Compra lançada no estoque' : `${r.lancados} itens lançados, ${r.pendentes} pendentes de produto`)
@@ -95,7 +94,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
                 <div><dt className="text-text-muted">Total da nota</dt><dd className="num text-[16px] font-semibold">{fmtBRL(previa.nfe.valores.total)}</dd></div>
               </dl>
             </div>
-            {previa.nfe.avisos.map((a) => <p key={a} className="mt-2 flex items-center gap-2 text-[13px] text-warn"><AlertTriangle className="size-4 shrink-0" />{a}</p>)}
+            {[...new Set([...previa.nfe.avisos, ...previa.validacao.avisos])].map((a) => <p key={a} className="mt-2 flex items-center gap-2 text-[13px] text-warn"><AlertTriangle className="size-4 shrink-0" />{a}</p>)}
             {previa.jaExiste && (
               <p className="mt-3 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] bg-surface-2 px-3 py-2 text-[13px]">
                 <CheckCircle2 className="size-4 text-ok" /> Esta nota já foi importada ({previa.jaExiste.status}).
@@ -110,9 +109,14 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
             </div>
             <ul className="space-y-3">
               {previa.itens.map((i) => {
-                const m = mapa[i.linha] ?? { produto: null, fator: '1' }
+                const m = mapa[i.linha] ?? { produto: null, fator: '1', local: '' }
                 const fator = Number(m.fator.replace(',', '.')) || 1
-                const custo = custoUnitarioBase({ valorTotal: i.valorTotal, desconto: i.desconto, quantidade: i.quantidade, fator, icms: i.icms }, itensCusto, previa.nfe.valores.frete, previa.nfe.valores.descontoNota, icms)
+                // mesma conta do lançamento (valor de estoque pelas marcações sugeridas ÷ quantidade recebida)
+                const custo = i.quantidade > 0 ? previaCustoItem({
+                  quantidadeNota: i.quantidade, precoUnit: i.valorUnitario, valorTotalItem: i.valorTotalItem, desconto: i.desconto, ipi: i.fiscal.ipi,
+                  st: i.fiscal.st + i.fiscal.fcpSt, icms: i.icms, frete: i.fiscal.frete, seguro: i.fiscal.seguro, freteCte: 0,
+                  flags: icms ? { ...i.config.flags, icms: false } : i.config.flags, aliqCredPis: 0, aliqCredCofins: 0, quantidadeRecebida: i.quantidade * fator,
+                }).custoUnitario : null
                 return (
                   <li key={i.linha} className="rounded-[var(--r-lg)] bg-surface p-4 u-card">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -136,6 +140,15 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
                         </div>
                       )}
                     </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1.5"><Label>Local deste item</Label>
+                        <select className={campoCompra} value={m.local} onChange={(e) => setMapa((x) => ({ ...x, [i.linha]: { ...m, local: e.target.value ? Number(e.target.value) : '' } }))}>
+                          <option value="">O local da nota</option>
+                          {locais.map((l) => <option key={l.codigoLocal} value={l.codigoLocal}>{l.descricao}</option>)}
+                        </select></div>
+                      {!i.config.movimentaEstoque && <p className="self-end text-[13px] text-text-muted">Fica fora do estoque (nota complementar ou item sem valor).</p>}
+                    </div>
+                    {i.alertas.map((a) => <p key={a.tipo} className="mt-2 flex items-center gap-2 text-[13px] text-warn"><AlertTriangle className="size-4 shrink-0" />{a.texto}</p>)}
                   </li>
                 )
               })}
@@ -151,7 +164,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
                 </select></div>
               <label className="flex items-start gap-3 text-[13px]">
                 <input type="checkbox" className="mt-1 size-4" checked={icms} onChange={(e) => setIcms(e.target.checked)} />
-                <span><span className="font-medium text-text">O ICMS desta nota é recuperável</span><br /><span className="text-text-muted">Deixe desmarcado no Simples Nacional: o custo é o valor cheio. Confirme com o contador.</span></span>
+                <span><span className="font-medium text-text">Tirar o ICMS do custo em todos os itens</span><br /><span className="text-text-muted">Marca "ICMS não é custo de estoque" em cada item (ICMS recuperável). Deixe desmarcado no Simples Nacional. Confirme com o contador.</span></span>
               </label>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

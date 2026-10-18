@@ -27,18 +27,35 @@ export type ItemNF = {
   full_object?: unknown
 }
 
+/** Fase B (só leitura): o que o Omie manda em full_object.itensAjustes (a loja própria recebe pela projeção, migration 185). */
+function ajustesDoItem(fullObject: unknown): { cfopEntrada: string | null; local: number | null; geraConta: boolean | null; movimenta: boolean | null } {
+  const a = (fullObject as { itensAjustes?: { cCFOPEntrada?: string; codigo_local_estoque?: number | string; cNaoGerarFinanceiro?: string; cNaoGerarMovEstoque?: string } } | null)?.itensAjustes
+  if (!a) return { cfopEntrada: null, local: null, geraConta: null, movimenta: null }
+  return {
+    cfopEntrada: a.cCFOPEntrada || null,
+    local: a.codigo_local_estoque != null && a.codigo_local_estoque !== '' ? Number(a.codigo_local_estoque) : null,
+    geraConta: a.cNaoGerarFinanceiro == null ? null : a.cNaoGerarFinanceiro !== 'S',
+    movimenta: a.cNaoGerarMovEstoque == null ? null : a.cNaoGerarMovEstoque !== 'S',
+  }
+}
+const simNao = (v: boolean | null) => (v == null ? '-' : v ? 'Sim' : 'Não')
+
 export function ItensNotaFiscal({
   notaId,
   itens,
   categorias,
   ligacoes,
+  nomesLocais,
 }: {
   notaId: string
   itens: ItemNF[]
   categorias: { id: number; nome: string }[]
   /** Loja Omie: cada item liga à página do produto e aos movimentos dele desde a emissão da nota. */
   ligacoes?: { emissao: string | null; hoje: string } | null
+  /** Nomes dos locais já carregados pela página (sem consulta nova aqui); sem nome, mostra o código. */
+  nomesLocais?: Record<number, string>
 }) {
+  const nomeLocal = (c: number | null) => (c == null ? '-' : nomesLocais?.[c] ?? String(c))
   const produtoHref = (item: ItemNF) => (ligacoes && item.n_id_produto ? `/estoque/produto/${item.n_id_produto}` : null)
   const movHref = (item: ItemNF) =>
     ligacoes && item.n_id_produto && ligacoes.emissao
@@ -113,7 +130,7 @@ export function ItensNotaFiscal({
             horizontal: com 11 colunas o table-fixed espremia o nome do produto
             em ~5 letras. Aqui o produto quebra linha e nada é cortado. */}
         <div className="u-stagger overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
-        <table className="w-full min-w-[960px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
+        <table className="w-full min-w-[1200px] text-sm [&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:bg-surface [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:bg-surface [&_th]:whitespace-nowrap [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-text-muted [&_thead]:border-b [&_thead]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr]:u-motion hover:[&_tbody_tr]:bg-surface-2/60">
           <thead>
             <tr>
               <th className="w-10">
@@ -128,6 +145,10 @@ export function ItensNotaFiscal({
               <th>Código</th>
               <th className="min-w-[240px]">Produto</th>
               <th>CFOP</th>
+              <th>CFOP de entrada</th>
+              <th>Local</th>
+              <th>Gera conta a pagar</th>
+              <th>Movimenta estoque</th>
               <th className="!text-right">Qtd NFe</th>
               <th className="!text-right">Preço unit.</th>
               <th className="!text-right">Total</th>
@@ -140,6 +161,7 @@ export function ItensNotaFiscal({
           <tbody>
             {itens.map((item) => {
               const impostos = impostosItem(item.full_object)
+              const aj = ajustesDoItem(item.full_object)
               return (
                 <>
                   <tr key={item.id} className={sel.has(item.id) ? 'bg-brand-soft/40' : ''}>
@@ -155,6 +177,10 @@ export function ItensNotaFiscal({
                     <td className="num text-text-muted">{item.c_codigo_produto}</td>
                     <td className="font-medium text-text">{nomeItem(item)}</td>
                     <td className="num text-text-muted">{item.c_cfop || '-'}</td>
+                    <td className="num text-text-muted">{aj.cfopEntrada ?? '-'}</td>
+                    <td className="text-text-muted">{nomeLocal(aj.local)}</td>
+                    <td className="text-text-muted">{simNao(aj.geraConta)}</td>
+                    <td className="text-text-muted">{simNao(aj.movimenta)}</td>
                     <td className="whitespace-nowrap text-right">
                       <Num value={item.n_qtde_nfe} frac={3} />{' '}
                       <span className="text-text-muted">{item.c_unidade_nfe}</span>
@@ -198,7 +224,7 @@ export function ItensNotaFiscal({
                   {expandido.has(item.id) && impostos.length > 0 && (
                     <tr key={`${item.id}-impostos`}>
                       <td></td>
-                      <td colSpan={9} className="bg-surface-2/50 py-2">
+                      <td colSpan={13} className="bg-surface-2/50 py-2">
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
                           {impostos.map((imp) => (
                             <span key={imp.label} className="text-text-muted">
@@ -234,6 +260,7 @@ export function ItensNotaFiscal({
         </label>
         {itens.map((item) => {
           const impostos = impostosItem(item.full_object)
+          const aj = ajustesDoItem(item.full_object)
           return (
           <div
             key={item.id}
@@ -262,6 +289,15 @@ export function ItensNotaFiscal({
               <Num value={item.n_qtde_nfe} frac={3} />{' '}
               <span className="text-text-muted">{item.c_unidade_nfe}</span>
             </div>
+
+            {(aj.cfopEntrada || aj.local != null || aj.movimenta != null) && (
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[13px]">
+                <div><dt className="text-text-muted">CFOP de entrada</dt><dd className="num">{aj.cfopEntrada ?? '-'}</dd></div>
+                <div><dt className="text-text-muted">Local</dt><dd>{nomeLocal(aj.local)}</dd></div>
+                <div><dt className="text-text-muted">Gera conta a pagar</dt><dd>{simNao(aj.geraConta)}</dd></div>
+                <div><dt className="text-text-muted">Movimenta estoque</dt><dd>{simNao(aj.movimenta)}</dd></div>
+              </dl>
+            )}
 
             {impostos.length > 0 && (
               <div className="mt-3">

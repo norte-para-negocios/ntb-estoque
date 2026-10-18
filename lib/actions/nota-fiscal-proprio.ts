@@ -11,6 +11,8 @@ import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
 import { sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
+import { carregarCmc } from '@/lib/estoque/nf-memoria'
+import { avaliarItemCompra, decidirConferencia, flagsParaTexto, validarConfigItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
 
@@ -181,4 +183,97 @@ export async function criarProdutoParaNF(dados: { descricao: string; unidade: st
   if ('error' in r) return r
   await registrarAuditoria('criar', 'produto', r.codigoProduto, dados.descricao.trim())
   return { ok: true, produto: { codigoProduto: r.codigoProduto, codigo: r.codigo, descricao: dados.descricao.trim(), unidade: dados.unidade.trim() } }
+}
+
+// ---------------------------------------------------------------- Fase B: item da nota e conferência
+
+const COLUNAS_FLAGS = ['custo_icms', 'custo_icms_st', 'custo_ipi', 'custo_seguro', 'custo_pis', 'custo_cofins', 'custo_frete', 'custo_outras'] as const
+
+/** Linha de compras_proprio_itens → entrada de avaliarItemCompra (marcações em texto na ordem do Omie). */
+function itemGravado(r: Record<string, unknown>): ItemCompraGravado {
+  const n = (k: string) => Number(r[k] ?? 0) || 0
+  const flags = r.custo_icms == null ? null : COLUNAS_FLAGS.map((c) => (r[c] ? 'S' : 'N')).join('')
+  return {
+    quantidade: n('quantidade'), valor_unitario: n('valor_unitario'), valor_total_item: r.valor_total_item == null ? null : n('valor_total_item'), desconto: n('desconto'),
+    ipi_valor: n('ipi_valor'), st_valor: n('st_valor'), fcp_st_valor: n('fcp_st_valor'), icms_valor: n('icms_valor'), frete_valor: n('frete_valor'),
+    seguro_valor: n('seguro_valor'), outras_valor: n('outras_valor'), frete_cte: n('frete_cte'), flags, aliq_cred_pis: n('aliq_cred_pis'), aliq_cred_cofins: n('aliq_cred_cofins'),
+    quantidade_recebida: r.quantidade_recebida == null ? null : n('quantidade_recebida'), fator: n('fator') || 1, unidade_compra: (r.unidade_compra as string) ?? null,
+    unidade_estoque: (r.unidade_estoque as string) ?? null, codigo_produto: r.codigo_produto == null ? null : Number(r.codigo_produto), movimenta_estoque: r.movimenta_estoque !== false,
+  }
+}
+
+/** Editor do item: local, CFOP de entrada, quantidade recebida, unidade, marcações, alíquotas, movimenta / gera conta a pagar.
+ *  Grava só o que veio em `cfg`; mexer no item tira a conferência (R9). */
+export async function configurarItemNF(compraItemId: number, cfg: ConfigItemNF): Promise<{ ok: true } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#configurarItemNF', configurarItemNF, [compraItemId, cfg]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const erro = validarConfigItem(cfg)
+  if (erro) return { error: erro }
+  const p: Record<string, unknown> = {}
+  if (cfg.codigoLocal !== undefined) p.codigo_local_estoque = cfg.codigoLocal
+  if (cfg.cfopEntrada !== undefined) p.cfop_entrada = cfg.cfopEntrada ? cfg.cfopEntrada.replace(/\D/g, '') : null
+  if (cfg.quantidadeRecebida !== undefined) p.quantidade_recebida = cfg.quantidadeRecebida
+  if (cfg.unidadeEstoque !== undefined) p.unidade_estoque = cfg.unidadeEstoque
+  if (cfg.flags !== undefined) p.custo_flags = flagsParaTexto(cfg.flags)
+  if (cfg.aliqCredPis !== undefined) p.aliq_cred_pis = cfg.aliqCredPis
+  if (cfg.aliqCredCofins !== undefined) p.aliq_cred_cofins = cfg.aliqCredCofins
+  if (cfg.movimentaEstoque !== undefined) p.movimenta_estoque = cfg.movimentaEstoque
+  if (cfg.geraContaPagar !== undefined) p.gera_conta_pagar = cfg.geraContaPagar
+  if (!Object.keys(p).length) return { ok: true }
+  const { data, error } = await createServiceClient().rpc('configurar_item_compra', { p_loja: ctx.lojaId, p_item: compraItemId, p_cfg: p, p_user: ctx.userId })
+  if (error) return { error: error.message }
+  const notaId = (data as { nota_id: number | null }).nota_id
+  if (notaId) await atualizarSituacao(ctx.lojaId, Number(notaId))
+  return { ok: true }
+}
+
+/** Etapa "Conferida": recalcula no servidor os avisos de cada item (fator, custo, valor zero) e só aceita com "Conferi os avisos". */
+export async function marcarConferidaNF(notaId: number, opts: { aceitarAvisos: boolean }): Promise<{ ok: true } | { error: string; pendencias?: { linha: number; motivo: string }[] }> {
+  const __d = viaDesktop('nota-fiscal-proprio#marcarConferidaNF', marcarConferidaNF, [notaId, opts]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const sb = createServiceClient()
+  const compra = await compraDaNota(ctx.lojaId, notaId)
+  if (!compra) return { error: 'Esta nota ainda não tem itens para conferir (só o resumo chegou da SEFAZ).' }
+  const [{ data: itens }, { data: nota }] = await Promise.all([
+    sb.from('compras_proprio_itens').select('*').eq('compra_id', compra.id).eq('loja_id', ctx.lojaId).order('linha'),
+    sb.from('notas_fiscais').select('full_object').eq('id', notaId).eq('loja_id', ctx.lojaId).maybeSingle(),
+  ])
+  const linhas = ((itens ?? []) as Record<string, unknown>[]).filter((r) => !r.lancado && r.movimenta_estoque !== false)
+  const finalidade = ((nota?.full_object as { sefaz?: { finalidade?: string } } | null)?.sefaz?.finalidade) ?? null
+  const cmc = await carregarCmc(ctx.lojaId, linhas.map((r) => Number(r.codigo_produto)).filter((c) => Number.isFinite(c) && c > 0))
+  const alertas = linhas.map((r) => {
+    const g = itemGravado(r)
+    return { linha: Number(r.linha), alertas: avaliarItemCompra(g, { cmc: g.codigo_produto != null ? cmc.get(g.codigo_produto) ?? null : null, finalidade }).alertas }
+  })
+  const dec = decidirConferencia(alertas, !!opts.aceitarAvisos)
+  if ('error' in dec) return dec
+  const { data, error } = await sb.rpc('marcar_compra_conferida', { p_loja: ctx.lojaId, p_compra: compra.id, p_user: ctx.userId, p_detalhe: { avisos_aceitos: dec.aceitos } })
+  if (error) return { error: error.message }
+  const r = data as { ok: boolean; pendencias?: { linha: number; motivo: string }[] }
+  if (!r.ok) {
+    const MOTIVO: Record<string, string> = { sem_produto: 'sem produto', local_invalido: 'local inválido', quantidade_zero: 'quantidade zero' }
+    return { error: `Itens pendentes: ${(r.pendencias ?? []).map((p) => `item ${p.linha} (${MOTIVO[p.motivo] ?? p.motivo})`).join(', ')}.`, pendencias: r.pendencias }
+  }
+  await registrarAuditoria('editar', 'nota fiscal (conferida)', compra.numero ?? notaId, null)
+  await atualizarSituacao(ctx.lojaId, notaId)
+  return { ok: true }
+}
+
+/** Observações da nota própria (aba Observações): texto livre da compra, com registro no histórico. */
+export async function salvarObservacaoNF(notaId: number, obs: string): Promise<{ ok: true } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#salvarObservacaoNF', salvarObservacaoNF, [notaId, obs]); if (__d) return __d as never
+  const ctx = await contexto('Notas Fiscais - Manifestar')
+  if ('error' in ctx) return ctx
+  const texto = (obs ?? '').trim()
+  if (texto.length > 2000) return { error: 'A observação passa de 2.000 caracteres.' }
+  const compra = await compraDaNota(ctx.lojaId, notaId)
+  if (!compra) return { error: 'Esta nota ainda não tem itens (só o resumo chegou da SEFAZ).' }
+  const sb = createServiceClient()
+  const { error } = await sb.from('compras_proprio').update({ obs: texto || null, updated_at: new Date().toISOString() }).eq('id', compra.id).eq('loja_id', ctx.lojaId)
+  if (error) return { error: error.message }
+  await sb.from('compras_proprio_eventos').insert({ loja_id: ctx.lojaId, compra_id: compra.id, tipo: 'observacao', detalhe: { texto: texto.slice(0, 200) }, user_id: ctx.userId })
+  revalidatePath(`/nota-fiscal/${notaId}`)
+  return { ok: true }
 }

@@ -99,7 +99,8 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
     const { m, alvo } = casados[idx]
     const p = alvo != null ? cad.produtosPorCodigo.get(alvo) : undefined
     return {
-      ...i, codigoProduto: alvo, fator: m.fator, sugestao: m.origem,
+      // valores fiscais já com as despesas/desconto que vieram só no total rateados (o mesmo que será gravado)
+      ...sug.itensFiscais[idx], codigoProduto: alvo, fator: m.fator, sugestao: m.origem,
       produto: p ? { codigo: p.codigo, descricao: p.descricao, unidade: p.unidade ?? '' } : undefined,
       config: sug.configs[idx], alertas: alertasPorLinha.get(i.linha) ?? [],
     }

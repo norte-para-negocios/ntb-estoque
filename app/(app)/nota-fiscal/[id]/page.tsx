@@ -18,6 +18,7 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { ConferenciaNF } from '@/components/nota-fiscal/ConferenciaNF'
 import { OrigemSefazNF } from '@/components/nota-fiscal/OrigemSefazNF'
 import { EntradasGeradasNF } from '@/components/nota-fiscal/EntradasGeradasNF'
+import { ObservacaoNF } from '@/components/nota-fiscal/ObservacaoNF'
 import { carregarConferencia } from './dados-proprio'
 
 export default async function NotaFiscalItensPage({
@@ -195,13 +196,15 @@ export default async function NotaFiscalItensPage({
       <DetalhesFiscaisNF fullObject={nf.full_object} semOmie={proprio} />
       {conferencia && (
         <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
-          podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} />
+          podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} conferidaEm={conferencia.compra?.conferidaEm ?? null} />
       )}
-      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }} />
+      <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
+        nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
 
       {proprio ? (
         <>
           <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
+          {conferencia?.compra && <ObservacaoNF notaId={Number(id)} obs={conferencia.compra.obs} editavel={podeManifestar} />}
           {conferencia && <OrigemSefazNF info={conferencia} />}
         </>
       ) : (

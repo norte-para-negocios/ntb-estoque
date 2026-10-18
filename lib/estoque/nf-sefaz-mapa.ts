@@ -64,7 +64,7 @@ export function cabecalhoDaNota(nfe: NfeLida, opts: { ambiente: '1' | '2'; orige
         vTotalPIS: nfe.valores.pis, vTotalCOFINS: nfe.valores.cofins, vFrete: nfe.valores.vFrete, vSeguro: nfe.valores.vSeg, vAproxTributos: nfe.tributosAprox,
       },
       infoAdicionais: { dRegistro: dmy(new Date().toISOString().slice(0, 10)) ?? '', cInfoCompl: nfe.infCpl ?? undefined },
-      sefaz: { origem: opts.origem, completo: true, alertas: opts.alertas, nsu: opts.nsu ?? null, recebidoEm: opts.recebidoEm ?? new Date().toISOString(), tipoOperacao: nfe.tipoOperacao },
+      sefaz: { origem: opts.origem, completo: true, alertas: opts.alertas, nsu: opts.nsu ?? null, recebidoEm: opts.recebidoEm ?? new Date().toISOString(), tipoOperacao: nfe.tipoOperacao, finalidade: nfe.finalidade, crt: nfe.crt },
     },
   }
 }

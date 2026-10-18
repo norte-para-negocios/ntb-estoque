@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   sugerirFlagsCusto, flagsParaTexto, flagsDeTexto, flagsParaOmie, sugerirCfopEntrada, formatarCfop, cfopValido,
-  alertasDoItem, configInicialItem, podeLancarSozinho, validarConfigItem, previaCustoItem, grupoUnidade, fatorConhecido, UNIDADES_ESTOQUE,
+  alertasDoItem, configInicialItem, podeLancarSozinho, decidirConferencia, avaliarItemCompra, validarConfigItem, previaCustoItem, grupoUnidade, fatorConhecido, UNIDADES_ESTOQUE,
 } from './nf-item-regras.ts'
 
 // Valores das capturas nf-* (~/Projects/omie-rea/telas/COM/etapas-pedidos-compra) e de D1/K1 (loja 5).
@@ -79,4 +79,22 @@ test('podeLancarSozinho: padrão ou alerta de item segura a nota', () => {
   assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], autoLancar: false }), false)
   assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], casamentosSeguros: false }), false)
   assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], alertasNota: 1 }), false)
+})
+
+test('marcarConferidaNF recusa sem "Conferi os avisos" (TEQUILA PRATA) e aceita com', () => {
+  const a = [{ linha: 5, alertas: [{ tipo: 'fator_suspeito' as const, texto: 'x' }, { tipo: 'custo_fora' as const, texto: 'y' }] }, { linha: 1, alertas: [{ tipo: 'recebido_menor' as const, texto: 'z' }] }]
+  assert.deepEqual(decidirConferencia(a, false), { error: 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' })
+  assert.deepEqual(decidirConferencia(a, true), { ok: true, aceitos: [{ linha: 5, tipo: 'fator_suspeito' }, { linha: 5, tipo: 'custo_fora' }] })
+  assert.deepEqual(decidirConferencia([a[1]], false), { ok: true, aceitos: [] })
+})
+
+test('avaliarItemCompra: prévia e avisos do item gravado (tela e servidor usam a mesma conta)', () => {
+  const base = { quantidade: 4, valor_unitario: 158.149101, valor_total_item: 706.35, desconto: 0, ipi_valor: 20.04, st_valor: 0, fcp_st_valor: 0, icms_valor: 0,
+    frete_valor: 0, seguro_valor: 0, outras_valor: 53.71, frete_cte: 0, flags: 'NNNNNNNN', aliq_cred_pis: 0, aliq_cred_cofins: 0, quantidade_recebida: null,
+    fator: 24, unidade_compra: 'CX', unidade_estoque: 'UN', codigo_produto: 1002, movimenta_estoque: true }
+  assert.deepEqual(avaliarItemCompra(base, { cmc: 6.5, finalidade: '1' }), { quantidadeRecebida: 96, previa: { valorEstoque: 632.6, custoUnitario: 6.589583 }, alertas: [] })
+  const prata = avaliarItemCompra({ ...base, quantidade: 1, valor_unitario: 139.9, valor_total_item: 139.9, ipi_valor: 0, outras_valor: 0, fator: 1, unidade_compra: 'UND8', unidade_estoque: 'ML' }, { cmc: 0.186533, finalidade: '1' })
+  assert.deepEqual(prata.alertas.map((a) => a.tipo), ['fator_suspeito', 'custo_fora'])
+  assert.equal(avaliarItemCompra({ ...base, valor_total_item: null }, { cmc: null, finalidade: '1' }).previa, null) // compra antiga: sem prévia N3
+  assert.deepEqual(avaliarItemCompra({ ...base, codigo_produto: null }, { cmc: null, finalidade: '1' }).alertas, [])
 })

@@ -27,12 +27,33 @@ type Transporte = {
   nPesoLiquido?: number
   nQtdeVolume?: string | number
   cEspecieVolume?: string
+  // nota própria (Fase B, R17): o que o XML traz a mais
+  cInscricaoTransp?: string
+  cUFTransp?: string
+  cPlaca?: string
+  cUFPlaca?: string
+  cRNTRC?: string
+  cMarcaVolume?: string
+  cNumeracaoVolume?: string
+  cLacres?: string
 }
 
 type ParcelaItem = { nSequencia: number; dVencimento: string; vParcela: number; pParcela: number }
 type Parcelas = { parcelasLista?: ParcelaItem[] }
 
 type Totais = {
+  vTotalNFe?: number
+  bcICMS?: number
+  vICMS?: number
+  bcICMSST?: number
+  vICMSSubstituicao?: number
+  vTotalIPI?: number
+  vTotalDescontos?: number
+  vOutrasDespesas?: number
+  vTotalPIS?: number
+  vTotalCOFINS?: number
+  vFrete?: number
+  vSeguro?: number
   vTotalProdutos?: number
   vAproxTributos?: number
   nValIBS?: number
@@ -141,6 +162,20 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
             {transporte.nQtdeVolume != null && (
               <Campo label="Volumes"><span className="num">{transporte.nQtdeVolume} {transporte.cEspecieVolume ?? ''}</span></Campo>
             )}
+            {semOmie && (
+              <>
+                {transporte.cCnpjCpfTransp && <Campo label="CNPJ da transportadora"><span className="num">{transporte.cCnpjCpfTransp}</span></Campo>}
+                {(transporte.cInscricaoTransp || transporte.cUFTransp) && (
+                  <Campo label="Inscrição estadual / UF"><span className="num">{[transporte.cInscricaoTransp, transporte.cUFTransp].filter(Boolean).join(' · ')}</span></Campo>
+                )}
+                {transporte.cPlaca && <Campo label="Placa"><span className="num">{transporte.cPlaca}{transporte.cUFPlaca ? ` (${transporte.cUFPlaca})` : ''}</span></Campo>}
+                {transporte.cRNTRC && <Campo label="RNTRC"><span className="num">{transporte.cRNTRC}</span></Campo>}
+                {(transporte.cMarcaVolume || transporte.cNumeracaoVolume) && (
+                  <Campo label="Marca / numeração dos volumes">{[transporte.cMarcaVolume, transporte.cNumeracaoVolume].filter(Boolean).join(' · ')}</Campo>
+                )}
+                {transporte.cLacres && <Campo label="Lacres"><span className="num">{transporte.cLacres}</span></Campo>}
+              </>
+            )}
           </dl>
         </div>
       )}
@@ -156,6 +191,22 @@ export function DetalhesFiscaisNF({ fullObject, semOmie = false }: { fullObject:
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {semOmie && totais?.vTotalNFe != null && (
+        <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
+          <h3 className="mb-3 text-[17px] font-semibold text-text">Totais</h3>
+          <dl className="grid grid-cols-2 gap-2.5">
+            {([
+              ['Base do ICMS', totais.bcICMS], ['ICMS', totais.vICMS], ['Base da ST', totais.bcICMSST], ['ICMS-ST', totais.vICMSSubstituicao],
+              ['IPI', totais.vTotalIPI], ['Frete', totais.vFrete], ['Seguro', totais.vSeguro], ['Outras despesas', totais.vOutrasDespesas],
+              ['Descontos', totais.vTotalDescontos], ['PIS', totais.vTotalPIS], ['COFINS', totais.vTotalCOFINS], ['Mercadorias', totais.vTotalProdutos],
+            ] as [string, number | undefined][]).map(([rotulo, v]) => (
+              <Campo key={rotulo} label={rotulo}><span className="num">{fmtMoeda(v ?? 0)}</span></Campo>
+            ))}
+            <Campo label="Total da nota"><span className="num font-semibold">{fmtMoeda(totais.vTotalNFe)}</span></Campo>
+          </dl>
         </div>
       )}
 

@@ -7,8 +7,10 @@ import { toast } from 'sonner'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
 import { SeletorProduto, campoCompra } from '@/components/compras-proprio/SeletorProduto'
-import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, definirLoteItemNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
+import { buscarProdutosNF, confirmarEntradaNF, criarProdutoParaNF, definirLoteItemNF, marcarConferidaNF, vincularItemNF } from '@/lib/actions/nota-fiscal-proprio'
 import { formatCustoUnit } from '@/lib/num-br'
+import type { AlertaItem } from '@/lib/estoque/nf-item-regras'
+import { EditorItemNF } from './EditorItemNF'
 
 export type ItemConferencia = {
   id: number; linha: number; descricao: string; cProd: string | null; unidade: string | null; quantidade: number; valorLiquido: number
@@ -17,18 +19,38 @@ export type ItemConferencia = {
   sugestao: { codigoProduto: number; codigo: string; descricao: string; unidade: string } | null
   lote?: string | null
   validade?: string | null
+  /** Fase B: configuração do item (local, CFOP de entrada, quantidade recebida, marcações…), valores fiscais, prévia e avisos. */
+  config: {
+    codigoLocal: number | null; cfopEntrada: string | null; origemCfop: string | null; quantidadeRecebida: number; unidadeEstoque: string | null
+    flags: string | null; origemFlags: string | null; aliqCredPis: number; aliqCredCofins: number; movimentaEstoque: boolean; geraContaPagar: boolean
+  }
+  fiscal: {
+    cst: string | null; csosn: string | null; icms: number; st: number; ipi: number; pis: number; cofins: number; frete: number; seguro: number; outras: number
+    freteCte: number; valorTotalItem: number | null; desconto: number; valorProdutos: number; precoUnit: number
+  }
+  previa: { valorEstoque: number; custoUnitario: number | null } | null
+  alertas: AlertaItem[]
+  saldoAtual: number | null
+  saldosPorLocal: Record<number, number>
 }
+
+/** Avisos que só passam com "Conferi os avisos" (mesma regra de decidirConferencia no servidor). */
+const AVISOS_QUE_SEGURAM = new Set<AlertaItem['tipo']>(['fator_suspeito', 'custo_fora', 'valor_zero'])
 
 const ORIGEM: Record<string, string> = { depara: 'de-para do fornecedor', ean: 'código de barras', descricao: 'nome parecido', manual: 'ligado por você' }
 const fmtQtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeConferir, alertas }: {
+export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeConferir, alertas, conferidaEm }: {
   notaId: number; itens: ItemConferencia[]; status: string; locais: { codigo: number; descricao: string }[]; localAtual: number | null; podeConferir: boolean; alertas: string[]
+  conferidaEm?: string | null
 }) {
   const router = useRouter()
   const [local, setLocal] = useState<number | ''>(localAtual ?? locais[0]?.codigo ?? '')
   const [pending, start] = useTransition()
+  const [conferindo, startConferir] = useTransition()
+  const [aceitarAvisos, setAceitarAvisos] = useState(false)
+  const temAvisoQueSegura = itens.some((i) => !i.lancado && i.config.movimentaEstoque && i.alertas.some((a) => AVISOS_QUE_SEGURAM.has(a.tipo)))
   const pendentes = itens.filter((i) => !i.lancado)
   const semProduto = pendentes.filter((i) => !i.produto).length
   const encerrada = status === 'cancelada'
@@ -44,6 +66,23 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
     })
   }
 
+  function marcarConferida() {
+    startConferir(async () => {
+      const r = await marcarConferidaNF(notaId, { aceitarAvisos })
+      if ('error' in r) { toast.error('Ainda não dá para marcar como conferida', { description: r.error }); return }
+      toast.success('Nota conferida', { description: 'Agora é só confirmar a entrada no estoque.' })
+      router.refresh()
+    })
+  }
+
+  // Rodapé (D18): mesmos totais do cartão do Omie
+  const soma = (f: (i: ItemConferencia) => number) => itens.reduce((a, i) => a + f(i), 0)
+  const rodape = {
+    mercadorias: soma((i) => i.fiscal.valorProdutos), desconto: soma((i) => i.fiscal.desconto), ipi: soma((i) => i.fiscal.ipi), st: soma((i) => i.fiscal.st),
+    despesas: soma((i) => i.fiscal.frete + i.fiscal.seguro + i.fiscal.outras + i.fiscal.freteCte),
+    total: soma((i) => i.fiscal.valorTotalItem ?? i.valorLiquido),
+  }
+
   if (!itens.length) return null
   return (
     <section className="space-y-3" aria-label="Conferência com o cadastro">
@@ -56,6 +95,18 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
         </div>
         {editavel && pendentes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
+            {conferidaEm
+              ? <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok"><CheckCircle2 className="size-4" />Conferida</span>
+              : <>
+                  {temAvisoQueSegura && (
+                    <label className="flex items-center gap-2 text-[13px] text-warn">
+                      <input type="checkbox" className="size-4" checked={aceitarAvisos} onChange={(e) => setAceitarAvisos(e.target.checked)} />Conferi os avisos
+                    </label>
+                  )}
+                  <button type="button" className={btnClass('outline')} onClick={marcarConferida} disabled={conferindo || (temAvisoQueSegura && !aceitarAvisos)}>
+                    {conferindo ? <Spinner /> : <CheckCircle2 className="size-4" />}Marcar como conferida
+                  </button>
+                </>}
             <select aria-label="Local que recebe a mercadoria" className={`${campoCompra} w-auto`} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
               {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
             </select>
@@ -73,13 +124,22 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
       )}
 
       <ul className="divide-y divide-[var(--border)] rounded-[var(--r-lg)] bg-surface u-card">
-        {itens.map((i) => <LinhaItem key={i.id} item={i} editavel={editavel && !i.lancado} encerrada={encerrada} />)}
+        {itens.map((i) => <LinhaItem key={i.id} item={i} editavel={editavel && !i.lancado} encerrada={encerrada} locais={locais} />)}
       </ul>
+
+      <dl className="grid grid-cols-2 gap-x-5 gap-y-1 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] shadow-[var(--shadow-sm)] sm:grid-cols-6">
+        <div><dt className="text-text-muted">Mercadorias</dt><dd className="num font-medium">{fmtBRL(rodape.mercadorias)}</dd></div>
+        <div><dt className="text-text-muted">Desconto</dt><dd className="num font-medium">{fmtBRL(rodape.desconto)}</dd></div>
+        <div><dt className="text-text-muted">IPI</dt><dd className="num font-medium">{fmtBRL(rodape.ipi)}</dd></div>
+        <div><dt className="text-text-muted">ST</dt><dd className="num font-medium">{fmtBRL(rodape.st)}</dd></div>
+        <div><dt className="text-text-muted">Frete/despesas</dt><dd className="num font-medium">{fmtBRL(rodape.despesas)}</dd></div>
+        <div><dt className="text-text-muted">Total da nota</dt><dd className="num text-[15px] font-semibold">{fmtBRL(rodape.total)}</dd></div>
+      </dl>
     </section>
   )
 }
 
-function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; editavel: boolean; encerrada: boolean }) {
+function LinhaItem({ item, editavel, encerrada, locais }: { item: ItemConferencia; editavel: boolean; encerrada: boolean; locais: { codigo: number; descricao: string }[] }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [trocando, setTrocando] = useState(false)
@@ -99,7 +159,8 @@ function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; edita
     <li className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[14px] font-medium text-text">{item.descricao}</p>
+          <p className={`text-[14px] font-medium text-text ${item.config.movimentaEstoque ? '' : 'line-through opacity-70'}`}>{item.descricao}</p>
+          {!item.config.movimentaEstoque && <p className="text-[12px] text-text-muted">fica fora do estoque</p>}
           <p className="num text-[12px] text-text-muted">{item.cProd ? `${item.cProd} · ` : ''}{fmtQtd(item.quantidade)} {item.unidade ?? ''} · {fmtBRL(item.valorLiquido)}</p>
         </div>
         <div className="text-right text-[13px]">
@@ -128,6 +189,8 @@ function LinhaItem({ item, editavel, encerrada }: { item: ItemConferencia; edita
       )}
 
       {(item.produto || item.lote || item.validade) && <LoteItem item={item} editavel={editavel} />}
+
+      <EditorItemNF item={item} locais={locais} editavel={editavel} />
 
       {editavel && !item.produto && (
         <div className="space-y-2">
