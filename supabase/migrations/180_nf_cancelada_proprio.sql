@@ -6,6 +6,9 @@
 --     entrada (estornar_compra). Idempotente: na segunda vez não estorna nada.
 -- (3) lancar_compra (mesma assinatura; corpo de produção em 18/10/2026 por pg_get_functiondef): chave cancelada não
 --     entra (também o XML importado à mão). Só lojas de estoque próprio usam estas funções.
+-- Tudo numa transação: se algo falhar, nada fica pela metade (os drop/create de função não se aplicam sozinhos).
+
+begin;
 
 create table if not exists sefaz_chaves_canceladas (
   loja_id bigint not null references lojas(id) on delete cascade,
@@ -102,6 +105,16 @@ begin
     raise exception 'Compra cancelada não pode ser lançada de novo' using errcode = '22023';
   end if;
 
+  -- 180: a mesma checagem para a compra achada pelo id (caminho real da SEFAZ e do "Confirmar entrada", que mandam
+  -- só o id, sem a chave no payload).
+  if v_comp.chave_acesso is not null and (exists (select 1 from sefaz_chaves_canceladas where loja_id = v_loja and chave = v_comp.chave_acesso)
+      or exists (select 1 from notas_fiscais where loja_id = v_loja and c_chave_nfe = v_comp.chave_acesso and deleted_at is null
+                 and coalesce(full_object->'infoCadastro'->>'cCancelada', 'N') = 'S')) then
+    perform sefaz_marcar_cancelada(v_loja, v_comp.chave_acesso);
+    return jsonb_build_object('ok', false, 'compra_id', v_comp.id, 'status', 'cancelada', 'lancados', 0, 'pendentes', 0,
+                              'duplicado', false, 'motivo', 'nota cancelada na SEFAZ');
+  end if;
+
   -- itens: cria os que faltam; nos já existentes só atualiza o mapeamento (e só se ainda não lançados)
   for d in select value as item, ordinality::int as ord from jsonb_array_elements(coalesce(p_compra->'itens', '[]'::jsonb)) with ordinality loop
     insert into compras_proprio_itens (compra_id, loja_id, linha, c_prod, ean, descricao, ncm, cfop, unidade_compra,
@@ -168,5 +181,7 @@ begin
   return jsonb_build_object('ok', true, 'compra_id', v_comp.id, 'status', v_status, 'lancados', v_lanc, 'ja_lancados', v_ja,
                             'pendentes', v_pend, 'duplicado', (v_lanc = 0 and v_ja > 0 and v_pend = 0), 'itens', v_saida);
 end $function$;
+
+commit;
 
 notify pgrst, 'reload schema';

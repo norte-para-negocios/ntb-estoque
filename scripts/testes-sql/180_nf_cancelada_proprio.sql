@@ -4,6 +4,8 @@ do $$
 declare v_loja bigint; r jsonb; s numeric; n int;
   chave_a text := '29261000000000000000550010000000011000000011';
   chave_b text := '29261000000000000000550010000000021000000022';
+  chave_d text := '29261000000000000000550010000000041000000044';
+  v_comp bigint;
   item jsonb := '[{"linha":1,"c_prod":"X1","descricao":"ITEM TESTE","quantidade":10,"valor_unitario":5,"valor_total":50,"codigo_produto":"777"}]';
 begin
   insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 180', '00000000000000', 'proprio') returning id into v_loja;
@@ -32,6 +34,16 @@ begin
   if r->>'status' <> 'cancelada' then raise exception 'B: lançou nota cancelada: %', r; end if;
   select count(*) into n from estoque_movimentos where loja_id = v_loja and ref = chave_b;
   if n <> 0 then raise exception 'B: % movimentos', n; end if;
+
+  -- D: caminho real de produção (SEFAZ): cancelamento chega antes; o XML registra a compra (registrar_compra_sefaz) e
+  -- o lançamento vem pelo id, SEM a chave no payload (nf-sefaz.ts, confirmarEntradaNF).
+  r := sefaz_marcar_cancelada(v_loja, chave_d);
+  r := registrar_compra_sefaz(jsonb_build_object('loja_id', v_loja, 'chave_acesso', chave_d, 'numero', '4', 'itens', item), 1);
+  v_comp := (r->>'compra_id')::bigint;
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_comp, 'itens', '[]'::jsonb), 1, null);
+  if r->>'status' <> 'cancelada' then raise exception 'D: lançou pelo id uma nota cancelada: %', r; end if;
+  select count(*) into n from estoque_movimentos where loja_id = v_loja and ref = chave_d;
+  if n <> 0 then raise exception 'D: % movimentos', n; end if;
 
   raise notice 'nf cancelada proprio (180) OK';
 end $$;

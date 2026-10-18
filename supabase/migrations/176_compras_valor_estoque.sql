@@ -5,6 +5,9 @@
 -- (item_movimenta_estoque, 175) — no Omie eles não entram no estoque; (3) valor continua quantidade × preço (valor da
 -- nota), para nenhum consumidor mudar sem querer. Mudou a lista de colunas de saída: drop + create.
 -- Espelho em lib/relatorio-frio-nf.ts (mesmo commit). Depende da 175.
+-- Tudo numa transação: se algo falhar, nada fica pela metade (os drop/create de função não se aplicam sozinhos).
+
+begin;
 
 drop function if exists relatorio_compras_total(bigint, date, date, text[], text[], text, text[], text, bigint, text);
 drop function if exists relatorio_compras_dim(bigint, date, date, text, text[], text[], text, text[], text, bigint, text);
@@ -199,5 +202,7 @@ grant execute on function relatorio_compras_total(bigint, date, date, text[], te
 grant execute on function relatorio_compras_dim(bigint, date, date, text, text[], text[], text, text[], text, bigint, text) to authenticated, service_role;
 grant execute on function relatorio_compras_matriz(bigint, date, date, text, text[], text[], text, text[], text, bigint, text) to authenticated, service_role;
 grant execute on function relatorio_compras_detalhe(bigint, date, date, text[], text[], text, text[], text, bigint, text) to authenticated, service_role;
+
+commit;
 
 notify pgrst, 'reload schema';

@@ -2,6 +2,9 @@
 -- (chave_idempotencia); a mesma chave de novo (duplo clique, reenvio da fila do desktop) devolve a compra já gravada com
 -- duplicado = true e não lança nada. Chamadas concorrentes com a mesma chave: o índice único barra a segunda.
 -- lancar_compra = corpo da 180 + o guarda acima (mesma assinatura). Depende da 180.
+-- Tudo numa transação: se algo falhar, nada fica pela metade (os drop/create de função não se aplicam sozinhos).
+
+begin;
 
 alter table compras_proprio add column if not exists chave_idempotencia text;
 create unique index if not exists compras_proprio_chave_idempotencia_uq
@@ -67,6 +70,16 @@ begin
     returning * into v_comp;
   elsif v_comp.status = 'cancelada' then
     raise exception 'Compra cancelada não pode ser lançada de novo' using errcode = '22023';
+  end if;
+
+  -- 180: a mesma checagem para a compra achada pelo id (caminho real da SEFAZ e do "Confirmar entrada", que mandam
+  -- só o id, sem a chave no payload).
+  if v_comp.chave_acesso is not null and (exists (select 1 from sefaz_chaves_canceladas where loja_id = v_loja and chave = v_comp.chave_acesso)
+      or exists (select 1 from notas_fiscais where loja_id = v_loja and c_chave_nfe = v_comp.chave_acesso and deleted_at is null
+                 and coalesce(full_object->'infoCadastro'->>'cCancelada', 'N') = 'S')) then
+    perform sefaz_marcar_cancelada(v_loja, v_comp.chave_acesso);
+    return jsonb_build_object('ok', false, 'compra_id', v_comp.id, 'status', 'cancelada', 'lancados', 0, 'pendentes', 0,
+                              'duplicado', false, 'motivo', 'nota cancelada na SEFAZ');
   end if;
 
   -- itens: cria os que faltam; nos já existentes só atualiza o mapeamento (e só se ainda não lançados)
@@ -135,5 +148,7 @@ begin
   return jsonb_build_object('ok', true, 'compra_id', v_comp.id, 'status', v_status, 'lancados', v_lanc, 'ja_lancados', v_ja,
                             'pendentes', v_pend, 'duplicado', (v_lanc = 0 and v_ja > 0 and v_pend = 0), 'itens', v_saida);
 end $function$;
+
+commit;
 
 notify pgrst, 'reload schema';

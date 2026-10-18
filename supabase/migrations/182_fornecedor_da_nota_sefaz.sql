@@ -6,6 +6,9 @@
 -- gravar_nota_sefaz = corpo de produção em 18/10/2026 (pg_get_functiondef) + n_id_fornecedor. Mesma assinatura.
 -- A carga das notas antigas é um script à parte (scripts/backfill/182_fornecedor_notas_sefaz.sql): escreve em dado de
 -- produção, roda só com OK.
+-- Tudo numa transação: se algo falhar, nada fica pela metade (os drop/create de função não se aplicam sozinhos).
+
+begin;
 
 create sequence if not exists public.seq_fornecedor_proprio start 8000000000001;
 
@@ -105,5 +108,7 @@ begin
 
   return jsonb_build_object('ok', true, 'nota_id', n.id, 'n_id_receb', v_idr, 'criada', v_criada, 'itens', v_nitens);
 end $function$;
+
+commit;
 
 notify pgrst, 'reload schema';

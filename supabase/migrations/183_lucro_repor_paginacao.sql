@@ -2,6 +2,9 @@
 -- lucro_proprio: corpo de produção em 18/10/2026 (pg_get_functiondef, migration 150) + desempate por rótulo na ordem,
 -- para a paginação (rpcTodos) não repetir nem pular linha. produtos_repor: sem produtos inativos, ordem por código
 -- (paginação estável) e sem acesso anônimo. Mesmas assinaturas e saídas.
+-- Tudo numa transação: se algo falhar, nada fica pela metade (os drop/create de função não se aplicam sozinhos).
+
+begin;
 
 create or replace function public.lucro_proprio(p_loja bigint, p_ini date, p_fim date, p_dim text DEFAULT 'produto'::text)
  RETURNS TABLE(rotulo text, quantidade numeric, faturamento numeric, cmv numeric, lucro numeric, margem numeric, itens_sem_baixa integer, itens_sem_custo integer)
@@ -100,5 +103,7 @@ $function$;
 
 revoke execute on function public.produtos_repor(bigint) from public, anon;
 grant execute on function public.produtos_repor(bigint) to authenticated, service_role;
+
+commit;
 
 notify pgrst, 'reload schema';
