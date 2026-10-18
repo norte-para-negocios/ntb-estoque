@@ -1,3 +1,4 @@
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao, isAdmin } from '@/lib/auth'
@@ -128,7 +129,7 @@ export default async function ProdutoPage({
       .single(),
     supabase.rpc('familias_da_loja', { p_loja_id: lojaId }),
     repor
-      ? supabase.rpc('produtos_repor', { p_loja_id: lojaId }).then(({ data }) => (data ?? []) as number[])
+      ? rpcTodos<number>(supabase, 'produtos_repor', { p_loja_id: lojaId }) // paginado (migration 183)
       : Promise.resolve<number[] | null>(null),
     // Familias com codigo+descricao para o select do form de edicao (o RPC acima so traz descricao).
     buscarFamilias(),

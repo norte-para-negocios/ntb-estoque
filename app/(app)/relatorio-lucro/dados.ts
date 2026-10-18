@@ -1,3 +1,5 @@
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { createServiceClient } from '@/lib/supabase/server'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 
@@ -36,10 +38,15 @@ const n = (v: unknown) => Number(v) || 0
 
 export async function carregarLucro(lojaId: number, f: FiltroLucro) {
   const supabase = createServiceClient()
-  const [{ data, error }, { data: dias }, { data: vendas }] = await Promise.all([
-    supabase.rpc('lucro_proprio', { p_loja: lojaId, p_ini: f.ini, p_fim: f.fim, p_dim: f.dim }),
-    supabase.rpc('lucro_proprio', { p_loja: lojaId, p_ini: f.ini, p_fim: f.fim, p_dim: 'dia' }),
-    supabase.from('vendas_proprio').select('valor').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false).gte('data', f.ini).lte('data', f.fim).limit(50000),
+  // Tudo paginado (migration 183): o PostgREST corta em 1.000 linhas, e com mais de 1.000 vendas no período o total
+  // de vendas, o ticket médio e as linhas do relatório saíam errados.
+  const erros: string[] = []
+  const [data, dias, vendas] = await Promise.all([
+    rpcTodos<Record<string, unknown>>(supabase, 'lucro_proprio', { p_loja: lojaId, p_ini: f.ini, p_fim: f.fim, p_dim: f.dim }, (e) => { erros.push(e.message) }),
+    rpcTodos<Record<string, unknown>>(supabase, 'lucro_proprio', { p_loja: lojaId, p_ini: f.ini, p_fim: f.fim, p_dim: 'dia' }),
+    buscarTodasLinhas<{ id: number; valor: number | null }>((from, to) =>
+      supabase.from('vendas_proprio').select('id, valor').eq('loja_id', lojaId).eq('cancelado', false).eq('devolvido', false)
+        .gte('data', f.ini).lte('data', f.fim).order('id', { ascending: true }).range(from, to)),
   ])
   const norm = (r: Record<string, unknown>): LinhaLucro => ({
     rotulo: String(r.rotulo ?? ''), quantidade: n(r.quantidade), faturamento: n(r.faturamento), cmv: n(r.cmv), lucro: n(r.lucro),
@@ -60,7 +67,7 @@ export async function carregarLucro(lojaId: number, f: FiltroLucro) {
   const cmv = todos.reduce((s, l) => s + l.cmv, 0)
   const qtdVendas = (vendas ?? []).length
   return {
-    erro: error?.message ?? null, linhas, evolucao,
+    erro: erros[0] ?? null, linhas, evolucao,
     totais: {
       faturamento, cmv, lucro: faturamento - cmv, margem: faturamento > 0 ? ((faturamento - cmv) / faturamento) * 100 : null,
       vendas: qtdVendas, ticket: qtdVendas > 0 ? (vendas ?? []).reduce((s, v) => s + n(v.valor), 0) / qtdVendas : null,

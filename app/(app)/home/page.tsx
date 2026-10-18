@@ -1,3 +1,4 @@
+import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { getProfile, getPermissoesNomes, getAtorGestao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { resumoValidade } from '@/lib/estoque/lotes'
@@ -119,7 +120,8 @@ export default async function HomePage() {
         .or(NAO_CANCELADA_OR)
         .gte('d_emissao_nfe', primeiroDiaMesISO)
         .lte('d_emissao_nfe', ontemLocal),
-      supabase.rpc('produtos_repor', { p_loja_id: lojaId }),
+      // paginado (migration 183): a lista de repor passa de 1.000 em loja grande
+      rpcTodos<number>(supabase, 'produtos_repor', { p_loja_id: lojaId }).then((data) => ({ data })),
       supabase.from('transferencias').select('id', head).eq('loja_id', lojaId).neq('status', 'Concluido'),
       supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
       // Pendentes de reenvio: falhou ao concluir (erro generico ou Sem CMC) e ainda
