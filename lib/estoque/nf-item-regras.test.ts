@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   sugerirFlagsCusto, flagsParaTexto, flagsDeTexto, flagsParaOmie, sugerirCfopEntrada, formatarCfop, cfopValido,
-  alertasDoItem, configInicialItem, validarConfigItem, previaCustoItem, grupoUnidade, fatorConhecido, UNIDADES_ESTOQUE,
+  alertasDoItem, configInicialItem, podeLancarSozinho, validarConfigItem, previaCustoItem, grupoUnidade, fatorConhecido, UNIDADES_ESTOQUE,
 } from './nf-item-regras.ts'
 
 // Valores das capturas nf-* (~/Projects/omie-rea/telas/COM/etapas-pedidos-compra) e de D1/K1 (loja 5).
@@ -69,4 +69,14 @@ test('validarConfigItem', () => {
 test('previaCustoItem bate com o kardex do Omie (NF 131055, Long Corona: 96 × 6,589583)', () => {
   const p = previaCustoItem({ quantidadeNota: 4, precoUnit: 158.149101, valorTotalItem: 706.35, desconto: 0, ipi: 20.04, st: 0, icms: 0, frete: 0, seguro: 0, freteCte: 0, flags: flagsDeTexto('NNNNNNNN')!, aliqCredPis: 0, aliqCredCofins: 0, quantidadeRecebida: 96 })
   assert.deepEqual(p, { valorEstoque: 632.6, custoUnitario: 6.589583 })
+})
+
+test('podeLancarSozinho: padrão ou alerta de item segura a nota', () => {
+  const b = { casamentosSeguros: true, alertasNota: 0, origensFlags: ['produto', 'regra'] as const, alertasItens: [], autoLancar: true }
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: [...b.origensFlags] }), true)
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: ['padrao'] }), false)
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], alertasItens: [{ tipo: 'fator_suspeito', texto: 'x' }] }), false)
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], autoLancar: false }), false)
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], casamentosSeguros: false }), false)
+  assert.equal(podeLancarSozinho({ ...b, origensFlags: ['regra'], alertasNota: 1 }), false)
 })

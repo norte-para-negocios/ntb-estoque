@@ -10,7 +10,10 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { lerNfe, type ItemNfe, type NfeLida } from '@/lib/estoque/nfe-xml'
-import { gravarNotaCompleta } from '@/lib/estoque/nf-sefaz'
+import { gravarNotaCompleta, localPadraoEntrada, sugestoesDosItens } from '@/lib/estoque/nf-sefaz'
+import { validarNfeImportada, validarXmlBruto } from '@/lib/estoque/nfe-validacao'
+import { assinaturaConfere } from '@/lib/estoque/nfe-assinatura'
+import type { AlertaItem, ConfigInicialItem } from '@/lib/estoque/nf-item-regras'
 import { casarItem, montarContexto, type Depara, type ProdutoCad } from '@/lib/estoque/nf-conferencia'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 
@@ -42,11 +45,28 @@ export type ItemPrevia = ItemNfe & {
   fator: number
   sugestao: 'depara' | 'ean' | 'descricao' | null
   produto?: { codigo: string; descricao: string; unidade: string }
+  /** Fase B: configuração sugerida (local, CFOP de entrada, marcações) e avisos do item. */
+  config: ConfigInicialItem
+  alertas: AlertaItem[]
 }
 export type PreviaCompra = {
   nfe: NfeLida
   itens: ItemPrevia[]
   jaExiste: { id: number; status: string; notaId: number | null } | null
+  validacao: { erros: string[]; avisos: string[] }
+}
+
+/** R11: valida o XML antes de ler/gravar (tamanho, DOCTYPE, protocolo, assinatura, ambiente, emitente). */
+async function validarXml(xml: string, lojaId: number): Promise<{ nfe: NfeLida; validacao: { erros: string[]; avisos: string[] }; cnpjLoja: string | null } | { error: string }> {
+  const bruto = validarXmlBruto(xml)
+  if (bruto.length) return { error: bruto.join(' ') }
+  let nfe: NfeLida
+  try { nfe = lerNfe(xml) } catch (e) { return { error: e instanceof Error ? e.message : 'XML inválido' } }
+  const { data: loja } = await createServiceClient().from('lojas').select('cnpj, is_test').eq('id', lojaId).maybeSingle()
+  const cnpjLoja = String(loja?.cnpj ?? '').replace(/\D/g, '') || null
+  const validacao = validarNfeImportada(nfe, { cnpjLoja, assinaturaConfere: assinaturaConfere(xml) })
+  if (validacao.erros.length) return { error: validacao.erros.join(' ') }
+  return { nfe, validacao, cnpjLoja }
 }
 
 /** Lê o XML e sugere o produto de cada item (de-para do fornecedor, depois descrição igual). Não grava nada. */
@@ -55,8 +75,9 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
   const ctx = await contexto('Compras - Criar')
   if ('error' in ctx) return ctx
   if (!xml || xml.length > TAMANHO_MAX_XML) return { error: 'Arquivo vazio ou grande demais (máximo 900 KB).' }
-  let nfe: NfeLida
-  try { nfe = lerNfe(xml) } catch (e) { return { error: e instanceof Error ? e.message : 'XML inválido' } }
+  const v = await validarXml(xml, ctx.lojaId)
+  if ('error' in v) return v
+  const nfe = v.nfe
 
   const sb = createServiceClient()
   const [{ data: depara }, { data: existente }, { data: produtos }] = await Promise.all([
@@ -67,19 +88,26 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
     sb.from('produtos').select('codigo_produto, codigo, descricao, unidade, ean, inativo').eq('loja_id', ctx.lojaId).neq('inativo', true).limit(5000),
   ])
   const cad = montarContexto((produtos ?? []) as ProdutoCad[], (depara ?? []) as Depara[])
-  const itens: ItemPrevia[] = nfe.itens.map((i) => {
+  const casados = nfe.itens.map((i) => {
     const m = casarItem({ cProd: i.cProd, ean: i.ean, descricao: i.descricao, unidade: i.unidade }, cad)
-    const alvo = m.codigoProduto ?? m.sugestao
+    return { m, alvo: m.codigoProduto ?? m.sugestao }
+  })
+  const sug = await sugestoesDosItens(ctx.lojaId, nfe, casados.map((c) => ({ codigoProduto: c.alvo, fator: c.m.fator })),
+    (cod) => cad.produtosPorCodigo.get(cod)?.unidade ?? null, await localPadraoEntrada(ctx.lojaId))
+  const alertasPorLinha = new Map(sug.alertasItens.map((a) => [a.linha, a.alertas]))
+  const itens: ItemPrevia[] = nfe.itens.map((i, idx) => {
+    const { m, alvo } = casados[idx]
     const p = alvo != null ? cad.produtosPorCodigo.get(alvo) : undefined
     return {
       ...i, codigoProduto: alvo, fator: m.fator, sugestao: m.origem,
       produto: p ? { codigo: p.codigo, descricao: p.descricao, unidade: p.unidade ?? '' } : undefined,
+      config: sug.configs[idx], alertas: alertasPorLinha.get(i.linha) ?? [],
     }
   })
-  return { ok: true, previa: { nfe, itens, jaExiste: existente ? { id: Number(existente.id), status: existente.status, notaId: existente.nota_fiscal_id != null ? Number(existente.nota_fiscal_id) : null } : null } }
+  return { ok: true, previa: { nfe, itens, validacao: v.validacao, jaExiste: existente ? { id: Number(existente.id), status: existente.status, notaId: existente.nota_fiscal_id != null ? Number(existente.nota_fiscal_id) : null } : null } }
 }
 
-export type Mapeamento = { linha: number; codigoProduto: number | null; fator: number }
+export type Mapeamento = { linha: number; codigoProduto: number | null; fator: number; codigoLocal?: number | null }
 type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean } | { error: string }
 
 async function chamarLancar(lojaId: number, compra: Record<string, unknown>, local: number, userId: string | null): Promise<ResultadoLancamento> {
@@ -97,15 +125,16 @@ export async function lancarCompraXml(dados: { xml: string; codigoLocal: number;
   if ('error' in ctx) return ctx
   if (!dados.codigoLocal) return { error: 'Escolha o local que recebe a mercadoria.' }
   if (!dados.xml || dados.xml.length > TAMANHO_MAX_XML) return { error: 'Arquivo vazio ou grande demais.' }
-  let nfe: NfeLida
-  try { nfe = lerNfe(dados.xml) } catch (e) { return { error: e instanceof Error ? e.message : 'XML inválido' } }
-  const mapa = new Map(dados.mapeamentos.map((m) => [m.linha, { codigoProduto: m.codigoProduto, fator: m.fator }]))
-  const { data: loja } = await createServiceClient().from('lojas').select('cnpj').eq('id', ctx.lojaId).maybeSingle()
+  // R11: recusa antes de gravar qualquer coisa
+  const v = await validarXml(dados.xml, ctx.lojaId)
+  if ('error' in v) return v
+  const nfe = v.nfe
+  const mapa = new Map(dados.mapeamentos.map((m) => [m.linha, { codigoProduto: m.codigoProduto, fator: m.fator, codigoLocal: m.codigoLocal ?? null }]))
   let res
   try {
     res = await gravarNotaCompleta(ctx.lojaId, nfe, {
       ambiente: '1', origem: 'xml', autoLancar: false, lancarParcial: true, mapeamentos: mapa, icmsRecuperavel: !!dados.icmsRecuperavel,
-      localEntrada: dados.codigoLocal, userId: ctx.userId, cnpjLoja: String(loja?.cnpj ?? '').replace(/\D/g, '') || null,
+      localEntrada: dados.codigoLocal, userId: ctx.userId, cnpjLoja: v.cnpjLoja, avisosExtras: v.validacao.avisos,
     })
   } catch (e) { return { error: e instanceof Error ? e.message : 'Falha ao lançar a nota' } }
   // guarda o XML completo (download na tela da nota; mesma tabela dos documentos recebidos da SEFAZ)

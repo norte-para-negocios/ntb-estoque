@@ -3,6 +3,8 @@ import { carregarCredencialLoja, type CredencialLoja } from './sefaz-certificado
 import { consultarDistribuicao, consultarPorChave, enviarCiencia } from './sefaz-rede'
 import { lerEvento, lerResNFe, proximaConsulta, tipoDocumento, type DocDistribuido } from './sefaz-distdfe'
 import { lerNfe } from './nfe-xml'
+import { validarNfeImportada, validarXmlBruto } from './nfe-validacao'
+import { assinaturaConfere } from './nfe-assinatura'
 import { cabecalhoDoResumo } from './nf-sefaz-mapa'
 import { gravarNotaCompleta } from './nf-sefaz'
 import { espelharNotaNoFrio } from './nf-frio'
@@ -37,11 +39,16 @@ async function processarDocumento(ctx: Ctx, doc: DocDistribuido, r: ResultadoSyn
   const tipo = tipoDocumento(doc.schema)
   try {
     if (tipo === 'procNFe') {
+      const bruto = validarXmlBruto(doc.xml)
+      if (bruto.length) { r.ignorados++; await marcarDoc(ctx.lojaId, doc.nsu, { processado: true, ignorado: bruto[0] }); return }
       const nfe = lerNfe(doc.xml)
       if (nfe.fornecedor.cnpj === ctx.cnpj || nfe.tipoOperacao === '0') {
         r.ignorados++; await marcarDoc(ctx.lojaId, doc.nsu, { processado: true, ignorado: 'nota emitida pela própria loja', chave: nfe.chave }); return
       }
-      const res = await gravarNotaCompleta(ctx.lojaId, nfe, { ambiente: String(ctx.ambiente) as '1' | '2', origem: 'sefaz', nsu: doc.nsu, autoLancar: ctx.autoLancar, cnpjLoja: ctx.cnpj })
+      // R11: XML sem protocolo/assinatura, não autorizado, de homologação etc. não entra (documento fica "ignorado" com o motivo)
+      const val = validarNfeImportada(nfe, { cnpjLoja: ctx.cnpj, assinaturaConfere: assinaturaConfere(doc.xml) })
+      if (val.erros.length) { r.ignorados++; await marcarDoc(ctx.lojaId, doc.nsu, { processado: true, ignorado: val.erros[0], chave: nfe.chave }); return }
+      const res = await gravarNotaCompleta(ctx.lojaId, nfe, { ambiente: String(ctx.ambiente) as '1' | '2', origem: 'sefaz', nsu: doc.nsu, autoLancar: ctx.autoLancar, cnpjLoja: ctx.cnpj, avisosExtras: val.avisos })
       r.notas++
       if (res.lancada) r.lancadas++; else r.aConferir++
       await marcarDoc(ctx.lojaId, doc.nsu, { processado: true, chave: nfe.chave, nota_fiscal_id: res.notaId, erro: null })

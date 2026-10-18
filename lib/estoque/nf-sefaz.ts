@@ -1,8 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { alertasDaNota, cabecalhoDaNota, itensDaNota, type OrigemNota } from './nf-sefaz-mapa'
+import { alertasDaNota, cabecalhoDaNota, itemCompraSefaz, itensComDespesasDoTotal, itensDaNota, type OrigemNota } from './nf-sefaz-mapa'
+import { alertasDoItem, configInicialItem, podeLancarSozinho, previaCustoItem, type AlertaItem, type ConfigInicialItem } from './nf-item-regras'
+import { carregarCmc, carregarMemoria } from './nf-memoria'
 import { casarItem, montarContexto, podeLancarAutomatico, type Casamento, type Depara, type ProdutoCad } from './nf-conferencia'
 import { espelharNotaNoFrio } from './nf-frio'
-import type { NfeLida } from './nfe-xml'
+import type { ItemNfe, NfeLida } from './nfe-xml'
 
 // Grava uma NF-e completa em loja de estoque próprio: nota no formato do Omie + conferência com o cadastro + (se tudo casou com
 // segurança) entrada no estoque. Reutilizado pela sincronização da SEFAZ e pelo upload manual de XML.
@@ -11,6 +13,8 @@ export type ResultadoNota = {
   notaId: number; compraId: number | null; situacao: string | null; lancada: boolean
   itens: number; casados: number; sugestoes: number; pendentes: number; alertas: string[]; criada: boolean
   lancados: number; status: string
+  /** Avisos de cada item (fator, custo, recebido, valor zero, complementar): seguram a entrada automática (R9). */
+  alertasItens: { linha: number; alertas: AlertaItem[] }[]
 }
 
 async function carregarProdutos(lojaId: number): Promise<ProdutoCad[]> {
@@ -31,14 +35,62 @@ export async function localPadraoEntrada(lojaId: number): Promise<number | null>
   return data?.[0]?.codigo_local_estoque != null ? Number(data[0].codigo_local_estoque) : null
 }
 
+/** Fase B: configuração inicial de cada item (marcações, CFOP de entrada, local, movimenta) pela memória + regra
+ *  (R1/R5/R6/R7), com despesas e desconto que vieram só no total rateados nos itens, e os avisos do item pela prévia de
+ *  custo (R15, mesma função do lançamento). Usado na gravação da nota e na prévia do upload. */
+export async function sugestoesDosItens(lojaId: number, nfe: NfeLida, casamentos: { codigoProduto: number | null; fator: number }[],
+  unidadeDe: (codigoProduto: number) => string | null, local: number | null,
+  opts: { icmsRecuperavel?: boolean; locaisManuais?: Map<number, number | null> } = {},
+): Promise<{ itensFiscais: ItemNfe[]; configs: ConfigInicialItem[]; alertasItens: { linha: number; alertas: AlertaItem[] }[]; aviso: string | null }> {
+  const { itens: itensFiscais, aviso } = itensComDespesasDoTotal(nfe)
+  const codigos = casamentos.map((c) => c.codigoProduto).filter((c): c is number => c != null)
+  const [memoria, cmc] = await Promise.all([
+    carregarMemoria(lojaId, nfe.fornecedor.cnpj || null, codigos, nfe.itens.map((i) => i.cProd)),
+    carregarCmc(lojaId, codigos),
+  ])
+  const configs: ConfigInicialItem[] = itensFiscais.map((i, idx) => {
+    const cod = casamentos[idx].codigoProduto
+    const cfg = configInicialItem({
+      item: { cfop: i.cfop, valorTotalItem: i.valorTotalItem, fiscal: { cst: i.fiscal.cst, csosn: i.fiscal.csosn } }, crt: nfe.crt, finalidade: nfe.finalidade,
+      memoriaProduto: cod != null ? memoria.porProduto.get(cod) ?? null : null, memoriaFornecedor: memoria.porCodigoFornecedor.get(i.cProd) ?? null,
+      unidadeProduto: cod != null ? unidadeDe(cod) : null, localNota: local,
+    })
+    const manualLocal = opts.locaisManuais?.get(i.linha)
+    if (manualLocal) cfg.codigoLocal = manualLocal
+    // "Tirar o ICMS do custo em todos os itens" (upload): preenche a marcação de cada item
+    if (opts.icmsRecuperavel && cfg.flags.icms) { cfg.flags = { ...cfg.flags, icms: false }; cfg.origemFlags = 'manual' }
+    return cfg
+  })
+  const alertasItens = itensFiscais.map((i, idx) => {
+    const c = casamentos[idx], cfg = configs[idx]
+    const qtdRecebida = i.quantidade * c.fator
+    const previa = previaCustoItem({
+      quantidadeNota: i.quantidade, precoUnit: i.valorUnitario, valorTotalItem: i.valorTotalItem, desconto: i.desconto, ipi: i.fiscal.ipi,
+      st: i.fiscal.st + i.fiscal.fcpSt, icms: i.icms, frete: i.fiscal.frete, seguro: i.fiscal.seguro, freteCte: 0, flags: cfg.flags,
+      aliqCredPis: cfg.aliqCredPis, aliqCredCofins: cfg.aliqCredCofins, quantidadeRecebida: qtdRecebida,
+    })
+    return {
+      linha: i.linha,
+      alertas: alertasDoItem({
+        unidadeNota: i.unidade, unidadeEstoque: c.codigoProduto != null ? cfg.unidadeEstoque : null, fator: c.fator, quantidadeNota: i.quantidade,
+        quantidadeRecebida: qtdRecebida, custoUnitario: c.codigoProduto != null ? previa.custoUnitario : null,
+        cmcAtual: c.codigoProduto != null ? cmc.get(c.codigoProduto) ?? null : null, valorTotalItem: i.valorTotalItem, finalidade: nfe.finalidade,
+      }),
+    }
+  }).filter((a) => a.alertas.length)
+  return { itensFiscais, configs, alertasItens, aviso }
+}
+
 export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   ambiente: '1' | '2'; origem: OrigemNota; nsu?: string | null; autoLancar: boolean; cnpjLoja?: string | null; userId?: string | null
-  mapeamentos?: Map<number, { codigoProduto: number | null; fator: number }>; icmsRecuperavel?: boolean; localEntrada?: number | null
+  mapeamentos?: Map<number, { codigoProduto: number | null; fator: number; codigoLocal?: number | null }>; icmsRecuperavel?: boolean; localEntrada?: number | null
   /** Upload manual de XML: lança já os itens que a pessoa mapeou e deixa os demais pendentes. */
   lancarParcial?: boolean
+  /** Avisos da validação do XML (assinatura que não confere, destinatário): entram nos alertas da nota. */
+  avisosExtras?: string[]
 }): Promise<ResultadoNota> {
   const sb = createServiceClient()
-  const alertas = alertasDaNota(nfe, opts.cnpjLoja)
+  const alertas = [...new Set([...alertasDaNota(nfe, opts.cnpjLoja), ...(opts.avisosExtras ?? [])])]
   const [produtos, deparaRes] = await Promise.all([
     carregarProdutos(lojaId),
     nfe.fornecedor.cnpj ? sb.from('fornecedor_produto_depara').select('c_prod, codigo_produto, fator').eq('loja_id', lojaId).eq('fornecedor_cnpj', nfe.fornecedor.cnpj) : Promise.resolve({ data: [] as Depara[] }),
@@ -58,16 +110,20 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   const criada = !!(g as { criada: boolean }).criada
 
   const local = opts.localEntrada ?? (await localPadraoEntrada(lojaId))
+
+  const { itensFiscais, configs, alertasItens, aviso: avisoRateio } = await sugestoesDosItens(lojaId, nfe, casamentos, (cod) => ctx.produtosPorCodigo.get(cod)?.unidade ?? null, local, {
+    icmsRecuperavel: opts.icmsRecuperavel, locaisManuais: new Map([...(opts.mapeamentos ?? new Map()).entries()].map(([l, m]) => [l, m.codigoLocal ?? null])),
+  })
+  if (avisoRateio) console.info(`nf-sefaz loja ${lojaId}: nota ${nfe.chave}: ${avisoRateio}`)
+
   const { data: rc, error: erc } = await sb.rpc('registrar_compra_sefaz', {
     p_compra: {
       loja_id: lojaId, chave_acesso: nfe.chave, nota_fiscal_id: notaId, numero: nfe.numero, serie: nfe.serie, fornecedor_cnpj: nfe.fornecedor.cnpj,
-      fornecedor_nome: nfe.fornecedor.nome, emissao: nfe.emissao, valor_frete: nfe.valores.frete, valor_desconto: nfe.valores.descontoNota,
-      icms_recuperavel: !!opts.icmsRecuperavel,
-      itens: nfe.itens.map((i, idx) => ({
-        linha: i.linha, c_prod: i.cProd, ean: i.ean, descricao: i.descricao, ncm: i.ncm, cfop: i.cfop, unidade_compra: i.unidade, quantidade: i.quantidade,
-        valor_unitario: i.valorUnitario, valor_total: i.valorTotal, desconto: i.desconto, icms_valor: i.icms, fator: casamentos[idx].fator,
-        codigo_produto: casamentos[idx].codigoProduto, match_origem: casamentos[idx].origem, match_score: casamentos[idx].score, sugestao_codigo_produto: casamentos[idx].sugestao,
-      })),
+      fornecedor_nome: nfe.fornecedor.nome, emissao: nfe.emissao, valor_frete: nfe.valores.frete,
+      // o desconto que veio só no total já está rateado no desconto de cada item (itensComDespesasDoTotal)
+      valor_desconto: 0,
+      icms_recuperavel: !!opts.icmsRecuperavel, user_id: opts.userId ?? null,
+      itens: itensFiscais.map((i, idx) => itemCompraSefaz(i, casamentos[idx], configs[idx])),
     },
     p_local: local,
   })
@@ -86,7 +142,11 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   // Entrada automática só quando tudo casou com segurança, a nota não tem alerta e há um local de destino.
   const casados = casamentos.filter((c) => c.codigoProduto != null).length
   let lancados = 0
-  const automatico = opts.autoLancar && !alertas.length && podeLancarAutomatico(casamentos)
+  // R9: além das regras de sempre, nenhuma marcação no padrão e nenhum aviso de item (fator, custo, valor zero)
+  const automatico = podeLancarSozinho({
+    casamentosSeguros: podeLancarAutomatico(casamentos), alertasNota: alertas.length, autoLancar: opts.autoLancar,
+    origensFlags: configs.filter((c) => c.movimentaEstoque).map((c) => c.origemFlags), alertasItens: alertasItens.flatMap((a) => a.alertas),
+  })
   const parcial = !!opts.lancarParcial && casados > 0
   if ((automatico || parcial) && (statusCompra === 'pendente' || statusCompra === 'parcial') && local) {
     const { data: rl, error: erl } = await sb.rpc('lancar_compra', { p_compra: { loja_id: lojaId, id: compraId, itens: [] }, p_local: local, p_user: opts.userId ?? null })
@@ -100,6 +160,6 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
   return {
     notaId, compraId, situacao: (situacao as string | null) ?? null, lancada: statusCompra === 'lancada', itens: nfe.itens.length, casados,
     sugestoes: casamentos.filter((c) => c.codigoProduto == null && c.sugestao != null).length,
-    pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada, lancados, status: statusCompra,
+    pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada, lancados, status: statusCompra, alertasItens,
   }
 }

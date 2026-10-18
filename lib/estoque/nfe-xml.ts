@@ -43,6 +43,7 @@ export type NfeLida = {
   valores: {
     produtos: number; frete: number; desconto: number; descontoNota: number; total: number; icms: number
     vFrete: number; vSeg: number; vOutro: number; ipi: number; st: number; fcpSt: number; pis: number; cofins: number; icmsDesonerado: number
+    bcIcms: number; bcSt: number
   }
   itens: ItemNfe[]
   avisos: string[]
@@ -232,6 +233,7 @@ export function lerNfe(xml: string): NfeLida {
     vFrete: num(txt(tot, 'vFrete')), vSeg: num(txt(tot, 'vSeg')), vOutro: num(txt(tot, 'vOutro')),
     ipi: num(txt(tot, 'vIPI')), st: num(txt(tot, 'vST')), fcpSt: num(txt(tot, 'vFCPST')),
     pis: num(txt(tot, 'vPIS')), cofins: num(txt(tot, 'vCOFINS')), icmsDesonerado: num(txt(tot, 'vICMSDeson')),
+    bcIcms: num(txt(tot, 'vBC')), bcSt: num(txt(tot, 'vBCST')),
   }
   if (tot && Math.abs(valores.produtos - vProdItens) > 0.05) avisos.push('A soma dos itens não bate com o total de produtos da nota.')
 

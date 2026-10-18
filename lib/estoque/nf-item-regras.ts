@@ -159,6 +159,11 @@ export function alertasDoItem(e: { unidadeNota: string; unidadeEstoque: string |
   return out
 }
 
+/** R9: a nota só entra sozinha com casamento seguro, sem alerta da nota, sem marcação no padrão e sem aviso de item. */
+export function podeLancarSozinho(e: { casamentosSeguros: boolean; alertasNota: number; origensFlags: OrigemFlags[]; alertasItens: AlertaItem[]; autoLancar: boolean }): boolean {
+  return e.autoLancar && e.casamentosSeguros && e.alertasNota === 0 && !e.origensFlags.includes('padrao') && e.alertasItens.length === 0
+}
+
 // ---------- Configuração inicial e validação ----------
 
 export type MemoriaItem = { flags: string | null; cfopEntrada: string | null; codigoLocal: number | null }
