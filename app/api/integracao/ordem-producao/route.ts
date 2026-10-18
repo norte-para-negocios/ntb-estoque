@@ -1,3 +1,4 @@
+import { ocorrenciasPorCodigo } from '@/lib/vendas/venda-idempotente'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
@@ -106,13 +107,15 @@ export async function POST(request: Request) {
     const sufixo = body.ambiente === 'homologacao' ? ' [Homologação]' : body.ambiente === 'producao' ? ' [Produção]' : ''
     const obs = (body.pedidoRef ? `Venda ntb-vendas #${body.pedidoRef}` : 'Venda ntb-vendas') + sufixo
     const itensReais: ResultadoItemVenda[] = []
+    // Ocorrência de cada produto no pedido: entra no código da OP (o mesmo pedido reenviado, mesmo em outra ordem, gera os mesmos códigos)
+    const ocorrencias = ocorrenciasPorCodigo(body.itens.map((i) => ({ codigo: String(i?.codigo ?? '') })))
     for (let i = 0; i < body.itens.length; i++) {
       const item = body.itens[i]
       if (!item?.codigo || !item.quantidade || item.quantidade <= 0) {
         itensReais.push({ codigo: item?.codigo ?? '?', ok: false, op: 'pulada', baixa: 'pulada', erro: 'Item inválido' })
         continue
       }
-      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, cupom: body.cupom ?? null }))
+      itensReais.push(await processarItemVenda(supabase, loja, item, { pedidoRef: body.pedidoRef ?? null, obs, dData, indice: i, ocorrencia: ocorrencias[i], cupom: body.cupom ?? null }))
     }
     return NextResponse.json({ lojaId: loja.id, resultados: itensReais })
   }

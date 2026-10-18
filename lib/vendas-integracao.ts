@@ -14,7 +14,8 @@
 // pra vendas_integracao_fila e o cron retry-integracao-vendas reenvia.
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao } from '@/lib/omie/ordem-producao'
+import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
+import { codIntOPVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
@@ -49,6 +50,26 @@ export type PayloadOp = {
 
 type ResultadoOp = { ok: boolean; nCodOP?: number; semEstrutura?: boolean; naFila?: boolean; erro?: string }
 
+/** Atualiza o vínculo venda→OP (migration 178). Sem vínculo (OP antiga, código por hora) não faz nada. */
+async function marcarVinculo(supabase: SupabaseClient, lojaId: number, codIntOP: string, campos: { n_cod_op?: number; estado: VinculoOP['estado'] }) {
+  const { error } = await supabase
+    .from('venda_op_vinculo')
+    .update({ ...campos, atualizado_em: new Date().toISOString() })
+    .eq('loja_id', lojaId)
+    .eq('cod_int_op', codIntOP)
+  if (error) console.error('vendas-integracao: falha ao atualizar venda_op_vinculo', codIntOP, error.message)
+}
+
+async function lerVinculo(supabase: SupabaseClient, lojaId: number, codIntOP: string): Promise<VinculoOP | null> {
+  const { data } = await supabase
+    .from('venda_op_vinculo')
+    .select('cod_int_op, n_cod_op, estado')
+    .eq('loja_id', lojaId)
+    .eq('cod_int_op', codIntOP)
+    .maybeSingle<VinculoOP>()
+  return data ?? null
+}
+
 /** Cria e conclui 1 OP. Nao grava fila: quem chama decide o que fazer com o erro. */
 async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
   let nCodOP: number | undefined
@@ -64,10 +85,12 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
     })
     nCodOP = criada?.nCodOP
     if (!nCodOP) return { ok: false, erro: 'Omie não retornou a OP criada', tipoErro: 'transitorio' }
+    await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'criada' })
     // "Movimentos pendentes de cálculo" logo após criar a OP é passageiro: espera e tenta de novo (ex.: ½ Portuguesa,
     // 29/09 — ficou criada e não concluída porque nada a reenviava).
     const opCriada = nCodOP
     await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, opCriada, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'))
+    await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: opCriada, estado: 'concluida' })
     await logIntegrationAttempt({
       loja_id: loja.id,
       model: 'OrdemProducao',
@@ -194,12 +217,64 @@ export type ResultadoItemVenda = {
   erro?: string
 }
 
+/**
+ * OP da venda com vínculo (migration 178): lê o que já foi feito para este cCodIntOP e só faz o que falta.
+ * incluir → grava o vínculo e cria+conclui; consultar → procura a OP no Omie pelo código (criada por uma execução que
+ * caiu no meio) e segue dali; concluir → só conclui; pronta → não chama o Omie.
+ */
+async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp, pedidoRef: string, ocorrencia: number): Promise<ResultadoOp & { tipoErro?: TipoErroOmie }> {
+  let v = await lerVinculo(supabase, loja.id, p.cCodIntOP)
+  let acao = decidirOPVenda(v)
+  if (acao === 'incluir') {
+    const { error } = await supabase.from('venda_op_vinculo').insert({
+      loja_id: loja.id, pedido_ref: pedidoRef.trim().toLowerCase(), codigo_produto: p.codigo_produto, ocorrencia, cod_int_op: p.cCodIntOP,
+    })
+    if (error?.code === '23505') { v = await lerVinculo(supabase, loja.id, p.cCodIntOP); acao = v ? 'consultar' : 'incluir' }
+    else if (error) console.error('vendas-integracao: falha ao gravar venda_op_vinculo', p.cCodIntOP, error.message)
+  }
+  if (acao === 'pronta') return { ok: true, nCodOP: v?.n_cod_op ?? undefined }
+  if (acao === 'consultar') {
+    try {
+      const achada = await consultarOPPorCodInt(loja, p.cCodIntOP)
+      if (achada) {
+        await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: achada.nCodOP, estado: achada.concluida ? 'concluida' : 'criada' })
+        if (achada.concluida) return { ok: true, nCodOP: achada.nCodOP }
+        v = { cod_int_op: p.cCodIntOP, n_cod_op: achada.nCodOP, estado: 'criada' }
+        acao = 'concluir'
+      } else acao = 'incluir'
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { ok: false, erro: msg, tipoErro: classificarErroOmie(msg) }
+    }
+  }
+  if (acao === 'concluir' && v?.n_cod_op) {
+    const nCodOP = v.n_cod_op
+    try {
+      await repetirSeCalculoPendente(() => concluirOrdemProducao(loja, nCodOP, p.dData, p.quantidade, 'Concluída automaticamente (venda ntb-vendas)'))
+      await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: nCodOP, estado: 'concluida' })
+      return { ok: true, nCodOP }
+    } catch (e) {
+      // A OP existe no Omie: não reenfileirar (duplicaria); o retry-op-conclusao conclui depois.
+      return { ok: false, nCodOP, erro: e instanceof Error ? e.message : String(e), tipoErro: 'permanente' }
+    }
+  }
+  const r = await tentarOp(supabase, loja, p)
+  if (!r.ok && r.tipoErro === 'ja_existe') {
+    const achada = await consultarOPPorCodInt(loja, p.cCodIntOP).catch(() => null)
+    if (achada) {
+      await marcarVinculo(supabase, loja.id, p.cCodIntOP, { n_cod_op: achada.nCodOP, estado: achada.concluida ? 'concluida' : 'criada' })
+      if (achada.concluida) return { ok: true, nCodOP: achada.nCodOP }
+    }
+  }
+  return r
+}
+
 /** Processa 1 item vendido: OP (se o produto tem estrutura) + saida de estoque. */
 export async function processarItemVenda(
   supabase: SupabaseClient,
   loja: LojaVenda,
   item: ItemVenda,
-  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number; cupom?: string | number | null }
+  ctx: { pedidoRef: string | null; obs: string; dData: string; indice: number; ocorrencia?: number; cupom?: string | number | null }
 ): Promise<ResultadoItemVenda> {
   const { data: produto } = await supabase
     .from('produtos')
@@ -224,16 +299,24 @@ export async function processarItemVenda(
   let nCodOP: number | undefined
   let erroOp: string | undefined
   if (!sem) {
+    // Com pedidoRef o código da OP sai do pedido (reenvio do mesmo pedido = mesmo código, migration 178); sem ele não
+    // há como reconhecer o reenvio e fica o código por hora de sempre.
+    const cCodIntOP = ctx.pedidoRef
+      ? codIntOPVenda(ctx.pedidoRef, produto.codigo_produto, ctx.ocorrencia ?? 0)
+      : `NTBV${Date.now()}${ctx.indice}`.slice(0, 20)
+    if (!ctx.pedidoRef) console.warn('vendas-integracao: venda sem pedidoRef: sem proteção contra reenvio', item.codigo)
     const payload: PayloadOp = {
       codigo: item.codigo,
       codigo_produto: produto.codigo_produto,
       quantidade: item.quantidade,
-      cCodIntOP: `NTBV${Date.now()}${ctx.indice}`.slice(0, 20),
+      cCodIntOP,
       obs: ctx.obs,
       codigoLocalEstoque: localMapeado ?? null,
       dData: ctx.dData,
     }
-    const r = await tentarOp(supabase, loja, payload)
+    const r = ctx.pedidoRef
+      ? await opDaVendaSemDuplicar(supabase, loja, payload, ctx.pedidoRef, ctx.ocorrencia ?? 0)
+      : await tentarOp(supabase, loja, payload)
     nCodOP = r.nCodOP
     if (r.ok) op = 'criada'
     else if (r.semEstrutura) op = 'sem_estrutura'
