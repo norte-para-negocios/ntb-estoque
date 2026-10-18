@@ -30,6 +30,7 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { lerPeriodo, addDias } from '@/lib/faturamento-periodo'
 import { filtrarPorNome, matrizMensal, ordenarRanking, posicaoNoRanking, rankear, resumir, serieDiaria, type LinhaRanking } from '@/lib/faturamento-itens'
+import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import {
   VISOES, SEM_FAMILIA, filtrarNotas, fornecedoresDistintos, itemParaLinha, itensDasNotas, lerOrdem, notaParaLinha, ordenarNotas, type Visao,
 } from '@/lib/notas-compras'
@@ -73,6 +74,8 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   const porMensal = DIMS_MENSAL.find((d) => d.value === sp.por)?.value ?? 'fornecedor'
   const ordemRank = sp.ordem === 'quant' ? 'quant' : 'valor'
   const sentido = sp.sentido === 'menos' ? 'menos' : 'mais'
+  // Produtos/Famílias/Evolução por item: valor que entrou no estoque (regra do Omie) ou valor da nota
+  const tipoValor = lerTipoValor(sp.valor)
 
   const podeSync = await isAdmin()
   const modo = await modoDaLoja(lojaId)
@@ -112,7 +115,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
     ? await carregarItensCompra(lojaId, notas, { produto: filtrosBanco.produto, local: localCod })
     : { itens: [], erros: [] as string[] }
   const itens = itensDasNotas(itensTodos, new Set(notas.map((n) => n.id)), { tipos, familias })
-  const linhasItens = itens.map(itemParaLinha)
+  const linhasItens = itens.map((i) => itemParaLinha(i, tipoValor))
   const avisos = [...new Set([...erros, ...errosItens])]
 
   // Parametros que atravessam links (periodo, visao, filtros, ordenacao, busca).
@@ -120,7 +123,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
     ini: per.ini, fim: per.fim, aba: visao === 'notas' ? '' : visao,
     fornecedor, familia: familias.join(','), status, tipo: tipos.join(','), local: sp.local ?? '', natureza: sp.natureza ?? '',
     produto: sp.produto ?? '', categoria: sp.categoria ?? '', num_nfe: sp.num_nfe ?? '',
-    q, ord: sp.ord ?? '', dir: sp.dir ?? '', por: porMensal === 'fornecedor' ? '' : porMensal,
+    q, ord: sp.ord ?? '', dir: sp.dir ?? '', por: porMensal === 'fornecedor' ? '' : porMensal, valor: tipoValor === 'estoque' ? '' : 'fiscal',
     ordem: ordemRank === 'valor' ? '' : ordemRank, sentido: sentido === 'mais' ? '' : sentido,
   }
   const href = (over: Record<string, string>) => {
@@ -214,6 +217,13 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
               <span className="text-[12px] text-text-muted">por</span>
               <Link href={href({ ordem: '' })} className={ordemRank === 'valor' ? chipAtivo : chipInativo}>R$</Link>
               <Link href={href({ ordem: 'quant' })} className={ordemRank === 'quant' ? chipAtivo : chipInativo}>{visao === 'fornecedores' ? 'Nº de notas' : 'Quantidade'}</Link>
+            </>
+          )}
+          {visao !== 'fornecedores' && (
+            <>
+              <span className="text-[12px] text-text-muted">valor</span>
+              <Link href={href({ valor: '' })} title="Valor que entrou no estoque (como no Omie: sem os impostos que viram crédito)" className={tipoValor === 'estoque' ? chipAtivo : chipInativo}>De estoque</Link>
+              <Link href={href({ valor: 'fiscal' })} title="Quantidade × preço da nota" className={tipoValor === 'fiscal' ? chipAtivo : chipInativo}>Da nota</Link>
             </>
           )}
         </div>
@@ -311,7 +321,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
               unidade={unidadeDe.get(selecionado.chave) ?? ''}
               posicao={posicaoNoRanking(rankItensTodos, selecionado.chave)}
               total={rankItensTodos.length}
-              serie={serieDiaria(itensSel.map(itemParaLinha), iniSerie, per.fim)}
+              serie={serieDiaria(itensSel.map((i) => itemParaLinha(i, tipoValor)), iniSerie, per.fim)}
               notas={notasSel}
               fecharHref={href({ item: '' })}
               produtoHref={modo !== 'nenhum' && !selecionado.chave.startsWith('nome:') ? `/estoque/produto/${selecionado.chave}` : undefined}

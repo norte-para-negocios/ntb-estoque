@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rankingCompras, matrizCompras } from './relatorio-compras-visoes.ts'
+import { rankingCompras, matrizCompras, comTipoValor } from './relatorio-compras-visoes.ts'
 
 const L = [
   { rotulo: 'PEIXES', mes: '2026-09', valor: 100 },
@@ -32,4 +32,11 @@ test('matriz cobre todos os meses do periodo, corta linhas mas soma tudo', () =>
 
 test('matriz atravessa a virada do ano', () => {
   assert.deepEqual(matrizCompras([], '2025-11-01', '2026-01-31').meses, ['2025-11', '2025-12', '2026-01'])
+})
+
+test('comTipoValor troca o valor pelo de estoque', () => {
+  const L = [{ rotulo: 'PEIXES', mes: '2026-10', valor: 3210.9, valor_estoque: 3197.93 }]
+  assert.equal(comTipoValor(L, 'estoque')[0].valor, 3197.93)
+  assert.equal(comTipoValor(L, 'fiscal')[0].valor, 3210.9)
+  assert.equal(rankingCompras(comTipoValor(L, 'estoque'))[0].valor, 3197.93)
 })

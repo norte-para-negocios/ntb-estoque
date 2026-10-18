@@ -3,6 +3,7 @@
 // matriz mensal que os componentes do Faturamento desenham.
 // Sem alias '@/' e sem import de valor: roda direto no `node --test`.
 import type { LinhaRanking, MatrizMensal } from './faturamento-itens'
+import type { TipoValorCompra } from './compras/custo-estoque-item'
 
 function mesesEntre(ini: string, fim: string): string[] {
   const out: string[] = []
@@ -17,6 +18,12 @@ function mesesEntre(ini: string, fim: string): string[] {
 }
 
 export type LinhaMesCompra = { rotulo: string; mes: string; valor: number }
+export type LinhaMesCompraDupla = LinhaMesCompra & { valor_estoque: number }
+
+/** 'estoque' (padrão, como no Omie) usa o valor que entrou no estoque; 'fiscal' usa quantidade × preço da nota. */
+export function comTipoValor(linhas: LinhaMesCompraDupla[], tipo: TipoValorCompra): LinhaMesCompra[] {
+  return linhas.map((l) => ({ rotulo: l.rotulo, mes: l.mes, valor: tipo === 'estoque' ? Number(l.valor_estoque) || 0 : Number(l.valor) || 0 }))
+}
 
 type Grupo = { rotulo: string; total: number; porMes: Record<string, number> }
 

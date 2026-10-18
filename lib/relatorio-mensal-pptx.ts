@@ -209,7 +209,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
   // --- Slide 6: Compras e Perdas ---
   {
     const slide = pptx.addSlide()
-    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${periodoLabel} · notas confirmadas`)
+    tituloSlide(slide, 'Dashboard — Compras e Perdas', `${periodoLabel} · notas confirmadas · valor de estoque, como no Omie`)
     const cp = dados.comprasPerdas
     graficoLinha(slide, cp.serieEntradaNf, { x: 0.4, y: 1.15, w: 6.1, h: 3.1, titulo: 'Entrada de Notas Fiscais por Tipo' })
     graficoLinha(

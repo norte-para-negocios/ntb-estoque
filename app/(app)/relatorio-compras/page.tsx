@@ -26,7 +26,8 @@ import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { lerPeriodo } from '@/lib/faturamento-periodo'
 import { filtrarPorNome, ordenarRanking, type LinhaRanking } from '@/lib/faturamento-itens'
-import { rankingCompras, matrizCompras, type LinhaMesCompra } from '@/lib/relatorio-compras-visoes'
+import { rankingCompras, matrizCompras, comTipoValor, type LinhaMesCompraDupla } from '@/lib/relatorio-compras-visoes'
+import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import {
   buscarItensNFFrio,
   filtrarItensCompras,
@@ -72,7 +73,7 @@ const MAX_DIAS_COMPRAS = 3700
 // Quantas linhas a tela mostra; o resto fica no "Baixar tudo".
 const LIMITE_LINHAS = 200
 
-type LinhaMatriz = LinhaMesCompra
+type LinhaMatriz = LinhaMesCompraDupla
 type Sp = Record<string, string | undefined>
 
 export default async function RelatorioComprasPage({ searchParams }: { searchParams: Promise<Sp> }) {
@@ -87,6 +88,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const mensal = sp.aba === 'mensal'
   const q = (sp.q ?? '').slice(0, 80)
   const sentido = sp.sentido === 'menos' ? 'menos' : 'mais'
+  // Valor que entrou no estoque (regra do Omie, padrão) ou valor da nota (quantidade × preço)
+  const tipoValor = lerTipoValor(sp.valor)
 
   // Drill: qualquer dimensão -> produto -> itens. Cada par da trilha vira
   // filtro; a dimensão exibida desce a cadeia.
@@ -171,7 +174,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const corte = limiteJanelaQuenteNF()
   const iniRpc = ini < corte ? corte : ini
 
-  type LinhaDim = { rotulo: string; valor: number }
+  type LinhaDim = { rotulo: string; valor: number; valor_estoque: number }
   const [{ data: totalRows, error: erroTotal }, matrizRaw, { data: cfopDimRaw, error: erroDim }, fornRaw, fornOpcoesRaw] = await Promise.all([
     supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill }),
     rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dimExibida ?? 'produto', ...filtrosComDrill }),
@@ -184,9 +187,10 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   ])
   logErroRpc('relatorio_compras_total', erroTotal)
   logErroRpc('relatorio_compras_dim', erroDim)
-  const fornLinhas: LinhaMatriz[] = fornRaw.map((r) => ({ rotulo: r.rotulo, mes: '', valor: Number(r.valor) || 0 }))
+  const fornLinhas: LinhaMatriz[] = fornRaw.map((r) => ({ rotulo: r.rotulo, mes: '', valor: Number(r.valor) || 0, valor_estoque: Number(r.valor_estoque) || 0 }))
   const fornNomes = new Set(fornOpcoesRaw.map((r) => r.rotulo))
   let total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
+  let totalEstoque = Number((totalRows as { valor_estoque: number }[] | null)?.[0]?.valor_estoque ?? 0)
   let nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
 
   // Complemento frio (Contabo) para o pedaço [ini, corte). Reaproveita a
@@ -240,6 +244,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
     filtrados = filtrarItensCompras(itensFrios, fDrill, meta)
     const totFrio = agregarComprasTotal(filtrados)
     total += totFrio.valor
+    totalEstoque += totFrio.valorEstoque
     nNotas += totFrio.nNotas
     for (const l of agregarComprasMatriz(filtrados, dimExibida ?? 'produto', meta)) matrizRaw.push(l)
     for (const l of agregarComprasMatriz(filtrados, 'fornecedor', meta)) fornLinhas.push(l)
@@ -313,12 +318,13 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   if (produto) exportParams.set('produto', produto)
   if (sp.local) exportParams.set('local', sp.local)
   if (sp.status) exportParams.set('status', sp.status)
+  if (tipoValor === 'fiscal') exportParams.set('valor', 'fiscal')
 
   // Parâmetros que atravessam links (período, visão, filtros, trilha, busca).
   const base: Record<string, string> = {
     ini, fim, dim: dim === 'familia' ? '' : dim, aba: mensal ? 'mensal' : '',
     fornecedor: sp.fornecedor ?? '', familia: sp.familia ?? '', status: sp.status ?? '', tipo: sp.tipo ?? '', cfop: sp.cfop ?? '',
-    produto: sp.produto ?? '', local: sp.local ?? '', drill: sp.drill ?? '', q, sentido: sentido === 'mais' ? '' : sentido,
+    produto: sp.produto ?? '', local: sp.local ?? '', drill: sp.drill ?? '', q, sentido: sentido === 'mais' ? '' : sentido, valor: tipoValor === 'estoque' ? '' : 'fiscal',
   }
   const href = (over: Record<string, string>) => {
     const u = new URLSearchParams()
@@ -334,13 +340,15 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const chipInativo = `${chipBase} bg-surface-2 text-text-muted hover:bg-[var(--border)] hover:text-text`
 
   // ---- dados de cada visão ----
-  const rankTodos = rankingCompras(matrizRaw, rotuloDe)
+  const linhasValor = comTipoValor(matrizRaw, tipoValor)
+  const rankTodos = rankingCompras(linhasValor, rotuloDe)
   const rankVis = ordenarRanking(filtrarPorNome(rankTodos, q), 'valor', sentido)
   const rankPagina = rankVis.slice(0, LIMITE_LINHAS)
-  const matriz = mensal && !nivelItens ? matrizCompras(matrizRaw, ini, fim, rotuloDe, LIMITE_LINHAS) : null
-  const rankForn = rankingCompras(fornLinhas)
+  const matriz = mensal && !nivelItens ? matrizCompras(linhasValor, ini, fim, rotuloDe, LIMITE_LINHAS) : null
+  const rankForn = rankingCompras(comTipoValor(fornLinhas, tipoValor))
+  const totalEscolhido = tipoValor === 'estoque' ? totalEstoque : total
   const maiorForn = rankForn[0] ?? null
-  const ticket = nNotas > 0 ? total / nNotas : null
+  const ticket = nNotas > 0 ? totalEscolhido / nNotas : null
   const legenda = (l: LinhaRanking) => `${fmtPct(l.pct)} do total`
   const dimInfo = DIMS.find((d) => d.value === dimExibida) ?? DIMS[0]
   const rotuloBusca = dimInfo.value === 'cfop' ? 'CFOP' : dimInfo.label.toLowerCase()
@@ -352,6 +360,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
       <input name="q" defaultValue={q} placeholder={`Buscar ${rotuloBusca}…`} className="h-9 min-w-0 flex-1 rounded-[var(--r-md)] border border-border bg-surface px-3 text-sm text-text sm:w-64 sm:flex-none" />
       <button type="submit" className={chipInativo}>Buscar</button>
       <div className="flex flex-wrap items-center gap-1.5">
+        <Link href={href({ valor: '' })} title="Valor que entrou no estoque (como no Omie: sem os impostos que viram crédito)" className={tipoValor === 'estoque' ? chipAtivo : chipInativo}>Valor de estoque</Link>
+        <Link href={href({ valor: 'fiscal' })} title="Quantidade × preço da nota" className={tipoValor === 'fiscal' ? chipAtivo : chipInativo}>Valor da nota</Link>
         <Link href={href({ sentido: '' })} className={sentido === 'mais' ? chipAtivo : chipInativo}>Mais comprados</Link>
         <Link href={href({ sentido: 'menos' })} className={sentido === 'menos' ? chipAtivo : chipInativo}>Menos comprados</Link>
       </div>
@@ -433,7 +443,11 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card titulo="Total comprado" valor={<Money value={total} />} />
+        <Card
+          titulo="Total comprado"
+          valor={<Money value={totalEscolhido} />}
+          sub={tipoValor === 'estoque' ? `Valor das notas: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : `Entrou no estoque: ${totalEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+        />
         <Card titulo="Notas" valor={nNotas.toLocaleString('pt-BR')} sub={plural(rankForn.length, 'fornecedor', 'fornecedores')} />
         <Card titulo="Ticket médio por nota" valor={ticket == null ? '—' : <Money value={ticket} />} />
         <Card titulo="Maior fornecedor" valor={maiorForn ? <Money value={maiorForn.valor} /> : '—'} sub={maiorForn ? `${maiorForn.rotulo} · ${fmtPct(maiorForn.pct)}` : undefined} />

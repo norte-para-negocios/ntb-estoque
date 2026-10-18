@@ -4,6 +4,8 @@
 // ficam os tipos das notas/itens, a conversao pra "linha" do Faturamento e os filtros
 // feitos em memoria (fornecedor, situacao, numero, busca).
 
+import type { TipoValorCompra } from './compras/custo-estoque-item'
+
 export type NotaLeve = {
   id: number
   dia: string // 'YYYY-MM-DD' (emissao)
@@ -28,7 +30,8 @@ export type ItemCompra = {
   familia: string
   unidade: string
   quant: number
-  valor: number
+  valor: number // valor da nota (quantidade × preço)
+  valorEstoque?: number // valor que entrou no estoque, regra do Omie (lib/compras/custo-estoque-item.ts); ausente = valor
 }
 
 // Mesmo formato de LinhaItem (lib/faturamento-itens.ts), repetido aqui porque modulo
@@ -92,8 +95,9 @@ export function notaParaLinha(n: NotaLeve): LinhaPainel {
   return { dia: n.dia, cupom: n.id, idProduto: null, produto: n.fornecedor, tipoCod: '', tipo: '', familia: '', quant: 1, valor: n.valor }
 }
 
-export function itemParaLinha(i: ItemCompra): LinhaPainel {
-  return { dia: i.dia, cupom: i.notaId, idProduto: i.idProduto, produto: i.produto, tipoCod: i.tipoCod, tipo: i.tipo, familia: i.familia, quant: i.quant, valor: i.valor }
+export function itemParaLinha(i: ItemCompra, tipo: TipoValorCompra = 'estoque'): LinhaPainel {
+  const valor = tipo === 'estoque' ? (i.valorEstoque ?? i.valor) : i.valor
+  return { dia: i.dia, cupom: i.notaId, idProduto: i.idProduto, produto: i.produto, tipoCod: i.tipoCod, tipo: i.tipo, familia: i.familia, quant: i.quant, valor }
 }
 
 // Itens das notas que sobraram, respeitando os filtros que sao "por item" (tipo/familia):

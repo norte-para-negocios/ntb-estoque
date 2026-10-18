@@ -21,7 +21,11 @@ import {
   buscarTipoPorDescricao,
 } from '@/lib/dashboard-gerencial'
 
-type ComprasTotalRow = { valor: number; n_notas: number }
+type ComprasTotalRow = { valor: number; n_notas: number; valor_estoque: number }
+
+// Compras no valor que entrou no estoque, como no Omie (migration 176): o relatório mensal mostra esse valor.
+const valorDeEstoque = <T extends { valor: number; valor_estoque: number }>(rows: T[]): T[] =>
+  rows.map((r) => ({ ...r, valor: Number(r.valor_estoque) || 0 }))
 type RejeitoRow = { categoria: string; valor_total: number | null; qtd_movimentos: number }
 
 // Compras de Ativo Imobilizado não entram no "Compras/Faturamento" (fórmula
@@ -161,21 +165,21 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
     rpcTodos<MatrizRow>(supabase, 'relatorio_faturamento_matriz', {
       p_loja_id: lojaId, p_dim: 'familia', p_mes_ini: mesIniAno, p_mes_fim: mesFimGraficoChave, p_rotulos: null,
     }),
-    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+    rpcTodos<MatrizRow & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId, p_ini: dataIniAno, p_fim: dataFimGrafico, p_dim: 'fornecedor',
       p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
-    }),
-    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+    }).then(valorDeEstoque),
+    rpcTodos<MatrizRow & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId, p_ini: dataIniAno, p_fim: dataFimGrafico, p_dim: 'tipo',
       p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
-    }),
+    }).then(valorDeEstoque),
     // Só pra excluir Ativo Imobilizado do denominador de Compras/Faturamento
     // (ver ehAtivoImobilizadoPorCfop acima) -- dimensão separada da de "tipo"
     // porque o critério real é fiscal (CFOP), não o tipo_item interno do Omie.
-    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+    rpcTodos<MatrizRow & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId, p_ini: dataIniAno, p_fim: dataFimGrafico, p_dim: 'cfop',
       p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
-    }),
+    }).then(valorDeEstoque),
     supabase.rpc('relatorio_compras_total', {
       p_loja_id: lojaId, p_ini: dataIniMes, p_fim: dataFimMes,
       p_familias: null, p_tipos: null, p_fornecedor: null, p_cfops: null, p_produto: null, p_local: null,
@@ -295,8 +299,8 @@ export async function carregarRelatorioMensal(lojaId: number, ano: number, mes: 
       seriePerda,
       notasMes: Number((comprasTotalMes.data as ComprasTotalRow[] | null)?.[0]?.n_notas ?? 0),
       notasAno: Number((comprasTotalAno.data as ComprasTotalRow[] | null)?.[0]?.n_notas ?? 0),
-      valorNotasMes: Number((comprasTotalMes.data as ComprasTotalRow[] | null)?.[0]?.valor ?? 0),
-      valorNotasAno: Number((comprasTotalAno.data as ComprasTotalRow[] | null)?.[0]?.valor ?? 0),
+      valorNotasMes: Number((comprasTotalMes.data as ComprasTotalRow[] | null)?.[0]?.valor_estoque ?? 0),
+      valorNotasAno: Number((comprasTotalAno.data as ComprasTotalRow[] | null)?.[0]?.valor_estoque ?? 0),
       perdaMateriaPrimaPctMes: percMPPorMes.get(mesRelChave) ?? null,
       perdaRevendaPctMes: percRevendaPorMes.get(mesRelChave) ?? null,
     },

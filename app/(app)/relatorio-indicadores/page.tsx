@@ -1,3 +1,4 @@
+import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
@@ -31,7 +32,7 @@ const fmtMoeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', c
 const fmtPct = (n: number) => (Number.isFinite(n) ? `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '-')
 const fmtQuando = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Bahia' })
 
-type LinhaMatriz = { rotulo: string; mes: string; valor: number }
+type LinhaMatriz = { rotulo: string; mes: string; valor: number; valor_estoque: number }
 
 // Meta do Ramon: Compras ÷ Faturamento ideal abaixo de 40% (na indústria), alguns
 // miram 35%. Quanto menos, melhor. Cor por faixa: <=40% no alvo, <=50% atenção, acima vermelho.
@@ -40,7 +41,7 @@ const corMeta = (pct: number, meta: number) => (!Number.isFinite(pct) ? 'text-te
 export default async function RelatorioIndicadoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string; local?: string }>
+  searchParams: Promise<{ data_inicio?: string; data_final?: string; familia?: string; produto?: string; local?: string; valor?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   const indicadoresProprio = (await modoDaLoja(lojaId)) === 'proprio'
@@ -53,6 +54,8 @@ export default async function RelatorioIndicadoresPage({
   const filtroFim = /^\d{4}-\d{2}-\d{2}$/.test(sp.data_final ?? '') ? sp.data_final! : null
   const familiasSel = valoresMulti(sp.familia)
   const produtoTermo = sp.produto?.trim() || null
+  // Compras pelo valor que entrou no estoque (regra do Omie, padrão) ou pelo valor da nota
+  const tipoValor = lerTipoValor(sp.valor)
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
   const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
   const chipsPeriodo = chipsPeriodoPadrao({ value: '', label: 'Tudo', dataIni: '', dataFim: '' })
@@ -165,7 +168,7 @@ export default async function RelatorioIndicadoresPage({
   const comprasPorMes: Record<string, number> = {}
   for (const r of comp) {
     if (descreverCFOP(r.rotulo).cat === 'Ativo imobilizado') continue
-    comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+    comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(tipoValor === 'estoque' ? r.valor_estoque : r.valor) || 0)
   }
 
   // metaRow nao depende de nada do bloco de Compras abaixo -- dispara agora e
@@ -213,7 +216,7 @@ export default async function RelatorioIndicadoresPage({
     }, meta)
     for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
       if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue
-      comprasPorMes[l.mes] = (comprasPorMes[l.mes] ?? 0) + l.valor
+      comprasPorMes[l.mes] = (comprasPorMes[l.mes] ?? 0) + (tipoValor === 'estoque' ? l.valor_estoque : l.valor)
     }
   }
 
@@ -266,6 +269,12 @@ export default async function RelatorioIndicadoresPage({
   // relatorio-compras/page.tsx). export/route.ts já sabe ler os dois agora.
   if (produtoTermo) exportParams.set('produto', produtoTermo)
   if (familiasSel.length) exportParams.set('familia', familiasSel.join(','))
+  if (tipoValor === 'fiscal') exportParams.set('valor', 'fiscal')
+  const hrefValor = (v: '' | 'fiscal') => {
+    const u = new URLSearchParams(Object.entries(sp).filter(([k, x]) => k !== 'valor' && typeof x === 'string' && x) as [string, string][])
+    if (v) u.set('valor', v)
+    return `/relatorio-indicadores${u.size ? `?${u}` : ''}`
+  }
   const exportHref = `/relatorio-indicadores/export${exportParams.toString() ? `?${exportParams.toString()}` : ''}`
 
   return (
@@ -292,6 +301,11 @@ export default async function RelatorioIndicadoresPage({
         />
         <ChipsFiltrosAtivos basePath="/relatorio-indicadores" campos={campos} persistirEm="/relatorio-indicadores" />
         <ChipsPeriodo basePath="/relatorio-indicadores" opcoes={chipsPeriodo} />
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
+          <span className="text-text-muted">Compras pelo</span>
+          <a href={hrefValor('')} title="Valor que entrou no estoque (como no Omie: sem os impostos que viram crédito)" className={`rounded-full px-3 py-1 font-semibold ${tipoValor === 'estoque' ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted'}`}>valor de estoque</a>
+          <a href={hrefValor('fiscal')} title="Quantidade × preço da nota" className={`rounded-full px-3 py-1 font-semibold ${tipoValor === 'fiscal' ? 'bg-brand-fill text-white' : 'bg-surface-2 text-text-muted'}`}>valor da nota</a>
+        </div>
       </ListaHeader>
 
       <div className="flex flex-wrap items-stretch gap-2.5">
@@ -365,7 +379,7 @@ export default async function RelatorioIndicadoresPage({
       </div>
 
       <p className="px-1 text-[13px] text-text-muted">
-        {indicadoresProprio ? 'Faturamento vem das vendas do Norte Vendas' : 'Faturamento vem do import do FAT do Omie'}; Compras vem das NFs de entrada (valor do item), já sem bonificação/comodato
+        {indicadoresProprio ? 'Faturamento vem das vendas do Norte Vendas' : 'Faturamento vem do import do FAT do Omie'}; Compras vem das NFs de entrada ({tipoValor === 'estoque' ? 'valor que entrou no estoque, como no Omie' : 'valor do item na nota'}), já sem bonificação/comodato
         e sem ativo imobilizado (compra de bem para a empresa é investimento, não gasto). &quot;Compras ÷ Faturamento&quot; é
         quanto você gastou comprando para cada real vendido. Meta: <span className="font-medium text-ok">≤ {metaPct}%</span> no alvo,
         <span className="font-medium text-warn"> até 50% atenção</span>, <span className="font-medium text-err">acima de 50% alto</span> (na indústria, alguns miram 35%).

@@ -1,3 +1,4 @@
+import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
   // filtro dos dois lados da razão, complemento frio de Compras).
   const familiasSel = valoresMulti(searchParams.get('familia') ?? undefined)
   const produtoTermo = searchParams.get('produto')?.trim() || null
+  const tipoValor = lerTipoValor(searchParams.get('valor'))
   const localParam = searchParams.get('local')
   const localCod = localParam && !Number.isNaN(Number(localParam)) ? Number(localParam) : null
   const filtroAtivo = !!(familiasSel.length || produtoTermo || localCod !== null)
@@ -89,7 +91,7 @@ export async function GET(request: Request) {
   // caso comum já que o período padrão é o ano inteiro).
   const corte = limiteJanelaQuenteNF()
   const compIniRpc = compIni < corte ? corte : compIni
-  const compRows = await rpcTodos<Linha>(supabase, 'relatorio_compras_matriz', {
+  const compRows = await rpcTodos<Linha & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
     p_loja_id: lojaId, p_ini: compIniRpc, p_fim: compFim, p_dim: 'cfop',
     p_familias: familiasSel.length ? familiasSel : null,
     p_produto: produtoTermo,
@@ -99,7 +101,7 @@ export async function GET(request: Request) {
   const comprasPorMes: Record<string, number> = {}
   for (const r of compRows) {
     if (descreverCFOP(r.rotulo).cat === 'Ativo imobilizado') continue
-    comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(r.valor) || 0)
+    comprasPorMes[r.mes] = (comprasPorMes[r.mes] ?? 0) + (Number(tipoValor === 'estoque' ? r.valor_estoque : r.valor) || 0)
   }
 
   // Complemento frio (Contabo) do lado Compras, para [compIni, corte) -- igual a page.tsx.
@@ -133,7 +135,7 @@ export async function GET(request: Request) {
     }, meta)
     for (const l of agregarComprasMatriz(filtrados, 'cfop', meta)) {
       if (descreverCFOP(l.rotulo).cat === 'Ativo imobilizado') continue
-      comprasPorMes[l.mes] = (comprasPorMes[l.mes] ?? 0) + l.valor
+      comprasPorMes[l.mes] = (comprasPorMes[l.mes] ?? 0) + (tipoValor === 'estoque' ? l.valor_estoque : l.valor)
     }
   }
 
@@ -173,7 +175,7 @@ export async function GET(request: Request) {
 
   const buffer = await gerarPlanilha(rows, colunas, {
     titulo: 'Indicadores · Faturamento × Compras',
-    subtitulo: `${compIni} a ${compFim} · Meta: Compras ÷ Faturamento abaixo de 40% (ideal 35%)${filtrosDesc ? ` · Filtros: ${filtrosDesc}` : ''}${avisoFrio}`,
+    subtitulo: `${compIni} a ${compFim} · Compras pelo ${tipoValor === 'estoque' ? 'valor de estoque (como no Omie)' : 'valor da nota'} · Meta: Compras ÷ Faturamento abaixo de 40% (ideal 35%)${filtrosDesc ? ` · Filtros: ${filtrosDesc}` : ''}${avisoFrio}`,
     autoFiltro: true,
   })
   return planilhaResponse('indicadores-fat-compras', buffer)

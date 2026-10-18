@@ -1,3 +1,4 @@
+import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
@@ -45,12 +46,12 @@ const DIMS = [
   { dim: 'produto', label: 'Produto', aba: 'Por Produto' },
 ] as const
 
-type LinhaMatriz = { rotulo: string; mes: string; valor: number }
+type LinhaMatriz = { rotulo: string; mes: string; valor: number; valor_estoque: number }
 type LinhaDetalhe = {
   data: string | null; mes: string | null; nota: string | null; fornecedor: string | null
   tipo: string | null; familia: string | null; produto: string | null; codigo: string | null
   ncm: string | null; cfop: string | null; unidade: string | null
-  qtde: number | null; preco_unit: number | null; total: number | null
+  qtde: number | null; preco_unit: number | null; total: number | null; valor_estoque: number | null
 }
 
 export async function GET(request: Request) {
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
   const produto = searchParams.get('produto') || null
   const localCod = searchParams.get('local') && !Number.isNaN(Number(searchParams.get('local'))) ? Number(searchParams.get('local')) : null
   const status = searchParams.get('status') || 'CONCLUIDA'
+  const tipoValor = lerTipoValor(searchParams.get('valor'))
   const filtros = {
     p_familias: arrOrNull(familias),
     p_tipos: arrOrNull(tipos),
@@ -100,7 +102,7 @@ export async function GET(request: Request) {
   }
 
   const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', MANIFESTADA: 'Manifestada', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
-  const sub = `${ini} a ${fim} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
+  const sub = `${ini} a ${fim} · ${tipoValor === 'estoque' ? 'Valor de estoque (como no Omie)' : 'Valor da nota'} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
 
   const abas: AbaPlanilha[] = []
 
@@ -152,7 +154,7 @@ export async function GET(request: Request) {
     const porRotulo = new Map<string, { total: number; meses: Record<string, number> }>()
     for (const r of matriz) {
       const ent = porRotulo.get(r.rotulo) ?? { total: 0, meses: {} }
-      const v = Number(r.valor) || 0
+      const v = Number(tipoValor === 'estoque' ? r.valor_estoque : r.valor) || 0
       ent.meses[r.mes] = (ent.meses[r.mes] ?? 0) + v
       ent.total += v
       porRotulo.set(r.rotulo, ent)
@@ -188,6 +190,7 @@ export async function GET(request: Request) {
     familia: l.familia ?? 'Sem classificação', produto: formatarNomeProduto(l.produto) || l.produto || '',
     codigo: l.codigo ?? '', ncm: l.ncm ?? '', cfop: l.cfop ?? '', unidade: l.unidade ?? '',
     qtde: Number(l.qtde) || 0, preco_unit: Number(l.preco_unit) || 0, total: Number(Number(l.total).toFixed(2)) || 0,
+    valor_estoque: Number(Number(l.valor_estoque).toFixed(2)) || 0,
   }))
   abas.push({
     nome: 'Detalhado',
@@ -206,7 +209,8 @@ export async function GET(request: Request) {
       { key: 'unidade', label: 'Un', tipo: 'texto', largura: 7 },
       { key: 'qtde', label: 'Qtde', tipo: 'numero', largura: 10 },
       { key: 'preco_unit', label: 'Preço unit', tipo: 'moeda', largura: 12 },
-      { key: 'total', label: 'Total', tipo: 'moeda', largura: 14, somar: true },
+      { key: 'total', label: 'Total (nota)', tipo: 'moeda', largura: 14, somar: true },
+      { key: 'valor_estoque', label: 'Valor de estoque', tipo: 'moeda', largura: 15, somar: true },
     ],
     opts: { titulo: 'Compras (detalhado)', subtitulo: sub, autoFiltro: true },
   })

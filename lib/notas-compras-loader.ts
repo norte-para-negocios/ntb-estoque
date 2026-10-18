@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { custoEstoqueItemOmie, type FlagsCustoOmie } from '@/lib/compras/custo-estoque-item'
 import { buscarTudoPaginado, buscarTodosPorIds, escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -141,12 +142,20 @@ type LinhaItemNF = {
   n_preco_unit: number | string | null
   c_unidade_nfe: string | null
   local: string | null
+  vtot: string | null
+  vdesc: string | null
+  ipi: string | null
+  st: string | null
+  icms: string | null
+  custo: unknown
+  naomov: string | null
+  ignorar: string | null
 }
 
 const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-// Itens das notas (valor = quantidade x preco unitario, igual as RPCs de Compras), com
+// Itens das notas (valor = quantidade x preco unitario; valorEstoque = regra do Omie, igual as RPCs de Compras), com
 // nome, tipo e familia do cadastro. Produto e local filtram o proprio item.
 export async function carregarItensCompra(lojaId: number, notas: NotaLeve[], f: Pick<FiltrosBancoNF, 'produto' | 'local'>): Promise<{ itens: ItemCompra[]; erros: string[] }> {
   const erros: string[] = []
@@ -156,13 +165,14 @@ export async function carregarItensCompra(lojaId: number, notas: NotaLeve[], f: 
   const brutos = await buscarTodosPorIds<LinhaItemNF>(notas.map((n) => n.id), (lote, from, to) =>
     anotando(erros, 'itens das notas', supabase
       .from('nota_fiscal_items')
-      .select('nota_fiscal_id, n_id_produto, c_codigo_produto, c_descricao_produto, n_qtde_nfe, n_preco_unit, c_unidade_nfe, local:full_object->itensAjustes->>codigo_local_estoque')
+      .select('nota_fiscal_id, n_id_produto, c_codigo_produto, c_descricao_produto, n_qtde_nfe, n_preco_unit, c_unidade_nfe, local:full_object->itensAjustes->>codigo_local_estoque, vtot:full_object->itensCabec->>vTotalItem, vdesc:full_object->itensCabec->>vDesconto, ipi:full_object->itensIPI->>nValIPI, st:full_object->itensICMSST->>nValorST, icms:full_object->itensICMS->>nValor, custo:full_object->itensCustoEstoque, naomov:full_object->itensAjustes->>cNaoGerarMovEstoque, ignorar:full_object->itensCabec->>cIgnorarItem')
       .eq('loja_id', lojaId)
       .in('nota_fiscal_id', lote)
       .order('id', { ascending: true })
       .range(from, to)))
   const busca = semAcento(f.produto.trim())
   const filtrados = brutos.filter((i) =>
+    i.naomov !== 'S' && i.ignorar !== 'S' && // o Omie não lança no estoque (mesma regra das RPCs de Compras, migration 176)
     (!busca || semAcento(`${i.c_descricao_produto ?? ''} ${i.c_codigo_produto ?? ''}`).includes(busca)) &&
     (f.local === null || i.local === String(f.local)))
   const codigos = [...new Set(filtrados.map((i) => (i.n_id_produto == null ? null : String(i.n_id_produto))).filter((c): c is string => !!c))]
@@ -185,6 +195,12 @@ export async function carregarItensCompra(lojaId: number, notas: NotaLeve[], f: 
       unidade: (i.c_unidade_nfe ?? '').trim().toUpperCase(),
       quant,
       valor: Math.round(quant * (Number(i.n_preco_unit) || 0) * 100) / 100,
+      valorEstoque: custoEstoqueItemOmie({
+        qtde: quant, precoUnit: Number(i.n_preco_unit) || 0,
+        vTotalItem: i.vtot == null || i.vtot === '' ? null : Number(i.vtot),
+        vDesconto: Number(i.vdesc) || 0, vIPI: Number(i.ipi) || 0, vST: Number(i.st) || 0, vICMS: Number(i.icms) || 0,
+        flags: i.custo && typeof i.custo === 'object' ? (i.custo as FlagsCustoOmie) : null,
+      }).valorEstoque,
     }
   })
   return { itens, erros: [...new Set(erros)] }

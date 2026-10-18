@@ -28,7 +28,11 @@ export type DashboardGerencial = {
 }
 
 export type MatrizRow = { rotulo: string; mes: string; valor: number }
-type ComprasTotalRow = { valor: number; n_notas: number }
+type ComprasTotalRow = { valor: number; n_notas: number; valor_estoque: number }
+
+// Compras no valor que entrou no estoque, como no Omie (migration 176).
+const valorDeEstoque = <T extends { valor: number; valor_estoque: number }>(rows: T[]): T[] =>
+  rows.map((r) => ({ ...r, valor: Number(r.valor_estoque) || 0 }))
 
 // Rotulos EXATOS gravados por lib/omie/faturamento.ts (TIPO_NOME) -- nao usar
 // os labels de PRODUTO_TIPO_ITEM (case/acentuacao diferentes: "Produto acabado"
@@ -149,7 +153,7 @@ export async function carregarDashboardGerencial(
       p_mes_fim: mesFim,
       p_rotulos: null,
     }),
-    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+    rpcTodos<MatrizRow & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId,
       p_ini: dataIni,
       p_fim: dataFim,
@@ -160,8 +164,8 @@ export async function carregarDashboardGerencial(
       p_cfops: null,
       p_produto: null,
       p_local: null,
-    }),
-    rpcTodos<MatrizRow>(supabase, 'relatorio_compras_matriz', {
+    }).then(valorDeEstoque),
+    rpcTodos<MatrizRow & { valor_estoque: number }>(supabase, 'relatorio_compras_matriz', {
       p_loja_id: lojaId,
       p_ini: dataIni,
       p_fim: dataFim,
@@ -172,7 +176,7 @@ export async function carregarDashboardGerencial(
       p_cfops: null,
       p_produto: null,
       p_local: null,
-    }),
+    }).then(valorDeEstoque),
     rpcTodos<MatrizRow>(supabase, 'relatorio_faturamento_matriz', {
       p_loja_id: lojaId,
       p_dim: 'tipo',
@@ -230,8 +234,8 @@ export async function carregarDashboardGerencial(
 
   const faturamentoAcabado = faturamentoAcabadoRows.reduce((s, r) => s + Number(r.valor), 0)
   const faturamentoRevenda = faturamentoRevendaRows.reduce((s, r) => s + Number(r.valor), 0)
-  const comprasMP = Number((comprasMateriaPrima.data as ComprasTotalRow[] | null)?.[0]?.valor ?? 0)
-  const comprasRev = Number((comprasRevenda.data as ComprasTotalRow[] | null)?.[0]?.valor ?? 0)
+  const comprasMP = Number((comprasMateriaPrima.data as ComprasTotalRow[] | null)?.[0]?.valor_estoque ?? 0)
+  const comprasRev = Number((comprasRevenda.data as ComprasTotalRow[] | null)?.[0]?.valor_estoque ?? 0)
 
   const rejeitos: RejeitoCategoria[] = rejeitosRows.map((r) => {
     const base = r.categoria === 'Matéria-prima' ? faturamentoAcabado : r.categoria === 'Revenda' ? faturamentoRevenda : null

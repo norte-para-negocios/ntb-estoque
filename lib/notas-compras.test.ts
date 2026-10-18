@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { situacaoBate, filtrarNotas, notaParaLinha, itensDasNotas, lerOrdem, ordenarNotas, fornecedoresDistintos, type NotaLeve, type ItemCompra } from './notas-compras.ts'
+import { situacaoBate, filtrarNotas, notaParaLinha, itemParaLinha, itensDasNotas, lerOrdem, ordenarNotas, fornecedoresDistintos, type NotaLeve, type ItemCompra } from './notas-compras.ts'
 import { rankear, resumir, serieDiaria } from './faturamento-itens.ts'
 
 const N = (o: Partial<NotaLeve>): NotaLeve => ({
@@ -64,4 +64,10 @@ test('ordem: aceita colunas antigas e desempata pelo id', () => {
   assert.deepEqual(ordenarNotas(notas, 'valor', 'desc').map((n) => n.id), [1, 2, 3, 4])
   assert.deepEqual(ordenarNotas(notas, 'fornecedor', 'asc').map((n) => n.id), [3, 1, 4, 2])
   assert.deepEqual(fornecedoresDistintos(notas), ['ATACADÃO S.A.', 'Hortifruti Sol', 'Peixaria Mar'])
+})
+
+test('itemParaLinha usa o valor de estoque por padrão', () => {
+  const i: ItemCompra = { notaId: 1, dia: '2026-10-13', idProduto: 2657120569, produto: 'Peixe pescada amarela', tipoCod: '01', tipo: 'Matéria-prima', familia: 'PEIXES', unidade: 'KG', quant: 77, valor: 3210.9, valorEstoque: 3197.93 }
+  assert.equal(itemParaLinha(i).valor, 3197.93)
+  assert.equal(itemParaLinha(i, 'fiscal').valor, 3210.9)
 })
