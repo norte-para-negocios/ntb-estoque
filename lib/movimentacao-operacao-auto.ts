@@ -16,6 +16,7 @@
 // Produção -- precisa de investigação separada de como derivar R$ da OP
 // sem CMC direto na tabela ordens_producao.
 import { createServiceClient } from '@/lib/supabase/server'
+import { itemMovimentaEstoque } from '@/lib/compras/custo-estoque-item'
 import { complementarMovimentos, complementarNotasFiscais, complementarNotaFiscalItems } from '@/lib/historico-contabo'
 import { buscarFatCupons, buscarFatCupomItens } from '@/lib/faturamento-frio'
 import { descreverCFOP } from '@/lib/cfop'
@@ -159,6 +160,7 @@ export async function gerarMovimentacaoOperacaoAutomatica(lojaId: number, produt
     const data = header.d_emissao_nfe.slice(0, 10)
     if (data < DESDE || data > hoje) continue
     if (!produtoCasa(it.n_id_produto)) continue
+    if (!itemMovimentaEstoque(it.full_object)) continue // "não movimenta estoque"/"ignorar item": o Omie não lança (migration 177)
     const cfop = cfopEntradaDeNF(it) ?? it.c_cfop
     const cat = descreverCFOP(cfop).cat
     const meta = it.n_id_produto != null ? metaPorCodigo.get(Number(it.n_id_produto)) : undefined
