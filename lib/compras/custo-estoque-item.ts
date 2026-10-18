@@ -10,7 +10,11 @@ export type FlagsCustoOmie = {
   cOutrosDespCusto?: string; cFreteCusto?: string; cSeguroCusto?: string
   nAliqCredPISCusto?: number | string; nAliqCredCOFINSCusto?: number | string
 }
-export type EntradaCustoItem = { qtde: number; precoUnit: number; vTotalItem: number | null; vDesconto: number; vIPI: number; vST: number; vICMS: number; flags: FlagsCustoOmie | null }
+export type EntradaCustoItem = {
+  qtde: number; precoUnit: number; vTotalItem: number | null; vDesconto: number; vIPI: number; vST: number; vICMS: number; flags: FlagsCustoOmie | null
+  /** Só na nota do estoque próprio (bloco `sefaz` da projeção, Fase B/R3): frete, seguro e CT-e com as suas marcações. */
+  vFrete?: number; vSeguro?: number; freteExterno?: number
+}
 export type CustoItem = { valorFiscal: number; valorEstoque: number; despesas: number; fonte: 'omie' | 'fiscal' }
 export type TipoValorCompra = 'estoque' | 'fiscal'
 
@@ -23,7 +27,12 @@ export function entradaCustoDoItem(fullObject: unknown, qtde: unknown, precoUnit
   const cab = obj(fo.itensCabec)
   const total = cab.vTotalItem
   const flags = fo.itensCustoEstoque && typeof fo.itensCustoEstoque === 'object' ? (fo.itensCustoEstoque as FlagsCustoOmie) : null
+  // Item do Omie não tem bloco `sefaz` (D1: nenhuma chave de frete/seguro em itensCabec): os três ficam indefinidos e o
+  // cálculo é exatamente o da Fase A.
+  const sefaz = fo.sefaz && typeof fo.sefaz === 'object' ? obj(fo.sefaz) : null
+  const extras = sefaz ? { vFrete: num(sefaz.vFrete), vSeguro: num(sefaz.vSeg), freteExterno: num(sefaz.freteCte) } : {}
   return {
+    ...extras,
     qtde: num(qtde), precoUnit: num(precoUnit),
     vTotalItem: total === undefined || total === null || total === '' ? null : num(total),
     vDesconto: num(cab.vDesconto), vIPI: num(obj(fo.itensIPI).nValIPI), vST: num(obj(fo.itensICMSST).nValorST), vICMS: num(obj(fo.itensICMS).nValor),
@@ -40,12 +49,27 @@ export function custoEstoqueItemOmie(e: EntradaCustoItem): CustoItem {
   // frete, seguro e outras despesas do item juntos (N3b: frete/seguro sem caso real na loja 5 — hipótese de que entram
   // pelo mesmo vTotalItem e saem pela marcação de outras despesas)
   const despesas = Math.max(0, round2(t - (e.qtde * e.precoUnit - e.vDesconto) - e.vIPI - e.vST))
-  const valorEstoque = round2(t
+  const impostos = t
     - (n('cIPICusto') ? e.vIPI : 0) - (n('cICMSSTCusto') ? e.vST : 0) - (n('cICMSCusto') ? e.vICMS : 0)
     - (n('cPISCusto') ? t * num(f.nAliqCredPISCusto) / 100 : 0)
     - (n('cCOFINSCusto') ? t * num(f.nAliqCredCOFINSCusto) / 100 : 0)
-    - (n('cOutrosDespCusto') ? despesas : 0))
+  if (e.vFrete === undefined && e.vSeguro === undefined && e.freteExterno === undefined) {
+    return { valorFiscal, valorEstoque: round2(impostos - (n('cOutrosDespCusto') ? despesas : 0)), despesas, fonte: 'omie' }
+  }
+  // Nota própria (R3): frete e seguro do item saem pelas próprias marcações; outras despesas = o resto (HIPÓTESE N3b: sem
+  // caso real de frete/seguro por item na loja 5); CT-e entra só com Frete = S (HIPÓTESE N8, sem fórmula provada no Omie).
+  const vFrete = e.vFrete ?? 0, vSeguro = e.vSeguro ?? 0
+  const outras = Math.max(0, round2(despesas - vFrete - vSeguro))
+  const valorEstoque = round2(impostos
+    - (n('cFreteCusto') ? vFrete : 0) - (n('cSeguroCusto') ? vSeguro : 0) - (n('cOutrosDespCusto') ? outras : 0)
+    + (n('cFreteCusto') ? 0 : (e.freteExterno ?? 0)))
   return { valorFiscal, valorEstoque, despesas, fonte: 'omie' }
+}
+
+/** Custo unitário da entrada: valor de estoque do item ÷ quantidade recebida (unidade de estoque), 6 casas (R3/R4). */
+export function custoUnitarioEntrada(valorEstoque: number, quantidadeRecebida: number): number | null {
+  if (!(quantidadeRecebida > 0)) return null
+  return Math.round((valorEstoque / quantidadeRecebida) * 1e6) / 1e6
 }
 
 /** Item que o Omie não lança no estoque: "não movimenta estoque" ou "ignorar item". "Não gera conta a pagar" entra. */

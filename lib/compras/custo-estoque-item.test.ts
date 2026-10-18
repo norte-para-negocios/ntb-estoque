@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { custoEstoqueItemOmie, entradaCustoDoItem, itemMovimentaEstoque, lerTipoValor } from './custo-estoque-item.ts'
+import { custoEstoqueItemOmie, custoUnitarioEntrada, entradaCustoDoItem, itemMovimentaEstoque, lerTipoValor } from './custo-estoque-item.ts'
 import type { EntradaCustoItem, FlagsCustoOmie } from './custo-estoque-item.ts'
 
 // Casos reais da loja 5 (itens de recebimento do Omie × kardex do Omie, notas concluídas desde 01/08/2026).
@@ -69,4 +69,28 @@ test('itemMovimentaEstoque', () => {
 test('lerTipoValor', () => {
   assert.equal(lerTipoValor(undefined), 'estoque'); assert.equal(lerTipoValor('xyz'), 'estoque')
   assert.equal(lerTipoValor('fiscal'), 'fiscal'); assert.equal(lerTipoValor(['fiscal']), 'fiscal')
+})
+
+// Fase B (R3): frete/seguro/CT-e separados só no bloco `sefaz` da nota própria; custo unitário pela quantidade recebida.
+const N8 = { ...N } // N da Fase A: tudo 'N', alíquotas 0
+test('Omie: sem bloco sefaz, Frete/Seguro não mudam nada (ÁGUA 131055, kardex 120 × 1,358333)', () => {
+  const base = { itensCabec: { vTotalItem: 176.41, vDesconto: 0 }, itensCustoEstoque: N8 }
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem(base, 10, 16.299516)).valorEstoque, 163)
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem({ ...base, itensCustoEstoque: { ...N8, cFreteCusto: 'S', cSeguroCusto: 'S' } }, 10, 16.299516)).valorEstoque, 163)
+})
+test('próprio: frete e seguro do item seguem as suas marcações; outras despesas = o resto (HIPÓTESE N3b)', () => {
+  const fo = { itensCabec: { vTotalItem: 115, vDesconto: 0 }, itensCustoEstoque: { ...N8, cFreteCusto: 'S' }, sefaz: { vFrete: 10, vSeg: 2 } }
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem(fo, 1, 100)).valorEstoque, 110) // tira seguro 2 e outras 3
+})
+test('CT-e entra só com Frete = S (HIPÓTESE N8)', () => {
+  const fo = (f: string) => ({ itensCabec: { vTotalItem: 100, vDesconto: 0 }, itensCustoEstoque: { ...N8, cFreteCusto: f }, sefaz: { vFrete: 0, vSeg: 0, freteCte: 12.5 } })
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem(fo('S'), 1, 100)).valorEstoque, 112.5)
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem(fo('N'), 1, 100)).valorEstoque, 100)
+})
+test('custo unitário = valor de estoque ÷ quantidade recebida (NF 131055 e entrega parcial da NF 4010)', () => {
+  assert.equal(custoUnitarioEntrada(163, 120), 1.358333)
+  assert.equal(custoUnitarioEntrada(632.6, 96), 6.589583)
+  assert.equal(custoUnitarioEntrada(39.87, 12), 3.3225)
+  assert.equal(custoUnitarioEntrada(3063.41, 37.888369), 80.853573)
+  assert.equal(custoUnitarioEntrada(10, 0), null)
 })
