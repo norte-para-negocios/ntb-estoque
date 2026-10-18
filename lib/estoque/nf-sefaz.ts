@@ -4,6 +4,7 @@ import { alertasDoItem, configInicialItem, podeLancarSozinho, previaCustoItem, t
 import { carregarCmc, carregarMemoria } from './nf-memoria'
 import { casarItem, montarContexto, podeLancarAutomatico, type Casamento, type Depara, type ProdutoCad } from './nf-conferencia'
 import { espelharNotaNoFrio } from './nf-frio'
+import { decidirLancamentoNaGravacao } from './nf-entrada'
 import type { ItemNfe, NfeLida } from './nfe-xml'
 
 // Grava uma NF-e completa em loja de estoque próprio: nota no formato do Omie + conferência com o cadastro + (se tudo casou com
@@ -15,6 +16,8 @@ export type ResultadoNota = {
   lancados: number; status: string
   /** Avisos de cada item (fator, custo, recebido, valor zero, complementar): seguram a entrada automática (R9). */
   alertasItens: { linha: number; alertas: AlertaItem[] }[]
+  /** Por que a entrada não foi feita na gravação: aviso de item que precisa de conferência, ou compra reaberta. */
+  retida: 'avisos' | 'reaberta' | null
 }
 
 async function carregarProdutos(lojaId: number): Promise<ProdutoCad[]> {
@@ -67,7 +70,7 @@ export async function sugestoesDosItens(lojaId: number, nfe: NfeLida, casamentos
     const previa = previaCustoItem({
       quantidadeNota: i.quantidade, precoUnit: i.valorUnitario, valorTotalItem: i.valorTotalItem, desconto: i.desconto, ipi: i.fiscal.ipi,
       st: i.fiscal.st + i.fiscal.fcpSt, icms: i.icms, frete: i.fiscal.frete, seguro: i.fiscal.seguro, freteCte: 0, flags: cfg.flags,
-      aliqCredPis: cfg.aliqCredPis, aliqCredCofins: cfg.aliqCredCofins, quantidadeRecebida: qtdRecebida,
+      aliqCredPis: cfg.aliqCredPis, aliqCredCofins: cfg.aliqCredCofins, quantidadeRecebida: qtdRecebida, csosn: i.fiscal.csosn, credIcmsSn: i.fiscal.credIcmsSn,
     })
     return {
       linha: i.linha,
@@ -147,8 +150,13 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
     casamentosSeguros: podeLancarAutomatico(casamentos), alertasNota: alertas.length, autoLancar: opts.autoLancar,
     origensFlags: configs.filter((c) => c.movimentaEstoque).map((c) => c.origemFlags), alertasItens: alertasItens.flatMap((a) => a.alertas),
   })
-  const parcial = !!opts.lancarParcial && casados > 0
-  if ((automatico || parcial) && (statusCompra === 'pendente' || statusCompra === 'parcial') && local) {
+  // upload do XML (lancarParcial) também não lança item com aviso de custo/fator/valor zero sem "Conferi os avisos", e
+  // compra com a entrada desfeita (reaberta) só volta pelo "Confirmar entrada"
+  const decisao = decidirLancamentoNaGravacao({
+    automatico, lancarParcial: !!opts.lancarParcial, casados, alertasItens, statusCompra, temLocal: !!local,
+    reaberta: !!(rc as { reaberta?: boolean }).reaberta,
+  })
+  if (decisao.lancar && local) {
     const { data: rl, error: erl } = await sb.rpc('lancar_compra', { p_compra: { loja_id: lojaId, id: compraId, itens: [] }, p_local: local, p_user: opts.userId ?? null })
     if (erl) throw new Error('Falha ao lançar a entrada no estoque: ' + erl.message)
     statusCompra = String((rl as { status: string }).status)
@@ -161,5 +169,6 @@ export async function gravarNotaCompleta(lojaId: number, nfe: NfeLida, opts: {
     notaId, compraId, situacao: (situacao as string | null) ?? null, lancada: statusCompra === 'lancada', itens: nfe.itens.length, casados,
     sugestoes: casamentos.filter((c) => c.codigoProduto == null && c.sugestao != null).length,
     pendentes: casamentos.filter((c) => c.codigoProduto == null).length, alertas, criada, lancados, status: statusCompra, alertasItens,
+    retida: decisao.retida,
   }
 }

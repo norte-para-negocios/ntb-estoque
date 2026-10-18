@@ -9,7 +9,7 @@ const num = (v: unknown) => Number(v ?? 0) || 0
 // Dados da conferência de uma nota em loja de estoque próprio (leitura pela sessão: RLS por loja).
 
 export type ConferenciaCarregada = {
-  compra: { id: number; status: string; codigoLocal: number | null; numero: string | null; conferidaEm: string | null; obs: string | null } | null
+  compra: { id: number; status: string; codigoLocal: number | null; numero: string | null; conferidaEm: string | null; obs: string | null; estornos: number } | null
   itens: ItemConferencia[]
   locais: { codigo: number; descricao: string }[]
   sefaz: { origem: string | null; recebidoEm: string | null; nsu: string | null; completo: boolean; alertas: string[] }
@@ -22,7 +22,7 @@ export type ConferenciaCarregada = {
 
 export async function carregarConferencia(lojaId: number, notaId: number, fullObject: unknown, chave: string | null): Promise<ConferenciaCarregada> {
   const sb = await createClient()
-  const { data: c } = await sb.from('compras_proprio').select('id, status, codigo_local_estoque, numero, conferida_em, obs').eq('loja_id', lojaId).eq('nota_fiscal_id', notaId).maybeSingle()
+  const { data: c } = await sb.from('compras_proprio').select('id, status, codigo_local_estoque, numero, conferida_em, obs, estornos').eq('loja_id', lojaId).eq('nota_fiscal_id', notaId).maybeSingle()
   const itens: ItemConferencia[] = []
   const finalidade = ((fullObject ?? {}) as { sefaz?: { finalidade?: string } }).sefaz?.finalidade ?? null
   if (c) {
@@ -58,6 +58,7 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
         seguro_valor: num(i.seguro_valor), outras_valor: num(i.outras_valor), frete_cte: num(i.frete_cte), flags, aliq_cred_pis: num(i.aliq_cred_pis), aliq_cred_cofins: num(i.aliq_cred_cofins),
         quantidade_recebida: i.quantidade_recebida == null ? null : num(i.quantidade_recebida), fator: num(i.fator) || 1, unidade_compra: (i.unidade_compra as string) ?? null,
         unidade_estoque: (i.unidade_estoque as string) ?? null, codigo_produto: cp, movimenta_estoque: i.movimenta_estoque !== false,
+        csosn: (((i.fiscal ?? {}) as Record<string, unknown>).csosn as string) ?? null, cred_icms_sn: num(((i.fiscal ?? {}) as Record<string, unknown>).credIcmsSn),
       }
       const av = avaliarItemCompra(gravado, { cmc: cp != null ? cmc.get(cp) ?? null : null, finalidade })
       const localItem = i.codigo_local_estoque != null ? Number(i.codigo_local_estoque) : null
@@ -76,7 +77,7 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
           aliqCredCofins: num(i.aliq_cred_cofins), movimentaEstoque: i.movimenta_estoque !== false, geraContaPagar: i.gera_conta_pagar !== false,
         },
         fiscal: {
-          cst: (fiscal.cst as string) ?? null, csosn: (fiscal.csosn as string) ?? null, icms: num(i.icms_valor), st: num(i.st_valor) + num(i.fcp_st_valor), ipi: num(i.ipi_valor),
+          cst: (fiscal.cst as string) ?? null, csosn: (fiscal.csosn as string) ?? null, credIcmsSn: num(fiscal.credIcmsSn), icms: num(i.icms_valor), st: num(i.st_valor) + num(i.fcp_st_valor), ipi: num(i.ipi_valor),
           pis: num(fiscal.pis), cofins: num(fiscal.cofins), frete: num(i.frete_valor), seguro: num(i.seguro_valor), outras: num(i.outras_valor), freteCte: num(i.frete_cte),
           valorTotalItem: i.valor_total_item == null ? null : num(i.valor_total_item), desconto: num(i.desconto), valorProdutos: num(i.valor_total), precoUnit: num(i.valor_unitario),
         },
@@ -111,7 +112,7 @@ export async function carregarConferencia(lojaId: number, notaId: number, fullOb
     if (d) documento = { cienciaEm: d.ciencia_em, cienciaCstat: d.ciencia_cstat, tipo: d.tipo }
   }
   return {
-    compra: c ? { id: Number(c.id), status: c.status, codigoLocal: c.codigo_local_estoque != null ? Number(c.codigo_local_estoque) : null, numero: c.numero, conferidaEm: c.conferida_em ?? null, obs: c.obs ?? null } : null,
+    compra: c ? { id: Number(c.id), status: c.status, codigoLocal: c.codigo_local_estoque != null ? Number(c.codigo_local_estoque) : null, numero: c.numero, conferidaEm: c.conferida_em ?? null, obs: c.obs ?? null, estornos: Number(c.estornos ?? 0) || 0 } : null,
     itens, locais,
     sefaz: { origem: fo.sefaz?.origem ?? null, recebidoEm: fo.sefaz?.recebidoEm ?? null, nsu: fo.sefaz?.nsu ?? null, completo: fo.sefaz?.completo !== false, alertas: fo.sefaz?.alertas ?? [] },
     documento, manifestacoes, ctes,

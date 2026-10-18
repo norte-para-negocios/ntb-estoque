@@ -59,7 +59,9 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
         mapeamentos: previa.itens.map((i) => ({ linha: i.linha, codigoProduto: mapa[i.linha]?.produto?.codigoProduto ?? null, fator: Number((mapa[i.linha]?.fator ?? '1').replace(',', '.')) || 1, codigoLocal: mapa[i.linha]?.local || null })),
       })
       if ('error' in r) { toast.error('Não foi possível lançar', { description: r.error }); return }
-      toast.success(r.status === 'lancada' ? 'Compra lançada no estoque' : `${r.lancados} itens lançados, ${r.pendentes} pendentes de produto`)
+      if (r.retida === 'avisos') toast.warning('Nota gravada, sem entrada no estoque', { description: 'Há avisos de custo ou quantidade nos itens: confira na nota e confirme a entrada.' })
+      else if (r.retida === 'reaberta') toast.info('Nota gravada', { description: 'A entrada desta nota foi desfeita: confira e confirme a entrada na própria nota.' })
+      else toast.success(r.status === 'lancada' ? 'Compra lançada no estoque' : `${r.lancados} itens lançados, ${r.pendentes} pendentes de produto`)
       router.push(r.notaId ? `/nota-fiscal/${r.notaId}` : '/nota-fiscal')
     })
   }
@@ -116,6 +118,7 @@ export function ImportarXml({ locais }: { locais: { codigoLocal: number; descric
                   quantidadeNota: i.quantidade, precoUnit: i.valorUnitario, valorTotalItem: i.valorTotalItem, desconto: i.desconto, ipi: i.fiscal.ipi,
                   st: i.fiscal.st + i.fiscal.fcpSt, icms: i.icms, frete: i.fiscal.frete, seguro: i.fiscal.seguro, freteCte: 0,
                   flags: icms ? { ...i.config.flags, icms: false } : i.config.flags, aliqCredPis: 0, aliqCredCofins: 0, quantidadeRecebida: i.quantidade * fator,
+                  csosn: i.fiscal.csosn, credIcmsSn: i.fiscal.credIcmsSn,
                 }).custoUnitario : null
                 return (
                   <li key={i.linha} className="rounded-[var(--r-lg)] bg-surface p-4 u-card">

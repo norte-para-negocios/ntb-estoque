@@ -7,6 +7,7 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { ROTULO_ORIGEM } from '@/lib/estoque/kardex'
 import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
+import { refBaseDaEntrada } from '@/lib/estoque/nf-entrada'
 
 export type DetalheKardex =
   | { error: string }
@@ -54,7 +55,7 @@ export async function detalheMovimentoProprio(id: number): Promise<DetalheKardex
       }
     } else if (m.origem === 'COMPRA') {
       const { data: c } = await sb.from('compras_proprio').select('id, numero, serie, fornecedor_nome, chave_acesso, emissao, origem')
-        .eq('loja_id', lojaId).or(`chave_acesso.eq.${ref},id.eq.${ref.startsWith('compra:') ? Number(ref.slice(7)) || 0 : 0}`).maybeSingle()
+        .eq('loja_id', lojaId).or(`chave_acesso.eq.${refBaseDaEntrada(ref)},id.eq.${refBaseDaEntrada(ref).startsWith('compra:') ? Number(refBaseDaEntrada(ref).slice(7)) || 0 : 0}`).maybeSingle()
       if (c) documento = {
         rotulo: c.origem === 'xml' ? 'Nota fiscal de entrada' : 'Compra lançada à mão', descricao: `${c.fornecedor_nome ?? 'Fornecedor'} · nº ${c.numero ?? '-'}${c.serie ? '/' + c.serie : ''}`,
         href: `/compras/${c.id}`, linhas: c.chave_acesso ? [{ rotulo: 'Chave de acesso', valor: c.chave_acesso }] : undefined,

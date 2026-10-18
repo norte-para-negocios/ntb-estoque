@@ -109,7 +109,7 @@ export async function previaXml(xml: string): Promise<{ ok: true; previa: Previa
 }
 
 export type Mapeamento = { linha: number; codigoProduto: number | null; fator: number; codigoLocal?: number | null }
-type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean } | { error: string }
+type ResultadoLancamento = { ok: true; compraId: number; notaId: number | null; status: string; lancados: number; pendentes: number; duplicado: boolean; retida?: 'avisos' | 'reaberta' | null } | { error: string }
 
 async function chamarLancar(lojaId: number, compra: Record<string, unknown>, local: number, userId: string | null): Promise<ResultadoLancamento> {
   // lancar_compra_com_lotes (migration 145) = lancar_compra + lote/validade de cada item até o gatilho de lotes.
@@ -142,7 +142,7 @@ export async function lancarCompraXml(dados: { xml: string; codigoLocal: number;
   await createServiceClient().from('sefaz_documentos').upsert({ loja_id: ctx.lojaId, nsu: `upload-${nfe.chave}`, schema: 'procNFe_upload', tipo: 'procNFe', chave: nfe.chave, completo: true, xml: dados.xml, nota_fiscal_id: res.notaId, processado: true }, { onConflict: 'loja_id,nsu', ignoreDuplicates: true })
   await registrarAuditoria('criar', 'compra (XML)', res.compraId ?? res.notaId, `NF ${nfe.numero} · ${nfe.fornecedor.nome}`)
   atualizarTelas()
-  return { ok: true, compraId: res.compraId ?? 0, notaId: res.notaId, status: res.status, lancados: res.lancados, pendentes: res.pendentes, duplicado: !res.criada && res.lancados === 0 && res.pendentes === 0 }
+  return { ok: true, compraId: res.compraId ?? 0, notaId: res.notaId, status: res.status, lancados: res.lancados, pendentes: res.pendentes, duplicado: !res.criada && res.lancados === 0 && res.pendentes === 0 && !res.retida, retida: res.retida }
 }
 
 export type ItemManual = { codigoProduto: number; quantidade: number | string; valorUnitario: number | string; unidade?: string; fator?: number | string; descricao?: string; lote?: string | null; validade?: string | null }

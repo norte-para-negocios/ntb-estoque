@@ -26,7 +26,7 @@ test('ações novas da nota recusam loja que não é própria antes de tudo', ()
   }
 })
 test('peças novas nunca importam nem chamam o Omie', () => {
-  for (const f of ['lib/estoque/nf-item-regras.ts', 'lib/estoque/nf-memoria.ts', 'lib/estoque/nfe-validacao.ts', 'lib/estoque/nfe-assinatura.ts', 'lib/estoque/sefaz-manifestacao.ts', 'lib/estoque/sefaz-manifestacao-tipos.ts', 'lib/estoque/cte-xml.ts', 'lib/estoque/nf-etapas.ts', 'lib/estoque/nf-historico.ts'])
+  for (const f of ['lib/estoque/nf-item-regras.ts', 'lib/estoque/nf-memoria.ts', 'lib/estoque/nfe-validacao.ts', 'lib/estoque/nfe-assinatura.ts', 'lib/estoque/sefaz-manifestacao.ts', 'lib/estoque/sefaz-manifestacao-tipos.ts', 'lib/estoque/cte-xml.ts', 'lib/estoque/nf-etapas.ts', 'lib/estoque/nf-historico.ts', 'lib/estoque/nf-entrada.ts', 'lib/estoque/sefaz-busca-chave.ts'])
     assert.ok(!/@\/lib\/omie\/|omieRequest|Recebimento\(/.test(semComentarios(ler(f))), f)
 })
 test('manifestarNF do Omie continua chamando concluirRecebimento depois do despacho por modo', () => {

@@ -98,3 +98,32 @@ test('avaliarItemCompra: prévia e avisos do item gravado (tela e servidor usam 
   assert.equal(avaliarItemCompra({ ...base, valor_total_item: null }, { cmc: null, finalidade: '1' }).previa, null) // compra antiga: sem prévia N3
   assert.deepEqual(avaliarItemCompra({ ...base, codigo_produto: null }, { cmc: null, finalidade: '1' }).alertas, [])
 })
+
+// Revisão final (achado 3): o lançamento (SQL 185, item_compra_full_object) usa o crédito do Simples (vCredICMSSN) como o
+// "ICMS" do custo quando o item é CSOSN 101/201 sem ICMS próprio. A prévia (única entrada TS de custo: tela, upload,
+// SEFAZ) precisa fazer o mesmo, senão a prévia ≠ o que entra (R15). Mesmo caso no SQL: 185, bloco M.
+test('HIPÓTESE CSOSN 101: prévia tira o crédito do Simples como ICMS, igual ao lançamento (água da NF 131055 com vCredICMSSN 4,08)', () => {
+  const agua = { quantidadeNota: 10, precoUnit: 16.299516, valorTotalItem: 176.41, desconto: 0, ipi: 0, st: 0, icms: 0, frete: 0, seguro: 0, freteCte: 0,
+    flags: flagsDeTexto('NNNNNNNN')!, aliqCredPis: 0, aliqCredCofins: 0, quantidadeRecebida: 120, csosn: '101', credIcmsSn: 4.08 }
+  assert.deepEqual(previaCustoItem(agua), { valorEstoque: 158.92, custoUnitario: 1.324333 })
+  assert.deepEqual(previaCustoItem({ ...agua, csosn: '201' }), { valorEstoque: 158.92, custoUnitario: 1.324333 })
+  // ICMS é custo (S): o crédito fica no custo
+  assert.equal(previaCustoItem({ ...agua, flags: flagsDeTexto('SNNNNNNN')! }).valorEstoque, 163)
+  // CSOSN 102 (sem crédito) e item com ICMS próprio: crédito ignorado
+  assert.equal(previaCustoItem({ ...agua, csosn: '102' }).valorEstoque, 163)
+  assert.equal(previaCustoItem({ ...agua, icms: 2 }).valorEstoque, 161)
+  // item gravado (tela da nota e servidor): o fiscal jsonb traz csosn e credIcmsSn
+  const g = { quantidade: 10, valor_unitario: 16.299516, valor_total_item: 176.41, desconto: 0, ipi_valor: 0, st_valor: 0, fcp_st_valor: 0, icms_valor: 0,
+    frete_valor: 0, seguro_valor: 0, outras_valor: 13.41, frete_cte: 0, flags: 'NNNNNNNN', aliq_cred_pis: 0, aliq_cred_cofins: 0, quantidade_recebida: null,
+    fator: 12, unidade_compra: 'CX', unidade_estoque: 'UN', codigo_produto: 1001, movimenta_estoque: true, csosn: '101', cred_icms_sn: 4.08 }
+  assert.deepEqual(avaliarItemCompra(g, { cmc: 1.3, finalidade: '1' }).previa, { valorEstoque: 158.92, custoUnitario: 1.324333 })
+})
+
+test('item religado a outro produto: o aviso de fator usa a unidade do produto novo (TEQUILA PRATA: UN → ML)', () => {
+  const g = { quantidade: 1, valor_unitario: 139.9, valor_total_item: 139.9, desconto: 0, ipi_valor: 0, st_valor: 0, fcp_st_valor: 0, icms_valor: 0,
+    frete_valor: 0, seguro_valor: 0, outras_valor: 0, frete_cte: 0, flags: 'NNNNNNNN', aliq_cred_pis: 0, aliq_cred_cofins: 0, quantidade_recebida: null,
+    fator: 1, unidade_compra: 'UND8', unidade_estoque: 'ML', codigo_produto: 3002, movimenta_estoque: true }
+  // 1 UND8 = 1 ML: suspeito (a 185 grava a unidade do produto novo ao religar; antes ficava UN e o aviso sumia)
+  assert.deepEqual(avaliarItemCompra(g, { cmc: null, finalidade: '1' }).alertas.map((a) => a.tipo), ['fator_suspeito'])
+  assert.deepEqual(avaliarItemCompra({ ...g, fator: 750 }, { cmc: null, finalidade: '1' }).alertas, [])
+})

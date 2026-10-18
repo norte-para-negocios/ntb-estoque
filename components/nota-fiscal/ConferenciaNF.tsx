@@ -25,7 +25,7 @@ export type ItemConferencia = {
     flags: string | null; origemFlags: string | null; aliqCredPis: number; aliqCredCofins: number; movimentaEstoque: boolean; geraContaPagar: boolean
   }
   fiscal: {
-    cst: string | null; csosn: string | null; icms: number; st: number; ipi: number; pis: number; cofins: number; frete: number; seguro: number; outras: number
+    cst: string | null; csosn: string | null; credIcmsSn: number; icms: number; st: number; ipi: number; pis: number; cofins: number; frete: number; seguro: number; outras: number
     freteCte: number; valorTotalItem: number | null; desconto: number; valorProdutos: number; precoUnit: number
   }
   previa: { valorEstoque: number; custoUnitario: number | null } | null
@@ -59,7 +59,8 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
   function confirmar() {
     if (local === '') { toast.error('Escolha o local que recebe a mercadoria'); return }
     start(async () => {
-      const r = await confirmarEntradaNF(notaId, local)
+      // aviso de custo/fator sem conferência: o servidor exige "Conferi os avisos" (mesma regra da conferência)
+      const r = await confirmarEntradaNF(notaId, local, { aceitarAvisos })
       if ('error' in r) { toast.error('Não foi possível dar entrada', { description: r.error }); return }
       toast.success(r.status === 'lancada' ? 'Entrada lançada no estoque' : `${r.lancados} ${r.lancados === 1 ? 'item entrou' : 'itens entraram'} no estoque; ${r.pendentes} ainda sem produto`)
       router.refresh()
@@ -110,7 +111,8 @@ export function ConferenciaNF({ notaId, itens, status, locais, localAtual, podeC
             <select aria-label="Local que recebe a mercadoria" className={`${campoCompra} w-auto`} value={local} onChange={(e) => setLocal(e.target.value ? Number(e.target.value) : '')}>
               {locais.map((l) => <option key={l.codigo} value={l.codigo}>{l.descricao}</option>)}
             </select>
-            <button type="button" className={btnClass('primary')} onClick={confirmar} disabled={pending || pendentes.every((i) => !i.produto)}>
+            <button type="button" className={btnClass('primary')} onClick={confirmar} disabled={pending || pendentes.every((i) => !i.produto) || (temAvisoQueSegura && !conferidaEm && !aceitarAvisos)}
+              title={temAvisoQueSegura && !conferidaEm && !aceitarAvisos ? 'Há avisos de custo ou quantidade: confira e marque "Conferi os avisos".' : undefined}>
               {pending ? <Spinner /> : <PackageCheck className="size-4" />}Confirmar entrada
             </button>
           </div>

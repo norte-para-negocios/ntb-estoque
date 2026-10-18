@@ -213,10 +213,17 @@ export function validarConfigItem(c: ConfigItemNF): string | null {
   return null
 }
 
-/** Prévia do custo na tela, pela MESMA função do lançamento/relatórios (R15). `st` = ST + FCP-ST do item. */
-export function previaCustoItem(e: { quantidadeNota: number; precoUnit: number; valorTotalItem: number; desconto: number; ipi: number; st: number; icms: number; frete: number; seguro: number; freteCte: number; flags: FlagsCusto; aliqCredPis: number; aliqCredCofins: number; quantidadeRecebida: number }): { valorEstoque: number; custoUnitario: number | null } {
+/** ICMS que entra na conta do custo, igual à projeção SQL (185, item_compra_full_object): HIPÓTESE (sem caso real em D1)
+ *  — no Simples (CSOSN 101/201) sem ICMS próprio, o "ICMS" do custo é o crédito do Simples (vCredICMSSN). */
+export function icmsDoCusto(icms: number, csosn: string | null | undefined, credIcmsSn: number | null | undefined): number {
+  return (Number(icms) || 0) === 0 && (csosn === '101' || csosn === '201') ? Number(credIcmsSn) || 0 : Number(icms) || 0
+}
+
+/** Prévia do custo na tela, pela MESMA função do lançamento/relatórios (R15). `st` = ST + FCP-ST do item. Ponto de entrada
+ *  único de TODAS as prévias (editor do item, conferência, upload do XML, SEFAZ): mesma regra do ICMS da projeção SQL. */
+export function previaCustoItem(e: { quantidadeNota: number; precoUnit: number; valorTotalItem: number; desconto: number; ipi: number; st: number; icms: number; frete: number; seguro: number; freteCte: number; flags: FlagsCusto; aliqCredPis: number; aliqCredCofins: number; quantidadeRecebida: number; csosn?: string | null; credIcmsSn?: number | null }): { valorEstoque: number; custoUnitario: number | null } {
   const r = custoEstoqueItemOmie({
-    qtde: e.quantidadeNota, precoUnit: e.precoUnit, vTotalItem: e.valorTotalItem, vDesconto: e.desconto, vIPI: e.ipi, vST: e.st, vICMS: e.icms,
+    qtde: e.quantidadeNota, precoUnit: e.precoUnit, vTotalItem: e.valorTotalItem, vDesconto: e.desconto, vIPI: e.ipi, vST: e.st, vICMS: icmsDoCusto(e.icms, e.csosn, e.credIcmsSn),
     flags: flagsParaOmie(e.flags, e.aliqCredPis, e.aliqCredCofins), vFrete: e.frete, vSeguro: e.seguro, freteExterno: e.freteCte,
   })
   return { valorEstoque: r.valorEstoque, custoUnitario: custoUnitarioEntrada(r.valorEstoque, e.quantidadeRecebida) }
@@ -229,6 +236,8 @@ export type ItemCompraGravado = {
   icms_valor: number; frete_valor: number; seguro_valor: number; outras_valor: number; frete_cte: number; flags: string | null
   aliq_cred_pis: number; aliq_cred_cofins: number; quantidade_recebida: number | null; fator: number; unidade_compra: string | null
   unidade_estoque: string | null; codigo_produto: number | null; movimenta_estoque: boolean
+  /** do `fiscal` jsonb (CSOSN e crédito do Simples): entram na prévia como na projeção SQL */
+  csosn?: string | null; cred_icms_sn?: number | null
 }
 export function avaliarItemCompra(i: ItemCompraGravado, ctx: { cmc: number | null; finalidade: string | null }): { quantidadeRecebida: number; previa: { valorEstoque: number; custoUnitario: number | null } | null; alertas: AlertaItem[] } {
   const fator = Number(i.fator) || 1
@@ -238,7 +247,7 @@ export function avaliarItemCompra(i: ItemCompraGravado, ctx: { cmc: number | nul
     quantidadeNota: Number(i.quantidade), precoUnit: Number(i.valor_unitario), valorTotalItem: Number(i.valor_total_item), desconto: Number(i.desconto),
     ipi: Number(i.ipi_valor), st: Number(i.st_valor) + Number(i.fcp_st_valor), icms: Number(i.icms_valor), frete: Number(i.frete_valor),
     seguro: Number(i.seguro_valor), freteCte: Number(i.frete_cte), flags, aliqCredPis: Number(i.aliq_cred_pis), aliqCredCofins: Number(i.aliq_cred_cofins),
-    quantidadeRecebida,
+    quantidadeRecebida, csosn: i.csosn ?? null, credIcmsSn: i.cred_icms_sn ?? null,
   })
   const alertas = i.codigo_produto == null ? [] : alertasDoItem({
     unidadeNota: i.unidade_compra ?? 'UN', unidadeEstoque: i.unidade_estoque, fator, quantidadeNota: Number(i.quantidade), quantidadeRecebida,

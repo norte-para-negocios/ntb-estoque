@@ -23,6 +23,7 @@ import { ManifestacaoNF } from '@/components/nota-fiscal/ManifestacaoNF'
 import { FreteCteNF } from '@/components/nota-fiscal/FreteCteNF'
 import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
+import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -207,7 +208,7 @@ export default async function NotaFiscalItensPage({
 
       {proprio ? (
         <>
-          <EntradasGeradasNF lojaId={lojaId} referencias={[nf.c_chave_nfe, conferencia?.compra ? `compra:${conferencia.compra.id}` : null].filter((x): x is string => !!x)} />
+          <EntradasGeradasNF lojaId={lojaId} referencias={refsDaEntrada(nf.c_chave_nfe ?? null, conferencia?.compra?.id ?? null, conferencia?.compra?.estornos ?? 0)} />
           {conferencia?.compra && (
             <FreteCteNF notaId={Number(id)} ctes={conferencia.ctes}
               editavel={podeManifestar && conferencia.compra.status !== 'cancelada' && !conferencia.itens.some((i) => i.lancado)} />

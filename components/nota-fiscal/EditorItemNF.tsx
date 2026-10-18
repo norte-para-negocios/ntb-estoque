@@ -51,6 +51,7 @@ export function EditorItemNF({ item, locais, editavel }: { item: ItemConferencia
       quantidadeNota: item.quantidade, precoUnit: item.fiscal.precoUnit, valorTotalItem: item.fiscal.valorTotalItem,
       desconto: item.fiscal.desconto, ipi: item.fiscal.ipi, st: item.fiscal.st, icms: item.fiscal.icms, frete: item.fiscal.frete, seguro: item.fiscal.seguro,
       freteCte: item.fiscal.freteCte, flags, aliqCredPis: numBR(pis) || 0, aliqCredCofins: numBR(cofins) || 0, quantidadeRecebida: qtdNum,
+      csosn: item.fiscal.csosn, credIcmsSn: item.fiscal.credIcmsSn,
     })
   }, [item, flags, pis, cofins, qtdNum])
 

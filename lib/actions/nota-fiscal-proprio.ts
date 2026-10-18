@@ -16,7 +16,8 @@ import { carregarCmc } from '@/lib/estoque/nf-memoria'
 import { carregarCredencialLoja } from '@/lib/estoque/sefaz-certificado'
 import { enviarManifestacao } from '@/lib/estoque/sefaz-rede'
 import { decidirEnvioManifestacao, ehTipoManifestacao, resultadoManifestacao, validarJustificativa, type EstadoManifestacao, type TipoManifestacao } from '@/lib/estoque/sefaz-manifestacao'
-import { avaliarItemCompra, decidirConferencia, flagsParaTexto, validarConfigItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
+import { avaliarItemCompra, decidirConferencia, flagsParaTexto, validarConfigItem, type AlertaItem, type ConfigItemNF, type ItemCompraGravado } from '@/lib/estoque/nf-item-regras'
+import { decidirConfirmacaoEntrada, resultadoLancamento } from '@/lib/estoque/nf-entrada'
 
 // Ações da tela de Notas Fiscais em loja de estoque próprio (sem Omie): conferir itens, confirmar a entrada, desfazer e excluir.
 
@@ -39,27 +40,36 @@ async function atualizarSituacao(lojaId: number, notaId: number) {
 }
 
 async function compraDaNota(lojaId: number, notaId: number) {
-  const { data } = await createServiceClient().from('compras_proprio').select('id, status, numero, codigo_local_estoque').eq('loja_id', lojaId).eq('nota_fiscal_id', notaId).maybeSingle()
+  const { data } = await createServiceClient().from('compras_proprio').select('id, status, numero, codigo_local_estoque, conferida_em').eq('loja_id', lojaId).eq('nota_fiscal_id', notaId).maybeSingle()
   return data
 }
 
-/** 'Confirmar entrada': lança no estoque os itens já ligados a produto (os demais ficam pendentes e a nota fica parcial). */
-export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | null): Promise<{ ok: true; lancados: number; pendentes: number; status: string } | { error: string }> {
-  const __d = viaDesktop('nota-fiscal-proprio#confirmarEntradaNF', confirmarEntradaNF, [notaId, codigoLocal]); if (__d) return __d as never
+/** 'Confirmar entrada': lança no estoque os itens já ligados a produto (os demais ficam pendentes e a nota fica parcial).
+ *  Refaz no servidor os avisos de cada item (fator, custo, valor zero): com aviso, só entra com "Conferi os avisos" agora
+ *  ou com a nota conferida depois da última mudança (mesma regra do marcarConferidaNF). Compra com a entrada desfeita
+ *  (reaberta) entra de novo por aqui. */
+export async function confirmarEntradaNF(notaId: number, codigoLocal?: number | null, opts?: { aceitarAvisos?: boolean }): Promise<{ ok: true; lancados: number; pendentes: number; status: string } | { error: string }> {
+  const __d = viaDesktop('nota-fiscal-proprio#confirmarEntradaNF', confirmarEntradaNF, [notaId, codigoLocal, opts]); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Manifestar')
   if ('error' in ctx) return ctx
   const compra = await compraDaNota(ctx.lojaId, notaId)
   if (!compra) return { error: 'Esta nota ainda não tem itens para conferir (só o resumo chegou da SEFAZ).' }
-  if (compra.status === 'cancelada') return { error: 'A entrada desta nota foi desfeita. Não dá para lançar de novo.' }
+  if (compra.status === 'cancelada') return { error: 'Nota cancelada na SEFAZ ou excluída: não entra no estoque.' }
   const local = codigoLocal ?? (compra.codigo_local_estoque != null ? Number(compra.codigo_local_estoque) : await localPadraoEntrada(ctx.lojaId))
   if (!local) return { error: 'Cadastre um local de estoque para receber a mercadoria.' }
-  const { data, error } = await createServiceClient().rpc('lancar_compra', { p_compra: { loja_id: ctx.lojaId, id: compra.id, itens: [] }, p_local: local, p_user: ctx.userId })
+  const sb = createServiceClient()
+  const avisos = await avisosDosItens(ctx.lojaId, compra.id, notaId)
+  const dec = decidirConfirmacaoEntrada(avisos, { conferida: !!compra.conferida_em, aceitarAvisos: !!opts?.aceitarAvisos })
+  if ('error' in dec) return dec
+  const { data, error } = await sb.rpc('lancar_compra', {
+    p_compra: { loja_id: ctx.lojaId, id: compra.id, itens: [], ...(dec.aceitos.length ? { avisos_aceitos: dec.aceitos } : {}) }, p_local: local, p_user: ctx.userId,
+  })
   if (error) return { error: error.message }
-  const r = data as { status: string; lancados: number; pendentes: number }
-  if (r.status === 'cancelada') return { error: 'Nota cancelada na SEFAZ: não entra no estoque.' }
-  await registrarAuditoria('concluir', 'nota fiscal (entrada)', compra.numero ?? notaId, null)
+  const r = resultadoLancamento(data as { ok?: boolean; status: string; lancados: number; pendentes: number; motivo?: string })
+  if ('error' in r) { await atualizarSituacao(ctx.lojaId, notaId); return r }
+  await registrarAuditoria('concluir', 'nota fiscal (entrada)', compra.numero ?? notaId, dec.aceitos.length ? `avisos aceitos: ${dec.aceitos.map((a) => `item ${a.linha} ${a.tipo}`).join(', ')}` : null)
   await atualizarSituacao(ctx.lojaId, notaId)
-  return { ok: true, lancados: Number(r.lancados) || 0, pendentes: Number(r.pendentes) || 0, status: r.status }
+  return { ok: true, lancados: r.lancados, pendentes: r.pendentes, status: r.status }
 }
 
 /** Desfaz a entrada no estoque (estorno movimento a movimento; o histórico fica). */
@@ -86,6 +96,10 @@ export async function excluirNotaProprio(notaId: number): Promise<{ ok: true } |
   if (compra && compra.status !== 'cancelada') {
     const { error } = await sb.rpc('estornar_compra', { p_compra_id: compra.id, p_user: ctx.userId })
     if (error) return { error: error.message }
+    // desfazer reabre a compra (185); a nota excluída fecha: não entra mais (nem sozinha, nem por "Confirmar entrada")
+    const { error: ec } = await sb.from('compras_proprio').update({ status: 'cancelada', updated_at: new Date().toISOString() }).eq('id', compra.id).eq('loja_id', ctx.lojaId)
+    if (ec) return { error: ec.message }
+    await sb.from('compras_proprio_eventos').insert({ loja_id: ctx.lojaId, compra_id: compra.id, tipo: 'cancelada', detalhe: { motivo: 'nota excluída' }, user_id: ctx.userId })
   }
   const { error: ed } = await sb.from('notas_fiscais').update({ deleted_at: new Date().toISOString() }).eq('id', notaId).eq('loja_id', ctx.lojaId)
   if (ed) return { error: ed.message }
@@ -203,7 +217,24 @@ function itemGravado(r: Record<string, unknown>): ItemCompraGravado {
     seguro_valor: n('seguro_valor'), outras_valor: n('outras_valor'), frete_cte: n('frete_cte'), flags, aliq_cred_pis: n('aliq_cred_pis'), aliq_cred_cofins: n('aliq_cred_cofins'),
     quantidade_recebida: r.quantidade_recebida == null ? null : n('quantidade_recebida'), fator: n('fator') || 1, unidade_compra: (r.unidade_compra as string) ?? null,
     unidade_estoque: (r.unidade_estoque as string) ?? null, codigo_produto: r.codigo_produto == null ? null : Number(r.codigo_produto), movimenta_estoque: r.movimenta_estoque !== false,
+    csosn: ((r.fiscal as Record<string, unknown> | null)?.csosn as string) ?? null, cred_icms_sn: Number((r.fiscal as Record<string, unknown> | null)?.credIcmsSn ?? 0) || 0,
   }
+}
+
+/** Avisos de cada item ainda não lançado que movimenta estoque (mesma conta da tela: avaliarItemCompra). */
+async function avisosDosItens(lojaId: number, compraId: number, notaId: number): Promise<{ linha: number; alertas: AlertaItem[] }[]> {
+  const sb = createServiceClient()
+  const [{ data: itens }, { data: nota }] = await Promise.all([
+    sb.from('compras_proprio_itens').select('*').eq('compra_id', compraId).eq('loja_id', lojaId).order('linha'),
+    sb.from('notas_fiscais').select('full_object').eq('id', notaId).eq('loja_id', lojaId).maybeSingle(),
+  ])
+  const linhas = ((itens ?? []) as Record<string, unknown>[]).filter((r) => !r.lancado && r.movimenta_estoque !== false)
+  const finalidade = ((nota?.full_object as { sefaz?: { finalidade?: string } } | null)?.sefaz?.finalidade) ?? null
+  const cmc = await carregarCmc(lojaId, linhas.map((r) => Number(r.codigo_produto)).filter((c) => Number.isFinite(c) && c > 0))
+  return linhas.map((r) => {
+    const g = itemGravado(r)
+    return { linha: Number(r.linha), alertas: avaliarItemCompra(g, { cmc: g.codigo_produto != null ? cmc.get(g.codigo_produto) ?? null : null, finalidade }).alertas }
+  })
 }
 
 /** Editor do item: local, CFOP de entrada, quantidade recebida, unidade, marcações, alíquotas, movimenta / gera conta a pagar.
@@ -240,17 +271,7 @@ export async function marcarConferidaNF(notaId: number, opts: { aceitarAvisos: b
   const sb = createServiceClient()
   const compra = await compraDaNota(ctx.lojaId, notaId)
   if (!compra) return { error: 'Esta nota ainda não tem itens para conferir (só o resumo chegou da SEFAZ).' }
-  const [{ data: itens }, { data: nota }] = await Promise.all([
-    sb.from('compras_proprio_itens').select('*').eq('compra_id', compra.id).eq('loja_id', ctx.lojaId).order('linha'),
-    sb.from('notas_fiscais').select('full_object').eq('id', notaId).eq('loja_id', ctx.lojaId).maybeSingle(),
-  ])
-  const linhas = ((itens ?? []) as Record<string, unknown>[]).filter((r) => !r.lancado && r.movimenta_estoque !== false)
-  const finalidade = ((nota?.full_object as { sefaz?: { finalidade?: string } } | null)?.sefaz?.finalidade) ?? null
-  const cmc = await carregarCmc(ctx.lojaId, linhas.map((r) => Number(r.codigo_produto)).filter((c) => Number.isFinite(c) && c > 0))
-  const alertas = linhas.map((r) => {
-    const g = itemGravado(r)
-    return { linha: Number(r.linha), alertas: avaliarItemCompra(g, { cmc: g.codigo_produto != null ? cmc.get(g.codigo_produto) ?? null : null, finalidade }).alertas }
-  })
+  const alertas = await avisosDosItens(ctx.lojaId, compra.id, notaId)
   const dec = decidirConferencia(alertas, !!opts.aceitarAvisos)
   if ('error' in dec) return dec
   const { data, error } = await sb.rpc('marcar_compra_conferida', { p_loja: ctx.lojaId, p_compra: compra.id, p_user: ctx.userId, p_detalhe: { avisos_aceitos: dec.aceitos } })

@@ -2,12 +2,13 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { carregarCredencialLoja, type CredencialLoja } from './sefaz-certificado'
 import { consultarDistribuicao, consultarPorChave, enviarCiencia } from './sefaz-rede'
 import { lerEvento, lerResNFe, proximaConsulta, tipoDocumento, type DocDistribuido } from './sefaz-distdfe'
-import { dvChave, lerNfe, validarChave } from './nfe-xml'
+import { lerNfe } from './nfe-xml'
 import { validarNfeImportada, validarXmlBruto } from './nfe-validacao'
 import { assinaturaConfere } from './nfe-assinatura'
 import { cabecalhoDoResumo } from './nf-sefaz-mapa'
 import { gravarNotaCompleta } from './nf-sefaz'
 import { espelharNotaNoFrio } from './nf-frio'
+import { ESPERA_BUSCA_CHAVE_MS, prechecarBuscaPorChave } from './sefaz-busca-chave'
 
 // Puxa as notas de entrada da SEFAZ (NFeDistribuicaoDFe, Ambiente Nacional) para uma loja de estoque próprio, sozinho, como o Omie faz:
 // resumo (resNFe) → ciência da operação → XML completo (procNFe) → nota no formato do Omie → conferência com o cadastro → entrada no estoque.
@@ -23,7 +24,6 @@ const MAX_LOTES_POR_EXECUCAO = 5
 const MAX_CIENCIAS_POR_EXECUCAO = 15
 
 type Ctx = { lojaId: number; cnpj: string; ambiente: 1 | 2; autoLancar: boolean; autoCiencia: boolean; uf?: string | null }
-const ESPERA_BUSCA_CHAVE_MS = 60 * 60 * 1000
 
 async function marcarDoc(lojaId: number, nsu: string, campos: Record<string, unknown>) {
   await createServiceClient().from('sefaz_documentos').update(campos).eq('loja_id', lojaId).eq('nsu', nsu)
@@ -218,22 +218,22 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
 }
 
 /** Nota pela chave digitada (Fase B, A4/R14): só NF-e (a distribuição de NF-e não entrega CT-e), pela consulta consChNFe
- *  (só leitura), no máximo 1 tentativa por chave por hora (sefaz_busca_chave). O bloqueado_ate da loja só barra a consulta
- *  por NSU (igual a hoje); um 656 aqui grava a espera de 1 hora. procNFe → nota completa; só resNFe → o resumo (a ciência
- *  segue a configuração da loja). */
+ *  (só leitura), no máximo 1 tentativa por chave por hora (sefaz_busca_chave). Respeita a espera da SEFAZ da loja
+ *  (sefaz_nsu.bloqueado_ate, 137/656) e recusa loja de teste e loja inativa (prechecarBuscaPorChave, antes de gravar ou
+ *  consultar); um 656 aqui grava a espera de 1 hora. procNFe → nota completa; só resNFe → o resumo (a ciência segue a
+ *  configuração da loja). */
 export async function importarNotaPorChave(lojaId: number, chave: string): Promise<{ ok: true; situacao: 'completa' | 'resumo' | 'nao_encontrada'; notaId: number | null } | { error: string }> {
-  const ch = (chave ?? '').replace(/\D/g, '')
-  if (!validarChave(ch) || dvChave(ch.slice(0, 43)) !== Number(ch[43])) return { error: 'Chave de acesso inválida (confira os 44 dígitos).' }
-  if (ch.slice(20, 22) !== '55') return { error: 'Só NF-e (modelo 55) pode ser buscada pela chave.' }
   const sb = createServiceClient()
-  const { data: loja } = await sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, is_test, certificado_path').eq('id', lojaId).maybeSingle()
-  if (!loja || loja.modo_estoque !== 'proprio') return { error: 'A loja não usa estoque próprio.' }
-  const cnpj = String(loja.cnpj ?? '').replace(/\D/g, '')
-  if (cnpj.length !== 14) return { error: 'A loja precisa de um CNPJ válido para consultar a SEFAZ.' }
-  if (ch.slice(6, 20) === cnpj) return { error: 'Esta nota foi emitida pela própria loja.' }
-  if (!loja.certificado_path) return { error: 'A loja não tem certificado digital cadastrado.' }
-  const { data: tent } = await sb.from('sefaz_busca_chave').select('ultima_em').eq('loja_id', lojaId).eq('chave', ch).maybeSingle()
-  if (tent?.ultima_em && Date.now() - new Date(tent.ultima_em).getTime() < ESPERA_BUSCA_CHAVE_MS) return { error: 'Esta chave já foi consultada há menos de 1 hora.' }
+  const chDig = (chave ?? '').replace(/\D/g, '')
+  const [{ data: loja }, { data: nsu }, { data: tent }] = await Promise.all([
+    sb.from('lojas').select('id, cnpj, uf, modo_estoque, ativo, is_test, certificado_path').eq('id', lojaId).maybeSingle(),
+    sb.from('sefaz_nsu').select('ambiente, auto_lancar, auto_ciencia, bloqueado_ate').eq('loja_id', lojaId).maybeSingle(),
+    sb.from('sefaz_busca_chave').select('ultima_em').eq('loja_id', lojaId).eq('chave', chDig).maybeSingle(),
+  ])
+  const pre = prechecarBuscaPorChave({ chave, loja, nsu, tentativa: tent, agora: Date.now() })
+  if ('error' in pre) return pre
+  const { chave: ch, cnpj } = pre
+  if (!loja) return { error: 'A loja não usa estoque próprio.' }
   const agoraIso = new Date().toISOString()
   // a tentativa é gravada ANTES da consulta: dois cliques não consultam duas vezes
   if (tent) {
@@ -243,7 +243,6 @@ export async function importarNotaPorChave(lojaId: number, chave: string): Promi
     const { error } = await sb.from('sefaz_busca_chave').insert({ loja_id: lojaId, chave: ch, ultima_em: agoraIso })
     if (error) return { error: error.code === '23505' ? 'Esta chave já foi consultada há menos de 1 hora.' : error.message }
   }
-  const { data: nsu } = await sb.from('sefaz_nsu').select('ambiente, auto_lancar, auto_ciencia').eq('loja_id', lojaId).maybeSingle()
   const ctx: Ctx = { lojaId, cnpj, ambiente: nsu?.ambiente === 2 ? 2 : 1, autoLancar: !!nsu?.auto_lancar, autoCiencia: !!nsu?.auto_ciencia, uf: loja.uf }
   let ret
   try {
