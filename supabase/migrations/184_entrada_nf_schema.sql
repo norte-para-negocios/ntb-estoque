@@ -4,7 +4,7 @@
 -- Aplicar ANTES da 185 (que usa estas colunas) e antes de publicar o código da Fase B. Lojas Omie não usam nada disto.
 --   compras_proprio_itens: valores fiscais do item (X1), local/CFOP de entrada/quantidade recebida/unidade por item,
 --     as 8 marcações "é custo de estoque" (todas ou nenhuma), alíquotas de crédito, movimenta estoque / gera conta a pagar.
---   compras_proprio: conferida_em/por (etapa "Conferida").
+--   compras_proprio: conferida_em/por (etapa "Conferida"), estornos (entradas desfeitas; a compra reabre).
 --   compras_proprio_eventos: histórico append-only do processamento (gravado dentro das funções SQL).
 --   sefaz_manifestacoes: manifestação do destinatário (no máximo uma conclusiva em andamento/registrada por nota).
 --   sefaz_busca_chave: nota por chave digitada, 1 tentativa por chave por hora.
@@ -65,7 +65,10 @@ alter table compras_proprio_itens add constraint compras_proprio_itens_flags_tod
 
 alter table compras_proprio
   add column if not exists conferida_em timestamptz,
-  add column if not exists conferida_por text;
+  add column if not exists conferida_por text,
+  -- quantas vezes a entrada foi desfeita (estornar_compra reabre a compra, como o "reverter recebimento" do Omie); cada
+  -- nova entrada usa ref <chave>#<n> no ledger para não cair na idempotência da entrada estornada
+  add column if not exists estornos int not null default 0;
 
 create table if not exists compras_proprio_eventos (
   id bigint generated always as identity primary key,

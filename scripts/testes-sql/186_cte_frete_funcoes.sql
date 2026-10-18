@@ -98,3 +98,66 @@ begin
   exception when sqlstate '22023' then null; end;
   raise notice '186 OK';
 end $$;
+
+-- N — (revisão final, achado 2) frete do CT-e nunca some nem muda em silêncio.
+do $$
+declare v_loja bigint; BAR bigint := 2746972551; v_a bigint; v_b bigint; v_cte bigint; it2 bigint; it_p bigint; v numeric; s text; fo jsonb; msg text;
+begin
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 186 N', '66764497000122', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, BAR, '01 - BAR');
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade) values (v_loja, 1001, 'A', 'A', 'UN'), (v_loja, 1002, 'B', 'B', 'UN');
+  -- (a) CT-e de R$ 50 em 2 itens de R$ 100 (Frete = S): 25 + 25; o item 2 passa a "não movimenta" → o item 1 fica com os 50
+  v_a := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220000091011123456781', jsonb_build_array(
+    jsonb_build_object('linha', 1, 'quantidade', 10, 'valor_unitario', 10, 'valor_total', 100, 'codigo_produto', 1001, 'valor_total_item', 100, 'custo_flags', 'NNNNNNSN'),
+    jsonb_build_object('linha', 2, 'quantidade', 10, 'valor_unitario', 10, 'valor_total', 100, 'codigo_produto', 1002, 'valor_total_item', 100, 'custo_flags', 'NNNNNNSN')), BAR);
+  insert into compras_proprio_cte (loja_id, valor, origem) values (v_loja, 50, 'manual') returning id into v_cte;
+  perform vincular_cte_compra(v_loja, v_cte, jsonb_build_array(jsonb_build_object('compra_id', v_a, 'valor', 50)), 'gerente');
+  select array_agg(frete_cte order by linha)::text into s from compras_proprio_itens where compra_id = v_a;
+  if s <> '{25.0000,25.0000}' then raise exception 'N(a): rateio inicial %', s; end if;
+  select id into it2 from compras_proprio_itens where compra_id = v_a and linha = 2;
+  perform configurar_item_compra(v_loja, it2, '{"movimenta_estoque": false}', 'gerente');
+  select array_agg(frete_cte order by linha)::text into s from compras_proprio_itens where compra_id = v_a;
+  if s <> '{50.0000,0.0000}' then raise exception 'N(a): frete do CT-e depois de "não movimenta" % (esperado {50,0})', s; end if;
+  select nfi.full_object into fo from nota_fiscal_items nfi join compras_proprio c on c.nota_fiscal_id = nfi.nota_fiscal_id where c.id = v_a and nfi.n_sequencia = 1;
+  if (fo->'sefaz'->>'freteCte')::numeric <> 50 then raise exception 'N(a): projeção %', fo->'sefaz'; end if;
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_a), BAR, null);
+  select custo_unitario into v from estoque_movimentos where loja_id = v_loja and codigo_produto = 1001;
+  if v <> 15 then raise exception 'N(a): custo do item 1 % (esperado (100 + 50) ÷ 10 = 15)', v; end if;
+  -- e voltar a movimentar reparte de novo (compra sem item lançado)
+  v_b := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220000091021123456782', jsonb_build_array(
+    jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 100, 'valor_total', 100, 'codigo_produto', 1001, 'valor_total_item', 100, 'custo_flags', 'NNNNNNSN'),
+    jsonb_build_object('linha', 2, 'quantidade', 1, 'valor_unitario', 100, 'valor_total', 100, 'valor_total_item', 100, 'custo_flags', 'NNNNNNSN')), BAR);
+  insert into compras_proprio_cte (loja_id, valor, origem) values (v_loja, 30, 'manual') returning id into v_cte;
+  perform vincular_cte_compra(v_loja, v_cte, jsonb_build_array(jsonb_build_object('compra_id', v_b, 'valor', 30)), 'gerente');
+  -- item 1 entra (o 2 não tem produto: compra parcial); mexer no "movimenta" do item 2 mudaria o frete do item 1 já lançado → recusa
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_b), BAR, null);
+  select id into it_p from compras_proprio_itens where compra_id = v_b and linha = 2;
+  begin
+    perform configurar_item_compra(v_loja, it_p, '{"movimenta_estoque": false}', 'gerente');
+    raise exception 'N(a): mudou o rateio do CT-e com item lançado';
+  exception when sqlstate '22023' then
+    get stacked diagnostics msg = message_text;
+    if msg not like '%desfaça a entrada%' then raise exception 'N(a): mensagem %', msg; end if;
+  end;
+  if (select frete_cte from compras_proprio_itens where compra_id = v_b and linha = 1) <> 15 then raise exception 'N(a): frete do item lançado mudou'; end if;
+
+  -- (b) religar um CT-e tirando dele uma nota que JÁ entrou no estoque: recusa e o frete dela não muda
+  v_a := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220000091031123456783', jsonb_build_array(
+    jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 60, 'valor_total', 60, 'codigo_produto', 1001, 'valor_total_item', 60, 'custo_flags', 'NNNNNNSN')), BAR);
+  v_b := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220000091041123456784', jsonb_build_array(
+    jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 40, 'valor_total', 40, 'codigo_produto', 1002, 'valor_total_item', 40, 'custo_flags', 'NNNNNNSN')), BAR);
+  insert into compras_proprio_cte (loja_id, valor, origem) values (v_loja, 10, 'manual') returning id into v_cte;
+  perform vincular_cte_compra(v_loja, v_cte, jsonb_build_array(jsonb_build_object('compra_id', v_a, 'valor', 6), jsonb_build_object('compra_id', v_b, 'valor', 4)), 'gerente');
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_b), BAR, null);
+  begin
+    perform vincular_cte_compra(v_loja, v_cte, jsonb_build_array(jsonb_build_object('compra_id', v_a, 'valor', 10)), 'gerente');
+    raise exception 'N(b): tirou do CT-e uma nota já lançada';
+  exception when sqlstate '22023' then
+    get stacked diagnostics msg = message_text;
+    if msg not like 'A nota % já entrou no estoque%' then raise exception 'N(b): mensagem %', msg; end if;
+  end;
+  if (select frete_cte from compras_proprio_itens where compra_id = v_b) <> 4 then
+    raise exception 'N(b): frete_cte da nota lançada mudou para %', (select frete_cte from compras_proprio_itens where compra_id = v_b); end if;
+  if not exists (select 1 from compras_proprio_cte_compra where cte_id = v_cte and compra_id = v_b) then raise exception 'N(b): vínculo da nota lançada sumiu'; end if;
+  raise notice '186 N (frete do CT-e) OK';
+end $$;

@@ -191,3 +191,136 @@ begin
   if n <> 2 then raise exception 'memória: % linhas certas', n; end if;
   raise notice '185 OK';
 end $$;
+
+-- K — (revisão final, achado 1) desfazer a entrada REABRE a compra (como o "reverter recebimento" do Omie) e ela pode
+-- entrar de novo, sem dobrar o estoque; nota cancelada na SEFAZ continua sem entrar nunca (180).
+do $$
+declare v_loja bigint; BAR bigint := 2746972551; ch text := '29260999111222000149550220000090011123456781';
+  ch2 text := '29260999111222000149550220000090021123456782'; v_c bigint; v_c2 bigint; r jsonb; v numeric; n int; s text; tipos text[]; it compras_proprio_itens%rowtype;
+begin
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 185 K', '66764497000122', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, BAR, '01 - BAR');
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade) values (v_loja, 2001, 'GIN', 'GIN', 'UN');
+  v_c := pg_temp.compra_sefaz(v_loja, ch, jsonb_build_array(jsonb_build_object('linha', 1, 'c_prod', 'G1', 'quantidade', 10, 'valor_unitario', 5,
+    'valor_total', 50, 'codigo_produto', 2001, 'valor_total_item', 50, 'custo_flags', 'NNNNNNNN', 'origem_flags', 'regra', 'unidade_estoque', 'UN')), BAR);
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c), BAR, 'gerente');
+  if r->>'status' <> 'lancada' then raise exception 'K: 1ª entrada %', r; end if;
+  -- desfazer: estoque volta, a compra reabre (pendente), conferência zera, situação volta para "a conferir"
+  r := estornar_compra(v_c, 'gerente');
+  if (r->>'estornados')::int <> 1 then raise exception 'K: estorno %', r; end if;
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 0 then raise exception 'K: saldo depois de desfazer %', v; end if;
+  if (select status from compras_proprio where id = v_c) <> 'pendente' then raise exception 'K: desfazer não reabriu: %', (select status from compras_proprio where id = v_c); end if;
+  s := sincronizar_situacao_nota(v_loja, (select nota_fiscal_id from compras_proprio where id = v_c));
+  if s <> 'a_conferir' then raise exception 'K: situação depois de desfazer %', s; end if;
+  -- desfazer de novo não faz nada (nem evento)
+  r := estornar_compra(v_c, 'gerente');
+  if (r->>'estornados')::int <> 0 or (r->>'duplicado')::boolean is not true then raise exception 'K: 2º estorno %', r; end if;
+  -- reaberta = editável e entra de novo pelo mesmo caminho do "Confirmar entrada"
+  select * into it from compras_proprio_itens where compra_id = v_c and linha = 1;
+  perform configurar_item_compra(v_loja, it.id, '{"quantidade_recebida": 8}', 'gerente');
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c, 'itens', '[]'::jsonb), BAR, 'gerente');
+  if r->>'status' <> 'lancada' or (r->>'lancados')::int <> 1 then raise exception 'K: 2ª entrada %', r; end if;
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 8 then raise exception 'K: saldo depois de entrar de novo % (esperado 8)', v; end if;
+  -- duplo clique / fila do desktop: não dobra
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c, 'itens', '[]'::jsonb), BAR, 'gerente');
+  if (r->>'lancados')::int <> 0 or (r->>'duplicado')::boolean is not true then raise exception 'K: relançar duplicou %', r; end if;
+  -- terceiro ciclo
+  perform estornar_compra(v_c, 'gerente');
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c, 'itens', '[]'::jsonb), BAR, 'gerente');
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 8 then raise exception 'K: saldo no 3º ciclo %', v; end if;
+  select count(*) into n from estoque_movimentos where loja_id = v_loja and origem = 'COMPRA' and codigo_produto = 2001;
+  if n <> 3 then raise exception 'K: % entradas (esperado 3: uma por ciclo)', n; end if;
+  select array_agg(tipo order by id) into tipos from compras_proprio_eventos where compra_id = v_c;
+  if tipos <> array['criada', 'lancada', 'estornada', 'item_configurado', 'lancada', 'estornada', 'lancada'] then raise exception 'K: eventos %', tipos; end if;
+  -- Fase A: nota cancelada na SEFAZ depois de entrar de novo → estorna e fica cancelada para sempre
+  r := sefaz_marcar_cancelada(v_loja, ch);
+  if (select status from compras_proprio where id = v_c) <> 'cancelada' then raise exception 'K: cancelada na SEFAZ virou %', (select status from compras_proprio where id = v_c); end if;
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 0 then raise exception 'K: saldo depois do cancelamento %', v; end if;
+  begin
+    r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c, 'itens', '[]'::jsonb), BAR, 'gerente');
+    if r->>'status' <> 'cancelada' then raise exception 'K: nota cancelada entrou %', r; end if;
+  exception when sqlstate '22023' then null; end;
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 0 then raise exception 'K: saldo depois de tentar lançar a cancelada %', v; end if;
+  -- desfeita (reaberta) e depois cancelada na SEFAZ, sem entrar de novo: cancelada
+  v_c2 := pg_temp.compra_sefaz(v_loja, ch2, jsonb_build_array(jsonb_build_object('linha', 1, 'quantidade', 1, 'valor_unitario', 5, 'valor_total', 5,
+    'codigo_produto', 2001, 'valor_total_item', 5, 'custo_flags', 'NNNNNNNN')), BAR);
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c2), BAR, null);
+  perform estornar_compra(v_c2, null);
+  perform sefaz_marcar_cancelada(v_loja, ch2);
+  if (select status from compras_proprio where id = v_c2) <> 'cancelada' then raise exception 'K: reaberta e cancelada virou %', (select status from compras_proprio where id = v_c2); end if;
+  begin
+    r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c2, 'itens', '[]'::jsonb), BAR, null);
+    if r->>'status' <> 'cancelada' then raise exception 'K: reaberta e cancelada entrou %', r; end if;
+  exception when sqlstate '22023' then null; end;
+  select coalesce(sum(saldo), 0) into v from estoque_saldos where loja_id = v_loja and codigo_produto = 2001;
+  if v <> 0 then raise exception 'K: saldo final %', v; end if;
+  raise notice '185 K (desfazer reabre) OK';
+end $$;
+
+-- L — (revisão final, achado 4) religar o item a OUTRO produto troca a unidade de estoque para a do produto novo e
+-- zera a quantidade recebida (TEQUILA PRATA: produto em UN → produto em ML, 1 UND8 = 750 ML).
+do $$
+declare v_loja bigint; BAR bigint := 2746972551; v_c bigint; it compras_proprio_itens%rowtype; fo jsonb;
+begin
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 185 L', '66764497000122', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, BAR, '01 - BAR');
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade) values
+    (v_loja, 3001, 'TEQ-UN', 'TEQUILA PRATA (garrafa)', 'UN'), (v_loja, 3002, 'TEQ-ML', 'TEQUILA PRATA (dose)', 'ML');
+  v_c := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220001892151123456789', jsonb_build_array(jsonb_build_object('linha', 5, 'c_prod', 'TQP',
+    'descricao', 'TEQUILA PRATA', 'unidade_compra', 'UND8', 'quantidade', 1, 'valor_unitario', 139.9, 'valor_total', 139.9, 'codigo_produto', 3001,
+    'unidade_estoque', 'UN', 'valor_total_item', 139.9, 'custo_flags', 'NNNNNNNN', 'origem_flags', 'regra')), BAR);
+  select * into it from compras_proprio_itens where compra_id = v_c and linha = 5;
+  perform configurar_item_compra(v_loja, it.id, '{"quantidade_recebida": 1}', 'gerente');
+  perform vincular_item_compra(v_loja, it.id, 3002, 750, 'gerente');
+  select * into it from compras_proprio_itens where id = it.id;
+  if it.unidade_estoque is distinct from 'ML' then raise exception 'L: unidade ficou % (esperado ML, do produto novo)', it.unidade_estoque; end if;
+  if it.quantidade_recebida is not null then raise exception 'L: quantidade recebida ficou % (esperado nula = 1 × 750)', it.quantidade_recebida; end if;
+  select nfi.full_object into fo from nota_fiscal_items nfi join compras_proprio c on c.nota_fiscal_id = nfi.nota_fiscal_id where c.id = v_c and nfi.n_sequencia = 5;
+  if fo->'itensAjustes'->>'cUnidade' <> 'ML' or (fo->'itensAjustes'->>'nQtdeRecebida')::numeric <> 750 then raise exception 'L: projeção %', fo->'itensAjustes'; end if;
+  -- mesmo produto, outro fator: a unidade fica
+  perform configurar_item_compra(v_loja, it.id, '{"unidade_estoque": "L"}', 'gerente');
+  perform vincular_item_compra(v_loja, it.id, 3002, 700, 'gerente');
+  if (select unidade_estoque from compras_proprio_itens where id = it.id) <> 'L' then raise exception 'L: mesmo produto trocou a unidade'; end if;
+  raise notice '185 L (religar troca a unidade) OK';
+end $$;
+
+-- M — (revisão final, achado 3) CSOSN 101 sem ICMS próprio: o crédito do Simples sai do custo como ICMS (HIPÓTESE).
+-- Mesmo caso do teste TS 'HIPÓTESE CSOSN 101' (nf-item-regras.test.ts): 158,92 ÷ 120 = 1,324333.
+do $$
+declare v_loja bigint; BAR bigint := 2746972551; v_c bigint; r jsonb; v numeric;
+begin
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 185 M', '66764497000122', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, BAR, '01 - BAR');
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade) values (v_loja, 1001, 'AGUA', 'AGUA', 'UN');
+  v_c := pg_temp.compra_sefaz(v_loja, '29260999111222000149550220001310991123456780', jsonb_build_array(jsonb_build_object('linha', 1, 'c_prod', '0023552',
+    'quantidade', 10, 'valor_unitario', 16.299516, 'valor_total', 163, 'fator', 12, 'codigo_produto', 1001, 'valor_total_item', 176.41, 'outras_valor', 13.41,
+    'icms_valor', 0, 'custo_flags', 'NNNNNNNN', 'origem_flags', 'padrao', 'fiscal', '{"csosn":"101","credIcmsSn":4.08,"aliqCredSn":2.5}'::jsonb)), BAR);
+  r := lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c), BAR, null);
+  select custo_unitario into v from estoque_movimentos where loja_id = v_loja and codigo_produto = 1001;
+  if v <> 1.324333 then raise exception 'M: custo CSOSN 101 % (esperado 1,324333, igual à prévia)', v; end if;
+  raise notice '185 M (CSOSN 101) OK';
+end $$;
+
+-- K2 — (revisão final, achado 1) a nova entrada da compra reaberta (ref <chave>#2) leva o lote e a validade do item
+do $$
+declare v_loja bigint; BAR bigint := 2746972551; ch text := '29260999111222000149550220000090031123456783'; v_c bigint; n int;
+begin
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 185 K2', '66764497000122', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, BAR, '01 - BAR');
+  insert into produtos (loja_id, codigo_produto, codigo, descricao, unidade) values (v_loja, 2002, 'QUEIJO', 'QUEIJO', 'KG');
+  v_c := pg_temp.compra_sefaz(v_loja, ch, jsonb_build_array(jsonb_build_object('linha', 1, 'quantidade', 2, 'valor_unitario', 30, 'valor_total', 60,
+    'codigo_produto', 2002, 'valor_total_item', 60, 'custo_flags', 'NNNNNNNN')), BAR);
+  update compras_proprio_itens set lote = 'L-K2', validade = '2027-01-31' where compra_id = v_c;
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c), BAR, null);
+  perform estornar_compra(v_c, null);
+  perform lancar_compra(jsonb_build_object('loja_id', v_loja, 'id', v_c), BAR, null);
+  -- o saldo da 2ª entrada fica no mesmo lote (não num lote sem nome/validade padrão)
+  select count(*) into n from estoque_lotes where loja_id = v_loja and codigo_produto = 2002 and saldo > 0 and lote = 'L-K2' and validade = '2027-01-31';
+  if n <> 1 or exists (select 1 from estoque_lotes where loja_id = v_loja and codigo_produto = 2002 and saldo > 0 and lote is distinct from 'L-K2') then raise exception 'K2: lote da 2ª entrada (% linhas; lotes: %)', n, (select json_agg(row_to_json(l)) from estoque_lotes l where loja_id = v_loja); end if;
+  raise notice '185 K2 (lote na nova entrada) OK';
+end $$;

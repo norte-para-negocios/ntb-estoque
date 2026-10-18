@@ -9,9 +9,11 @@
 --     "não movimenta estoque" conta como resolvido (R7), manifestação negativa registrada = não entra (R12), eventos.
 --     Item sem valor_total_item (compra antiga, compra manual) segue a fórmula da 181 sem mudança.
 --   registrar_compra_sefaz, vincular_item_compra, estornar_compra, sincronizar_situacao_nota: + campos novos, eventos,
---     projeção, situações 'conferida' e 'recusada'.
+--     projeção, situações 'conferida' e 'recusada'. estornar_compra REABRE a compra (pendente, estornos + 1) em vez de
+--     cancelá-la; 'cancelada' = nota cancelada na SEFAZ (ou excluída). A nova entrada usa ref <chave>#<n>.
+--   _lote_da_entrada (145): acha o item da compra também pela ref <chave>#<n> (lote/validade na nova entrada).
 -- Novas: item_compra_full_object, projetar_itens_compra_na_nota, memoria_itens_compra, configurar_item_compra,
---   marcar_compra_conferida (só service_role).
+--   marcar_compra_conferida, _recalcular_frete_cte (frete do CT-e por item; a 186 usa) (só service_role).
 -- Tudo numa transação. Sem a 185 o código novo não consegue configurar/conferir item; o código antigo funciona com ela.
 
 begin;
@@ -244,7 +246,33 @@ begin
   end loop;
 
   perform projetar_itens_compra_na_nota(v_comp.id); -- 185
-  return jsonb_build_object('ok', true, 'compra_id', v_comp.id, 'criada', v_criada, 'status', v_comp.status, 'itens', v_n);
+  -- 185: reaberta = entrada desfeita; o lançamento automático/do upload não a lança de novo sozinho (só "Confirmar entrada")
+  return jsonb_build_object('ok', true, 'compra_id', v_comp.id, 'criada', v_criada, 'status', v_comp.status, 'itens', v_n,
+                            'reaberta', coalesce(v_comp.estornos, 0) > 0);
+end $function$;
+
+-- ---------------------------------------------------------------- frete do CT-e por item (nova; usada também pela 186)
+-- frete_cte de cada item = soma dos CT-e ligados à compra, repartida pelo valor líquido dos itens que movimentam estoque
+-- (centavo no maior). Tabela compras_proprio_cte_compra vem da 184.
+create or replace function public._recalcular_frete_cte(p_compra bigint)
+ returns void
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare v_total numeric; v_base numeric; v_soma numeric := 0; v_maior bigint; it record;
+begin
+  select coalesce(sum(valor), 0) into v_total from compras_proprio_cte_compra where compra_id = p_compra;
+  update compras_proprio_itens set frete_cte = 0 where compra_id = p_compra;
+  if v_total <= 0 then return; end if;
+  select coalesce(sum(greatest(valor_total - desconto, 0)), 0) into v_base from compras_proprio_itens where compra_id = p_compra and movimenta_estoque;
+  if v_base <= 0 then return; end if;
+  for it in select id, greatest(valor_total - desconto, 0) as base from compras_proprio_itens where compra_id = p_compra and movimenta_estoque order by linha loop
+    update compras_proprio_itens set frete_cte = round(v_total * it.base / v_base, 2) where id = it.id;
+    v_soma := v_soma + round(v_total * it.base / v_base, 2);
+  end loop;
+  select id into v_maior from compras_proprio_itens where compra_id = p_compra and movimenta_estoque order by (valor_total - desconto) desc, linha limit 1;
+  if round(v_total - v_soma, 2) <> 0 then update compras_proprio_itens set frete_cte = frete_cte + round(v_total - v_soma, 2) where id = v_maior; end if;
 end $function$;
 
 -- ---------------------------------------------------------------- configurar / conferir (novas)
@@ -255,7 +283,7 @@ create or replace function public.configurar_item_compra(p_loja bigint, p_item b
  set search_path to 'public'
 as $function$
 declare i compras_proprio_itens%rowtype; c compras_proprio%rowtype; v_de jsonb := '{}'::jsonb; v_para jsonb := '{}'::jsonb;
-  v_local bigint; v_cfop text; v_qtd numeric; v_fl text; v_aliq numeric; v_txt_atual text; k text;
+  v_local bigint; v_cfop text; v_qtd numeric; v_fl text; v_aliq numeric; v_txt_atual text; k text; v_mov_mudou boolean := false;
 begin
   select * into i from compras_proprio_itens where id = p_item and loja_id = p_loja for update;
   if not found then raise exception 'Item não encontrado' using errcode = '22023'; end if;
@@ -310,7 +338,13 @@ begin
   end loop;
   if p_cfg ? 'movimenta_estoque' then
     v_de := v_de || jsonb_build_object('movimenta_estoque', i.movimenta_estoque); v_para := v_para || jsonb_build_object('movimenta_estoque', (p_cfg->>'movimenta_estoque')::boolean);
+    v_mov_mudou := i.movimenta_estoque is distinct from coalesce((p_cfg->>'movimenta_estoque')::boolean, true);
     i.movimenta_estoque := coalesce((p_cfg->>'movimenta_estoque')::boolean, true);
+    -- o rateio do CT-e é pelos itens que movimentam: mudar isso com item já lançado mudaria o frete de quem já entrou
+    if v_mov_mudou and exists (select 1 from compras_proprio_cte_compra where compra_id = c.id)
+       and exists (select 1 from compras_proprio_itens where compra_id = c.id and lancado) then
+      raise exception 'A nota tem CT-e e itens que já entraram no estoque: desfaça a entrada para mudar o "movimenta estoque".' using errcode = '22023';
+    end if;
   end if;
   if p_cfg ? 'gera_conta_pagar' then
     v_de := v_de || jsonb_build_object('gera_conta_pagar', i.gera_conta_pagar); v_para := v_para || jsonb_build_object('gera_conta_pagar', (p_cfg->>'gera_conta_pagar')::boolean);
@@ -327,6 +361,8 @@ begin
   update compras_proprio set conferida_em = null, conferida_por = null, updated_at = now() where id = c.id;
   insert into compras_proprio_eventos (loja_id, compra_id, tipo, linha, detalhe, user_id)
   values (p_loja, c.id, 'item_configurado', i.linha, jsonb_build_object('de', v_de, 'para', v_para), p_user);
+  -- frete do CT-e repartido de novo entre os itens que movimentam (antes de projetar)
+  if v_mov_mudou then perform _recalcular_frete_cte(c.id); end if;
   perform projetar_itens_compra_na_nota(c.id);
   return jsonb_build_object('ok', true, 'compra_id', c.id, 'nota_id', c.nota_fiscal_id);
 end $function$;
@@ -373,8 +409,13 @@ begin
   if not exists (select 1 from produtos where loja_id = p_loja and codigo_produto = p_produto) then raise exception 'Produto % não existe nesta loja', p_produto using errcode = '22023'; end if;
   if p_fator is null or p_fator <= 0 then raise exception 'Fator de conversão inválido' using errcode = '22023'; end if;
   select * into c from compras_proprio where id = i.compra_id;
+  -- 185: produto NOVO = unidade de estoque do produto novo e quantidade recebida de volta ao padrão (nota × fator); o
+  -- mesmo produto (só outro fator) mantém o que a pessoa configurou
   update compras_proprio_itens set codigo_produto = p_produto, fator = p_fator, match_origem = 'manual', match_score = 1,
-         unidade_estoque = coalesce(unidade_estoque, (select p.unidade from produtos p where p.loja_id = p_loja and p.codigo_produto = p_produto limit 1)) -- 185
+         unidade_estoque = case when i.codigo_produto is distinct from p_produto
+                                then (select p.unidade from produtos p where p.loja_id = p_loja and p.codigo_produto = p_produto limit 1)
+                                else coalesce(unidade_estoque, (select p.unidade from produtos p where p.loja_id = p_loja and p.codigo_produto = p_produto limit 1)) end,
+         quantidade_recebida = case when i.codigo_produto is distinct from p_produto then null else quantidade_recebida end
    where id = i.id;
   if c.fornecedor_cnpj is not null and i.c_prod is not null then
     insert into fornecedor_produto_depara (loja_id, fornecedor_cnpj, c_prod, codigo_produto, fator, unidade_compra)
@@ -502,7 +543,9 @@ begin
 
   -- rateio estável: base = valor líquido de TODOS os itens (não depende da ordem de mapeamento)
   select coalesce(sum(valor_total - desconto), 0), count(*) into v_total_liq, v_n from compras_proprio_itens where compra_id = v_comp.id;
-  v_ref := coalesce(v_comp.chave_acesso, 'compra:' || v_comp.id);
+  v_ref := coalesce(v_comp.chave_acesso, 'compra:' || v_comp.id)
+    -- 185: compra reaberta (entrada desfeita) entra com ref nova; a idempotência por item continua (lancado + ref/linha)
+    || case when v_comp.estornos > 0 then '#' || (v_comp.estornos + 1) else '' end;
 
   for it in select * from compras_proprio_itens where compra_id = v_comp.id order by linha loop
     if it.lancado then v_ja := v_ja + 1; continue; end if;
@@ -564,7 +607,9 @@ begin
 
   if v_lanc > 0 then -- 185
     insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
-    values (v_loja, v_comp.id, 'lancada', jsonb_build_object('lancados', v_lanc, 'ignorados', v_ign, 'pendentes', v_pend), p_user);
+    values (v_loja, v_comp.id, 'lancada', jsonb_strip_nulls(jsonb_build_object('lancados', v_lanc, 'ignorados', v_ign, 'pendentes', v_pend,
+            -- avisos de custo/fator aceitos no "Confirmar entrada" (nota sem conferência depois da última mudança)
+            'avisos_aceitos', case when jsonb_typeof(p_compra->'avisos_aceitos') = 'array' then p_compra->'avisos_aceitos' end)), p_user);
   end if;
   perform projetar_itens_compra_na_nota(v_comp.id); -- 185
 
@@ -573,27 +618,93 @@ begin
 end $function$;
 
 -- ---------------------------------------------------------------- estornar_compra (produção + 185)
+-- 185: desfazer a entrada REABRE a compra (status 'pendente', estornos + 1, conferência zerada), como o "reverter
+-- recebimento" do Omie: dá para mexer nos itens / ligar o CT-e e confirmar de novo (a nova entrada usa ref <chave>#<n>).
+-- 'cancelada' fica só para a nota cancelada na SEFAZ (chave em sefaz_chaves_canceladas ou nota com cCancelada; a 180
+-- grava a chave ANTES de chamar esta função) e para a nota excluída (excluirNotaProprio): essas nunca entram de novo.
 create or replace function public.estornar_compra(p_compra_id bigint, p_user text DEFAULT NULL::text)
  returns jsonb
  language plpgsql
  security definer
  set search_path to 'public'
 as $function$
-declare c compras_proprio%rowtype; i record; n int := 0;
+declare c compras_proprio%rowtype; i record; n int := 0; v_cancelada boolean;
 begin
   select * into c from compras_proprio where id = p_compra_id for update;
   if not found then raise exception 'Compra inexistente' using errcode = '22023'; end if;
   if c.status = 'cancelada' then return jsonb_build_object('ok', true, 'estornados', 0, 'duplicado', true); end if;
+  v_cancelada := c.chave_acesso is not null and (exists (select 1 from sefaz_chaves_canceladas where loja_id = c.loja_id and chave = c.chave_acesso)
+      or exists (select 1 from notas_fiscais where loja_id = c.loja_id and c_chave_nfe = c.chave_acesso and deleted_at is null
+                 and coalesce(full_object->'infoCadastro'->>'cCancelada', 'N') = 'S'));
   for i in select * from compras_proprio_itens where compra_id = c.id and lancado and movimento_id is not null order by linha loop
     perform estornar_movimento(i.movimento_id, p_user, 'Estorno da compra ' || coalesce(c.numero, c.id::text));
     update compras_proprio_itens set lancado = false where id = i.id;
     n := n + 1;
   end loop;
-  update compras_proprio set status = 'cancelada', updated_at = now() where id = c.id;
-  insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id) -- 185
-  values (c.loja_id, c.id, 'estornada', jsonb_build_object('estornados', n), p_user);
+  -- já reaberta (nada lançado) e sem cancelamento: nada a desfazer
+  if n = 0 and c.status = 'pendente' and not v_cancelada then return jsonb_build_object('ok', true, 'estornados', 0, 'duplicado', true); end if;
+  if v_cancelada then
+    update compras_proprio set status = 'cancelada', updated_at = now() where id = c.id;
+  else
+    update compras_proprio set status = 'pendente', estornos = estornos + 1, lancada_em = null, conferida_em = null, conferida_por = null,
+           updated_at = now() where id = c.id;
+  end if;
+  insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
+  values (c.loja_id, c.id, 'estornada', jsonb_build_object('estornados', n, 'reaberta', not v_cancelada), p_user);
   perform projetar_itens_compra_na_nota(c.id);
-  return jsonb_build_object('ok', true, 'estornados', n, 'duplicado', false);
+  return jsonb_build_object('ok', true, 'estornados', n, 'duplicado', false, 'reaberta', not v_cancelada);
+end $function$;
+
+-- ---------------------------------------------------------------- _lote_da_entrada (produção, 145 + 185)
+-- lote/validade do item da compra também na nova entrada da compra reaberta (ref <chave>#<n>); o resto igual à produção.
+create or replace function public._lote_da_entrada(m estoque_movimentos, OUT o_lote text, OUT o_validade date)
+ RETURNS record
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_dias int; v_op ordens_producao%rowtype; v_guc_l text; v_guc_v text; v_map jsonb;
+begin
+  o_lote := null; o_validade := null;
+  -- 1) contexto explícito da transação (entrada manual com lote, testes)
+  begin v_guc_l := nullif(current_setting('estoque.lote', true), ''); exception when others then v_guc_l := null; end;
+  begin v_guc_v := nullif(current_setting('estoque.validade', true), ''); exception when others then v_guc_v := null; end;
+  if v_guc_l is not null or v_guc_v is not null then
+    o_lote := v_guc_l; o_validade := v_guc_v::date; return;
+  end if;
+  -- 2) compra: item da compra pela (ref = chave ou 'compra:id', linha)
+  if m.origem = 'COMPRA' then
+    select i.lote, i.validade into o_lote, o_validade
+      from compras_proprio_itens i join compras_proprio c on c.id = i.compra_id
+     where c.loja_id = m.loja_id and i.linha = m.linha
+       -- 185: a compra reaberta entra de novo com ref <chave>#<n> (estornar_compra reabre)
+       and coalesce(c.chave_acesso, 'compra:' || c.id) = regexp_replace(m.ref, '#[0-9]+$', '')
+     limit 1;
+    -- compra lançada e criada na mesma chamada (lancar_compra_com_lotes): mapa linha -> {lote, validade} da transação
+    if o_lote is null and o_validade is null then
+      begin
+        v_map := nullif(current_setting('estoque.lotes_compra', true), '')::jsonb;
+      exception when others then v_map := null; end;
+      if v_map is not null and v_map ? m.linha::text then
+        o_lote := nullif(btrim(v_map -> m.linha::text ->> 'lote'), '');
+        o_validade := nullif(v_map -> m.linha::text ->> 'validade', '')::date;
+      end if;
+    end if;
+  -- 3) produção da OP: ref = 'OP:<id>:<n>' → validade e número da OP
+  elsif m.origem = 'PRODUCAO' and m.ref like 'OP:%' then
+    select * into v_op from ordens_producao where id = nullif(split_part(m.ref, ':', 2), '')::bigint and loja_id = m.loja_id;
+    if found then
+      o_lote := coalesce(v_op.identificacao_c_num_op, v_op.num_ordem::text);
+      o_validade := v_op.validade;
+    end if;
+  elsif m.origem = 'PRODUCAO' then
+    o_lote := m.ref;
+  end if;
+  -- 4) sem validade informada: prazo padrão do produto (entrada de compra e produção)
+  if o_validade is null and m.origem in ('COMPRA', 'PRODUCAO', 'ENTRADA_MANUAL', 'MANUAL') then
+    select validade_dias into v_dias from produtos where loja_id = m.loja_id and codigo_produto = m.codigo_produto;
+    if v_dias is not null then o_validade := m.data_ref + v_dias; end if;
+  end if;
 end $function$;
 
 -- ---------------------------------------------------------------- sincronizar_situacao_nota (produção + 185)
@@ -643,11 +754,13 @@ begin
 end $function$;
 
 -- ---------------------------------------------------------------- permissões das funções novas
+revoke all on function public._recalcular_frete_cte(bigint) from public, anon, authenticated;
 revoke all on function public.item_compra_full_object(compras_proprio_itens, bigint) from public, anon, authenticated;
 revoke all on function public.projetar_itens_compra_na_nota(bigint) from public, anon, authenticated;
 revoke all on function public.memoria_itens_compra(bigint, text, bigint[], text[]) from public, anon, authenticated;
 revoke all on function public.configurar_item_compra(bigint, bigint, jsonb, text) from public, anon, authenticated;
 revoke all on function public.marcar_compra_conferida(bigint, bigint, text, jsonb) from public, anon, authenticated;
+grant execute on function public._recalcular_frete_cte(bigint) to service_role;
 grant execute on function public.item_compra_full_object(compras_proprio_itens, bigint) to service_role;
 grant execute on function public.projetar_itens_compra_na_nota(bigint) to service_role;
 grant execute on function public.memoria_itens_compra(bigint, text, bigint[], text[]) to service_role;

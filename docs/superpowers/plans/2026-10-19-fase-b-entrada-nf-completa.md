@@ -993,7 +993,7 @@ Expected: números guardados no relatório da task.
 
 - [ ] **Step 2: [OK] P-MIG 184, depois 185**
 
-Expected: `\df` 1 overload em `custo_estoque_item_omie`, `lancar_compra`, `registrar_compra_sefaz`, `vincular_item_compra`, `estornar_compra`, `sincronizar_situacao_nota`, `configurar_item_compra`, `marcar_compra_conferida`, `memoria_itens_compra`, `item_compra_full_object`, `projetar_itens_compra_na_nota`. Logo depois da 185, a consulta do Step 1 de novo: **checksum e totais de Compras iguais nas lojas 2–7** (se não, restaurar as funções de `/root/backups-ntb-estoque/pre-185-*.sql` e parar). O código antigo segue no ar e funciona (R2/R3).
+Expected: `\df` 1 overload em `custo_estoque_item_omie`, `lancar_compra`, `registrar_compra_sefaz`, `vincular_item_compra`, `estornar_compra`, `sincronizar_situacao_nota`, `configurar_item_compra`, `marcar_compra_conferida`, `memoria_itens_compra`, `item_compra_full_object`, `projetar_itens_compra_na_nota`, `_recalcular_frete_cte` e `_lote_da_entrada` (revisão final: a 185 recria a função da 145 — salvar o `pg_get_functiondef` dela em `pre-185-_lote_da_entrada.sql` no backup). Logo depois da 185, a consulta do Step 1 de novo: **checksum e totais de Compras iguais nas lojas 2–7** (se não, restaurar as funções de `/root/backups-ntb-estoque/pre-185-*.sql` e parar). O código antigo segue no ar e funciona (R2/R3).
 
 - [ ] **Step 3: [OK] Merge, deploy, desktop**
 
