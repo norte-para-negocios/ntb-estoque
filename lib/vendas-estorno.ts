@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
-import { excluirOrdemProducao, reverterOrdemProducao } from '@/lib/omie/ordem-producao'
+import { excluirOrdemProducao, reverterOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
+import { opsParaEstornar, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 
 export type ResultadoEstornoVenda = {
   ajustesExcluidos: number
@@ -9,6 +10,15 @@ export type ResultadoEstornoVenda = {
   filaCancelada: number
   falhas: number
   detalhes: string[]
+}
+
+/** Vínculo venda→OP desfeito (pelo código, ou pelo nº da OP quando o alvo veio do log). */
+async function marcarEstornada(supabase: SupabaseClient, lojaId: number, codInt: string | null, nCodOP: number | null) {
+  let q = supabase.from('venda_op_vinculo').update({ estado: 'estornada', atualizado_em: new Date().toISOString() }).eq('loja_id', lojaId)
+  if (codInt) q = q.eq('cod_int_op', codInt)
+  else if (nCodOP) q = q.eq('n_cod_op', nCodOP)
+  else return
+  await q
 }
 
 const REF = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -35,7 +45,13 @@ export async function estornarVenda(supabase: SupabaseClient, loja: LojaOmie, pe
     .select('id')
   r.filaCancelada = fila?.length ?? 0
 
-  // 2) ordens de produção geradas por esta venda
+  // 2) ordens de produção geradas por esta venda: pelo vínculo venda→OP (migration 178, não é podado) + pelo log de
+  // integração (vendas de antes da 178; o sucesso é apagado depois de 2 dias pelo prune).
+  const { data: vinculos } = await supabase
+    .from('venda_op_vinculo')
+    .select('cod_int_op, n_cod_op, estado')
+    .eq('loja_id', loja.id)
+    .eq('pedido_ref', pedidoRef.toLowerCase())
   const { data: logsOp } = await supabase
     .from('integration_attempts')
     .select('response')
@@ -44,19 +60,31 @@ export async function estornarVenda(supabase: SupabaseClient, loja: LojaOmie, pe
     .eq('error', false)
     .like('request', marca)
     .like('response', 'nCodOP=%')
-  const codigosOp = [...new Set((logsOp ?? []).map((l) => Number(String(l.response).replace('nCodOP=', ''))).filter((n) => Number.isFinite(n) && n > 0))]
-  for (const nCodOP of codigosOp) {
+  const codigosLog = [...new Set((logsOp ?? []).map((l) => Number(String(l.response).replace('nCodOP=', ''))).filter((n) => Number.isFinite(n) && n > 0))]
+  const alvos = opsParaEstornar((vinculos ?? []) as VinculoOP[], codigosLog)
+  for (const alvo of alvos) {
+    let nCodOP: number | null = 'nCodOP' in alvo ? alvo.nCodOP : null
+    const codInt = 'codInt' in alvo ? alvo.codInt : null
+    if (codInt) {
+      // Vínculo sem nº da OP (a criação caiu no meio): procura no Omie pelo código antes de desistir.
+      const achada = await consultarOPPorCodInt(loja, codInt).catch(() => null)
+      if (!achada) { await marcarEstornada(supabase, loja.id, codInt, null); continue }
+      nCodOP = achada.nCodOP
+    }
+    if (!nCodOP) continue
     try {
       // Concluída (é como nasce): reverte a conclusão antes de excluir. Se já estava
       // aberta, o Omie recusa a reversão — segue pra exclusão.
       await reverterOrdemProducao(loja, nCodOP).catch(() => {})
       await excluirOrdemProducao(loja, nCodOP)
       await supabase.from('ordens_producao').delete().eq('loja_id', loja.id).eq('identificacao_n_cod_op', nCodOP)
+      await marcarEstornada(supabase, loja.id, codInt, nCodOP)
       r.opsExcluidas++
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (/n.o encontrad|n.o existe|inexistente|n.o localizad/i.test(msg)) {
         await supabase.from('ordens_producao').delete().eq('loja_id', loja.id).eq('identificacao_n_cod_op', nCodOP)
+        await marcarEstornada(supabase, loja.id, codInt, nCodOP)
         continue
       }
       r.falhas++

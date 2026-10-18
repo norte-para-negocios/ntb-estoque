@@ -15,7 +15,7 @@
 import { comEsperaDeCmc, repetirSeCalculoPendente } from '@/lib/vendas/saida-com-espera'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consultarOPPorCodInt } from '@/lib/omie/ordem-producao'
-import { codIntOPVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
+import { codIntOPVenda, chaveSaidaVenda, decidirOPVenda, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
 import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
@@ -167,10 +167,11 @@ async function darSaida(
   local: number,
   obs: string,
   origem: 'PDV' | 'AJU',
-  marca: string | null = null
+  marca: string | null = null,
+  vendaChave: string | null = null
 ): Promise<{ ok: boolean; status: string; erro?: string }> {
   const data = dataCriacaoBahia(hojeBahiaISO())!
-  const { data: mov, error } = await supabase
+  const gravar = (comChave: boolean) => supabase
     .from('movimentos')
     .insert({
       loja_id: loja.id,
@@ -184,10 +185,26 @@ async function darSaida(
       obs,
       // Obs "Cupom N" (venda com nota): a marca da venda fica aqui para o estorno achar a saída.
       ...(marca ? { obs_item: marca } : {}),
+      // Chave da saída desta venda (migration 178): o mesmo pedido reenviado não grava outra saída.
+      ...(vendaChave && comChave ? { venda_chave: vendaChave } : {}),
       status: 'Processando',
     })
     .select('id, tentativas')
     .single<{ id: number; tentativas: number | null }>()
+  let { data: mov, error } = await gravar(true)
+  // Banco ainda sem a coluna venda_chave (código publicado antes da migration 178): grava como antes, sem a chave.
+  if (error && vendaChave && /venda_chave/.test(error.message)) ({ data: mov, error } = await gravar(false))
+  if (error?.code === '23505' && vendaChave) {
+    // Já existe a saída desta venda: devolve o estado dela sem enviar de novo (o cron retry-ajustes-movimentos cuida
+    // da que não concluiu).
+    const { data: jaTem } = await supabase
+      .from('movimentos')
+      .select('status')
+      .eq('loja_id', loja.id)
+      .eq('venda_chave', vendaChave)
+      .maybeSingle<{ status: string }>()
+    return { ok: jaTem?.status === 'Concluido', status: jaTem?.status ?? 'Concluido' }
+  }
   if (error || !mov) return { ok: false, status: 'Erro', erro: error?.message ?? 'Falha ao gravar movimento' }
   // Logo após a OP o Omie ainda calcula o custo do que foi produzido ("Sem CMC" por alguns segundos): espera e tenta
   // de novo aqui mesmo em vez de deixar pro cron de 1 h. "Sem CMC" não lança nada no Omie, então repetir é seguro.
@@ -330,7 +347,8 @@ export async function processarItemVenda(
   let baixa = 'sem local de estoque'
   if (local) {
     const o = obsDaBaixa(ctx.obs, item.comNota, item.cupom ?? ctx.cupom)
-    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, o.obs, origemDaVenda(item.comNota), o.marca)
+    const chave = ctx.pedidoRef ? chaveSaidaVenda(ctx.pedidoRef, produto.codigo_produto, ctx.ocorrencia ?? 0) : null
+    const s = await darSaida(supabase, loja, produto.codigo_produto, item.quantidade, local, o.obs, origemDaVenda(item.comNota), o.marca, chave)
     baixa = s.status
   }
 

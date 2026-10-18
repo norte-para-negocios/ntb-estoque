@@ -46,3 +46,21 @@ export function decidirOPVenda(v: VinculoOP | null): 'incluir' | 'consultar' | '
   if (v.estado === 'criada' && v.n_cod_op) return 'concluir'
   return 'consultar'
 }
+
+export type AlvoEstorno = { nCodOP: number } | { codInt: string }
+
+/**
+ * OPs a desfazer no estorno de uma venda: as do vínculo (as estornadas ficam de fora; sem nº ainda → procurar pelo
+ * código) + as achadas no log de integração antigo (vendas de antes da migration 178), sem repetir o mesmo nº.
+ */
+export function opsParaEstornar(vinculos: VinculoOP[], legado: number[]): AlvoEstorno[] {
+  const out: AlvoEstorno[] = []
+  const vistos = new Set<number>()
+  for (const v of vinculos) {
+    if (v.estado === 'estornada') { if (v.n_cod_op) vistos.add(v.n_cod_op); continue }
+    if (v.n_cod_op) { if (!vistos.has(v.n_cod_op)) { vistos.add(v.n_cod_op); out.push({ nCodOP: v.n_cod_op }) } }
+    else out.push({ codInt: v.cod_int_op })
+  }
+  for (const n of legado) if (!vistos.has(n)) { vistos.add(n); out.push({ nCodOP: n }) }
+  return out
+}

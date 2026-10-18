@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda } from './venda-idempotente.ts'
+import { codIntOPVenda, chaveSaidaVenda, ocorrenciasPorCodigo, decidirOPVenda, opsParaEstornar, type VinculoOP } from './venda-idempotente.ts'
 
 const REF = '3f6c2a9e-1b7d-4c55-9a0e-2d8f4b6c1e07'
 
@@ -29,4 +29,9 @@ test('decidirOPVenda', () => {
   assert.equal(decidirOPVenda({ cod_int_op: 'x', n_cod_op: 123, estado: 'criada' }), 'concluir')
   assert.equal(decidirOPVenda({ cod_int_op: 'x', n_cod_op: 123, estado: 'concluida' }), 'pronta')
   assert.equal(decidirOPVenda({ cod_int_op: 'x', n_cod_op: 123, estado: 'estornada' }), 'pronta')
+})
+
+test('opsParaEstornar junta vínculo e log antigo sem repetir', () => {
+  const v: VinculoOP[] = [{ cod_int_op: 'NTBV-a', n_cod_op: 111, estado: 'concluida' }, { cod_int_op: 'NTBV-b', n_cod_op: null, estado: 'incluindo' }, { cod_int_op: 'NTBV-c', n_cod_op: 333, estado: 'estornada' }]
+  assert.deepEqual(opsParaEstornar(v, [111, 222]), [{ nCodOP: 111 }, { codInt: 'NTBV-b' }, { nCodOP: 222 }])
 })
