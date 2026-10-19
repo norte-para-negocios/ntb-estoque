@@ -417,7 +417,8 @@ export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoj
           definitivo = classificarErroOmie(erro) !== 'transitorio'
         }
       }
-      const tentativas = linha.tentativas + 1
+      // Recusa do disjuntor não chegou no Omie: não gasta tentativa da fila.
+      const tentativas = linha.tentativas + (!ok && ehRecusaDoDisjuntor(erro) ? 0 : 1)
       if (ok) r.sucesso++
       else r.falhas++
       await supabase

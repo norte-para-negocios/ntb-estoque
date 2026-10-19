@@ -105,3 +105,19 @@ test('recusa do disjuntor local é reconhecida (não chegou no Omie)', () => {
   assert.equal(ehRecusaDoDisjuntor('[OP 5 criada, conclusão falhou] API do Omie bloqueada para esta loja por consumo indevido (libera em ~3 min).'), true)
   assert.equal(ehRecusaDoDisjuntor('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.'), false)
 })
+
+test('disjuntor escala para a chave inteira quando um 2º método é bloqueado com outro ainda ativo', () => {
+  registrarBloqueio('kE', 1800, 9_000_000, 'ConcluirOrdemProducao')
+  assert.equal(msRestantesBloqueio('kE', 9_000_000, 'ListarProdutos'), 0)
+  registrarBloqueio('kE', 600, 9_000_000, 'IncluirAjusteEstoque')
+  assert.equal(msRestantesBloqueio('kE', 9_000_000, 'ListarProdutos'), 600_000)
+  assert.equal(msRestantesBloqueio('kE', 9_000_000, 'ConcluirOrdemProducao'), 1_800_000)
+})
+
+test('erro que se repete além do teto sai da repetição; bloqueio não conta para o teto', () => {
+  assert.equal(statusFalhaConclusaoOP('ERROR: Ordem de produção não cadastrada', 29), 'Erro')
+  assert.equal(statusFalhaConclusaoOP('ERROR: Ordem de produção não cadastrada', 30), 'Precisa corrigir no Omie')
+  assert.equal(statusFalhaConclusaoOP('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.', 99), 'Erro')
+  assert.equal(statusFalhaConclusaoOP('Omie não respondeu em 30s (ConcluirOrdemProducao). Tente novamente.', 99), 'Erro')
+  assert.equal(statusFalhaConclusaoOP('ERROR: O seguinte produto da estrutura possui o CMC unitário zerado', 99), 'Sem CMC')
+})

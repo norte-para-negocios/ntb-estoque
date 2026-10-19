@@ -1,4 +1,4 @@
-// Classificacao das faultstrings do Omie + disjuntor por app_key (2026-09-24).
+// Classificacao das faultstrings do Omie + disjuntor por app_key e método (2026-09-24; por método desde 2026-10-19).
 // Modulo puro (sem imports @/) pra rodar direto em `node --test`.
 
 export function segundosBloqueio(msg: string): number | null {
@@ -27,8 +27,12 @@ const chaveBloqueio = (appKey: string, metodo?: string) => `${appKey}\u0000${met
 
 export function registrarBloqueio(appKey: string, segundos: number, agoraMs: number = Date.now(), metodo?: string): void {
   const ate = agoraMs + segundos * 1000
-  const k = chaveBloqueio(appKey, metodo)
-  if ((bloqueadoAte.get(k) ?? 0) < ate) bloqueadoAte.set(k, ate)
+  // Outro método da mesma chave já bloqueado: pode ser bloqueio da chave inteira (já visto: uma leitura limpa
+  // reestendeu um MISUSE). Na dúvida, trava a chave toda pelo prazo deste bloqueio, em vez de cada método gastar uma chamada.
+  const outroAtivo = metodo !== undefined && msRestantesBloqueio(appKey, agoraMs) > 0 && msRestantesBloqueio(appKey, agoraMs, metodo) === 0
+  for (const k of outroAtivo ? [chaveBloqueio(appKey, metodo), chaveBloqueio(appKey)] : [chaveBloqueio(appKey, metodo)]) {
+    if ((bloqueadoAte.get(k) ?? 0) < ate) bloqueadoAte.set(k, ate)
+  }
 }
 
 /** Com método: só aquele método (ou um bloqueio sem método da chave). Sem método: algum método da chave bloqueado. */
@@ -53,9 +57,14 @@ export function ehRecusaDoDisjuntor(msg: string): boolean {
  * produto sem ficha) sai da repetição automática: repetir só junta erros no mesmo método e o Omie
  * bloqueia a chave (Sertão: 16 OPs do Baião/Feijão tropeiro, até 2.021 tentativas cada).
  */
-export function statusFalhaConclusaoOP(msg: string): 'Precisa corrigir no Omie' | 'Sem CMC' | 'Erro' {
+export const TETO_TENTATIVAS_ERRO_OP = 30
+
+export function statusFalhaConclusaoOP(msg: string, tentativas = 0): 'Precisa corrigir no Omie' | 'Sem CMC' | 'Erro' {
   if (/encontra-se inativo|n.o possui nenhum item na sua estrutura/i.test(msg)) return 'Precisa corrigir no Omie'
   if (/\bcmc\b|custo m.dio/i.test(msg)) return 'Sem CMC'
+  // Bloqueio/rede/tempo esgotado passam sozinhos e não contam para o teto; outro erro repetido 30 vezes (~5 h) sai da
+  // repetição (ex.: OP excluída no Omie), senão 10 desses voltam a bloquear o ConcluirOrdemProducao a cada ciclo.
+  if (tentativas >= TETO_TENTATIVAS_ERRO_OP && classificarErroOmie(msg) !== 'transitorio' && !ehRecusaDoDisjuntor(msg)) return 'Precisa corrigir no Omie'
   return 'Erro'
 }
 

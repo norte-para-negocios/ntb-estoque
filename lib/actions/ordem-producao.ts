@@ -19,7 +19,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { hojeBahiaISO } from '@/lib/data-bahia'
-import { ehRecusaDoDisjuntor, statusFalhaConclusaoOP } from '@/lib/omie/erros-omie'
+import { bloqueioDaResposta, ehRecusaDoDisjuntor, statusFalhaConclusaoOP } from '@/lib/omie/erros-omie'
 import {
   ehLojaProprio, criarOPProprio, criarOPsProprio, alterarOPProprio, concluirOPProprio, reverterOPProprio, excluirOPProprio,
 } from '@/lib/estoque/op-proprio'
@@ -602,14 +602,20 @@ async function executarConclusaoOP(
     // tentativa (até 19/10/2026 a mensagem do disjuntor sobrescrevia o motivo de verdade, ex.: insumo inativo).
     if (ehRecusaDoDisjuntor(msg)) {
       const agora = new Date().toISOString()
-      const { data: jaNaFila } = await supabase
+      const { data: jaNaFila, error: erroFila } = await supabase
         .from('ordens_producao')
-        .update({ conclusao_ultima_tentativa_em: agora, updated_at: agora })
+        .update({
+          // Guarda o pedido de agora (conclusão parcial/data escolhida), senão o cron concluiria a quantidade planejada.
+          conclusao_qtde_desejada: qtdeProduzida ?? null,
+          conclusao_data_desejada: dataEscolhidaISO ?? null,
+          conclusao_ultima_tentativa_em: agora,
+          updated_at: agora,
+        })
         .eq('id', op.id)
         .eq('loja_id', op.loja_id)
         .not('conclusao_status', 'is', null)
         .select('id')
-      if (jaNaFila?.length) {
+      if (erroFila || jaNaFila?.length) {
         revalidatePath('/ordem-producao')
         return
       }
@@ -619,11 +625,11 @@ async function executarConclusaoOP(
       .from('ordens_producao')
       .update({
         // 'Precisa corrigir no Omie' (insumo inativo, sem ficha) fica fora do retryOPsPendentes.
-        conclusao_status: statusFalhaConclusaoOP(msg),
+        conclusao_status: statusFalhaConclusaoOP(msg, (op.conclusao_tentativas ?? 0) + 1),
         conclusao_erro_msg: msg,
         conclusao_qtde_desejada: qtdeProduzida ?? null,
         conclusao_data_desejada: dataEscolhidaISO ?? null,
-        conclusao_tentativas: (op.conclusao_tentativas ?? 0) + (ehRecusaDoDisjuntor(msg) ? 0 : 1),
+        conclusao_tentativas: (op.conclusao_tentativas ?? 0) + (ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, undefined) != null ? 0 : 1),
         conclusao_ultima_tentativa_em: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
