@@ -76,3 +76,10 @@ test('filtros: documento (nota, OP, pedido) aparado', () => {
   assert.equal(lerFiltrosKardex({ doc: ' 123 ' }, HOJE).doc, '123')
   assert.equal(lerFiltrosKardex({}, HOJE).doc, '')
 })
+
+test('paraCsv: texto que vira fórmula no Excel sai neutralizado; número negativo continua número (Fase H)', () => {
+  const csv = paraCsv(['Produto', 'Qtd'], [['=HYPERLINK("http://x")', -2], ['@SOMA(A1)', 3]])
+  const linhas = csv.replace('﻿', '').split('\r\n')
+  assert.equal(linhas[1], `"'=HYPERLINK(""http://x"")";-2`)
+  assert.equal(linhas[2], "'@SOMA(A1);3")
+})

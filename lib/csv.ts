@@ -3,16 +3,13 @@
  * Usa separador ';' e prefixa BOM para que o Excel reconheça UTF-8.
  */
 
+import { celulaCsv } from '@/lib/seguranca/regras'
+
 const BOM = '﻿'
 
+// Escapa aspas, ';' e quebra de linha e neutraliza fórmula (=, +, -, @) -- Fase H.
 function escapaCampo(valor: unknown): string {
-  if (valor === null || valor === undefined) return ''
-  const s = String(valor)
-  // Escapa se contiver aspas, separador ';' ou quebra de linha.
-  if (/[";\r\n]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`
-  }
-  return s
+  return celulaCsv(valor)
 }
 
 /**

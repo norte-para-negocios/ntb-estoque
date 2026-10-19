@@ -41,3 +41,10 @@ test('CSV: ponto e vírgula, aspas escapadas e números em pt-BR', () => {
   assert.equal(linhaCsv(['x', 1, null]), 'x;1;')
   assert.equal(numeroCsv(1234.5), '1234,5')
 })
+
+test('campoCsv/linhaCsv: neutraliza fórmula e mantém número negativo (Fase H)', () => {
+  assert.equal(campoCsv('=1+1'), "'=1+1")
+  assert.equal(campoCsv('+55 71 9999'), "'+55 71 9999")
+  assert.equal(campoCsv('-3,5'), '-3,5')
+  assert.equal(linhaCsv(['@x', -1]), "'@x;-1")
+})

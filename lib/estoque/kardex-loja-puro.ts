@@ -1,5 +1,7 @@
 // Kardex da loja inteira (/estoque/kardex, "nosso Omie" Fase 2): filtros da URL, página e CSV. Puro, sem imports:
 // node --test lib/estoque/kardex-loja-puro.test.ts.
+// @ts-expect-error: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { celulaCsv } from '../seguranca/regras.ts'
 
 export type FiltrosKardexLoja = {
   ini: string; fim: string; produto: number | null; q: string; local: number | null; origem: string; autor: string; doc: string
@@ -51,7 +53,7 @@ export function paginaKardex(page: number, porPagina: number): { from: number; t
 function celula(v: string | number | null): string {
   if (v == null) return ''
   if (typeof v === 'number') return Number.isFinite(v) ? String(v).replace('.', ',') : ''
-  return /[";\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  return celulaCsv(v) // Fase H: neutraliza fórmula (=, +, -, @) além de escapar
 }
 
 /** CSV para o Excel em português: BOM (acentos), separador ';', CRLF, número com vírgula decimal. */

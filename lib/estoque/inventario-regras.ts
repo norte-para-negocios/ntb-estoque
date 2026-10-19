@@ -1,4 +1,6 @@
 // Regras puras do inventário/reposição do estoque próprio (sem banco, testáveis).
+// @ts-expect-error: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
+import { celulaCsv } from '../seguranca/regras.ts'
 
 export type ClasseAbc = 'A' | 'B' | 'C'
 
@@ -46,10 +48,9 @@ export const ROTULO_CLASSE: Record<ClasseAbc, string> = {
   C: 'Curva C — giro baixo (conte a cada 3 meses)',
 }
 
-/** Escapa um campo de CSV (ponto e vírgula, padrão do Excel brasileiro). */
+/** Escapa um campo de CSV (ponto e vírgula, padrão do Excel brasileiro) e neutraliza fórmula (Fase H). */
 export function campoCsv(v: string | number | null | undefined): string {
-  const s = v == null ? '' : String(v)
-  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  return celulaCsv(v)
 }
 
 export function linhaCsv(campos: (string | number | null | undefined)[]): string {

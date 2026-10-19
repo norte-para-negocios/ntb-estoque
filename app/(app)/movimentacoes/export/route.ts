@@ -2,14 +2,13 @@ import { NextResponse } from 'next/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
+import { celulaCsv } from '@/lib/seguranca/regras'
 import { buscarKardex, periodoKardex, ROTULO_ORIGEM, ROTULO_TIPO, type ParamsKardex } from '@/lib/estoque/kardex'
 
 const MAX_LINHAS = 20000
 
-function campoCsv(v: string | number | null | undefined): string {
-  const s = v == null ? '' : String(v)
-  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
+// Fase H: escapa e neutraliza fórmula (=, +, -, @) -- descrição vem da nota do fornecedor.
+const campoCsv = (v: string | number | null | undefined): string => celulaCsv(v)
 
 // Exporta exatamente o que está filtrado na tela de Movimentações (loja de estoque próprio).
 export async function GET(request: Request) {

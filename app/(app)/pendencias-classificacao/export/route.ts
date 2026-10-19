@@ -1,3 +1,4 @@
+import { celulaCsv } from '@/lib/seguranca/regras'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao } from '@/lib/auth'
 import { limiteJanelaQuente } from '@/lib/historico-contabo'
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   }
 
   const csv = (linhas: string[][]): Response => {
-    const esc = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+    const esc = (v: string) => celulaCsv(v) // Fase H: escapa e neutraliza fórmula (=, +, -, @)
     const avisoLinhas: string[][] = errosConsulta.length
       ? [[`AVISO: falha ao consultar ${[...new Set(errosConsulta)].join(', ')} -- valores abaixo podem estar incompletos`]]
       : []

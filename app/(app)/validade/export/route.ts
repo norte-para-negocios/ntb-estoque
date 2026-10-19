@@ -2,13 +2,12 @@
 import { NextResponse } from 'next/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { celulaCsv } from '@/lib/seguranca/regras'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { carregarValidadeProprio, type ParamsValidade } from '../dados-proprio'
 
-const csv = (v: unknown) => {
-  const s = v == null ? '' : String(v)
-  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
+// Fase H: escapa e neutraliza fórmula (=, +, -, @).
+const csv = (v: unknown) => celulaCsv(v)
 const num = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 6, useGrouping: false })
 
 export async function GET(request: Request) {
