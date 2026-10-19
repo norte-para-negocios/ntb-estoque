@@ -4,7 +4,7 @@
 
 **Goal:** (1) o gerente fecha um mês e, a partir daí, nenhuma escrita do Norte Estoque com data dentro dele é aceita (trava no banco e no servidor, reabertura só com permissão nova e registrada); (2) tela "Contador" que baixa num ZIP os XMLs das notas de entrada do mês, o livro de entradas (Excel e PDF) e o inventário tipo Bloco H numa data; (3) devolução ao fornecedor [H1] registrada no estoque próprio (itens/quantidades de uma nota de entrada, saída pelo ledger com estorno parcial do custo, situação "devolução a emitir"), sem emitir NF-e.
 
-**Architecture:** O fechamento mora em duas tabelas novas (`estoque_periodo_fechado` = estado, `estoque_periodo_eventos` = histórico append-only) e numa função `_exigir_periodo_aberto` que os gatilhos das tabelas do estoque próprio (ledger, itens da compra, OP própria, inventários, pedido de compra) e da correção de custo chamam; o servidor confere o mesmo estado antes de mandar qualquer escrita datada ao Omie (`lib/estoque/fechamento.ts`, regras puras em `fechamento-puro.ts`). O pacote do contador lê só o que já está no banco (notas + itens no formato do Omie nos dois modos, `sefaz_documentos` para os XMLs, posição de estoque da Fase D) e monta o ZIP com um escritor próprio (`node:zlib`, sem dependência nova). A devolução é um documento novo com saída no ledger por uma função própria que tira as unidades ao custo da entrada original e recalcula o custo médio sem elas.
+**Architecture:** O fechamento mora em duas tabelas novas (`estoque_periodo_fechado` = estado, `estoque_periodo_eventos` = histórico append-only) e numa função `_exigir_periodo_aberto` que os gatilhos das tabelas do estoque próprio (ledger, itens da compra, OP própria, inventários, pedido de compra) e da correção de custo chamam; o servidor confere o mesmo estado antes de mandar qualquer escrita datada ao Omie (`lib/estoque/periodo-fechado.ts`, regras puras em `periodo-fechado-puro.ts`). O pacote do contador lê só o que já está no banco (notas + itens no formato do Omie nos dois modos, `sefaz_documentos` para os XMLs, posição de estoque da Fase D) e monta o ZIP com um escritor próprio (`node:zlib`, sem dependência nova). A devolução é um documento novo com saída no ledger por uma função própria que tira as unidades ao custo da entrada original e recalcula o custo médio sem elas.
 
 **Tech Stack:** Next.js 16.2.9 (rotas `route.ts`, server actions), TypeScript, Supabase self-hosted (Postgres 17 + PostgREST), `node --test` (Node 26), `exceljs` (já usado em `lib/excel`), `@react-pdf/renderer` (já usado no PDF do pedido), `node:zlib` (`deflateRawSync`, `crc32`).
 
@@ -50,7 +50,7 @@
 | Arquivo | Responsabilidade | Task |
 |---|---|---|
 | `supabase/migrations/230_fechamento_periodo.sql`, `scripts/testes-sql/230_fechamento_periodo.sql`, `scripts/testes-sql/230_preparar_banco.sh` | Tabelas, funções, gatilhos e pendências do fechamento | 1 |
-| `lib/estoque/fechamento-puro.ts` (+ teste), `lib/estoque/fechamento.ts`, `lib/actions/fechamento.ts` | Regras puras, leitura do estado, ações fechar/reabrir | 2 |
+| `lib/estoque/periodo-fechado-puro.ts` (+ teste), `lib/estoque/periodo-fechado.ts`, `lib/actions/periodo-fechado.ts` | Regras puras, leitura do estado, ações fechar/reabrir | 2 |
 | `lib/actions/estoque-omie.ts`, `movimentacoes.ts`, `inventario.ts`, `ordem-producao.ts`, `nota-fiscal-proprio.ts`, `compras-proprio.ts`, `pedido-compra.ts`, `components/estoque-proprio/CorrigirCusto.tsx`, `app/(app)/estoque/ajustes/page.tsx` | Trava no servidor e aviso unificado | 3 |
 | `supabase/migrations/231_devolucao_fornecedor.sql` + teste SQL; `lib/compras/devolucao-puro.ts` (+ teste); `lib/actions/devolucao-fornecedor.ts`; `components/nota-fiscal/DevolucaoFornecedorNF.tsx`; `app/(app)/devolucao-fornecedor/page.tsx` | Devolução ao fornecedor | 4 |
 | `supabase/migrations/232_contador.sql` + teste SQL; `lib/contador/{zip,livro-entradas-puro}.ts` (+ testes); `lib/contador/{livro-entradas-loader,bloco-h-loader,pacote}.ts`; `lib/contador/LivroPdf.tsx`; `app/(app)/contador/{page.tsx,pacote/route.ts,livro/route.ts,bloco-h/route.ts}`; `components/contador/*`; `components/shell/NavItems.ts`; `lib/permissoes-catalogo.ts` | Pacote do contador + tela | 5 |
@@ -69,20 +69,20 @@
 ### Task 2: Regras puras e ações de fechamento
 
 **Interfaces — Produces:**
-- `fechamento-puro.ts`: `type MesFechado = { mes: string /*YYYY-MM*/; fechadoEm: string | null; fechadoPorNome: string | null }`; `mesDaData(d: string | null | undefined): string | null` (aceita `YYYY-MM-DD[T…]` e `DD/MM/YYYY`); `bloqueioPorPeriodo(datas: (string|null|undefined)[], fechados: MesFechado[], oQue: string): string | null`; `situacaoDaData(dataISO, hojeISO, fechados: string[], fechadoAteEnv?: string|null): 'fechado'|'antigo'|'aberto'`; `validarFechamento(mes: string, hojeISO: string): string | null`; `validarReabertura(motivo: string): string | null`; `mesesDaTela(hojeISO: string, n = 12): string[]`; `rotuloMes('2026-09') = 'setembro de 2026'`; `ehErroPeriodoFechado(e: {code?, message?}): boolean`.
-- `fechamento.ts` (servidor): `mesesFechados(lojaId): Promise<MesFechado[]>`, `exigirPeriodoAberto(lojaId, datas, oQue): Promise<string | null>`, `situacaoPeriodoLoja(lojaId, dataISO): Promise<'fechado'|'antigo'|'aberto'>`.
-- `lib/actions/fechamento.ts`: `fecharMes(mes: string, obs?: string): Promise<{ ok: true; duplicado: boolean } | { error: string; pendencias?: Pendencia[] }>`, `reabrirMes(mes: string, motivo: string): Promise<{ ok: true } | { error: string }>`.
+- `periodo-fechado-puro.ts`: `type MesFechado = { mes: string /*YYYY-MM*/; fechadoEm: string | null; fechadoPorNome: string | null }`; `mesDaData(d: string | null | undefined): string | null` (aceita `YYYY-MM-DD[T…]` e `DD/MM/YYYY`); `bloqueioPorPeriodo(datas: (string|null|undefined)[], fechados: MesFechado[], oQue: string): string | null`; `situacaoDaData(dataISO, hojeISO, fechados: string[], fechadoAteEnv?: string|null): 'fechado'|'antigo'|'aberto'`; `validarFechamento(mes: string, hojeISO: string): string | null`; `validarReabertura(motivo: string): string | null`; `mesesDaTela(hojeISO: string, n = 12): string[]`; `rotuloMes('2026-09') = 'setembro de 2026'`; `ehErroPeriodoFechado(e: {code?, message?}): boolean`.
+- `periodo-fechado.ts` (servidor): `mesesFechados(lojaId): Promise<MesFechado[]>`, `exigirPeriodoAberto(lojaId, datas, oQue): Promise<string | null>`, `situacaoPeriodoLoja(lojaId, dataISO): Promise<'fechado'|'antigo'|'aberto'>`.
+- `lib/actions/periodo-fechado.ts`: `fecharMes(mes: string, obs?: string): Promise<{ ok: true; duplicado: boolean } | { error: string; pendencias?: Pendencia[] }>`, `reabrirMes(mes: string, motivo: string): Promise<{ ok: true } | { error: string }>`.
 
-- [ ] Teste `lib/estoque/fechamento-puro.test.ts`: `bloqueioPorPeriodo(['2026-09-15'], [{mes:'2026-09',…}], 'Ajuste')` cita "setembro de 2026" e quem fechou; `situacaoDaData('2026-09-15','2026-10-19',['2026-09'])='fechado'`, `('2026-08-31','2026-10-19',[])='antigo'`, `('2026-09-01','2026-10-19',[])='aberto'`, env `'2026-09'` → `antigo`; `validarFechamento('2026-10','2026-10-19')` recusa, `('2026-09',…)` null, `('lixo')` recusa; `validarReabertura('curto')` recusa; `mesDaData('05/10/2026')='2026-10'`.
+- [ ] Teste `lib/estoque/periodo-fechado-puro.test.ts`: `bloqueioPorPeriodo(['2026-09-15'], [{mes:'2026-09',…}], 'Ajuste')` cita "setembro de 2026" e quem fechou; `situacaoDaData('2026-09-15','2026-10-19',['2026-09'])='fechado'`, `('2026-08-31','2026-10-19',[])='antigo'`, `('2026-09-01','2026-10-19',[])='aberto'`, env `'2026-09'` → `antigo`; `validarFechamento('2026-10','2026-10-19')` recusa, `('2026-09',…)` null, `('lixo')` recusa; `validarReabertura('curto')` recusa; `mesDaData('05/10/2026')='2026-10'`.
 - [ ] Rodar: falha. Implementar. Rodar: passa.
-- [ ] `fechamento.ts`, ações, permissões no catálogo (módulo "Fechamento e contador"), `node scripts/inserir-via-desktop.mjs`; `npx tsc --noEmit -p .`.
+- [ ] `periodo-fechado.ts`, ações, permissões no catálogo (módulo "Fechamento e contador"), `node scripts/inserir-via-desktop.mjs`; `npx tsc --noEmit -p .`.
 - [ ] Commit `feat(fechamento): regras e ações de fechar/reabrir mês`.
 
 ### Task 3: Trava no servidor nas escritas datadas
 
 - [ ] Chamar `exigirPeriodoAberto` (R5) nas actions listadas; erro de banco `PF001` vira a mensagem do banco (já é português).
 - [ ] `corrigirCustoAjuste`/`relancarCorrecaoCusto`: `fechado` recusa sem 2ª confirmação; `antigo` segue pedindo; `CorrigirCusto.tsx` e `estoque/ajustes/page.tsx` recebem `mesesFechados` e usam `situacaoDaData`.
-- [ ] `npx tsc --noEmit -p .`; testes puros existentes (`escrita-omie-puro`, `fechamento-puro`) passam.
+- [ ] `npx tsc --noEmit -p .`; testes puros existentes (`escrita-omie-puro`, `periodo-fechado-puro`) passam.
 - [ ] Commit `feat(fechamento): trava no servidor antes das escritas com data`.
 
 ### Task 4: Devolução ao fornecedor (migration 231)

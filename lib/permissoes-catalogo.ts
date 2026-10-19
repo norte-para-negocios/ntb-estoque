@@ -106,6 +106,18 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Compras - Aprovar pedidos', label: 'Aprovar pedidos e requisições de compra, cadastrar compradores' },
       // Fase C2 (migration 240): requisição de compra (só estoque próprio).
       { nome: 'Compras - Requisicoes', label: 'Criar e editar requisições de compra' },
+      // Fase F (migration 231): devolução ao fornecedor no estoque próprio (sem emitir NF-e).
+      { nome: 'Compras - Devolucao ao fornecedor', label: 'Registrar e cancelar devolução ao fornecedor' },
+    ],
+  },
+  {
+    modulo: 'Fechamento e contador',
+    grupo: 'Operação',
+    // Fase F (migrations 230/232): fechar o mês trava toda escrita com data nele; reabrir é registrado com motivo.
+    permissoes: [
+      { nome: 'Fechamento - Fechar mes', label: 'Fechar o mês' },
+      { nome: 'Fechamento - Reabrir mes', label: 'Reabrir um mês fechado' },
+      { nome: 'Contador - Pacote', label: 'Baixar o pacote do contador (XMLs, livro de entradas, Bloco H)' },
     ],
   },
   {
