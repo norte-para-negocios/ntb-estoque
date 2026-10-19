@@ -111,11 +111,11 @@
 
 **Files:**
 - Create: `supabase/migrations/188_movimentacao_valor_movimento.sql`, `scripts/testes-sql/188_movimentacao_valor_movimento.sql`
-- Modify: `app/(app)/relatorio-movimentacao/page.tsx` (só o modo "Em quantidade": opção `?valor=movimento`)
+- Modify: `app/(app)/relatorio-movimentacao/page.tsx` e `export/route.ts` (modo "Por operação (R$)": opção `?valor=movimento`; na execução viu-se que o modo "Em quantidade" não mostra R$, então a opção foi para onde o R$ aparece)
 - Modify: `lib/relatorios/cmv-puro.ts` (reaproveita `escolherFonteCmv` como `fonteValorMovimento`)
 
 **Interfaces:**
-- SQL `relatorio_movimentacao_valor_mov(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_sentido text, p_cod_prods bigint[] default null, p_produto text default null) returns table(rotulo text, mes text, qtde numeric, valor numeric)` — mesma forma e rótulos da `relatorio_movimentacao_matriz` (170). Loja `proprio`: `estoque_movimentos` (data_ref, valor = |q| × custo_unitario); senão `kardex_omie` não cancelado (valor = |q| × valor_unit). Entradas = q > 0, saídas = q < 0. Ordem `1, 2`.
+- SQL `relatorio_movimentacao_valor_mov(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_sentido text, p_cod_prods bigint[] default null, p_produto text default null) returns table(origem, sentido, codigo_local_estoque, n_cod_prod, mes, inventario, qtde, valor, sem_custo)` — linhas no formato do modo automático (`LinhaOperAuto`). Loja `proprio`: `estoque_movimentos` (data_ref, valor = |q| × custo_unitario); senão `kardex_omie` não cancelado (valor = |q| × valor_unit). Entradas = q > 0, saídas = q < 0. Ordem `1, 2`.
 - Padrão da tela não muda (último preço de compra). `valor=movimento` só usa a RPC nova quando a fonte cobre o período (proprio sempre; Omie só com kardex cobrindo [ini, fim]); senão aviso e padrão. Decisão de trocar o padrão fica com o dono.
 
 - [ ] Teste SQL: rótulos por tipo/família/produto, sentido, filtro de produto, loja própria × Omie.
