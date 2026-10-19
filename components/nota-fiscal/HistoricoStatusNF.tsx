@@ -95,8 +95,32 @@ export async function HistoricoStatusNF({
   // `MovimentacoesGeradasNF.tsx`), buscando TODOS os webhooks de
   // `RecebimentoProduto.*` da loja antes de filtrar por `nIdReceb` -- só
   // então corta pra `LIMITE` (100) na exibição.
-  const webhooksTodos = nIdReceb
-    ? await buscarTodasLinhas<{ id: number; message: unknown; created_at: string }>(
+  //
+  // Fase I (19/10/2026): o caminho acima lia TODOS os RecebimentoProduto% da loja (seq scan em webhooks
+  // inteira, ~0,8 s em produção por nota, 1.524 mensagens para filtrar em JS). Com a migration 191 o banco
+  // guarda o nIdReceb na coluna `n_id_receb` (gatilho na entrada) com índice, e a busca vai direto aos
+  // eventos da nota. Sem a 191 aplicada (coluna inexistente, 42703) cai no caminho antigo abaixo.
+  type LinhaWebhook = { id: number; message: unknown; created_at: string }
+  let webhooksDiretos: LinhaWebhook[] | null = null
+  if (nIdReceb) {
+    const { data, error } = await supabase
+      .from('webhooks')
+      .select('id, message, created_at')
+      .eq('loja_id', lojaId)
+      .eq('n_id_receb', nIdReceb)
+      .ilike('message->>topic', 'RecebimentoProduto%')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(LIMITE)
+    if (!error) webhooksDiretos = (data ?? []) as LinhaWebhook[]
+    else if (error.code !== '42703' && !/n_id_receb/.test(error.message)) {
+      console.error('HistoricoStatusNF: falha ao ler webhooks da nota', error.message)
+      errosConsulta.push('eventos do Omie (webhooks)')
+      webhooksDiretos = []
+    }
+  }
+  const webhooksTodos = webhooksDiretos ?? (nIdReceb
+    ? await buscarTodasLinhas<LinhaWebhook>(
         (from, to) =>
           supabase
             .from('webhooks')
@@ -110,7 +134,7 @@ export async function HistoricoStatusNF({
           errosConsulta.push('eventos do Omie (webhooks)')
         }
       )
-    : []
+    : [])
   const webhooksDoRecebimento = webhooksTodos
     .filter((w) => {
       const msg = w.message as { event?: { cabecalho?: { nIdReceb?: number | string } } }
