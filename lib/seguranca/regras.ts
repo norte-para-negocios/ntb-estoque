@@ -67,7 +67,7 @@ export function cabecalhosSeguranca(opts: { desktop: boolean }): { key: string; 
   const lista = [
     { key: 'X-Content-Type-Options', value: 'nosniff' },
     { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-    { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
+    { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'" },
     { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
     // Câmera fica liberada para a própria origem (leitor de código de barras, html5-qrcode).
     { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()' },
