@@ -115,7 +115,8 @@ export async function editarFornecedor(id: number, dados: ParceiroInput): Promis
 
   // Fornecedor criado a partir de nota da SEFAZ/XML (estoque próprio, migration 182): o código é da faixa própria e
   // não existe no Omie; a alteração fica só aqui.
-  if (atual.origem === 'sefaz') return { ok: true }
+  // Fase G: fornecedor importado por planilha (só estoque próprio, migration 223) também não existe no Omie.
+  if (atual.origem === 'sefaz' || atual.origem === 'planilha') return { ok: true }
   const codigoOmie = (atual.codigo_omie as number | null) ?? null
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key) return { ok: true, omieError: 'Loja sem chave do Omie: alteração salva localmente.' }
@@ -159,7 +160,7 @@ export async function excluirFornecedor(id: number): Promise<{ ok?: boolean; err
 
   const codigoOmie = (alvo?.codigo_omie as number | null) ?? null
   // Fornecedor da nota da SEFAZ/XML (migration 182): não existe no Omie.
-  if (!codigoOmie || alvo?.origem === 'sefaz') return { ok: true }
+  if (!codigoOmie || alvo?.origem === 'sefaz' || alvo?.origem === 'planilha') return { ok: true }
 
   const loja = await getLoja(lojaId)
   if (!loja?.omie_app_key) return { ok: true }
