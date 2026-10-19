@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import type { LojaOmie } from './client'
 import { lojaPodeEspelhar, type LojaCandidata } from '@/lib/estoque/espelho-lojas'
+import { cronAutorizado } from '@/lib/seguranca/regras'
 
 export async function getLojasAtivas(): Promise<LojaOmie[]> {
   const supabase = createServiceClient()
@@ -13,9 +14,9 @@ export async function getLojasAtivas(): Promise<LojaOmie[]> {
   return (data ?? []) as LojaOmie[]
 }
 
+// Fase H: sem CRON_SECRET configurado nenhum cron passa (antes "Bearer undefined" passava); comparação em tempo constante.
 export function assertCronAuth(request: Request): boolean {
-  const auth = request.headers.get('authorization')
-  return auth === `Bearer ${process.env.CRON_SECRET}`
+  return cronAutorizado(request.headers.get('authorization'), process.env.CRON_SECRET)
 }
 
 /**
