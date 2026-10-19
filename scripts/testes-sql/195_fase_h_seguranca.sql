@@ -29,6 +29,22 @@ begin
   raise notice 'ANTES: authenticated/anon executam financeiro_*/compras_* de outra loja e leem bkp_*';
 end $$;
 
+-- ESCRITA (só aqui, banco local): anon, sem login nenhum, grava um ajuste na tabela movimentos de uma loja qualquer
+do $$
+declare v_loja bigint; n int;
+begin
+  select min(id) into v_loja from public.lojas;
+  set local role anon;
+  perform public.upsert_movimentos_ajuste(jsonb_build_array(jsonb_build_object(
+    'loja_id', v_loja, 'id_ajuste', 999000111, 'id_prod', 1, 'tipo', 'SAI', 'quan', 1, 'valor', 0,
+    'codigo_local_estoque', 1, 'data', '2026-10-19', 'motivo', 'INV', 'obs', 'forjado pelo teste 195', 'status', 'Concluido')));
+  reset role;
+  select count(*) into n from public.movimentos where id_ajuste = 999000111;
+  if n <> 1 then raise exception 'esperava o ajuste forjado gravado antes da 195'; end if;
+  delete from public.movimentos where id_ajuste = 999000111;
+  raise notice 'ANTES: anon gravou um ajuste em movimentos da loja % via upsert_movimentos_ajuste', v_loja;
+end $$;
+
 -- ---------------------------------------------------------------- parte 2: aplica
 \i /tmp/195.sql
 
