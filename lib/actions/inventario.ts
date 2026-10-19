@@ -12,13 +12,15 @@ import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { exigirPeriodoAberto, mesesFechadosSet } from '@/lib/estoque/periodo-fechado'
-import { foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
+import { exigirPeriodoAberto, mesesFechados, mesesFechadosSet, semMesFechado } from '@/lib/estoque/periodo-fechado'
+import { bloqueioPorPeriodo, filtrosForaDosFechados } from '@/lib/estoque/periodo-fechado-puro'
 import * as proprio from '@/lib/inventario/proprio'
 
 // Fase F: inventário com data num mês fechado não muda nem vai ao Omie (no banco, item novo/contagem/exclusão também
 // recusam). Conferido ANTES de qualquer estorno do ajuste do estoque próprio, para nada ficar pela metade.
 async function travaDoInventario(lojaId: number, ref: { inventarioId?: number; itemId?: number }): Promise<string | null> {
+  const fechados = await mesesFechados(lojaId)
+  if (!fechados.length) return null // sem mês fechado, nenhuma consulta a mais
   const sb = createServiceClient()
   let invId = ref.inventarioId ?? null
   if (!invId && ref.itemId) {
@@ -27,7 +29,7 @@ async function travaDoInventario(lojaId: number, ref: { inventarioId?: number; i
   }
   if (!invId) return null
   const { data: inv } = await sb.from('inventarios').select('data').eq('id', invId).eq('loja_id', lojaId).maybeSingle()
-  return exigirPeriodoAberto(lojaId, [(inv as { data: string | null } | null)?.data ?? null], 'inventário')
+  return bloqueioPorPeriodo([(inv as { data: string | null } | null)?.data ?? null], fechados, 'inventário')
 }
 
 export async function createInventario(
@@ -626,39 +628,44 @@ export async function retryAjustesInventarioPendentes(
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
 
   for (const loja of lojas) {
-    const { data: errosGenericos, error: erroErros } = await supabase
+    // Fase F (revisão I1): item de inventário com data num mês fechado fica fora da CONSULTA (pela data do inventário,
+    // embutido com !inner), senão as pendências do mês fechado ocupam o limite para sempre.
+    const fechadosLoja = await mesesFechadosSet(loja.id)
+    const filtrosData = filtrosForaDosFechados('data', [...fechadosLoja], 'timestamp')
+    const colsRetry = 'id, inventario_id, loja_id, status, tentativas, id_ajuste, quan' + (filtrosData.length ? ', inventarios!inner(data)' : '')
+    const { data: errosGenericos, error: erroErros } = await semMesFechado(supabase
       .from('inventario_items')
-      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
+      .select(colsRetry)
       .eq('loja_id', loja.id)
       .eq('status', 'Erro')
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${new Date(Date.now() - ERRO_STALE_MIN * 60_000).toISOString()}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData, 'inventarios')
 
     const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
-    const { data: semCmc, error: erroSemCmc } = await supabase
+    const { data: semCmc, error: erroSemCmc } = await semMesFechado(supabase
       .from('inventario_items')
-      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
+      .select(colsRetry)
       .eq('loja_id', loja.id)
       .eq('status', 'Sem CMC')
       .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData, 'inventarios')
 
     // Reclaim de item travado em 'Processando' (Important #2): ver docstring da
     // funcao. Mesma prioridade/sem teto de 'Erro'.
     const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
-    const { data: processandoTravados, error: erroProcessando } = await supabase
+    const { data: processandoTravados, error: erroProcessando } = await semMesFechado(supabase
       .from('inventario_items')
-      .select('id, inventario_id, loja_id, status, tentativas, id_ajuste, quan')
+      .select(colsRetry)
       .eq('loja_id', loja.id)
       .eq('status', 'Processando')
       .lt('ultima_tentativa_em', processandoCutoff)
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData, 'inventarios')
 
     // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
     // de parse do .or()), reportar explicitamente por loja em vez de tratar como
@@ -683,18 +690,10 @@ export async function retryAjustesInventarioPendentes(
     // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
     // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
     // presa (achado real da revisao final, 2026-08-10).
-    let candidatos = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
+    // select dinâmico (colsRetry) perde o tipo do supabase-js: as colunas são as de InventarioItemRetryRow
+    const candidatos = ([...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])] as unknown as InventarioItemRetryRow[])
       .filter((i) => i.id_ajuste === null && i.quan !== null)
-    // Fase F: item de inventário com data num mês fechado não é reenviado ao Omie enquanto o mês estiver fechado.
-    const fechadosLoja = await mesesFechadosSet(loja.id)
-    if (fechadosLoja.size && candidatos.length) {
-      const invIds = [...new Set(candidatos.map((i) => i.inventario_id))]
-      const { data: invs, error: erroInvs } = await supabase.from('inventarios').select('id, data').eq('loja_id', loja.id).in('id', invIds)
-      const dataInv = new Map((invs ?? []).map((v) => [Number(v.id), v.data as string | null]))
-      // sem a data do inventário não dá para saber o mês: espera o próximo ciclo em vez de arriscar mandar
-      candidatos = erroInvs ? [] : candidatos.filter((i) => dataInv.has(Number(i.inventario_id)) && foraDoMesFechado(dataInv.get(Number(i.inventario_id)) ?? null, fechadosLoja))
-    }
-    const pendentes = candidatos.slice(0, limitePorLoja) as InventarioItemRetryRow[]
+    const pendentes = candidatos.slice(0, limitePorLoja)
 
     if (pendentes.length === 0) {
       resultados.push({ loja_id: loja.id, tentadas: 0, sucesso: 0, falhas: 0 })

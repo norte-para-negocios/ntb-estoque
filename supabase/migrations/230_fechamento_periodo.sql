@@ -6,7 +6,7 @@
 -- pedido de compra e correção de custo de ajuste do Omie. Reabrir só com permissão própria e motivo, tudo registrado
 -- em estoque_periodo_eventos (append-only). Erro de período fechado: SQLSTATE PF001, mensagem "Período fechado: …".
 -- Lojas Omie: nada que o sync do Omie grava ganha gatilho (movimentos, ordens_producao de loja Omie, notas); a trava
--- delas é no servidor, antes de mandar ao Omie (lib/estoque/fechamento.ts).
+-- delas é no servidor, antes de mandar ao Omie (lib/estoque/periodo-fechado.ts).
 --
 -- SÓ ADITIVA (código velho continua funcionando). Aplicar (manual, com backup e OK do dono):
 --   docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 230_fechamento_periodo.sql
@@ -304,7 +304,7 @@ drop trigger if exists correcao_custo_periodo on public.estoque_correcao_custo;
 create trigger correcao_custo_periodo before insert on public.estoque_correcao_custo
   for each row execute function public.trg_correcao_custo_periodo();
 
--- 6) Cancelamento da nota na SEFAZ depois do fechamento: a fila não para (corpo da 180 + o bloco de exceção) -----------
+-- 6) Cancelamento da nota na SEFAZ que não dá para estornar (mês fechado ou devolução ativa): a fila não para --------
 create or replace function public.sefaz_marcar_cancelada(p_loja bigint, p_chave text)
  returns jsonb
  language plpgsql
@@ -312,7 +312,7 @@ create or replace function public.sefaz_marcar_cancelada(p_loja bigint, p_chave 
  set search_path to 'public'
 as $function$
 declare n notas_fiscais%rowtype; c compras_proprio%rowtype; v_nota boolean := false; v_est jsonb; v_estornada boolean := false; v_n int := 0;
-  v_mes_fechado boolean := false; v_msg text;
+  v_mes_fechado boolean := false; v_msg text; v_estado text; v_pendente boolean := false;
 begin
   insert into sefaz_chaves_canceladas (loja_id, chave) values (p_loja, p_chave) on conflict do nothing;
   select * into n from notas_fiscais where loja_id = p_loja and c_chave_nfe = p_chave and deleted_at is null for update;
@@ -330,16 +330,19 @@ begin
       begin
         v_est := estornar_compra(c.id, 'SEFAZ: nota cancelada');
         v_estornada := true; v_n := coalesce((v_est->>'estornados')::int, 0);
-      exception when sqlstate 'PF001' then
-        get stacked diagnostics v_msg = message_text;
-        v_mes_fechado := true;
+      exception when sqlstate 'PF001' or sqlstate '22023' then
+        -- PF001 = mês fechado; 22023 = regra do estorno (ex.: devolução ao fornecedor ativa, migration 231). Nos dois a
+        -- fila da SEFAZ não pode voltar atrás: a chave fica cancelada e a compra marcada para estornar à mão.
+        get stacked diagnostics v_msg = message_text, v_estado = returned_sqlstate;
+        v_mes_fechado := v_estado = 'PF001';
+        v_pendente := true;
         insert into compras_proprio_eventos (loja_id, compra_id, tipo, detalhe, user_id)
-        values (p_loja, c.id, 'cancelada', jsonb_build_object('mes_fechado', true, 'estorno_pendente', true, 'motivo', v_msg), 'SEFAZ');
+        values (p_loja, c.id, 'cancelada', jsonb_build_object('mes_fechado', v_mes_fechado, 'estorno_pendente', true, 'motivo', v_msg), 'SEFAZ');
       end;
     end if;
   end if;
   return jsonb_build_object('ok', true, 'nota', v_nota, 'nota_id', case when v_nota then n.id end,
-                            'estornada', v_estornada, 'estornados', v_n, 'mes_fechado', v_mes_fechado);
+                            'estornada', v_estornada, 'estornados', v_n, 'mes_fechado', v_mes_fechado, 'estorno_pendente', v_pendente);
 end $function$;
 
 -- 7) Quem chama o quê -------------------------------------------------------------------------------------------------

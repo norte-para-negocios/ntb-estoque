@@ -76,6 +76,18 @@ begin
   perform devolucao_fornecedor_cancelar(v_loja, (r->>'id')::bigint, 'u1', 'Ana');
   perform estornar_compra(v_b, 'u1');
 
+  -- 8. cancelamento na SEFAZ de nota com devolução ativa (revisão I2): não volta atrás inteiro; a chave fica gravada
+  --    como cancelada, a compra ganha evento 'cancelada' com estorno_pendente e a devolução continua de pé
+  update compras_proprio set chave_acesso = repeat('7', 44) where id = v_a;
+  select id into v_item_b from compras_proprio_itens where compra_id = v_a;
+  r := devolucao_fornecedor_registrar(v_loja, v_a, jsonb_build_array(jsonb_build_object('compra_item_id', v_item_b, 'quantidade', 2)), 'avariado', 'u1', 'Ana');
+  r := sefaz_marcar_cancelada(v_loja, repeat('7', 44));
+  if (r->>'estornada')::boolean or (r->>'estorno_pendente')::boolean is not true then raise exception 'cancelada com devolução %', r; end if;
+  if not exists (select 1 from sefaz_chaves_canceladas where loja_id = v_loja and chave = repeat('7', 44)) then raise exception 'chave cancelada não gravada'; end if;
+  if not exists (select 1 from compras_proprio_eventos where compra_id = v_a and tipo = 'cancelada' and (detalhe->>'estorno_pendente')::boolean
+                 and detalhe->>'motivo' like '%devolução ao fornecedor%') then raise exception 'evento estorno_pendente'; end if;
+  if (select situacao from devolucoes_fornecedor where compra_id = v_a) <> 'a_emitir' then raise exception 'devolução mexida'; end if;
+
   raise notice '231: todos os testes passaram';
 end $$;
 do $$ begin

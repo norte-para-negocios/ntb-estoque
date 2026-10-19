@@ -36,11 +36,21 @@ export async function situacaoPeriodoLoja(lojaId: number, dataISO: string): Prom
  * entregue ao contador. A data é a do movimento de entrada de cada item lançado (o banco recusa do mesmo jeito).
  */
 export async function travaDaCompraLancada(lojaId: number, compraId: number): Promise<string | null> {
+  const fechados = await mesesFechados(lojaId)
+  if (!fechados.length) return null // sem mês fechado, nenhuma consulta a mais
   const sb = createServiceClient()
   const { data: itens } = await sb.from('compras_proprio_itens').select('movimento_id').eq('compra_id', compraId).eq('loja_id', lojaId)
     .eq('lancado', true).not('movimento_id', 'is', null).order('id')
   const ids = (itens ?? []).map((i) => Number(i.movimento_id))
   if (!ids.length) return null
   const { data: movs } = await sb.from('estoque_movimentos').select('data_ref').eq('loja_id', lojaId).in('id', ids.slice(0, 500))
-  return exigirPeriodoAberto(lojaId, (movs ?? []).map((m) => String(m.data_ref)), 'nota de entrada lançada no estoque')
+  return bloqueioPorPeriodo((movs ?? []).map((m) => String(m.data_ref)), fechados, 'nota de entrada lançada no estoque')
+}
+
+/** Aplica os filtros de `filtrosForaDosFechados` na consulta (um `.or()` por mês; com `tabela`, na tabela embutida `!inner`). */
+type ComOr = { or: (filtro: string, opcoes?: { referencedTable?: string }) => unknown }
+export function semMesFechado<Q>(q: Q, filtros: string[], tabela?: string): Q {
+  let r = q as unknown as ComOr
+  for (const f of filtros) r = (tabela ? r.or(f, { referencedTable: tabela }) : r.or(f)) as ComOr
+  return r as unknown as Q
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-ignore: import com .ts exigido pelo node --test
-import { bloqueioPorPeriodo, ehErroPeriodoFechado, foraDoMesFechado, mesDaData, mesesDaTela, rotuloMes, situacaoDaData, validarFechamento, validarReabertura } from './periodo-fechado-puro.ts'
+import { bloqueioPorPeriodo, ehErroPeriodoFechado, filtrosConclusaoOPForaDosFechados, filtrosForaDosFechados, foraDoMesFechado, mesDaData, mesesDaTela, rotuloMes, situacaoDaData, validarFechamento, validarReabertura } from './periodo-fechado-puro.ts'
 
 const SET = { mes: '2026-09', fechadoEm: '2026-10-05T13:00:00Z', fechadoPorNome: 'Ana' }
 
@@ -76,4 +76,19 @@ test('foraDoMesFechado (filtro dos reenvios ao Omie)', () => {
   assert.equal(foraDoMesFechado('2026-10-01', f), true)
   assert.equal(foraDoMesFechado(null, f), true)
   assert.equal(foraDoMesFechado('2026-09-30', new Set()), true)
+})
+
+test('filtrosForaDosFechados: um filtro "or" por mês fechado, no fuso da Bahia (revisão I1)', () => {
+  assert.deepEqual(filtrosForaDosFechados('data', ['2026-09'], 'timestamp'), ['data.lt.2026-09-01T03:00:00Z,data.gte.2026-10-01T03:00:00Z'])
+  assert.deepEqual(filtrosForaDosFechados('data', ['2025-12', '2026-02'], 'timestamp'), [
+    'data.lt.2025-12-01T03:00:00Z,data.gte.2026-01-01T03:00:00Z', 'data.lt.2026-02-01T03:00:00Z,data.gte.2026-03-01T03:00:00Z'])
+  assert.deepEqual(filtrosForaDosFechados('data_ajuste', ['2026-09'], 'date'), ['data_ajuste.lt.2026-09-01,data_ajuste.gte.2026-10-01'])
+  assert.deepEqual(filtrosForaDosFechados('data', [], 'timestamp'), [])
+  assert.deepEqual(filtrosForaDosFechados('data', ['lixo'], 'timestamp'), [])
+})
+
+test('filtrosConclusaoOPForaDosFechados: data desejada; sem ela, a previsão; sem as duas, passa', () => {
+  assert.deepEqual(filtrosConclusaoOPForaDosFechados(['2026-09']), [
+    'conclusao_data_desejada.lt.2026-09-01,conclusao_data_desejada.gte.2026-10-01,and(conclusao_data_desejada.is.null,or(identificacao_d_dt_previsao.lt.2026-09-01,identificacao_d_dt_previsao.gte.2026-10-01,identificacao_d_dt_previsao.is.null))',
+  ])
 })

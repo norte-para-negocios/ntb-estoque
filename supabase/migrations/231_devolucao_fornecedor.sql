@@ -207,7 +207,7 @@ begin
       raise exception 'Item %: quantidade maior do que ainda dá para devolver (%)', it.linha, v_disp using errcode = '22023';
     end if;
     v_custo := coalesce(nullif(m.custo_unitario, 0), it.custo_unitario_base, 0);
-    v_valor_item := coalesce(it.valor_total_item, it.valor_total - it.desconto, 0);
+    v_valor_item := coalesce(it.valor_total_item, it.valor_total - coalesce(it.desconto, 0), 0);
     v_fiscal := round(v_valor_item * v_q / m.quantidade, 2);
     r := _saida_ao_custo_da_entrada(p_loja, m.codigo_local_estoque, m.codigo_produto, 'dev:' || v_dev.id, it.linha, v_q, v_custo,
                                     p_user, 'Devolução ao fornecedor nº ' || v_numero || ' (nota ' || coalesce(c.numero, c.id::text) || ')');

@@ -3,7 +3,8 @@
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { exigirPeriodoAberto } from '@/lib/estoque/periodo-fechado'
+import { exigirPeriodoAberto, mesesFechados, mesesFechadosSet, semMesFechado } from '@/lib/estoque/periodo-fechado'
+import { bloqueioPorPeriodo, filtrosConclusaoOPForaDosFechados } from '@/lib/estoque/periodo-fechado-puro'
 import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import {
@@ -179,10 +180,12 @@ function addDiasISO(iso: string, dias: number): string | null {
  */
 // Fase F: OP concluída num mês fechado não reverte nem é excluída; data nova não cai num mês fechado.
 async function travaDaOP(lojaId: number, opId: number, novasDatas: (string | null | undefined)[] = []): Promise<string | null> {
+  const fechados = await mesesFechados(lojaId)
+  if (!fechados.length) return null // sem mês fechado, nenhuma consulta a mais
   const { data: op } = await createServiceClient().from('ordens_producao').select('concluida, dt_conclusao_real').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
   const o = op as { concluida: boolean | null; dt_conclusao_real: string | null } | null
-  const r = o?.concluida ? await exigirPeriodoAberto(lojaId, [o.dt_conclusao_real], 'OP concluída') : null
-  return r ?? exigirPeriodoAberto(lojaId, novasDatas, 'ordem de produção')
+  const r = o?.concluida ? bloqueioPorPeriodo([o.dt_conclusao_real], fechados, 'OP concluída') : null
+  return r ?? bloqueioPorPeriodo(novasDatas, fechados, 'ordem de produção')
 }
 
 export async function criarOrdemProducao(input: {
@@ -974,20 +977,23 @@ export async function retryOPsPendentes(
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
 
   for (const loja of lojas) {
-    const { data: errosGenericos } = await supabase
+    // Fase F (revisão I1): conclusão com data num mês fechado fica fora da CONSULTA (executarConclusaoOP recusaria e a
+    // OP voltaria todo ciclo ocupando o limite).
+    const filtrosData = filtrosConclusaoOPForaDosFechados([...(await mesesFechadosSet(loja.id))])
+    const { data: errosGenericos } = await semMesFechado(supabase
       .from('ordens_producao')
       .select(COLUNAS_OP_RETRY)
       .eq('loja_id', loja.id)
       .eq('concluida', false)
       .eq('conclusao_status', 'Erro')
       .order('conclusao_ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     let pendentes = (errosGenericos ?? []) as OPRetryRow[]
 
     if (incluirSemCmc) {
       const limiteStale = new Date(Date.now() - semCmcStaleHoras * 3600_000).toISOString()
-      const { data: semCmc } = await supabase
+      const { data: semCmc } = await semMesFechado(supabase
         .from('ordens_producao')
         .select(COLUNAS_OP_RETRY)
         .eq('loja_id', loja.id)
@@ -996,7 +1002,7 @@ export async function retryOPsPendentes(
         .lt('conclusao_tentativas', SEM_CMC_MAX_TENTATIVAS)
         .or(`conclusao_ultima_tentativa_em.is.null,conclusao_ultima_tentativa_em.lt.${limiteStale}`)
         .order('conclusao_ultima_tentativa_em', { ascending: true, nullsFirst: true })
-        .limit(limitePorLoja)
+        .limit(limitePorLoja), filtrosData)
       pendentes = [...pendentes, ...((semCmc ?? []) as OPRetryRow[])].slice(0, limitePorLoja)
     }
 

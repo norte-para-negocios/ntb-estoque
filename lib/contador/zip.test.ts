@@ -44,3 +44,13 @@ test('ZIP vazio é válido', () => {
 test('crc32 confere com o valor de referência', () => {
   assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926)
 })
+
+test('nomes repetidos viram -2, -3 (não -2-3)', () => {
+  const z = criarZip([{ nome: 'x.xml', dados: 'a' }, { nome: 'x.xml', dados: 'b' }, { nome: 'x.xml', dados: 'c' }, { nome: 'sem', dados: 'd' }, { nome: 'sem', dados: 'e' }])
+  const nomes: string[] = []
+  for (let i = z.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])); i >= 0; i = z.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), i + 4)) {
+    const n = z.readUInt16LE(i + 28)
+    nomes.push(z.subarray(i + 46, i + 46 + n).toString('utf8'))
+  }
+  assert.deepEqual(nomes, ['x.xml', 'x-2.xml', 'x-3.xml', 'sem', 'sem-2'])
+})

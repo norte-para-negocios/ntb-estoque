@@ -1,3 +1,4 @@
+import { marcarCanceladaNaSefaz } from '@/lib/estoque/sefaz-cancelamento'
 import { createServiceClient } from '@/lib/supabase/server'
 import { carregarCredencialLoja, type CredencialLoja } from './sefaz-certificado'
 import { consultarDistribuicao, consultarPorChave, enviarCiencia } from './sefaz-rede'
@@ -69,17 +70,18 @@ async function processarDocumento(ctx: Ctx, doc: DocDistribuido, r: ResultadoSyn
         void espelharNotaNoFrio(ctx.lojaId, notaId)
         r.resumos++
       }
-      if (res.situacao === '3') await sb.rpc('sefaz_marcar_cancelada', { p_loja: ctx.lojaId, p_chave: res.chave })
+      if (res.situacao === '3') await marcarCanceladaNaSefaz((n, a) => sb.rpc(n, a), ctx.lojaId, res.chave)
       await marcarDoc(ctx.lojaId, doc.nsu, { processado: true, chave: res.chave, nota_fiscal_id: notaId })
       return
     }
     if (tipo === 'procEventoNFe' || tipo === 'resEvento') {
       const ev = lerEvento(doc.xml)
       if (ev.tpEvento === '110111' && ev.chave) {
-        const { data } = await sb.rpc('sefaz_marcar_cancelada', { p_loja: ctx.lojaId, p_chave: ev.chave })
-        // Compra já lançada: a entrada é estornada pela própria função (migration 180).
-        if ((data as { estornada?: boolean } | null)?.estornada) r.estornos++
-        if ((data as { nota?: boolean } | null)?.nota) {
+        // Compra já lançada: a entrada é estornada pela própria função (migration 180); mês fechado ou devolução ativa
+        // deixam o estorno pendente (230). Erro do banco lança: o documento NÃO vira processado e é tentado de novo.
+        const c = await marcarCanceladaNaSefaz((n, a) => sb.rpc(n, a), ctx.lojaId, ev.chave)
+        if (c.estornada) r.estornos++
+        if (c.nota) {
           r.cancelamentos++
           const n = await notaPorChave(ctx.lojaId, ev.chave); if (n) void espelharNotaNoFrio(ctx.lojaId, n.id)
         }
@@ -144,6 +146,17 @@ async function buscarCompletosPorChave(ctx: Ctx, cred: CredencialLoja, r: Result
   }
 }
 
+/**
+ * Revisão da Fase F (I2): documento que falhou no processamento (ex.: cancelamento cuja gravação deu erro no banco)
+ * fica com processado=false e o erro; aqui ele é reprocessado (só banco, nenhuma chamada à SEFAZ), até 20 por ciclo.
+ */
+async function reprocessarComErro(ctx: Ctx, r: ResultadoSync): Promise<void> {
+  const { data } = await createServiceClient().from('sefaz_documentos').select('nsu, schema, xml, completo')
+    .eq('loja_id', ctx.lojaId).eq('processado', false).not('erro', 'is', null).in('tipo', ['procEventoNFe', 'resEvento', 'resNFe'])
+    .not('xml', 'is', null).order('id').limit(20)
+  for (const d of (data ?? []) as DocDistribuido[]) await processarDocumento(ctx, d, r)
+}
+
 export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
   const r = vazio(lojaId)
   const sb = createServiceClient()
@@ -173,7 +186,7 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
   }
   if (bloq > agora) {
     // a espera de 1 hora vale só para a consulta por NSU; ciência e busca pela chave são outros pedidos e seguem
-    try { await darCiencias(ctx, cred, r); await buscarCompletosPorChave(ctx, cred, r) }
+    try { await reprocessarComErro(ctx, r); await darCiencias(ctx, cred, r); await buscarCompletosPorChave(ctx, cred, r) }
     catch (e) { console.error(`sefaz-sync loja ${lojaId}: ciência/busca pela chave`, e instanceof Error ? e.message : e) }
     return { ...r, ok: true, motivo: 'A SEFAZ pede esperar antes de consultar de novo.', bloqueadoAte: nsu.bloqueado_ate }
   }
@@ -204,6 +217,7 @@ export async function sincronizarSefaz(lojaId: number): Promise<ResultadoSync> {
       if (!avancou) { r.ok = ret.cStat === '656'; r.motivo = `SEFAZ ${ret.cStat}: ${ret.xMotivo}`; break }
       if (!prox.continuarJa) break
     }
+    await reprocessarComErro(ctx, r)
     await darCiencias(ctx, cred, r)
     await buscarCompletosPorChave(ctx, cred, r)
     await sb.from('lojas').update({ nota_fiscal_status: r.falhas ? 'Erro' : 'Concluido', nota_fiscal_ultima_atualizacao: new Date().toISOString() }).eq('id', lojaId)

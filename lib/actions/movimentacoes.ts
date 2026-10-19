@@ -9,8 +9,8 @@ import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
-import { exigirPeriodoAberto, mesesFechadosSet } from '@/lib/estoque/periodo-fechado'
-import { foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
+import { exigirPeriodoAberto, mesesFechadosSet, semMesFechado } from '@/lib/estoque/periodo-fechado'
+import { filtrosForaDosFechados, foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
 import { encerrarOuEnviarAjusteManual, motivoDoAjusteManual, validarCustoInformado } from '@/lib/omie/motivo-ajuste'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
@@ -219,7 +219,10 @@ export async function retryMovimentosManuaisPendentes(
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; encerradas?: number; erro?: string }[] = []
 
   for (const loja of lojas) {
-    const { data: errosGenericos, error: erroErros } = await supabase
+    // Fase F (revisão I1): ajuste com data num mês fechado fica fora da CONSULTA (senão ocupa o limite para sempre).
+    const fechadosLoja = await mesesFechadosSet(loja.id)
+    const filtrosData = filtrosForaDosFechados('data', [...fechadosLoja], 'timestamp')
+    const { data: errosGenericos, error: erroErros } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -229,10 +232,10 @@ export async function retryMovimentosManuaisPendentes(
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${new Date(Date.now() - ERRO_STALE_MIN * 60_000).toISOString()}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
-    const { data: semCmc, error: erroSemCmc } = await supabase
+    const { data: semCmc, error: erroSemCmc } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -242,7 +245,7 @@ export async function retryMovimentosManuaisPendentes(
       .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     // Reclaim de linha travada em 'Processando' (Important #2, mesma auditoria):
     // um crash/timeout no meio de `reenviarMovimentoManual` (chamado tambem por
@@ -251,7 +254,7 @@ export async function retryMovimentosManuaisPendentes(
     // com a mesma prioridade/sem teto de 'Erro' (nao e um caso "sem CMC" que
     // precisa de acao humana, e sim uma tentativa que nunca terminou).
     const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
-    const { data: processandoTravados, error: erroProcessando } = await supabase
+    const { data: processandoTravados, error: erroProcessando } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -261,7 +264,7 @@ export async function retryMovimentosManuaisPendentes(
       .lt('ultima_tentativa_em', processandoCutoff)
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     // Nao engolir erro de query: mesmo padrao de bug ja visto 3x neste repo
     // (AGENTS.md) -- reportar explicitamente por loja em vez de tratar como "0
@@ -282,8 +285,6 @@ export async function retryMovimentosManuaisPendentes(
     // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
     // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
     // presa (achado real da revisao final, 2026-08-10).
-    // Fase F: ajuste com data num mês fechado não é reenviado ao Omie enquanto o mês estiver fechado.
-    const fechadosLoja = await mesesFechadosSet(loja.id)
     const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
       .filter((m) => m.id_ajuste === null && m.quan !== null && foraDoMesFechado((m as { data?: string | null }).data, fechadosLoja))
       .slice(0, limitePorLoja) as MovimentoManualRetryRow[]

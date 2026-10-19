@@ -42,8 +42,10 @@ export function criarZip(arquivos: ArquivoZip[]): Buffer {
   let offset = 0
   const usados = new Set<string>()
   for (const a of arquivos) {
-    let nome = nomeSeguro(a.nome)
-    for (let k = 2; usados.has(nome); k++) nome = nome.replace(/(\.[^./]*)?$/, (ext) => `-${k}${ext ?? ''}`)
+    const original = nomeSeguro(a.nome)
+    const m = original.match(/^(.*?)(\.[^./]*)?$/)!
+    let nome = original
+    for (let k = 2; usados.has(nome); k++) nome = `${m[1]}-${k}${m[2] ?? ''}`
     usados.add(nome)
     const bruto = typeof a.dados === 'string' ? Buffer.from(a.dados, 'utf8') : Buffer.from(a.dados)
     const comp = deflateRawSync(bruto, { level: 6 })

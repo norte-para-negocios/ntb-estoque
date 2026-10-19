@@ -97,6 +97,31 @@ export function ehErroPeriodoFechado(e: { code?: string | null; message?: string
   return e.code === 'PF001' || (e.message ?? '').includes('Período fechado:')
 }
 
+const proximoMes = (mes: string) => {
+  const [a, m] = mes.split('-').map(Number)
+  return m === 12 ? `${a + 1}-01` : `${a}-${pad(m + 1)}`
+}
+const mesValido = (m: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m)
+
+/**
+ * Filtros PostgREST (um `.or()` por mês fechado; vários `.or()` se somam com E) que deixam de fora as linhas com data
+ * num mês fechado, DENTRO da consulta dos reenvios — senão as pendências do mês fechado ocupam o `limit` para sempre
+ * e os reenvios dos meses abertos param (revisão I1). timestamp = limites à 00:00 da Bahia (03:00 UTC).
+ */
+export function filtrosForaDosFechados(coluna: string, meses: string[], tipo: 'timestamp' | 'date'): string[] {
+  const lim = (mes: string) => (tipo === 'timestamp' ? `${mes}-01T03:00:00Z` : `${mes}-01`)
+  return meses.filter(mesValido).map((m) => `${coluna}.lt.${lim(m)},${coluna}.gte.${lim(proximoMes(m))}`)
+}
+
+/** Conclusão de OP no Omie: vale a data desejada; sem ela, a previsão; sem as duas (cai em hoje), passa. */
+export function filtrosConclusaoOPForaDosFechados(meses: string[]): string[] {
+  return meses.filter(mesValido).map((m) => {
+    const a = `${m}-01`
+    const b = `${proximoMes(m)}-01`
+    return `conclusao_data_desejada.lt.${a},conclusao_data_desejada.gte.${b},and(conclusao_data_desejada.is.null,or(identificacao_d_dt_previsao.lt.${a},identificacao_d_dt_previsao.gte.${b},identificacao_d_dt_previsao.is.null))`
+  })
+}
+
 /** Reenvio ao Omie pode sair (data fora de mês fechado). Sem data: sai (comportamento de sempre). */
 export function foraDoMesFechado(data: string | null | undefined, fechados: Set<string>): boolean {
   if (!fechados.size) return true

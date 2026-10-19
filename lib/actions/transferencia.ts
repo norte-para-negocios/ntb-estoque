@@ -14,8 +14,8 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import type { TipoTransferencia } from '@/lib/transferencia-tipos'
 import { limparObservacao, montarObsTransferencia } from '@/lib/transferencia-obs'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { mesesFechadosSet } from '@/lib/estoque/periodo-fechado'
-import { foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
+import { mesesFechadosSet, semMesFechado } from '@/lib/estoque/periodo-fechado'
+import { filtrosForaDosFechados, foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
 import {
   desfazerItemTransferencia,
   desfazerTransferenciaInteira,
@@ -705,7 +705,10 @@ export async function retryMovimentosTransferenciaPendentes(
   const resultados: { loja_id: number; tentadas: number; sucesso: number; falhas: number; erro?: string }[] = []
 
   for (const loja of lojas) {
-    const { data: errosGenericos, error: erroErros } = await supabase
+    // Fase F (revisão I1): movimento com data num mês fechado fica fora da CONSULTA (senão ocupa o limite para sempre).
+    const fechadosLoja = await mesesFechadosSet(loja.id)
+    const filtrosData = filtrosForaDosFechados('data', [...fechadosLoja], 'timestamp')
+    const { data: errosGenericos, error: erroErros } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -714,10 +717,10 @@ export async function retryMovimentosTransferenciaPendentes(
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${new Date(Date.now() - ERRO_STALE_MIN * 60_000).toISOString()}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
-    const { data: semCmc, error: erroSemCmc } = await supabase
+    const { data: semCmc, error: erroSemCmc } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -726,12 +729,12 @@ export async function retryMovimentosTransferenciaPendentes(
       .lt('tentativas', SEM_CMC_MAX_TENTATIVAS)
       .or(`ultima_tentativa_em.is.null,ultima_tentativa_em.lt.${staleCutoff}`)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     // Reclaim de movimento travado em 'Processando' (Important #2): ver docstring
     // da funcao. Mesma prioridade/sem teto de 'Erro'.
     const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
-    const { data: processandoTravados, error: erroProcessando } = await supabase
+    const { data: processandoTravados, error: erroProcessando } = await semMesFechado(supabase
       .from('movimentos')
       .select('id, transferencia_id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
@@ -740,7 +743,7 @@ export async function retryMovimentosTransferenciaPendentes(
       .lt('ultima_tentativa_em', processandoCutoff)
       .lt('tentativas', ERRO_MAX_TENTATIVAS)
       .order('ultima_tentativa_em', { ascending: true, nullsFirst: true })
-      .limit(limitePorLoja)
+      .limit(limitePorLoja), filtrosData)
 
     // Nao engolir erro de query: se qualquer uma falhar (timeout, URI longa, erro
     // de parse do .or()), reportar explicitamente por loja em vez de tratar como
@@ -765,8 +768,6 @@ export async function retryMovimentosTransferenciaPendentes(
     // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
     // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
     // presa (achado real da revisao final, 2026-08-10).
-    // Fase F: movimento com data num mês fechado não é reenviado ao Omie enquanto o mês estiver fechado.
-    const fechadosLoja = await mesesFechadosSet(loja.id)
     const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
       .filter((m) => m.id_ajuste === null && m.quan !== null && m.quan > 0 && foraDoMesFechado((m as { data?: string | null }).data, fechadosLoja))
       .slice(0, limitePorLoja) as MovimentoTransferenciaRetryRow[]

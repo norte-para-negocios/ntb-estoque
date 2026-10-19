@@ -25,6 +25,28 @@ begin
   select * into r from posicao_proprio_em_data(v_loja, '2026-12-31') where codigo_local_estoque = 1;
   if r.saldo <> (select saldo from estoque_saldos where loja_id = v_loja and codigo_local_estoque = 1 and codigo_produto = 501) then raise exception 'saldo atual'; end if;
   if r.cmc <> (select cmc from estoque_custos where loja_id = v_loja and codigo_produto = 501) then raise exception 'cmc atual'; end if;
+  -- Movimento retroativo gravado depois (revisão I3): 02/10 entra 5 a R$ 20 (gravado primeiro); depois se grava uma
+  -- entrada de 10 a R$ 10 com data 01/09. O cmc_apos dela é o do momento da gravação (13,33); na data 30/09 o custo
+  -- certo é 10 (só ela existia). O custo vem da reconstrução na ordem da data.
+  insert into lojas (nome, cnpj, modo_estoque) values ('TESTE 232 RETRO', '00000000000234', 'proprio') returning id into v_loja;
+  insert into local_estoques (loja_id, codigo_local_estoque, descricao) values (v_loja, 1, 'DEPOSITO');
+  perform registrar_movimento(v_loja, 1, 777, 'ENT', 'T', 'r1', 5, 20, null, null, 0, null, null, '2026-10-02');
+  perform registrar_movimento(v_loja, 1, 777, 'ENT', 'T', 'r2', 10, 10, null, null, 0, null, null, '2026-09-01');
+  if (select cmc_apos from estoque_movimentos where loja_id = v_loja and ref = 'r2') <> 13.333333 then raise exception 'premissa: cmc_apos gravado'; end if;
+  select * into r from posicao_proprio_em_data(v_loja, '2026-09-30');
+  if r.saldo <> 10 or r.cmc <> 10 then raise exception 'retroativo em 30/09: saldo % custo %', r.saldo, r.cmc; end if;
+  select * into r from posicao_proprio_em_data(v_loja, '2026-10-31');
+  if r.saldo <> 15 or r.cmc <> 13.333333 then raise exception 'retroativo em 31/10: saldo % custo %', r.saldo, r.cmc; end if;
+  -- saída não muda o custo; saldo zerado + entrada nova assume o custo da entrada
+  perform registrar_movimento(v_loja, 1, 777, 'SAI', 'T', 'r3', 15, null, null, null, 0, null, null, '2026-10-03');
+  perform registrar_movimento(v_loja, 1, 777, 'ENT', 'T', 'r4', 2, 7, null, null, 0, null, null, '2026-10-04');
+  select * into r from posicao_proprio_em_data(v_loja, '2026-10-31');
+  if r.saldo <> 2 or r.cmc <> 7 then raise exception 'depois de zerar: saldo % custo %', r.saldo, r.cmc; end if;
+  -- devolução ao fornecedor (231) refaz o custo sem as unidades, igual à função de saída
+  perform _saida_ao_custo_da_entrada(v_loja, 1, 777, 'dev:t', 1, 1, 7);
+  perform registrar_movimento(v_loja, 1, 777, 'ENT', 'T', 'r5', 1, 13, null, null, 0, null, null, '2026-10-05');
+  select * into r from posicao_proprio_em_data(v_loja, '2026-12-31');
+  if r.cmc <> (select cmc from estoque_custos where loja_id = v_loja and codigo_produto = 777) then raise exception 'custo reconstruído % ≠ atual', r.cmc; end if;
   raise notice '232: todos os testes passaram';
 end $$;
 do $$ begin
