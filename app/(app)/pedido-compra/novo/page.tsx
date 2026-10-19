@@ -9,11 +9,11 @@ export default async function NovoPedidoCompraPage() {
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
   if (!(await requirePermissao(lojaId, 'Compras - Pedidos'))) notFound()
-  const { fornecedores, locais } = await cadastrosDoPedido(lojaId)
+  const { fornecedores, locais, compradores } = await cadastrosDoPedido(lojaId)
   return (
     <div className="space-y-4">
       <DetailHeader href="/pedido-compra" title="Novo pedido de compra" breadcrumb={[{ label: 'Pedidos de compra', href: '/pedido-compra' }, { label: 'Novo' }]} />
-      <FormPedidoCompra fornecedores={fornecedores} locais={locais} />
+      <FormPedidoCompra fornecedores={fornecedores} locais={locais} compradores={compradores} />
     </div>
   )
 }

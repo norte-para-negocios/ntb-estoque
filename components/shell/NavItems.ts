@@ -29,6 +29,9 @@ import {
   RefreshCw,
   HeartPulse,
   Wrench,
+  ListTodo,
+  ClipboardPen,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -57,6 +60,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/estoque/correcoes', label: 'Central de correções', icon: HeartPulse, group: 'Operação', comEstoque: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
   { href: '/sugestao-compra', label: 'Sugestão de compra', icon: ShoppingCart, group: 'Operação', comEstoque: true },
+  { href: '/tarefas-compras', label: 'Tarefas de compras', icon: ListTodo, group: 'Operação', soEstoqueProprio: true },
+  { href: '/requisicao-compra', label: 'Requisições de compra', icon: ClipboardPen, group: 'Operação', soEstoqueProprio: true },
   { href: '/pedido-compra', label: 'Pedidos de compra', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
@@ -72,6 +77,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sync-catalogo', label: 'Sincronização Vendas', icon: RefreshCw, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/categoria-contabil', label: 'Categorias Contábeis', icon: Tags, group: 'Cadastros' },
   { href: '/fornecedor', label: 'Fornecedores', icon: Truck, group: 'Cadastros' },
+  { href: '/compras-cadastros', label: 'Compradores e prazos', icon: UserCog, group: 'Cadastros', soEstoqueProprio: true },
   { href: '/sintegra', label: 'SINTEGRA', icon: ScanLine, group: 'Cadastros' },
   { href: '/sync-status', label: 'Saúde da integração', icon: Activity, group: 'Cadastros', admin: true },
   { href: '/log', label: 'Logs de Integração', icon: ScrollText, group: 'Cadastros', admin: true },

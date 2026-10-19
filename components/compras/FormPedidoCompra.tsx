@@ -28,10 +28,12 @@ async function buscar(termo: string): Promise<ProdutoBusca[]> {
   return r.map((p) => ({ codigoProduto: p.codigo_produto, codigo: p.codigo, descricao: p.descricao, unidade: p.unidade }))
 }
 
-export function FormPedidoCompra({ inicial, fornecedores, locais }: {
+export function FormPedidoCompra({ inicial, fornecedores, locais, compradores = [] }: {
   inicial?: (PedidoForm & { id: number; itensProduto: (ProdutoBusca | null)[] }) | null
   fornecedores: { id: number; nome: string; cnpj: string | null }[]
   locais: { codigo: number; descricao: string }[]
+  /** compradores ativos (240); vazio = o campo não aparece */
+  compradores?: { id: number; nome: string }[]
 }) {
   const router = useRouter()
   const [pend, start] = useTransition()
@@ -46,6 +48,7 @@ export function FormPedidoCompra({ inicial, fornecedores, locais }: {
   const [cond, setCond] = useState(textoDasParcelas(inicial?.parcelas ?? []))
   const [obs, setObs] = useState(inicial?.obs ?? '')
   const [obsInt, setObsInt] = useState(inicial?.obsInterna ?? '')
+  const [comprador, setComprador] = useState(inicial?.compradorId ? String(inicial.compradorId) : '')
   const [chave] = useState(() => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Date.now())))
   const nova = (): Linha => ({ chave: Math.random().toString(36).slice(2), produto: null, unidade: '', fator: '1', quantidade: '', preco: '', local: '', obs: '' })
   const [linhas, setLinhas] = useState<Linha[]>(() => inicial?.itens.length ? inicial.itens.map((i, k) => ({
@@ -67,6 +70,7 @@ export function FormPedidoCompra({ inicial, fornecedores, locais }: {
       fornecedorId: forn?.id ?? null, fornecedorNome: forn?.nome ?? fornNome, fornecedorCnpj: forn?.cnpj ?? null,
       previsaoEntrega: previsao || null, frete: numBR(frete) || 0, outrasDespesas: numBR(outras) || 0, parcelas,
       numeroFornecedor: numFor || null, contato: contato || null, obs: obs || null, obsInterna: obsInt || null,
+      compradorId: comprador ? Number(comprador) : null,
       itens: usadas.map((l) => ({
         codigoProduto: l.produto!.codigoProduto, descricao: l.produto!.descricao, unidade: l.unidade || l.produto!.unidade,
         fator: numBR(l.fator) || 1, quantidade: numBR(l.quantidade), precoUnitario: numBR(l.preco) || 0,
@@ -93,6 +97,14 @@ export function FormPedidoCompra({ inicial, fornecedores, locais }: {
         </div>
         <div><label className={rotulo} htmlFor="pc-p">Previsão de entrega</label><input id="pc-p" type="date" value={previsao} onChange={(e) => setPrevisao(e.target.value)} className={campo} /></div>
         <div><label className={rotulo} htmlFor="pc-n">Nº do pedido no fornecedor</label><input id="pc-n" value={numFor} onChange={(e) => setNumFor(e.target.value)} className={campo} /></div>
+        {(compradores.length > 0 || comprador) && (
+          <div><label className={rotulo} htmlFor="pc-comp">Comprador</label>
+            <select id="pc-comp" value={comprador} onChange={(e) => setComprador(e.target.value)} className={campo}>
+              <option value="">Sem comprador</option>
+              {compradores.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {comprador && !compradores.some((c) => String(c.id) === comprador) && <option value={comprador}>Comprador inativo (mantido)</option>}
+            </select></div>
+        )}
         <div><label className={rotulo} htmlFor="pc-c">Contato no fornecedor</label><input id="pc-c" value={contato} onChange={(e) => setContato(e.target.value)} className={campo} /></div>
         <div><label className={rotulo} htmlFor="pc-fr">Frete (R$)</label><input id="pc-fr" inputMode="decimal" value={frete} onChange={(e) => setFrete(e.target.value)} className={campo} /></div>
         <div><label className={rotulo} htmlFor="pc-o">Outras despesas (R$)</label><input id="pc-o" inputMode="decimal" value={outras} onChange={(e) => setOutras(e.target.value)} className={campo} /></div>

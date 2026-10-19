@@ -11,6 +11,7 @@ import { AcoesPedido } from '@/components/compras/AcoesPedido'
 import { acoesDisponiveis, parcelasDoPedido } from '@/lib/compras/pedido-puro'
 import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { carregarPedido } from '../dados'
+import { nomesCompradores } from '../cadastros'
 import { TOM_COR } from '../tom'
 
 const q = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
@@ -33,6 +34,7 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
   const p = await carregarPedido(lojaId, Number(id))
   if (!p) notFound()
   const { cab, resumo, itens } = p
+  const compradorNome = resumo.compradorId ? (await nomesCompradores(lojaId)).get(resumo.compradorId) ?? null : null
   const recebidoTotal = itens.length > 0 && itens.every((i) => i.recebido + 1e-6 >= i.quantidadeBase)
   const acoes = acoesDisponiveis(cab.etapa, { temVinculo: p.notas.length > 0, podeAprovar, podeEditar, recebidoTotal })
   const parcelas = parcelasDoPedido(Array.isArray(cab.parcelas) ? cab.parcelas : [], resumo.total, cab.previsao_entrega)
@@ -49,7 +51,8 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
               <span className="inline-flex items-center gap-1.5 font-medium text-text">
                 <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[TOM_COR[resumo.etapaExibida.tom]]}`} aria-hidden />{resumo.etapaExibida.rotulo}
               </span>
-              <span>Criado {dataHora(cab.created_at)}{cab.criado_por_nome ? ` por ${cab.criado_por_nome}` : ''}{cab.origem === 'sugestao' ? ' (da sugestão de compra)' : ''}</span>
+              <span>Criado {dataHora(cab.created_at)}{cab.criado_por_nome ? ` por ${cab.criado_por_nome}` : ''}{cab.origem === 'sugestao' ? ' (da sugestão de compra)' : cab.origem === 'requisicao' ? ' (das requisições)' : cab.origem === 'planilha' ? ' (da planilha)' : ''}</span>
+              {compradorNome && <span>Comprador: <span className="text-text">{compradorNome}</span></span>}
               {cab.aprovado_em && <span>Aprovado {dataHora(cab.aprovado_em)}{cab.aprovado_por_nome ? ` por ${cab.aprovado_por_nome}` : ''}</span>}
               {cab.cancelado_em && <span className="text-err">Cancelado {dataHora(cab.cancelado_em)}{cab.motivo_cancelamento ? `: ${cab.motivo_cancelamento}` : ''}</span>}
             </div>

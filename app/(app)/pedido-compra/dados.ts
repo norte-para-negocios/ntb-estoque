@@ -7,6 +7,9 @@ export type PedidoResumo = {
   id: number; numero: number; etapa: EtapaPedido; etapaExibida: ReturnType<typeof etapaExibida>
   fornecedorNome: string; previsaoEntrega: string | null; createdAt: string; criadoPorNome: string | null; aprovadoPorNome: string | null
   itens: number; valorItens: number; total: number; qtdBase: number; recebido: number; vinculado: number
+  fornecedorCnpj: string | null; updatedAt: string; origem: string
+  /** 240 (comprador_id); null sem a migration */
+  compradorId: number | null
 }
 
 export type ItemSituacao = {
@@ -32,7 +35,7 @@ function itemDe(r: Record<string, unknown>): ItemSituacao {
   }
 }
 
-function resumir(c: Cab, itens: ItemSituacao[]): PedidoResumo {
+function resumir(c: Cab, itens: ItemSituacao[], compradorId: number | null = null): PedidoResumo {
   const valorItens = Math.round(itens.reduce((a, i) => a + i.quantidade * i.precoUnitario, 0) * 100) / 100
   const qtdBase = itens.reduce((a, i) => a + i.quantidadeBase, 0)
   const recebido = itens.reduce((a, i) => a + Math.min(i.recebido, i.quantidadeBase), 0)
@@ -41,7 +44,21 @@ function resumir(c: Cab, itens: ItemSituacao[]): PedidoResumo {
     fornecedorNome: c.fornecedor_nome, previsaoEntrega: c.previsao_entrega, createdAt: c.created_at, criadoPorNome: c.criado_por_nome, aprovadoPorNome: c.aprovado_por_nome,
     itens: itens.length, valorItens, total: Math.round((valorItens + n(c.frete) + n(c.outras_despesas)) * 100) / 100, qtdBase, recebido,
     vinculado: itens.reduce((a, i) => a + i.vinculado, 0),
+    fornecedorCnpj: c.fornecedor_cnpj, updatedAt: c.updated_at, origem: c.origem, compradorId,
   }
+}
+
+/** comprador_id vem à parte: sem a migration 240 a coluna não existe e a tela segue sem comprador. */
+async function compradoresDosPedidos(lojaId: number, ids: number[]): Promise<Map<number, number | null>> {
+  const m = new Map<number, number | null>()
+  if (!ids.length) return m
+  const sb = await createClient()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await sb.from('pedidos_compra').select('id, comprador_id').eq('loja_id', lojaId).in('id', ids.slice(i, i + 200))
+    if (error) return new Map()
+    for (const r of (data ?? []) as { id: number; comprador_id: number | null }[]) m.set(Number(r.id), r.comprador_id == null ? null : Number(r.comprador_id))
+  }
+  return m
 }
 
 /** Os 300 pedidos mais recentes da loja (o filtro de etapa/fornecedor/número é feito na página). */
@@ -56,7 +73,8 @@ export async function listarPedidos(lojaId: number): Promise<{ pedidos: PedidoRe
     const { data: its } = await sb.from('pedidos_compra_itens_situacao').select('*').eq('loja_id', lojaId).in('pedido_id', ids.slice(i, i + 100)).order('id').limit(5000)
     for (const r of (its ?? []) as Record<string, unknown>[]) itens.set(n(r.pedido_id), [...(itens.get(n(r.pedido_id)) ?? []), itemDe(r)])
   }
-  return { pedidos: cabs.map((c) => resumir(c, itens.get(c.id) ?? [])), erro: null }
+  const comps = await compradoresDosPedidos(lojaId, ids)
+  return { pedidos: cabs.map((c) => resumir(c, itens.get(c.id) ?? [], comps.get(c.id) ?? null)), erro: null }
 }
 
 export type NotaVinculada = { compraId: number; notaId: number | null; numero: string | null; emissao: string | null; status: string; itens: number }
@@ -89,7 +107,7 @@ export async function carregarPedido(lojaId: number, id: number): Promise<{
     for (const p of ps ?? []) codigos.set(n(p.codigo_produto), p.codigo)
   }
   return {
-    cab, resumo: resumir(cab, itens), itens, notas,
+    cab, resumo: resumir(cab, itens, (await compradoresDosPedidos(lojaId, [cab.id])).get(cab.id) ?? null), itens, notas,
     eventos: (evs ?? []).map((e) => ({ id: n(e.id), tipo: e.tipo, de: e.de_etapa, para: e.para_etapa, detalhe: (e.detalhe ?? {}) as Record<string, unknown>, userNome: e.user_nome, em: e.created_at })),
     locais: new Map((locs ?? []).map((l) => [n(l.codigo_local_estoque), l.descricao as string])),
     codigos,

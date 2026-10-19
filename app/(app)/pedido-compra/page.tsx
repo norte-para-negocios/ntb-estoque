@@ -39,6 +39,8 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
       <PageHeader title="Pedidos de compra" icon={ClipboardCheck} description="Pedido ao fornecedor com preço combinado, aprovação e conferência com a nota que chegar."
         actions={<>
           <Link href="/sugestao-compra" className={btnClass('outline')}>Sugestão de compra</Link>
+          <Link href="/requisicao-compra" className={btnClass('outline')}>Requisições</Link>
+          {podeCriar && <Link href="/pedido-compra/importar" className={btnClass('outline')}>Importar planilha</Link>}
           {podeCriar && <Link href="/pedido-compra/novo" className={btnClass('primary')}><Plus className="size-4" /> Novo pedido</Link>}
         </>} />
 
