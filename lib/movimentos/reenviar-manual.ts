@@ -10,6 +10,7 @@ import { dataOmieBR } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { origemDoAjuste } from '@/lib/vendas/local-venda'
 import { motivoOmieDoAjuste, valorDoAjusteManual } from '@/lib/omie/motivo-ajuste'
+import { bloqueioDaResposta, ehRecusaDoDisjuntor } from '@/lib/omie/erros-omie'
 
 export type MovimentoManualRow = {
   id: number
@@ -128,12 +129,15 @@ export async function reenviarMovimentoManual(
     return { id: mov.id, status: sucesso ? 'Concluido' : 'Erro', erro: sucesso ? undefined : (res.descricao_status ?? 'Omie recusou o ajuste') }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    // Bloqueio do Omie (real ou do nosso disjuntor) não é culpa do movimento: não gasta tentativa. Até 19/10/2026
+    // contava, e 91 baixas de venda do Sertão bateram no teto de 30 sem nunca ter chegado no Omie.
+    const naoContaTentativa = ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, undefined) != null
     await supabase
       .from('movimentos')
       .update({
         status: 'Erro',
         descricao_status: msg,
-        tentativas: (mov.tentativas ?? 0) + 1,
+        tentativas: (mov.tentativas ?? 0) + (naoContaTentativa ? 0 : 1),
         ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', mov.id)

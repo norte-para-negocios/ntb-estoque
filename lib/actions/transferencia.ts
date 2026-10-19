@@ -1,6 +1,7 @@
 'use server'
 
 import { viaDesktop } from '@/lib/offline/via-desktop'
+import { bloqueioDaResposta, ehRecusaDoDisjuntor } from '@/lib/omie/erros-omie'
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
@@ -497,12 +498,14 @@ async function processarMovimento(
       .eq('id', mov.id)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    // Bloqueio do Omie (real ou do disjuntor) não gasta tentativa (19/10/2026, ver lib/movimentos/reenviar-manual.ts).
+    const naoContaTentativa = ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, undefined) != null
     await supabase
       .from('movimentos')
       .update({
         status: 'Erro',
         response: msg,
-        tentativas: (mov.tentativas ?? 0) + 1,
+        tentativas: (mov.tentativas ?? 0) + (naoContaTentativa ? 0 : 1),
         ultima_tentativa_em: new Date().toISOString(),
       })
       .eq('id', mov.id)
