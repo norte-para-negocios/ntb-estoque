@@ -23,6 +23,8 @@ import { ManifestacaoNF } from '@/components/nota-fiscal/ManifestacaoNF'
 import { FreteCteNF } from '@/components/nota-fiscal/FreteCteNF'
 import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProcessamentoNF'
 import { carregarConferencia } from './dados-proprio'
+import { carregarPedidoDaNota } from './dados-pedido'
+import { PedidoDaNotaNF } from '@/components/nota-fiscal/PedidoDaNotaNF'
 import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 
 export default async function NotaFiscalItensPage({
@@ -109,6 +111,9 @@ export default async function NotaFiscalItensPage({
   const concluida = statusInfo?.label === 'Concluída'
   const cancelada = statusInfo?.label === 'Cancelada'
   const conferencia = proprio && nfSupabase ? await carregarConferencia(lojaId, Number(id), nf.full_object, nf.c_chave_nfe ?? null) : null
+  // Fase C (só estoque próprio): pedido de compra da nota e conferência pedido × nota × recebido
+  const pedidoDaNota = conferencia?.compra && conferencia.compra.status !== 'cancelada' ? await carregarPedidoDaNota(lojaId, conferencia.compra.id) : null
+  const podeVincularPedido = !!pedidoDaNota && (await requirePermissao(lojaId, 'Compras - Pedidos'))
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -203,6 +208,7 @@ export default async function NotaFiscalItensPage({
         <ConferenciaNF notaId={Number(id)} itens={conferencia.itens} status={conferencia.compra?.status ?? 'pendente'} locais={conferencia.locais} localAtual={conferencia.compra?.codigoLocal ?? null}
           podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} conferidaEm={conferencia.compra?.conferidaEm ?? null} />
       )}
+      {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
         nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
 
