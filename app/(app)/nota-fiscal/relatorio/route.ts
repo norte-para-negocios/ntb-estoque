@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = searchParams.get('data_final') || new Date().toISOString().split('T')[0]
   const fornecedor = searchParams.get('fornecedor') || ''
-  const transportadora = searchParams.get('transportadora') || ''
+  const transportadora = (searchParams.get('transportadora') || '').slice(0, 120) // mesmo corte da tela
   const numNfe = searchParams.get('num_nfe') || ''
   const status = searchParams.get('status') || ''
   // tipo/familia vem como lista separada por virgula (multi-select) na URL.

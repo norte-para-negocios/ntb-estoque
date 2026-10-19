@@ -12,7 +12,7 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { BarrasDiarias } from '@/components/faturamento/BarrasDiarias'
-import { agregarOps, filtrarOps, resumoOps, serieOps } from '@/lib/relatorios/ops-periodo-puro'
+import { agregarOps, resumoOps, serieOps } from '@/lib/relatorios/ops-periodo-puro'
 import { carregarOps, lerParamsOps, paramsBaseOps, type FonteOps, type SpOps } from '@/lib/relatorios/ops-periodo-loader'
 
 const LIMITE = 500
@@ -30,12 +30,11 @@ export default async function RelatorioOpsPage({ searchParams }: { searchParams:
   if ((await modoDaLoja(lojaId)) === 'nenhum') notFound()
   const hoje = hojeBahiaISO()
   const p = lerParamsOps(await searchParams, hoje)
-  const { fonte, cobertura, brutas, meta, erros, opcoes } = await carregarOps(lojaId, p.ini, p.fim)
   const filtros = { tipos: p.tipos, familias: p.familias, q: p.q }
-  const vis = filtrarOps(brutas, meta, filtros)
-  const res = resumoOps(vis)
-  const linhas = p.visao === 'dias' ? [] : agregarOps(brutas, meta, p.visao === 'consumidos' ? 'consumido' : 'produzido', filtros)
-  const serie = p.visao === 'dias' ? serieOps(vis, p.ini, p.fim) : []
+  const { fonte, cobertura, produtos, dias, meta, erros, opcoes } = await carregarOps(lojaId, p.ini, p.fim, filtros)
+  const res = resumoOps(produtos)
+  const linhas = p.visao === 'dias' ? [] : agregarOps(produtos, meta, p.visao === 'consumidos' ? 'consumido' : 'produzido', filtros)
+  const serie = p.visao === 'dias' ? serieOps(dias, p.ini, p.fim) : []
   const nomeOps = fonte === 'kardex' ? 'Movimentos' : 'OPs'
 
   const base = paramsBaseOps(p)
@@ -57,7 +56,7 @@ export default async function RelatorioOpsPage({ searchParams }: { searchParams:
         icon={Factory}
         voltarHref="/relatorios"
         description="O que foi produzido e quanta matéria-prima a produção consumiu no período, produto a produto."
-        actions={brutas.length > 0 ? <a href={`/relatorio-ops/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a> : undefined}
+        actions={produtos.length > 0 ? <a href={`/relatorio-ops/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a> : undefined}
       />
 
       <PeriodoBar basePath="/relatorio-ops" params={base} ini={p.ini} fim={p.fim} hoje={hoje} />
@@ -75,7 +74,7 @@ export default async function RelatorioOpsPage({ searchParams }: { searchParams:
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias: mostrando os dias mais recentes.</p>}
       {erros.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler: {erros.join(', ')}. Os números podem estar incompletos; recarregue a página.</p>}
 
-      {brutas.length === 0 ? (
+      {produtos.length === 0 ? (
         <EmptyState icon={Factory} title="Nenhuma produção concluída no período" hint="Mude o período. Só entram ordens de produção concluídas." />
       ) : (
         <>

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rpcDaSugestao, montarLinhasSugestao, filtrarSugestao, resumoSugestao, diferencaMinimo, resumoMinimo, type LinhaBruta } from './sugestao-puro.ts'
+import { rpcDaSugestao, montarLinhasSugestao, filtrarSugestao, resumoSugestao, diferencaMinimo, resumoMinimo, resumoMinimoDaTela, type LinhaBruta } from './sugestao-puro.ts'
 
 const bruta = (o: Partial<LinhaBruta>): LinhaBruta => ({
   codigo_produto: 1, codigo: '1', descricao: 'X', unidade: 'UN', tipo_item: '00', familia: 'F', consumo_total: 0, estoque_atual: 0,
@@ -94,4 +94,7 @@ test('estoque mínimo: "minimo" lista quem tem mínimo (todos os tipos), "abaixo
   // falta × custo médio (senão último custo): produto 3 = 3 × 10, produto 4 = 4 × 2; o 6 não tem custo
   assert.deepEqual(resumoMinimo(filtrarSugestao(linhas, { ver: 'minimo' })), { comMinimo: 5, abaixo: 3, faltaValor: 38, semCusto: 1 })
   assert.deepEqual(resumoMinimo([]), { comMinimo: 0, abaixo: 0, faltaValor: 0, semCusto: 0 })
+  // cartões da tela: mesmo na visão "abaixo", "com mínimo" conta todos com mínimo (revisão de 19/10: mostrava 114 em vez de 267)
+  assert.deepEqual(resumoMinimoDaTela(linhas, { ver: 'abaixo' }), { comMinimo: 5, abaixo: 3, faltaValor: 38, semCusto: 1 })
+  assert.deepEqual(resumoMinimoDaTela(linhas, { ver: 'abaixo', tipos: ['00'] }).comMinimo, 4)
 })

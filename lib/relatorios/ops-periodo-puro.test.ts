@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agregarOps, filtrarOps, resumoOps, serieOps, type LinhaOpBruta, type MetaOp } from './ops-periodo-puro.ts'
+import { agregarOps, codigosDoFiltro, filtrarOps, resumoOps, serieOps, type LinhaOpProduto, type MetaOp } from './ops-periodo-puro.ts'
 
-const L = (o: Partial<LinhaOpBruta>): LinhaOpBruta => ({ papel: 'produzido', dia: '2026-10-01', n_cod_prod: 1, ops: 1, qtde: 1, custo: null, ...o })
+// A RPC 211 já devolve uma linha por papel × produto (ops, quantidade, custo, dias) e a série por dia à parte.
+const L = (o: Partial<LinhaOpProduto>): LinhaOpProduto => ({ papel: 'produzido', n_cod_prod: 1, ops: 1, qtde: 1, custo: null, dias: 1, ...o })
 const meta = new Map<number, MetaOp>([
   [1, { rotulo: 'Moqueca', codigo: '90133', familia: 'Pratos', tipo: '04', unidade: 'UN' }],
   [2, { rotulo: 'Arroz (PI)', codigo: '70003', familia: 'PI', tipo: '03', unidade: 'KG' }],
@@ -10,35 +11,35 @@ const meta = new Map<number, MetaOp>([
 ])
 const F = { tipos: [] as string[], familias: [] as string[], q: '' }
 
-test('agrega por produto somando os dias; ordem: mais OPs, depois mais quantidade, depois nome', () => {
-  const brutas = [
-    L({ n_cod_prod: 1, ops: 2, qtde: 2 }), L({ n_cod_prod: 1, dia: '2026-10-02', ops: 1, qtde: 1 }),
-    L({ n_cod_prod: 2, ops: 3, qtde: 1.5 }), L({ papel: 'consumido', n_cod_prod: 3, ops: 3, qtde: 0.4 }),
-  ]
-  const r = agregarOps(brutas, meta, 'produzido', F)
-  assert.deepEqual(r.map((l) => [l.rotulo, l.ops, l.qtde, l.dias]), [['Moqueca', 3, 3, 2], ['Arroz (PI)', 3, 1.5, 1]])
-  assert.equal(r[0].unidade, 'UN')
-  assert.deepEqual(agregarOps(brutas, meta, 'consumido', F).map((l) => l.chave), ['3'])
+test('lista do papel pedido com o cadastro; ordem: mais OPs, depois mais quantidade, depois nome', () => {
+  const linhas = [L({ n_cod_prod: 1, ops: 3, qtde: 3, dias: 2 }), L({ n_cod_prod: 2, ops: 3, qtde: 1.5 }), L({ papel: 'consumido', n_cod_prod: 3, ops: 3, qtde: 0.4 })]
+  const r = agregarOps(linhas, meta, 'produzido', F)
+  assert.deepEqual(r.map((l) => [l.rotulo, l.ops, l.qtde, l.dias, l.unidade]), [['Moqueca', 3, 3, 2, 'UN'], ['Arroz (PI)', 3, 1.5, 1, 'KG']])
+  assert.deepEqual(agregarOps(linhas, meta, 'consumido', F).map((l) => l.chave), ['3'])
 })
 
-test('custo só existe quando toda linha tem custo; filtros de tipo, família e busca; produto sem cadastro', () => {
-  const brutas = [L({ n_cod_prod: 1, custo: 10 }), L({ n_cod_prod: 1, dia: '2026-10-02', custo: 5 }), L({ n_cod_prod: 2, custo: null }), L({ n_cod_prod: 9 })]
-  const r = agregarOps(brutas, meta, 'produzido', F)
-  assert.equal(r.find((l) => l.chave === '1')?.custo, 15)
-  assert.equal(r.find((l) => l.chave === '2')?.custo, null)
-  assert.equal(r.find((l) => l.chave === '9')?.rotulo, 'Produto 9')
-  assert.deepEqual(agregarOps(brutas, meta, 'produzido', { ...F, tipos: ['03'] }).map((l) => l.chave), ['2'])
-  assert.deepEqual(agregarOps(brutas, meta, 'produzido', { ...F, familias: ['Pratos'] }).map((l) => l.chave), ['1'])
-  assert.deepEqual(agregarOps(brutas, meta, 'produzido', { ...F, q: '7000' }).map((l) => l.chave), ['2'])
-  assert.deepEqual(filtrarOps(brutas, meta, { ...F, familias: ['Pratos'] }).length, 2)
+test('filtros de tipo, família e busca; produto sem cadastro', () => {
+  const linhas = [L({ n_cod_prod: 1, custo: 15 }), L({ n_cod_prod: 2 }), L({ n_cod_prod: 9 })]
+  assert.equal(agregarOps(linhas, meta, 'produzido', F).find((l) => l.chave === '9')?.rotulo, 'Produto 9')
+  assert.equal(agregarOps(linhas, meta, 'produzido', F).find((l) => l.chave === '1')?.custo, 15)
+  assert.deepEqual(agregarOps(linhas, meta, 'produzido', { ...F, tipos: ['03'] }).map((l) => l.chave), ['2'])
+  assert.deepEqual(agregarOps(linhas, meta, 'produzido', { ...F, familias: ['Pratos'] }).map((l) => l.chave), ['1'])
+  assert.deepEqual(agregarOps(linhas, meta, 'produzido', { ...F, q: '7000' }).map((l) => l.chave), ['2'])
+  assert.equal(filtrarOps(linhas, meta, { ...F, familias: ['Pratos'] }).length, 1)
 })
 
-test('resumo e série por dia (dias sem produção = 0)', () => {
-  const brutas = [L({ ops: 2, qtde: 4, custo: 8 }), L({ dia: '2026-10-03', n_cod_prod: 2, ops: 1, qtde: 1, custo: 2 }), L({ papel: 'consumido', n_cod_prod: 3, ops: 2, qtde: 0.5, custo: 1 })]
-  assert.deepEqual(resumoOps(brutas), { ops: 3, produtos: 2, insumos: 1, custoProduzido: 10, custoConsumido: 1 })
-  assert.deepEqual(resumoOps([L({ custo: null })]).custoProduzido, null)
-  assert.deepEqual(serieOps(brutas, '2026-10-01', '2026-10-03'), [
+test('códigos para o filtro no banco: null sem filtro; senão os do cadastro que passam', () => {
+  assert.equal(codigosDoFiltro(meta, F), null)
+  assert.deepEqual(codigosDoFiltro(meta, { ...F, tipos: ['01', '03'] }), [2, 3])
+  assert.deepEqual(codigosDoFiltro(meta, { ...F, q: 'zzz' }), [])
+})
+
+test('resumo (custo nulo se faltar em alguma linha) e série por dia com zeros', () => {
+  const linhas = [L({ ops: 2, custo: 8 }), L({ n_cod_prod: 2, ops: 1, custo: 2 }), L({ papel: 'consumido', n_cod_prod: 3, ops: 2, custo: 1 })]
+  assert.deepEqual(resumoOps(linhas), { ops: 3, produtos: 2, insumos: 1, custoProduzido: 10, custoConsumido: 1 })
+  assert.equal(resumoOps([L({ custo: 3 }), L({ n_cod_prod: 2, custo: null })]).custoProduzido, null)
+  assert.deepEqual(resumoOps([]), { ops: 0, produtos: 0, insumos: 0, custoProduzido: null, custoConsumido: null })
+  assert.deepEqual(serieOps([{ dia: '2026-10-01', ops: 2, qtde: 4 }, { dia: '2026-10-03', ops: 1, qtde: 1 }], '2026-10-01', '2026-10-03'), [
     { dia: '2026-10-01', ops: 2, qtde: 4 }, { dia: '2026-10-02', ops: 0, qtde: 0 }, { dia: '2026-10-03', ops: 1, qtde: 1 },
   ])
-  assert.deepEqual(resumoOps([]), { ops: 0, produtos: 0, insumos: 0, custoProduzido: null, custoConsumido: null })
 })

@@ -15,7 +15,7 @@ import { CartaoResumo as Card } from '@/components/faturamento/CartaoResumo'
 import { TabelaSugestao } from '@/components/compras/TabelaSugestao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { carregarSugestao, lerParamsSugestao } from '@/lib/compras/sugestao-dados'
-import { ehVisaoMinimo, filtrarSugestao, resumoMinimo, resumoSugestao } from '@/lib/compras/sugestao-puro'
+import { ehVisaoMinimo, filtrarSugestao, resumoMinimoDaTela, resumoSugestao } from '@/lib/compras/sugestao-puro'
 
 type Sp = Record<string, string | undefined>
 
@@ -41,7 +41,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
   const vis = filtrarSugestao(linhas, filtro)
   const res = resumoSugestao(vis)
   const visaoMinimo = ehVisaoMinimo(sp.ver)
-  const resMin = resumoMinimo(vis)
+  const resMin = resumoMinimoDaTela(linhas, filtro)
   const pagina = vis.slice(0, LIMITE_LINHAS)
 
   const familias = [...new Set(linhas.map((l) => l.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))

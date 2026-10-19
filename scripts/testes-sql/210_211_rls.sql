@@ -6,9 +6,9 @@ set local session_replication_role = replica;
 insert into ordens_producao (id, loja_id, concluida, dt_conclusao_real, identificacao_n_cod_produto, identificacao_n_qtde) values (995001, 15, true, '2026-10-01', 1, 1);
 set local session_replication_role = origin;
 create temp table t_admin as
-  select (select count(*) from relatorio_produtos_fornecedor(5)) pf5,
-         (select count(*) from relatorio_ops_periodo(5, '2026-09-12', '2026-10-13')) ops5,
-         (select count(*) from relatorio_ops_periodo(15, '2026-01-01', '2026-12-31')) ops15;
+  select jsonb_array_length(relatorio_produtos_fornecedor(5)) pf5,
+         jsonb_array_length(relatorio_ops_periodo(5, '2026-09-12', '2026-10-13')->'produtos') ops5,
+         jsonb_array_length(relatorio_ops_periodo(15, '2026-01-01', '2026-12-31')->'produtos') ops15;
 grant select on t_admin to authenticated;
 set local role authenticated;
 set local search_path = "$user", public;
@@ -17,15 +17,15 @@ do $$
 declare a record; n bigint;
 begin
   select * into a from t_admin;
-  select count(*) into n from relatorio_produtos_fornecedor(5);
+  n := jsonb_array_length(relatorio_produtos_fornecedor(5));
   if n <> a.pf5 or n = 0 then raise exception 'loja 5 produtos por fornecedor: usuário % x admin %', n, a.pf5; end if;
-  select count(*) into n from relatorio_ops_periodo(5, '2026-09-12', '2026-10-13');
+  n := jsonb_array_length(relatorio_ops_periodo(5, '2026-09-12', '2026-10-13')->'produtos');
   if n <> a.ops5 or n = 0 then raise exception 'loja 5 OPs: usuário % x admin %', n, a.ops5; end if;
   if a.ops15 = 0 then raise exception 'a loja 15 precisa de uma OP concluída para o teste valer'; end if;
-  select count(*) into n from relatorio_ops_periodo(15, '2026-01-01', '2026-12-31');
+  n := jsonb_array_length(relatorio_ops_periodo(15, '2026-01-01', '2026-12-31')->'produtos');
   if n <> 0 then raise exception 'usuário da loja 5 viu % linhas da loja 15', n; end if;
-  select count(*) into n from relatorio_produtos_fornecedor(15);
+  n := jsonb_array_length(relatorio_produtos_fornecedor(15));
   if n <> 0 then raise exception 'usuário da loja 5 viu compras da loja 15'; end if;
-  raise notice 'RLS 210/211 OK (loja 5: % pares, % linhas de OP; loja 15 escondida)', a.pf5, a.ops5;
+  raise notice 'RLS 210/211 OK (loja 5: % pares, % produto × papel de OP; loja 15 escondida)', a.pf5, a.ops5;
 end $$;
 rollback;

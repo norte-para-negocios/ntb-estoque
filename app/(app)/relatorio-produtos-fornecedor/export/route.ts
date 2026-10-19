@@ -2,6 +2,7 @@ import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { gerarPlanilhaMulti, planilhaResponse } from '@/lib/excel'
 import { carregarProdutosFornecedor, lerOpcoesPF } from '@/lib/relatorios/produtos-fornecedor-loader'
 import { rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
+import { modoDaLoja } from '@/lib/estoque/ledger'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,7 @@ const dataBR = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').revers
 export async function GET(request: Request) {
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
   const lojaId = await getCurrentLojaId()
+  if ((await modoDaLoja(lojaId)) === 'nenhum') return new Response('Esta loja não controla estoque', { status: 404 })
   const op = lerOpcoesPF(Object.fromEntries(new URL(request.url).searchParams.entries()))
   const { linhas, erros } = await carregarProdutosFornecedor(lojaId, op)
   if (!linhas.length) return new Response('Sem dados no filtro selecionado', { status: 404 })

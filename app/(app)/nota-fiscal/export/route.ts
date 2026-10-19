@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     natureza: searchParams.get('natureza') || undefined,
     familia: searchParams.get('familia') || undefined,
     local: searchParams.get('local') || undefined,
-    transportadora: searchParams.get('transportadora') || undefined,
+    transportadora: (searchParams.get('transportadora') || '').slice(0, 120) || undefined, // mesmo corte da tela
   }
   const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
 

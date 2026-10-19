@@ -10,37 +10,38 @@
 --
 -- Loja própria: compras lançadas (lancada/parcial, item lançado) de compras_proprio(_itens); custo = custo_unitario_base.
 -- A chave do fornecedor da loja própria é o md5 do CNPJ (o CNPJ nunca sai da função).
+--
+-- Velocidade (revisão de 19/10, medido em produção como usuário comum da loja 5): o JSON de cada nota (dRec, cancelada)
+-- é lido uma vez por nota, os itens só pelas colunas comuns, e o full_object do item (quantidade recebida, unidade e
+-- custo de estoque) só nas linhas da última compra (~1,5 mil, não nos ~20 mil itens). Devolve tudo num jsonb só (uma
+-- chamada; o PostgREST corta tabela em 1000 linhas e cada página refazia a função): antes 3,8–4,3 s por página × 2,
+-- depois 0,65–0,84 s numa chamada, com o mesmo resultado (1.483 pares, R$ 5.102.095,42, linha a linha igual).
 -- security invoker: vale a RLS de quem chama. Teste: scripts/testes-sql/210_relatorio_produtos_fornecedor.sql.
 -- Depende da 175 (custo_estoque_item_omie).
 
+drop function if exists public.relatorio_produtos_fornecedor(bigint);
 create or replace function public.relatorio_produtos_fornecedor(p_loja_id bigint)
-returns table (
-  n_cod_prod bigint, fornecedor_chave text, fornecedor text, fornecedor_fantasia text, codigo_fornecedor text,
-  ultima_data date, ultima_nota text, ultima_nota_id bigint, qtde numeric, unidade text, preco_unit numeric,
-  total numeric, custo_unit numeric, compras integer, total_comprado numeric, primeira_data date
-)
+returns jsonb
 language sql stable security invoker set search_path = public as $$
   with modo as (select coalesce((select l.modo_estoque from lojas l where l.id = p_loja_id), 'omie') as m),
-  omie as (
-    select i.n_id_produto as prod,
+  notas as materialized (  -- materializada: o JSON da nota é lido uma vez por nota, não por item
+    select n.id as nota_id, n.c_numero_nfe as nota,
            coalesce('id:' || n.n_id_fornecedor::text, 'nome:' || upper(btrim(coalesce(nullif(btrim(n.c_razao_social), ''), n.c_nome, '')))) as chave,
            coalesce(nullif(btrim(n.c_razao_social), ''), nullif(btrim(n.c_nome), ''), 'Sem fornecedor') as nome,
            nullif(btrim(n.c_nome), '') as fantasia,
-           nullif(btrim(i.c_codigo_produto), '') as cod_forn,
-           coalesce(case when (n.full_object->'infoCadastro'->>'dRec') ~ '^\d{2}/\d{2}/\d{4}$'
-                         then to_date(n.full_object->'infoCadastro'->>'dRec', 'DD/MM/YYYY') end, n.d_emissao_nfe) as dia,
-           n.c_numero_nfe as nota, n.id as nota_id, i.id as item_id,
-           coalesce(nullif(nullif(i.full_object->'itensAjustes'->>'nQtdeRecebida', '')::numeric, 0), i.n_qtde_nfe) as q,
-           coalesce(nullif(btrim(i.full_object->'itensAjustes'->>'cUnidade'), ''), i.c_unidade_nfe) as un,
-           coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0) as bruto,
-           round(coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0), 2) as tot,
-           custo_estoque_item_omie(i.full_object, i.n_qtde_nfe, i.n_preco_unit) as vest
+           coalesce(case when ic->>'dRec' ~ '^\d{2}/\d{2}/\d{4}$' then to_date(ic->>'dRec', 'DD/MM/YYYY') end, n.d_emissao_nfe) as dia
     from notas_fiscais n
-    join nota_fiscal_items i on i.loja_id = n.loja_id and i.nota_fiscal_id = n.id
+    cross join lateral (select n.full_object->'infoCadastro' as ic) j
     where (select m from modo) <> 'proprio'
       and n.loja_id = p_loja_id and n.deleted_at is null and n.c_etapa = '60'
-      and coalesce(n.full_object->'infoCadastro'->>'cCancelada', 'N') <> 'S'
-      and i.n_id_produto is not null and coalesce(i.c_ignorar_item, 'N') <> 'S'
+      and coalesce(ic->>'cCancelada', 'N') <> 'S'
+  ),
+  omie as (
+    select i.n_id_produto as prod, nt.chave, nt.nome, nt.fantasia, nullif(btrim(i.c_codigo_produto), '') as cod_forn, nt.dia,
+           nt.nota, nt.nota_id, i.id as item_id, round(coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0), 2) as tot
+    from notas nt
+    join nota_fiscal_items i on i.loja_id = p_loja_id and i.nota_fiscal_id = nt.nota_id
+    where i.n_id_produto is not null and coalesce(i.c_ignorar_item, 'N') <> 'S'
   ),
   proprio as (
     select it.codigo_produto as prod,
@@ -49,14 +50,9 @@ language sql stable security invoker set search_path = public as $$
            coalesce(nullif(btrim(c.fornecedor_nome), ''), 'Sem fornecedor') as nome, null::text as fantasia,
            nullif(btrim(it.c_prod), '') as cod_forn,
            coalesce(c.emissao, (c.lancada_em at time zone 'America/Bahia')::date, (c.created_at at time zone 'America/Bahia')::date) as dia,
-           c.numero as nota, c.id as nota_id, it.id as item_id,
-           it.quantidade * coalesce(nullif(it.fator, 0), 1) as q, p.unidade as un,
-           it.valor_total - it.desconto as bruto,
-           round(it.valor_total - it.desconto, 2) as tot,
-           round(coalesce(it.custo_unitario_base, 0) * it.quantidade * coalesce(nullif(it.fator, 0), 1), 2) as vest
+           c.numero as nota, c.id as nota_id, it.id as item_id, round(it.valor_total - it.desconto, 2) as tot
     from compras_proprio c
     join compras_proprio_itens it on it.compra_id = c.id and it.loja_id = c.loja_id
-    left join produtos p on p.loja_id = c.loja_id and p.codigo_produto = it.codigo_produto
     where (select m from modo) = 'proprio'
       and c.loja_id = p_loja_id and c.status in ('lancada', 'parcial') and it.lancado and it.codigo_produto is not null
   ),
@@ -67,15 +63,36 @@ language sql stable security invoker set search_path = public as $$
   ),
   ult as (
     select distinct on (prod, chave) * from u order by prod, chave, dia desc nulls last, nota_id desc, item_id desc
+  ),
+  -- só a última compra de cada par lê o detalhe do item (quantidade recebida, unidade, custo de estoque)
+  det as (
+    select ult.*, agg.compras, agg.total_comprado, agg.primeira, d.q, d.un, d.bruto, d.vest
+    from ult
+    join agg on agg.prod = ult.prod and agg.chave = ult.chave
+    cross join lateral (
+      select coalesce(nullif(nullif(i.full_object->'itensAjustes'->>'nQtdeRecebida', '')::numeric, 0), i.n_qtde_nfe) as q,
+             coalesce(nullif(btrim(i.full_object->'itensAjustes'->>'cUnidade'), ''), i.c_unidade_nfe) as un,
+             coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0) as bruto,
+             custo_estoque_item_omie(i.full_object, i.n_qtde_nfe, i.n_preco_unit) as vest
+      from nota_fiscal_items i where (select m from modo) <> 'proprio' and i.id = ult.item_id
+      union all
+      select it.quantidade * coalesce(nullif(it.fator, 0), 1), p.unidade, it.valor_total - it.desconto,
+             coalesce(it.custo_unitario_base, 0) * it.quantidade * coalesce(nullif(it.fator, 0), 1)
+      from compras_proprio_itens it
+      left join produtos p on p.loja_id = it.loja_id and p.codigo_produto = it.codigo_produto
+      where (select m from modo) = 'proprio' and it.id = ult.item_id
+    ) d
   )
-  select ult.prod, ult.chave, ult.nome, ult.fantasia, ult.cod_forn, ult.dia, ult.nota, ult.nota_id,
-         round(ult.q, 6), ult.un,
-         case when ult.q > 0 then round(ult.bruto / ult.q, 6) end,
-         ult.tot,
-         case when ult.q > 0 then round(ult.vest / ult.q, 6) end,
-         agg.compras, agg.total_comprado, agg.primeira
-  from ult join agg on agg.prod = ult.prod and agg.chave = ult.chave
-  order by ult.prod, ult.chave
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'n_cod_prod', det.prod, 'fornecedor_chave', det.chave, 'fornecedor', det.nome, 'fornecedor_fantasia', det.fantasia,
+           'codigo_fornecedor', det.cod_forn, 'ultima_data', det.dia, 'ultima_nota', det.nota, 'ultima_nota_id', det.nota_id,
+           'qtde', round(det.q, 6), 'unidade', det.un,
+           'preco_unit', case when det.q > 0 then round(det.bruto / det.q, 6) end,
+           'total', det.tot,
+           'custo_unit', case when det.q > 0 then round(det.vest / det.q, 6) end,
+           'compras', det.compras, 'total_comprado', det.total_comprado, 'primeira_data', det.primeira
+         ) order by det.prod, det.chave), '[]'::jsonb)
+  from det
 $$;
 
 revoke all on function public.relatorio_produtos_fornecedor(bigint) from public, anon;

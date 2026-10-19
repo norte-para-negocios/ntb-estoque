@@ -120,4 +120,6 @@
 | Estrutura dos Produtos | `/estoque/fichas/excel` | — | × captura: nível 1 5.077/5.077; níveis 2+ 3.925/4.355 (o Omie não abre algumas PIs com ficha) |
 | OP por Produto / por Matéria-prima / Concluídas | `/relatorio-ops` + Excel | 211 | captura do Omie deu timeout; RPC = SQL direto (7.044 OPs, 15.630,209; kardex 15.449 / 14.184,878 e 60.062 / 1.006.648,930) |
 
-Ordem das migrations: 210 → 211 (210 depende da 175). Testes: puros (`node --test`), SQL 210, 211 e RLS (`210_211_rls.sql`).
+Ordem das migrations: 210 → 211 (210 depende da 175).
+
+Revisão independente (19/10): I1 cartões do mínimo sobre todos com mínimo (`resumoMinimoDaTela`); I2 210 em jsonb, nota lida uma vez, item só na última compra: produção, usuário comum, loja 5: 3,8–4,3 s × 2 páginas → 0,65–0,84 s, mesmo resultado (1.483 pares, R$ 5.102.095,42, linha a linha); I3 211 em jsonb agregado (produtos + dias), filtro por `p_produtos`: 1 ano da loja 5, 57 chamadas de ~1,6 s → 1 chamada de 1,3 s, mesmos totais; M1 testes SQL limpam as lojas usadas dentro da transação; M3 Excel barra loja sem estoque; M6 transportadora cortada em 120 também no Excel/PDF. Testes: puros (`node --test`), SQL 210, 211 e RLS (`210_211_rls.sql`).

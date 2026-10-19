@@ -5,6 +5,20 @@ begin;
 set local session_replication_role = replica;  -- a trava de troca de modo e as FKs não interessam aqui
 update lojas set modo_estoque = 'omie' where id = 9;
 update lojas set modo_estoque = 'proprio' where id = 18;
+-- o teste não depende do que já existe nas duas lojas do banco local
+delete from nota_fiscal_items where loja_id in (9, 18);
+delete from notas_fiscais where loja_id in (9, 18);
+delete from compras_proprio_itens where loja_id in (9, 18);
+delete from compras_proprio where loja_id in (9, 18);
+-- a função devolve um jsonb (uma chamada só); aqui vira tabela para conferir
+create function pg_temp.pf(l bigint) returns table (
+  n_cod_prod bigint, fornecedor_chave text, fornecedor text, fornecedor_fantasia text, codigo_fornecedor text, ultima_data date,
+  ultima_nota text, ultima_nota_id bigint, qtde numeric, unidade text, preco_unit numeric, total numeric, custo_unit numeric,
+  compras integer, total_comprado numeric, primeira_data date
+) language sql as $f$ select * from jsonb_to_recordset(public.relatorio_produtos_fornecedor(l)) as x(
+  n_cod_prod bigint, fornecedor_chave text, fornecedor text, fornecedor_fantasia text, codigo_fornecedor text, ultima_data date,
+  ultima_nota text, ultima_nota_id bigint, qtde numeric, unidade text, preco_unit numeric, total numeric, custo_unit numeric,
+  compras integer, total_comprado numeric, primeira_data date) $f$;
 insert into notas_fiscais (id, loja_id, n_id_receb, n_id_fornecedor, c_razao_social, c_nome, c_etapa, c_numero_nfe, d_emissao_nfe, full_object) values
  (900001, 9, 'r1', 77, 'FORNECEDOR A LTDA', 'A FANTASIA', '60', '100', '2026-09-01', '{"infoCadastro": {"cCancelada": "N", "dRec": "03/09/2026"}}'),
  -- mais nova pela emissão, mas recebida antes: a última é a de recebimento mais recente (r1 tem dRec 03/09)
@@ -35,25 +49,28 @@ insert into compras_proprio_itens (compra_id, loja_id, linha, c_prod, quantidade
 do $$
 declare r record; n int;
 begin
-  select count(*) into n from relatorio_produtos_fornecedor(9);
+  select count(*) into n from pg_temp.pf(9);
   if n <> 2 then raise exception 'loja Omie: esperava 2 pares, veio %', n; end if;
-  select * into r from relatorio_produtos_fornecedor(9) where fornecedor_chave = 'id:77';
+  select * into r from pg_temp.pf(9) where fornecedor_chave = 'id:77';
   if r.ultima_nota <> '100' or r.ultima_data <> '2026-09-03' or r.qtde <> 24 or r.unidade <> 'UN' or r.preco_unit <> 2.5 or r.total <> 60
      or r.custo_unit <> 2.5 or r.compras <> 2 or r.total_comprado <> 159 or r.primeira_data <> '2026-09-02' or r.fornecedor_fantasia <> 'A FANTASIA'
      or r.codigo_fornecedor <> 'X-1'
   then raise exception 'fornecedor A: %', row_to_json(r); end if;
-  select * into r from relatorio_produtos_fornecedor(9) where fornecedor_chave = 'nome:SEM CADASTRO ME';
+  select * into r from pg_temp.pf(9) where fornecedor_chave = 'nome:SEM CADASTRO ME';
   if r.n_cod_prod <> 500 or r.ultima_data <> '2026-09-05' or r.qtde <> 3 or r.preco_unit <> 4 then raise exception 'sem cadastro: %', row_to_json(r); end if;
   -- loja própria: só a compra lançada; chave sem o CNPJ em claro
-  select count(*) into n from relatorio_produtos_fornecedor(18);
+  select count(*) into n from pg_temp.pf(18);
   if n <> 1 then raise exception 'loja própria: esperava 1 par, veio %', n; end if;
-  select * into r from relatorio_produtos_fornecedor(18);
+  select * into r from pg_temp.pf(18);
   if r.ultima_nota <> 'P1' or r.qtde <> 12 or r.total <> 90 or r.preco_unit <> 7.5 or r.custo_unit <> 7.5 or r.compras <> 1
      or r.fornecedor_chave not like 'cnpj:%' or r.fornecedor_chave like '%11222333%'
   then raise exception 'própria: %', row_to_json(r); end if;
   -- a loja Omie não lê compras_proprio e a própria não lê as notas do Omie
-  select count(*) into n from relatorio_produtos_fornecedor(18) where fornecedor_chave like 'id:%';
+  select count(*) into n from pg_temp.pf(18) where fornecedor_chave like 'id:%';
   if n <> 0 then raise exception 'loja própria leu notas do Omie'; end if;
+  -- uma chamada traz tudo, em ordem de produto e fornecedor
+  if jsonb_typeof(relatorio_produtos_fornecedor(9)) <> 'array' or jsonb_array_length(relatorio_produtos_fornecedor(9)) <> 2 then raise exception 'jsonb'; end if;
+  if relatorio_produtos_fornecedor(7) <> '[]'::jsonb then raise exception 'loja sem compras deveria devolver []'; end if;
   raise notice 'relatorio_produtos_fornecedor OK';
 end $$;
 rollback;

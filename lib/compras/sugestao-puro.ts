@@ -237,6 +237,11 @@ export function filtrarSugestao(linhas: LinhaSugestao[], f: FiltroSugestao): Lin
       : (a, b) => ORDEM_REC[a.recomendacao] - ORDEM_REC[b.recomendacao] || a.diasAtePonto - b.diasAtePonto || a.descricao.localeCompare(b.descricao, 'pt-BR'))
 }
 
+/** Cartões das visões de mínimo na tela: sempre sobre todos os que têm mínimo (com os outros filtros), mesmo na visão "abaixo". */
+export function resumoMinimoDaTela(linhas: LinhaSugestao[], f: FiltroSugestao) {
+  return resumoMinimo(filtrarSugestao(linhas, { ...f, ver: 'minimo' }))
+}
+
 /** Cartões das visões de mínimo: quantos têm mínimo, quantos estão abaixo e quanto custa repor até o mínimo. */
 export function resumoMinimo(linhas: LinhaSugestao[]): { comMinimo: number; abaixo: number; faltaValor: number; semCusto: number } {
   const r = { comMinimo: 0, abaixo: 0, faltaValor: 0, semCusto: 0 }

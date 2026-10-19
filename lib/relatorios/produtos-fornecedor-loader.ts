@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
-import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { carregarCustoESaldo } from '@/lib/relatorios/custo-medio-loader'
 import { rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
 import { montarProdutosFornecedor, SEM_FAMILIA, type BrutoPF, type MetaPF, type OpcoesPF } from '@/lib/relatorios/produtos-fornecedor-puro'
@@ -27,7 +26,11 @@ export async function carregarProdutosFornecedor(lojaId: number, op: OpcoesPF) {
   const anotar = (onde: string) => (e: { message: string }) => { erros.push(onde); console.error(`produtos-fornecedor: ${onde}`, e.message) }
   type Prod = { codigo_produto: number; codigo: string | null; descricao: string | null; descricao_familia: string | null; tipo_item: string | null; unidade: string | null; inativo: boolean | null }
   const [brutas, prods, { custo, saldo, dataFoto }] = await Promise.all([
-    rpcTodos<BrutoPF>(supabase, 'relatorio_produtos_fornecedor', { p_loja_id: lojaId }, anotar('compras por fornecedor')),
+    // a função devolve um jsonb só (uma chamada; sem paginação que refaria a função a cada página)
+    supabase.rpc('relatorio_produtos_fornecedor', { p_loja_id: lojaId }).then(({ data, error }) => {
+      if (error) anotar('compras por fornecedor')(error)
+      return (Array.isArray(data) ? data : []) as BrutoPF[]
+    }),
     buscarTodasLinhas<Prod>((from, to) => supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, inativo')
       .eq('loja_id', lojaId).order('id').range(from, to), undefined, anotar('cadastro de produtos')),
     carregarCustoESaldo(lojaId, (onde) => erros.push(onde)),

@@ -1,10 +1,11 @@
 // Produção por produto e matéria-prima consumida no período (matriz N17/N18/N20), a partir da RPC relatorio_ops_periodo
-// (migration 211): uma linha por papel × dia × produto. Custo só é somado quando todas as linhas têm custo (loja própria
-// ou kardex do Omie); senão fica nulo, nunca um total pela metade.
+// (migration 211), que já devolve uma linha por papel × produto e a série por dia à parte. Custo vem nulo da RPC quando
+// alguma OP não tem custo (nunca um total pela metade); aqui o total também fica nulo se faltar em alguma linha.
 // Puro, sem imports: node --test lib/relatorios/ops-periodo-puro.test.ts
 
 export type PapelOp = 'produzido' | 'consumido'
-export type LinhaOpBruta = { papel: PapelOp; dia: string; n_cod_prod: number; ops: number; qtde: number; custo: number | null }
+export type LinhaOpProduto = { papel: PapelOp; n_cod_prod: number; ops: number; qtde: number; custo: number | null; dias: number }
+export type DiaOp = { dia: string; ops: number; qtde: number }
 export type MetaOp = { rotulo: string; codigo: string; familia: string; tipo: string; unidade: string }
 export type LinhaOp = { chave: string; rotulo: string; codigo: string; familia: string; tipo: string; unidade: string; ops: number; qtde: number; custo: number | null; dias: number }
 export type FiltrosOp = { tipos: string[]; familias: string[]; q: string }
@@ -15,46 +16,48 @@ const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
 const metaDe = (meta: Map<number, MetaOp>, cod: number): MetaOp =>
   meta.get(cod) ?? { rotulo: `Produto ${cod}`, codigo: String(cod), familia: 'Sem família', tipo: '', unidade: '' }
 
-/** Linhas cujo produto passa no filtro de tipo, família e busca (vale para os cartões e a série por dia). */
-export function filtrarOps(brutas: LinhaOpBruta[], meta: Map<number, MetaOp>, f: FiltrosOp): LinhaOpBruta[] {
+const passa = (m: MetaOp, f: FiltrosOp, termo: string) =>
+  (!f.tipos.length || f.tipos.includes(m.tipo || '_')) && (!f.familias.length || f.familias.includes(m.familia))
+  && (!termo || semAcento(`${m.rotulo} ${m.codigo}`).includes(termo))
+
+const temFiltro = (f: FiltrosOp) => f.tipos.length > 0 || f.familias.length > 0 || f.q.trim() !== ''
+
+/** Produtos do cadastro que passam no filtro, para a RPC filtrar no banco (vale para a série por dia); null = sem filtro. */
+export function codigosDoFiltro(meta: Map<number, MetaOp>, f: FiltrosOp): number[] | null {
+  if (!temFiltro(f)) return null
   const termo = semAcento(f.q.trim())
-  return brutas.filter((b) => {
-    const m = metaDe(meta, Number(b.n_cod_prod))
-    return (!f.tipos.length || f.tipos.includes(m.tipo || '_')) && (!f.familias.length || f.familias.includes(m.familia))
-      && (!termo || semAcento(`${m.rotulo} ${m.codigo}`).includes(termo))
-  })
+  return [...meta.entries()].filter(([, m]) => passa(m, f, termo)).map(([c]) => c).sort((a, b) => a - b)
 }
 
-/** Uma linha por produto (somando os dias) do papel pedido, filtrada por tipo, família e busca (nome ou código). */
-export function agregarOps(brutas: LinhaOpBruta[], meta: Map<number, MetaOp>, papel: PapelOp, f: FiltrosOp): LinhaOp[] {
-  const g = new Map<number, { ops: number; qtde: number; custo: number; semCusto: boolean; dias: Set<string> }>()
-  for (const b of filtrarOps(brutas, meta, f)) {
-    if (b.papel !== papel) continue
-    const cod = Number(b.n_cod_prod)
-    const x = g.get(cod) ?? { ops: 0, qtde: 0, custo: 0, semCusto: false, dias: new Set<string>() }
-    x.ops += Number(b.ops) || 0
-    x.qtde += Number(b.qtde) || 0
-    if (b.custo == null) x.semCusto = true
-    else x.custo += Number(b.custo)
-    x.dias.add(b.dia)
-    g.set(cod, x)
-  }
-  return [...g.entries()].map(([cod, x]) => {
+/** Linhas cujo produto passa no filtro de tipo, família e busca. */
+export function filtrarOps(linhas: LinhaOpProduto[], meta: Map<number, MetaOp>, f: FiltrosOp): LinhaOpProduto[] {
+  const termo = semAcento(f.q.trim())
+  return linhas.filter((l) => passa(metaDe(meta, Number(l.n_cod_prod)), f, termo))
+}
+
+/** Lista do papel pedido, com o cadastro, filtrada; ordem: mais OPs, mais quantidade, nome. */
+export function agregarOps(linhas: LinhaOpProduto[], meta: Map<number, MetaOp>, papel: PapelOp, f: FiltrosOp): LinhaOp[] {
+  return filtrarOps(linhas, meta, f).filter((l) => l.papel === papel).map((l) => {
+    const cod = Number(l.n_cod_prod)
     const m = metaDe(meta, cod)
-    return { chave: String(cod), rotulo: m.rotulo, codigo: m.codigo, familia: m.familia, tipo: m.tipo, unidade: m.unidade, ops: x.ops, qtde: r6(x.qtde), custo: x.semCusto ? null : r2(x.custo), dias: x.dias.size }
+    return {
+      chave: String(cod), rotulo: m.rotulo, codigo: m.codigo, familia: m.familia, tipo: m.tipo, unidade: m.unidade,
+      ops: Number(l.ops) || 0, qtde: r6(Number(l.qtde) || 0), custo: l.custo == null ? null : r2(Number(l.custo)), dias: Number(l.dias) || 0,
+    }
   }).sort((a, b) => b.ops - a.ops || b.qtde - a.qtde || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
 
 /** Cartões: OPs (ou movimentos) de produção, produtos produzidos, insumos consumidos e custos (nulo se faltar custo). */
-export function resumoOps(brutas: LinhaOpBruta[]): { ops: number; produtos: number; insumos: number; custoProduzido: number | null; custoConsumido: number | null } {
+export function resumoOps(linhas: LinhaOpProduto[]): { ops: number; produtos: number; insumos: number; custoProduzido: number | null; custoConsumido: number | null } {
   const soma = (p: PapelOp) => {
-    const ls = brutas.filter((b) => b.papel === p)
-    return ls.length && ls.every((b) => b.custo != null) ? r2(ls.reduce((s, b) => s + Number(b.custo), 0)) : null
+    const ls = linhas.filter((l) => l.papel === p)
+    return ls.length && ls.every((l) => l.custo != null) ? r2(ls.reduce((s, l) => s + Number(l.custo), 0)) : null
   }
+  const prod = linhas.filter((l) => l.papel === 'produzido')
   return {
-    ops: brutas.filter((b) => b.papel === 'produzido').reduce((s, b) => s + (Number(b.ops) || 0), 0),
-    produtos: new Set(brutas.filter((b) => b.papel === 'produzido').map((b) => Number(b.n_cod_prod))).size,
-    insumos: new Set(brutas.filter((b) => b.papel === 'consumido').map((b) => Number(b.n_cod_prod))).size,
+    ops: prod.reduce((s, l) => s + (Number(l.ops) || 0), 0),
+    produtos: new Set(prod.map((l) => Number(l.n_cod_prod))).size,
+    insumos: new Set(linhas.filter((l) => l.papel === 'consumido').map((l) => Number(l.n_cod_prod))).size,
     custoProduzido: soma('produzido'),
     custoConsumido: soma('consumido'),
   }
@@ -67,16 +70,9 @@ const proximoDia = (iso: string) => {
 }
 
 /** OPs e quantidade produzida por dia de `ini` a `fim` (dias sem produção = 0). */
-export function serieOps(brutas: LinhaOpBruta[], ini: string, fim: string): { dia: string; ops: number; qtde: number }[] {
-  const m = new Map<string, { ops: number; qtde: number }>()
-  for (const b of brutas) {
-    if (b.papel !== 'produzido') continue
-    const x = m.get(b.dia) ?? { ops: 0, qtde: 0 }
-    x.ops += Number(b.ops) || 0
-    x.qtde += Number(b.qtde) || 0
-    m.set(b.dia, x)
-  }
-  const out: { dia: string; ops: number; qtde: number }[] = []
-  for (let d = ini; d <= fim; d = proximoDia(d)) out.push({ dia: d, ops: m.get(d)?.ops ?? 0, qtde: r6(m.get(d)?.qtde ?? 0) })
+export function serieOps(dias: DiaOp[], ini: string, fim: string): DiaOp[] {
+  const m = new Map(dias.map((d) => [String(d.dia).slice(0, 10), d]))
+  const out: DiaOp[] = []
+  for (let d = ini; d <= fim; d = proximoDia(d)) out.push({ dia: d, ops: Number(m.get(d)?.ops) || 0, qtde: r6(Number(m.get(d)?.qtde) || 0) })
   return out
 }
