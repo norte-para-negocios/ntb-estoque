@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { headersDoContexto } from '@/lib/offline/contexto'
+import { metodoEscreve } from '@/lib/supabase/autor-puro'
 
 // O app roda 100% no stack self-hosted do Contabo desde a migracao de
 // 2026-07-31 (NEXT_PUBLIC_SUPABASE_URL aponta pro loopback 127.0.0.1:8100 --
@@ -44,13 +45,51 @@ export async function createClient() {
   })
 }
 
+// Fase G (histórico de alterações, migration 220): toda ESCRITA do service client feita dentro de uma requisição com
+// usuário logado leva o id dele no cabeçalho x-ntb-autor; o gatilho historico_registrar grava quem mudou. O banco só
+// aceita o cabeçalho com JWT de service_role (um usuário comum não se passa por outro). Sem cookies (cron, script) ou sem
+// sessão: sem cabeçalho, nada muda. Leitura (GET/HEAD) nunca resolve o usuário. Uma consulta ao login por requisição.
+const autorPorRequisicao = new WeakMap<object, Promise<string | null>>()
+
+async function autorDaRequisicao(): Promise<string | null> {
+  let store: Awaited<ReturnType<typeof cookies>>
+  try {
+    store = await cookies()
+  } catch {
+    return null // fora de uma requisição (script, after() já encerrado)
+  }
+  if (!store.getAll().some((c) => c.name.startsWith('sb-'))) return null
+  let p = autorPorRequisicao.get(store)
+  if (!p) {
+    p = (async () => {
+      try {
+        const { data } = await (await createClient()).auth.getUser()
+        return data.user?.id ?? null
+      } catch {
+        return null
+      }
+    })()
+    autorPorRequisicao.set(store, p)
+  }
+  return p
+}
+
+const fetchComAutor: typeof fetch = async (input, init) => {
+  if (!metodoEscreve(init?.method)) return fetch(input, init)
+  const autor = await autorDaRequisicao()
+  if (!autor) return fetch(input, init)
+  const headers = new Headers(init?.headers)
+  headers.set('x-ntb-autor', autor)
+  return fetch(input, { ...init, headers })
+}
+
 // Client com service_role para operacoes server-side que ignoram RLS
 // (syncs Omie, webhook, escritas administrativas). NUNCA expor ao browser.
 export function createServiceClient() {
   const { url, key } = urlEChaveAtuais('service')
   const headers = headersDoContexto()
   return createServerClient(url, key, {
-    ...(headers ? { global: { headers } } : {}),
+    global: { ...(headers ? { headers } : {}), fetch: fetchComAutor },
     cookies: {
       getAll() {
         return []
