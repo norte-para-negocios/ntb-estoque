@@ -60,6 +60,17 @@ test('filtrarSugestao: padrão esconde "não comprar" e tipos 08/09/99; ordem im
   assert.equal(r.semCusto, 2)
 })
 
+test('montarLinhasSugestao: requisições entram na entrada prevista e o lead time diz de onde veio (241)', () => {
+  const [l] = montarLinhasSugestao([bruta({ consumo_total: 300, estoque_atual: 0, entrada_nf: 10, entrada_requisicoes: 25, lead_time: 5, lead_time_origem: 'fornecedor' })], P)
+  assert.equal(l.entradaRequisicoes, 25)
+  assert.equal(l.entradaPrevista, 35)
+  assert.equal(l.leadTime, 5)
+  assert.equal(l.leadTimeOrigem, 'fornecedor')
+  const [semCampos] = montarLinhasSugestao([bruta({ consumo_total: 300 })], P)   // função antiga (201) sem as chaves novas
+  assert.equal(semCampos.entradaRequisicoes, 0)
+  assert.equal(semCampos.leadTimeOrigem, null)
+})
+
 test('valor estimado usa o custo médio quando existe (unidade da nota do Omie pode vir errada)', () => {
   const [l] = montarLinhasSugestao([bruta({ consumo_total: 300, ultimo_custo: 418.02, cmc: 0.206212 })], P)
   assert.equal(l.sugestao, 160)

@@ -149,12 +149,16 @@ export type LinhaBruta = {
   ultimo_custo: number | null; ultima_compra: string | null
   /** custo médio do produto (Omie: CMC da foto; próprio: estoque_custos) */
   cmc?: number | null
+  /** 241 (só próprio): itens de requisições abertas/aprovadas; ausente na função antiga */
+  entrada_requisicoes?: number
+  /** 241 (só próprio): de onde veio o lead time */
+  lead_time_origem?: 'produto' | 'fornecedor' | null
 }
 
 export type LinhaSugestao = LinhaCalculada & {
   codigoProduto: number; codigo: string; descricao: string; unidade: string; tipoItem: string | null; familia: string
   acao: AcaoSugestao; rotulo: string; estoqueMinimo: number; estoqueAtual: number; leadTimeInformado: boolean
-  entradaNf: number; entradaOps: number; entradaPedidos: number; previsaoVenda: number | null; consumoOps: number
+  entradaNf: number; entradaOps: number; entradaPedidos: number; entradaRequisicoes: number; leadTimeOrigem: 'produto' | 'fornecedor' | null; previsaoVenda: number | null; consumoOps: number
   fornecedorId: number | null; fornecedorNome: string | null; fornecedorCnpj: string | null
   ultimoCusto: number | null; ultimaCompra: string | null; custoMedio: number | null; valorEstimado: number
 }
@@ -170,7 +174,8 @@ export function montarLinhasSugestao(
 ): LinhaSugestao[] {
   return brutas.map((b) => {
     const entradaPedidos = n0(b.entrada_pedidos) + (p.pedidosExtra?.get(Number(b.codigo_produto)) ?? 0)
-    const entrada = n0(b.entrada_nf) + n0(b.entrada_ops) + entradaPedidos
+    const entradaRequisicoes = n0(b.entrada_requisicoes)
+    const entrada = n0(b.entrada_nf) + n0(b.entrada_ops) + entradaPedidos + entradaRequisicoes
     const prevVenda = n0(b.previsao_dias) > 0 && n0(b.previsao_qtde) > 0 ? r6((n0(b.previsao_qtde) / n0(b.previsao_dias)) * p.diasEstimativa) : null
     const calc = calcularSugestao({
       consumoTotal: n0(b.consumo_total), estoqueMinimo: n0(b.estoque_minimo), estoqueAtual: n0(b.estoque_atual),
@@ -187,7 +192,8 @@ export function montarLinhasSugestao(
       codigoProduto: Number(b.codigo_produto), codigo: b.codigo ?? String(b.codigo_produto), descricao: b.descricao ?? '(sem descrição)',
       unidade: b.unidade ?? 'UN', tipoItem: b.tipo_item, familia: b.familia ?? 'Sem família', acao, rotulo: rotuloRecomendacao(calc.recomendacao, acao),
       estoqueMinimo: n0(b.estoque_minimo), estoqueAtual: n0(b.estoque_atual), leadTimeInformado: b.lead_time != null && n0(b.lead_time) > 0,
-      entradaNf: n0(b.entrada_nf), entradaOps: n0(b.entrada_ops), entradaPedidos, previsaoVenda: prevVenda, consumoOps: n0(b.consumo_ops),
+      entradaNf: n0(b.entrada_nf), entradaOps: n0(b.entrada_ops), entradaPedidos, entradaRequisicoes,
+      leadTimeOrigem: b.lead_time_origem === 'produto' || b.lead_time_origem === 'fornecedor' ? b.lead_time_origem : null, previsaoVenda: prevVenda, consumoOps: n0(b.consumo_ops),
       fornecedorId: b.fornecedor_id == null ? null : Number(b.fornecedor_id), fornecedorNome: b.fornecedor_nome, fornecedorCnpj: b.fornecedor_cnpj,
       ultimoCusto: custo, ultimaCompra: b.ultima_compra, custoMedio: cmc,
       valorEstimado: custoRef != null && acao === 'comprar' ? Math.round(calc.sugestao * custoRef * 100) / 100 : 0,
