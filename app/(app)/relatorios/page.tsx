@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { getCurrentLojaId } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
-  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse,
+  TrendingUp, BarChart3, ShoppingCart, ArrowDownUp, DollarSign, Scale, Percent, ShieldCheck, CalendarCheck, ArrowUpRight, Boxes, ClipboardX, Factory, FileBarChart, Target, Flag, ChartColumnDecreasing, Warehouse, Calculator,
 } from 'lucide-react'
 
 type Rel = {
@@ -42,6 +42,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
       { href: '/relatorio-compras', titulo: 'Compras', icon: ShoppingCart, descricao: 'Quanto e de quem você compra; evolução do preço dos insumos.', pergunta: 'Estou pagando mais caro?' },
       { href: '/relatorio-estoque-valorizado', titulo: 'Estoque valorizado', icon: Boxes, descricao: 'Valor do estoque por produto: saldo x CMC da última foto do Omie.', pergunta: 'Quanto vale o meu estoque?' },
       { href: '/relatorio-posicao-estoque', titulo: 'Posição de estoque', icon: Warehouse, descricao: 'Quantidade, custo médio e valor por produto e por local, com zerados, inativos, um total só e o inventário tipo SPED (Bloco H) para o contador.', pergunta: 'O que tenho em cada local e quanto vale?' },
+      { href: '/relatorio-cmv', titulo: 'CMV / CPV', icon: Calculator, descricao: 'Custo do que foi vendido e do que foi consumido na produção no período, com a margem bruta real por produto, família e tipo.', pergunta: 'Quanto custou o que eu vendi?' },
       { href: '/relatorio-margem', titulo: 'Margem', icon: Percent, descricao: 'Margem por produto e família, mais e menos rentáveis.', pergunta: 'O que dá mais lucro?' },
     ],
   },

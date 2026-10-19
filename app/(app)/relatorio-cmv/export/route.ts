@@ -1,0 +1,62 @@
+import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
+import { hojeBahiaISO } from '@/lib/data-bahia'
+import { gerarPlanilhaMulti, planilhaResponse, type AbaPlanilha } from '@/lib/excel'
+import { carregarCmv } from '@/lib/relatorios/cmv-loader'
+import { agruparCmv, cmvFormulaOmie } from '@/lib/relatorios/cmv-puro'
+import { DIM_DA_ABA, lerParamsCmv, textoFonte } from '@/lib/relatorios/cmv-params'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: Request) {
+  if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
+  const lojaId = await getCurrentLojaId()
+  const p = lerParamsCmv(Object.fromEntries(new URL(request.url).searchParams.entries()), hojeBahiaISO())
+  const aba = p.aba === 'estoque' ? 'produtos' : p.aba
+  const d = await carregarCmv(lojaId, p.ini, p.fim, { tipos: p.tipos, familias: p.familias }, DIM_DA_ABA[aba])
+  if (!d.linhas.length) return new Response('Sem vendas no período/filtro selecionado', { status: 404 })
+  const linhas = d.fonte === 'proprio' ? d.linhas : agruparCmv(d.linhas, DIM_DA_ABA[aba])
+  const nome = aba === 'familias' ? 'Família' : aba === 'tipos' ? 'Tipo' : 'Produto'
+  const sub = `${p.ini} a ${p.fim} · ${textoFonte(d.fonte, d.cobertura, d.dataFoto)}${d.avisos.length ? ` · ATENÇÃO: ${d.avisos.join(' ')}` : ''}`
+  const abas: AbaPlanilha[] = [{
+    rows: linhas.filter((l) => l.faturamento !== 0 || l.cmv !== 0).map((l) => ({
+      rotulo: l.rotulo, familia: l.familia, tipo: l.tipo, quant: l.quant, faturamento: l.faturamento, cmv: l.cmv,
+      margem: Math.round((l.faturamento - l.cmv) * 100) / 100, obs: l.custoSuspeito ? 'Custo de hoje acima do preço de venda: ficou zero' : l.semCusto ? 'Sem custo' : '', pct: l.faturamento > 0 ? Math.round(((l.faturamento - l.cmv) / l.faturamento) * 1000) / 10 : null, consumo: l.consumo,
+    })),
+    colunas: [
+      { key: 'rotulo', label: nome, tipo: 'texto', largura: 44 },
+      ...(aba === 'produtos' && d.fonte !== 'proprio' ? [{ key: 'familia', label: 'Família', tipo: 'texto' as const, largura: 24 }, { key: 'tipo', label: 'Tipo', tipo: 'texto' as const, largura: 22 }] : []),
+      { key: 'quant', label: 'Quantidade vendida', tipo: 'numero', largura: 14, somar: true },
+      { key: 'faturamento', label: 'Faturamento', tipo: 'moeda', largura: 16, somar: true },
+      { key: 'cmv', label: 'CMV', tipo: 'moeda', largura: 16, somar: true },
+      { key: 'margem', label: 'Margem bruta', tipo: 'moeda', largura: 16, somar: true },
+      { key: 'pct', label: 'Margem %', tipo: 'numero', largura: 10 },
+      ...(d.fonte === 'kardex' ? [{ key: 'consumo', label: 'Consumo OP (CPV)', tipo: 'moeda' as const, largura: 16, somar: true }] : []),
+      ...(aba === 'produtos' ? [{ key: 'obs', label: 'Observação', tipo: 'texto' as const, largura: 34 }] : []),
+    ],
+    opts: { titulo: `CMV por ${nome.toLowerCase()}`, subtitulo: sub, autoFiltro: true },
+    nome: 'CMV',
+  }]
+  if (d.fonte === 'kardex') {
+    abas.push({
+      rows: agruparCmv(d.linhas, 'produto').map((l) => ({
+        rotulo: l.rotulo, tipo: l.tipo, ei: l.ei, compras: l.compras, producao: l.producao, ef: l.ef, formula: cmvFormulaOmie(l),
+        vendas: l.cmv, consumo: l.consumo, outras: Math.round((l.outrasSaidas - l.outrasEntradas) * 100) / 100,
+      })),
+      colunas: [
+        { key: 'rotulo', label: 'Produto', tipo: 'texto', largura: 44 },
+        { key: 'tipo', label: 'Tipo', tipo: 'texto', largura: 22 },
+        { key: 'ei', label: 'Estoque inicial (EI)', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'compras', label: 'Compras (C)', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'producao', label: 'Produção (P)', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'ef', label: 'Estoque final (EF)', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'formula', label: 'CMV/CPV (EI + C + P − EF)', tipo: 'moeda', largura: 18, somar: true },
+        { key: 'vendas', label: 'Saídas de venda', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'consumo', label: 'Consumo OP', tipo: 'moeda', largura: 16, somar: true },
+        { key: 'outras', label: 'Outras saídas − entradas', tipo: 'moeda', largura: 18, somar: true },
+      ],
+      opts: { titulo: 'CMV/CPV pelo estoque (fórmula do Omie)', subtitulo: sub, autoFiltro: true },
+      nome: 'Pelo estoque',
+    })
+  }
+  return planilhaResponse('cmv', await gerarPlanilhaMulti(abas))
+}
