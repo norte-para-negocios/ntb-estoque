@@ -6,6 +6,7 @@ import { viaDesktop } from '@/lib/offline/via-desktop'
 // (criarAjusteManual, transferência), que leem o CMC ao vivo. Loja 4 bloqueada; loja de teste = escrita simulada.
 
 import { revalidatePath } from 'next/cache'
+import { exigirPeriodoAberto } from '@/lib/estoque/periodo-fechado'
 import { createServiceClient } from '@/lib/supabase/server'
 import { carimboUsuario, getUser } from '@/lib/auth'
 import { contextoEscritaOmie, type LojaEscrita } from '@/lib/estoque/contexto-escrita-omie'
@@ -259,6 +260,9 @@ export async function corrigirCustoAjuste(input: {
   const invalido = validarCustoNovo(Number(input.custoNovo), custoAtual)
   if (invalido) return { error: invalido }
   const dataISO = diaDoMovimento(String(mov.data))
+  // Fase F: mês com fechamento formal trava (sem 2ª confirmação); o aviso de mês antigo continua abaixo.
+  const travado = await exigirPeriodoAberto(lojaId, [dataISO], 'correção de custo de ajuste')
+  if (travado) return { error: travado }
   const fechado = mesDoAjusteFechado(dataISO, hojeBahiaISO(), process.env.ESTOQUE_MES_FECHADO_ATE ?? null)
   if (fechado && input.confirmarMesFechado !== true) {
     return { error: `O mês deste ajuste (${dataISO.slice(5, 7)}/${dataISO.slice(0, 4)}) já foi enviado à contabilidade. Confirme de novo para corrigir mesmo assim.`, precisaConfirmarMesFechado: true }
@@ -328,6 +332,8 @@ export async function relancarCorrecaoCusto(correcaoId: number): Promise<Respost
   const svc = createServiceClient()
   const { data: c, error } = await svc.from('estoque_correcao_custo').select(COLS_CORRECAO).eq('id', correcaoId).eq('loja_id', lojaId).maybeSingle<CorrecaoRow>()
   if (error || !c) return { error: 'Correção não encontrada.' }
+  const travado = await exigirPeriodoAberto(lojaId, [c.data_ajuste], 'relançamento da correção de custo')
+  if (travado) return { error: travado }
   const etapa = proximaEtapaCorrecao(c.status, c.updated_at, Date.now())
   if (!etapa) return { error: c.status === 'concluido' ? 'Esta correção já foi concluída.' : 'Esta correção está em andamento agora. Espere alguns minutos.' }
   // Reivindica a linha: só um "Refazer" passa (o update condicional pelo status e pelo updated_at lidos).

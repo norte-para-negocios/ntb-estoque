@@ -12,7 +12,23 @@ import { excluirAjusteEstoque } from '@/lib/omie/ajuste'
 import { dataCriacaoBahia, dataOmieBR, hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { exigirPeriodoAberto, mesesFechadosSet } from '@/lib/estoque/periodo-fechado'
+import { foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
 import * as proprio from '@/lib/inventario/proprio'
+
+// Fase F: inventário com data num mês fechado não muda nem vai ao Omie (no banco, item novo/contagem/exclusão também
+// recusam). Conferido ANTES de qualquer estorno do ajuste do estoque próprio, para nada ficar pela metade.
+async function travaDoInventario(lojaId: number, ref: { inventarioId?: number; itemId?: number }): Promise<string | null> {
+  const sb = createServiceClient()
+  let invId = ref.inventarioId ?? null
+  if (!invId && ref.itemId) {
+    const { data: it } = await sb.from('inventario_items').select('inventario_id').eq('id', ref.itemId).eq('loja_id', lojaId).maybeSingle()
+    invId = (it as { inventario_id: number } | null)?.inventario_id ?? null
+  }
+  if (!invId) return null
+  const { data: inv } = await sb.from('inventarios').select('data').eq('id', invId).eq('loja_id', lojaId).maybeSingle()
+  return exigirPeriodoAberto(lojaId, [(inv as { data: string | null } | null)?.data ?? null], 'inventário')
+}
 
 export async function createInventario(
   codigoLocalEstoque: number,
@@ -28,6 +44,8 @@ export async function createInventario(
   if (!(await requirePermissao(lojaId, 'Inventarios - Criar'))) {
     return { error: 'Sem permissao para criar inventario' }
   }
+  const travadoCriar = await exigirPeriodoAberto(lojaId, [dataEscolhida ?? hojeBahia], 'inventário')
+  if (travadoCriar) return { error: travadoCriar }
   const userId = (await getUser()).id
   const supabase = createServiceClient()
   const dataInventario = dataCriacaoBahia(dataEscolhida) ?? dataCriacaoBahia(hojeBahia)!
@@ -96,6 +114,7 @@ export async function addInventarioItem(
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return null
   }
+  if (await travaDoInventario(lojaId, { inventarioId })) return null
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('inventario_items')
@@ -143,6 +162,8 @@ export async function enviarInventarioItem(
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
   }
+  const travadoEnvio = await travaDoInventario(lojaId, { itemId })
+  if (travadoEnvio) return { status: 'Erro', descricao_status: travadoEnvio, valor: null, id_ajuste: null, error: travadoEnvio }
   if ((await modoDaLoja(lojaId)) === 'proprio') return enviarItemProprio(lojaId, itemId, quan, motivo)
   const supabase = createServiceClient()
 
@@ -247,6 +268,8 @@ export async function removeInventarioItem(itemId: number) {
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
   }
+  const travado = await travaDoInventario(lojaId, { itemId })
+  if (travado) return { error: travado }
   const supabase = createServiceClient()
   if ((await modoDaLoja(lojaId)) === 'proprio') {
     const { data: it } = await supabase.from('inventario_items').select('id_ajuste').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()
@@ -441,6 +464,8 @@ export async function finishInventario(inventarioId: number) {
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
   }
+  const travado = await travaDoInventario(lojaId, { inventarioId })
+  if (travado) return { error: travado }
   const supabase = createServiceClient()
   if ((await modoDaLoja(lojaId)) === 'proprio') return concluirProprio(lojaId, inventarioId, true)
 
@@ -493,6 +518,8 @@ export async function forceSyncInventario(inventarioId: number) {
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
   }
+  const travado = await travaDoInventario(lojaId, { inventarioId })
+  if (travado) return { error: travado }
   const supabase = createServiceClient()
   if ((await modoDaLoja(lojaId)) === 'proprio') return concluirProprio(lojaId, inventarioId, false)
 
@@ -656,9 +683,18 @@ export async function retryAjustesInventarioPendentes(
     // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
     // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
     // presa (achado real da revisao final, 2026-08-10).
-    const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
+    let candidatos = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
       .filter((i) => i.id_ajuste === null && i.quan !== null)
-      .slice(0, limitePorLoja) as InventarioItemRetryRow[]
+    // Fase F: item de inventário com data num mês fechado não é reenviado ao Omie enquanto o mês estiver fechado.
+    const fechadosLoja = await mesesFechadosSet(loja.id)
+    if (fechadosLoja.size && candidatos.length) {
+      const invIds = [...new Set(candidatos.map((i) => i.inventario_id))]
+      const { data: invs, error: erroInvs } = await supabase.from('inventarios').select('id, data').eq('loja_id', loja.id).in('id', invIds)
+      const dataInv = new Map((invs ?? []).map((v) => [Number(v.id), v.data as string | null]))
+      // sem a data do inventário não dá para saber o mês: espera o próximo ciclo em vez de arriscar mandar
+      candidatos = erroInvs ? [] : candidatos.filter((i) => dataInv.has(Number(i.inventario_id)) && foraDoMesFechado(dataInv.get(Number(i.inventario_id)) ?? null, fechadosLoja))
+    }
+    const pendentes = candidatos.slice(0, limitePorLoja) as InventarioItemRetryRow[]
 
     if (pendentes.length === 0) {
       resultados.push({ loja_id: loja.id, tentadas: 0, sucesso: 0, falhas: 0 })
@@ -814,6 +850,8 @@ export async function duplicarInventario(inventarioId: number, dataEscolhida?: s
   if (dataEscolhida && dataEscolhida > hojeBahia) {
     return { error: 'A data não pode ser futura' }
   }
+  const travadoDup = await exigirPeriodoAberto(lojaId, [dataEscolhida ?? hojeBahia], 'inventário')
+  if (travadoDup) return { error: travadoDup }
   const supabase = createServiceClient()
 
   const { data: original } = await supabase
@@ -878,6 +916,8 @@ export async function excluirInventario(inventarioId: number) {
   if (!(await requirePermissao(lojaId, 'Inventarios - Excluir'))) {
     return { error: 'Sem permissão para excluir' }
   }
+  const travado = await travaDoInventario(lojaId, { inventarioId })
+  if (travado) return { error: travado }
   const supabase = createServiceClient()
   if ((await modoDaLoja(lojaId)) === 'proprio') {
     const { data: itens } = await supabase.from('inventario_items').select('id, id_ajuste').eq('inventario_id', inventarioId).eq('loja_id', lojaId)
@@ -936,6 +976,8 @@ export async function editQuantidadeInventarioItem(itemId: number, quan: number 
   if (!(await requirePermissao(lojaId, 'Inventarios - Editar'))) {
     return { error: 'Sem permissao para editar inventario' }
   }
+  const travado = await travaDoInventario(lojaId, { itemId })
+  if (travado) return { error: travado }
   const supabase = createServiceClient()
   if ((await modoDaLoja(lojaId)) === 'proprio') {
     const { data: it } = await supabase.from('inventario_items').select('id, id_ajuste').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()
@@ -1036,6 +1078,8 @@ export async function informarMotivoInventarioItem(itemId: number, motivo: strin
     return { status: 'Erro', descricao_status: 'Sem permissao para editar', valor: null, id_ajuste: null, error: 'Sem permissao para editar inventario' }
   }
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { status: 'Erro', descricao_status: 'Não se aplica a esta loja', valor: null, id_ajuste: null, error: 'Não se aplica' }
+  const travadoMotivo = await travaDoInventario(lojaId, { itemId })
+  if (travadoMotivo) return { status: 'Erro', descricao_status: travadoMotivo, valor: null, id_ajuste: null, error: travadoMotivo }
   const texto = (motivo ?? '').trim()
   if (texto.length < 3) return { status: 'Erro', descricao_status: 'Informe o motivo (mínimo 3 letras)', valor: null, id_ajuste: null, error: 'Motivo muito curto' }
   const { data: it } = await createServiceClient().from('inventario_items').select('quan').eq('id', itemId).eq('loja_id', lojaId).maybeSingle()

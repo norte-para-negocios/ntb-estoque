@@ -30,3 +30,17 @@ export async function situacaoPeriodoLoja(lojaId: number, dataISO: string): Prom
   const fechados = (await mesesFechados(lojaId)).map((m) => m.mes)
   return situacaoDaData(dataISO, hojeBahiaISO(), fechados, process.env.ESTOQUE_MES_FECHADO_ATE ?? null)
 }
+
+/**
+ * Nota de entrada do estoque próprio já lançada num mês fechado: desfazer a entrada ou excluir a nota mudaria o mês
+ * entregue ao contador. A data é a do movimento de entrada de cada item lançado (o banco recusa do mesmo jeito).
+ */
+export async function travaDaCompraLancada(lojaId: number, compraId: number): Promise<string | null> {
+  const sb = createServiceClient()
+  const { data: itens } = await sb.from('compras_proprio_itens').select('movimento_id').eq('compra_id', compraId).eq('loja_id', lojaId)
+    .eq('lancado', true).not('movimento_id', 'is', null).order('id')
+  const ids = (itens ?? []).map((i) => Number(i.movimento_id))
+  if (!ids.length) return null
+  const { data: movs } = await sb.from('estoque_movimentos').select('data_ref').eq('loja_id', lojaId).in('id', ids.slice(0, 500))
+  return exigirPeriodoAberto(lojaId, (movs ?? []).map((m) => String(m.data_ref)), 'nota de entrada lançada no estoque')
+}

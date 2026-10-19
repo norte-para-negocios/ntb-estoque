@@ -9,15 +9,16 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { btnClass } from '@/components/ui-kit/Button'
 import { Spinner } from '@/components/ui-kit/Spinner'
-import { impactoCorrecaoCusto, mesDoAjusteFechado, validarCustoNovo } from '@/lib/estoque/escrita-omie-puro'
+import { impactoCorrecaoCusto, validarCustoNovo } from '@/lib/estoque/escrita-omie-puro'
+import { situacaoDaData } from '@/lib/estoque/periodo-fechado-puro'
 import { corrigirCustoAjuste, relancarCorrecaoCusto } from '@/lib/actions/estoque-omie'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 })
 const qtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 
-export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataISO, produto, unidade, hoje, fechadoAte, simulado }: {
+export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataISO, produto, unidade, hoje, fechadoAte, mesesFechados = [], simulado }: {
   movimentoId: number; tipo: 'ENT' | 'SAI'; quantidade: number; custoAtual: number; dataISO: string; produto: string; unidade: string
-  hoje: string; fechadoAte: string | null; simulado: boolean
+  hoje: string; fechadoAte: string | null; mesesFechados?: string[]; simulado: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [txt, setTxt] = useState('')
@@ -32,7 +33,10 @@ export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataI
   const novo = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
   const invalido = txt ? validarCustoNovo(novo, custoAtual) : 'Informe o custo novo.'
   const imp = !invalido ? impactoCorrecaoCusto({ tipo, quantidade, custoAtual, custoNovo: novo }) : null
-  const fechado = mesDoAjusteFechado(dataISO, hoje, fechadoAte)
+  // Fase F: mês com fechamento formal trava; mês antigo (o aviso de sempre) pede a 2ª confirmação.
+  const situacao = situacaoDaData(dataISO, hoje, mesesFechados, fechadoAte)
+  const travado = situacao === 'fechado'
+  const fechado = situacao === 'antigo'
   const mes = `${dataISO.slice(5, 7)}/${dataISO.slice(0, 4)}`
 
   function salvar() {
@@ -77,6 +81,9 @@ export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataI
             <input type="checkbox" className="mt-0.5" checked={ciente} onChange={(e) => setCiente(e.target.checked)} />
             Confirmo excluir este ajuste no Omie e relançar com o custo novo.
           </label>
+          {travado && (
+            <p className="rounded-[var(--r-md)] bg-surface-2 p-2 font-medium text-err">O mês {mes} está fechado. Para corrigir, quem tem a permissão &quot;Reabrir mês&quot; reabre em Contador → Fechamento.</p>
+          )}
           {fechado && (
             <label className="flex items-start gap-2 rounded-[var(--r-md)] bg-surface-2 p-2 text-warn">
               <input type="checkbox" className="mt-0.5" checked={cienteMes} onChange={(e) => setCienteMes(e.target.checked)} />
@@ -86,7 +93,7 @@ export function CorrigirCusto({ movimentoId, tipo, quantidade, custoAtual, dataI
           {erro && <p className="rounded-[var(--r-md)] bg-surface-2 p-2 font-medium text-err">{erro}</p>}
         </div>
         <DialogFooter>
-          <button type="button" className={btnClass('primary')} disabled={pending || !!invalido || !ciente || (fechado && !cienteMes)} onClick={salvar}>
+          <button type="button" className={btnClass('primary')} disabled={pending || travado || !!invalido || !ciente || (fechado && !cienteMes)} onClick={salvar}>
             {pending && <Spinner />}Excluir e relançar no Omie
           </button>
         </DialogFooter>

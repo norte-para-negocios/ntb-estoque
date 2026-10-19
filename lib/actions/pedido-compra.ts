@@ -7,6 +7,7 @@ import { getCurrentLojaId, getProfile, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { exigirPeriodoAberto } from '@/lib/estoque/periodo-fechado'
 import { agruparPorFornecedor, validarParcelas, type LinhaParaPedido, type Parcela } from '@/lib/compras/pedido-puro'
 
 // Pedido de compra do estoque próprio (Fase C, I2/I3). Só loja modo 'proprio'; nada aqui fala com o Omie.
@@ -25,7 +26,7 @@ async function contexto(...permissoes: string[]): Promise<Ctx | Erro> {
 
 // As funções pc_* levantam as regras de negócio com errcode 22023 e mensagem em português; erro técnico não vaza.
 const msgErro = (e: { message?: string; code?: string } | null | undefined) => {
-  if (e?.code === '22023' && e.message) return e.message
+  if ((e?.code === '22023' || e?.code === 'PF001') && e.message) return e.message
   console.error('pedido-compra:', e?.message)
   return 'Não foi possível concluir agora. Tente de novo; se continuar, avise o suporte.'
 }
@@ -95,6 +96,15 @@ export async function salvarPedidoCompra(form: PedidoForm): Promise<{ id: number
   if ('error' in ctx) return ctx
   const inval = validar(form)
   if (inval) return { error: inval }
+  // Fase F: pedido criado num mês fechado não muda; previsão de entrega não cai num mês fechado (o banco também recusa).
+  let criadoEm: string | null = null
+  if (form.id) {
+    const { data: p } = await createServiceClient().from('pedidos_compra').select('created_at').eq('id', form.id).eq('loja_id', ctx.lojaId).maybeSingle()
+    criadoEm = (p as { created_at: string } | null)?.created_at ?? null
+  }
+  const travado = (await exigirPeriodoAberto(ctx.lojaId, [criadoEm], 'pedido de compra'))
+    ?? (await exigirPeriodoAberto(ctx.lojaId, [form.previsaoEntrega], 'previsão de entrega do pedido'))
+  if (travado) return { error: travado }
   const { data, error } = await createServiceClient().rpc('pc_salvar', { p_loja: ctx.lojaId, p_dados: paraJson(form, 'manual'), p_user: ctx.userId, p_nome: ctx.nome })
   if (error) return { error: msgErro(error) }
   const r = data as { id: number; numero: number; duplicado: boolean }

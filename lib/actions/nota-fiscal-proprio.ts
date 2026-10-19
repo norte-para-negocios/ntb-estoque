@@ -7,6 +7,7 @@ import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { travaDaCompraLancada } from '@/lib/estoque/periodo-fechado'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { espelharNotaNoFrio } from '@/lib/estoque/nf-frio'
 import { localPadraoEntrada } from '@/lib/estoque/nf-sefaz'
@@ -79,6 +80,8 @@ export async function desfazerEntradaNF(notaId: number): Promise<{ ok: true; est
   if ('error' in ctx) return ctx
   const compra = await compraDaNota(ctx.lojaId, notaId)
   if (!compra) return { error: 'Esta nota não tem entrada lançada.' }
+  const travado = await travaDaCompraLancada(ctx.lojaId, compra.id)
+  if (travado) return { error: travado }
   const { data, error } = await createServiceClient().rpc('estornar_compra', { p_compra_id: compra.id, p_user: ctx.userId })
   if (error) return { error: error.message }
   await registrarAuditoria('reverter', 'nota fiscal (entrada)', compra.numero ?? notaId, null)
@@ -93,6 +96,10 @@ export async function excluirNotaProprio(notaId: number): Promise<{ ok: true } |
   if ('error' in ctx) return ctx
   const sb = createServiceClient()
   const compra = await compraDaNota(ctx.lojaId, notaId)
+  if (compra) {
+    const travado = await travaDaCompraLancada(ctx.lojaId, compra.id)
+    if (travado) return { error: travado }
+  }
   if (compra && compra.status !== 'cancelada') {
     const { error } = await sb.rpc('estornar_compra', { p_compra_id: compra.id, p_user: ctx.userId })
     if (error) return { error: error.message }

@@ -3,6 +3,7 @@
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { exigirPeriodoAberto } from '@/lib/estoque/periodo-fechado'
 import { carimboUsuario, getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import {
@@ -176,6 +177,14 @@ function addDiasISO(iso: string, dias: number): string | null {
  * Cria uma OP no Omie e reflete no banco. A validade fica SO no nosso sistema.
  * ATENCAO: escreve de verdade no Omie da loja; testar apenas com o cliente ciente.
  */
+// Fase F: OP concluída num mês fechado não reverte nem é excluída; data nova não cai num mês fechado.
+async function travaDaOP(lojaId: number, opId: number, novasDatas: (string | null | undefined)[] = []): Promise<string | null> {
+  const { data: op } = await createServiceClient().from('ordens_producao').select('concluida, dt_conclusao_real').eq('id', opId).eq('loja_id', lojaId).maybeSingle()
+  const o = op as { concluida: boolean | null; dt_conclusao_real: string | null } | null
+  const r = o?.concluida ? await exigirPeriodoAberto(lojaId, [o.dt_conclusao_real], 'OP concluída') : null
+  return r ?? exigirPeriodoAberto(lojaId, novasDatas, 'ordem de produção')
+}
+
 export async function criarOrdemProducao(input: {
   nCodProduto: number
   data: string // 'YYYY-MM-DD'
@@ -195,6 +204,8 @@ export async function criarOrdemProducao(input: {
 
   const dData = dataParaBR(input.data)
   if (!dData) return { error: 'Data inválida' }
+  const travadoCriar = await exigirPeriodoAberto(lojaId, [input.data], 'ordem de produção')
+  if (travadoCriar) return { error: travadoCriar }
 
   // Loja de estoque proprio: a OP nasce no banco local, sem Omie.
   if (await ehLojaProprio(lojaId)) {
@@ -262,6 +273,8 @@ export async function criarOrdensProducao(input: {
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Criar'))) return { error: 'Sem permissão' }
   if (!input.itens.length) return { error: 'Adicione ao menos um produto' }
   if (!input.datas.length) return { error: 'Informe a data' }
+  const travadoDatas = await exigirPeriodoAberto(lojaId, input.datas, 'ordem de produção')
+  if (travadoDatas) return { error: travadoDatas }
 
   if (await ehLojaProprio(lojaId)) {
     const r = await criarOPsProprio(lojaId, input, await carimboUsuario())
@@ -403,6 +416,8 @@ export async function setDataOP(opId: number, dataISO: string) {
 
   const dData = dataParaBR(dataISO)
   if (!dData) return { error: 'Data inválida' }
+  const travadoData = await travaDaOP(lojaId, opId, [dataISO])
+  if (travadoData) return { error: travadoData }
   if (await ehLojaProprio(lojaId)) {
     const r = await alterarOPProprio(lojaId, opId, { data: dataISO }, await carimboUsuario())
     return 'error' in r ? { error: r.error } : { ok: true }
@@ -561,6 +576,9 @@ async function executarConclusaoOP(
     dataConclusaoISO = hojeISO
   }
   if (dataConclusaoISO > hojeISO) dataConclusaoISO = hojeISO
+  // Fase F: conclusão com data num mês fechado não vai ao Omie (vale para a tela, o lote e o reenvio do cron).
+  const travadoConclusao = await exigirPeriodoAberto(op.loja_id, [dataConclusaoISO], 'conclusão de OP')
+  if (travadoConclusao) return { error: travadoConclusao }
   const mc0 = dataConclusaoISO.match(/^(\d{4})-(\d{2})-(\d{2})/)
   const dataConclusao = mc0 ? `${mc0[3]}/${mc0[2]}/${mc0[1]}` : new Date().toLocaleDateString('pt-BR')
   const obs = await carimboUsuario()
@@ -698,6 +716,10 @@ export async function finishOP(
   const __d = viaDesktop('ordem-producao#finishOP', finishOP, [opId, dataEscolhidaISO, qtdeProduzida]); if (__d) return __d as never
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Ordens de Producao - Concluir'))) return { error: 'Sem permissão' }
+  if (dataEscolhidaISO) {
+    const travadoFim = await exigirPeriodoAberto(lojaId, [dataEscolhidaISO], 'conclusão de OP')
+    if (travadoFim) return { error: travadoFim }
+  }
   const supabaseSessao = await createClient()
   const {
     data: { user },
@@ -785,6 +807,8 @@ export async function excluirOP(opId: number) {
   const __d = viaDesktop('ordem-producao#excluirOP', excluirOP, [opId]); if (__d) return __d as never
   {
     const lojaProp = await getCurrentLojaId()
+    const travadoOP = await travaDaOP(lojaProp, opId)
+    if (travadoOP) return { error: travadoOP }
     if (await ehLojaProprio(lojaProp)) {
       if (!(await requirePermissao(lojaProp, 'Ordens de Producao - Excluir'))) return { error: 'Sem permissão' }
       return excluirOPProprio(lojaProp, opId, await carimboUsuario())
@@ -836,6 +860,8 @@ export async function reverterOP(opId: number) {
   const __d = viaDesktop('ordem-producao#reverterOP', reverterOP, [opId]); if (__d) return __d as never
   {
     const lojaProp = await getCurrentLojaId()
+    const travadoOP = await travaDaOP(lojaProp, opId)
+    if (travadoOP) return { error: travadoOP }
     if (await ehLojaProprio(lojaProp)) {
       if (!(await requirePermissao(lojaProp, 'Ordens de Producao - Reverter'))) return { error: 'Sem permissão' }
       return reverterOPProprio(lojaProp, opId, await carimboUsuario())
@@ -1127,6 +1153,11 @@ export async function reverterOPsEmLote(
     async (op) => {
       if (!op.identificacao_n_cod_op || !op.loja) {
         falhas.push({ id: op.id, error: 'OP sem código Omie ou loja inválida' })
+        return
+      }
+      const travadoRev = await travaDaOP(lojaId, op.id)
+      if (travadoRev) {
+        falhas.push({ id: op.id, error: travadoRev })
         return
       }
       try {

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, ClipboardList, SlidersHorizontal } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { mesesFechados } from '@/lib/estoque/periodo-fechado'
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { hojeBahiaISO } from '@/lib/data-bahia'
@@ -115,6 +116,7 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
   const podeCorrigir = modo === 'omie' && lojaId !== LOJA_BLOQUEADA && (await requirePermissao(lojaId, 'Estoque - Corrigir custo'))
   const lojaTeste = podeCorrigir ? (await lojaEspelho(lojaId)).isTest : false
   const fechadoAte = process.env.ESTOQUE_MES_FECHADO_ATE ?? null
+  const mesesFechadosLoja = podeCorrigir ? (await mesesFechados(lojaId)).map((m) => m.mes) : []
   type Pendente = { id: number; id_prod: number; data_ajuste: string; tipo: string; quantidade: number; custo_antigo: number | null; custo_novo: number; status: string; erro: string | null; user_nome: string | null; updated_at: string }
   let pendentes: Pendente[] = []
   if (modo === 'omie') {
@@ -228,7 +230,7 @@ export default async function AjustesPage({ searchParams }: { searchParams: Prom
                         origem: a.origemMov ?? null, motivo: a.motivo, origem_ajuste: a.origem, quan: a.quantidade, valor: a.custoUnit, codigo_local_estoque: a.local,
                       }, { aceitaIdSimulado: lojaTeste }) && (
                         <div className="font-normal"><CorrigirCusto movimentoId={a.id} tipo={a.tipo} quantidade={a.quantidade} custoAtual={a.custoUnit}
-                          dataISO={diaDoMovimento(a.quando)} produto={nome(a.produto)} unidade={p?.unidade ?? ''} hoje={hoje} fechadoAte={fechadoAte} simulado={lojaTeste} /></div>
+                          dataISO={diaDoMovimento(a.quando)} produto={nome(a.produto)} unidade={p?.unidade ?? ''} hoje={hoje} fechadoAte={fechadoAte} mesesFechados={mesesFechadosLoja} simulado={lojaTeste} /></div>
                       )}
                     </td>
                     <td className="num whitespace-nowrap px-2 py-2 text-right">{a.tipo === 'SLD' ? <span className="text-text-muted">contagem</span> : fmtBRL(a.valor)}</td>

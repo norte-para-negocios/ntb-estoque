@@ -8,6 +8,7 @@ import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { travaDaCompraLancada } from '@/lib/estoque/periodo-fechado'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { lerNfe, type ItemNfe, type NfeLida } from '@/lib/estoque/nfe-xml'
 import { gravarNotaCompleta, localPadraoEntrada, sugestoesDosItens } from '@/lib/estoque/nf-sefaz'
@@ -253,6 +254,8 @@ export async function estornarCompra(compraId: number): Promise<{ ok: true; esto
   const sb = createServiceClient()
   const { data: compra } = await sb.from('compras_proprio').select('id, numero').eq('id', compraId).eq('loja_id', ctx.lojaId).maybeSingle()
   if (!compra) return { error: 'Compra não encontrada.' }
+  const travado = await travaDaCompraLancada(ctx.lojaId, compraId)
+  if (travado) return { error: travado }
   const { data, error } = await sb.rpc('estornar_compra', { p_compra_id: compraId, p_user: ctx.userId })
   if (error) return { error: error.message }
   await sincronizarNotaDaCompra(ctx.lojaId, compraId)

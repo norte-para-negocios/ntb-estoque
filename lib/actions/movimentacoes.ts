@@ -9,6 +9,8 @@ import { type LojaOmie } from '@/lib/omie/client'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { entrada, saida, modoDaLoja } from '@/lib/estoque/ledger'
+import { exigirPeriodoAberto, mesesFechadosSet } from '@/lib/estoque/periodo-fechado'
+import { foraDoMesFechado } from '@/lib/estoque/periodo-fechado-puro'
 import { encerrarOuEnviarAjusteManual, motivoDoAjusteManual, validarCustoInformado } from '@/lib/omie/motivo-ajuste'
 
 const TIPOS_MANUAIS = new Set(['ENT', 'SAI'])
@@ -56,6 +58,9 @@ export async function criarAjusteManual(input: {
   if (!(await requirePermissao(lojaId, 'Movimentacoes - Criar'))) {
     return { error: 'Sem permissao para criar movimento' }
   }
+  // Fase F: data num mês fechado não vai ao Omie nem ao ledger (no próprio o banco também recusa).
+  const travado = await exigirPeriodoAberto(lojaId, [input.data ?? hojeBahia], 'ajuste de estoque')
+  if (travado) return { error: travado }
 
   // Loja de estoque proprio: o ajuste vai direto para o ledger (sem Omie). Mesmas regras de sempre: motivo obrigatorio,
   // data nao futura, quantidade > 0. Estorno e feito na propria tela de Movimentacoes.
@@ -216,7 +221,7 @@ export async function retryMovimentosManuaisPendentes(
   for (const loja of lojas) {
     const { data: errosGenericos, error: erroErros } = await supabase
       .from('movimentos')
-      .select('id, loja_id, status, tentativas, id_ajuste, quan')
+      .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
       .is('transferencia_id', null)
       .in('tipo', TIPOS_MANUAIS_ARR)
@@ -229,7 +234,7 @@ export async function retryMovimentosManuaisPendentes(
     const staleCutoff = new Date(Date.now() - SEM_CMC_STALE_HORAS * 3600_000).toISOString()
     const { data: semCmc, error: erroSemCmc } = await supabase
       .from('movimentos')
-      .select('id, loja_id, status, tentativas, id_ajuste, quan')
+      .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
       .is('transferencia_id', null)
       .in('tipo', TIPOS_MANUAIS_ARR)
@@ -248,7 +253,7 @@ export async function retryMovimentosManuaisPendentes(
     const processandoCutoff = new Date(Date.now() - PROCESSANDO_STALE_HORAS * 3600_000).toISOString()
     const { data: processandoTravados, error: erroProcessando } = await supabase
       .from('movimentos')
-      .select('id, loja_id, status, tentativas, id_ajuste, quan')
+      .select('id, loja_id, status, tentativas, id_ajuste, quan, data')
       .eq('loja_id', loja.id)
       .is('transferencia_id', null)
       .in('tipo', TIPOS_MANUAIS_ARR)
@@ -277,8 +282,10 @@ export async function retryMovimentosManuaisPendentes(
     // processandoTravados primeiro: sem isso, um backlog de 'Sem CMC' pode preencher
     // o limitePorLoja inteiro todo ciclo e nunca sobrar vaga pro reclaim de linha
     // presa (achado real da revisao final, 2026-08-10).
+    // Fase F: ajuste com data num mês fechado não é reenviado ao Omie enquanto o mês estiver fechado.
+    const fechadosLoja = await mesesFechadosSet(loja.id)
     const pendentes = [...(processandoTravados ?? []), ...(errosGenericos ?? []), ...(semCmc ?? [])]
-      .filter((m) => m.id_ajuste === null && m.quan !== null)
+      .filter((m) => m.id_ajuste === null && m.quan !== null && foraDoMesFechado((m as { data?: string | null }).data, fechadosLoja))
       .slice(0, limitePorLoja) as MovimentoManualRetryRow[]
 
     if (pendentes.length === 0) {
