@@ -7,6 +7,10 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { btnClass } from '@/components/ui-kit/Button'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { CriarOPProdutos } from '@/components/ordem-producao/CriarOPProdutos'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { formatarNomeProduto } from '@/lib/formatar-nome'
+import { quantidadeParaDuplicar } from '@/lib/produto/duplicar-puro'
+import type { ProdutoBusca } from '@/lib/actions/produtos-search'
 import { UNIDADE_OP_VALIDAS, descreverRecorrenciaOP, type UnidadeOP } from '@/lib/op-recorrencia'
 
 // Passo 2 da criacao de OP: escolher os produtos. O cabecalho (data/recorrencia/
@@ -15,7 +19,7 @@ import { UNIDADE_OP_VALIDAS, descreverRecorrenciaOP, type UnidadeOP } from '@/li
 export default async function NovaOPPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; unidade?: string; intervalo?: string; vezes?: string; local?: string; destino?: string; obs?: string }>
+  searchParams: Promise<{ data?: string; unidade?: string; intervalo?: string; vezes?: string; local?: string; destino?: string; obs?: string; duplicar?: string }>
 }) {
   const lojaId = await getCurrentLojaId()
   // Passo 2 da criacao de OP: exige a permissao de Criar (pode ser aberta por URL).
@@ -81,6 +85,22 @@ export default async function NovaOPPage({
     destinoNome = (loc?.descricao as string | null) ?? null
   }
 
+  // Fase G [M6]: duplicar OP só no estoque próprio (no Omie a OP é escrita no Omie, que pede OK do dono).
+  const itensIniciais: { produto: ProdutoBusca; quantidade: string }[] = []
+  if (sp.duplicar && /^\d+$/.test(sp.duplicar) && (await modoDaLoja(lojaId)) === 'proprio') {
+    const supabase = await createClient()
+    const { data: origem } = await supabase.from('ordens_producao').select('identificacao_n_cod_produto, identificacao_n_qtde')
+      .eq('loja_id', lojaId).eq('id', Number(sp.duplicar)).maybeSingle()
+    if (origem?.identificacao_n_cod_produto) {
+      const { data: p } = await supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, unidade')
+        .eq('loja_id', lojaId).eq('codigo_produto', origem.identificacao_n_cod_produto).eq('inativo', false).maybeSingle()
+      if (p) itensIniciais.push({
+        produto: { ...(p as ProdutoBusca), descricao: formatarNomeProduto(p.descricao) },
+        quantidade: quantidadeParaDuplicar(Number(origem.identificacao_n_qtde)),
+      })
+    }
+  }
+
   const m = data.match(/^(\d{4})-(\d{2})-(\d{2})/)
   const dataBR = m ? `${m[3]}/${m[2]}/${m[1]}` : data
 
@@ -113,7 +133,7 @@ export default async function NovaOPPage({
           </span>
         }
       />
-      <CriarOPProdutos data={data} unidade={unidade} intervalo={intervalo} vezes={vezes} localCodigo={localCodigo} localNome={localNome} destinoCodigo={destinoCodigo} destinoNome={destinoNome} obs={obs} />
+      <CriarOPProdutos data={data} unidade={unidade} intervalo={intervalo} vezes={vezes} localCodigo={localCodigo} localNome={localNome} destinoCodigo={destinoCodigo} destinoNome={destinoNome} obs={obs} itensIniciais={itensIniciais} />
     </div>
   )
 }

@@ -87,7 +87,7 @@ export function FormProdutoProprio({ modo, familias, grupos, inicial }: { modo: 
   })
   const [linhas, setLinhas] = useState<LinhaVar[]>(() =>
     inicial?.variacoes.length
-      ? inicial.variacoes.map((v) => ({ codigo: v.codigo, valor: Object.values(v.atributos)[0] ?? v.descricao, preco: String(v.valorUnitario).replace('.', ','), inativo: v.inativo }))
+      ? inicial.variacoes.map((v) => ({ codigo: v.codigo || null, valor: Object.values(v.atributos)[0] ?? v.descricao, preco: String(v.valorUnitario).replace('.', ','), inativo: v.inativo }))
       : [{ codigo: null, valor: '', preco: '', inativo: false }, { codigo: null, valor: '', preco: '', inativo: false }]
   )
   const [extras, setExtras] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(inicial?.extras ?? {}).map(([k, v]) => [k, String(v)])))

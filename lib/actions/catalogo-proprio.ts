@@ -12,6 +12,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { criarProdutoProprio } from '@/lib/estoque/proprio-driver'
 import { entregarAgora, rodarSyncCatalogo } from '@/lib/estoque/catalogo-sync'
+import { validarCest, validarEan, validarOrigem } from '@/lib/importacao/planilha-puro'
 
 type Erro = { error: string }
 
@@ -26,6 +27,30 @@ async function lojaProprio(permissao: string): Promise<{ lojaId: number } | Erro
 
 function sincronizar(lojaId: number) {
   after(() => entregarAgora(lojaId))
+}
+
+/**
+ * Fase G [K1]: EAN, CEST e origem editáveis depois de criado (só estoque próprio; no Omie o caminho de escrita aprovado não
+ * manda esses campos). Valida dígito do EAN, CEST com 7 dígitos, origem 0–8 e EAN único na loja.
+ */
+async function fiscalValidado(lojaId: number, ean: string | null | undefined, extras: Record<string, string | number> | undefined, codigoAtual?: string):
+  Promise<{ ean: string | null; extras: Record<string, string | number> } | Erro> {
+  const e = validarEan(ean ?? '')
+  if (!e.ok) return { error: e.erro }
+  const ex: Record<string, string | number> = { ...(extras ?? {}) }
+  const cest = validarCest(ex.cest == null ? '' : String(ex.cest))
+  if (!cest.ok) return { error: cest.erro }
+  if (cest.valor) ex.cest = cest.valor; else delete ex.cest
+  const origem = validarOrigem(ex.origem == null ? '' : String(ex.origem))
+  if (!origem.ok) return { error: origem.erro }
+  if (origem.valor != null) ex.origem = origem.valor; else delete ex.origem
+  if (e.valor) {
+    let q = createServiceClient().from('produtos').select('codigo').eq('loja_id', lojaId).eq('ean', e.valor).limit(1)
+    if (codigoAtual) q = q.neq('codigo', codigoAtual)
+    const { data } = await q
+    if (data?.length) return { error: `Este EAN já é do produto ${data[0].codigo}` }
+  }
+  return { ean: e.valor, extras: ex }
 }
 
 // ---------------------------------------------------------------------------------------------- grupos
@@ -139,11 +164,13 @@ export async function criarProdutoCatalogo(d: ProdutoCatalogoInput): Promise<{ o
   }
   const menorPreco = ehMae ? Math.min(...variacoes.map((v) => v.preco)) : Number(d.valorUnitario) || 0
 
+  const fiscal = await fiscalValidado(ctx.lojaId, d.ean, d.extras)
+  if ('error' in fiscal) return fiscal
   const r = await criarProdutoProprio(ctx.lojaId, { ...d, valorUnitario: menorPreco, pdv: d.pdv ?? false })
   if ('error' in r) return { error: r.error }
   const extra: Record<string, unknown> = {
-    grupo_id: d.grupoId ?? null, atributos: limparAtributos(d.atributos), ean: d.ean?.trim() || null,
-    full_object: { extras: d.extras ?? {} }, validade_dias: validadeOk(d.validadeDias),
+    grupo_id: d.grupoId ?? null, atributos: limparAtributos(d.atributos), ean: fiscal.ean,
+    full_object: { extras: fiscal.extras }, validade_dias: validadeOk(d.validadeDias),
   }
   if (ehMae) extra.eh_mae = true
   const { error: e1 } = await supabase.from('produtos').update(extra).eq('loja_id', ctx.lojaId).eq('codigo_produto', r.codigoProduto)
@@ -215,12 +242,15 @@ export async function salvarProdutoCatalogo(
   const { data: p } = await supabase.from('produtos').select('id, codigo_produto, eh_mae, tipo_item, codigo_familia, descricao_familia').eq('loja_id', ctx.lojaId).eq('codigo', codigo).maybeSingle()
   if (!p) return { error: 'Produto não encontrado' }
 
+  const fiscal = await fiscalValidado(ctx.lojaId, d.ean, d.extras, codigo)
+  if ('error' in fiscal) return fiscal
+
   const ativas = variacoes.filter((v) => !v.inativo && v.descricao.trim())
   const preco = p.eh_mae && ativas.length ? Math.min(...ativas.map((v) => v.preco)) : d.valorUnitario
   const { error } = await supabase.from('produtos').update({
     descricao: d.descricao.trim(), unidade: d.unidade.trim(), ncm: ncm || null, estoque_minimo: d.estoqueMinimo, pdv: d.pdv,
-    inativo: d.inativo, valor_unitario: preco, grupo_id: d.grupoId, atributos: limparAtributos(d.atributos), ean: d.ean?.trim() || null,
-    full_object: { extras: d.extras ?? {} }, updated_at: new Date().toISOString(),
+    inativo: d.inativo, valor_unitario: preco, grupo_id: d.grupoId, atributos: limparAtributos(d.atributos), ean: fiscal.ean,
+    full_object: { extras: fiscal.extras }, updated_at: new Date().toISOString(),
     ...(d.validadeDias !== undefined ? { validade_dias: validadeOk(d.validadeDias) } : {}),
   }).eq('id', p.id as number)
   if (error) return { error: error.message }

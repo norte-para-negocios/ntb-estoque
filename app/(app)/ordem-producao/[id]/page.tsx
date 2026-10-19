@@ -13,6 +13,9 @@ import { HistoricoSyncOP } from '@/components/ordem-producao/HistoricoSyncOP'
 import { HistoricoEdicoesOP } from '@/components/ordem-producao/HistoricoEdicoesOP'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
+import Link from 'next/link'
+import { Copy } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
 import { detalheOPProprio } from '@/lib/estoque/op-proprio'
 import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
@@ -159,6 +162,8 @@ export default async function OrdemProducaoDetalhePage({
   // Data de referencia para os cruzamentos aproximados (inventario/NF): conclusao
   // real quando ja concluida, senao a data prevista -- mesma logica ja usada na
   // listagem (ordem-producao/page.tsx) para escolher qual data mostrar.
+  // Fase G [M6]: duplicar só no estoque próprio (no Omie, criar OP escreve no Omie e pede OK do dono).
+  const podeDuplicar = proprio && (await requirePermissao(lojaId, 'Ordens de Producao - Criar'))
   const dataReferencia: string | null = op.dt_conclusao_real ?? op.identificacao_d_dt_previsao ?? null
 
   return (
@@ -224,6 +229,21 @@ export default async function OrdemProducaoDetalhePage({
           <Campo label="Data de conclusão"><span className="num">{fmtDataBR(op.dt_conclusao_real) ?? '-'}</span></Campo>
         </dl>
       </div>
+
+      {proprio && podeDuplicar && (
+        <div className="flex justify-end">
+          <Link
+            href={`/ordem-producao/nova?${new URLSearchParams({
+              data: hojeISO, duplicar: String(op.id),
+              ...(op.identificacao_codigo_local_estoque ? { local: String(op.identificacao_codigo_local_estoque) } : {}),
+              ...(localDestinoCod ? { destino: String(localDestinoCod) } : {}),
+            }).toString()}`}
+            className={btnClass('outline')}
+          >
+            <Copy className="size-4" /> Duplicar OP
+          </Link>
+        </div>
+      )}
 
       {proprio && (
         <DetalheOPProprio

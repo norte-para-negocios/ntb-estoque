@@ -38,6 +38,7 @@ export function CriarOPProdutos({
   localCodigo,
   destinoCodigo = null,
   obs,
+  itensIniciais = [],
 }: {
   data: string
   unidade: UnidadeOP
@@ -48,9 +49,11 @@ export function CriarOPProdutos({
   destinoCodigo?: number | null
   destinoNome?: string | null
   obs: string
+  /** Fase G [M6]: "Duplicar OP" (estoque próprio) chega com o produto e a quantidade da OP de origem já na lista. */
+  itensIniciais?: { produto: ProdutoBusca; quantidade: string }[]
 }) {
   const proprio = useEstoqueProprio()
-  const [itens, setItens] = useState<ItemOP[]>([])
+  const [itens, setItens] = useState<ItemOP[]>(() => itensIniciais.map((i) => ({ ...i, validadeDias: '' })))
   const [filtro, setFiltro] = useState('')
   const [pending, startTransition] = useTransition()
   const router = useRouter()

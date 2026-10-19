@@ -8,6 +8,9 @@ import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { HistoricoFicha } from '@/components/historico/HistoricoFicha'
 import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
+import Link from 'next/link'
+import { Copy } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 
 // Edição do produto no estoque próprio: grupo/subgrupo, atributos, mãe e variações. Lojas Omie continuam na tela de lista.
 export default async function ProdutoCatalogoPage({ params }: { params: Promise<{ codigo: string }> }) {
@@ -17,7 +20,7 @@ export default async function ProdutoCatalogoPage({ params }: { params: Promise<
   const { codigo } = await params
   const produto = await carregarProdutoCatalogo(decodeURIComponent(codigo))
   if (!produto) notFound()
-  const [familias, grupos] = await Promise.all([buscarFamilias(), listarGrupos()])
+  const [familias, grupos, podeCriar] = await Promise.all([buscarFamilias(), listarGrupos(), requirePermissao(lojaId, 'Produtos - Criar')])
 
   return (
     <div className="space-y-5">
@@ -25,7 +28,14 @@ export default async function ProdutoCatalogoPage({ params }: { params: Promise<
         href="/produto"
         title={produto.descricao || produto.codigo}
         breadcrumb={[{ label: 'Produtos', href: '/produto' }, { label: produto.codigo }]}
-        meta={<span className="text-[13px] text-text-muted">{produto.ehMae ? `Produto mãe · ${produto.variacoes.length} variações` : produto.paiCodigoProduto != null ? 'Variação de um produto mãe' : 'Produto simples'}</span>}
+        meta={
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[13px] text-text-muted">{produto.ehMae ? `Produto mãe · ${produto.variacoes.length} variações` : produto.paiCodigoProduto != null ? 'Variação de um produto mãe' : 'Produto simples'}</span>
+            {podeCriar && produto.paiCodigoProduto == null && (
+              <Link href={`/produto/novo?duplicar=${encodeURIComponent(produto.codigo)}`} className={btnClass('outline')}><Copy className="size-4" /> Duplicar</Link>
+            )}
+          </div>
+        }
       />
       <FormProdutoProprio modo="editar" familias={familias} grupos={grupos} inicial={produto} />
       <AnexosRegistro lojaId={lojaId} entidade="produto" entidadeId={produto.codigoProduto} />
