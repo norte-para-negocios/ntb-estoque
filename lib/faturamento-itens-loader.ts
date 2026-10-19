@@ -53,7 +53,7 @@ export async function carregarItens(lojaId: number, ini: string, fim: string, fi
     if (filtros.familias.length && !filtros.familias.includes(familia)) return null
     return {
       dia: String(dia).slice(0, 10), cupom, idProduto, produto: m?.descricao || m?.codigo || nomeBruto || 'Produto não identificado',
-      tipoCod, tipo: rotuloTipo(tipoCod), familia, quant, valor,
+      tipoCod, tipo: rotuloTipo(tipoCod), familia, quant, valor, ...(m?.codigo ? { codigo: m.codigo } : {}),
     }
   }
 

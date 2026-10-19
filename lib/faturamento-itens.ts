@@ -10,6 +10,7 @@ export type LinhaItem = {
   familia: string
   quant: number
   valor: number
+  codigo?: string // código do cadastro (Curva ABC); ausente quando o produto não está cadastrado
 }
 export type Dimensao = 'produto' | 'familia' | 'tipo'
 export type LinhaRanking = { chave: string; rotulo: string; valor: number; quant: number; cupons: number; pct: number }
