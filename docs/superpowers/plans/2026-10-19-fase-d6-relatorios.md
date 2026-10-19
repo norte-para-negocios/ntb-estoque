@@ -1,6 +1,6 @@
 # Fase D item 6 — os demais relatórios do Omie (Compras, Estoque, Produção) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (execução inline, sem subagentes). Passos com checkbox (`- [ ]`).
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (execução inline, sem subagentes). Passos com checkbox (`- [x]`).
 
 **Goal:** dar às lojas Omie e às de estoque próprio os relatórios de Compras/Estoque/Produção do Omie que ainda faltam ou estão parciais (matriz do omie-rea §N), na ordem de impacto para um restaurante, com prova numérica.
 
@@ -59,10 +59,10 @@
 - `type BrutoPF` (= colunas da RPC), `type MetaPF = { codigo, descricao, familia, tipo, unidade, inativo, custoMedio: number | null, estoque: number }`.
 - `montarProdutosFornecedor(brutas: BrutoPF[], meta: Map<number, MetaPF>, op: { ver: 'produto' | 'fornecedor'; q: string; fornecedor: string; tipos: string[]; familias: string[]; inativos: boolean }): { linhas: LinhaPF[]; resumo: { produtos, fornecedores, pares, multiFornecedor } }` — `LinhaPF` = bruto + meta + `nFornecedores` (do produto) + `maisBarato` (menor `custo_unit` entre os fornecedores do produto, só quando > 1) + `variacaoPct` (custo da última compra × custo médio atual). Ordem `produto`: descrição, depois última data desc; `fornecedor`: nome, depois descrição.
 
-- [ ] Testes puros (empate, sem meta, filtro por fornecedor sem acento, inativo, maisBarato só com 2+, variação nula sem custo médio) → falhar → implementar → passar.
-- [ ] Migration + teste SQL (cancelada fora, última pela data e id, sem fornecedor cadastrado, loja própria) no `d6` → passar.
-- [ ] Loader (RPC por `rpcTodos` + `carregarPosicao` para cadastro, saldo e custo médio), tela (chips Por produto / Por fornecedor, busca, filtro de fornecedor, tipo/família, "Incluir inativos"), Excel com as colunas do Omie.
-- [ ] Prova: loja 5 (dados reais no `d6`) × captura do Omie de 17/10 (pares com última compra desde 07/2025: data, nota, quantidade, preço). tsc; commit.
+- [x] Testes puros (empate, sem meta, filtro por fornecedor sem acento, inativo, maisBarato só com 2+, variação nula sem custo médio) → falhar → implementar → passar.
+- [x] Migration + teste SQL (cancelada fora, última pela data e id, sem fornecedor cadastrado, loja própria) no `d6` → passar.
+- [x] Loader (RPC por `rpcTodos` + `carregarPosicao` para cadastro, saldo e custo médio), tela (chips Por produto / Por fornecedor, busca, filtro de fornecedor, tipo/família, "Incluir inativos"), Excel com as colunas do Omie.
+- [x] Prova: loja 5 (dados reais no `d6`) × captura do Omie de 17/10 (pares com última compra desde 07/2025: data, nota, quantidade, preço). tsc; commit.
 
 ### Task 2: Estoque mínimo / abaixo do mínimo (N5) na Sugestão de compra
 
@@ -70,9 +70,9 @@
 
 **Interfaces:** `filtrarSugestao` aceita `ver: 'minimo' | 'abaixo'` (mínimo > 0; abaixo = atual < mínimo); nessas visões o filtro padrão de tipo não se aplica (o relatório do Omie lista todos os tipos) e a ordem é `diferencaMinimo` crescente. `diferencaMinimo(l) = estoqueAtual − estoqueMinimo`; `resumoMinimo(linhas) → { comMinimo, abaixo, faltaValor }` (falta × custo médio, senão último custo).
 
-- [ ] Testes puros → falhar → implementar → passar.
-- [ ] Tela: opções no "Mostrar", cartões próprios nas duas visões, coluna Diferença no Excel; card "Estoque mínimo" no hub → `/sugestao-compra?ver=abaixo`.
-- [ ] Prova: mínimo e lista de produtos com mínimo (loja 5, `d6`) × captura `rel-com-estoque-minimo` (268 ativos). tsc; commit.
+- [x] Testes puros → falhar → implementar → passar.
+- [x] Tela: opções no "Mostrar", cartões próprios nas duas visões, coluna Diferença no Excel; card "Estoque mínimo" no hub → `/sugestao-compra?ver=abaixo`.
+- [x] Prova: mínimo e lista de produtos com mínimo (loja 5, `d6`) × captura `rel-com-estoque-minimo` (268 ativos). tsc; commit.
 
 ### Task 3: Recebimentos por transportadora (N28) em Notas Fiscais
 
@@ -80,8 +80,8 @@
 
 **Interfaces:** `NotaLeve.transportadora: string` (`transporte.cNomeTransp`, senão `cRazaoTransp`, senão `SEM_TRANSPORTADORA = 'Sem transportadora'`); `transportadoraDe(nome, razao)`; visão `'transportadoras'`; `notaParaLinha(n, por: 'fornecedor' | 'transportadora' = 'fornecedor')`; `FiltrosMemoria.transportadora` (exato).
 
-- [ ] Testes puros → falhar → implementar → passar. Tela + Excel.
-- [ ] Prova: as 12 notas da captura (`rel-com-recebimentos-por-trasnportadora`, 17/10) × banco (transportadora por nota). tsc; commit.
+- [x] Testes puros → falhar → implementar → passar. Tela + Excel.
+- [x] Prova: as 12 notas da captura (`rel-com-recebimentos-por-trasnportadora`, 17/10) × banco (transportadora por nota). tsc; commit.
 
 ### Task 4: Estrutura dos produtos multinível em Excel (N2)
 
@@ -89,23 +89,35 @@
 
 **Interfaces:** `type ItemFicha = { insumo: number; quantidade: number; perda: number; unidade: string | null }`; `explodirEstrutura(fichas: Map<number, ItemFicha[]>, produto: number, maxNivel = 10): LinhaEstrutura[]`, `LinhaEstrutura = { produto, nivel, caminho, ordem, insumo, quantidade, perda, unidade, temFicha, ciclo }` — ordem sequencial em profundidade (o item intermediário vem antes dos itens dele, como no Omie), quantidade do nível n = quantidade do pai no prato × quantidade por unidade do pai (perda só informada, não multiplica: regra vista na captura, vinagrete 0,053333 × cebola 0,145278 = 0,007748).
 
-- [ ] Testes puros (2 níveis com a conta do Omie, ciclo, limite, ficha vazia) → falhar → implementar → passar.
-- [ ] Excel (os dois modos; custo unitário = custo médio atual da posição; custo total = quantidade × custo).
-- [ ] Prova: loja 5 (`estrutura_produto_cache` no `d6`) × captura `rel-com-estrutura` (quantidades por produto × item, níveis 1 e 2). tsc; commit.
+- [x] Testes puros (2 níveis com a conta do Omie, ciclo, limite, ficha vazia) → falhar → implementar → passar.
+- [x] Excel (os dois modos; custo unitário = custo médio atual da posição; custo total = quantidade × custo).
+- [x] Prova: loja 5 (`estrutura_produto_cache` no `d6`) × captura `rel-com-estrutura` (quantidades por produto × item, níveis 1 e 2). tsc; commit.
 
 ### Task 5: Produção por produto e matéria-prima consumida (N17, N18, N20)
 
 **Files:** Create `supabase/migrations/211_relatorio_ops_periodo.sql`, `scripts/testes-sql/211_relatorio_ops_periodo.sql`, `lib/relatorios/ops-periodo-puro.ts` (+ teste), `lib/relatorios/ops-periodo-loader.ts`, `app/(app)/relatorio-ops/page.tsx`, `.../export/route.ts`. Modify `app/(app)/relatorios/page.tsx` (grupo Produção).
 
 **Interfaces:**
-- SQL `relatorio_ops_periodo(p_loja_id bigint, p_ini date, p_fim date) returns table(papel text, dia date, n_cod_prod bigint, ops integer, qtde numeric, custo numeric)`, `papel in ('produzido','consumido')`, ordem `papel, dia, n_cod_prod`. OPs concluídas com `dt_conclusao_real` no período. Omie: produzido = `identificacao_n_qtde`; consumido = `full_object.itensDetalhes[].nQtde` (mesma regra da `movimentacoes_loja`, 170); custo nulo. Próprio: produzido com `custo_total`; consumido = `ordens_producao_proprio_itens` da produção atual (`ordens_producao_proprio.ref = producao_ref`), custo = quantidade × custo unitário.
+- SQL `relatorio_ops_periodo(p_loja_id bigint, p_ini date, p_fim date, p_fonte text default 'ops') returns table(papel text, dia date, n_cod_prod bigint, ops integer, qtde numeric, custo numeric)` (`p_fonte = 'kardex'` = OPE/OPS do `kardex_omie`, decidido na execução: o espelho de OPs da loja 5 tem só 7.044 das 15.449 produções do kardex), `papel in ('produzido','consumido')`, ordem `papel, dia, n_cod_prod`. OPs concluídas com `dt_conclusao_real` no período. Omie: produzido = `identificacao_n_qtde`; consumido = `full_object.itensDetalhes[].nQtde` (mesma regra da `movimentacoes_loja`, 170); custo nulo. Próprio: produzido com `custo_total`; consumido = `ordens_producao_proprio_itens` da produção atual (`ordens_producao_proprio.ref = producao_ref`), custo = quantidade × custo unitário.
 - `agregarOps(linhas, meta: Map<number, {rotulo, familia, tipo, unidade}>, papel): LinhaOp[]` (`{ chave, rotulo, familia, tipo, unidade, qtde, ops, custo, dias }`, ordem qtde desc, rótulo) e `serieOps(linhas, ini, fim)` (OPs e quantidade produzida por dia, dias sem produção = 0).
 
-- [ ] Testes puros → falhar → implementar → passar. Migration + teste SQL no `d6`.
-- [ ] Tela (PeriodoBar padrão Este mês; visões Produzidos / Matéria-prima consumida / Por dia; filtros tipo/família; cartões OPs concluídas, produtos, insumos, custo da produção quando há) e Excel.
-- [ ] Prova: loja 5 (`d6`) × kardex do Omie (`kardex_omie` OPE/OPS) no mesmo período. tsc; commit.
+- [x] Testes puros → falhar → implementar → passar. Migration + teste SQL no `d6`.
+- [x] Tela (PeriodoBar padrão Este mês; visões Produzidos / Matéria-prima consumida / Por dia; filtros tipo/família; cartões OPs concluídas, produtos, insumos, custo da produção quando há) e Excel.
+- [x] Prova: loja 5 (`d6`) × kardex do Omie (`kardex_omie` OPE/OPS) no mesmo período. tsc; commit.
 
 ### Task 6: Documentação e fechamento
 
-- [ ] AGENTS.md: seção "Fase D item 6" (telas, regras, migrations 210 → 211, deploy, o que ficou fora). Sem server action nova (`inserir-via-desktop.mjs` não roda).
-- [ ] Todos os testes da fase + tsc; commit final.
+- [x] AGENTS.md: seção "Fase D item 6" (telas, regras, migrations 210 → 211, deploy, o que ficou fora). Sem server action nova (`inserir-via-desktop.mjs` não roda).
+- [x] Todos os testes da fase + tsc; commit final.
+
+## Resultado (19/10/2026)
+
+| Relatório do Omie | Tela / arquivo | Migration | Prova (loja 5, dados reais) |
+|---|---|---|---|
+| Produtos por Fornecedor | `/relatorio-produtos-fornecedor` + Excel | 210 | × captura de 17/10 (1.415 pares): nota 98,0 %, quantidade 97,7 %, preço 97,5 %, custo 95,1 %, data 93,4 %; × SQL direto em produção: 1.483 pares e R$ 5.102.095,42 iguais |
+| Estoque Mínimo | `/sugestao-compra?ver=abaixo` / `?ver=minimo` + Excel | — (usa a 201) | × captura: 267 de 268 ativos com mínimo; mínimo igual em 267/267 |
+| Recebimentos por Transportadora | `/nota-fiscal?aba=transportadoras` (+ filtro no Excel e no PDF) | — | × captura: 12/12 notas com a mesma transportadora |
+| Estrutura dos Produtos | `/estoque/fichas/excel` | — | × captura: nível 1 5.077/5.077; níveis 2+ 3.925/4.355 (o Omie não abre algumas PIs com ficha) |
+| OP por Produto / por Matéria-prima / Concluídas | `/relatorio-ops` + Excel | 211 | captura do Omie deu timeout; RPC = SQL direto (7.044 OPs, 15.630,209; kardex 15.449 / 14.184,878 e 60.062 / 1.006.648,930) |
+
+Ordem das migrations: 210 → 211 (210 depende da 175). Testes: puros (`node --test`), SQL 210, 211 e RLS (`210_211_rls.sql`).
