@@ -58,7 +58,7 @@ export function ImportarPedidos() {
     <div className="space-y-4">
       <section className="grid gap-4 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)] sm:grid-cols-3">
         <div><p className="text-[13px] font-semibold text-text">1. Baixe o modelo</p>
-          <a href="/pedido-compra/importar/modelo" className={`${btnClass('outline')} mt-2`}><Download className="size-4" /> Modelo (.xlsx)</a></div>
+          <a href="/pedido-compra/importar/modelo" download className={`${btnClass('outline')} mt-2`}><Download className="size-4" /> Modelo (.xlsx)</a></div>
         <div><p className="text-[13px] font-semibold text-text">2. Preencha</p>
           <p className="mt-1 text-[12.5px] text-text-muted">Uma linha por item. Linhas com o mesmo &quot;Pedido&quot; viram um pedido; sem ele, junta por fornecedor e previsão. A aba Instruções explica cada coluna.</p></div>
         <div><p className="text-[13px] font-semibold text-text">3. Envie e confira</p>
