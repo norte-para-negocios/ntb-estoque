@@ -7,6 +7,8 @@
 //   depende  = 'local' se a loja atual é de estoque próprio, 'fila' se é loja Omie.
 // Conferido ação a ação em 2026-10-09 (corpo de cada função: chamadas ao Omie/SEFAZ/rede e
 // desvio por modoDaLoja/ehLojaProprio).
+// Fase C (19/10/2026): as ações de pedido-compra (salvar, mudar etapa, vincular/desvincular nota, criar da sugestão,
+// lead time) ficam FORA de propósito: as tabelas novas (migrations 200/201) não estão em offline_tabelas, então só com internet.
 export type ModoOffline = 'leitura' | 'local' | 'fila' | 'depende'
 
 const leitura = [

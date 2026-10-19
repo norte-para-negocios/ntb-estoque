@@ -56,6 +56,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/estoque', label: 'Estoque', icon: Boxes, group: 'Operação', comEstoque: true },
   { href: '/estoque/correcoes', label: 'Central de correções', icon: HeartPulse, group: 'Operação', comEstoque: true },
   { href: '/reposicao', label: 'Reposição', icon: ShoppingCart, group: 'Operação', soEstoqueProprio: true },
+  { href: '/sugestao-compra', label: 'Sugestão de compra', icon: ShoppingCart, group: 'Operação', comEstoque: true },
+  { href: '/pedido-compra', label: 'Pedidos de compra', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

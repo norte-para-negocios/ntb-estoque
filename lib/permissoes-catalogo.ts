@@ -100,6 +100,10 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     permissoes: [
       { nome: 'Compras', label: 'Acessar' },
       { nome: 'Compras - Criar', label: 'Criar' },
+      // Fase C (migrations 200/201): sugestão de compra (as duas lojas) e pedido de compra (só estoque próprio).
+      { nome: 'Compras - Sugestao', label: 'Ver a sugestão de compra' },
+      { nome: 'Compras - Pedidos', label: 'Criar e editar pedidos de compra' },
+      { nome: 'Compras - Aprovar pedidos', label: 'Aprovar pedidos de compra' },
     ],
   },
   {
@@ -193,6 +197,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/inventario-proprio': 'Inventarios - Ver',
   '/reposicao': 'Movimentacoes',
   '/compras': 'Compras',
+  '/sugestao-compra': 'Compras - Sugestao',
+  '/pedido-compra': 'Compras - Pedidos',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

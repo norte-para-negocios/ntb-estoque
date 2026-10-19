@@ -130,3 +130,97 @@ export function saidaPrevistaPelaPrevisao(previsaoQtde: number, previsaoDias: nu
   if (!temPrevisao && !(consumoOps > 0)) return null
   return r6((temPrevisao ? (previsaoQtde / previsaoDias) * diasEstimativa : 0) + Math.max(0, consumoOps))
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Despacho por modo e montagem das linhas da tela (a partir do jsonb das funções da migration 201).
+
+export type ModoLoja = 'omie' | 'proprio' | 'nenhum'
+
+/** Cada modo lê a sua função; loja sem estoque não tem sugestão. Nada do modo próprio passa pela função do Omie e vice-versa. */
+export function rpcDaSugestao(modo: ModoLoja): 'sugestao_compra_omie' | 'sugestao_compra_proprio' | null {
+  return modo === 'omie' ? 'sugestao_compra_omie' : modo === 'proprio' ? 'sugestao_compra_proprio' : null
+}
+
+export type LinhaBruta = {
+  codigo_produto: number; codigo: string | null; descricao: string | null; unidade: string | null; tipo_item: string | null; familia: string | null
+  consumo_total: number; estoque_atual: number; estoque_minimo: number; lead_time: number | null
+  entrada_nf: number; entrada_ops: number; entrada_pedidos: number; consumo_ops: number; previsao_qtde: number; previsao_dias: number
+  tem_ficha: boolean; fornecedor_id: number | null; fornecedor_nome: string | null; fornecedor_cnpj: string | null
+  ultimo_custo: number | null; ultima_compra: string | null
+}
+
+export type LinhaSugestao = LinhaCalculada & {
+  codigoProduto: number; codigo: string; descricao: string; unidade: string; tipoItem: string | null; familia: string
+  acao: AcaoSugestao; rotulo: string; estoqueMinimo: number; estoqueAtual: number; leadTimeInformado: boolean
+  entradaNf: number; entradaOps: number; entradaPedidos: number; previsaoVenda: number | null; consumoOps: number
+  fornecedorId: number | null; fornecedorNome: string | null; fornecedorCnpj: string | null
+  ultimoCusto: number | null; ultimaCompra: string | null; valorEstimado: number
+}
+
+const n0 = (v: unknown) => {
+  const x = Number(v)
+  return Number.isFinite(x) ? x : 0
+}
+
+export function montarLinhasSugestao(
+  brutas: LinhaBruta[],
+  p: { diasAnalise: number; diasEstimativa: number; base: BaseProjecao; pedidosExtra?: Map<number, number> },
+): LinhaSugestao[] {
+  return brutas.map((b) => {
+    const entradaPedidos = n0(b.entrada_pedidos) + (p.pedidosExtra?.get(Number(b.codigo_produto)) ?? 0)
+    const entrada = n0(b.entrada_nf) + n0(b.entrada_ops) + entradaPedidos
+    const prevVenda = n0(b.previsao_dias) > 0 && n0(b.previsao_qtde) > 0 ? r6((n0(b.previsao_qtde) / n0(b.previsao_dias)) * p.diasEstimativa) : null
+    const calc = calcularSugestao({
+      consumoTotal: n0(b.consumo_total), estoqueMinimo: n0(b.estoque_minimo), estoqueAtual: n0(b.estoque_atual),
+      leadTime: b.lead_time == null ? null : n0(b.lead_time), entradaPrevista: entrada,
+      saidaPrevista: saidaPrevistaPelaPrevisao(n0(b.previsao_qtde), n0(b.previsao_dias), p.diasEstimativa, n0(b.consumo_ops)),
+    }, p)
+    const acao = acaoDoProduto(b.tipo_item, !!b.tem_ficha)
+    const custo = b.ultimo_custo == null ? null : n0(b.ultimo_custo)
+    return {
+      ...calc,
+      codigoProduto: Number(b.codigo_produto), codigo: b.codigo ?? String(b.codigo_produto), descricao: b.descricao ?? '(sem descrição)',
+      unidade: b.unidade ?? 'UN', tipoItem: b.tipo_item, familia: b.familia ?? 'Sem família', acao, rotulo: rotuloRecomendacao(calc.recomendacao, acao),
+      estoqueMinimo: n0(b.estoque_minimo), estoqueAtual: n0(b.estoque_atual), leadTimeInformado: b.lead_time != null && n0(b.lead_time) > 0,
+      entradaNf: n0(b.entrada_nf), entradaOps: n0(b.entrada_ops), entradaPedidos, previsaoVenda: prevVenda, consumoOps: n0(b.consumo_ops),
+      fornecedorId: b.fornecedor_id == null ? null : Number(b.fornecedor_id), fornecedorNome: b.fornecedor_nome, fornecedorCnpj: b.fornecedor_cnpj,
+      ultimoCusto: custo, ultimaCompra: b.ultima_compra,
+      valorEstimado: custo != null && acao === 'comprar' ? Math.round(calc.sugestao * custo * 100) / 100 : 0,
+    }
+  })
+}
+
+export type FiltroSugestao = { q?: string; tipos?: string[]; familia?: string; ver?: string; acao?: string; fornecedor?: string }
+
+const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const ORDEM_REC: Record<Recomendacao, number> = { imediato: 0, proximos: 1, nao: 2 }
+
+/** Filtros da tela; ver = 'acao' (padrão: comprar/produzir), 'imediato' ou 'todos'. Ordem do Omie: recomendação, depois dias até o ponto. */
+export function filtrarSugestao(linhas: LinhaSugestao[], f: FiltroSugestao): LinhaSugestao[] {
+  const q = semAcento((f.q ?? '').trim())
+  const ver = f.ver === 'todos' || f.ver === 'imediato' ? f.ver : 'acao'
+  return linhas
+    .filter((l) => (f.tipos?.length ? f.tipos.includes(l.tipoItem ?? '') : tipoPadraoIncluido(l.tipoItem)))
+    .filter((l) => !f.familia || l.familia === f.familia)
+    .filter((l) => !f.acao || l.acao === f.acao)
+    .filter((l) => !f.fornecedor || (l.fornecedorNome ?? '') === f.fornecedor)
+    .filter((l) => ver === 'todos' || (ver === 'imediato' ? l.recomendacao === 'imediato' : l.recomendacao !== 'nao'))
+    .filter((l) => !q || semAcento(l.descricao).includes(q) || semAcento(l.codigo).includes(q))
+    .sort((a, b) => ORDEM_REC[a.recomendacao] - ORDEM_REC[b.recomendacao] || a.diasAtePonto - b.diasAtePonto || a.descricao.localeCompare(b.descricao, 'pt-BR'))
+}
+
+export function resumoSugestao(linhas: LinhaSugestao[]): { comprarJa: number; comprarProximos: number; produzirJa: number; produzirProximos: number; valorEstimado: number; semCusto: number } {
+  const r = { comprarJa: 0, comprarProximos: 0, produzirJa: 0, produzirProximos: 0, valorEstimado: 0, semCusto: 0 }
+  for (const l of linhas) {
+    if (l.recomendacao === 'nao') continue
+    if (l.acao === 'comprar') {
+      if (l.recomendacao === 'imediato') r.comprarJa++
+      else r.comprarProximos++
+      r.valorEstimado += l.valorEstimado
+      if (l.ultimoCusto == null) r.semCusto++
+    } else if (l.recomendacao === 'imediato') r.produzirJa++
+    else r.produzirProximos++
+  }
+  r.valorEstimado = Math.round(r.valorEstimado * 100) / 100
+  return r
+}
