@@ -18,21 +18,45 @@ export function ehCmcPendente(msg: string): boolean {
 // Estado de processo: o ntb-estoque roda como UM `next start` no Contabo e os
 // crons batem nele via localhost, entao um Map em memoria cobre tudo. Chamar o
 // Omie durante o bloqueio reinicia a contagem dele -- por isso falhar rapido.
+// Chave = app_key + método (19/10/2026): o Omie bloqueia por IP + App Key + MÉTODO
+// (ajuda.omie.com.br "Limites de consumo da API": 10ª requisição com erro no mesmo
+// método = 30 min). Travar a chave inteira parou as vendas do Sertão por uma semana
+// por causa de um único método (ConcluirOrdemProducao) que errava sem parar.
 const bloqueadoAte = new Map<string, number>()
+const chaveBloqueio = (appKey: string, metodo?: string) => `${appKey}\u0000${metodo ?? ''}`
 
-export function registrarBloqueio(appKey: string, segundos: number, agoraMs: number = Date.now()): void {
+export function registrarBloqueio(appKey: string, segundos: number, agoraMs: number = Date.now(), metodo?: string): void {
   const ate = agoraMs + segundos * 1000
-  if ((bloqueadoAte.get(appKey) ?? 0) < ate) bloqueadoAte.set(appKey, ate)
+  const k = chaveBloqueio(appKey, metodo)
+  if ((bloqueadoAte.get(k) ?? 0) < ate) bloqueadoAte.set(k, ate)
 }
 
-export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now()): number {
-  const ate = bloqueadoAte.get(appKey)
-  if (!ate) return 0
-  if (ate <= agoraMs) {
-    bloqueadoAte.delete(appKey)
-    return 0
+/** Com método: só aquele método (ou um bloqueio sem método da chave). Sem método: algum método da chave bloqueado. */
+export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now(), metodo?: string): number {
+  let maior = 0
+  for (const [k, ate] of bloqueadoAte) {
+    if (ate <= agoraMs) { bloqueadoAte.delete(k); continue }
+    const [chave, m] = k.split('\u0000')
+    if (chave !== appKey) continue
+    if (metodo === undefined || m === '' || m === metodo) maior = Math.max(maior, ate - agoraMs)
   }
-  return ate - agoraMs
+  return maior
+}
+
+/** Mensagem do nosso disjuntor (a chamada nem chegou no Omie). */
+export function ehRecusaDoDisjuntor(msg: string): boolean {
+  return /API do Omie bloqueada para esta loja/i.test(msg)
+}
+
+/**
+ * Status da OP quando a conclusão falha (19/10/2026). Erro que não passa sozinho (insumo inativo,
+ * produto sem ficha) sai da repetição automática: repetir só junta erros no mesmo método e o Omie
+ * bloqueia a chave (Sertão: 16 OPs do Baião/Feijão tropeiro, até 2.021 tentativas cada).
+ */
+export function statusFalhaConclusaoOP(msg: string): 'Precisa corrigir no Omie' | 'Sem CMC' | 'Erro' {
+  if (/encontra-se inativo|n.o possui nenhum item na sua estrutura/i.test(msg)) return 'Precisa corrigir no Omie'
+  if (/\bcmc\b|custo m.dio/i.test(msg)) return 'Sem CMC'
+  return 'Erro'
 }
 
 // Bloqueio do Omie numa resposta: segundos informados na mensagem ou, se vier so o

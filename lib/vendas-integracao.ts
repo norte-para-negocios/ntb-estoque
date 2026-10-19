@@ -18,7 +18,7 @@ import { incluirOrdemProducao, concluirOrdemProducao, fetchOrdemProducao, consul
 import { codigoOPDaVenda, chaveSaidaVenda, classificarErroSaidaVenda, decidirOPVenda, patchOPNaoConcluida, type VinculoOP } from '@/lib/vendas/venda-idempotente'
 import { incluirNfce, type IncluirNfcePayload } from '@/lib/omie/nota-fiscal-venda'
 import { logIntegrationAttempt, type LojaOmie } from '@/lib/omie/client'
-import { msRestantesBloqueio, classificarErroOmie, proximaTentativa, type TipoErroOmie } from '@/lib/omie/erros-omie'
+import { bloqueioDaResposta, ehRecusaDoDisjuntor, classificarErroOmie, proximaTentativa, statusFalhaConclusaoOP, type TipoErroOmie } from '@/lib/omie/erros-omie'
 import { reenviarMovimentoManual } from '@/lib/movimentos/reenviar-manual'
 import { dataCriacaoBahia, hojeBahiaISO } from '@/lib/data-bahia'
 import { localDaVenda, obsDaBaixa, origemDaVenda, type LojaLocais } from '@/lib/vendas/local-venda'
@@ -127,7 +127,7 @@ async function tentarOp(supabase: SupabaseClient, loja: LojaVenda, p: PayloadOp)
       await supabase
         .from('ordens_producao')
         // OP criada mas não concluída: marca pro cron retry-op-conclusao concluir depois (antes ficava esquecida).
-        .update(erroConclusao ? patchOPNaoConcluida(p.obs, erroConclusao, new Date().toISOString()) : { observacao: p.obs })
+        .update(erroConclusao ? { ...patchOPNaoConcluida(p.obs, erroConclusao, new Date().toISOString()), conclusao_status: statusFalhaConclusaoOP(erroConclusao) } : { observacao: p.obs })
         .eq('loja_id', loja.id)
         .eq('identificacao_n_cod_op', nCodOP)
     }
@@ -272,7 +272,7 @@ async function opDaVendaSemDuplicar(supabase: SupabaseClient, loja: LojaVenda, p
       const msg = e instanceof Error ? e.message : String(e)
       if (!loja.is_test) {
         await fetchOrdemProducao(loja, nCodOP).catch(() => {})
-        await supabase.from('ordens_producao').update(patchOPNaoConcluida(p.obs, msg, new Date().toISOString()))
+        await supabase.from('ordens_producao').update({ ...patchOPNaoConcluida(p.obs, msg, new Date().toISOString()), conclusao_status: statusFalhaConclusaoOP(msg) })
           .eq('loja_id', loja.id).eq('identificacao_n_cod_op', nCodOP)
       }
       return { ok: false, nCodOP, erro: msg, tipoErro: 'permanente' }
@@ -381,7 +381,7 @@ export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoj
     .returns<LojaVenda[]>()
   const resumo: { loja_id: number; tentadas: number; sucesso: number; falhas: number }[] = []
   for (const loja of lojas ?? []) {
-    if (!loja.omie_app_key || msRestantesBloqueio(loja.omie_app_key) > 0) continue
+    if (!loja.omie_app_key) continue
     const { data: linhas } = await supabase
       .from('vendas_integracao_fila')
       .select('id, loja_id, tipo, payload, tentativas')
@@ -431,7 +431,8 @@ export async function processarFilaVendas(supabase: SupabaseClient, limitePorLoj
           updated_at: new Date().toISOString(),
         })
         .eq('id', linha.id)
-      if (msRestantesBloqueio(loja.omie_app_key) > 0) break
+      // Bloqueio do Omie (real ou do disjuntor, que agora é por método): para a loja neste ciclo, sem gastar a fila.
+      if (!ok && (ehRecusaDoDisjuntor(erro) || bloqueioDaResposta(erro, undefined) != null)) break
     }
     resumo.push(r)
   }

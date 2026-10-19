@@ -112,7 +112,7 @@ export async function omieRequest<T = unknown>({
 
   // Disjuntor (2026-09-24): o Omie bloqueou esta chave por consumo indevido --
   // chamar de novo reinicia a contagem do bloqueio. Falha rapido em vez de bater.
-  const restante = msRestantesBloqueio(omie_app_key)
+  const restante = msRestantesBloqueio(omie_app_key, Date.now(), call)
   if (restante > 0) {
     throw new OmieError(
       `API do Omie bloqueada para esta loja por consumo indevido (libera em ~${Math.ceil(restante / 60000)} min). Tente novamente depois.`,
@@ -150,7 +150,8 @@ export async function omieRequest<T = unknown>({
         const segBloqueio = bloqueioDaResposta(json?.faultstring ?? '', json?.faultcode)
         if (segBloqueio != null) {
           // Bloqueio por consumo indevido: esperar 60s e retentar so reinicia a contagem.
-          registrarBloqueio(omie_app_key, segBloqueio)
+          registrarBloqueio(omie_app_key, segBloqueio, Date.now(), call)
+          await logBloqueioReal(loja_id, call, lastError.message)
           throw lastError
         }
         if (podeRepetirLimite(attempt, semRepetir)) {
@@ -174,7 +175,8 @@ export async function omieRequest<T = unknown>({
         }
         const seg = bloqueioDaResposta(msg, faultCode)
         if (seg != null) {
-          registrarBloqueio(omie_app_key, seg)
+          registrarBloqueio(omie_app_key, seg, Date.now(), call)
+          await logBloqueioReal(loja_id, call, msg)
           throw new OmieError(msg, faultCode, res.status)
         }
         // Limite de concorrencia / consumo redundante do Omie: vem como faultstring,
@@ -233,4 +235,14 @@ export async function logIntegrationAttempt(params: {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Bloqueio real do Omie (não o do disjuntor): fica registrado com o método e a mensagem original. Até 19/10/2026 só
+// sobrava a mensagem do disjuntor e não dava para saber qual método o Omie tinha bloqueado. Nunca derruba a chamada.
+async function logBloqueioReal(loja_id: number, call: string, msg: string) {
+  try {
+    await logIntegrationAttempt({ loja_id, model: `[BLOQUEIO OMIE] ${call}`, request: '', error: true, error_message: msg.slice(0, 1000) })
+  } catch {
+    /* log é só diagnóstico */
+  }
 }

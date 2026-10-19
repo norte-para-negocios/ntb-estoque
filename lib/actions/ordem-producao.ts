@@ -19,6 +19,7 @@ import { getPosicaoProduto } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { hojeBahiaISO } from '@/lib/data-bahia'
+import { ehRecusaDoDisjuntor, statusFalhaConclusaoOP } from '@/lib/omie/erros-omie'
 import {
   ehLojaProprio, criarOPProprio, criarOPsProprio, alterarOPProprio, concluirOPProprio, reverterOPProprio, excluirOPProprio,
 } from '@/lib/estoque/op-proprio'
@@ -597,14 +598,32 @@ async function executarConclusaoOP(
   // sem custo medio, mesmo depois do fallback tentar); qualquer outro erro vira
   // 'Erro' generico (conexao, Omie fora do ar, etc.).
   async function marcarFalhaConclusao(msg: string) {
+    // Recusa do nosso disjuntor: a chamada nem chegou no Omie. Não apaga o erro real gravado antes nem conta
+    // tentativa (até 19/10/2026 a mensagem do disjuntor sobrescrevia o motivo de verdade, ex.: insumo inativo).
+    if (ehRecusaDoDisjuntor(msg)) {
+      const agora = new Date().toISOString()
+      const { data: jaNaFila } = await supabase
+        .from('ordens_producao')
+        .update({ conclusao_ultima_tentativa_em: agora, updated_at: agora })
+        .eq('id', op.id)
+        .eq('loja_id', op.loja_id)
+        .not('conclusao_status', 'is', null)
+        .select('id')
+      if (jaNaFila?.length) {
+        revalidatePath('/ordem-producao')
+        return
+      }
+      // 1ª falha desta OP: entra na fila como 'Erro' (transitório) com a mensagem do disjuntor.
+    }
     await supabase
       .from('ordens_producao')
       .update({
-        conclusao_status: pareceErroCmc(msg) ? 'Sem CMC' : 'Erro',
+        // 'Precisa corrigir no Omie' (insumo inativo, sem ficha) fica fora do retryOPsPendentes.
+        conclusao_status: statusFalhaConclusaoOP(msg),
         conclusao_erro_msg: msg,
         conclusao_qtde_desejada: qtdeProduzida ?? null,
         conclusao_data_desejada: dataEscolhidaISO ?? null,
-        conclusao_tentativas: (op.conclusao_tentativas ?? 0) + 1,
+        conclusao_tentativas: (op.conclusao_tentativas ?? 0) + (ehRecusaDoDisjuntor(msg) ? 0 : 1),
         conclusao_ultima_tentativa_em: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

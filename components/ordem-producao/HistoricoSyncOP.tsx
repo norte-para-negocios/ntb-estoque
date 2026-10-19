@@ -40,6 +40,7 @@ function fmtDataBR(d: string | null): string | null {
 const STATUS_TOKEN: Record<string, CorToken> = {
   Erro: 'err',
   'Sem CMC': 'warn',
+  'Precisa corrigir no Omie': 'err',
 }
 
 export function HistoricoSyncOP({ info }: { info: SyncOPInfo }) {

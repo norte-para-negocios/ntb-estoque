@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -80,4 +80,28 @@ test('podeRepetirLimite: até 2 repetições, nunca quando o chamador pede semRe
   assert.equal(podeRepetirLimite(1, false), true)
   assert.equal(podeRepetirLimite(2, false), false)
   assert.equal(podeRepetirLimite(0, true), false)
+})
+
+// 19/10/2026 (Sertão): o bloqueio do Omie é por IP + app_key + MÉTODO; o disjuntor travava a chave inteira.
+test('disjuntor por método: bloquear ConcluirOrdemProducao não trava IncluirAjusteEstoque', () => {
+  registrarBloqueio('kM', 1800, 5_000_000, 'ConcluirOrdemProducao')
+  assert.equal(msRestantesBloqueio('kM', 5_000_000, 'ConcluirOrdemProducao'), 1_800_000)
+  assert.equal(msRestantesBloqueio('kM', 5_000_000, 'IncluirAjusteEstoque'), 0)
+  // sem método = algum método da chave bloqueado
+  assert.equal(msRestantesBloqueio('kM', 5_000_000), 1_800_000)
+  assert.equal(msRestantesBloqueio('kM', 5_000_000 + 1_800_001, 'ConcluirOrdemProducao'), 0)
+})
+
+test('erro permanente da conclusão de OP sai da repetição; CMC e transitório seguem', () => {
+  assert.equal(statusFalhaConclusaoOP('[OP 1 criada, conclusão falhou] ERROR: Produto [Carnes p/ Baiao 50G (PI)] encontra-se inativo. Não é possível continuar com a operação.'), 'Precisa corrigir no Omie')
+  assert.equal(statusFalhaConclusaoOP('ERROR: Este produto não possui nenhum item na sua estrutura.'), 'Precisa corrigir no Omie')
+  assert.equal(statusFalhaConclusaoOP('ERROR: O seguinte produto da estrutura possui o CMC unitário zerado em 16/10/2026'), 'Sem CMC')
+  assert.equal(statusFalhaConclusaoOP('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.'), 'Erro')
+  assert.equal(statusFalhaConclusaoOP('Omie não respondeu em 30s (ConcluirOrdemProducao). Tente novamente.'), 'Erro')
+})
+
+test('recusa do disjuntor local é reconhecida (não chegou no Omie)', () => {
+  assert.equal(ehRecusaDoDisjuntor('API do Omie bloqueada para esta loja por consumo indevido (libera em ~30 min). Tente novamente depois.'), true)
+  assert.equal(ehRecusaDoDisjuntor('[OP 5 criada, conclusão falhou] API do Omie bloqueada para esta loja por consumo indevido (libera em ~3 min).'), true)
+  assert.equal(ehRecusaDoDisjuntor('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.'), false)
 })
