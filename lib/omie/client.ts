@@ -221,7 +221,7 @@ export async function logIntegrationAttempt(params: {
   error?: boolean
   error_message?: string
 }) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('integration_attempts').insert({
     loja_id: params.loja_id,
     model: params.model,

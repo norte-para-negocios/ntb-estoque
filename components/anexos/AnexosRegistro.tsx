@@ -3,6 +3,7 @@ import { requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { anexosPermitidos, type EntidadeAnexo } from '@/lib/anexos/anexos-puro'
 import { AnexosLista, type AnexoLinha } from './AnexosLista'
+import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 /** Seção "Anexos" de um registro (Fase G [O2]). Só estoque próprio nesta fase; some sem a migration 221. */
 export async function AnexosRegistro({ lojaId, entidade, entidadeId }: { lojaId: number; entidade: EntidadeAnexo; entidadeId: number | string }) {
@@ -13,7 +14,7 @@ export async function AnexosRegistro({ lojaId, entidade, entidadeId }: { lojaId:
     .eq('loja_id', lojaId).eq('entidade', entidade).eq('entidade_id', String(entidadeId)).is('excluido_em', null)
     .order('id', { ascending: false })
   if (error) {
-    if (error.code !== '42P01') console.error('AnexosRegistro: falha ao listar', error.message)
+    if (!tabelaAusente(error)) console.error('AnexosRegistro: falha ao listar', error.message)
     return null
   }
   const [podeEnviar, podeExcluir] = await Promise.all([requirePermissao(lojaId, 'Anexos - Enviar'), requirePermissao(lojaId, 'Anexos - Excluir')])

@@ -5,6 +5,7 @@ import { syncNotasFiscais } from '@/lib/omie/nota-fiscal'
 import type { LojaOmie } from '@/lib/omie/client'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { sincronizarSefaz } from '@/lib/estoque/sefaz-sync'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 export const maxDuration = 300
 
@@ -12,7 +13,7 @@ function dmy(date: Date): string {
   return date.toLocaleDateString('pt-BR')
 }
 
-export async function POST() {
+async function postSync() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Notas Fiscais - Sincronizar'))) {
     return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
@@ -65,3 +66,6 @@ export async function POST() {
     )
   }
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

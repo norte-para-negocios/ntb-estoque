@@ -7,6 +7,7 @@ import { viaDesktop } from '@/lib/offline/via-desktop'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getProfile, requirePermissao } from '@/lib/auth'
 import { PERMISSAO_DO_TIPO, TIPOS_NOTIFICACAO, type Gravidade, type TipoNotificacao } from '@/lib/notificacoes/regras-puro'
+import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 export type NotificacaoTela = {
   id: number
@@ -29,7 +30,7 @@ async function visiveis(): Promise<{ userId: string; itens: Omit<NotificacaoTela
     .select('id, tipo, gravidade, titulo, mensagem, link, atualizada_em')
     .eq('loja_id', lojaId).is('resolvida_em', null).order('atualizada_em', { ascending: false }).limit(50)
   if (error) {
-    if (error.code !== '42P01') console.error('notificacoes: falha ao listar', error.message)
+    if (!tabelaAusente(error)) console.error('notificacoes: falha ao listar', error.message)
     return null
   }
   const tipos = [...new Set((data ?? []).map((n) => n.tipo as string).filter(ehTipo))]

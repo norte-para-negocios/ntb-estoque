@@ -77,7 +77,7 @@ async function syncPorTag(
   campoStatus: 'fornecedor_status' | 'cliente_status',
   campoData: 'fornecedor_ultima_atualizacao' | 'cliente_ultima_atualizacao'
 ) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ [campoStatus]: 'Processando' }).eq('id', loja.id)
 
   try {

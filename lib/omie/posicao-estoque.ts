@@ -83,7 +83,7 @@ const LOCAL_MINIMO = 0
  * (ex.: o almoxarifado NUCLEO da Brotas). Agora são ~85 chamadas no total.
  */
 export async function syncPosicaoEstoque(loja: LojaOmie): Promise<number> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const hoje = new Date().toLocaleDateString('pt-BR') // d/m/Y
   const dataISO = new Date().toISOString().split('T')[0]
 

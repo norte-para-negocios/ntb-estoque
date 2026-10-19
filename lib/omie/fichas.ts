@@ -20,7 +20,7 @@ export type ResumoFichas = { loja: number; lidas: number; semFicha: number; grav
 export async function sincronizarFichasLoja(loja: LojaOmie): Promise<ResumoFichas> {
   const r: ResumoFichas = { loja: loja.id, lidas: 0, semFicha: 0, gravadas: 0, removidas: 0, parouPor: null }
   if (!(await pegarTravaSync(loja.id, 'fichas', 600))) return { ...r, parouPor: 'trava (outro ciclo em andamento)' }
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const t0 = Date.now()
   try {
     const erros: string[] = []

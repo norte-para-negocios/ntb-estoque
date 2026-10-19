@@ -5,6 +5,7 @@ import { viaDesktop } from '@/lib/offline/via-desktop'
 import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getUser, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { semAutor } from '@/lib/supabase/sem-autor'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { travaDaCompraLancada } from '@/lib/estoque/periodo-fechado'
@@ -193,7 +194,8 @@ export async function sincronizarSefazAgora() {
   const __d = viaDesktop('nota-fiscal-proprio#sincronizarSefazAgora', sincronizarSefazAgora, []); if (__d) return __d as never
   const ctx = await contexto('Notas Fiscais - Sincronizar')
   if ('error' in ctx) return ctx
-  const r = await sincronizarSefaz(ctx.lojaId)
+  // Fase G (revisão I1): o que vem da SEFAZ grava no histórico como "Sistema".
+  const r = await semAutor(() => sincronizarSefaz(ctx.lojaId))
   revalidatePath('/nota-fiscal')
   return r
 }

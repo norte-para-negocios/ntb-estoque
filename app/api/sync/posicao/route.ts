@@ -4,12 +4,13 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { syncPosicaoEstoque } from '@/lib/omie/posicao-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { pegarTravaSync, soltarTravaSync } from '@/lib/omie/trava-sync'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 const INTERVALO_MIN_MS = 5 * 60_000
 
 export const maxDuration = 300
 
-export async function POST() {
+async function postSync() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Produtos - Sincronizar'))) {
     return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
@@ -45,3 +46,6 @@ export async function POST() {
     await soltarTravaSync(lojaId, 'posicao')
   }
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

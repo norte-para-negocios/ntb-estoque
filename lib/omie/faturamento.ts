@@ -149,7 +149,7 @@ async function atualizarCanceladoNoFrio(lojaId: number, nIdCupom: number): Promi
  * `faturamento_importado` para a loja. Retorna quantas linhas agregadas gravou.
  */
 export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: string; meses?: number }): Promise<number> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
 
   // Mapa produto: codigo_produto -> { tipo, familia }. O PostgREST/Supabase
   // corta silenciosamente em 1000 linhas por padrão (sem erro) -- lojas com

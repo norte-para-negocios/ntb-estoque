@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { LinhaHistorico } from './historico-puro'
 import type { EntidadeHistorico } from './rotulos'
+import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 export const LIMITE_HISTORICO = 2000
 
@@ -22,8 +23,8 @@ export async function carregarHistorico(
     .order('id', { ascending: false })
     .limit(LIMITE_HISTORICO)
   if (error) {
-    // 42P01 = tabela ainda não existe (migration 220 não aplicada): a tela mostra "ainda não ativado"
-    return { linhas: [], erro: error.code === '42P01' ? 'nao_ativado' : error.message, cortado: false }
+    // tabela ainda não existe (migration 220 não aplicada ou cache do PostgREST velho): a tela mostra "ainda não ativado"
+    return { linhas: [], erro: tabelaAusente(error) ? 'nao_ativado' : error.message, cortado: false }
   }
   const linhas = (data ?? []).map((r) => ({ ...r, txid: Number(r.txid), id: Number(r.id) })) as LinhaHistorico[]
   return { linhas, erro: null, cortado: linhas.length === LIMITE_HISTORICO }

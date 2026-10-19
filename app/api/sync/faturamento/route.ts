@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, getAtorGestao, getUser } from '@/lib/auth'
 import { syncFaturamento } from '@/lib/omie/faturamento'
 import type { LojaOmie } from '@/lib/omie/client'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 // Botão "Atualizar" do relatório de faturamento: repuxa tipo/família direto dos
 // cupons fiscais do Omie pra loja atual. Antes desta rota, o único jeito de
@@ -12,7 +13,7 @@ import type { LojaOmie } from '@/lib/omie/client'
 // também /api/cron/sync-faturamento, que roda esta mesma sync sozinha à noite).
 export const maxDuration = 300
 
-export async function POST() {
+async function postSync() {
   const lojaId = await getCurrentLojaId()
   if (!(await getAtorGestao()).podeGerir) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
@@ -51,3 +52,6 @@ export async function POST() {
     )
   }
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

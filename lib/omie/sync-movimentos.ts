@@ -42,7 +42,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
  * garantindo atualizacao incremental e idempotente.
  */
 export async function syncMovimentos(loja: LojaOmie): Promise<number> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   let totalGravados = 0
 
   // Janela: do inicio do mes passado ate hoje (cobre todo dado que pode ter

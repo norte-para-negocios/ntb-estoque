@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth'
 import { caminhoAnexo, LIMITE_ANEXO_BYTES, origemAceita, validarAnexo } from '@/lib/anexos/anexos-puro'
 import { BUCKET_ANEXOS, contextoAnexo, ehEntidadeAnexo, registroExiste } from '@/lib/anexos/servidor'
+import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 // Fase G [O2]: envio de anexo (multipart: entidade, entidade_id, arquivo). Sessão + permissão + loja + registro existe;
 // tipo decidido pelo conteúdo; limite 8 MB; até 20 por registro. Só com internet (o desktop offline não tem Storage).
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   const sb = createServiceClient()
   const { count, error: errCount } = await sb.from('anexos').select('id', { count: 'exact', head: true })
     .eq('loja_id', ctx.lojaId).eq('entidade', entidade).eq('entidade_id', entidadeId).is('excluido_em', null)
-  if (errCount) return NextResponse.json({ error: errCount.code === '42P01' ? 'Anexos ainda não ativados neste servidor.' : 'Falha ao consultar os anexos' }, { status: 503 })
+  if (errCount) return NextResponse.json({ error: tabelaAusente(errCount) ? 'Anexos ainda não ativados neste servidor.' : 'Falha ao consultar os anexos' }, { status: 503 })
 
   const bytes = new Uint8Array(await arquivo.arrayBuffer())
   const v = validarAnexo({ nome: arquivo.name, tamanho: arquivo.size, bytes, existentes: count ?? 0 })

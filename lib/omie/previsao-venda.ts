@@ -24,7 +24,7 @@ export async function syncPrevisaoVenda(loja: LojaOmie) {
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
 
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const rows: {
     loja_id: number
     n_cod_prod: number

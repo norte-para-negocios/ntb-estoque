@@ -85,7 +85,7 @@ export async function alterarLocalEstoque(
 }
 
 export async function syncLocaisEstoque(loja: LojaOmie) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ local_estoque_status: 'Processando' }).eq('id', loja.id)
 
   try {

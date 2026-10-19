@@ -5,14 +5,14 @@ import { createServiceClient } from '@/lib/supabase/server'
  * Falha de leitura LANÇA: seguir com estado vazio reiniciaria o backfill do zero em silêncio.
  */
 export async function lerEstadoSync(lojaId: number, frente: string): Promise<unknown> {
-  const { data, error } = await createServiceClient()
+  const { data, error } = await createServiceClient({ semAutor: true })
     .from('espelho_sync_estado').select('estado').eq('loja_id', lojaId).eq('frente', frente).maybeSingle()
   if (error) throw new Error(`espelho_sync_estado (${frente}): ${error.message}`)
   return data?.estado ?? null
 }
 
 export async function gravarEstadoSync(lojaId: number, frente: string, estado: unknown, ultimoErro: string | null = null): Promise<void> {
-  const { error } = await createServiceClient().from('espelho_sync_estado').upsert(
+  const { error } = await createServiceClient({ semAutor: true }).from('espelho_sync_estado').upsert(
     { loja_id: lojaId, frente, estado, ultimo_erro: ultimoErro, atualizado_em: new Date().toISOString() },
     { onConflict: 'loja_id,frente' }
   )
@@ -21,7 +21,7 @@ export async function gravarEstadoSync(lojaId: number, frente: string, estado: u
 
 /** Locais ativos da loja (códigos do Omie), ordenados. Erro de consulta lança. */
 export async function locaisAtivos(lojaId: number): Promise<number[]> {
-  const { data, error } = await createServiceClient()
+  const { data, error } = await createServiceClient({ semAutor: true })
     .from('local_estoques').select('codigo_local_estoque').eq('loja_id', lojaId)
     .or('inativo.is.null,inativo.neq.S').order('codigo_local_estoque')
   if (error) throw new Error(`local_estoques: ${error.message}`)

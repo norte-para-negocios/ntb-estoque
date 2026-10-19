@@ -174,7 +174,7 @@ const CAMPOS_PROTEGIVEIS = [
 ] as const
 
 export async function syncProdutos(loja: LojaOmie) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ produto_status: 'Processando' }).eq('id', loja.id)
 
   // Mapa codigo_produto -> campos editados a mao (para nao sobrescrever no upsert).

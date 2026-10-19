@@ -4,6 +4,7 @@ import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { consultarEstrutura } from '@/lib/omie/malha'
 import { OmieError, type LojaOmie } from '@/lib/omie/client'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 export const maxDuration = 300
 
@@ -12,7 +13,7 @@ export const maxDuration = 300
 // REAIS, só leitura (ConsultarEstrutura, nunca escreve na malha do
 // cliente). Pacing de 10s -- bem mais conservador que os 3s que já
 // travaram em MISUSE_API_PROCESS numa loja de teste no mesmo dia.
-export async function POST(request: Request) {
+async function postSync(request: Request) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 })
   }
@@ -142,3 +143,6 @@ export async function POST(request: Request) {
     pendentes,
   })
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

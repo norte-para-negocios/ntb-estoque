@@ -3,6 +3,7 @@
 import { viaDesktop } from '@/lib/offline/via-desktop'
 
 import { createServiceClient } from '@/lib/supabase/server'
+import { semAutor } from '@/lib/supabase/sem-autor'
 import { getProfile } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { LojaOmie } from '@/lib/omie/client'
@@ -64,7 +65,9 @@ export async function reprocessarSync(
   }
 
   try {
-    await SYNCS[model](loja)
+    // Fase G (revisão I1): o que o sync grava vem do Omie: histórico como "Sistema", não em nome de quem clicou.
+    const fn = SYNCS[model]
+    await semAutor(() => fn(loja))
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : 'Falha no sync.' }
   }

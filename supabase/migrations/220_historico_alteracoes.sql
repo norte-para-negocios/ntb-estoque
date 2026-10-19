@@ -19,6 +19,13 @@
 -- Argumentos do gatilho: [entidade, coluna do id da entidade, coluna da linha ('' na tabela principal), gravar|ignorar,
 -- campos...]; campo 'a.b.*' = cada chave do objeto jsonb a->b (ex.: full_object.extras.* = CEST, origem, marca...).
 
+-- Retenção (revisão I2): 400 dias. historico_podar(400, 5000) apaga em lotes; o cron /api/cron/podar-historico roda 1x por
+-- dia (scripts/sync-cron.sh) e chama até 20 lotes. Só o servidor (service role) chama.
+--
+-- Gatilhos novos pegam lock em produtos/ordens_producao/...: se algum sync estiver segurando a tabela, desiste em 5 s em vez
+-- de enfileirar as escritas do app atrás do ALTER (é só rodar de novo).
+set lock_timeout = '5s';
+
 begin;
 
 create table if not exists public.historico_alteracoes (
@@ -39,6 +46,7 @@ create table if not exists public.historico_alteracoes (
   created_at  timestamptz not null default now()
 );
 create index if not exists historico_alteracoes_registro on public.historico_alteracoes (loja_id, entidade, entidade_id, id desc);
+create index if not exists historico_alteracoes_criado on public.historico_alteracoes (created_at);
 
 alter table public.historico_alteracoes enable row level security;
 drop policy if exists historico_alteracoes_select_por_loja on public.historico_alteracoes;
@@ -137,6 +145,21 @@ begin
 end $$;
 revoke all on function public.historico_registrar() from public, anon, authenticated;
 
+-- Retenção: apaga um lote do que passou de p_dias (mínimo 90). Devolve quantas linhas saíram (o cron repete enquanto vier cheio).
+create or replace function public.historico_podar(p_dias int default 400, p_lote int default 5000)
+returns int language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_n int;
+begin
+  if p_dias is null or p_dias < 90 then raise exception 'Retenção do histórico: mínimo de 90 dias' using errcode = '22023'; end if;
+  delete from historico_alteracoes
+   where id in (select id from historico_alteracoes where created_at < now() - make_interval(days => p_dias)
+                 order by created_at limit greatest(1, least(coalesce(p_lote, 5000), 50000)));
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+revoke all on function public.historico_podar(int, int) from public, anon, authenticated;
+grant execute on function public.historico_podar(int, int) to service_role;
+
 -- Gatilhos -----------------------------------------------------------------------------------------------------------
 drop trigger if exists historico on public.produtos;
 create trigger historico after insert or update or delete on public.produtos for each row execute function public.historico_registrar(
@@ -191,6 +214,6 @@ commit;
 
 notify pgrst, 'reload schema';
 
--- Reverter: drop trigger historico on public.produtos; (idem fornecedores, compras_proprio, compras_proprio_itens,
+-- Reverter: drop function public.historico_podar(int, int); drop trigger historico on public.produtos; (idem fornecedores, compras_proprio, compras_proprio_itens,
 -- ordens_producao, pedidos_compra, pedidos_compra_itens); drop function public.historico_registrar();
 -- drop table public.historico_alteracoes;

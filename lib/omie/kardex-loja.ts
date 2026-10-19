@@ -22,7 +22,7 @@ const FRENTE = 'kardex'
 export async function sincronizarKardexLoja(loja: LojaOmie, agora = new Date()): Promise<ResumoCiclo> {
   const resumo: ResumoCiclo = { loja: loja.id, paginas: 0, linhas: 0, parouPor: null, historicoDesde: null }
   if (!(await pegarTravaSync(loja.id, 'kardex-loja', 600))) return { ...resumo, parouPor: 'trava (outro ciclo em andamento)' }
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const t0 = Date.now()
   try {
     const locais = await locaisAtivos(loja.id)

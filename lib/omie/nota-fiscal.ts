@@ -119,7 +119,7 @@ async function gravarNotaFiscalNoFrio(lojaId: number, nota: NotaFiscalBulkRow): 
 }
 
 async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   if (!nf.cabec) return
 
   const { data: saved, error: errCabec } = await supabase
@@ -234,7 +234,7 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
 }
 
 export async function syncNotasFiscais(loja: LojaOmie, dataIni?: string, dataFim?: string) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ nota_fiscal_status: 'Processando' }).eq('id', loja.id)
 
   try {
@@ -373,7 +373,7 @@ function parseDate(d: string | null | undefined): string | null {
  * entre as duas origens.
  */
 export async function existeNotaFiscalComChave(lojaId: number, chaveNfe: string): Promise<boolean> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const { count } = await supabase
     .from('notas_fiscais')
     .select('id', { count: 'exact', head: true })

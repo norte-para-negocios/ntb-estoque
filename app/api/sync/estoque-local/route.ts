@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 // Espelha o saldo mais recente de posicao_estoques (já sincronizado
 // via /api/sync/posicao, não chama a Omie de novo aqui) pra
 // estoque_local_saldos -- ponto de partida do ledger local. Ação
 // explícita: sobrescreve qualquer saldo local já divergido. Ver
 // docs/superpowers/specs/2026-08-18-estoque-independente-omie-lojas-teste-design.md.
-export async function POST() {
+async function postSync() {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 })
   }
@@ -97,3 +98,6 @@ export async function POST() {
 
   return NextResponse.json({ ok: true, copiados, falhas, totalProdutos, dataPosicao: dataMaisRecente, posicoesTruncadas })
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

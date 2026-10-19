@@ -4,6 +4,7 @@ import { getCurrentLojaId, isAdmin } from '@/lib/auth'
 import { consultarEstrutura } from '@/lib/omie/malha'
 import { OmieError, type LojaOmie } from '@/lib/omie/client'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 export const maxDuration = 300
 
@@ -11,7 +12,7 @@ export const maxDuration = 300
 // ConsultarEstrutura -- nunca escreve na malha da Omie). Só pra lojas
 // is_test=true -- ver docs/superpowers/specs/
 // 2026-08-18-estoque-independente-omie-lojas-teste-design.md.
-export async function POST() {
+async function postSync() {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 })
   }
@@ -142,3 +143,6 @@ export async function POST() {
     produtosTruncados,
   })
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

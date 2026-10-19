@@ -33,7 +33,7 @@ const motivo = (e: unknown) => {
 export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> {
   const r: ResumoOps = { loja: loja.id, abertas: 0, novas: 0, atualizadas: 0, sairam: 0, consultadas: 0, parouPor: null }
   if (!(await pegarTravaSync(loja.id, 'ops-abertas', INTERVALO_S))) return { ...r, parouPor: 'intervalo de 30 min' }
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const base = { loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test, endpoint: 'v1/produtos/op', semRepetir: true }
   let cicloBom = false
   const t0 = Date.now()

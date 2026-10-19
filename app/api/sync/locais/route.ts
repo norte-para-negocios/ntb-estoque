@@ -3,10 +3,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
+import { rotaSemAutor } from '@/lib/supabase/sem-autor'
 
 export const maxDuration = 300
 
-export async function POST() {
+async function postSync() {
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Locais de Estoque - Sincronizar'))) {
     return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
@@ -34,3 +35,6 @@ export async function POST() {
     )
   }
 }
+
+// Fase G (revisão I1): o que este sync grava vem do Omie/SEFAZ: histórico como "Sistema", não em nome de quem clicou.
+export const POST = rotaSemAutor(postSync)

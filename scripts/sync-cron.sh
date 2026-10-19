@@ -117,5 +117,9 @@ if [ "$bloco" -eq 0 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-margem-
 # pra sempre -- e a Omie nao guarda os dois (confirmado ao vivo na API).
 if [ "$bloco" -eq 3 ] && [ "$hora" = "06" ]; then hit /api/cron/snapshot-op-planejada; fi
 
+# Fase G (migration 220, revisao I2): retencao de 400 dias do historico de alteracoes, 1x por dia (bloco 2 = min 20-29,
+# 03h de Brasilia), em lotes; so o banco.
+if [ "$bloco" -eq 2 ] && [ "$hora" = "06" ]; then hit /api/cron/podar-historico; fi
+
 # Mantem o log enxuto (ultimas ~2000 linhas, uns poucos dias).
 tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"

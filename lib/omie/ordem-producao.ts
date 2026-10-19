@@ -107,7 +107,7 @@ async function gravarOrdensNoFrio(lojaId: number, linhas: OrdemProducaoBulkRow[]
 }
 
 export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataFim?: string) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ ordem_producao_status: 'Processando' }).eq('id', loja.id)
 
   try {
@@ -235,7 +235,7 @@ export async function syncOrdensProducao(loja: LojaOmie, dataIni?: string, dataF
 }
 
 export async function fetchOrdemProducao(loja: LojaOmie, nCodOP: number) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const res = await omieRequest<OmieOP>({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
@@ -317,7 +317,7 @@ export async function reconciliarOPsFantasmas(
   diasAtraso = 3,
   limite = 40
 ): Promise<{ verificadas: number; excluidas: number; erros: number }> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const limiteData = new Date(Date.now() - diasAtraso * 86400000).toISOString().slice(0, 10)
   const metade = Math.ceil(limite / 2)
 

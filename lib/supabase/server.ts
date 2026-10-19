@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { headersDoContexto } from '@/lib/offline/contexto'
-import { metodoEscreve } from '@/lib/supabase/autor-puro'
+import { mandaAutor } from '@/lib/supabase/autor-puro'
+import { dentroDeSemAutor } from '@/lib/supabase/sem-autor'
 
 // O app roda 100% no stack self-hosted do Contabo desde a migracao de
 // 2026-07-31 (NEXT_PUBLIC_SUPABASE_URL aponta pro loopback 127.0.0.1:8100 --
@@ -75,7 +76,7 @@ async function autorDaRequisicao(): Promise<string | null> {
 }
 
 const fetchComAutor: typeof fetch = async (input, init) => {
-  if (!metodoEscreve(init?.method)) return fetch(input, init)
+  if (!mandaAutor({ metodo: init?.method, clienteSemAutor: false, contextoSemAutor: dentroDeSemAutor() })) return fetch(input, init)
   const autor = await autorDaRequisicao()
   if (!autor) return fetch(input, init)
   const headers = new Headers(init?.headers)
@@ -85,11 +86,12 @@ const fetchComAutor: typeof fetch = async (input, init) => {
 
 // Client com service_role para operacoes server-side que ignoram RLS
 // (syncs Omie, webhook, escritas administrativas). NUNCA expor ao browser.
-export function createServiceClient() {
+// `semAutor: true` (lib/omie/*): o que vem do Omie é gravado no histórico como "Sistema", nunca em nome de quem clicou.
+export function createServiceClient(opcoes?: { semAutor?: boolean }) {
   const { url, key } = urlEChaveAtuais('service')
   const headers = headersDoContexto()
   return createServerClient(url, key, {
-    global: { ...(headers ? { headers } : {}), fetch: fetchComAutor },
+    global: { ...(headers ? { headers } : {}), ...(opcoes?.semAutor ? {} : { fetch: fetchComAutor }) },
     cookies: {
       getAll() {
         return []

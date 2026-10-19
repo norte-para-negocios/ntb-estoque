@@ -4,7 +4,7 @@ import { lojaPodeEspelhar, type LojaCandidata } from '@/lib/estoque/espelho-loja
 import { cronAutorizado } from '@/lib/seguranca/regras'
 
 export async function getLojasAtivas(): Promise<LojaOmie[]> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const { data } = await supabase
     .from('lojas')
     .select('id, omie_app_key, omie_app_secret, is_test')
@@ -24,7 +24,7 @@ export function assertCronAuth(request: Request): boolean {
  * modo Omie, nunca a loja 4. Sem a coluna (migration não aplicada) devolve [] e loga.
  */
 export async function getLojasEspelhoCompleto(): Promise<LojaOmie[]> {
-  const { data, error } = await createServiceClient()
+  const { data, error } = await createServiceClient({ semAutor: true })
     .from('lojas')
     .select('id, omie_app_key, omie_app_secret, is_test, ativo, espelho_completo, modo_estoque')
     .eq('ativo', true)

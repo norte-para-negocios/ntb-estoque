@@ -54,7 +54,7 @@ function soSePreenchido(valor: string | undefined, chave: string): Record<string
  * Nao escreve nada no Omie. Status sem acento (regra do banco).
  */
 export async function syncEmpresa(loja: LojaOmie): Promise<boolean> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   try {
     const res = await omieRequest<OmieEmpresaResp>({
       loja_id: loja.id,

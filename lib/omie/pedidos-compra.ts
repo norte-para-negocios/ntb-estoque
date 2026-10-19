@@ -47,7 +47,7 @@ export async function saldoPedidosCompraOmie(lojaId: number, fimEstimativa: stri
       return { saldo: c ? saldoPedidosOmie(c.pedidos, fimEstimativa) : null, aviso: c ? null : 'Pedidos do Omie sendo lidos agora; recarregue em instantes.' }
     }
     try {
-      const { data: loja } = await createServiceClient().from('lojas').select('id, omie_app_key, omie_app_secret, is_test').eq('id', lojaId).single<LojaOmie>()
+      const { data: loja } = await createServiceClient({ semAutor: true }).from('lojas').select('id, omie_app_key, omie_app_secret, is_test').eq('id', lojaId).single<LojaOmie>()
       if (!loja?.omie_app_key) return { saldo: null, aviso: 'Loja sem chave do Omie.' }
       const pedidos = await lerPedidos(loja)
       cache.set(lojaId, { em: Date.now(), pedidos })

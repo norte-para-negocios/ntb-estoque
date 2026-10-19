@@ -18,6 +18,7 @@ import {
   lerTabela, prepararFornecedores, prepararProdutos, resumoPrevia,
   type AcaoLinha, type FornecedorExistente, type LinhaPrevia, type ProdutoExistente, type TipoImportacao,
 } from '@/lib/importacao/planilha-puro'
+import { tabelaAusente } from '@/lib/supabase/tabela-ausente'
 
 type Erro = { error: string }
 // Cadastro lido pela metade faria um produto existente parecer novo (e duplicar): falha na leitura = prévia recusada.
@@ -115,7 +116,7 @@ export async function previaImportacao(formData: FormData): Promise<PreviaImport
       loja_id: ctx.lojaId, tipo, nome_arquivo: arquivo.name.slice(0, 200), hash, linhas, resumo, criado_por: perfil.id, criado_por_nome: perfil.name,
     }).select('id').single(),
   ])
-  if (error) return { error: error.code === '42P01' ? 'Importação ainda não ativada neste servidor.' : 'Não foi possível guardar a prévia agora' }
+  if (error) return { error: tabelaAusente(error) ? 'Importação ainda não ativada neste servidor.' : 'Não foi possível guardar a prévia agora' }
   return { id: Number(data.id), tipo, linhas, resumo, desconhecidas: tabela.desconhecidas, jaImportadaEm: (anterior?.[0]?.aplicada_em as string | undefined) ?? null }
 }
 

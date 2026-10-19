@@ -93,5 +93,31 @@ do $$ begin
   if (select descricao from produtos where loja_id = 9001 and codigo_produto = 22001) <> 'TOMATE 3' then raise exception '9: escrita abortada'; end if;
 end $$;
 
+-- 10. sync com sessão (revisão I1): service role SEM o cabeçalho de autor = produto como "sistema", OP não grava
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.headers', '{"accept":"application/json"}', true);
+update produtos set descricao = 'TOMATE DO OMIE' where loja_id = 9001 and codigo_produto = 22001;
+update ordens_producao set identificacao_n_qtde = 9 where loja_id = 9001;
+do $$ begin
+  if (select origem from historico_alteracoes where entidade = 'produto' and valor_para = 'TOMATE DO OMIE') <> 'sistema' then raise exception '10: sync gravou autor'; end if;
+  if exists (select 1 from historico_alteracoes where entidade = 'op' and valor_para::numeric = 9) then raise exception '10: OP do sync gravou'; end if;
+end $$;
+
+-- 11. retenção: apaga só o que passou do prazo, em lote; prazo menor que 90 dias recusado; authenticated não chama
+do $$ declare n int; begin
+  update historico_alteracoes set created_at = now() - interval '401 days' where entidade = 'fornecedor';
+  n := historico_podar(400, 1);
+  if n <> 1 then raise exception '11: lote %', n; end if;
+  n := historico_podar(400, 5000);
+  if exists (select 1 from historico_alteracoes where entidade = 'fornecedor') then raise exception '11: sobrou vencido'; end if;
+  if not exists (select 1 from historico_alteracoes where entidade = 'produto') then raise exception '11: apagou o que está no prazo'; end if;
+  begin perform historico_podar(30, 10); raise exception '11: aceitou 30 dias'; exception when sqlstate '22023' then null; end;
+end $$;
+set local role authenticated;
+do $$ begin
+  begin perform historico_podar(400, 10); raise exception '11: authenticated podou'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'OK 220' as resultado;
 rollback;

@@ -81,7 +81,7 @@ export async function excluirFamiliaOmie(loja: LojaOmie, codigo: number) {
  * real 18/06). Nao escreve nada no Omie.
  */
 export async function syncFamilias(loja: LojaOmie) {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   await supabase.from('lojas').update({ familia_status: 'Processando' }).eq('id', loja.id)
 
   try {

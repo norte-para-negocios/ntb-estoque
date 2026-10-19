@@ -122,7 +122,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
  * Retorna o número de registros inseridos/atualizados.
  */
 export async function syncAjustes(loja: LojaOmie): Promise<number> {
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
 
   // Cursor: max id_ajuste já salvo para esta loja
   const { data: cursorRow } = await supabase
@@ -211,7 +211,7 @@ const TETO_AJUSTES_MS = 150_000
 export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Promise<ResumoCiclo> {
   const resumo: ResumoCiclo = { loja: loja.id, paginas: 0, linhas: 0, parouPor: null, historicoDesde: null }
   if (!(await pegarTravaSync(loja.id, 'ajustes', 600))) return { ...resumo, parouPor: 'trava (outro ciclo em andamento)' }
-  const supabase = createServiceClient()
+  const supabase = createServiceClient({ semAutor: true })
   const t0 = Date.now()
   try {
     let estado = lerEstado(await lerEstadoSync(loja.id, 'ajustes'))

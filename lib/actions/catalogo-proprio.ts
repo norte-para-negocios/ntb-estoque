@@ -7,6 +7,7 @@ import { viaDesktop } from '@/lib/offline/via-desktop'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { semAutor } from '@/lib/supabase/sem-autor'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
@@ -283,7 +284,8 @@ export async function sincronizarAgora(): Promise<{ ok: true; resumo: string } |
   const __d = viaDesktop('catalogo-proprio#sincronizarAgora', sincronizarAgora, []); if (__d) return __d as never
   const ctx = await lojaProprio('Produtos - Editar')
   if ('error' in ctx) return ctx
-  const r = await rodarSyncCatalogo()
+  // Fase G (revisão I1): o que vem do Norte Vendas grava no histórico como "Sistema".
+  const r = await semAutor(() => rodarSyncCatalogo())
   const minha = r.detalhes.find((d) => d.loja === ctx.lojaId)
   if (minha?.erro) return { error: String(minha.erro) }
   revalidatePath('/sync-catalogo')
