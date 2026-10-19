@@ -1,8 +1,8 @@
 import type { DiaValor } from '@/lib/faturamento-dias'
 
-// Barras de faturamento por dia, com linha horizontal opcional da meta.
+// Barras de faturamento por dia, com linha horizontal opcional da meta. `emReais=false` mostra o número puro (ex.: OPs).
 // Barra cheia = bateu a meta; clara = nao bateu; cinza = dia em andamento (hoje).
-export function BarrasDiarias({ dias, meta, hoje, nome = 'Faturamento' }: { dias: DiaValor[]; meta?: number | null; hoje?: string; nome?: string }) {
+export function BarrasDiarias({ dias, meta, hoje, nome = 'Faturamento', emReais = true }: { dias: DiaValor[]; meta?: number | null; hoje?: string; nome?: string; emReais?: boolean }) {
   if (!dias.length) return null
   const W = 960, H = 160, PAD = 8
   const max = Math.max(1, meta ?? 0, ...dias.map((d) => d.valor))
@@ -30,7 +30,7 @@ export function BarrasDiarias({ dias, meta, hoje, nome = 'Faturamento' }: { dias
           const cls = andamento ? 'fill-text-muted/30' : yMeta === null || bateu ? 'fill-brand' : 'fill-brand/30'
           return (
             <g key={d.dia}>
-              <title>{`${rotulo(d.dia)}: ${d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${andamento ? ' (em andamento)' : ''}`}</title>
+              <title>{`${rotulo(d.dia)}: ${(emReais ? d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : d.valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 }))}${andamento ? ' (em andamento)' : ''}`}</title>
               <rect x={x + largura * 0.12} y={H - h} width={largura * 0.76} height={h} rx={3} className={cls} />
               {i % passo === 0 && <text x={x + largura / 2} y={H + 16} textAnchor="middle" className="fill-text-muted text-[11px]">{rotulo(d.dia)}</text>}
             </g>

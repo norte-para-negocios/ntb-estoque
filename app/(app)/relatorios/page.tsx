@@ -33,6 +33,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
   {
     grupo: 'Produção',
     itens: [
+      { href: '/relatorio-ops', titulo: 'Produção por produto', icon: Factory, descricao: 'Quanto foi produzido de cada produto e quanta matéria-prima a produção consumiu no período, com custo quando há.', pergunta: 'O que produzi e o que gastei para produzir?' },
       { href: '/relatorio-producao', titulo: 'Dashboard de Produção', icon: Factory, descricao: 'OPs concluídas por dia/semana/mês, com quebra por quem concluiu.', pergunta: 'Quem produziu e quando?' },
     ],
   },
