@@ -89,6 +89,9 @@ if [ "$bloco" -eq 3 ]; then hit /api/cron/sync-faturamento; fi
 if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-preco-movimentacao; fi
 # Familias de produto (PesquisarFamilias, 1-2 paginas por loja): existia a rota mas nunca entrou aqui.
 if [ "$bloco" -eq 4 ]; then hit /api/cron/sync-familias; fi
+# Fase G (migration 222): notificacoes do sininho (validade, estoque minimo, nota parada, erros do Omie/Vendas, pedido
+# aguardando aprovacao). So le o banco, nao chama o Omie nem envia nada; 2x por hora (blocos 1 e 4).
+if [ "$bloco" -eq 1 ] || [ "$bloco" -eq 4 ]; then hit /api/cron/gerar-notificacoes; fi
 # Reenvia ao Contabo o faturamento das lojas de estoque proprio que nao chegou no fechamento (so local, sem Omie).
 if [ "$bloco" -eq 5 ]; then hit /api/cron/sync-fechamentos-frio; fi
 

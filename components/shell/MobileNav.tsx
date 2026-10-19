@@ -15,6 +15,7 @@ import {
   Package,
   Search,
 } from 'lucide-react'
+import { Sininho } from './Sininho'
 import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from './NavItems'
@@ -136,16 +137,19 @@ export function MobileNav({
           height={240}
           className="logo-adapt h-6 w-auto"
         />
-        {onBuscar && (
-          <button
-            type="button"
-            onClick={onBuscar}
-            aria-label="Buscar"
-            className="ml-auto flex size-10 items-center justify-center rounded-full text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
-          >
-            <Search className="size-5" />
-          </button>
-        )}
+        <div className="ml-auto flex items-center">
+          <Sininho tela="celular" />
+          {onBuscar && (
+            <button
+              type="button"
+              onClick={onBuscar}
+              aria-label="Buscar"
+              className="flex size-10 items-center justify-center rounded-full text-text-muted u-motion u-press-sm hover:bg-surface-2 hover:text-text"
+            >
+              <Search className="size-5" />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Backdrop com fade. */}

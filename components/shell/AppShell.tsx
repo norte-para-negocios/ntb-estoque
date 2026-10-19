@@ -7,6 +7,7 @@ import { Search } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { MobileNav } from './MobileNav'
 import { BuscaGlobal } from './BuscaGlobal'
+import { Sininho } from './Sininho'
 import { BannerSync } from '@/components/desktop/BannerSync'
 
 export function AppShell({
@@ -84,7 +85,8 @@ export function AppShell({
             (cabecalho de tabela congelado tipo Excel). */}
         <main className="flex-1 min-w-0 overflow-x-clip pb-20 lg:pb-0">
           <div className="mx-auto w-full max-w-6xl px-4 lg:px-8 py-6">
-            <div className="mb-2 hidden justify-end lg:flex">
+            <div className="mb-2 hidden items-center justify-end gap-2 lg:flex">
+              <Sininho tela="desktop" />
               {/* Celular: a busca fica na barra superior (MobileNav). Desktop: botao completo com texto e atalho de teclado */}
               <button
                 type="button"
