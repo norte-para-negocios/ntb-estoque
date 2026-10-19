@@ -141,6 +141,20 @@ export function validarParcelas(p: Parcela[]): string | null {
   return Math.abs(soma - 100) > 0.01 ? `Os percentuais somam ${soma.toLocaleString('pt-BR')}%, precisam somar 100%.` : null
 }
 
+/** "30/60/90" → três parcelas iguais (a última fecha os 100%); texto vazio = sem parcelas; inválido = null. */
+export function parcelasDoTexto(texto: string): Parcela[] | null {
+  const t = texto.trim()
+  if (!t) return []
+  const dias = t.split(/[\s/;,]+/).filter(Boolean).map(Number)
+  if (!dias.length || dias.length > 24 || dias.some((d) => !Number.isInteger(d) || d < 0 || d > 3650)) return null
+  const base = Math.floor((100 / dias.length) * 100) / 100
+  return dias.map((d, i) => ({ dias: d, percentual: i === dias.length - 1 ? Math.round((100 - base * (dias.length - 1)) * 100) / 100 : base }))
+}
+
+export function textoDasParcelas(p: Parcela[]): string {
+  return p.map((x) => x.dias).join('/')
+}
+
 /** Vencimento = previsão de entrega + dias (como o nDias do Omie); a última parcela leva o arredondamento. */
 export function parcelasDoPedido(p: Parcela[], total: number, previsao: string | null): { numero: number; dias: number; vencimento: string | null; valor: number; percentual: number }[] {
   let acum = 0

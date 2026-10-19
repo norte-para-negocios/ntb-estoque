@@ -107,3 +107,12 @@ test('totaisPedido e parcelas', () => {
   assert.equal(Math.round((p[0].valor + p[1].valor) * 100) / 100, 125.01)
   assert.deepEqual(p.map((x) => x.valor), [62.51, 62.5])
 })
+
+test('parcelasDoTexto: 30/60/90 em partes iguais que fecham 100%', async () => {
+  const { parcelasDoTexto, textoDasParcelas } = await import('./pedido-puro.ts')
+  assert.deepEqual(parcelasDoTexto('30/60/90'), [{ dias: 30, percentual: 33.33 }, { dias: 60, percentual: 33.33 }, { dias: 90, percentual: 33.34 }])
+  assert.deepEqual(parcelasDoTexto(''), [])
+  assert.equal(parcelasDoTexto('30/x'), null)
+  assert.equal(validarParcelas(parcelasDoTexto('0 28 56')!), null)
+  assert.equal(textoDasParcelas([{ dias: 30, percentual: 50 }, { dias: 60, percentual: 50 }]), '30/60')
+})
