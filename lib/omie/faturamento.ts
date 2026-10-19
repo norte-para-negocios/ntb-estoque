@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest } from './client'
 import type { LojaOmie } from './client'
 import { buscarFatCupons } from '@/lib/faturamento-frio'
+import { diffFaturamentoImportado, type LinhaFat } from './faturamento-diff'
 
 // Faturamento via API (cupom fiscal / NFC-e do PDV) -> faturamento_importado.
 // Mesma lógica de scripts/sync-faturamento-api.mjs, compartilhada entre a rota
@@ -400,22 +401,67 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
   // (backfill futuro) seriam apagados de novo no proximo sync.
   const mesIniAno = `${ano}-${String(mesInicio).padStart(2, '0')}`
   const mesFimAno = `${ano}-${String(mesAtual).padStart(2, '0')}`
-  const { error: delErro } = await supabase
-    .from('faturamento_importado')
-    .delete()
-    .eq('loja_id', loja.id)
-    .in('dimensao', ['tipo', 'familia', 'produto', 'tipo>familia', 'familia>produto'])
-    .gte('mes', mesIniAno)
-    .lte('mes', mesFimAno)
-  if (delErro) throw new Error(delErro.message)
+  const DIMENSOES = ['tipo', 'familia', 'produto', 'tipo>familia', 'familia>produto']
 
-  const rows = [...acc.entries()].map(([k, valor]) => {
+  const rows: LinhaFat[] = [...acc.entries()].map(([k, valor]) => {
     const [dimensao, rotulo, mes] = JSON.parse(k) as [string, string, string]
-    return { loja_id: loja.id, dimensao, rotulo, mes, valor: Number(valor.toFixed(2)) }
+    return { dimensao, rotulo, mes, valor: Number(valor.toFixed(2)) }
   })
-  for (let i = 0; i < rows.length; i += 1000) {
-    const { error } = await supabase.from('faturamento_importado').insert(rows.slice(i, i + 1000))
+
+  // Fase I (19/10/2026): grava só a diferença. Apagar e reinserir o escopo inteiro a cada hora gerava ~15 mil
+  // linhas/hora na outbox (93 % dela) e uma versão nova de cada linha para os desktops; e a tela via o mês vazio
+  // entre o delete e o insert. Escopo lido = exatamente o que o delete antigo apagava.
+  const existentes: LinhaFat[] = []
+  for (let pagina = 0; ; pagina++) {
+    const from = pagina * 1000
+    const { data, error } = await supabase
+      .from('faturamento_importado')
+      .select('dimensao, rotulo, mes, valor')
+      .eq('loja_id', loja.id)
+      .in('dimensao', DIMENSOES)
+      .gte('mes', mesIniAno)
+      .lte('mes', mesFimAno)
+      .order('dimensao')
+      .order('rotulo')
+      .order('mes')
+      .range(from, from + 999)
     if (error) throw new Error(error.message)
+    if (!data?.length) break
+    existentes.push(...(data as LinhaFat[]))
+    if (data.length < 1000) break
+  }
+  const { inserir, atualizar, apagar } = diffFaturamentoImportado(existentes, rows)
+
+  // Apaga por (dimensao, mes) + lista de rótulos em lotes pequenos: rótulo é nome de produto e a lista vai na URL
+  // (limite de ~8 KB do PostgREST/nginx, ver AGENTS.md "414 URI Too Long").
+  const porGrupo = new Map<string, { dimensao: string; mes: string; rotulos: string[] }>()
+  for (const l of apagar) {
+    const g = JSON.stringify([l.dimensao, l.mes])
+    const item = porGrupo.get(g) ?? { dimensao: l.dimensao, mes: l.mes, rotulos: [] }
+    item.rotulos.push(l.rotulo)
+    porGrupo.set(g, item)
+  }
+  for (const { dimensao, mes, rotulos } of porGrupo.values()) {
+    for (let i = 0; i < rotulos.length; i += 30) {
+      const { error } = await supabase
+        .from('faturamento_importado')
+        .delete()
+        .eq('loja_id', loja.id)
+        .eq('dimensao', dimensao)
+        .eq('mes', mes)
+        .in('rotulo', rotulos.slice(i, i + 30))
+      if (error) throw new Error(error.message)
+    }
+  }
+  const gravar = [...inserir, ...atualizar].map((l) => ({ loja_id: loja.id, ...l }))
+  for (let i = 0; i < gravar.length; i += 1000) {
+    const { error } = await supabase
+      .from('faturamento_importado')
+      .upsert(gravar.slice(i, i + 1000), { onConflict: 'loja_id,dimensao,rotulo,mes' })
+    if (error) throw new Error(error.message)
+  }
+  if (inserir.length || atualizar.length || apagar.length) {
+    console.log(`[faturamento] loja ${loja.id}: +${inserir.length} ~${atualizar.length} -${apagar.length} (de ${rows.length})`)
   }
   await supabase.from('faturamento_import_meta').upsert({
     loja_id: loja.id,
