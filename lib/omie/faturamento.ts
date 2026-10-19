@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest } from './client'
 import type { LojaOmie } from './client'
 import { buscarFatCupons } from '@/lib/faturamento-frio'
-import { diffFaturamentoImportado, type LinhaFat } from './faturamento-diff'
+import { diffFaturamentoImportado, filtroInPostgrest, type LinhaFat } from './faturamento-diff'
 
 // Faturamento via API (cupom fiscal / NFC-e do PDV) -> faturamento_importado.
 // Mesma lógica de scripts/sync-faturamento-api.mjs, compartilhada entre a rota
@@ -449,7 +449,7 @@ export async function syncFaturamento(loja: LojaOmie, opts?: { importadoPor?: st
         .eq('loja_id', loja.id)
         .eq('dimensao', dimensao)
         .eq('mes', mes)
-        .in('rotulo', rotulos.slice(i, i + 30))
+        .filter('rotulo', 'in', filtroInPostgrest(rotulos.slice(i, i + 30)))
       if (error) throw new Error(error.message)
     }
   }

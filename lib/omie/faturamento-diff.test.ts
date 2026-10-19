@@ -50,3 +50,12 @@ test('valor vindo do banco como texto (numeric do PostgREST) compara pelo númer
   const ex = [{ dimensao: 'tipo', rotulo: '04', mes: '2026-10', valor: '123.40' as unknown as number }]
   assert.equal(diffFaturamentoImportado(ex, [L('tipo', '04', '2026-10', 123.4)]).atualizar.length, 0)
 })
+
+// Revisão M2 (19/10/2026): o apagar por rótulo vai num filtro `in` na URL; aspas e barra precisam de escape.
+test('filtroInPostgrest: aspas em todos os valores, escapa barra e aspas', async () => {
+  const { filtroInPostgrest } = await import('./faturamento-diff.ts')
+  assert.equal(filtroInPostgrest(['Pastel']), '("Pastel")')
+  assert.equal(filtroInPostgrest(['PIZZA 8"', 'A\\B', 'x,y (z)']), '("PIZZA 8\\"","A\\\\B","x,y (z)")')
+  assert.equal(filtroInPostgrest(['JOHNNIE | BLACK', 'Açaí']), '("JOHNNIE | BLACK","Açaí")')
+  assert.equal(filtroInPostgrest(['fim\\']), '("fim\\\\")')
+})

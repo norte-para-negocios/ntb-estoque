@@ -8,6 +8,15 @@ export type LinhaFat = { dimensao: string; rotulo: string; mes: string; valor: n
 const chave = (l: LinhaFat) => JSON.stringify([l.dimensao, l.rotulo, l.mes])
 const centavos = (v: number | string) => Math.round(Number(v) * 100)
 
+/**
+ * Lista para o filtro `in` do PostgREST (`.filter(col, 'in', filtroInPostgrest(valores))`), com cada valor entre
+ * aspas e `\` e `"` escapados. O `.in()` do supabase-js só põe aspas quando o valor tem `,()` e não escapa
+ * aspas nem barra: um rótulo de produto como `PIZZA 8"` ou `A\B` não casaria (revisão M2, 19/10/2026).
+ */
+export function filtroInPostgrest(valores: string[]): string {
+  return '(' + valores.map((v) => '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"').join(',') + ')'
+}
+
 export function diffFaturamentoImportado(
   existentes: LinhaFat[],
   novos: LinhaFat[],
