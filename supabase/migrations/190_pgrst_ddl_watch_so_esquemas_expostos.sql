@@ -8,7 +8,8 @@
 -- requisições esperam o cache novo). Esquemas expostos em produção (docker inspect, 19/10):
 --   supabase-rest  PGRST_DB_SCHEMAS=public,graphql_public
 --   rest-vendas    PGRST_DB_SCHEMAS=public
--- Se PGRST_DB_SCHEMAS mudar no docker-compose, atualizar a lista em pgrst_deve_recarregar().
+-- Se PGRST_DB_SCHEMAS mudar no docker-compose, atualizar a lista ('public', 'graphql_public') nas DUAS
+-- funções abaixo.
 --
 -- Ganho real é pequeno (o gasto grande do spec de 18/10 era o ping OpenAPI do Vendas, ver
 -- docs/superpowers/specs/2026-10-18-fase-i-velocidade-achados.md, "Resultados 19/10"); esta
@@ -19,7 +20,7 @@
 --   docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 190_pgrst_ddl_watch_so_esquemas_expostos.sql
 --
 -- REVERTER: rodar o bloco abaixo (definição ORIGINAL de produção, lida em 19/10/2026 com
--- pg_get_functiondef) e depois `drop function if exists extensions.pgrst_deve_recarregar(text);`
+-- pg_get_functiondef).
 -- Os gatilhos de evento (pgrst_ddl_watch, pgrst_drop_watch) não são tocados por esta migration.
 /*
 CREATE OR REPLACE FUNCTION extensions.pgrst_ddl_watch()
@@ -81,15 +82,11 @@ END; $function$;
 
 begin;
 
--- Regra única: o DDL num esquema só interessa ao PostgREST se o esquema é exposto (ou se o
--- objeto não tem esquema, ex. CREATE SCHEMA, que pode virar exposto).
-create or replace function extensions.pgrst_deve_recarregar(p_schema text)
-returns boolean
-language sql
-immutable
-as $$
-  select p_schema is null or p_schema in ('public', 'graphql_public')
-$$;
+-- Regra (o DDL só interessa ao PostgREST se o esquema é exposto, ou se o objeto não tem esquema)
+-- escrita DENTRO das duas funções, sem chamar outra função: o gatilho roda com o papel de quem fez o
+-- DDL, e papéis como supabase_auth_admin / supabase_storage_admin não têm USAGE no esquema extensions
+-- (uma função auxiliar lá quebraria as migrations de imagem do auth/storage). Teste 190 cobre isso.
+drop function if exists extensions.pgrst_deve_recarregar(text);
 
 create or replace function extensions.pgrst_ddl_watch()
  returns event_trigger
@@ -113,7 +110,8 @@ begin
     , 'COMMENT'
     )
     -- pg_temp e esquemas que o PostgREST não expõe (realtime, storage, auth, ...) não recarregam
-    and (cmd.command_tag in ('CREATE SCHEMA', 'ALTER SCHEMA') or extensions.pgrst_deve_recarregar(cmd.schema_name))
+    and (cmd.command_tag in ('CREATE SCHEMA', 'ALTER SCHEMA')
+         or cmd.schema_name is null or cmd.schema_name in ('public', 'graphql_public'))
     then
       notify pgrst, 'reload schema';
       return; -- um aviso por comando basta (o PostgREST recarrega tudo de uma vez)
@@ -142,7 +140,7 @@ begin
     , 'rule'
     )
     and obj.is_temporary is false -- no pg_temp objects
-    and (obj.object_type = 'schema' or extensions.pgrst_deve_recarregar(obj.schema_name))
+    and (obj.object_type = 'schema' or obj.schema_name is null or obj.schema_name in ('public', 'graphql_public'))
     then
       notify pgrst, 'reload schema';
       return;

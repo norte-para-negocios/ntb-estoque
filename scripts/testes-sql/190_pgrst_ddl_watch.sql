@@ -56,24 +56,50 @@ create table if not exists realtime.messages_2026_10_19 partition of realtime.me
 \echo CASO antes_realtime_drop_particao 1
 drop table realtime.messages_2026_10_19;
 
-\echo CASO aplica_190 2
+\echo CASO aplica_190 1
 \i supabase/migrations/190_pgrst_ddl_watch_so_esquemas_expostos.sql
 
--- regra pura
-\echo CASO regra_pura 0
-do $$
-begin
-  assert extensions.pgrst_deve_recarregar('public'), 'public';
-  assert extensions.pgrst_deve_recarregar('graphql_public'), 'graphql_public';
-  assert extensions.pgrst_deve_recarregar(null), 'null';
-  assert not extensions.pgrst_deve_recarregar('realtime'), 'realtime';
-  assert not extensions.pgrst_deve_recarregar('storage'), 'storage';
-  assert not extensions.pgrst_deve_recarregar('supabase_functions'), 'supabase_functions';
-  assert not extensions.pgrst_deve_recarregar('auth'), 'auth';
-  assert not extensions.pgrst_deve_recarregar('extensions'), 'extensions';
-  assert not extensions.pgrst_deve_recarregar('pg_temp'), 'pg_temp';
-  assert not extensions.pgrst_deve_recarregar('cron'), 'cron';
+-- a 190 não deixa função auxiliar (o gatilho não pode depender de USAGE em extensions)
+\echo CASO sem_funcao_auxiliar 0
+do $$ begin
+  assert to_regprocedure('extensions.pgrst_deve_recarregar(text)') is null, 'sobrou pgrst_deve_recarregar';
 end $$;
+
+-- papel NÃO superusuário e SEM USAGE em extensions (como supabase_auth_admin/supabase_storage_admin)
+-- fazendo DDL no próprio esquema: tem que passar (C1 da revisão de 19/10)
+\echo CASO preparo_papel_create_schema 1
+drop schema if exists fi190_auth cascade;
+drop schema if exists fi190_novo cascade;
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname = 'fi190_admin') then
+    create role fi190_admin nologin nosuperuser;
+  end if;
+end $$;
+revoke all on schema extensions from public, fi190_admin;
+select format('grant create on database %I to fi190_admin', current_database()) \gexec
+create schema fi190_auth authorization fi190_admin;
+do $$ begin
+  assert not (select rolsuper from pg_roles where rolname = 'fi190_admin'), 'papel é superusuário';
+  assert not has_schema_privilege('fi190_admin', 'extensions', 'USAGE'), 'papel tem USAGE em extensions';
+end $$;
+set role fi190_admin;
+\echo CASO papel_sem_extensions_create_table 0
+create table fi190_auth.users (id int);
+\echo CASO papel_sem_extensions_alter_table 0
+alter table fi190_auth.users add column email text;
+\echo CASO papel_sem_extensions_function 0
+create function fi190_auth.uid() returns int language sql as 'select 1';
+\echo CASO papel_sem_extensions_drop 0
+drop table fi190_auth.users;
+\echo CASO papel_sem_extensions_create_schema_avisa 1
+create schema fi190_novo;
+\echo CASO papel_sem_extensions_drop_schema_avisa 1
+drop schema fi190_novo;
+reset role;
+\echo CASO limpeza_drop_schema 1
+drop schema fi190_auth cascade;
+select format('revoke create on database %I from fi190_admin', current_database()) \gexec
+drop role fi190_admin;
 
 -- DEPOIS da 190
 \echo CASO realtime_particao_nao_avisa 0
