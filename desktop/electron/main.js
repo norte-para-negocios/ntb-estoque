@@ -6,6 +6,7 @@ const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
 const { autoUpdater } = require('electron-updater')
+const { linkExternoPermitido } = require('./link-externo')
 
 const banco = require('./banco')
 const auth = require('./auth-local')
@@ -144,15 +145,20 @@ function criarJanela() {
       return false
     }
   }
+  // Fase H: só http(s)/mailto vão para o sistema. Antes qualquer esquema (file:, ms-msdt:, search-ms:...) que
+  // aparecesse num link da tela era entregue ao Windows, que abre o programa associado.
+  const abrirFora = (url) => {
+    if (linkExternoPermitido(url)) shell.openExternal(url)
+  }
   janela.webContents.on('will-navigate', (e, url) => {
     if (!mesmaOrigem(url)) {
       e.preventDefault()
-      shell.openExternal(url)
+      abrirFora(url)
     }
   })
   janela.webContents.setWindowOpenHandler(({ url }) => {
     if (mesmaOrigem(url)) return { action: 'allow' }
-    shell.openExternal(url)
+    abrirFora(url)
     return { action: 'deny' }
   })
   janela.loadURL(`${origem}/home`)

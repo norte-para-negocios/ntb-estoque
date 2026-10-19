@@ -1,0 +1,15 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const { linkExternoPermitido } = require('./link-externo')
+
+test('linkExternoPermitido: só http, https e mailto', () => {
+  assert.equal(linkExternoPermitido('https://app-estoque.norteparanegocios.com.br/x'), true)
+  assert.equal(linkExternoPermitido('http://exemplo.com'), true)
+  assert.equal(linkExternoPermitido('mailto:alguem@exemplo.com'), true)
+  assert.equal(linkExternoPermitido('file:///C:/Windows/System32/calc.exe'), false)
+  assert.equal(linkExternoPermitido('ms-msdt:/id PCWDiagnostic'), false)
+  assert.equal(linkExternoPermitido('search-ms:query=x'), false)
+  assert.equal(linkExternoPermitido('javascript:alert(1)'), false)
+  assert.equal(linkExternoPermitido('não é url'), false)
+  assert.equal(linkExternoPermitido(undefined), false)
+})
