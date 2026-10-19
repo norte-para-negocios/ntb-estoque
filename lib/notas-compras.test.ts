@@ -1,11 +1,32 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { situacaoBate, filtrarNotas, notaParaLinha, itemParaLinha, itensDasNotas, lerOrdem, ordenarNotas, fornecedoresDistintos, type NotaLeve, type ItemCompra } from './notas-compras.ts'
+import { situacaoBate, filtrarNotas, notaParaLinha, itemParaLinha, itensDasNotas, lerOrdem, ordenarNotas, fornecedoresDistintos, transportadoraDe, transportadoraDoObjeto, SEM_TRANSPORTADORA, type NotaLeve, type ItemCompra } from './notas-compras.ts'
 import { rankear, resumir, serieDiaria } from './faturamento-itens.ts'
 
 const N = (o: Partial<NotaLeve>): NotaLeve => ({
   id: 1, dia: '2026-10-01', numero: '100', serie: '1', fornecedor: 'ATACADAO', natureza: 'COMPRA', valor: 100,
-  etapa: '60', cancelada: false, manifestada: true, sefazSituacao: null, ...o,
+  etapa: '60', cancelada: false, manifestada: true, sefazSituacao: null, transportadora: SEM_TRANSPORTADORA, ...o,
+})
+
+test('transportadora da nota: nome fantasia, senão razão social, senão "Sem transportadora"', () => {
+  assert.equal(transportadoraDe(' MARCELO TRANSPORTES ', 'MARCELO PEDRO LTDA'), 'MARCELO TRANSPORTES')
+  assert.equal(transportadoraDe('', 'MARCELO PEDRO LTDA'), 'MARCELO PEDRO LTDA')
+  assert.equal(transportadoraDe(null, null), SEM_TRANSPORTADORA)
+  assert.equal(transportadoraDoObjeto({ transporte: { cNomeTransp: '', cRazaoTransp: 'O MESMO' } }), 'O MESMO')
+  assert.equal(transportadoraDoObjeto(null), SEM_TRANSPORTADORA)
+})
+
+test('recebimentos por transportadora: ranking por nota e filtro exato', () => {
+  const ns = [
+    N({ id: 1, valor: 6200, transportadora: 'MARCELO' }), N({ id: 2, valor: 450, transportadora: 'O MESMO' }),
+    N({ id: 3, valor: 100 }), N({ id: 4, valor: 50 }), N({ id: 5, valor: 999, transportadora: 'MARCELO', cancelada: true }),
+  ]
+  const validas = filtrarNotas(ns, {})
+  const r = rankear(validas.map((n) => notaParaLinha(n, 'transportadora')), 'produto')
+  assert.deepEqual(r.map((l) => [l.rotulo, l.valor, l.cupons]), [['MARCELO', 6200, 1], ['O MESMO', 450, 1], [SEM_TRANSPORTADORA, 150, 2]])
+  assert.deepEqual(filtrarNotas(ns, { transportadora: 'MARCELO' }).map((n) => n.id), [1])
+  assert.deepEqual(filtrarNotas(ns, { transportadora: SEM_TRANSPORTADORA }).map((n) => n.id), [3, 4])
+  assert.equal(notaParaLinha(ns[0]).produto, 'ATACADAO') // padrão continua sendo o fornecedor
 })
 
 const notas = [

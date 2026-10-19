@@ -6,6 +6,7 @@ import { gerarPlanilha, planilhaResponse } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
+import { transportadoraDoObjeto } from '@/lib/notas-compras'
 
 function fmtData(d: string | null): string {
   if (!d) return '-'
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
     natureza: searchParams.get('natureza') || undefined,
     familia: searchParams.get('familia') || undefined,
     local: searchParams.get('local') || undefined,
+    transportadora: searchParams.get('transportadora') || undefined,
   }
   const categoriaOrClause = resolverCategoriaOrClause(params.categoria)
 
@@ -246,12 +248,14 @@ export async function GET(request: Request) {
   // ja cobre virtualmente o mesmo intervalo que o frio pra notas_fiscais/
   // nota_fiscal_items -- os dois calculos viraram trabalho jogado fora. Usa
   // so o Supabase.
-  const notasCompletas = notas
+  // Transportadora (visão Transportadoras da tela): filtro exato pelo bloco transporte da nota.
+  const notasCompletas = params.transportadora ? notas.filter((n) => transportadoraDoObjeto(n.full_object) === params.transportadora) : notas
 
   const rows = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
     nfe: n.c_numero_nfe ?? '-',
     fornecedor: n.c_razao_social || n.c_nome || '-',
+    transportadora: transportadoraDoObjeto(n.full_object),
     etapa: statusNF(n.c_etapa, n.full_object).label,
     valor: n.n_valor_nfe ?? 0,
   }))
@@ -264,6 +268,7 @@ export async function GET(request: Request) {
       { key: 'emissao', label: 'Emissão', tipo: 'texto', largura: 12 },
       { key: 'nfe', label: 'NFe', tipo: 'texto', largura: 14 },
       { key: 'fornecedor', label: 'Fornecedor', tipo: 'texto' },
+      { key: 'transportadora', label: 'Transportadora', tipo: 'texto', largura: 24 },
       { key: 'etapa', label: 'Etapa', tipo: 'texto', largura: 12 },
       { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
     ],

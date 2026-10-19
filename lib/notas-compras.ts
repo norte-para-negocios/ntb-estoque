@@ -18,6 +18,7 @@ export type NotaLeve = {
   cancelada: boolean
   manifestada: boolean
   sefazSituacao: string | null
+  transportadora: string // transporte.cNomeTransp, senão cRazaoTransp, senão SEM_TRANSPORTADORA
 }
 
 export type ItemCompra = {
@@ -43,11 +44,24 @@ export type LinhaPainel = {
 
 export const SEM_FORNECEDOR = 'Sem fornecedor'
 export const SEM_FAMILIA = 'Sem família'
+export const SEM_TRANSPORTADORA = 'Sem transportadora'
 
-export type Visao = 'notas' | 'fornecedores' | 'produtos' | 'familias' | 'dias' | 'mensal'
+/** Transportadora da nota (bloco transporte do recebimento): nome fantasia, senão razão social. */
+export function transportadoraDe(nome: string | null | undefined, razao: string | null | undefined): string {
+  return (nome ?? '').trim() || (razao ?? '').trim() || SEM_TRANSPORTADORA
+}
+
+/** Mesma regra a partir do full_object da nota (Excel e PDF, que leem o objeto inteiro). */
+export function transportadoraDoObjeto(fo: unknown): string {
+  const t = fo && typeof fo === 'object' ? (fo as { transporte?: { cNomeTransp?: unknown; cRazaoTransp?: unknown } }).transporte : undefined
+  return transportadoraDe(typeof t?.cNomeTransp === 'string' ? t.cNomeTransp : null, typeof t?.cRazaoTransp === 'string' ? t.cRazaoTransp : null)
+}
+
+export type Visao = 'notas' | 'fornecedores' | 'transportadoras' | 'produtos' | 'familias' | 'dias' | 'mensal'
 export const VISOES: { value: Visao; label: string }[] = [
   { value: 'notas', label: 'Notas' },
   { value: 'fornecedores', label: 'Fornecedores' },
+  { value: 'transportadoras', label: 'Transportadoras' },
   { value: 'produtos', label: 'Produtos' },
   { value: 'familias', label: 'Famílias' },
   { value: 'dias', label: 'Por dia' },
@@ -70,7 +84,7 @@ export function situacaoBate(n: NotaLeve, status: string): boolean {
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export type FiltrosMemoria = { fornecedor?: string; status?: string; numero?: string; q?: string }
+export type FiltrosMemoria = { fornecedor?: string; status?: string; numero?: string; q?: string; transportadora?: string }
 
 // Filtros que nao precisam ir ao banco. Fornecedor: contem o texto (sem acento/caixa),
 // igual ao ilike antigo -- escolher um nome da lista casa com ele mesmo.
@@ -82,6 +96,7 @@ export function filtrarNotas(notas: NotaLeve[], f: FiltrosMemoria): NotaLeve[] {
     if (!situacaoBate(n, f.status ?? '')) return false
     if (forn && !semAcento(n.fornecedor).includes(forn)) return false
     if (num && !(n.numero ?? '').includes(num)) return false
+    if (f.transportadora && n.transportadora !== f.transportadora) return false
     if (q) {
       const alvo = semAcento(`${n.fornecedor} ${n.numero ?? ''} ${n.natureza ?? ''}`)
       if (!alvo.includes(q)) return false
@@ -90,9 +105,9 @@ export function filtrarNotas(notas: NotaLeve[], f: FiltrosMemoria): NotaLeve[] {
   })
 }
 
-// Nota vira "linha" do Faturamento: produto = fornecedor, quant = 1 (conta notas).
-export function notaParaLinha(n: NotaLeve): LinhaPainel {
-  return { dia: n.dia, cupom: n.id, idProduto: null, produto: n.fornecedor, tipoCod: '', tipo: '', familia: '', quant: 1, valor: n.valor }
+// Nota vira "linha" do Faturamento: produto = fornecedor (ou transportadora), quant = 1 (conta notas).
+export function notaParaLinha(n: NotaLeve, por: 'fornecedor' | 'transportadora' = 'fornecedor'): LinhaPainel {
+  return { dia: n.dia, cupom: n.id, idProduto: null, produto: por === 'transportadora' ? n.transportadora : n.fornecedor, tipoCod: '', tipo: '', familia: '', quant: 1, valor: n.valor }
 }
 
 export function itemParaLinha(i: ItemCompra, tipo: TipoValorCompra = 'estoque'): LinhaPainel {

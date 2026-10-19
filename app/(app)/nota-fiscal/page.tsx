@@ -69,6 +69,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   const localCod = sp.local && !Number.isNaN(Number(sp.local)) ? Number(sp.local) : null
   const status = sp.status ?? ''
   const fornecedor = sp.fornecedor ?? ''
+  const transportadora = (sp.transportadora ?? '').slice(0, 120)
   const q = (sp.q ?? '').slice(0, 80)
   const { ord, dir } = lerOrdem(sp.ord, sp.dir)
   const page = Math.max(1, Number(sp.page) || 1)
@@ -105,8 +106,8 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   ])
   // Fornecedores do filtro: os do periodo com os outros filtros (menos o proprio fornecedor).
   const fornecedores = fornecedoresDistintos(filtrarNotas(notasPeriodo, { status, numero: sp.num_nfe }))
-  const notas = filtrarNotas(notasPeriodo, { status, fornecedor, numero: sp.num_nfe })
-  const linhasNotas = notas.map(notaParaLinha)
+  const notas = filtrarNotas(notasPeriodo, { status, fornecedor, numero: sp.num_nfe, transportadora })
+  const linhasNotas = notas.map((n) => notaParaLinha(n))
   const kp = resumir(linhasNotas)
   const rankForn = rankear(linhasNotas, 'produto')
   const maiorForn = rankForn[0] ?? null
@@ -123,7 +124,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   // Parametros que atravessam links (periodo, visao, filtros, ordenacao, busca).
   const base: Record<string, string> = {
     ini: per.ini, fim: per.fim, aba: visao === 'notas' ? '' : visao,
-    fornecedor, familia: familias.join(','), status, tipo: tipos.join(','), local: sp.local ?? '', natureza: sp.natureza ?? '',
+    fornecedor, transportadora, familia: familias.join(','), status, tipo: tipos.join(','), local: sp.local ?? '', natureza: sp.natureza ?? '',
     produto: sp.produto ?? '', categoria: sp.categoria ?? '', num_nfe: sp.num_nfe ?? '',
     q, ord: sp.ord ?? '', dir: sp.dir ?? '', por: porMensal === 'fornecedor' ? '' : porMensal, valor: tipoValor === 'estoque' ? '' : 'fiscal',
     ordem: ordemRank === 'valor' ? '' : ordemRank, sentido: sentido === 'mais' ? '' : sentido,
@@ -138,7 +139,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   exportQs.set('data_inicio', per.ini)
   exportQs.set('data_final', per.fim)
   exportQs.set('status', status || 'VALIDAS')
-  for (const k of ['fornecedor', 'num_nfe', 'tipo', 'natureza', 'produto', 'categoria', 'familia', 'local'] as const) if (base[k]) exportQs.set(k, base[k])
+  for (const k of ['fornecedor', 'transportadora', 'num_nfe', 'tipo', 'natureza', 'produto', 'categoria', 'familia', 'local'] as const) if (base[k]) exportQs.set(k, base[k])
 
   const chipBase = 'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold u-motion u-press-sm'
   const chipAtivo = `${chipBase} bg-brand-fill text-white`
@@ -165,6 +166,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   const temProxima = notasOrdenadas.length > page * POR_PAGINA
 
   const rankFornVis = visao === 'fornecedores' ? ordenarRanking(filtrarPorNome(rankForn, q), ordemRank, sentido) : []
+  const rankTranspVis = visao === 'transportadoras' ? ordenarRanking(filtrarPorNome(rankear(notas.map((n) => notaParaLinha(n, 'transportadora')), 'produto'), q), ordemRank, sentido) : []
   const rankItensTodos = visao === 'produtos' ? rankear(linhasItens, 'produto') : visao === 'familias' ? rankear(linhasItens, 'familia') : []
   const rankItensVis = ordenarRanking(filtrarPorNome(rankItensTodos, q), visao === 'familias' ? 'valor' : ordemRank, sentido)
   const unidadeDe = new Map<string, string>()
@@ -195,7 +197,7 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
   const legendaForn = (l: LinhaRanking) => `${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
   const legendaProd = (l: LinhaRanking) => `${fmtQtd(l.quant)} ${unidadeDe.get(l.chave) ?? 'un'} · ${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
   const legendaFam = (l: LinhaRanking) => `${plural(l.cupons, 'nota', 'notas')} · ${fmtPct(l.pct)}`
-  const rotuloBusca = visao === 'fornecedores' ? 'fornecedor' : visao === 'produtos' ? 'produto' : visao === 'familias' ? 'família' : 'fornecedor, nº ou natureza'
+  const rotuloBusca = visao === 'transportadoras' ? 'transportadora' : visao === 'fornecedores' ? 'fornecedor' : visao === 'produtos' ? 'produto' : visao === 'familias' ? 'família' : 'fornecedor, nº ou natureza'
 
   const formBusca = (
     <form action="/nota-fiscal" className="flex w-full flex-wrap items-center gap-2">
@@ -218,10 +220,10 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
             <>
               <span className="text-[12px] text-text-muted">por</span>
               <Link href={href({ ordem: '' })} className={ordemRank === 'valor' ? chipAtivo : chipInativo}>R$</Link>
-              <Link href={href({ ordem: 'quant' })} className={ordemRank === 'quant' ? chipAtivo : chipInativo}>{visao === 'fornecedores' ? 'Nº de notas' : 'Quantidade'}</Link>
+              <Link href={href({ ordem: 'quant' })} className={ordemRank === 'quant' ? chipAtivo : chipInativo}>{visao === 'fornecedores' || visao === 'transportadoras' ? 'Nº de notas' : 'Quantidade'}</Link>
             </>
           )}
-          {visao !== 'fornecedores' && (
+          {visao !== 'fornecedores' && visao !== 'transportadoras' && (
             <>
               <span className="text-[12px] text-text-muted">valor</span>
               <Link href={href({ valor: '' })} title="Valor que entrou no estoque (como no Omie: sem os impostos que viram crédito)" className={tipoValor === 'estoque' ? chipAtivo : chipInativo}>De estoque</Link>
@@ -298,6 +300,10 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
         {VISOES.map((v) => <Link key={v.value} href={href({ aba: v.value === 'notas' ? '' : v.value, item: '', page: '', q: '' })} className={visao === v.value ? chipAtivo : chipInativo}>{v.label}</Link>)}
       </div>
 
+      {transportadora && (
+        <p className="px-1 text-[13px] text-text-muted">Transportadora: <strong className="text-text">{transportadora}</strong> · <Link href={href({ transportadora: '' })} className="text-brand hover:underline">ver todas</Link></p>
+      )}
+
       {notas.length === 0 ? vazioPeriodo : visao === 'notas' ? (
         <div className="space-y-3">
           {formBusca}
@@ -316,6 +322,14 @@ export default async function NotaFiscalPage({ searchParams }: { searchParams: P
             ? <EmptyState icon={FileText} title="Nada encontrado" hint="Nenhum fornecedor bate com a busca." />
             : <RankingBarras linhas={rankFornVis} ordem={ordemRank} legenda={legendaForn} hrefDe={(chave) => href({ aba: '', fornecedor: chave.replace(/^nome:/, ''), q: '', ordem: '', sentido: '' })} />}
           <p className="px-1 text-[12px] text-text-muted">Toque num fornecedor para ver as notas dele.</p>
+        </div>
+      ) : visao === 'transportadoras' ? (
+        <div className="space-y-3">
+          {formBusca}
+          {rankTranspVis.length === 0
+            ? <EmptyState icon={FileText} title="Nada encontrado" hint="Nenhuma transportadora bate com a busca." />
+            : <RankingBarras linhas={rankTranspVis} ordem={ordemRank} legenda={legendaForn} hrefDe={(chave) => href({ aba: '', transportadora: chave.replace(/^nome:/, ''), q: '', ordem: '', sentido: '' })} />}
+          <p className="px-1 text-[12px] text-text-muted">Transportadora informada no recebimento (frete). Toque numa para ver as notas dela.</p>
         </div>
       ) : visao === 'produtos' || visao === 'familias' ? (
         <div className="space-y-3">

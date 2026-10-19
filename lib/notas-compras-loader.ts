@@ -4,7 +4,7 @@ import { buscarTudoPaginado, buscarTodosPorIds, escapeIlike, escapeIlikeOr } fro
 import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
-import { SEM_FAMILIA, SEM_FORNECEDOR, type ItemCompra, type NotaLeve } from '@/lib/notas-compras'
+import { SEM_FAMILIA, SEM_FORNECEDOR, transportadoraDe, type ItemCompra, type NotaLeve } from '@/lib/notas-compras'
 
 // Leitura do painel de Notas Fiscais (compras recebidas). So o banco principal: ele tem
 // todo o historico de NF desde 2025-06 (ver limiteJanelaQuenteNF em lib/historico-contabo.ts;
@@ -35,11 +35,14 @@ type LinhaNF = {
   cancelada: string | null
   recebido: string | null
   sefaz: string | null
+  transp: string | null
+  transp_razao: string | null
 }
 
 const SELECT_NF =
   'id, d_emissao_nfe, c_numero_nfe, c_serie_nfe, c_razao_social, c_nome, n_valor_nfe, c_etapa, c_natureza_operacao, ' +
-  'cancelada:full_object->infoCadastro->>cCancelada, recebido:full_object->infoCadastro->>cRecebido, sefaz:full_object->sefaz->>situacao'
+  'cancelada:full_object->infoCadastro->>cCancelada, recebido:full_object->infoCadastro->>cRecebido, sefaz:full_object->sefaz->>situacao, ' +
+  'transp:full_object->transporte->>cNomeTransp, transp_razao:full_object->transporte->>cRazaoTransp'
 
 type Res<T> = { data: T[] | null; error: { message: string } | null }
 
@@ -102,6 +105,7 @@ function paraNota(r: LinhaNF): NotaLeve {
     cancelada: r.cancelada === 'S',
     manifestada: r.recebido === 'S',
     sefazSituacao: r.sefaz,
+    transportadora: transportadoraDe(r.transp, r.transp_razao),
   }
 }
 

@@ -11,6 +11,7 @@ import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { statusNF, NAO_CANCELADA_OR } from '@/lib/nf-status'
 import { CATEGORIAS_NF, resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
+import { transportadoraDoObjeto } from '@/lib/notas-compras'
 
 async function pdfErroResponse(titulo: string, mensagem: string) {
   const el = createElement(PdfErro, { titulo, mensagem }) as Parameters<typeof renderToBuffer>[0]
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
     new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
   const dataFinal = searchParams.get('data_final') || new Date().toISOString().split('T')[0]
   const fornecedor = searchParams.get('fornecedor') || ''
+  const transportadora = searchParams.get('transportadora') || ''
   const numNfe = searchParams.get('num_nfe') || ''
   const status = searchParams.get('status') || ''
   // tipo/familia vem como lista separada por virgula (multi-select) na URL.
@@ -248,7 +250,7 @@ export async function GET(request: Request) {
   // virtualmente o mesmo intervalo que o frio pra notas_fiscais/
   // nota_fiscal_items -- o complemento (e o calculo de notaIdsFrioSet, que so
   // filtrava a fatia fria) virou trabalho jogado fora. Usa so o Supabase.
-  const notasCompletas = notas
+  const notasCompletas = transportadora ? notas.filter((n) => transportadoraDoObjeto(n.full_object) === transportadora) : notas
 
   const itens: RelatorioNFItem[] = notasCompletas.map((n) => ({
     emissao: fmtData(n.d_emissao_nfe),
@@ -261,6 +263,7 @@ export async function GET(request: Request) {
   // Monta subtitulo com filtros aplicados.
   const filtrosAtivos: string[] = []
   if (fornecedor) filtrosAtivos.push(`Fornecedor: ${fornecedor}`)
+  if (transportadora) filtrosAtivos.push(`Transportadora: ${transportadora}`)
   if (numNfe) filtrosAtivos.push(`NF: ${numNfe}`)
   if (status && status !== 'TODAS') filtrosAtivos.push(`Status: ${status === 'VALIDAS' ? 'Válidas (sem canceladas)' : status === 'C' || status === 'CONCLUIDA' ? 'Concluída' : status === 'CANCELADA' ? 'Cancelada' : status === 'MANIFESTADA' ? 'Manifestada' : 'Pendente'}`)
   if (tiposArr.length) filtrosAtivos.push(`Tipo: ${tiposArr.map((t) => labelTipoItem(t)).join(', ')}`)
