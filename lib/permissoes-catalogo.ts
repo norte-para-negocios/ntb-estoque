@@ -140,6 +140,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Produtos - Criar', label: 'Criar' },
       { nome: 'Produtos - Editar', label: 'Editar' },
       { nome: 'Produtos - Excluir', label: 'Excluir' },
+      // Fase G (migration 223): importar produtos por planilha (só estoque próprio).
+      { nome: 'Produtos - Importar planilha', label: 'Importar planilha' },
     ],
   },
   {
@@ -189,6 +191,18 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Fornecedores - Criar', label: 'Criar' },
       { nome: 'Fornecedores - Editar', label: 'Editar' },
       { nome: 'Fornecedores - Excluir', label: 'Excluir' },
+      // Fase G (migration 223): importar fornecedores por planilha (só estoque próprio).
+      { nome: 'Fornecedores - Importar planilha', label: 'Importar planilha' },
+    ],
+  },
+  {
+    modulo: 'Anexos',
+    grupo: 'Operação',
+    // Fase G (migration 221): arquivos anexados a produto, nota de entrada, pedido de compra e OP (só estoque próprio).
+    // Ver os anexos acompanha a permissão de ver o registro.
+    permissoes: [
+      { nome: 'Anexos - Enviar', label: 'Enviar anexos' },
+      { nome: 'Anexos - Excluir', label: 'Excluir anexos' },
     ],
   },
   {

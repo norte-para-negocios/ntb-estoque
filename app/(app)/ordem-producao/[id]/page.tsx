@@ -12,6 +12,7 @@ import { NotaFiscalVinculadaOP } from '@/components/ordem-producao/NotaFiscalVin
 import { HistoricoSyncOP } from '@/components/ordem-producao/HistoricoSyncOP'
 import { HistoricoEdicoesOP } from '@/components/ordem-producao/HistoricoEdicoesOP'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
+import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
 import { DetalheOPProprio } from '@/components/ordem-producao/DetalheOPProprio'
 import { detalheOPProprio } from '@/lib/estoque/op-proprio'
 import { urlVendaNoVendas } from '@/lib/estoque/link-vendas'
@@ -283,6 +284,7 @@ export default async function OrdemProducaoDetalhePage({
 
       <HistoricoEdicoesOP lojaId={lojaId} codigoOmieOP={op.identificacao_n_cod_op ?? null} />
 
+      {opFonte === 'quente' && <AnexosRegistro lojaId={lojaId} entidade="op" entidadeId={op.id} />}
       {opFonte === 'quente' && <HistoricoAlteracoes lojaId={lojaId} entidade="op" ids={[op.id]} titulo="Histórico de alterações (campo a campo)" />}
     </div>
   )

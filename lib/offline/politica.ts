@@ -11,6 +11,8 @@
 // lead time) ficam FORA de propósito: as tabelas novas (migrations 200/201) não estão em offline_tabelas, então só com internet.
 // Fase C2 (19/10/2026): idem para requisicao-compra (salvar, ação, gerar pedidos, criar da sugestão), compras-cadastros
 // (comprador, prazo do fornecedor) e importar-pedidos (prévia e confirmação): tabelas das migrations 240–242, só com internet.
+// Fase G (19/10/2026): anexos#excluirAnexo, notificacoes#* e importacao#* ficam FORA de propósito: as tabelas novas
+// (migrations 221–223) não estão em offline_tabelas e o envio de anexo/planilha precisa do servidor (Storage). Só com internet.
 export type ModoOffline = 'leitura' | 'local' | 'fila' | 'depende'
 
 const leitura = [
