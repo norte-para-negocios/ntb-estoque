@@ -12,6 +12,7 @@ import { gerarChaveIntegracaoNtbVendas } from '@/lib/actions/integracao-ntb-vend
 import type { ModoEstoque } from '@/lib/estoque/ledger'
 import { semearLojaProprio } from '@/lib/estoque/proprio-driver'
 import { notificarVendasLoja } from '@/lib/estoque/catalogo-sync'
+import { camposChavesOmie } from '@/lib/seguranca/regras'
 
 /**
  * Force-sync da loja (admin): zera os campos *_status para null, fazendo o proximo
@@ -59,10 +60,9 @@ function normalizarDados(dados: LojaInput) {
     bairro: dados.bairro.trim() || null,
     logradouro: dados.logradouro.trim() || null,
     numero: dados.numero.trim() || null,
-    // Loja "fora do Omie": chaves podem ser vazias -> grava null
-    // Fora do modo omie as chaves nunca são guardadas.
-    omie_app_key: modo === 'omie' ? dados.omie_app_key.trim() || null : null,
-    omie_app_secret: modo === 'omie' ? dados.omie_app_secret.trim() || null : null,
+    // Fora do modo omie as chaves nunca são guardadas. Fase H: a tela não recebe mais as chaves gravadas, então
+    // campo em branco = manter a que está no banco (na criação, em branco = sem chave).
+    ...camposChavesOmie(modo, dados.omie_app_key, dados.omie_app_secret),
     ativo: dados.ativo,
     ...(dados.razao_social !== undefined ? { razao_social: dados.razao_social.trim() || null } : {}),
     ...(dados.email !== undefined ? { email: dados.email.trim() || null } : {}),

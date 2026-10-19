@@ -9,6 +9,7 @@ import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { BuscaSimples } from '@/components/BuscaSimples'
 import { escapeIlikeOr } from '@/lib/utils-busca'
+import { finalSegredo } from '@/lib/seguranca/regras'
 import { Store } from 'lucide-react'
 
 export default async function LojaPage({
@@ -53,11 +54,23 @@ export default async function LojaPage({
     })
   )
 
-  const lojas = lojasRaw?.map(({ integracao_api_key, ...resto }) => ({
-    ...resto,
-    integracao_ntb_vendas_configurada: !!integracao_api_key,
-    tem_movimentos_estoque: comMovimento.has(resto.id),
-  }))
+  // Fase H (19/10/2026): segredos não descem para o navegador. Antes o select('*') mandava omie_app_key/
+  // omie_app_secret inteiros (a tela só mascarava na exibição, o valor ia no payload), mais CSC e caminho/senha
+  // cifrada do certificado. Agora só "existe" + os 4 últimos caracteres; o formulário deixa o campo em branco
+  // e salvar em branco mantém a chave gravada (camposChavesOmie).
+  const SEGREDOS = new Set(['integracao_api_key', 'integracao_teste_api_key', 'omie_app_key', 'omie_app_secret', 'csc_producao', 'csc_id_producao', 'certificado_senha_enc', 'certificado_path'])
+  const lojas = lojasRaw?.map(
+    ({ integracao_api_key, omie_app_key, omie_app_secret, csc_producao, ...demais }) => ({
+      ...(Object.fromEntries(Object.entries(demais).filter(([k]) => !SEGREDOS.has(k))) as typeof demais),
+      omie_app_key: null,
+      omie_app_secret: null,
+      omie_app_key_final: finalSegredo(omie_app_key),
+      omie_app_secret_final: finalSegredo(omie_app_secret),
+      csc_producao: csc_producao ? 'definido' : null,
+      integracao_ntb_vendas_configurada: !!integracao_api_key,
+      tem_movimentos_estoque: comMovimento.has(demais.id),
+    })
+  )
 
   // Catalogo de permissoes para o convite por codigo (gerado direto da tela da loja).
   const { data: permissoes } = await supabase

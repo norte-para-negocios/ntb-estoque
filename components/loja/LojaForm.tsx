@@ -83,6 +83,9 @@ export type LojaExistente = {
   telefone1?: string | null
   omie_app_key: string | null
   omie_app_secret: string | null
+  /** Fase H: as chaves não chegam ao navegador; só os 4 últimos caracteres da que está gravada. */
+  omie_app_key_final?: string | null
+  omie_app_secret_final?: string | null
   ativo: boolean | null
   modo_estoque?: string | null
   is_test?: boolean | null
@@ -574,7 +577,7 @@ export function LojaForm({
                           className={inputClass}
                           value={form.omie_app_key}
                           onChange={(e) => set('omie_app_key', e.target.value)}
-                          placeholder="Deixe vazio para loja fora do Omie"
+                          placeholder={loja?.omie_app_key_final ? `Gravada (${loja.omie_app_key_final}). Em branco = manter` : 'Deixe vazio para loja fora do Omie'}
                           autoComplete="off"
                         />
                       </div>
@@ -584,7 +587,7 @@ export function LojaForm({
                           className={inputClass}
                           value={form.omie_app_secret}
                           onChange={(e) => set('omie_app_secret', e.target.value)}
-                          placeholder="Deixe vazio para loja fora do Omie"
+                          placeholder={loja?.omie_app_secret_final ? `Gravada (${loja.omie_app_secret_final}). Em branco = manter` : 'Deixe vazio para loja fora do Omie'}
                           autoComplete="off"
                         />
                       </div>

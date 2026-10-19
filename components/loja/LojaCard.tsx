@@ -53,8 +53,11 @@ export type LojaRow = {
   empresa_status: string | null
   empresa_ultima_atualizacao: string | null
   // omie
+  // Fase H: as chaves não descem mais para o navegador (sempre null aqui); só os 4 últimos caracteres.
   omie_app_key: string | null
   omie_app_secret: string | null
+  omie_app_key_final?: string | null
+  omie_app_secret_final?: string | null
   // modo de estoque: omie | proprio | nenhum
   modo_estoque?: string | null
   is_test?: boolean | null
@@ -152,13 +155,6 @@ function maskTelefone(v: string): string {
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
   if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
   return v
-}
-
-// Mascara de segredo omie: mostra so os ultimos 4 chars com asteriscos antes
-function maskSegredo(v: string | null): string {
-  if (!v) return '-'
-  if (v.length <= 4) return '****'
-  return `${'*'.repeat(Math.min(v.length - 4, 8))}${v.slice(-4)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -389,8 +385,8 @@ export function LojaCard({
       {(loja.modo_estoque ?? 'omie') === 'omie' && (
       <Section icon={Key} title="Chaves Omie">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <DadoLinha label="App Key" valor={maskSegredo(loja.omie_app_key)} mono />
-          <DadoLinha label="App Secret" valor={maskSegredo(loja.omie_app_secret)} mono />
+          <DadoLinha label="App Key" valor={loja.omie_app_key_final ?? '-'} mono />
+          <DadoLinha label="App Secret" valor={loja.omie_app_secret_final ?? '-'} mono />
         </div>
         <p className="mt-2 text-[13px] text-text-muted">
           Para editar as chaves, use o botão &quot;Editar loja&quot; abaixo.
