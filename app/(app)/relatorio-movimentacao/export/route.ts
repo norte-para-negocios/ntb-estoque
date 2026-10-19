@@ -11,6 +11,7 @@ import {
   limiteJanelaQuenteNF,
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
+import { gerarMovimentacaoValorMovimento } from '@/lib/relatorios/movimentacao-valor-mov-loader'
 import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
 
 export const dynamic = 'force-dynamic'
@@ -54,9 +55,15 @@ export async function GET(request: Request) {
       rowsImportadas.push(...(data as LinhaOper[]))
       if (data.length < 1000) break
     }
-    const usarAutomatico = rowsImportadas.length === 0
     const produtoBusca = searchParams.get('produto') ?? undefined
-    const rows: (LinhaOper | LinhaOperAuto)[] = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, produtoBusca) : rowsImportadas
+    // Opção "valor do movimento" (Fase D, N13), mesma regra da tela.
+    const hojeVm = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+    const vm = searchParams.get('valor') === 'movimento'
+      ? await gerarMovimentacaoValorMovimento(lojaId, searchParams.get('data_inicio') || `${hojeVm.slice(0, 4)}-01-01`, searchParams.get('data_final') || hojeVm, produtoBusca)
+      : null
+    const usarValorMov = !!vm?.periodo
+    const usarAutomatico = usarValorMov || rowsImportadas.length === 0
+    const rows: (LinhaOper | LinhaOperAuto)[] = usarValorMov ? vm!.linhas : rowsImportadas.length === 0 ? await gerarMovimentacaoOperacaoAutomatica(lojaId, produtoBusca) : rowsImportadas
     if (!rows.length) return new Response('Sem movimentação por operação', { status: 404 })
     // Toggle Família/Produto (feedback Ramon, ver page.tsx e AGENTS.md): só
     // vale no modo automático, mesmo guard usado lá -- fora disso o export

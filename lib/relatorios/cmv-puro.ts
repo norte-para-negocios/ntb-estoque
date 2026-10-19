@@ -30,6 +30,16 @@ export function escolherFonteCmv(a: { modo: 'omie' | 'proprio' | 'nenhum'; karde
   return 'estimado'
 }
 
+/** Período que a "Movimentação pelo valor do movimento" consegue mostrar: loja própria = o pedido; loja Omie = a parte
+ *  do pedido coberta pelo histórico completo do kardex (null se nada). `cortado` = o pedido foi reduzido. */
+export function periodoValorMovimento(a: { modo: 'omie' | 'proprio' | 'nenhum'; kardexDesde: string | null; kardexAte: string | null; ini: string; fim: string }): { ini: string; fim: string; cortado: boolean } | null {
+  if (a.modo === 'proprio') return { ini: a.ini, fim: a.fim, cortado: false }
+  if (a.modo !== 'omie' || !a.kardexDesde || !a.kardexAte) return null
+  const ini = a.ini > a.kardexDesde ? a.ini : a.kardexDesde
+  const fim = a.fim < a.kardexAte ? a.fim : a.kardexAte
+  return ini <= fim ? { ini, fim, cortado: ini !== a.ini || fim !== a.fim } : null
+}
+
 /** CMC de hoje por produto: média dos locais com saldo positivo; senão o da sentinela (local 0); senão o maior válido. */
 export function custoMedioAtual(foto: { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number }[]): Map<number, number> {
   const g = new Map<number, { valor: number; saldo: number; sentinela: number | null; maior: number | null }>()

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agruparCmv, cmvFormulaOmie, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, type LinhaCmv } from './cmv-puro.ts'
+import { periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, type LinhaCmv } from './cmv-puro.ts'
 
 test('escolherFonteCmv: próprio, kardex só com o período inteiro coberto, senão estimado', () => {
   const k = { kardexDesde: '2026-09-12', kardexAte: '2026-10-16' }
@@ -95,4 +95,13 @@ test('agruparCmv por família e resumo', () => {
   assert.equal(resumoCmv([]).margemPct, null)
   const v: LinhaCmv = linhaVazia('x', 'x')
   assert.equal(v.cmv, 0)
+})
+
+test('periodoValorMovimento: própria = pedido; Omie = parte coberta pelo kardex; nada coberto = null', () => {
+  const k = { kardexDesde: '2026-09-12', kardexAte: '2026-10-16' }
+  assert.deepEqual(periodoValorMovimento({ modo: 'proprio', kardexDesde: null, kardexAte: null, ini: '2026-01-01', fim: '2026-10-19' }), { ini: '2026-01-01', fim: '2026-10-19', cortado: false })
+  assert.deepEqual(periodoValorMovimento({ modo: 'omie', ...k, ini: '2026-01-01', fim: '2026-10-19' }), { ini: '2026-09-12', fim: '2026-10-16', cortado: true })
+  assert.deepEqual(periodoValorMovimento({ modo: 'omie', ...k, ini: '2026-09-20', fim: '2026-09-30' }), { ini: '2026-09-20', fim: '2026-09-30', cortado: false })
+  assert.equal(periodoValorMovimento({ modo: 'omie', ...k, ini: '2026-01-01', fim: '2026-08-31' }), null)
+  assert.equal(periodoValorMovimento({ modo: 'omie', kardexDesde: null, kardexAte: null, ini: '2026-01-01', fim: '2026-08-31' }), null)
 })

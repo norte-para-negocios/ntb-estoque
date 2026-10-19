@@ -24,6 +24,7 @@ import {
   type LinhaMovHistoricoBruta,
 } from '@/lib/historico-contabo'
 import { gerarMovimentacaoOperacaoAutomatica, type LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
+import { gerarMovimentacaoValorMovimento } from '@/lib/relatorios/movimentacao-valor-mov-loader'
 import {
   buscarMovimentosManuais,
   buscarMetaProdutosMovManual,
@@ -73,6 +74,7 @@ export default async function RelatorioMovimentacaoPage({
     produto?: string; tipo?: string; familia?: string; local?: string
     fonte?: string
     drill?: string
+    valor?: string
   }>
 }) {
   const lojaId = await getCurrentLojaId()
@@ -124,8 +126,15 @@ export default async function RelatorioMovimentacaoPage({
     // outra loja sem import, reconstrói a mesma matriz automaticamente a
     // partir de NF (compra), fato de cupom (PDV) e ajustes (manual/inventário),
     // já sincronizados pra todas as lojas (ver lib/movimentacao-operacao-auto.ts).
-    const usarAutomatico = rowsImportadas.length === 0
-    const rows: (LinhaOper | LinhaOperAuto)[] = usarAutomatico ? await gerarMovimentacaoOperacaoAutomatica(lojaId, sp.produto) : rowsImportadas
+    // Opção "valor do movimento" (Fase D, N13): cada movimento pelo seu valor no kardex do Omie / ledger próprio
+    // (lib/relatorios/movimentacao-valor-mov-loader.ts). O padrão (sem `valor`) não muda.
+    const hojeVm = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+    const vm = sp.valor === 'movimento'
+      ? await gerarMovimentacaoValorMovimento(lojaId, sp.data_inicio || `${hojeVm.slice(0, 4)}-01-01`, sp.data_final || hojeVm, sp.produto)
+      : null
+    const usarValorMov = !!vm?.periodo
+    const usarAutomatico = usarValorMov || rowsImportadas.length === 0
+    const rows: (LinhaOper | LinhaOperAuto)[] = usarValorMov ? vm!.linhas : rowsImportadas.length === 0 ? await gerarMovimentacaoOperacaoAutomatica(lojaId, sp.produto) : rowsImportadas
     // Toggle Família/Produto da matriz mês a mês (feedback Ramon, WhatsApp
     // 2026-08-10): só faz sentido no modo automático -- a tabela importada do
     // MOV_DRV (movimentacao_operacao) é pré-agregada por família, sem grão de
@@ -177,7 +186,9 @@ export default async function RelatorioMovimentacaoPage({
           title="Movimentação"
           icon={ArrowDownUp}
           description={
-            usarAutomatico
+            usarValorMov
+              ? 'Por operação, local e tipo — em R$ pelo valor de cada movimento (custo, como o Omie)'
+              : usarAutomatico
               ? 'Por operação, local e tipo — em R$ (automático: NF + PDV + ajustes) — BETA'
               : 'Por operação, local e tipo — em R$ (importado do MOV_DRV) — BETA'
           }
@@ -191,7 +202,7 @@ export default async function RelatorioMovimentacaoPage({
                 persistirEm="/relatorio-movimentacao-op"
               />
               <a
-                href={`/relatorio-movimentacao/export?modo=operacao${sp.produto ? `&produto=${encodeURIComponent(sp.produto)}` : ''}${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.dimOper ? `&dimOper=${encodeURIComponent(sp.dimOper)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}`}
+                href={`/relatorio-movimentacao/export?modo=operacao${sp.produto ? `&produto=${encodeURIComponent(sp.produto)}` : ''}${sp.op ? `&op=${encodeURIComponent(sp.op)}` : ''}${sp.loc ? `&loc=${encodeURIComponent(sp.loc)}` : ''}${sp.sent ? `&sent=${encodeURIComponent(sp.sent)}` : ''}${sp.familia ? `&familia=${encodeURIComponent(sp.familia)}` : ''}${sp.tipo ? `&tipo=${encodeURIComponent(sp.tipo)}` : ''}${sp.dimOper ? `&dimOper=${encodeURIComponent(sp.dimOper)}` : ''}${sp.data_inicio ? `&data_inicio=${sp.data_inicio}` : ''}${sp.data_final ? `&data_final=${sp.data_final}` : ''}${sp.valor === 'movimento' ? '&valor=movimento' : ''}`}
                 target="_blank" rel="noopener noreferrer" className={btnClass('outline')}
                 title="Excel: operações + perdas + matriz (com filtros)"
               >
@@ -205,11 +216,30 @@ export default async function RelatorioMovimentacaoPage({
       </ListaHeader>
     )
 
+    const segValor = (
+      <div className="space-y-1.5">
+        <SegmentLinks
+          basePath="/relatorio-movimentacao"
+          param="valor"
+          aria-label="Valor"
+          opcoes={[
+            { value: '', label: 'Valor de sempre (NF, venda e ajuste)' },
+            { value: 'movimento', label: 'Valor do movimento (custo, como o Omie)' },
+          ]}
+        />
+        {vm && !vm.periodo && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">O kardex do Omie não cobre este período nesta loja (o espelho só existe onde está ligado). Mostrando o valor de sempre.</p>}
+        {vm?.periodo?.cortado && <p className="text-[13px] text-text-muted">Valor do movimento só existe no período coberto pelo kardex: mostrando de {fmtData(vm.periodo.ini)} a {fmtData(vm.periodo.fim)}.</p>}
+        {vm?.erro && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler o kardex ({vm.erro}). Os valores podem estar incompletos.</p>}
+        {usarValorMov && vm!.semCusto > 0 && <p className="text-[13px] text-text-muted">{vm!.semCusto.toLocaleString('pt-BR')} movimento(s) sem custo no kardex entram com valor zero.</p>}
+      </div>
+    )
+
     if (!rows.length) {
       return (
         <div className="space-y-4">
           {header}
           {seg}
+          {segValor}
           <EmptyState
             icon={ArrowDownUp}
             title="Sem movimentação por operação importada"
@@ -292,6 +322,7 @@ export default async function RelatorioMovimentacaoPage({
       <div className="space-y-4">
         {header}
         {seg}
+        {segValor}
 
         {/* Cards executivos */}
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
@@ -349,7 +380,9 @@ export default async function RelatorioMovimentacaoPage({
           </table>
         </div>
         <p className="px-1 text-[13px] text-text-muted">
-          {usarAutomatico
+          {usarValorMov
+            ? 'Cada movimento pelo seu valor no kardex: saída = custo médio da hora; compra = custo da nota (mesmo valor do relatório "Resumido por produto" do Omie).'
+            : usarAutomatico
             ? 'Valor do PDV vem do fato de cupom (item a item, valor real de venda).'
             : 'O valor do PDV na saída não é confiável (custo médio de produto acabado fica distorcido no Omie) — use o modo "Em quantidade" para volume de venda.'}
           {metaRow?.importado_em && <> · Importado em {fmtQuando(metaRow.importado_em as string)}.</>}
