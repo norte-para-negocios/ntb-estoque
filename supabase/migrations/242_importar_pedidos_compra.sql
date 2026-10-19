@@ -24,7 +24,7 @@ begin
   -- trava antes de conferir a chave: o mesmo arquivo enviado duas vezes ao mesmo tempo = o 2º espera e devolve o do 1º
   perform pg_advisory_xact_lock(hashtext('pedido_compra_importar'), p_loja::int);
   select coalesce(jsonb_agg(jsonb_build_object('id', id, 'numero', numero, 'fornecedor', fornecedor_nome) order by id), '[]'::jsonb)
-    into v_peds from pedidos_compra where loja_id = p_loja and chave_idempotencia like p_chave || ':%';
+    into v_peds from pedidos_compra where loja_id = p_loja and left(chave_idempotencia, length(p_chave) + 1) = p_chave || ':';
   if jsonb_array_length(v_peds) > 0 then return jsonb_build_object('ok', true, 'duplicado', true, 'pedidos', v_peds); end if;
 
   for x in select * from jsonb_array_elements(p_pedidos) loop
