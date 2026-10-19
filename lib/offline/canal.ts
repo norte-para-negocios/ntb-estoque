@@ -1,6 +1,7 @@
 // Autenticação e utilidades das rotas /api/offline/* (canal do app desktop). Só servidor.
 import { gzipSync } from 'node:zlib'
 import { createServiceClient } from '@/lib/supabase/server'
+import { criarLimitador, ipDoCliente } from '@/lib/seguranca/regras'
 
 export const OFFLINE_VERSAO_MINIMA = '1.0.0'
 
@@ -75,17 +76,16 @@ export function jsonGzip(dado: unknown, status = 200): Response {
   })
 }
 
-// Limite simples de tentativas de login por IP+e-mail (memória do processo).
-const tentativas = new Map<string, number[]>()
+// Limite simples de tentativas de login por IP+e-mail (memória do processo), um limitador por (max, janela).
+const limitadores = new Map<string, ReturnType<typeof criarLimitador>>()
 export function excedeuTentativas(chave: string, max = 5, janelaMs = 60_000): boolean {
-  const agora = Date.now()
-  const lista = (tentativas.get(chave) ?? []).filter((t) => agora - t < janelaMs)
-  lista.push(agora)
-  tentativas.set(chave, lista)
-  if (tentativas.size > 5000) tentativas.clear()
-  return lista.length > max
+  const id = `${max}|${janelaMs}`
+  let lim = limitadores.get(id)
+  if (!lim) limitadores.set(id, (lim = criarLimitador(max, janelaMs)))
+  return lim(chave)
 }
 
+// Fase H: o primeiro item do X-Forwarded-For é o que o cliente mandou (o nginx só acrescenta o IP real no fim).
 export function ipDe(req: Request): string {
-  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || req.headers.get('x-real-ip') || 'desconhecido'
+  return ipDoCliente((n) => req.headers.get(n))
 }

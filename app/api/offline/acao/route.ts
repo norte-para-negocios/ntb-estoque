@@ -7,6 +7,7 @@ import { autenticarCanal, erro } from '@/lib/offline/canal'
 import { comContexto } from '@/lib/offline/contexto'
 import { ACOES } from '@/lib/offline/registro-acoes'
 import { desserializarArgs, lerDigest, serializarValor, type Json } from '@/lib/offline/serializacao'
+import { acaoSoDoServidor } from '@/lib/seguranca/regras'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -26,6 +27,8 @@ export async function POST(req: Request) {
   const intentId = String(body.intentId ?? '')
   const acao = String(body.acao ?? '')
   if (!/^[0-9a-f-]{36}$/.test(intentId)) return erro(400, 'Intent inválido.')
+  // Fase H: crons de reenvio (recebem a lista de lojas com as chaves do Omie como argumento) não são ação de usuário.
+  if (acaoSoDoServidor(acao)) return erro(403, 'Ação não permitida pelo app.')
   const fn = Object.prototype.hasOwnProperty.call(ACOES, acao) ? ACOES[acao] : undefined
   if (typeof fn !== 'function') return erro(400, 'Ação desconhecida. Atualize o app.', { tipo: 'versao' })
 
