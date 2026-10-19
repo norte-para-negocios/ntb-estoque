@@ -17,7 +17,8 @@
 - Entrada prevista da sugestão (modo próprio) passa a contar requisições abertas e aprovadas (Omie: "pedidos de compra + requisições + OPs"), em coluna própria `entrada_requisicoes` (hipótese H6, documentada na tela). Requisição que virou pedido sai (já conta no pedido).
 - Lead time: produto (`produto_compra_param`) > fornecedor da última nota (`fornecedor_compra_param`) > vazio (1 dia). A função devolve `lead_time_origem` ('produto' | 'fornecedor' | null).
 - Importação: `.xlsx` ou `.csv` até 700 KB, até 2.000 linhas, 100 pedidos, 300 itens por pedido. Uma linha = um item. Agrupador = coluna "Pedido" (vazia = fornecedor + previsão). Prévia sempre refeita no servidor; confirmar reenvia o arquivo, o servidor valida de novo e grava tudo ou nada (`pc_importar`). Chave = `imp:` + sha256 do arquivo: o mesmo arquivo duas vezes devolve os pedidos da primeira.
-- Compradores: nome, usuário do sistema (opcional), ativo. Pedido e requisição ganham `comprador_id` opcional (pedidos: coluna nova + `pc_salvar` recriada com o campo). Cadastro de comprador e lead time do fornecedor exigem `Compras - Aprovar pedidos` (gestor), sem permissão nova.
+- Compradores: nome, usuário do sistema (opcional), ativo. Pedido e requisição ganham `comprador_id` opcional (pedidos: coluna nova + `pc_salvar` recriada com o campo). Cadastro de comprador exige `Compras - Aprovar pedidos` (gestor); prazo do fornecedor, `Compras - Pedidos` (o mesmo do prazo por produto). Permissão nova só `Compras - Requisicoes`.
+- Na execução: o que vira pedido rascunho a partir da requisição continua contando como requisição na entrada prevista até o pedido sair do rascunho (a sugestão só conta pedido aguardando/aprovado); a migration de importação ficou 242 e a de lead time 241.
 - I9 (formas de pagamento de compras) fica fora: o pedido já tem parcelas em dias.
 - Desktop offline: as ações novas ficam fora de `politica.ts` (tabelas novas não estão em `offline_tabelas`): só com internet.
 
