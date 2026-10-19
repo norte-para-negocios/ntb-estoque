@@ -29,7 +29,7 @@ import { Num } from '@/components/ui-kit/Num'
 import { formatQtdExata } from '@/lib/num-br'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
 import { corMargem, TEXTO_CLASSE } from '@/lib/status-cor'
-import { Package, Download, Plus, Printer } from 'lucide-react'
+import { Package, Download, Plus, Printer, Upload } from 'lucide-react'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { SegmentedHrefs } from '@/components/produtos/SegmentedHrefs'
 
@@ -82,6 +82,8 @@ export default async function ProdutoPage({
 }) {
   const lojaId = await getCurrentLojaId()
   const modoProprio = (await modoDaLoja(lojaId)) === 'proprio'
+  // Fase G [K10]: importar por planilha só no estoque próprio (no Omie o cadastro é do Omie).
+  const podeImportar = modoProprio && (await requirePermissao(lojaId, 'Produtos - Importar planilha'))
   if (!(await requirePermissao(lojaId, 'Produtos'))) notFound()
 
   const params = await searchParams
@@ -551,6 +553,11 @@ export default async function ProdutoPage({
             {podeCriar && (
               <Link href="/produto/novo" className={btnClass('primary')}>
                 <Plus className="size-4" /> Novo produto
+              </Link>
+            )}
+            {podeImportar && (
+              <Link href="/produto/importar" className={btnClass('outline')}>
+                <Upload className="size-4" /> Importar planilha
               </Link>
             )}
             <a href={`/produto/export?${exportParams.toString()}`} className={btnClass('outline')}>

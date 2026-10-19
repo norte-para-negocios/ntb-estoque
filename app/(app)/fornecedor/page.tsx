@@ -16,7 +16,9 @@ import {
 } from '@/components/fornecedor/FornecedorAcoes'
 import type { ParceiroFormValues } from '@/components/parceiro/ParceiroForm'
 import { escapeIlikeOr } from '@/lib/utils-busca'
-import { History, Truck } from 'lucide-react'
+import { History, Truck, Upload } from 'lucide-react'
+import { modoDaLoja } from '@/lib/estoque/ledger'
+import { btnClass } from '@/components/ui-kit/Button'
 import Link from 'next/link'
 import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 
@@ -88,6 +90,8 @@ export default async function FornecedorPage({
   const podeCriar = await requirePermissao(lojaId, 'Fornecedores - Criar')
   const podeEditar = await requirePermissao(lojaId, 'Fornecedores - Editar')
   const podeExcluir = await requirePermissao(lojaId, 'Fornecedores - Excluir')
+  // Fase G [O6]: importar por planilha só no estoque próprio.
+  const podeImportar = (await modoDaLoja(lojaId)) === 'proprio' && (await requirePermissao(lojaId, 'Fornecedores - Importar planilha'))
 
   const { data: lojaSync } = await supabase
     .from('lojas')
@@ -140,6 +144,11 @@ export default async function FornecedorPage({
           actions={
             <>
               {podeCriar && <NovoFornecedor />}
+              {podeImportar && (
+                <Link href="/fornecedor/importar" className={btnClass('outline')}>
+                  <Upload className="size-4" /> Importar planilha
+                </Link>
+              )}
               {podeSync && <PuxarFornecedores />}
             </>
           }
