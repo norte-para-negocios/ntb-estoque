@@ -1,0 +1,89 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { custoValido, escolherFoto, montarPosicao, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
+
+const P = (o: Partial<MetaProduto> & { codigo_produto: number }): MetaProduto => ({
+  codigo: String(o.codigo_produto), descricao: `Produto ${o.codigo_produto}`, familia: 'Insumos', tipo: '01', unidade: 'KG', ncm: '0000.00.00', inativo: false, ...o,
+})
+const F = (n_cod_prod: number, codigo_local_estoque: number, n_saldo: number, n_cmc: number, reservado: number | null = null): LinhaFoto => ({ n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado })
+const locais = new Map([[10, { descricao: 'DEPOSITO', padrao: true }], [20, { descricao: 'COZINHA', padrao: false }]])
+const produtos = [P({ codigo_produto: 1 }), P({ codigo_produto: 2, familia: 'Bebidas', tipo: '00' }), P({ codigo_produto: 3, inativo: true }), P({ codigo_produto: 4 })]
+const foto = [
+  F(1, 0, 0, 5), // sentinela: nunca é linha
+  F(1, 10, 10, 5, 2), F(1, 20, -2, 6),
+  F(2, 10, 3, 2.7e10), // custo absurdo
+  F(3, 10, 4, 1),
+  F(4, 0, 0, 7), // só sentinela: zerado
+]
+const op = (o: Partial<OpcoesPosicao> = {}): OpcoesPosicao => ({ ver: 'produto', zerados: false, inativos: true, tipos: [], familias: [], q: '', ...o })
+
+test('custoValido: (0, 1e7)', () => {
+  assert.equal(custoValido(5), true)
+  assert.equal(custoValido(0), false)
+  assert.equal(custoValido(-1), false)
+  assert.equal(custoValido(2.7e10), false)
+})
+
+test('mesmo total nas visões por produto e por local; negativo entra; sentinela fora', () => {
+  const pr = montarPosicao(foto, produtos, locais, op())
+  const lo = montarPosicao(foto, produtos, locais, op({ ver: 'local' }))
+  assert.equal(pr.total.valor, 50 - 12 + 4) // 10×5 − 2×6 + 4×1; o absurdo vale 0
+  assert.equal(lo.total.valor, pr.total.valor)
+  assert.equal(pr.total.positivo, 54)
+  assert.equal(pr.total.negativo, -12)
+  assert.equal(pr.total.suspeitos, 1)
+  assert.equal(lo.linhas.length, 4) // 1@10, 1@20, 2@10, 3@10
+  const p1 = pr.linhas.find((l) => l.codProduto === 1)!
+  assert.equal(p1.quant, 8)
+  assert.equal(p1.valor, 38)
+  assert.equal(p1.reservado, 2)
+  assert.equal(p1.disponivel, 6)
+  assert.equal(pr.linhas.find((l) => l.codProduto === 2)!.custoSuspeito, true)
+})
+
+test('zerados só com a opção; na visão por local vão para o local padrão', () => {
+  assert.equal(montarPosicao(foto, produtos, locais, op()).linhas.some((l) => l.codProduto === 4), false)
+  const pr = montarPosicao(foto, produtos, locais, op({ zerados: true }))
+  const z = pr.linhas.find((l) => l.codProduto === 4)!
+  assert.equal(z.quant, 0)
+  assert.equal(z.cmc, 7) // custo da sentinela
+  const lo = montarPosicao(foto, produtos, locais, op({ ver: 'local', zerados: true }))
+  assert.equal(lo.linhas.find((l) => l.codProduto === 4)!.local, 'DEPOSITO')
+  assert.equal(pr.total.valor, montarPosicao(foto, produtos, locais, op()).total.valor)
+})
+
+test('inativos: escondidos sem a opção', () => {
+  const r = montarPosicao(foto, produtos, locais, op({ inativos: false }))
+  assert.equal(r.linhas.some((l) => l.codProduto === 3), false)
+})
+
+test('tipo SPED (Bloco H): só ativo com saldo > 0, valor unitário = valor ÷ quantidade', () => {
+  const r = montarPosicao(foto, produtos, locais, op({ ver: 'sped', zerados: true }))
+  assert.deepEqual(r.linhas.map((l) => l.codProduto), [1, 2])
+  const p1 = r.linhas.find((l) => l.codProduto === 1)!
+  assert.equal(p1.quant, 8)
+  assert.equal(p1.cmc, 4.75)
+  assert.equal(p1.ncm, '0000.00.00')
+  assert.equal(r.total.valor, 38) // por produto (o local com −2 já está dentro do produto 1)
+  assert.equal(r.total.negativo, 0)
+  assert.equal(r.total.suspeitos, 1)
+})
+
+test('filtros de tipo, família e busca', () => {
+  assert.deepEqual(montarPosicao(foto, produtos, locais, op({ tipos: ['00'] })).linhas.map((l) => l.codProduto), [2])
+  assert.deepEqual(montarPosicao(foto, produtos, locais, op({ familias: ['Bebidas'] })).linhas.map((l) => l.codProduto), [2])
+  assert.deepEqual(montarPosicao(foto, produtos, locais, op({ q: 'produto 3' })).linhas.map((l) => l.codProduto), [3])
+})
+
+test('ordem: maior valor primeiro; sem foto = vazio', () => {
+  const r = montarPosicao(foto, produtos, locais, op())
+  assert.deepEqual(r.linhas.map((l) => l.codProduto), [1, 3, 2])
+  const v = montarPosicao([], produtos, locais, op())
+  assert.deepEqual(v.total, { linhas: 0, quant: 0, valor: 0, positivo: 0, negativo: 0, suspeitos: 0 })
+})
+
+test('escolherFoto: a mais recente com local real', () => {
+  assert.equal(escolherFoto([{ data: '2026-10-19', temLocalReal: false }, { data: '2026-10-18', temLocalReal: true }]), '2026-10-18')
+  assert.equal(escolherFoto([{ data: '2026-10-18', temLocalReal: true }, { data: '2026-10-19', temLocalReal: true }]), '2026-10-19')
+  assert.equal(escolherFoto([]), null)
+})

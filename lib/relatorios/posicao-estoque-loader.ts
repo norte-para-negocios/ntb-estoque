@@ -1,0 +1,61 @@
+import { createClient } from '@/lib/supabase/server'
+import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
+import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
+import { escolherFoto, montarPosicao, SEM_FAMILIA, type InfoLocal, type LinhaFoto, type MetaProduto, type OpcoesPosicao, type VerPosicao } from '@/lib/relatorios/posicao-estoque-puro'
+
+export type SpPosicao = Record<string, string | undefined>
+const lista = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+const TIPO_LABEL = new Map(PRODUTO_TIPO_ITEM.map((t) => [t.value, t.label]))
+export const rotuloTipo = (c: string) => (c ? (TIPO_LABEL.get(c) ?? `Tipo ${c}`) : 'Não classificado')
+
+export function lerOpcoesPosicao(sp: SpPosicao): OpcoesPosicao {
+  const ver: VerPosicao = sp.ver === 'local' ? 'local' : sp.ver === 'sped' ? 'sped' : 'produto'
+  return { ver, zerados: sp.zerados === '1', inativos: sp.inativos !== '0', tipos: lista(sp.tipo), familias: lista(sp.familia), q: (sp.q ?? '').slice(0, 80) }
+}
+export function paramsBasePosicao(o: OpcoesPosicao): Record<string, string> {
+  return { ver: o.ver === 'produto' ? '' : o.ver, zerados: o.zerados ? '1' : '', inativos: o.inativos ? '' : '0', tipo: o.tipos.join(','), familia: o.familias.join(','), q: o.q }
+}
+
+// Lê a foto mais recente com local real (posicao_estoques: lojas Omie = sync do Omie; estoque próprio = projeção
+// do ledger, migrations 132/144), o cadastro e os locais, e monta a posição. Vale para os dois modos.
+export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
+  const supabase = await createClient()
+  const erros: string[] = []
+  const anotar = (onde: string) => (e: { message: string }) => { erros.push(onde); console.error(`posicao-estoque: ${onde}`, e.message) }
+
+  const [ultima, ultimaReal] = await Promise.all([
+    supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).neq('codigo_local_estoque', 0).order('data_posicao', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  if (ultima.error) anotar('data da foto')(ultima.error)
+  if (ultimaReal.error) anotar('data da foto')(ultimaReal.error)
+  const datas = [
+    ...(ultima.data ? [{ data: String(ultima.data.data_posicao), temLocalReal: ultimaReal.data?.data_posicao === ultima.data.data_posicao }] : []),
+    ...(ultimaReal.data ? [{ data: String(ultimaReal.data.data_posicao), temLocalReal: true }] : []),
+  ]
+  const dataFoto = escolherFoto(datas)
+  const fotoEmLeitura = !!ultima.data && dataFoto !== null && String(ultima.data.data_posicao) > dataFoto
+
+  const [foto, prods, locs] = await Promise.all([
+    dataFoto
+      ? buscarTodasLinhas<LinhaFoto>(
+          (from, to) => supabase.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
+          undefined, anotar('posição de estoque'))
+      : Promise.resolve<LinhaFoto[]>([]),
+    buscarTodasLinhas<{ codigo_produto: number; codigo: string | null; descricao: string | null; descricao_familia: string | null; tipo_item: string | null; unidade: string | null; ncm: string | null; inativo: boolean | null }>(
+      (from, to) => supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, ncm, inativo').eq('loja_id', lojaId).order('id').range(from, to),
+      undefined, anotar('cadastro de produtos')),
+    buscarTodasLinhas<{ codigo_local_estoque: number; descricao: string | null; padrao: string | null }>(
+      (from, to) => supabase.from('local_estoques').select('codigo_local_estoque, descricao, padrao').eq('loja_id', lojaId).is('deleted_at', null).order('id').range(from, to),
+      undefined, anotar('locais de estoque')),
+  ])
+  const produtos: MetaProduto[] = prods.map((p) => ({
+    codigo_produto: Number(p.codigo_produto), codigo: p.codigo, descricao: p.descricao, familia: p.descricao_familia, tipo: p.tipo_item,
+    unidade: p.unidade, ncm: p.ncm, inativo: p.inativo === true,
+  }))
+  const locais = new Map<number, InfoLocal>(locs.map((l) => [Number(l.codigo_local_estoque), { descricao: l.descricao ?? String(l.codigo_local_estoque), padrao: l.padrao === 'S' }]))
+  const r = montarPosicao(foto, produtos, locais, op)
+  const tipos = [...new Set(produtos.map((p) => p.tipo ?? ''))].sort().map((c) => ({ value: c || '_', label: rotuloTipo(c) }))
+  const familias = [...new Set(produtos.map((p) => p.familia || SEM_FAMILIA))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((f) => ({ value: f, label: f }))
+  return { ...r, dataFoto, fotoEmLeitura, erros: [...new Set(erros)], opcoes: { tipos, familias } }
+}
