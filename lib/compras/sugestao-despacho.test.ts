@@ -59,3 +59,10 @@ test('filtrarSugestao: padrão esconde "não comprar" e tipos 08/09/99; ordem im
   assert.equal(r.comprarProximos, 1)
   assert.equal(r.semCusto, 2)
 })
+
+test('valor estimado usa o custo médio quando existe (unidade da nota do Omie pode vir errada)', () => {
+  const [l] = montarLinhasSugestao([bruta({ consumo_total: 300, ultimo_custo: 418.02, cmc: 0.206212 })], P)
+  assert.equal(l.sugestao, 160)
+  assert.equal(l.valorEstimado, 32.99)
+  assert.equal(l.ultimoCusto, 418.02)
+})

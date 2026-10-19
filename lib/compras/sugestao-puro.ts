@@ -147,6 +147,8 @@ export type LinhaBruta = {
   entrada_nf: number; entrada_ops: number; entrada_pedidos: number; consumo_ops: number; previsao_qtde: number; previsao_dias: number
   tem_ficha: boolean; fornecedor_id: number | null; fornecedor_nome: string | null; fornecedor_cnpj: string | null
   ultimo_custo: number | null; ultima_compra: string | null
+  /** custo médio do produto (Omie: CMC da foto; próprio: estoque_custos) */
+  cmc?: number | null
 }
 
 export type LinhaSugestao = LinhaCalculada & {
@@ -154,7 +156,7 @@ export type LinhaSugestao = LinhaCalculada & {
   acao: AcaoSugestao; rotulo: string; estoqueMinimo: number; estoqueAtual: number; leadTimeInformado: boolean
   entradaNf: number; entradaOps: number; entradaPedidos: number; previsaoVenda: number | null; consumoOps: number
   fornecedorId: number | null; fornecedorNome: string | null; fornecedorCnpj: string | null
-  ultimoCusto: number | null; ultimaCompra: string | null; valorEstimado: number
+  ultimoCusto: number | null; ultimaCompra: string | null; custoMedio: number | null; valorEstimado: number
 }
 
 const n0 = (v: unknown) => {
@@ -177,6 +179,9 @@ export function montarLinhasSugestao(
     }, p)
     const acao = acaoDoProduto(b.tipo_item, !!b.tem_ficha)
     const custo = b.ultimo_custo == null ? null : n0(b.ultimo_custo)
+    const cmc = b.cmc == null ? null : n0(b.cmc)
+    // valor estimado pelo custo médio (no Omie a conversão de unidade da nota às vezes vem errada); sem ele, o último custo
+    const custoRef = cmc ?? custo
     return {
       ...calc,
       codigoProduto: Number(b.codigo_produto), codigo: b.codigo ?? String(b.codigo_produto), descricao: b.descricao ?? '(sem descrição)',
@@ -184,8 +189,8 @@ export function montarLinhasSugestao(
       estoqueMinimo: n0(b.estoque_minimo), estoqueAtual: n0(b.estoque_atual), leadTimeInformado: b.lead_time != null && n0(b.lead_time) > 0,
       entradaNf: n0(b.entrada_nf), entradaOps: n0(b.entrada_ops), entradaPedidos, previsaoVenda: prevVenda, consumoOps: n0(b.consumo_ops),
       fornecedorId: b.fornecedor_id == null ? null : Number(b.fornecedor_id), fornecedorNome: b.fornecedor_nome, fornecedorCnpj: b.fornecedor_cnpj,
-      ultimoCusto: custo, ultimaCompra: b.ultima_compra,
-      valorEstimado: custo != null && acao === 'comprar' ? Math.round(calc.sugestao * custo * 100) / 100 : 0,
+      ultimoCusto: custo, ultimaCompra: b.ultima_compra, custoMedio: cmc,
+      valorEstimado: custoRef != null && acao === 'comprar' ? Math.round(calc.sugestao * custoRef * 100) / 100 : 0,
     }
   })
 }
@@ -217,7 +222,7 @@ export function resumoSugestao(linhas: LinhaSugestao[]): { comprarJa: number; co
       if (l.recomendacao === 'imediato') r.comprarJa++
       else r.comprarProximos++
       r.valorEstimado += l.valorEstimado
-      if (l.ultimoCusto == null) r.semCusto++
+      if (l.ultimoCusto == null && l.custoMedio == null) r.semCusto++
     } else if (l.recomendacao === 'imediato') r.produzirJa++
     else r.produzirProximos++
   }

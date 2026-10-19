@@ -170,6 +170,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
                           <span>Sugestão = ({q(l.saidaProjetada, 6)} + {q(l.pontoPedido, 6)}) − ({q(l.estoqueAtual)} + {q(l.entradaPrevista)}) = <b className="num">{q(l.sugestao, 6)}</b></span>
                           <span>Dias até o ponto = ({q(l.estoqueAtual)} − {q(l.pontoPedido, 6)}) ÷ {q(l.consumoMedio, 6)} = <b className="num">{l.diasAtePonto}</b></span>
                           {base === 'consumo' && l.previsaoVenda != null && <span className="text-text-muted">Previsão de venda no período (não usada nesta base): {q(l.previsaoVenda)}</span>}
+                          <span className="text-text-muted">Custo médio {brl(l.custoMedio)} · último custo {brl(l.ultimoCusto)} · valor estimado {brl(l.valorEstimado)}</span>
                           {l.consumoOps > 0 && base === 'consumo' && <span className="text-text-muted">Consumo previsto nas OPs abertas (não usado nesta base): {q(l.consumoOps)}</span>}
                         </div>
                         <Link href={`/estoque/produto/${l.codigoProduto}`} className="mt-2 inline-block text-[12px] font-semibold text-brand">Abrir o produto</Link>

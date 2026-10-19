@@ -74,7 +74,8 @@ with prod as (
 ), foto as (
   select max(data_posicao) as d from posicao_estoques where loja_id = p_loja and codigo_local_estoque <> 0
 ), pos as (
-  select pe.n_cod_prod, sum(pe.n_saldo) filter (where pe.codigo_local_estoque <> 0) as saldo, sum(coalesce(pe.estoque_minimo, 0)) as minimo
+  select pe.n_cod_prod, sum(pe.n_saldo) filter (where pe.codigo_local_estoque <> 0) as saldo, sum(coalesce(pe.estoque_minimo, 0)) as minimo,
+         max(pe.n_cmc) filter (where pe.n_cmc > 0 and pe.n_cmc < 10000000) as cmc   -- custo médio do Omie (fora de (0, 1e7) = suspeito)
     from posicao_estoques pe join foto on pe.data_posicao = foto.d where pe.loja_id = p_loja group by 1
 ), nf_itens as (
   select i.n_id_produto, n.id as nota_id, n.c_etapa, n.d_emissao_nfe, n.n_id_fornecedor, coalesce(nullif(btrim(n.c_razao_social), ''), n.c_nome) as nome,
@@ -110,7 +111,7 @@ with prod as (
          (ficha.codigo_produto is not null) as tem_ficha,
          f.id as fornecedor_id, coalesce(ult.nome, f.razao_social) as fornecedor_nome,
          nullif(regexp_replace(coalesce(f.cnpj_cpf, ''), '\D', '', 'g'), '') as fornecedor_cnpj,
-         ult.custo as ultimo_custo, ult.d_emissao_nfe as ultima_compra
+         ult.custo as ultimo_custo, ult.d_emissao_nfe as ultima_compra, pos.cmc
     from prod p
     left join cons c on c.cod_prod = p.codigo_produto
     left join pos on pos.n_cod_prod = p.codigo_produto
@@ -141,6 +142,8 @@ with prod as (
    group by 1
 ), pos as (
   select s.codigo_produto, sum(s.saldo) as saldo, sum(coalesce(s.minimo, 0)) as minimo from estoque_saldos s where s.loja_id = p_loja group by 1
+), cmc as (
+  select codigo_produto, nullif(cmc, 0) as cmc from estoque_custos where loja_id = p_loja
 ), nfp as (
   -- nota do fornecedor já recebida no sistema e ainda não lançada no estoque ("faturado pelo fornecedor")
   select i.codigo_produto, sum(coalesce(i.quantidade_recebida, i.quantidade * i.fator)) as q
@@ -180,7 +183,7 @@ with prod as (
          coalesce(opcons.q, 0) as consumo_ops, coalesce(prev.qtde, 0) as previsao_qtde, coalesce(prev.dias, 0) as previsao_dias,
          (ficha.codigo_produto is not null) as tem_ficha,
          f.id as fornecedor_id, coalesce(ult.fornecedor_nome, f.razao_social) as fornecedor_nome, ult.cnpj as fornecedor_cnpj,
-         ult.custo as ultimo_custo, ult.data as ultima_compra
+         ult.custo as ultimo_custo, ult.data as ultima_compra, cmc.cmc
     from prod p
     left join cons c on c.codigo_produto = p.codigo_produto
     left join pos on pos.codigo_produto = p.codigo_produto
@@ -191,6 +194,7 @@ with prod as (
     left join prev on prev.n_cod_prod = p.codigo_produto
     left join ficha on ficha.codigo_produto = p.codigo_produto
     left join ult on ult.codigo_produto = p.codigo_produto
+    left join cmc on cmc.codigo_produto = p.codigo_produto
     left join lateral (select f.id, f.razao_social from fornecedores f
                         where f.loja_id = p_loja and ult.cnpj is not null and regexp_replace(coalesce(f.cnpj_cpf, ''), '\D', '', 'g') = ult.cnpj
                         order by f.id limit 1) f on true

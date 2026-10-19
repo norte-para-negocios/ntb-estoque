@@ -103,7 +103,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
         <Card titulo="Comprar imediatamente" valor={res.comprarJa.toLocaleString('pt-BR')} sub="o estoque já chegou no ponto de pedido" />
         <Card titulo="Comprar nos próximos dias" valor={res.comprarProximos.toLocaleString('pt-BR')} sub="chega no ponto dentro da estimativa" />
         <Card titulo="Produzir" valor={(res.produzirJa + res.produzirProximos).toLocaleString('pt-BR')} sub={`${res.produzirJa} imediatamente`} />
-        <Card titulo="Compra estimada" valor={<Money value={res.valorEstimado} />} sub={res.semCusto ? `sugestão × último custo · ${res.semCusto} sem custo` : 'sugestão × último custo'} />
+        <Card titulo="Compra estimada" valor={<Money value={res.valorEstimado} />} sub={res.semCusto ? `sugestão × custo médio · ${res.semCusto} sem custo` : 'sugestão × custo médio (ou último custo)'} />
       </div>
 
       {!erro && vis.length === 0 ? (
