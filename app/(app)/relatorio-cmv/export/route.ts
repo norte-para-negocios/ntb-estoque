@@ -41,6 +41,7 @@ export async function GET(request: Request) {
       rows: agruparCmv(d.linhas, 'produto').map((l) => ({
         rotulo: l.rotulo, tipo: l.tipo, ei: l.ei, compras: l.compras, producao: l.producao, ef: l.ef, formula: cmvFormulaOmie(l),
         vendas: l.cmv, consumo: l.consumo, outras: Math.round((l.outrasSaidas - l.outrasEntradas) * 100) / 100,
+        quebra: l.quebra > 0.01 ? `Saldo pulou ${l.quebra.toLocaleString('pt-BR')} sem movimento no espelho: fora do total da fórmula` : '',
       })),
       colunas: [
         { key: 'rotulo', label: 'Produto', tipo: 'texto', largura: 44 },
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
         { key: 'vendas', label: 'Saídas de venda', tipo: 'moeda', largura: 16, somar: true },
         { key: 'consumo', label: 'Consumo OP', tipo: 'moeda', largura: 16, somar: true },
         { key: 'outras', label: 'Outras saídas − entradas', tipo: 'moeda', largura: 18, somar: true },
+        { key: 'quebra', label: 'Quebra no kardex', tipo: 'texto', largura: 40 },
       ],
       opts: { titulo: 'CMV/CPV pelo estoque (fórmula do Omie)', subtitulo: sub, autoFiltro: true },
       nome: 'Pelo estoque',

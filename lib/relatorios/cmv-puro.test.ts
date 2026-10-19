@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, type LinhaCmv } from './cmv-puro.ts'
+import { totaisFormula, periodoValorMovimento, agruparCmv, cmvFormulaOmie, custoMedioAtual, escolherFonteCmv, linhaVazia, montarLinhasEstimado, montarLinhasKardex, resumoCmv, type LinhaCmv } from './cmv-puro.ts'
 
 test('escolherFonteCmv: próprio, kardex só com o período inteiro coberto, senão estimado', () => {
   const k = { kardexDesde: '2026-09-12', kardexAte: '2026-10-16' }
@@ -104,4 +104,20 @@ test('periodoValorMovimento: própria = pedido; Omie = parte coberta pelo kardex
   assert.deepEqual(periodoValorMovimento({ modo: 'omie', ...k, ini: '2026-09-20', fim: '2026-09-30' }), { ini: '2026-09-20', fim: '2026-09-30', cortado: false })
   assert.equal(periodoValorMovimento({ modo: 'omie', ...k, ini: '2026-01-01', fim: '2026-08-31' }), null)
   assert.equal(periodoValorMovimento({ modo: 'omie', kardexDesde: null, kardexAte: null, ini: '2026-01-01', fim: '2026-08-31' }), null)
+})
+
+test('totaisFormula: produto com quebra na cadeia sai do total da fórmula e é listado; vendas não mudam', () => {
+  const meta = new Map([[9, { rotulo: 'Azeitona', familia: 'Insumos', tipoCod: '01', tipo: 'Matéria-prima' }], [1, { rotulo: 'Moqueca', familia: 'Pratos', tipoCod: '04', tipo: 'Produto acabado' }]])
+  const rpc = [
+    { n_cod_prod: 1, ei: 10, compras: 0, producao: 90, outras_entradas: 0, vendas: 95, qtd_vendida: 3, consumo_op: 0, outras_saidas: 0, ef: 5, sem_custo: 0, quebra: 0 },
+    { n_cod_prod: 9, ei: 99.5, compras: 103.52, producao: 0, outras_entradas: 0, vendas: 0, qtd_vendida: 0, consumo_op: 32.09, outras_saidas: 0, ef: 449706.65, sem_custo: 0, quebra: 2997 },
+  ]
+  const l = montarLinhasKardex(rpc, [], meta)
+  const t = totaisFormula(l, () => true)
+  assert.equal(t.semQuebra, 95)
+  assert.equal(t.foraDoTotal, -449503.63)
+  assert.deepEqual(t.quebrados.map((q) => q.rotulo), ['Azeitona'])
+  assert.equal(totaisFormula(l, (tipo) => tipo === '04').quebrados.length, 0)
+  assert.equal(resumoCmv(l).cmv, 95)
+  assert.equal(agruparCmv(l, 'familia').find((x) => x.rotulo === 'Insumos')!.quebra, 2997)
 })

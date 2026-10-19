@@ -12,11 +12,12 @@ export type LinhaCmv = {
   chave: string; rotulo: string; familia: string; tipoCod: string; tipo: string
   quant: number; faturamento: number; cmv: number; consumo: number
   ei: number; compras: number; producao: number; ef: number; outrasEntradas: number; outrasSaidas: number; semCusto: number; custoSuspeito: number
+  quebra: number // quantidade que o saldo do kardex 'pulou' sem movimento no espelho (0 = cadeia íntegra)
 }
 export type VendaItem = { idProduto: number | null; produto: string; familia: string; tipoCod: string; tipo: string; quant: number; valor: number }
 export type LinhaRpcCmv = {
   n_cod_prod: number; ei: number; compras: number; producao: number; outras_entradas: number; vendas: number
-  qtd_vendida: number; consumo_op: number; outras_saidas: number; ef: number; sem_custo: number
+  qtd_vendida: number; consumo_op: number; outras_saidas: number; ef: number; sem_custo: number; quebra?: number
 }
 export type MetaCmv = { rotulo: string; familia: string; tipoCod: string; tipo: string }
 
@@ -66,7 +67,7 @@ export function custoMedioAtual(foto: { n_cod_prod: number; codigo_local_estoque
 export function linhaVazia(chave: string, rotulo: string, m?: Partial<MetaCmv>): LinhaCmv {
   return {
     chave, rotulo, familia: m?.familia ?? 'Sem família', tipoCod: m?.tipoCod ?? '', tipo: m?.tipo ?? 'Não classificado',
-    quant: 0, faturamento: 0, cmv: 0, consumo: 0, ei: 0, compras: 0, producao: 0, ef: 0, outrasEntradas: 0, outrasSaidas: 0, semCusto: 0, custoSuspeito: 0,
+    quant: 0, faturamento: 0, cmv: 0, consumo: 0, ei: 0, compras: 0, producao: 0, ef: 0, outrasEntradas: 0, outrasSaidas: 0, semCusto: 0, custoSuspeito: 0, quebra: 0,
   }
 }
 
@@ -117,6 +118,7 @@ export function montarLinhasKardex(rpc: LinhaRpcCmv[], vendas: VendaItem[], meta
     l.outrasEntradas = Number(r.outras_entradas) || 0
     l.outrasSaidas = Number(r.outras_saidas) || 0
     l.semCusto = Number(r.sem_custo) || 0
+    l.quebra = Number(r.quebra) || 0
     m.set(k, l)
   }
   // venda sem nenhuma saída no kardex (ex.: taxa de serviço, produto que não baixa estoque): custo zero, contado
@@ -131,7 +133,22 @@ export function montarLinhasKardex(rpc: LinhaRpcCmv[], vendas: VendaItem[], meta
 /** EI + C + P − EF (fórmula do relatório CMV/CPV do Omie). */
 export const cmvFormulaOmie = (l: Pick<LinhaCmv, 'ei' | 'compras' | 'producao' | 'ef'>) => r2(l.ei + l.compras + l.producao - l.ef)
 
-const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'custoSuspeito'] as const
+/** Totais da fórmula EI + C + P − EF sem os produtos com quebra na cadeia do kardex (o EF deles carrega um saldo que
+ *  "pulou" sem movimento no espelho, ex. azeitona da loja 5: R$ 449,7 mil de EF falso). Vendas/consumo não mudam. */
+export function totaisFormula(linhas: LinhaCmv[], incluiTipo: (tipoCod: string) => boolean): { semQuebra: number; foraDoTotal: number; quebrados: { rotulo: string; quebra: number; formula: number }[] } {
+  let semQuebra = 0, foraDoTotal = 0
+  const quebrados: { rotulo: string; quebra: number; formula: number }[] = []
+  for (const l of linhas) {
+    if (!incluiTipo(l.tipoCod)) continue
+    const f = cmvFormulaOmie(l)
+    if (l.quebra > 0.01) { foraDoTotal += f; quebrados.push({ rotulo: l.rotulo, quebra: l.quebra, formula: f }) }
+    else semQuebra += f
+  }
+  quebrados.sort((a, b) => Math.abs(b.formula) - Math.abs(a.formula) || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
+  return { semQuebra: r2(semQuebra), foraDoTotal: r2(foraDoTotal), quebrados }
+}
+
+const CAMPOS = ['quant', 'faturamento', 'cmv', 'consumo', 'ei', 'compras', 'producao', 'ef', 'outrasEntradas', 'outrasSaidas', 'semCusto', 'custoSuspeito', 'quebra'] as const
 
 export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
   let out: LinhaCmv[]
@@ -146,7 +163,7 @@ export function agruparCmv(linhas: LinhaCmv[], por: DimCmv): LinhaCmv[] {
     }
     out = [...g.values()]
   }
-  for (const l of out) for (const c of CAMPOS) l[c] = c === 'quant' ? r6(l[c]) : c === 'semCusto' || c === 'custoSuspeito' ? l[c] : r2(l[c])
+  for (const l of out) for (const c of CAMPOS) l[c] = c === 'quant' || c === 'quebra' ? r6(l[c]) : c === 'semCusto' || c === 'custoSuspeito' ? l[c] : r2(l[c])
   return out.sort((a, b) => b.cmv - a.cmv || b.faturamento - a.faturamento || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
 }
 

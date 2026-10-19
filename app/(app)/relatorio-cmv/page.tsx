@@ -11,7 +11,7 @@ import { PeriodoBar } from '@/components/faturamento/PeriodoBar'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarCmv } from '@/lib/relatorios/cmv-loader'
-import { agruparCmv, cmvFormulaOmie, resumoCmv } from '@/lib/relatorios/cmv-puro'
+import { agruparCmv, cmvFormulaOmie, resumoCmv, totaisFormula } from '@/lib/relatorios/cmv-puro'
 import { DIM_DA_ABA, lerParamsCmv, paramsBaseCmv, textoFonte, type SpCmv } from '@/lib/relatorios/cmv-params'
 
 const LIMITE = 500
@@ -49,7 +49,8 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
     { value: 'produtos', label: 'Produtos' }, { value: 'familias', label: 'Famílias' }, { value: 'tipos', label: 'Tipos' },
     ...(kardex ? [{ value: 'estoque', label: 'Pelo estoque (EI + C + P − EF)' }] : []),
   ]
-  const formulaTotal = (fil: (tipo: string) => boolean) => d.linhas.filter((l) => fil(l.tipoCod)).reduce((s, l) => s + cmvFormulaOmie(l), 0)
+  const formulaOmie = totaisFormula(d.linhas, (t) => TIPOS_OMIE.includes(t))
+  const formulaTodos = totaisFormula(d.linhas, () => true)
 
   return (
     <div className="space-y-4">
@@ -88,9 +89,20 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
           {d.filtrosIgnorados && <p className="text-[13px] text-text-muted">Na loja de estoque próprio os filtros de tipo e família ainda não se aplicam a este relatório.</p>}
           {aba === 'estoque' && (
             <p className="text-[13px] text-text-muted">
-              Fórmula do relatório CMV/CPV do Omie, por produto. Tipos 00, 04 e 99 (filtro padrão do Omie): <Money value={formulaTotal((t) => TIPOS_OMIE.includes(t))} />;
-              todos os tipos (soma também o consumo de insumos, que já está no custo dos pratos): <Money value={formulaTotal(() => true)} />.
+              Fórmula do relatório CMV/CPV do Omie, por produto{formulaTodos.quebrados.length > 0 ? ', sem os produtos com quebra no kardex' : ''}. Tipos 00, 04 e 99 (filtro padrão do Omie): <Money value={formulaOmie.semQuebra} />;
+              todos os tipos (soma também o consumo de insumos, que já está no custo dos pratos): <Money value={formulaTodos.semQuebra} />.
             </p>
+          )}
+          {aba === 'estoque' && formulaTodos.quebrados.length > 0 && (
+            <div className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">
+              <p>
+                {formulaTodos.quebrados.length} produto(s) com quebra na cadeia do kardex (o saldo do Omie mudou sem movimento no espelho, então o estoque final deles não fecha):
+                ficaram fora dos totais acima (<Money value={formulaTodos.foraDoTotal} /> pela fórmula). O CMV de vendas e o consumo não dependem disso.
+              </p>
+              <ul className="mt-1 list-disc pl-5 text-text-muted">
+                {formulaTodos.quebrados.slice(0, 20).map((q) => <li key={q.rotulo}>{q.rotulo}: saldo pulou {fmtQtd(q.quebra)} · fórmula <Money value={q.formula} /></li>)}
+              </ul>
+            </div>
           )}
 
           <form action="/relatorio-cmv" className="flex flex-wrap items-center gap-2">
@@ -111,7 +123,7 @@ export default async function CmvPage({ searchParams }: { searchParams: Promise<
                 <tbody>
                   {linhas.slice(0, LIMITE).map((l) => (
                     <tr key={l.chave} className="border-t border-border/60">
-                      <td className="px-3 py-2"><div className="max-w-[260px] truncate text-text" title={l.rotulo}>{l.rotulo}</div><div className="text-[12px] text-text-muted">{l.tipo}</div></td>
+                      <td className="px-3 py-2"><div className="max-w-[260px] truncate text-text" title={l.rotulo}>{l.rotulo}</div><div className="text-[12px] text-text-muted">{l.tipo}{l.quebra > 0.01 && <span className="ml-1 text-warn">· quebra no kardex (fora do total)</span>}</div></td>
                       {[l.ei, l.compras, l.producao, l.ef].map((v, i) => <td key={i} className="num whitespace-nowrap px-3 py-2 text-right text-text-muted"><Money value={v} /></td>)}
                       <td className="num whitespace-nowrap px-3 py-2 text-right font-medium text-text"><Money value={cmvFormulaOmie(l)} /></td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text"><Money value={l.cmv} /></td>

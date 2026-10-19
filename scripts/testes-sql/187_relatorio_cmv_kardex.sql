@@ -23,7 +23,10 @@ insert into kardex_omie (loja_id, id_mov, n_cod_prod, codigo_local_estoque, data
  -- produto 600: devolução de venda (entrada) reduz o CMV
  (7, 13, 600, 1, '2026-09-20', 'COM', 10, 2, 10, 2, false),
  (7, 14, 600, 1, '2026-10-01', 'VEN', -4, 2, 6, 2, false),
- (7, 15, 600, 1, '2026-10-02', 'DVP', 1, 2, 7, 2, false);
+ (7, 15, 600, 1, '2026-10-02', 'DVP', 1, 2, 7, 2, false),
+ -- produto 700: quebra da cadeia (saldo pula de 4 para 3001 sem movimento no espelho, caso da azeitona da loja 5)
+ (7, 16, 700, 1, '2026-09-30', 'COM', 4, 10, 4, 10, false),
+ (7, 17, 700, 1, '2026-10-02', 'OPS', -0.5, 10, 3001, 150, false);
 
 do $$
 declare r record; n int;
@@ -43,11 +46,16 @@ begin
   if r.sem_custo <> 1 or r.outras_entradas <> 0 then raise exception 'produto 500: %', row_to_json(r); end if;
   select * into r from relatorio_cmv_kardex(7, '2026-10-01', '2026-10-03') where n_cod_prod = 600;
   if r.vendas <> 6 or r.qtd_vendida <> 3 or r.ei <> 20 or r.ef <> 14 then raise exception 'produto 600: %', row_to_json(r); end if;
+  -- quebra: |EI + Σq − EF| em quantidade = |4 − 0,5 − 3001| = 2997,5; os outros produtos ficam sem quebra
+  select * into r from relatorio_cmv_kardex(7, '2026-10-01', '2026-10-03') where n_cod_prod = 700;
+  if r.quebra is distinct from 2997.5 then raise exception 'produto 700 (quebra): %', row_to_json(r); end if;
+  select count(*) into n from relatorio_cmv_kardex(7, '2026-10-01', '2026-10-03') where quebra > 0;
+  if n <> 1 then raise exception 'só o produto 700 devia ter quebra, vieram %', n; end if;
   -- outra loja não aparece; ordem total por produto
   select count(*) into n from relatorio_cmv_kardex(8, '2026-10-01', '2026-10-03');
   if n <> 0 then raise exception 'loja 8 devia vir vazia, veio %', n; end if;
   select count(*) into n from relatorio_cmv_kardex(7, '2026-10-01', '2026-10-03');
-  if n <> 6 then raise exception 'esperava 6 produtos, veio %', n; end if;
+  if n <> 7 then raise exception 'esperava 7 produtos, veio %', n; end if;
   raise notice 'relatorio_cmv_kardex OK';
 end $$;
 rollback;
