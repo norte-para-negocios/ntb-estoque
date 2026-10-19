@@ -25,6 +25,8 @@ import { HistoricoProcessamentoNF } from '@/components/nota-fiscal/HistoricoProc
 import { carregarConferencia } from './dados-proprio'
 import { carregarPedidoDaNota } from './dados-pedido'
 import { PedidoDaNotaNF } from '@/components/nota-fiscal/PedidoDaNotaNF'
+import { DevolucaoFornecedorNF } from '@/components/nota-fiscal/DevolucaoFornecedorNF'
+import { carregarDevolucoesDaNota } from '@/lib/compras/devolucao-loader'
 import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 
 export default async function NotaFiscalItensPage({
@@ -115,6 +117,9 @@ export default async function NotaFiscalItensPage({
   const pedidoDaNota = conferencia?.compra && conferencia.compra.status !== 'cancelada' ? await carregarPedidoDaNota(lojaId, conferencia.compra.id) : null
   // mesma regra da ação vincularNotaAoPedido: 'Compras - Pedidos' e 'Notas Fiscais'
   const podeVincularPedido = !!pedidoDaNota && (await requirePermissao(lojaId, 'Compras - Pedidos')) && (await requirePermissao(lojaId, 'Notas Fiscais'))
+  // Fase F [H1] (só estoque próprio): devolução ao fornecedor dos itens que entraram no estoque, sem NF-e
+  const devolucoes = conferencia?.compra && ['lancada', 'parcial'].includes(conferencia.compra.status) ? await carregarDevolucoesDaNota(lojaId, conferencia.compra.id) : null
+  const podeDevolver = !!devolucoes && (await requirePermissao(lojaId, 'Compras - Devolucao ao fornecedor'))
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -210,6 +215,7 @@ export default async function NotaFiscalItensPage({
           podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} conferidaEm={conferencia.compra?.conferidaEm ?? null} />
       )}
       {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
+      {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver} />}
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
         nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
 

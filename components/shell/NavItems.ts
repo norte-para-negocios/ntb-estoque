@@ -32,6 +32,8 @@ import {
   ListTodo,
   ClipboardPen,
   UserCog,
+  Undo2,
+  BookOpenCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -63,6 +65,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/tarefas-compras', label: 'Tarefas de compras', icon: ListTodo, group: 'Operação', soEstoqueProprio: true },
   { href: '/requisicao-compra', label: 'Requisições de compra', icon: ClipboardPen, group: 'Operação', soEstoqueProprio: true },
   { href: '/pedido-compra', label: 'Pedidos de compra', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
+  { href: '/devolucao-fornecedor', label: 'Devoluções ao fornecedor', icon: Undo2, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },
@@ -84,6 +87,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/resumo', label: 'Resumo Operacional', icon: CalendarCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/correcoes', label: 'Feito pelo robô', icon: Wrench, group: 'Administração', gestaoUsuarios: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3, group: 'Administração', gestaoUsuarios: true },
+  { href: '/contador', label: 'Contador e fechamento', icon: BookOpenCheck, group: 'Administração', gestaoUsuarios: true },
   { href: '/minha-loja', label: 'Minha loja', icon: Settings, group: 'Administração', gestaoUsuarios: true, cadeadoSemAdmin: true },
   { href: '/loja', label: 'Lojas', icon: Store, group: 'Administração', admin: true },
   { href: '/saude-banco', label: 'Saúde do Banco', icon: Database, group: 'Administração', superAdmin: true },

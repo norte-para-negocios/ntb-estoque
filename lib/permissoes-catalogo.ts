@@ -216,6 +216,7 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/requisicao-compra': 'Compras - Requisicoes',
   '/tarefas-compras': 'Compras - Pedidos',
   '/compras-cadastros': 'Compras - Pedidos',
+  '/devolucao-fornecedor': 'Compras - Devolucao ao fornecedor',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',
