@@ -206,18 +206,51 @@ export type FiltroSugestao = { q?: string; tipos?: string[]; familia?: string; v
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const ORDEM_REC: Record<Recomendacao, number> = { imediato: 0, proximos: 1, nao: 2 }
 
-/** Filtros da tela; ver = 'acao' (padrão: comprar/produzir), 'imediato' ou 'todos'. Ordem do Omie: recomendação, depois dias até o ponto. */
+/** Estoque atual − estoque mínimo (coluna "Diferença" do relatório Estoque Mínimo do Omie). */
+export const diferencaMinimo = (l: Pick<LinhaSugestao, 'estoqueAtual' | 'estoqueMinimo'>): number => r6(l.estoqueAtual - l.estoqueMinimo)
+
+/** Visões do relatório "Estoque Mínimo" do Omie (ERP_PRD_EST_MINIMO): só produtos com mínimo, ordenados pela diferença. */
+export const ehVisaoMinimo = (ver?: string): ver is 'minimo' | 'abaixo' => ver === 'minimo' || ver === 'abaixo'
+
+/**
+ * Filtros da tela; ver = 'acao' (padrão: comprar/produzir), 'imediato', 'todos', 'minimo' (tem estoque mínimo) ou 'abaixo'
+ * (estoque atual < mínimo). Ordem do Omie: recomendação, depois dias até o ponto; nas visões de mínimo, a diferença
+ * (atual − mínimo) crescente. O relatório de mínimo do Omie não esconde tipo nenhum: lá o filtro de tipo padrão não vale.
+ */
 export function filtrarSugestao(linhas: LinhaSugestao[], f: FiltroSugestao): LinhaSugestao[] {
   const q = semAcento((f.q ?? '').trim())
-  const ver = f.ver === 'todos' || f.ver === 'imediato' ? f.ver : 'acao'
+  const ver = f.ver === 'todos' || f.ver === 'imediato' || ehVisaoMinimo(f.ver) ? f.ver : 'acao'
+  const minimo = ehVisaoMinimo(ver)
   return linhas
-    .filter((l) => (f.tipos?.length ? f.tipos.includes(l.tipoItem ?? '') : tipoPadraoIncluido(l.tipoItem)))
+    .filter((l) => (f.tipos?.length ? f.tipos.includes(l.tipoItem ?? '') : minimo || tipoPadraoIncluido(l.tipoItem)))
     .filter((l) => !f.familia || l.familia === f.familia)
     .filter((l) => !f.acao || l.acao === f.acao)
     .filter((l) => !f.fornecedor || (l.fornecedorNome ?? '') === f.fornecedor)
-    .filter((l) => ver === 'todos' || (ver === 'imediato' ? l.recomendacao === 'imediato' : l.recomendacao !== 'nao'))
+    .filter((l) => ver === 'todos'
+      || (ver === 'imediato' ? l.recomendacao === 'imediato'
+        : ver === 'minimo' ? l.estoqueMinimo > 0
+          : ver === 'abaixo' ? l.estoqueMinimo > 0 && l.estoqueAtual < l.estoqueMinimo
+            : l.recomendacao !== 'nao'))
     .filter((l) => !q || semAcento(l.descricao).includes(q) || semAcento(l.codigo).includes(q))
-    .sort((a, b) => ORDEM_REC[a.recomendacao] - ORDEM_REC[b.recomendacao] || a.diasAtePonto - b.diasAtePonto || a.descricao.localeCompare(b.descricao, 'pt-BR'))
+    .sort(minimo
+      ? (a, b) => diferencaMinimo(a) - diferencaMinimo(b) || a.descricao.localeCompare(b.descricao, 'pt-BR')
+      : (a, b) => ORDEM_REC[a.recomendacao] - ORDEM_REC[b.recomendacao] || a.diasAtePonto - b.diasAtePonto || a.descricao.localeCompare(b.descricao, 'pt-BR'))
+}
+
+/** Cartões das visões de mínimo: quantos têm mínimo, quantos estão abaixo e quanto custa repor até o mínimo. */
+export function resumoMinimo(linhas: LinhaSugestao[]): { comMinimo: number; abaixo: number; faltaValor: number; semCusto: number } {
+  const r = { comMinimo: 0, abaixo: 0, faltaValor: 0, semCusto: 0 }
+  for (const l of linhas) {
+    if (l.estoqueMinimo <= 0) continue
+    r.comMinimo++
+    if (l.estoqueAtual >= l.estoqueMinimo) continue
+    r.abaixo++
+    const custo = l.custoMedio ?? l.ultimoCusto
+    if (custo == null) r.semCusto++
+    else r.faltaValor += (l.estoqueMinimo - l.estoqueAtual) * custo
+  }
+  r.faltaValor = Math.round(r.faltaValor * 100) / 100
+  return r
 }
 
 export function resumoSugestao(linhas: LinhaSugestao[]): { comprarJa: number; comprarProximos: number; produzirJa: number; produzirProximos: number; valorEstimado: number; semCusto: number } {

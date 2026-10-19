@@ -15,7 +15,7 @@ import { CartaoResumo as Card } from '@/components/faturamento/CartaoResumo'
 import { TabelaSugestao } from '@/components/compras/TabelaSugestao'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
 import { carregarSugestao, lerParamsSugestao } from '@/lib/compras/sugestao-dados'
-import { filtrarSugestao, resumoSugestao } from '@/lib/compras/sugestao-puro'
+import { ehVisaoMinimo, filtrarSugestao, resumoMinimo, resumoSugestao } from '@/lib/compras/sugestao-puro'
 
 type Sp = Record<string, string | undefined>
 
@@ -40,13 +40,15 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
   const filtro = { q: sp.q, tipos: valoresMulti(sp.tipo), familia: sp.familia, ver: sp.ver, acao: sp.acao, fornecedor: sp.fornecedor }
   const vis = filtrarSugestao(linhas, filtro)
   const res = resumoSugestao(vis)
+  const visaoMinimo = ehVisaoMinimo(sp.ver)
+  const resMin = resumoMinimo(vis)
   const pagina = vis.slice(0, LIMITE_LINHAS)
 
   const familias = [...new Set(linhas.map((l) => l.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   const fornecedores = [...new Set(linhas.map((l) => l.fornecedorNome).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   const campos: CampoFiltro[] = [
     { tipo: 'texto', nome: 'q', label: 'Produto (nome ou código)' },
-    { tipo: 'select', nome: 'ver', label: 'Mostrar', opcoes: [{ value: '', label: 'Comprar ou produzir' }, { value: 'imediato', label: 'Só imediatamente' }, { value: 'todos', label: 'Todos (inclui não comprar)' }] },
+    { tipo: 'select', nome: 'ver', label: 'Mostrar', opcoes: [{ value: '', label: 'Comprar ou produzir' }, { value: 'imediato', label: 'Só imediatamente' }, { value: 'todos', label: 'Todos (inclui não comprar)' }, { value: 'abaixo', label: 'Abaixo do estoque mínimo' }, { value: 'minimo', label: 'Estoque mínimo (todos com mínimo)' }] },
     { tipo: 'select', nome: 'acao', label: 'Ação', opcoes: [{ value: '', label: 'Comprar e produzir' }, { value: 'comprar', label: 'Só comprar' }, { value: 'produzir', label: 'Só produzir' }] },
     { tipo: 'multi-select', nome: 'tipo', label: 'Tipo do produto (padrão: sem ativo, serviço e outras)', opcoes: PRODUTO_TIPO_ITEM },
     { tipo: 'combobox', nome: 'familia', label: 'Família', opcoes: familias.map((f) => ({ value: f, label: f })) },
@@ -100,15 +102,24 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
         </p>
       ))}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card titulo="Comprar imediatamente" valor={res.comprarJa.toLocaleString('pt-BR')} sub="o estoque já chegou no ponto de pedido" />
-        <Card titulo="Comprar nos próximos dias" valor={res.comprarProximos.toLocaleString('pt-BR')} sub="chega no ponto dentro da estimativa" />
-        <Card titulo="Produzir" valor={(res.produzirJa + res.produzirProximos).toLocaleString('pt-BR')} sub={`${res.produzirJa} imediatamente`} />
-        <Card titulo="Compra estimada" valor={<Money value={res.valorEstimado} />} sub={res.semCusto ? `sugestão × custo médio · ${res.semCusto} sem custo` : 'sugestão × custo médio (ou último custo)'} />
-      </div>
+      {visaoMinimo ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Card titulo="Com estoque mínimo" valor={resMin.comMinimo.toLocaleString('pt-BR')} sub="produtos ativos com mínimo definido" />
+          <Card titulo="Abaixo do mínimo" valor={resMin.abaixo.toLocaleString('pt-BR')} sub="estoque atual menor que o mínimo" />
+          <Card titulo="Para voltar ao mínimo" valor={<Money value={resMin.faltaValor} />} sub={resMin.semCusto ? `falta × custo médio · ${resMin.semCusto} sem custo` : 'falta × custo médio (ou último custo)'} />
+          <Card titulo="Comprar imediatamente" valor={res.comprarJa.toLocaleString('pt-BR')} sub="pela fórmula da sugestão" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Card titulo="Comprar imediatamente" valor={res.comprarJa.toLocaleString('pt-BR')} sub="o estoque já chegou no ponto de pedido" />
+          <Card titulo="Comprar nos próximos dias" valor={res.comprarProximos.toLocaleString('pt-BR')} sub="chega no ponto dentro da estimativa" />
+          <Card titulo="Produzir" valor={(res.produzirJa + res.produzirProximos).toLocaleString('pt-BR')} sub={`${res.produzirJa} imediatamente`} />
+          <Card titulo="Compra estimada" valor={<Money value={res.valorEstimado} />} sub={res.semCusto ? `sugestão × custo médio · ${res.semCusto} sem custo` : 'sugestão × custo médio (ou último custo)'} />
+        </div>
+      )}
 
       {!erro && vis.length === 0 ? (
-        <EmptyState icon={ShoppingCart} title={linhas.length ? 'Nada a comprar neste filtro' : 'Sem dados para sugerir'}
+        <EmptyState icon={ShoppingCart} title={linhas.length ? (visaoMinimo ? (sp.ver === 'abaixo' ? 'Nada abaixo do mínimo' : 'Nenhum produto com estoque mínimo') : 'Nada a comprar neste filtro') : 'Sem dados para sugerir'}
           hint={linhas.length ? 'Mostre "Todos" no filtro para ver também o que não precisa comprar.' : 'Nenhum produto ativo teve saída, mínimo ou saldo no período.'} />
       ) : (
         <TabelaSugestao linhas={pagina} diasAnalise={p.diasAnalise} diasEstimativa={p.diasEstimativa} base={p.base}

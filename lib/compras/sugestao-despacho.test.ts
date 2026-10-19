@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rpcDaSugestao, montarLinhasSugestao, filtrarSugestao, resumoSugestao, type LinhaBruta } from './sugestao-puro.ts'
+import { rpcDaSugestao, montarLinhasSugestao, filtrarSugestao, resumoSugestao, diferencaMinimo, resumoMinimo, type LinhaBruta } from './sugestao-puro.ts'
 
 const bruta = (o: Partial<LinhaBruta>): LinhaBruta => ({
   codigo_produto: 1, codigo: '1', descricao: 'X', unidade: 'UN', tipo_item: '00', familia: 'F', consumo_total: 0, estoque_atual: 0,
@@ -76,4 +76,22 @@ test('valor estimado usa o custo médio quando existe (unidade da nota do Omie p
   assert.equal(l.sugestao, 160)
   assert.equal(l.valorEstimado, 32.99)
   assert.equal(l.ultimoCusto, 418.02)
+})
+
+test('estoque mínimo: "minimo" lista quem tem mínimo (todos os tipos), "abaixo" só quem está abaixo; ordem pela diferença', () => {
+  const linhas = montarLinhasSugestao([
+    bruta({ codigo_produto: 1, descricao: 'Sem mínimo', estoque_atual: 5 }),
+    bruta({ codigo_produto: 2, descricao: 'Acima', estoque_minimo: 2, estoque_atual: 13 }),
+    bruta({ codigo_produto: 3, descricao: 'Abaixo', estoque_minimo: 5, estoque_atual: 2, cmc: 10 }),
+    bruta({ codigo_produto: 4, descricao: 'Negativo', estoque_minimo: 1, estoque_atual: -3, tipo_item: '99', ultimo_custo: 2 }),
+    bruta({ codigo_produto: 5, descricao: 'Igual', estoque_minimo: 4, estoque_atual: 4 }),
+    bruta({ codigo_produto: 6, descricao: 'Sem custo', estoque_minimo: 3, estoque_atual: 1 }),
+  ], P)
+  assert.deepEqual(filtrarSugestao(linhas, { ver: 'minimo' }).map((l) => l.codigoProduto), [4, 3, 6, 5, 2])
+  assert.deepEqual(filtrarSugestao(linhas, { ver: 'abaixo' }).map((l) => l.codigoProduto), [4, 3, 6])
+  assert.deepEqual(filtrarSugestao(linhas, { ver: 'abaixo', tipos: ['00'] }).map((l) => l.codigoProduto), [3, 6])
+  assert.equal(diferencaMinimo(linhas[3]), -4)
+  // falta × custo médio (senão último custo): produto 3 = 3 × 10, produto 4 = 4 × 2; o 6 não tem custo
+  assert.deepEqual(resumoMinimo(filtrarSugestao(linhas, { ver: 'minimo' })), { comMinimo: 5, abaixo: 3, faltaValor: 38, semCusto: 1 })
+  assert.deepEqual(resumoMinimo([]), { comMinimo: 0, abaixo: 0, faltaValor: 0, semCusto: 0 })
 })

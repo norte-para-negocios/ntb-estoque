@@ -4,7 +4,7 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { gerarPlanilha, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { carregarSugestao, lerParamsSugestao } from '@/lib/compras/sugestao-dados'
-import { filtrarSugestao } from '@/lib/compras/sugestao-puro'
+import { diferencaMinimo, ehVisaoMinimo, filtrarSugestao } from '@/lib/compras/sugestao-puro'
 
 // Excel da Sugestão de compra: as colunas do grid do Omie, com os mesmos filtros da tela (sem o corte de linhas).
 const COLUNAS: ColunaExcel[] = [
@@ -16,6 +16,7 @@ const COLUNAS: ColunaExcel[] = [
   { key: 'consumoTotal', label: 'Consumo total', tipo: 'numero' },
   { key: 'estoqueMinimo', label: 'Estoque mínimo', tipo: 'numero' },
   { key: 'estoqueAtual', label: 'Estoque atual', tipo: 'numero' },
+  { key: 'diferencaMinimo', label: 'Diferença (atual − mínimo)', tipo: 'numero' },
   { key: 'duracao', label: 'Duração do estoque (dias)', tipo: 'numero' },
   { key: 'leadTime', label: 'Lead time (dias)', tipo: 'numero' },
   { key: 'pontoPedido', label: 'Ponto de pedido (quantidade)', tipo: 'numero' },
@@ -46,10 +47,10 @@ export async function GET(req: Request) {
   const { linhas, erro } = await carregarSugestao(lojaId, modo, p)
   if (erro) return new Response(erro, { status: 502 })
   const vis = filtrarSugestao(linhas, { q: sp.q, tipos: valoresMulti(sp.tipo), familia: sp.familia, ver: sp.ver, acao: sp.acao, fornecedor: sp.fornecedor })
-  const rows = vis.map((l) => ({ ...l, fornecedor: l.fornecedorNome ?? '' }))
+  const rows = vis.map((l) => ({ ...l, fornecedor: l.fornecedorNome ?? '', diferencaMinimo: diferencaMinimo(l) }))
   const br = (iso: string) => iso.split('-').reverse().join('/')
   const buf = await gerarPlanilha(rows, COLUNAS, {
-    titulo: 'Sugestão de compra',
+    titulo: ehVisaoMinimo(sp.ver) ? (sp.ver === 'abaixo' ? 'Abaixo do estoque mínimo' : 'Estoque mínimo') : 'Sugestão de compra',
     subtitulo: `Análise ${br(p.ini)} a ${br(p.fim)} (${p.diasAnalise} dias) · estimativa ${br(p.projIni)} a ${br(p.projFim)} (${p.diasEstimativa} dias) · projeção: ${p.base === 'previsao' ? 'previsão de venda + OPs abertas' : 'consumo médio (Omie)'}`,
     autoFiltro: true,
   })
