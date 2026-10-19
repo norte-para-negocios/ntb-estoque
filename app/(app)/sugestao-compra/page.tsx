@@ -31,6 +31,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
   if (!(await requirePermissao(lojaId, 'Compras - Sugestao'))) notFound()
   const proprio = modo === 'proprio'
   const podePedido = proprio && (await requirePermissao(lojaId, 'Compras - Pedidos'))
+  const podeRequisicao = proprio && (await requirePermissao(lojaId, 'Compras - Requisicoes'))
 
   const sp = await searchParams
   const hoje = hojeBahiaISO()
@@ -111,7 +112,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
           hint={linhas.length ? 'Mostre "Todos" no filtro para ver também o que não precisa comprar.' : 'Nenhum produto ativo teve saída, mínimo ou saldo no período.'} />
       ) : (
         <TabelaSugestao linhas={pagina} diasAnalise={p.diasAnalise} diasEstimativa={p.diasEstimativa} base={p.base}
-          podeCriarPedido={podePedido} podeEditarLead={podePedido} modo={proprio ? 'proprio' : 'omie'} />
+          podeCriarPedido={podePedido} podeEditarLead={podePedido} modo={proprio ? 'proprio' : 'omie'} podeCriarRequisicao={podeRequisicao} />
       )}
       {vis.length > LIMITE_LINHAS && <p className="px-1 text-[12px] text-text-muted">Mostrando {LIMITE_LINHAS} de {vis.length.toLocaleString('pt-BR')}. O Excel traz todos.</p>}
 
@@ -119,9 +120,9 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
         <summary className="cursor-pointer font-semibold text-text">Como a conta é feita</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>Consumo médio = saídas do período de análise (vendas, consumo de produção e ajustes de saída, todos os locais) ÷ dias. {proprio ? 'Saída estornada e transferência entre locais não contam.' : 'Fonte: o histórico de saídas do Omie.'}</li>
-          <li>Ponto de pedido = estoque mínimo (soma dos locais) + consumo médio × lead time. Lead time {proprio ? 'editável por produto' : 'do cadastro do produto no Omie'}; sem lead time vale 1 dia (*).</li>
+          <li>Ponto de pedido = estoque mínimo (soma dos locais) + consumo médio × lead time. Lead time {proprio ? 'editável por produto; sem ele, o prazo do fornecedor da última nota (Compradores e prazos)' : 'do cadastro do produto no Omie'}; sem lead time vale 1 dia (*).</li>
           <li>Projeção de saídas = consumo médio × dias de estimativa (como no Omie) ou, se escolhido, previsão de venda + consumo nas OPs abertas.</li>
-          <li>Entrada prevista = notas do fornecedor ainda não recebidas + OPs abertas{proprio ? ' + saldo dos pedidos de compra aguardando ou aprovados que ainda não está em nota' : ''}.</li>
+          <li>Entrada prevista = notas do fornecedor ainda não recebidas + OPs abertas{proprio ? ' + saldo dos pedidos de compra aguardando ou aprovados que ainda não está em nota + requisições abertas ou aprovadas (como o Omie, que soma as requisições; contar também a aberta é escolha nossa)' : ''}.</li>
           <li>Sugestão = projeção + ponto de pedido − estoque atual − entrada prevista (nunca negativa). Imediatamente = já está no ponto de pedido; nos próximos dias = chega nele durante a estimativa.</li>
           <li>Produzir = produto acabado/em processo (tipo 04/03) ou com ficha técnica. Ativo imobilizado, serviço e &quot;outras&quot; ficam fora até serem escolhidos no filtro de tipo.</li>
         </ul>

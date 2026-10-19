@@ -23,6 +23,7 @@ const COLUNAS: ColunaExcel[] = [
   { key: 'entradaNf', label: 'Entrada prevista: notas a receber', tipo: 'numero' },
   { key: 'entradaOps', label: 'Entrada prevista: OPs abertas', tipo: 'numero' },
   { key: 'entradaPedidos', label: 'Entrada prevista: pedidos', tipo: 'numero' },
+  { key: 'entradaRequisicoes', label: 'Entrada prevista: requisições', tipo: 'numero' },
   { key: 'entradaPrevista', label: 'Entrada prevista', tipo: 'numero' },
   { key: 'saidaProjetada', label: 'Saída projetada', tipo: 'numero' },
   { key: 'previsaoVenda', label: 'Previsão de venda no período', tipo: 'numero' },

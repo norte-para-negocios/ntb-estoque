@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react'
 import { btnClass } from '@/components/ui-kit/Button'
 import type { LinhaSugestao } from '@/lib/compras/sugestao-puro'
 import { criarPedidosDaSugestao, salvarLeadTime } from '@/lib/actions/pedido-compra'
+import { criarRequisicaoDaSugestao } from '@/lib/actions/requisicao-compra'
 
 const q = (n: number | null | undefined, max = 3) => (n == null ? '—' : n.toLocaleString('pt-BR', { maximumFractionDigits: max }))
 const brl = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -18,9 +19,11 @@ function novaChave(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`
 }
 
-export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, podeCriarPedido, podeEditarLead, modo }: {
+export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, podeCriarPedido, podeEditarLead, modo, podeCriarRequisicao = false }: {
   linhas: LinhaSugestao[]; diasAnalise: number; diasEstimativa: number; base: 'consumo' | 'previsao'
   podeCriarPedido: boolean; podeEditarLead: boolean; modo: 'omie' | 'proprio'
+  /** Fase C2: "Criar requisição" com os itens marcados (só estoque próprio) */
+  podeCriarRequisicao?: boolean
 }) {
   const router = useRouter()
   const [aberto, setAberto] = useState<number | null>(null)
@@ -29,6 +32,8 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
   const [msg, setMsg] = useState<string | null>(null)
   const [pend, start] = useTransition()
   const [chave] = useState(novaChave)
+  const [chaveReq] = useState(novaChave)
+  const marcar = podeCriarPedido || podeCriarRequisicao
   const selecionaveis = useMemo(() => linhas.filter((l) => l.acao === 'comprar' && l.sugestao > 0), [linhas])
   const qtdDe = (l: LinhaSugestao) => {
     const v = Number((qtd[l.codigoProduto] ?? '').replace(',', '.'))
@@ -54,6 +59,18 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
     })
   }
 
+  function criarRequisicao() {
+    setMsg(null)
+    start(async () => {
+      const r = await criarRequisicaoDaSugestao(escolhidas.map((l) => ({
+        codigoProduto: l.codigoProduto, quantidade: qtdDe(l), preco: l.ultimoCusto ?? 0,
+        fornecedorId: l.fornecedorId, fornecedorNome: l.fornecedorNome, fornecedorCnpj: l.fornecedorCnpj,
+      })), chaveReq)
+      if ('error' in r) { setMsg(r.error); return }
+      router.push(`/requisicao-compra/${r.id}`)
+    })
+  }
+
   function lead(l: LinhaSugestao, valor: string) {
     const dias = Number(valor)
     if (!Number.isInteger(dias) || dias === l.leadTime) return
@@ -66,26 +83,33 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
 
   return (
     <div className="space-y-2">
-      {podeCriarPedido && selecionaveis.length > 0 && (
+      {marcar && selecionaveis.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-[var(--r-lg)] bg-surface px-3 py-2 shadow-[var(--shadow-sm)]">
           <button type="button" className={btnClass('outline')} onClick={() => setSel(Object.fromEntries(selecionaveis.map((l) => [l.codigoProduto, true])))}>
             Marcar os {selecionaveis.length} a comprar
           </button>
           <button type="button" className={btnClass('outline')} onClick={() => setSel({})}>Limpar</button>
-          <button type="button" className={btnClass('primary')} disabled={pend || escolhidas.length === 0} onClick={criar}>
-            <ShoppingCart className="size-4" /> {pend ? 'Criando…' : `Criar pedido de compra (${escolhidas.length})`}
-          </button>
-          <span className="text-[12px] text-text-muted">Um rascunho por fornecedor (o da última nota), com o último custo como preço. Você confere e envia para aprovação.</span>
+          {podeCriarPedido && (
+            <button type="button" className={btnClass('primary')} disabled={pend || escolhidas.length === 0} onClick={criar}>
+              <ShoppingCart className="size-4" /> {pend ? 'Criando…' : `Criar pedido de compra (${escolhidas.length})`}
+            </button>
+          )}
+          {podeCriarRequisicao && (
+            <button type="button" className={btnClass(podeCriarPedido ? 'outline' : 'primary')} disabled={pend || escolhidas.length === 0} onClick={criarRequisicao}>
+              {pend ? 'Criando…' : `Criar requisição (${escolhidas.length})`}
+            </button>
+          )}
+          <span className="text-[12px] text-text-muted">Pedido: um rascunho por fornecedor (o da última nota), com o último custo como preço. Requisição: uma só, para aprovação antes de virar pedido.</span>
           {msg && <span className="text-[13px] text-err">{msg}</span>}
         </div>
       )}
-      {!podeCriarPedido && msg && <p className="text-[13px] text-err">{msg}</p>}
+      {!marcar && msg && <p className="text-[13px] text-err">{msg}</p>}
 
       <div className="overflow-x-auto rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-sm)]">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border">
-              {podeCriarPedido && <th className={th} aria-label="Selecionar" />}
+              {marcar && <th className={th} aria-label="Selecionar" />}
               <th className={`text-left ${th}`}>Recomendação</th>
               <th className={`text-left ${th}`}>Produto</th>
               <th className={`text-right ${th}`} title={`Saídas em ${diasAnalise} dias ÷ ${diasAnalise}`}>Consumo/dia</th>
@@ -98,7 +122,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
               <th className={`text-right ${th}`}>Entrada prevista</th>
               <th className={`text-right ${th}`} title={base === 'consumo' ? `Consumo médio × ${diasEstimativa} dias` : 'Previsão de venda + consumo nas OPs abertas'}>Saída projetada</th>
               <th className={`text-right ${th}`}>Sugestão</th>
-              {podeCriarPedido && <th className={`text-right ${th}`}>Comprar</th>}
+              {marcar && <th className={`text-right ${th}`}>Comprar</th>}
               <th className={`text-left ${th}`}>Fornecedor</th>
             </tr>
           </thead>
@@ -109,7 +133,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
               return (
                 <Fragment key={l.codigoProduto}>
                   <tr className="border-t border-border/60 align-top">
-                    {podeCriarPedido && (
+                    {marcar && (
                       <td className="px-2.5 py-2">
                         {sel0 && <input type="checkbox" aria-label={`Comprar ${l.descricao}`} checked={!!sel[l.codigoProduto]}
                           onChange={(e) => setSel((s) => ({ ...s, [l.codigoProduto]: e.target.checked }))} />}
@@ -136,9 +160,10 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
                     <td className={td}>
                       {podeEditarLead ? (
                         <input type="number" min={1} max={365} defaultValue={l.leadTime} disabled={pend} aria-label={`Lead time de ${l.descricao}`}
-                          className="w-14 rounded-[var(--r-sm)] bg-surface-2 px-1 py-0.5 text-right text-[13px]" onBlur={(e) => lead(l, e.target.value)} />
+                          title={l.leadTimeOrigem === 'fornecedor' ? 'Prazo do fornecedor da última nota; mudar aqui grava só para este produto' : undefined}
+                          className={`w-14 rounded-[var(--r-sm)] bg-surface-2 px-1 py-0.5 text-right text-[13px] ${l.leadTimeOrigem === 'fornecedor' ? 'text-text-muted' : ''}`} onBlur={(e) => lead(l, e.target.value)} />
                       ) : (
-                        <span title={l.leadTimeInformado ? (modo === 'omie' ? 'Do cadastro do produto no Omie' : 'Informado') : 'Não informado: 1 dia (padrão do Omie)'}>
+                        <span title={l.leadTimeInformado ? (modo === 'omie' ? 'Do cadastro do produto no Omie' : l.leadTimeOrigem === 'fornecedor' ? 'Prazo do fornecedor da última nota' : 'Informado') : 'Não informado: 1 dia (padrão do Omie)'}>
                           {l.leadTime}{!l.leadTimeInformado && <span className="text-text-muted">*</span>}
                         </span>
                       )}
@@ -148,7 +173,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
                     <td className={td}>{q(l.entradaPrevista)}</td>
                     <td className={td}>{q(l.saidaProjetada)}</td>
                     <td className={`${td} font-semibold ${l.sugestao > 0 ? 'text-text' : 'text-text-muted'}`}>{q(l.sugestao)}</td>
-                    {podeCriarPedido && (
+                    {marcar && (
                       <td className={td}>
                         {sel0 && <input inputMode="decimal" aria-label={`Quantidade a comprar de ${l.descricao}`} value={qtd[l.codigoProduto] ?? String(l.sugestao).replace('.', ',')}
                           onChange={(e) => setQtd((s) => ({ ...s, [l.codigoProduto]: e.target.value }))}
@@ -162,7 +187,7 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
                   </tr>
                   {abre && (
                     <tr className="bg-surface-2/60">
-                      <td colSpan={podeCriarPedido ? 15 : 13} className="px-4 py-3 text-[12.5px] text-text">
+                      <td colSpan={marcar ? 15 : 13} className="px-4 py-3 text-[12.5px] text-text">
                         <div className="grid gap-1 sm:grid-cols-2">
                           <span>Consumo médio = {q(l.consumoTotal)} ÷ {diasAnalise} dias = <b className="num">{q(l.consumoMedio, 6)}</b></span>
                           <span>Ponto de pedido = {q(l.estoqueMinimo)} + ({q(l.consumoMedio, 6)} × {l.leadTime}) = <b className="num">{q(l.pontoPedido, 6)}</b></span>
@@ -171,7 +196,8 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
                               ? `${q(l.consumoMedio, 6)} × ${diasEstimativa} dias`
                               : `previsão de venda ${q(l.previsaoVenda ?? 0)} + consumo nas OPs abertas ${q(l.consumoOps)}`} = <b className="num">{q(l.saidaProjetada, 6)}</b>
                           </span>
-                          <span>Entrada prevista = notas a receber {q(l.entradaNf)} + OPs abertas {q(l.entradaOps)} + pedidos {q(l.entradaPedidos)} = <b className="num">{q(l.entradaPrevista)}</b></span>
+                          <span>Entrada prevista = notas a receber {q(l.entradaNf)} + OPs abertas {q(l.entradaOps)} + pedidos {q(l.entradaPedidos)}{modo === 'proprio' ? ` + requisições ${q(l.entradaRequisicoes)}` : ''} = <b className="num">{q(l.entradaPrevista)}</b></span>
+                          {modo === 'proprio' && <span className="text-text-muted">Lead time: {l.leadTimeOrigem === 'produto' ? 'do produto' : l.leadTimeOrigem === 'fornecedor' ? `do fornecedor ${l.fornecedorNome ?? ''} (Compradores e prazos)` : 'não informado, vale 1 dia'}</span>}
                           <span>Sugestão = ({q(l.saidaProjetada, 6)} + {q(l.pontoPedido, 6)}) − ({q(l.estoqueAtual)} + {q(l.entradaPrevista)}) = <b className="num">{q(l.sugestao, 6)}</b></span>
                           <span>Dias até o ponto = ({q(l.estoqueAtual)} − {q(l.pontoPedido, 6)}) ÷ {q(l.consumoMedio, 6)} = <b className="num">{l.diasAtePonto}</b></span>
                           {base === 'consumo' && l.previsaoVenda != null && <span className="text-text-muted">Previsão de venda no período (não usada nesta base): {q(l.previsaoVenda)}</span>}
