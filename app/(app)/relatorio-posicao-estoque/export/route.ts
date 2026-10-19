@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const rows = r.linhas.map((l) => ({
     codigo: l.codigo, descricao: l.descricao, local: l.local ?? '', familia: l.familia, tipo: rotuloTipo(l.tipo), ncm: l.ncm, unidade: l.unidade,
     inativo: l.inativo ? 'Sim' : 'Não', quant: l.quant, reservado: l.reservado, disponivel: l.disponivel, cmc: l.cmc, valor: l.valor,
-    situacao: l.custoSuspeito ? 'Custo fora do normal (vale 0)' : '', posse: 'Próprio, em poder da empresa',
+    situacao: l.custoSuspeito ? 'Custo fora do normal (vale 0)' : '', posse: '0', posseDesc: 'Item de propriedade do informante e em seu poder',
   }))
   const colunas: ColunaExcel[] = sped
     ? [
@@ -27,7 +27,8 @@ export async function GET(request: Request) {
         { key: 'quant', label: 'QTD', tipo: 'numero', largura: 14 },
         { key: 'cmc', label: 'VL_UNIT', tipo: 'numero', largura: 14 },
         { key: 'valor', label: 'VL_ITEM', tipo: 'moeda', largura: 16, somar: true },
-        { key: 'posse', label: 'IND_PROP', tipo: 'texto', largura: 28 },
+        { key: 'posse', label: 'IND_PROP', tipo: 'texto', largura: 10 },
+        { key: 'posseDesc', label: 'Indicador de propriedade', tipo: 'texto', largura: 44 },
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
     : [
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
         { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
-  const aviso = r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''
+  const aviso = `${r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''}${r.locaisSumidos.length ? ` · ATENÇÃO: local(is) fora da última leitura do Omie: ${r.locaisSumidos.join(', ')}` : ''}`
   const buffer = await gerarPlanilhaMulti([{
     rows, colunas,
     opts: {

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { PRODUTO_TIPO_ITEM } from '@/lib/constants-omie'
-import { escolherFoto, montarPosicao, SEM_FAMILIA, type InfoLocal, type LinhaFoto, type MetaProduto, type OpcoesPosicao, type VerPosicao } from '@/lib/relatorios/posicao-estoque-puro'
+import { escolherFoto, locaisSumidos, montarPosicao, SEM_FAMILIA, type InfoLocal, type LinhaFoto, type MetaProduto, type OpcoesPosicao, type VerPosicao } from '@/lib/relatorios/posicao-estoque-puro'
 
 export type SpPosicao = Record<string, string | undefined>
 const lista = (v?: string) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
@@ -36,7 +36,13 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
   const dataFoto = escolherFoto(datas)
   const fotoEmLeitura = !!ultima.data && dataFoto !== null && String(ultima.data.data_posicao) > dataFoto
 
-  const [foto, prods, locs] = await Promise.all([
+  // Locais da foto anterior (para avisar local ativo que não veio na leitura atual, como na tela de Estoque).
+  const anteriorQ = dataFoto
+    ? await supabase.from('posicao_estoques').select('data_posicao').eq('loja_id', lojaId).neq('codigo_local_estoque', 0).lt('data_posicao', dataFoto).order('data_posicao', { ascending: false }).limit(1).maybeSingle()
+    : null
+  const dataAnterior = anteriorQ?.data?.data_posicao ? String(anteriorQ.data.data_posicao) : null
+
+  const [foto, prods, locs, locaisAnteriores] = await Promise.all([
     dataFoto
       ? buscarTodasLinhas<LinhaFoto>(
           (from, to) => supabase.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
@@ -45,9 +51,14 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
     buscarTodasLinhas<{ codigo_produto: number; codigo: string | null; descricao: string | null; descricao_familia: string | null; tipo_item: string | null; unidade: string | null; ncm: string | null; inativo: boolean | null }>(
       (from, to) => supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, ncm, inativo').eq('loja_id', lojaId).order('id').range(from, to),
       undefined, anotar('cadastro de produtos')),
-    buscarTodasLinhas<{ codigo_local_estoque: number; descricao: string | null; padrao: string | null }>(
-      (from, to) => supabase.from('local_estoques').select('codigo_local_estoque, descricao, padrao').eq('loja_id', lojaId).is('deleted_at', null).order('id').range(from, to),
+    buscarTodasLinhas<{ codigo_local_estoque: number; descricao: string | null; padrao: string | null; inativo: string | null }>(
+      (from, to) => supabase.from('local_estoques').select('codigo_local_estoque, descricao, padrao, inativo').eq('loja_id', lojaId).is('deleted_at', null).order('id').range(from, to),
       undefined, anotar('locais de estoque')),
+    dataAnterior
+      ? buscarTodasLinhas<{ codigo_local_estoque: number }>(
+          (from, to) => supabase.from('posicao_estoques').select('codigo_local_estoque').eq('loja_id', lojaId).eq('data_posicao', dataAnterior).neq('codigo_local_estoque', 0).order('id').range(from, to),
+          undefined, anotar('foto anterior'))
+      : Promise.resolve<{ codigo_local_estoque: number }[]>([]),
   ])
   const produtos: MetaProduto[] = prods.map((p) => ({
     codigo_produto: Number(p.codigo_produto), codigo: p.codigo, descricao: p.descricao, familia: p.descricao_familia, tipo: p.tipo_item,
@@ -55,7 +66,10 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
   }))
   const locais = new Map<number, InfoLocal>(locs.map((l) => [Number(l.codigo_local_estoque), { descricao: l.descricao ?? String(l.codigo_local_estoque), padrao: l.padrao === 'S' }]))
   const r = montarPosicao(foto, produtos, locais, op)
+  const ativos = new Set(locs.filter((l) => l.inativo !== 'S').map((l) => Number(l.codigo_local_estoque)))
+  const sumidos = locaisSumidos(foto.map((f) => Number(f.codigo_local_estoque)), locaisAnteriores.map((l) => Number(l.codigo_local_estoque)), ativos)
+    .map((c) => locais.get(c)?.descricao ?? String(c))
   const tipos = [...new Set(produtos.map((p) => p.tipo ?? ''))].sort().map((c) => ({ value: c || '_', label: rotuloTipo(c) }))
   const familias = [...new Set(produtos.map((p) => p.familia || SEM_FAMILIA))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((f) => ({ value: f, label: f }))
-  return { ...r, dataFoto, fotoEmLeitura, erros: [...new Set(erros)], opcoes: { tipos, familias } }
+  return { ...r, dataFoto, fotoEmLeitura, locaisSumidos: sumidos, erros: [...new Set(erros)], opcoes: { tipos, familias } }
 }

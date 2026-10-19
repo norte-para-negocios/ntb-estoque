@@ -58,6 +58,7 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
       <FiltrosFaturamento tipos={r.opcoes.tipos} familias={r.opcoes.familias} />
 
       {r.erros.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler {r.erros.join(', ')}. O total pode estar incompleto; recarregue a página.</p>}
+      {r.locaisSumidos.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">O Omie não devolveu na última leitura o(s) local(is) {r.locaisSumidos.join(', ')}, que tinham saldo na foto anterior: o saldo deles não está nesta posição.</p>}
       {r.fotoEmLeitura && <p className="text-[13px] text-text-muted">A foto de hoje ainda está sendo lida do Omie: mostrando a de {fmtData(r.dataFoto!)}.</p>}
       {sped && <p className="text-[13px] text-text-muted">Inventário no formato do Bloco H (registro H010): só produtos ativos com saldo positivo, somados em todos os locais, valor unitário = valor ÷ quantidade. Posição da foto de {r.dataFoto ? fmtData(r.dataFoto) : '—'}.</p>}
       {r.total.suspeitos > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{r.total.suspeitos} linha(s) com custo médio fora do normal no Omie (zero, negativo ou acima de R$ 10 milhões): entram com valor zero e aparecem marcadas.</p>}

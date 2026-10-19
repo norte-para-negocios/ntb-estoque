@@ -32,6 +32,12 @@ export function escolherFoto(datas: { data: string; temLocalReal: boolean }[]): 
   return datas.filter((d) => d.temLocalReal).map((d) => d.data).sort().pop() ?? null
 }
 
+/** Locais ativos que vieram na foto anterior e não vieram na atual (o Omie não devolveu o local na última leitura). */
+export function locaisSumidos(atual: number[], anterior: number[], ativos: Set<number>): number[] {
+  const agora = new Set(atual)
+  return [...new Set(anterior)].filter((l) => l !== 0 && ativos.has(l) && !agora.has(l)).sort((a, b) => a - b)
+}
+
 type LinhaLocal = { prod: number; local: number; quant: number; reservado: number; cmc: number; valor: number; suspeito: boolean }
 
 export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais: Map<number, InfoLocal>, op: OpcoesPosicao): { linhas: LinhaPosicao[]; total: TotalPosicao } {
@@ -95,7 +101,8 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
       linhas.push(linha(cod, op.ver === 'local' ? localPadrao : null, 0, 0, 0, null, false))
     }
   }
-  if (!op.zerados) linhas = linhas.filter((l) => l.quant !== 0 || l.reservado !== 0)
+  // sem "zerados": some só o que não tem quantidade, reserva nem valor (locais que se anulam ficam: a tabela soma o cartão)
+  if (!op.zerados) linhas = linhas.filter((l) => l.quant !== 0 || l.reservado !== 0 || l.valor !== 0)
   linhas.sort((a, b) => b.valor - a.valor || a.descricao.localeCompare(b.descricao, 'pt-BR') || a.chave.localeCompare(b.chave))
 
   // Totais das linhas de local (o mesmo número nas visões por produto e por local); no SPED, das linhas do

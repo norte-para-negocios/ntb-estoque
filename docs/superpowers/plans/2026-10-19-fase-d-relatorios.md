@@ -92,7 +92,7 @@
 - Modify: `app/(app)/relatorios/page.tsx` (card "CMV / CPV" em "Compras e custo")
 
 **Interfaces (produz):**
-- SQL `relatorio_cmv_kardex(p_loja_id bigint, p_ini date, p_fim date) returns table(n_cod_prod bigint, ei numeric, compras numeric, producao numeric, outras_entradas numeric, vendas numeric, qtd_vendida numeric, consumo_op numeric, outras_saidas numeric, ef numeric, sem_custo integer)` — depende da 173 (`saldo_em_data`). Valor do movimento = `quantidade × valor_unit` (com sinal). Origem: vendas = −Σ em PDV, VEN, DVP, CVP; consumo_op = −Σ OPS; producao = Σ OPE; compras = Σ COM, IMP, CIM, DCP, CDC; resto: entrada → outras_entradas, saída → outras_saidas. EF = Σ local `saldo × cmc` de `saldo_em_data(p_fim)`; EI = `saldo_em_data(p_ini − 1)`; produto×local sem linha antes do início: EI = EF − fluxo do período. Ordem por `n_cod_prod`.
+- SQL `relatorio_cmv_kardex(p_loja_id bigint, p_ini date, p_fim date) returns table(n_cod_prod bigint, ei numeric, compras numeric, producao numeric, outras_entradas numeric, vendas numeric, qtd_vendida numeric, consumo_op numeric, outras_saidas numeric, ef numeric, sem_custo integer, quebra numeric)` — depende da 173 (`saldo_em_data`, já em produção desde 18/10). Valor do movimento = `quantidade × valor_unit` (com sinal). Origem: vendas = −Σ em PDV, VEN, DVP, CVP; consumo_op = −Σ OPS; producao = Σ OPE; compras = Σ COM, IMP, CIM, DCP, CDC; resto: entrada → outras_entradas, saída → outras_saidas. EF = Σ local `saldo × cmc` de `saldo_em_data(p_fim)`; EI = `saldo_em_data(p_ini − 1)`; produto×local sem linha antes do início: EI = EF − fluxo do período. Ordem por `n_cod_prod`.
 - `type FonteCmv = 'proprio' | 'kardex' | 'estimado'`
 - `escolherFonteCmv(a: { modo: 'omie' | 'proprio' | 'nenhum'; kardexDesde: string | null; kardexAte: string | null; ini: string; fim: string }): FonteCmv` — proprio → proprio; omie com `kardexDesde ≤ ini` e `fim ≤ kardexAte` → kardex; senão estimado.
 - `custoMedioAtual(foto: { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number }[]): Map<number, number>` — média ponderada pelo saldo positivo dos locais reais; senão CMC da sentinela; senão o maior CMC válido; inválido fora.
@@ -115,7 +115,7 @@
 - Modify: `lib/relatorios/cmv-puro.ts` (reaproveita `escolherFonteCmv` como `fonteValorMovimento`)
 
 **Interfaces:**
-- SQL `relatorio_movimentacao_valor_mov(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_sentido text, p_cod_prods bigint[] default null, p_produto text default null) returns table(origem, sentido, codigo_local_estoque, n_cod_prod, mes, inventario, qtde, valor, sem_custo)` — linhas no formato do modo automático (`LinhaOperAuto`). Loja `proprio`: `estoque_movimentos` (data_ref, valor = |q| × custo_unitario); senão `kardex_omie` não cancelado (valor = |q| × valor_unit). Entradas = q > 0, saídas = q < 0. Ordem `1, 2`.
+- SQL `relatorio_movimentacao_valor_mov(p_loja_id bigint, p_ini date, p_fim date) returns table(origem, sentido, codigo_local_estoque, n_cod_prod, mes, inventario, qtde, valor, sem_custo)` — linhas no formato do modo automático (`LinhaOperAuto`). Loja `proprio`: `estoque_movimentos` (data_ref, valor = |q| × custo_unitario); senão `kardex_omie` não cancelado (valor = |q| × valor_unit). Entradas = q > 0, saídas = q < 0. Ordem `1, 2`.
 - Padrão da tela não muda (último preço de compra). `valor=movimento` só usa a RPC nova quando a fonte cobre o período (proprio sempre; Omie só com kardex cobrindo [ini, fim]); senão aviso e padrão. Decisão de trocar o padrão fica com o dono.
 
 - [ ] Teste SQL: rótulos por tipo/família/produto, sentido, filtro de produto, loja própria × Omie.
@@ -123,6 +123,6 @@
 
 ### Task 5: Documentação e fechamento
 
-- [ ] AGENTS.md: seção "Fase D (19/10/2026)" com telas, regras, migrations 187 → 188 (dependem da 173), deploy (aplicar 173 antes; `desktop/scripts/gerar-schema.sh`), limites conhecidos.
+- [ ] AGENTS.md: seção "Fase D (19/10/2026)" com telas, regras, migrations 187 → 188 (a 173 já está em produção), deploy (`desktop/scripts/gerar-schema.sh`), limites conhecidos.
 - [ ] `node scripts/inserir-via-desktop.mjs` só se houver server action nova (não há: telas e GETs).
 - [ ] Todos os testes da fase + tsc; commit final.

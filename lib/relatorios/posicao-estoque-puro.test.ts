@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { custoValido, escolherFoto, montarPosicao, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
+import { locaisSumidos, custoValido, escolherFoto, montarPosicao, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
 
 const P = (o: Partial<MetaProduto> & { codigo_produto: number }): MetaProduto => ({
   codigo: String(o.codigo_produto), descricao: `Produto ${o.codigo_produto}`, familia: 'Insumos', tipo: '01', unidade: 'KG', ncm: '0000.00.00', inativo: false, ...o,
@@ -86,4 +86,19 @@ test('escolherFoto: a mais recente com local real', () => {
   assert.equal(escolherFoto([{ data: '2026-10-19', temLocalReal: false }, { data: '2026-10-18', temLocalReal: true }]), '2026-10-18')
   assert.equal(escolherFoto([{ data: '2026-10-18', temLocalReal: true }, { data: '2026-10-19', temLocalReal: true }]), '2026-10-19')
   assert.equal(escolherFoto([]), null)
+})
+
+test('produto com quantidade 0 mas valor ≠ 0 (locais que se anulam) continua na tabela: as linhas somam o cartão', () => {
+  const f = [F(5, 10, 2, 10), F(5, 20, -2, 4)] // 20 − 8 = 12 com quantidade líquida 0
+  const r = montarPosicao(f, [P({ codigo_produto: 5 })], locais, op())
+  assert.equal(r.linhas.length, 1)
+  assert.equal(r.linhas[0].quant, 0)
+  assert.equal(r.linhas[0].valor, 12)
+  assert.equal(r.linhas.reduce((s, l) => s + l.valor, 0), r.total.valor)
+})
+
+test('locaisSumidos: local ativo que estava na foto anterior e não está na atual', () => {
+  assert.deepEqual(locaisSumidos([10], [10, 20, 30], new Set([10, 20])), [20])
+  assert.deepEqual(locaisSumidos([10, 20], [10, 20], new Set([10, 20])), [])
+  assert.deepEqual(locaisSumidos([10], [], new Set([10, 20])), [])
 })
