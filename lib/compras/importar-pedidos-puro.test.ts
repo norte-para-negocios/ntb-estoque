@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lerCelulaNumero, lerCelulaData, mapearCabecalho, validarImportacao, pedidosParaSql, COLUNAS_MODELO } from './importar-pedidos-puro.ts'
+import { lerCelulaNumero, lerCelulaData, mapearCabecalho, validarImportacao, pedidosParaSql, lerCsv, COLUNAS_MODELO } from './importar-pedidos-puro.ts'
+
+test('lerCsv: ; ou , como separador, aspas e quebra de linha do Windows', () => {
+  assert.deepEqual(lerCsv('Código do produto;Quantidade\r\nP1;"1,5"\r\n"A;B";2\r\n'), [['Código do produto', 'Quantidade'], ['P1', '1,5'], ['A;B', '2']])
+  assert.deepEqual(lerCsv('a,b\n"x ""y""",3'), [['a', 'b'], ['x "y"', '3']])
+  assert.deepEqual(lerCsv('﻿a;b\n1;2'), [['a', 'b'], ['1', '2']])
+})
 import { parcelasDoTexto } from './pedido-puro.ts'
 
 test('lerCelulaNumero: formatos do Brasil e do Excel', () => {

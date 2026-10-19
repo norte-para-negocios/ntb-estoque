@@ -262,6 +262,32 @@ export function validarImportacao(matriz: Celula[][], cad: CadastroImportacao): 
   return { linhas, pedidos, erros, erroGeral }
 }
 
+/** CSV do Excel brasileiro (";") ou ",": o separador é o que aparece mais na 1ª linha fora de aspas. */
+export function lerCsv(t: string): string[][] {
+  const s = t.replace(/^﻿/, '')
+  const primeira = s.split(/\r?\n/, 1)[0].replace(/"[^"]*"/g, '')
+  const sep = (primeira.match(/;/g) ?? []).length >= (primeira.match(/,/g) ?? []).length ? ';' : ','
+  const linhas: string[][] = []
+  let linha: string[] = []
+  let campo = ''
+  let aspas = false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (aspas) {
+      if (ch === '"' && s[i + 1] === '"') { campo += '"'; i++ }
+      else if (ch === '"') aspas = false
+      else campo += ch
+    } else if (ch === '"') aspas = true
+    else if (ch === sep) { linha.push(campo); campo = '' }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && s[i + 1] === '\n') i++
+      linha.push(campo); linhas.push(linha); linha = []; campo = ''
+    } else campo += ch
+  }
+  if (campo !== '' || linha.length) { linha.push(campo); linhas.push(linha) }
+  return linhas
+}
+
 /** Formato de p_pedidos da pc_importar (o mesmo jsonb do pc_salvar). */
 export function pedidosParaSql(p: PedidoImportado[]) {
   return p.map((x) => ({

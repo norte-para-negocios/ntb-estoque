@@ -51,6 +51,8 @@ export type PedidoForm = {
   contato?: string | null
   obs?: string | null
   obsInterna?: string | null
+  /** 240: comprador responsável (cadastro de compradores); sem a 240 o banco ignora o campo */
+  compradorId?: number | null
   itens: ItemPedidoForm[]
 }
 
@@ -78,6 +80,7 @@ function paraJson(f: PedidoForm, origem: 'manual' | 'sugestao') {
     fornecedor_id: f.fornecedorId ?? null, fornecedor_nome: (f.fornecedorNome ?? '').trim(), fornecedor_cnpj: f.fornecedorCnpj ?? null,
     previsao_entrega: f.previsaoEntrega || null, frete: f.frete ?? 0, outras_despesas: f.outrasDespesas ?? 0, parcelas: f.parcelas ?? [],
     numero_fornecedor: f.numeroFornecedor ?? null, contato: f.contato ?? null, obs: f.obs ?? null, obs_interna: f.obsInterna ?? null,
+    comprador_id: f.compradorId ?? null,
     itens: f.itens.map((i) => ({
       codigo_produto: i.codigoProduto, descricao: i.descricao ?? null, unidade: i.unidade ?? null, fator: i.fator ?? 1,
       quantidade: i.quantidade, preco_unitario: i.precoUnitario, codigo_local_estoque: i.codigoLocal ?? null, obs: i.obs ?? null,

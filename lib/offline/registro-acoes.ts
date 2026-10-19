@@ -8,43 +8,46 @@ import * as m4 from '@/lib/actions/catalogo-proprio'
 import * as m5 from '@/lib/actions/categoria-contabil'
 import * as m6 from '@/lib/actions/central'
 import * as m7 from '@/lib/actions/certificado'
-import * as m8 from '@/lib/actions/compras-proprio'
-import * as m9 from '@/lib/actions/convite'
-import * as m10 from '@/lib/actions/detalhe-movimento'
-import * as m11 from '@/lib/actions/estoque-omie'
-import * as m12 from '@/lib/actions/estoque-proprio'
-import * as m13 from '@/lib/actions/estrutura'
-import * as m14 from '@/lib/actions/familia'
-import * as m15 from '@/lib/actions/ficha-tecnica'
-import * as m16 from '@/lib/actions/fichas-omie'
-import * as m17 from '@/lib/actions/fornecedor'
-import * as m18 from '@/lib/actions/integracao-ntb-vendas'
-import * as m19 from '@/lib/actions/inventario-proprio'
-import * as m20 from '@/lib/actions/inventario'
-import * as m21 from '@/lib/actions/local-estoque'
-import * as m22 from '@/lib/actions/loja-selector'
-import * as m23 from '@/lib/actions/loja'
-import * as m24 from '@/lib/actions/mapeamento-local-estoque'
-import * as m25 from '@/lib/actions/meta-faturamento'
-import * as m26 from '@/lib/actions/meta-mensal'
-import * as m27 from '@/lib/actions/minha-loja'
-import * as m28 from '@/lib/actions/movimentacoes-proprio'
-import * as m29 from '@/lib/actions/movimentacoes'
-import * as m30 from '@/lib/actions/nota-fiscal-proprio'
-import * as m31 from '@/lib/actions/nota-fiscal'
-import * as m32 from '@/lib/actions/onboarding-loja'
-import * as m33 from '@/lib/actions/ops-lote'
-import * as m34 from '@/lib/actions/ordem-producao'
-import * as m35 from '@/lib/actions/pedido-compra'
-import * as m36 from '@/lib/actions/produto-minimo'
-import * as m37 from '@/lib/actions/produto-substituicao'
-import * as m38 from '@/lib/actions/produto'
-import * as m39 from '@/lib/actions/produtos-search'
-import * as m40 from '@/lib/actions/sintegra'
-import * as m41 from '@/lib/actions/sync-status'
-import * as m42 from '@/lib/actions/transferencia'
-import * as m43 from '@/lib/actions/usuario'
-import * as m44 from '@/lib/actions/validade-proprio'
+import * as m8 from '@/lib/actions/compras-cadastros'
+import * as m9 from '@/lib/actions/compras-proprio'
+import * as m10 from '@/lib/actions/convite'
+import * as m11 from '@/lib/actions/detalhe-movimento'
+import * as m12 from '@/lib/actions/estoque-omie'
+import * as m13 from '@/lib/actions/estoque-proprio'
+import * as m14 from '@/lib/actions/estrutura'
+import * as m15 from '@/lib/actions/familia'
+import * as m16 from '@/lib/actions/ficha-tecnica'
+import * as m17 from '@/lib/actions/fichas-omie'
+import * as m18 from '@/lib/actions/fornecedor'
+import * as m19 from '@/lib/actions/importar-pedidos'
+import * as m20 from '@/lib/actions/integracao-ntb-vendas'
+import * as m21 from '@/lib/actions/inventario-proprio'
+import * as m22 from '@/lib/actions/inventario'
+import * as m23 from '@/lib/actions/local-estoque'
+import * as m24 from '@/lib/actions/loja-selector'
+import * as m25 from '@/lib/actions/loja'
+import * as m26 from '@/lib/actions/mapeamento-local-estoque'
+import * as m27 from '@/lib/actions/meta-faturamento'
+import * as m28 from '@/lib/actions/meta-mensal'
+import * as m29 from '@/lib/actions/minha-loja'
+import * as m30 from '@/lib/actions/movimentacoes-proprio'
+import * as m31 from '@/lib/actions/movimentacoes'
+import * as m32 from '@/lib/actions/nota-fiscal-proprio'
+import * as m33 from '@/lib/actions/nota-fiscal'
+import * as m34 from '@/lib/actions/onboarding-loja'
+import * as m35 from '@/lib/actions/ops-lote'
+import * as m36 from '@/lib/actions/ordem-producao'
+import * as m37 from '@/lib/actions/pedido-compra'
+import * as m38 from '@/lib/actions/produto-minimo'
+import * as m39 from '@/lib/actions/produto-substituicao'
+import * as m40 from '@/lib/actions/produto'
+import * as m41 from '@/lib/actions/produtos-search'
+import * as m42 from '@/lib/actions/requisicao-compra'
+import * as m43 from '@/lib/actions/sintegra'
+import * as m44 from '@/lib/actions/sync-status'
+import * as m45 from '@/lib/actions/transferencia'
+import * as m46 from '@/lib/actions/usuario'
+import * as m47 from '@/lib/actions/validade-proprio'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Acao = (...args: any[]) => Promise<unknown>
@@ -77,160 +80,168 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'central#previaRefazerInventario': m6.previaRefazerInventario as Acao,
   'central#refazerInventario': m6.refazerInventario as Acao,
   'certificado#salvarCertificado': m7.salvarCertificado as Acao,
-  'compras-proprio#previaXml': m8.previaXml as Acao,
-  'compras-proprio#lancarCompraXml': m8.lancarCompraXml as Acao,
-  'compras-proprio#lancarCompraManual': m8.lancarCompraManual as Acao,
-  'compras-proprio#mapearPendentes': m8.mapearPendentes as Acao,
-  'compras-proprio#estornarCompra': m8.estornarCompra as Acao,
-  'compras-proprio#buscarProdutosCompra': m8.buscarProdutosCompra as Acao,
-  'compras-proprio#criarProdutoRapido': m8.criarProdutoRapido as Acao,
-  'convite#gerarConvite': m9.gerarConvite as Acao,
-  'convite#revogarConvite': m9.revogarConvite as Acao,
-  'detalhe-movimento#buscarDetalheOP': m10.buscarDetalheOP as Acao,
-  'detalhe-movimento#buscarDetalheTransferencia': m10.buscarDetalheTransferencia as Acao,
-  'detalhe-movimento#buscarDetalheNotaFiscal': m10.buscarDetalheNotaFiscal as Acao,
-  'detalhe-movimento#buscarDetalheInventario': m10.buscarDetalheInventario as Acao,
-  'estoque-omie#entradaOmie': m11.entradaOmie as Acao,
-  'estoque-omie#ajusteOmie': m11.ajusteOmie as Acao,
-  'estoque-omie#transferirOmie': m11.transferirOmie as Acao,
-  'estoque-omie#corrigirCustoAjuste': m11.corrigirCustoAjuste as Acao,
-  'estoque-omie#relancarCorrecaoCusto': m11.relancarCorrecaoCusto as Acao,
-  'estoque-proprio#entradaManual': m12.entradaManual as Acao,
-  'estoque-proprio#ajusteManual': m12.ajusteManual as Acao,
-  'estoque-proprio#definirMinimo': m12.definirMinimo as Acao,
-  'estoque-proprio#transferirEntreLocais': m12.transferirEntreLocais as Acao,
-  'estoque-proprio#estornarMovimento': m12.estornarMovimento as Acao,
-  'estrutura#verEstrutura': m13.verEstrutura as Acao,
-  'estrutura#salvarEstrutura': m13.salvarEstrutura as Acao,
-  'familia#criarFamilia': m14.criarFamilia as Acao,
-  'familia#editarFamilia': m14.editarFamilia as Acao,
-  'familia#excluirFamilia': m14.excluirFamilia as Acao,
-  'familia#puxarFamiliasDoOmie': m14.puxarFamiliasDoOmie as Acao,
-  'ficha-tecnica#salvarFichaTecnica': m15.salvarFichaTecnica as Acao,
-  'ficha-tecnica#desativarFichaTecnica': m15.desativarFichaTecnica as Acao,
-  'ficha-tecnica#produzirLoteAction': m15.produzirLoteAction as Acao,
-  'fichas-omie#trocarInsumoNoPrato': m16.trocarInsumoNoPrato as Acao,
-  'fornecedor#criarFornecedor': m17.criarFornecedor as Acao,
-  'fornecedor#editarFornecedor': m17.editarFornecedor as Acao,
-  'fornecedor#excluirFornecedor': m17.excluirFornecedor as Acao,
-  'fornecedor#puxarFornecedoresDoOmie': m17.puxarFornecedoresDoOmie as Acao,
-  'integracao-ntb-vendas#gerarChaveIntegracaoNtbVendas': m18.gerarChaveIntegracaoNtbVendas as Acao,
-  'integracao-ntb-vendas#removerChaveIntegracaoNtbVendas': m18.removerChaveIntegracaoNtbVendas as Acao,
-  'inventario-proprio#abrirInventario': m19.abrirInventario as Acao,
-  'inventario-proprio#contarItem': m19.contarItem as Acao,
-  'inventario-proprio#definirMotivoItem': m19.definirMotivoItem as Acao,
-  'inventario-proprio#fecharInventario': m19.fecharInventario as Acao,
-  'inventario-proprio#cancelarInventario': m19.cancelarInventario as Acao,
-  'inventario-proprio#buscarProdutosParaContagem': m19.buscarProdutosParaContagem as Acao,
-  'inventario-proprio#salvarLimiteMotivo': m19.salvarLimiteMotivo as Acao,
-  'inventario#createInventario': m20.createInventario as Acao,
-  'inventario#addInventarioItem': m20.addInventarioItem as Acao,
-  'inventario#enviarInventarioItem': m20.enviarInventarioItem as Acao,
-  'inventario#removeInventarioItem': m20.removeInventarioItem as Acao,
-  'inventario#finishInventario': m20.finishInventario as Acao,
-  'inventario#forceSyncInventario': m20.forceSyncInventario as Acao,
-  'inventario#retryAjustesInventarioPendentes': m20.retryAjustesInventarioPendentes as Acao,
-  'inventario#duplicarInventario': m20.duplicarInventario as Acao,
-  'inventario#excluirInventario': m20.excluirInventario as Acao,
-  'inventario#editQuantidadeInventarioItem': m20.editQuantidadeInventarioItem as Acao,
-  'inventario#informarMotivoInventarioItem': m20.informarMotivoInventarioItem as Acao,
-  'local-estoque#excluirLocalEstoque': m21.excluirLocalEstoque as Acao,
-  'local-estoque#criarLocalEstoque': m21.criarLocalEstoque as Acao,
-  'local-estoque#editarLocalEstoque': m21.editarLocalEstoque as Acao,
-  'loja-selector#setCurrentLoja': m22.setCurrentLoja as Acao,
-  'loja#criarLoja': m23.criarLoja as Acao,
-  'loja#editarLoja': m23.editarLoja as Acao,
-  'loja#alternarAtivoLoja': m23.alternarAtivoLoja as Acao,
-  'loja#excluirLoja': m23.excluirLoja as Acao,
-  'loja#forceSyncLoja': m23.forceSyncLoja as Acao,
-  'loja#puxarEmpresaDoOmie': m23.puxarEmpresaDoOmie as Acao,
-  'mapeamento-local-estoque#salvarMapeamentoLocalEstoque': m24.salvarMapeamentoLocalEstoque as Acao,
-  'meta-faturamento#salvarMetaFaturamento': m25.salvarMetaFaturamento as Acao,
-  'meta-mensal#salvarMetaMensal': m26.salvarMetaMensal as Acao,
-  'minha-loja#editarLojaNegocio': m27.editarLojaNegocio as Acao,
-  'minha-loja#salvarEtiquetaConfig': m27.salvarEtiquetaConfig as Acao,
-  'movimentacoes-proprio#detalheMovimentoProprio': m28.detalheMovimentoProprio as Acao,
-  'movimentacoes#criarAjusteManual': m29.criarAjusteManual as Acao,
-  'movimentacoes#retryMovimentosManuaisPendentes': m29.retryMovimentosManuaisPendentes as Acao,
-  'nota-fiscal-proprio#confirmarEntradaNF': m30.confirmarEntradaNF as Acao,
-  'nota-fiscal-proprio#desfazerEntradaNF': m30.desfazerEntradaNF as Acao,
-  'nota-fiscal-proprio#excluirNotaProprio': m30.excluirNotaProprio as Acao,
-  'nota-fiscal-proprio#vincularItemNF': m30.vincularItemNF as Acao,
-  'nota-fiscal-proprio#definirLoteItemNF': m30.definirLoteItemNF as Acao,
-  'nota-fiscal-proprio#criarProdutoDoItemNF': m30.criarProdutoDoItemNF as Acao,
-  'nota-fiscal-proprio#buscarProdutosNF': m30.buscarProdutosNF as Acao,
-  'nota-fiscal-proprio#salvarConfigSefaz': m30.salvarConfigSefaz as Acao,
-  'nota-fiscal-proprio#sincronizarSefazAgora': m30.sincronizarSefazAgora as Acao,
-  'nota-fiscal-proprio#criarProdutoParaNF': m30.criarProdutoParaNF as Acao,
-  'nota-fiscal-proprio#configurarItemNF': m30.configurarItemNF as Acao,
-  'nota-fiscal-proprio#marcarConferidaNF': m30.marcarConferidaNF as Acao,
-  'nota-fiscal-proprio#salvarObservacaoNF': m30.salvarObservacaoNF as Acao,
-  'nota-fiscal-proprio#manifestarNotaSefaz': m30.manifestarNotaSefaz as Acao,
-  'nota-fiscal-proprio#importarCteNF': m30.importarCteNF as Acao,
-  'nota-fiscal-proprio#informarFreteNF': m30.informarFreteNF as Acao,
-  'nota-fiscal-proprio#desvincularCteNF': m30.desvincularCteNF as Acao,
-  'nota-fiscal-proprio#buscarNotaPorChaveNF': m30.buscarNotaPorChaveNF as Acao,
-  'nota-fiscal#setQuantidadeNFItem': m31.setQuantidadeNFItem as Acao,
-  'nota-fiscal#setCategoriaContabilNFItem': m31.setCategoriaContabilNFItem as Acao,
-  'nota-fiscal#manifestarNF': m31.manifestarNF as Acao,
-  'nota-fiscal#reverterManifestacaoNF': m31.reverterManifestacaoNF as Acao,
-  'nota-fiscal#excluirRecebimentoNF': m31.excluirRecebimentoNF as Acao,
-  'onboarding-loja#gerarCodigoLoja': m32.gerarCodigoLoja as Acao,
-  'onboarding-loja#removerCodigoLoja': m32.removerCodigoLoja as Acao,
-  'ops-lote#acaoOPLote': m33.acaoOPLote as Acao,
-  'ordem-producao#criarOrdemProducao': m34.criarOrdemProducao as Acao,
-  'ordem-producao#criarOrdensProducao': m34.criarOrdensProducao as Acao,
-  'ordem-producao#saldoAtualProdutos': m34.saldoAtualProdutos as Acao,
-  'ordem-producao#setValidadeOP': m34.setValidadeOP as Acao,
-  'ordem-producao#setQuantidadeOP': m34.setQuantidadeOP as Acao,
-  'ordem-producao#setDataOP': m34.setDataOP as Acao,
-  'ordem-producao#setQtdPlanejadaOP': m34.setQtdPlanejadaOP as Acao,
-  'ordem-producao#finishOP': m34.finishOP as Acao,
-  'ordem-producao#excluirOP': m34.excluirOP as Acao,
-  'ordem-producao#reverterOP': m34.reverterOP as Acao,
-  'ordem-producao#retryOPsPendentes': m34.retryOPsPendentes as Acao,
-  'ordem-producao#finishOPsEmLote': m34.finishOPsEmLote as Acao,
-  'ordem-producao#reverterOPsEmLote': m34.reverterOPsEmLote as Acao,
-  'pedido-compra#salvarPedidoCompra': m35.salvarPedidoCompra as Acao,
-  'pedido-compra#mudarEtapaPedido': m35.mudarEtapaPedido as Acao,
-  'pedido-compra#vincularNotaAoPedido': m35.vincularNotaAoPedido as Acao,
-  'pedido-compra#desvincularNotaDoPedido': m35.desvincularNotaDoPedido as Acao,
-  'pedido-compra#criarPedidosDaSugestao': m35.criarPedidosDaSugestao as Acao,
-  'pedido-compra#salvarLeadTime': m35.salvarLeadTime as Acao,
-  'produto-minimo#setEstoqueMinimo': m36.setEstoqueMinimo as Acao,
-  'produto-substituicao#criarProdutoSubstituicao': m37.criarProdutoSubstituicao as Acao,
-  'produto-substituicao#excluirProdutoSubstituicao': m37.excluirProdutoSubstituicao as Acao,
-  'produto#buscarFamilias': m38.buscarFamilias as Acao,
-  'produto#sugerirProximoCodigo': m38.sugerirProximoCodigo as Acao,
-  'produto#criarProduto': m38.criarProduto as Acao,
-  'produto#editarProduto': m38.editarProduto as Acao,
-  'produto#excluirProduto': m38.excluirProduto as Acao,
-  'produtos-search#buscarProdutos': m39.buscarProdutos as Acao,
-  'produtos-search#buscarProdutoPorCodigo': m39.buscarProdutoPorCodigo as Acao,
-  'sintegra#consultarCnpj': m40.consultarCnpj as Acao,
-  'sintegra#importarParceiro': m40.importarParceiro as Acao,
-  'sync-status#reprocessarSync': m41.reprocessarSync as Acao,
-  'transferencia#createTransferencia': m42.createTransferencia as Acao,
-  'transferencia#addMovimento': m42.addMovimento as Acao,
-  'transferencia#enviarMovimento': m42.enviarMovimento as Acao,
-  'transferencia#salvarObservacaoTransferencia': m42.salvarObservacaoTransferencia as Acao,
-  'transferencia#salvarObservacaoItem': m42.salvarObservacaoItem as Acao,
-  'transferencia#removeMovimento': m42.removeMovimento as Acao,
-  'transferencia#finishTransferencia': m42.finishTransferencia as Acao,
-  'transferencia#forceSyncTransferencia': m42.forceSyncTransferencia as Acao,
-  'transferencia#retryMovimentosTransferenciaPendentes': m42.retryMovimentosTransferenciaPendentes as Acao,
-  'transferencia#duplicarTransferencia': m42.duplicarTransferencia as Acao,
-  'transferencia#excluirTransferencia': m42.excluirTransferencia as Acao,
-  'transferencia#editQuantidadeMovimento': m42.editQuantidadeMovimento as Acao,
-  'usuario#criarUsuario': m43.criarUsuario as Acao,
-  'usuario#editarUsuario': m43.editarUsuario as Acao,
-  'usuario#aprovarUsuario': m43.aprovarUsuario as Acao,
-  'usuario#recusarUsuario': m43.recusarUsuario as Acao,
-  'usuario#excluirUsuario': m43.excluirUsuario as Acao,
-  'usuario#togglePermissao': m43.togglePermissao as Acao,
-  'usuario#redefinirSenha': m43.redefinirSenha as Acao,
-  'usuario#toggleLocal': m43.toggleLocal as Acao,
-  'validade-proprio#baixarLoteVencido': m44.baixarLoteVencido as Acao,
-  'validade-proprio#salvarAlertaValidade': m44.salvarAlertaValidade as Acao,
-  'validade-proprio#reconciliarLotes': m44.reconciliarLotes as Acao,
+  'compras-cadastros#salvarComprador': m8.salvarComprador as Acao,
+  'compras-cadastros#salvarLeadTimeFornecedor': m8.salvarLeadTimeFornecedor as Acao,
+  'compras-proprio#previaXml': m9.previaXml as Acao,
+  'compras-proprio#lancarCompraXml': m9.lancarCompraXml as Acao,
+  'compras-proprio#lancarCompraManual': m9.lancarCompraManual as Acao,
+  'compras-proprio#mapearPendentes': m9.mapearPendentes as Acao,
+  'compras-proprio#estornarCompra': m9.estornarCompra as Acao,
+  'compras-proprio#buscarProdutosCompra': m9.buscarProdutosCompra as Acao,
+  'compras-proprio#criarProdutoRapido': m9.criarProdutoRapido as Acao,
+  'convite#gerarConvite': m10.gerarConvite as Acao,
+  'convite#revogarConvite': m10.revogarConvite as Acao,
+  'detalhe-movimento#buscarDetalheOP': m11.buscarDetalheOP as Acao,
+  'detalhe-movimento#buscarDetalheTransferencia': m11.buscarDetalheTransferencia as Acao,
+  'detalhe-movimento#buscarDetalheNotaFiscal': m11.buscarDetalheNotaFiscal as Acao,
+  'detalhe-movimento#buscarDetalheInventario': m11.buscarDetalheInventario as Acao,
+  'estoque-omie#entradaOmie': m12.entradaOmie as Acao,
+  'estoque-omie#ajusteOmie': m12.ajusteOmie as Acao,
+  'estoque-omie#transferirOmie': m12.transferirOmie as Acao,
+  'estoque-omie#corrigirCustoAjuste': m12.corrigirCustoAjuste as Acao,
+  'estoque-omie#relancarCorrecaoCusto': m12.relancarCorrecaoCusto as Acao,
+  'estoque-proprio#entradaManual': m13.entradaManual as Acao,
+  'estoque-proprio#ajusteManual': m13.ajusteManual as Acao,
+  'estoque-proprio#definirMinimo': m13.definirMinimo as Acao,
+  'estoque-proprio#transferirEntreLocais': m13.transferirEntreLocais as Acao,
+  'estoque-proprio#estornarMovimento': m13.estornarMovimento as Acao,
+  'estrutura#verEstrutura': m14.verEstrutura as Acao,
+  'estrutura#salvarEstrutura': m14.salvarEstrutura as Acao,
+  'familia#criarFamilia': m15.criarFamilia as Acao,
+  'familia#editarFamilia': m15.editarFamilia as Acao,
+  'familia#excluirFamilia': m15.excluirFamilia as Acao,
+  'familia#puxarFamiliasDoOmie': m15.puxarFamiliasDoOmie as Acao,
+  'ficha-tecnica#salvarFichaTecnica': m16.salvarFichaTecnica as Acao,
+  'ficha-tecnica#desativarFichaTecnica': m16.desativarFichaTecnica as Acao,
+  'ficha-tecnica#produzirLoteAction': m16.produzirLoteAction as Acao,
+  'fichas-omie#trocarInsumoNoPrato': m17.trocarInsumoNoPrato as Acao,
+  'fornecedor#criarFornecedor': m18.criarFornecedor as Acao,
+  'fornecedor#editarFornecedor': m18.editarFornecedor as Acao,
+  'fornecedor#excluirFornecedor': m18.excluirFornecedor as Acao,
+  'fornecedor#puxarFornecedoresDoOmie': m18.puxarFornecedoresDoOmie as Acao,
+  'importar-pedidos#previaImportacaoPedidos': m19.previaImportacaoPedidos as Acao,
+  'importar-pedidos#confirmarImportacaoPedidos': m19.confirmarImportacaoPedidos as Acao,
+  'integracao-ntb-vendas#gerarChaveIntegracaoNtbVendas': m20.gerarChaveIntegracaoNtbVendas as Acao,
+  'integracao-ntb-vendas#removerChaveIntegracaoNtbVendas': m20.removerChaveIntegracaoNtbVendas as Acao,
+  'inventario-proprio#abrirInventario': m21.abrirInventario as Acao,
+  'inventario-proprio#contarItem': m21.contarItem as Acao,
+  'inventario-proprio#definirMotivoItem': m21.definirMotivoItem as Acao,
+  'inventario-proprio#fecharInventario': m21.fecharInventario as Acao,
+  'inventario-proprio#cancelarInventario': m21.cancelarInventario as Acao,
+  'inventario-proprio#buscarProdutosParaContagem': m21.buscarProdutosParaContagem as Acao,
+  'inventario-proprio#salvarLimiteMotivo': m21.salvarLimiteMotivo as Acao,
+  'inventario#createInventario': m22.createInventario as Acao,
+  'inventario#addInventarioItem': m22.addInventarioItem as Acao,
+  'inventario#enviarInventarioItem': m22.enviarInventarioItem as Acao,
+  'inventario#removeInventarioItem': m22.removeInventarioItem as Acao,
+  'inventario#finishInventario': m22.finishInventario as Acao,
+  'inventario#forceSyncInventario': m22.forceSyncInventario as Acao,
+  'inventario#retryAjustesInventarioPendentes': m22.retryAjustesInventarioPendentes as Acao,
+  'inventario#duplicarInventario': m22.duplicarInventario as Acao,
+  'inventario#excluirInventario': m22.excluirInventario as Acao,
+  'inventario#editQuantidadeInventarioItem': m22.editQuantidadeInventarioItem as Acao,
+  'inventario#informarMotivoInventarioItem': m22.informarMotivoInventarioItem as Acao,
+  'local-estoque#excluirLocalEstoque': m23.excluirLocalEstoque as Acao,
+  'local-estoque#criarLocalEstoque': m23.criarLocalEstoque as Acao,
+  'local-estoque#editarLocalEstoque': m23.editarLocalEstoque as Acao,
+  'loja-selector#setCurrentLoja': m24.setCurrentLoja as Acao,
+  'loja#criarLoja': m25.criarLoja as Acao,
+  'loja#editarLoja': m25.editarLoja as Acao,
+  'loja#alternarAtivoLoja': m25.alternarAtivoLoja as Acao,
+  'loja#excluirLoja': m25.excluirLoja as Acao,
+  'loja#forceSyncLoja': m25.forceSyncLoja as Acao,
+  'loja#puxarEmpresaDoOmie': m25.puxarEmpresaDoOmie as Acao,
+  'mapeamento-local-estoque#salvarMapeamentoLocalEstoque': m26.salvarMapeamentoLocalEstoque as Acao,
+  'meta-faturamento#salvarMetaFaturamento': m27.salvarMetaFaturamento as Acao,
+  'meta-mensal#salvarMetaMensal': m28.salvarMetaMensal as Acao,
+  'minha-loja#editarLojaNegocio': m29.editarLojaNegocio as Acao,
+  'minha-loja#salvarEtiquetaConfig': m29.salvarEtiquetaConfig as Acao,
+  'movimentacoes-proprio#detalheMovimentoProprio': m30.detalheMovimentoProprio as Acao,
+  'movimentacoes#criarAjusteManual': m31.criarAjusteManual as Acao,
+  'movimentacoes#retryMovimentosManuaisPendentes': m31.retryMovimentosManuaisPendentes as Acao,
+  'nota-fiscal-proprio#confirmarEntradaNF': m32.confirmarEntradaNF as Acao,
+  'nota-fiscal-proprio#desfazerEntradaNF': m32.desfazerEntradaNF as Acao,
+  'nota-fiscal-proprio#excluirNotaProprio': m32.excluirNotaProprio as Acao,
+  'nota-fiscal-proprio#vincularItemNF': m32.vincularItemNF as Acao,
+  'nota-fiscal-proprio#definirLoteItemNF': m32.definirLoteItemNF as Acao,
+  'nota-fiscal-proprio#criarProdutoDoItemNF': m32.criarProdutoDoItemNF as Acao,
+  'nota-fiscal-proprio#buscarProdutosNF': m32.buscarProdutosNF as Acao,
+  'nota-fiscal-proprio#salvarConfigSefaz': m32.salvarConfigSefaz as Acao,
+  'nota-fiscal-proprio#sincronizarSefazAgora': m32.sincronizarSefazAgora as Acao,
+  'nota-fiscal-proprio#criarProdutoParaNF': m32.criarProdutoParaNF as Acao,
+  'nota-fiscal-proprio#configurarItemNF': m32.configurarItemNF as Acao,
+  'nota-fiscal-proprio#marcarConferidaNF': m32.marcarConferidaNF as Acao,
+  'nota-fiscal-proprio#salvarObservacaoNF': m32.salvarObservacaoNF as Acao,
+  'nota-fiscal-proprio#manifestarNotaSefaz': m32.manifestarNotaSefaz as Acao,
+  'nota-fiscal-proprio#importarCteNF': m32.importarCteNF as Acao,
+  'nota-fiscal-proprio#informarFreteNF': m32.informarFreteNF as Acao,
+  'nota-fiscal-proprio#desvincularCteNF': m32.desvincularCteNF as Acao,
+  'nota-fiscal-proprio#buscarNotaPorChaveNF': m32.buscarNotaPorChaveNF as Acao,
+  'nota-fiscal#setQuantidadeNFItem': m33.setQuantidadeNFItem as Acao,
+  'nota-fiscal#setCategoriaContabilNFItem': m33.setCategoriaContabilNFItem as Acao,
+  'nota-fiscal#manifestarNF': m33.manifestarNF as Acao,
+  'nota-fiscal#reverterManifestacaoNF': m33.reverterManifestacaoNF as Acao,
+  'nota-fiscal#excluirRecebimentoNF': m33.excluirRecebimentoNF as Acao,
+  'onboarding-loja#gerarCodigoLoja': m34.gerarCodigoLoja as Acao,
+  'onboarding-loja#removerCodigoLoja': m34.removerCodigoLoja as Acao,
+  'ops-lote#acaoOPLote': m35.acaoOPLote as Acao,
+  'ordem-producao#criarOrdemProducao': m36.criarOrdemProducao as Acao,
+  'ordem-producao#criarOrdensProducao': m36.criarOrdensProducao as Acao,
+  'ordem-producao#saldoAtualProdutos': m36.saldoAtualProdutos as Acao,
+  'ordem-producao#setValidadeOP': m36.setValidadeOP as Acao,
+  'ordem-producao#setQuantidadeOP': m36.setQuantidadeOP as Acao,
+  'ordem-producao#setDataOP': m36.setDataOP as Acao,
+  'ordem-producao#setQtdPlanejadaOP': m36.setQtdPlanejadaOP as Acao,
+  'ordem-producao#finishOP': m36.finishOP as Acao,
+  'ordem-producao#excluirOP': m36.excluirOP as Acao,
+  'ordem-producao#reverterOP': m36.reverterOP as Acao,
+  'ordem-producao#retryOPsPendentes': m36.retryOPsPendentes as Acao,
+  'ordem-producao#finishOPsEmLote': m36.finishOPsEmLote as Acao,
+  'ordem-producao#reverterOPsEmLote': m36.reverterOPsEmLote as Acao,
+  'pedido-compra#salvarPedidoCompra': m37.salvarPedidoCompra as Acao,
+  'pedido-compra#mudarEtapaPedido': m37.mudarEtapaPedido as Acao,
+  'pedido-compra#vincularNotaAoPedido': m37.vincularNotaAoPedido as Acao,
+  'pedido-compra#desvincularNotaDoPedido': m37.desvincularNotaDoPedido as Acao,
+  'pedido-compra#criarPedidosDaSugestao': m37.criarPedidosDaSugestao as Acao,
+  'pedido-compra#salvarLeadTime': m37.salvarLeadTime as Acao,
+  'produto-minimo#setEstoqueMinimo': m38.setEstoqueMinimo as Acao,
+  'produto-substituicao#criarProdutoSubstituicao': m39.criarProdutoSubstituicao as Acao,
+  'produto-substituicao#excluirProdutoSubstituicao': m39.excluirProdutoSubstituicao as Acao,
+  'produto#buscarFamilias': m40.buscarFamilias as Acao,
+  'produto#sugerirProximoCodigo': m40.sugerirProximoCodigo as Acao,
+  'produto#criarProduto': m40.criarProduto as Acao,
+  'produto#editarProduto': m40.editarProduto as Acao,
+  'produto#excluirProduto': m40.excluirProduto as Acao,
+  'produtos-search#buscarProdutos': m41.buscarProdutos as Acao,
+  'produtos-search#buscarProdutoPorCodigo': m41.buscarProdutoPorCodigo as Acao,
+  'requisicao-compra#salvarRequisicao': m42.salvarRequisicao as Acao,
+  'requisicao-compra#acaoRequisicao': m42.acaoRequisicao as Acao,
+  'requisicao-compra#gerarPedidosDasRequisicoes': m42.gerarPedidosDasRequisicoes as Acao,
+  'requisicao-compra#criarRequisicaoDaSugestao': m42.criarRequisicaoDaSugestao as Acao,
+  'sintegra#consultarCnpj': m43.consultarCnpj as Acao,
+  'sintegra#importarParceiro': m43.importarParceiro as Acao,
+  'sync-status#reprocessarSync': m44.reprocessarSync as Acao,
+  'transferencia#createTransferencia': m45.createTransferencia as Acao,
+  'transferencia#addMovimento': m45.addMovimento as Acao,
+  'transferencia#enviarMovimento': m45.enviarMovimento as Acao,
+  'transferencia#salvarObservacaoTransferencia': m45.salvarObservacaoTransferencia as Acao,
+  'transferencia#salvarObservacaoItem': m45.salvarObservacaoItem as Acao,
+  'transferencia#removeMovimento': m45.removeMovimento as Acao,
+  'transferencia#finishTransferencia': m45.finishTransferencia as Acao,
+  'transferencia#forceSyncTransferencia': m45.forceSyncTransferencia as Acao,
+  'transferencia#retryMovimentosTransferenciaPendentes': m45.retryMovimentosTransferenciaPendentes as Acao,
+  'transferencia#duplicarTransferencia': m45.duplicarTransferencia as Acao,
+  'transferencia#excluirTransferencia': m45.excluirTransferencia as Acao,
+  'transferencia#editQuantidadeMovimento': m45.editQuantidadeMovimento as Acao,
+  'usuario#criarUsuario': m46.criarUsuario as Acao,
+  'usuario#editarUsuario': m46.editarUsuario as Acao,
+  'usuario#aprovarUsuario': m46.aprovarUsuario as Acao,
+  'usuario#recusarUsuario': m46.recusarUsuario as Acao,
+  'usuario#excluirUsuario': m46.excluirUsuario as Acao,
+  'usuario#togglePermissao': m46.togglePermissao as Acao,
+  'usuario#redefinirSenha': m46.redefinirSenha as Acao,
+  'usuario#toggleLocal': m46.toggleLocal as Acao,
+  'validade-proprio#baixarLoteVencido': m47.baixarLoteVencido as Acao,
+  'validade-proprio#salvarAlertaValidade': m47.salvarAlertaValidade as Acao,
+  'validade-proprio#reconciliarLotes': m47.reconciliarLotes as Acao,
 })
