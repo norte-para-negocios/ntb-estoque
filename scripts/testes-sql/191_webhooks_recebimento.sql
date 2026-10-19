@@ -24,6 +24,8 @@ select case when g % 31 < 10 then 5 when g % 31 < 18 then 7 when g % 31 < 23 the
                                  'event', jsonb_build_object('codigo', g), 'pad', repeat('x', 700)) end,
        now() - (g || ' seconds')::interval
 from generate_series(1, 164785) g;
+-- revisão M1: com `? 'nIdReceb'` esta linha fazia o laço de carga da 191 nunca terminar
+insert into webhooks (loja_id, message_id, message) values (5, 'fi-receb-nulo', '{"topic":"RecebimentoProduto.Alterado","event":{"cabecalho":{"nIdReceb":null}}}');
 analyze webhooks;
 select count(*) total, count(*) filter (where loja_id = 5) loja5,
        count(*) filter (where loja_id = 5 and message->>'topic' like 'RecebimentoProduto%') receb_loja5 from webhooks;
@@ -77,7 +79,11 @@ insert into webhooks (loja_id, message_id, message) values (5, 'fi-novo2', '{"to
 do $$ begin
   assert (select n_id_receb from webhooks where message_id = 'fi-novo') = '42', 'gatilho não preencheu';
   assert (select n_id_receb from webhooks where message_id = 'fi-novo2') is null, 'gatilho preencheu sem nIdReceb';
-  assert (select count(*) from webhooks where n_id_receb is null and message->'event'->'cabecalho' ? 'nIdReceb') = 0, 'carga incompleta';
+  assert (select count(*) from webhooks where n_id_receb is null and (message->'event'->'cabecalho'->>'nIdReceb') is not null) = 0, 'carga incompleta';
+  -- a linha com "nIdReceb": null (revisão M1) continua sem valor, e a carga terminou
+  assert (select n_id_receb from webhooks where message_id = 'fi-receb-nulo') is null, 'nIdReceb null ganhou valor';
+  assert (select bool_and(i.indisvalid) from pg_index i join pg_class c on c.oid = i.indexrelid
+          where c.relname in ('webhooks_loja_n_id_receb_idx', 'idx_webhooks_loja_message')), 'índice inválido';
 end $$;
 drop table fi_alvo;
 \echo RESULTADO: PASSOU (asserts ok)

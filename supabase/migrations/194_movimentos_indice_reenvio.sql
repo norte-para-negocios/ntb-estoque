@@ -17,3 +17,13 @@ create index concurrently if not exists movimentos_loja_status_tentativa_idx
   on public.movimentos (loja_id, status, ultima_tentativa_em nulls first);
 
 analyze public.movimentos;
+
+-- índice concurrently que falha no meio fica INVÁLIDO (e o IF NOT EXISTS de uma 2ª rodada não o refaz)
+do $$
+begin
+  if not coalesce((select i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid
+                   where c.relname = 'movimentos_loja_status_tentativa_idx'), false) then
+    raise exception '194: índice movimentos_loja_status_tentativa_idx ausente ou inválido; rode "drop index concurrently if exists movimentos_loja_status_tentativa_idx" e aplique a 194 de novo';
+  end if;
+  raise notice '194: índice válido';
+end $$;
