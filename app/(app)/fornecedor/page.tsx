@@ -16,7 +16,9 @@ import {
 } from '@/components/fornecedor/FornecedorAcoes'
 import type { ParceiroFormValues } from '@/components/parceiro/ParceiroForm'
 import { escapeIlikeOr } from '@/lib/utils-busca'
-import { Truck } from 'lucide-react'
+import { History, Truck } from 'lucide-react'
+import Link from 'next/link'
+import { btnLinhaClass, RotuloAcao } from '@/components/ui-kit/Button'
 
 const PER_PAGE = 50
 
@@ -213,6 +215,9 @@ export default async function FornecedorPage({
         ]}
         acao={(p) => (
           <div className="flex items-center justify-end gap-1">
+            <Link href={`/fornecedor/${p.id}`} className={btnLinhaClass('ghost')} aria-label="Histórico" title="Histórico de alterações">
+              <History className="size-4" /> <RotuloAcao>Histórico</RotuloAcao>
+            </Link>
             {podeEditar && <EditarFornecedor existente={{ id: p.id, values: toValues(p) }} />}
             {podeExcluir && <ExcluirFornecedor id={p.id} nome={p.razao_social} />}
           </div>

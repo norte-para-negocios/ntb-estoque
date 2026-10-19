@@ -13,6 +13,7 @@ import { FUNDO_CLASSE } from '@/lib/status-cor'
 import { carregarPedido } from '../dados'
 import { nomesCompradores } from '../cadastros'
 import { TOM_COR } from '../tom'
+import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 
 const q = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const dataBR = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
@@ -138,6 +139,8 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
           ))}
         </ul>
       </section>
+
+      <HistoricoAlteracoes lojaId={lojaId} entidade="pedido_compra" ids={[cab.id]} titulo="Alterações campo a campo" />
     </div>
   )
 }

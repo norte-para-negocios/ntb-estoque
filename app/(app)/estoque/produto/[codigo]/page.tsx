@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { Coins, Layers, Scale, Wallet } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
@@ -198,6 +199,7 @@ export default async function ProdutoEstoquePage({ params }: { params: Promise<{
         </section>
       )}
       <NotasDoProduto lojaId={lojaId} codigoProduto={p.codigoProduto} codigo={p.codigo} />
+      <HistoricoAlteracoes lojaId={lojaId} entidade="produto" ids={[p.codigoProduto]} titulo="Histórico do cadastro" />
     </div>
   )
 }

@@ -28,6 +28,7 @@ import { PedidoDaNotaNF } from '@/components/nota-fiscal/PedidoDaNotaNF'
 import { DevolucaoFornecedorNF } from '@/components/nota-fiscal/DevolucaoFornecedorNF'
 import { carregarDevolucoesDaNota } from '@/lib/compras/devolucao-loader'
 import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
+import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 
 export default async function NotaFiscalItensPage({
   params,
@@ -235,6 +236,7 @@ export default async function NotaFiscalItensPage({
           {/* loja própria: histórico de processamento (SEFAZ, conferência, estoque, manifestação) no lugar do HistoricoStatusNF do Omie */}
           <HistoricoProcessamentoNF lojaId={lojaId} chave={nf.c_chave_nfe ?? null} compraId={conferencia?.compra?.id ?? null}
             nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
+          {conferencia?.compra && <HistoricoAlteracoes lojaId={lojaId} entidade="nota_entrada" ids={[conferencia.compra.id]} />}
         </>
       ) : (
         <>

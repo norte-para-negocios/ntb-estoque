@@ -5,6 +5,8 @@ import { buscarFamilias } from '@/lib/actions/produto'
 import { carregarProdutoCatalogo, listarGrupos } from '@/lib/actions/catalogo-proprio'
 import { FormProdutoProprio } from '@/components/produtos-proprio/FormProdutoProprio'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
+import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
+import { HistoricoFicha } from '@/components/historico/HistoricoFicha'
 
 // Edição do produto no estoque próprio: grupo/subgrupo, atributos, mãe e variações. Lojas Omie continuam na tela de lista.
 export default async function ProdutoCatalogoPage({ params }: { params: Promise<{ codigo: string }> }) {
@@ -25,6 +27,8 @@ export default async function ProdutoCatalogoPage({ params }: { params: Promise<
         meta={<span className="text-[13px] text-text-muted">{produto.ehMae ? `Produto mãe · ${produto.variacoes.length} variações` : produto.paiCodigoProduto != null ? 'Variação de um produto mãe' : 'Produto simples'}</span>}
       />
       <FormProdutoProprio modo="editar" familias={familias} grupos={grupos} inicial={produto} />
+      <HistoricoAlteracoes lojaId={lojaId} entidade="produto" ids={[produto.codigoProduto, ...produto.variacoes.map((v) => v.codigoProduto)]} />
+      <HistoricoFicha lojaId={lojaId} codigoProduto={produto.codigoProduto} />
     </div>
   )
 }
