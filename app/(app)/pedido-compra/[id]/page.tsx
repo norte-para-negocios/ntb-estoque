@@ -33,7 +33,8 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
   const p = await carregarPedido(lojaId, Number(id))
   if (!p) notFound()
   const { cab, resumo, itens } = p
-  const acoes = acoesDisponiveis(cab.etapa, { temVinculo: p.notas.length > 0, podeAprovar, podeEditar })
+  const recebidoTotal = itens.length > 0 && itens.every((i) => i.recebido + 1e-6 >= i.quantidadeBase)
+  const acoes = acoesDisponiveis(cab.etapa, { temVinculo: p.notas.length > 0, podeAprovar, podeEditar, recebidoTotal })
   const parcelas = parcelasDoPedido(Array.isArray(cab.parcelas) ? cab.parcelas : [], resumo.total, cab.previsao_entrega)
   const pct = resumo.qtdBase > 0 ? Math.min(100, (resumo.recebido / resumo.qtdBase) * 100) : 0
 

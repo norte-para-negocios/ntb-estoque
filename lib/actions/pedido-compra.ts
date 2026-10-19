@@ -140,7 +140,7 @@ export async function desvincularNotaDoPedido(pedidoId: number, compraId: number
 }
 
 /** "Criar pedido" da sugestão: um rascunho por fornecedor (último fornecedor de cada produto). Idempotente pela chave. */
-export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: string): Promise<{ pedidos: { id: number; numero: number; fornecedor: string }[] } | Erro> {
+export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: string): Promise<{ pedidos: { id: number; numero: number; fornecedor: string }[]; falhas: { fornecedor: string; erro: string }[] } | Erro> {
   const __d = viaDesktop('pedido-compra#criarPedidosDaSugestao', criarPedidosDaSugestao, [linhas, chave]); if (__d) return __d as never
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx
@@ -150,6 +150,7 @@ export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: s
   const grupos = agruparPorFornecedor(validas)
   const sb = createServiceClient()
   const pedidos: { id: number; numero: number; fornecedor: string }[] = []
+  const falhas: { fornecedor: string; erro: string }[] = []
   for (const [i, g] of grupos.entries()) {
     const nome = g.fornecedorNome ?? 'Fornecedor a definir'
     const form: PedidoForm = {
@@ -157,13 +158,15 @@ export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: s
       itens: g.itens.map((l) => ({ codigoProduto: l.codigoProduto, quantidade: Math.round(l.quantidade * 1e6) / 1e6, precoUnitario: Math.max(0, Math.round((l.preco || 0) * 1e6) / 1e6) })),
     }
     const { data, error } = await sb.rpc('pc_salvar', { p_loja: ctx.lojaId, p_dados: paraJson(form, 'sugestao'), p_user: ctx.userId, p_nome: ctx.nome })
-    if (error) return pedidos.length ? { pedidos } : { error: msgErro(error) }
+    // segue para os outros fornecedores e devolve quais falharam (a mesma chave refaz só o que faltou)
+    if (error) { falhas.push({ fornecedor: nome, erro: msgErro(error) }); continue }
     const r = data as { id: number; numero: number; duplicado: boolean }
     if (!r.duplicado) await registrarAuditoria('criar', 'pedido_compra', r.id, `Pedido de compra ${r.numero} (da sugestão)`)
     pedidos.push({ id: r.id, numero: r.numero, fornecedor: nome })
   }
   atualizar()
-  return { pedidos }
+  if (!pedidos.length) return { error: falhas.map((f) => `${f.fornecedor}: ${f.erro}`).join(' · ') || 'Nenhum pedido criado.' }
+  return { pedidos, falhas }
 }
 
 /** Lead time de ressuprimento do produto (estoque próprio; na loja Omie ele vem do cadastro do Omie). */

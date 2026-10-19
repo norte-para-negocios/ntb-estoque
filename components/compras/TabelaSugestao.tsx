@@ -44,6 +44,11 @@ export function TabelaSugestao({ linhas, diasAnalise, diasEstimativa, base, pode
         fornecedorId: l.fornecedorId, fornecedorNome: l.fornecedorNome, fornecedorCnpj: l.fornecedorCnpj,
       })), chave)
       if ('error' in r) { setMsg(r.error); return }
+      if (r.falhas.length) {
+        setMsg(`Criados: nº ${r.pedidos.map((p) => p.numero).join(', ')}. Não criados: ${r.falhas.map((f) => `${f.fornecedor} (${f.erro})`).join('; ')}. Tente de novo para refazer só os que faltaram.`)
+        router.refresh()
+        return
+      }
       if (r.pedidos.length === 1) router.push(`/pedido-compra/${r.pedidos[0].id}`)
       else router.push(`/pedido-compra?criados=${r.pedidos.map((p) => p.numero).join(',')}`)
     })

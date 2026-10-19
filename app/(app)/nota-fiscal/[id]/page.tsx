@@ -113,7 +113,8 @@ export default async function NotaFiscalItensPage({
   const conferencia = proprio && nfSupabase ? await carregarConferencia(lojaId, Number(id), nf.full_object, nf.c_chave_nfe ?? null) : null
   // Fase C (só estoque próprio): pedido de compra da nota e conferência pedido × nota × recebido
   const pedidoDaNota = conferencia?.compra && conferencia.compra.status !== 'cancelada' ? await carregarPedidoDaNota(lojaId, conferencia.compra.id) : null
-  const podeVincularPedido = !!pedidoDaNota && (await requirePermissao(lojaId, 'Compras - Pedidos'))
+  // mesma regra da ação vincularNotaAoPedido: 'Compras - Pedidos' e 'Notas Fiscais'
+  const podeVincularPedido = !!pedidoDaNota && (await requirePermissao(lojaId, 'Compras - Pedidos')) && (await requirePermissao(lojaId, 'Notas Fiscais'))
 
   function fmtData(d: string | null) {
     if (!d) return null

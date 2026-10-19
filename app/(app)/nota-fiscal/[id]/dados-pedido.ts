@@ -39,7 +39,7 @@ export async function carregarPedidoDaNota(lojaId: number, compraId: number): Pr
       const daNota = notaItens.filter((x) => x.pedidoItemId == null || idsItens.has(x.pedidoItemId))
       // saldo que o pedido esperava nesta nota = pedido − o que já está em outras notas
       const pedidoConf = doPedido.map((i) => {
-        const nesta = notaItens.filter((x) => x.pedidoItemId === n(i.id)).reduce((a, x) => a + x.recebido, 0)
+        const nesta = notaItens.filter((x) => x.pedidoItemId === n(i.id) && x.codigoProduto === n(i.codigo_produto)).reduce((a, x) => a + x.recebido, 0)
         return { id: n(i.id), codigoProduto: n(i.codigo_produto), descricao: i.descricao, quantidadeBase: Math.max(0, n(i.quantidade_base) - (n(i.vinculado) - nesta)), precoBase: n(i.preco_base) }
       })
       vinculados.push({ pedidoId: n(c.id), numero: n(c.numero), fornecedor: c.fornecedor_nome, etapa: c.etapa, linhas: conferirPedidoNota(pedidoConf, daNota) })

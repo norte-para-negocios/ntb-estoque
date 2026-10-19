@@ -58,7 +58,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
       <PageHeader
         title="Sugestão de compra"
         icon={ShoppingCart}
-        description="O que comprar ou produzir, pela mesma conta do Omie: consumo médio, ponto de pedido, entradas previstas e projeção de saídas."
+        description="O que comprar ou produzir, pela mesma fórmula do Omie: consumo médio, ponto de pedido, entradas previstas e projeção de saídas. Os números podem diferir dos do Omie se o histórico de lá mudou depois da nossa leitura."
         voltarHref="/relatorios"
         actions={
           <>
@@ -76,7 +76,7 @@ export default async function SugestaoCompraPage({ searchParams }: { searchParam
         <div><label className={rotulo} htmlFor="s-ef">até</label><input id="s-ef" type="date" name="eFim" defaultValue={p.projFim} className={campo} /></div>
         <div><label className={rotulo} htmlFor="s-pj">Projeção de saídas</label>
           <select id="s-pj" name="proj" defaultValue={p.base === 'previsao' ? 'previsao' : ''} className={campo}>
-            <option value="">Consumo médio (igual ao Omie)</option>
+            <option value="">Consumo médio (fórmula do Omie)</option>
             <option value="previsao">Previsão de venda + OPs abertas</option>
           </select></div>
         <div className="flex gap-2"><button type="submit" className={btnClass('primary')}>Calcular</button><Link href="/sugestao-compra" className={btnClass('outline')}>Padrão</Link></div>

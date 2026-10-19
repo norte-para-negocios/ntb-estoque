@@ -116,3 +116,17 @@ test('parcelasDoTexto: 30/60/90 em partes iguais que fecham 100%', async () => {
   assert.equal(validarParcelas(parcelasDoTexto('0 28 56')!), null)
   assert.equal(textoDasParcelas([{ dias: 30, percentual: 50 }, { dias: 60, percentual: 50 }]), '30/60')
 })
+
+test('pedido 100% recebido não oferece cancelar (revisão M7)', () => {
+  assert.deepEqual(acoesDisponiveis('aprovado', { temVinculo: true, podeAprovar: true, podeEditar: true, recebidoTotal: true }), [])
+  assert.deepEqual(acoesDisponiveis('aprovado', { temVinculo: true, podeAprovar: true, podeEditar: true, recebidoTotal: false }), ['cancelar'])
+})
+
+test('item da nota religado a outro produto não conta no item do pedido (revisão I1)', () => {
+  const r = conferirPedidoNota(
+    [{ id: 1, codigoProduto: 501, descricao: 'TOMATE', quantidadeBase: 10, precoBase: 4.5 }],
+    [{ id: 11, codigoProduto: 777, descricao: 'TOMATE?', quantidadeBase: 10, precoBase: 4.5, recebido: 10, lancado: true, pedidoItemId: 1 }],
+  )
+  assert.equal(r.find((l) => l.pedidoItemId === 1)!.situacao, 'nao_veio')
+  assert.equal(r.find((l) => l.notaItemId === 11)!.situacao, 'fora_do_pedido')
+})

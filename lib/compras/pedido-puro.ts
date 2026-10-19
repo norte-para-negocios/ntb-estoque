@@ -21,7 +21,7 @@ export const ETAPAS_FILTRO: { value: EtapaExibida; label: string }[] =
 const EPS = 1e-6
 
 /** Ações que a tela oferece (a função pc_acao confere de novo no banco). */
-export function acoesDisponiveis(etapa: EtapaPedido, o: { temVinculo: boolean; podeAprovar: boolean; podeEditar: boolean }): AcaoPedido[] {
+export function acoesDisponiveis(etapa: EtapaPedido, o: { temVinculo: boolean; podeAprovar: boolean; podeEditar: boolean; recebidoTotal?: boolean }): AcaoPedido[] {
   const r: AcaoPedido[] = []
   if (etapa === 'rascunho') {
     // aprovar direto do rascunho só para quem também cria pedido (o comprador que pode aprovar)
@@ -32,7 +32,8 @@ export function acoesDisponiveis(etapa: EtapaPedido, o: { temVinculo: boolean; p
   } else if (etapa === 'aprovado') {
     if (o.podeEditar && !o.temVinculo) r.push('reabrir')
   }
-  if (etapa !== 'cancelado' && o.podeEditar) r.push('cancelar')
+  // pedido já 100% recebido não se cancela (pc_acao recusa também)
+  if (etapa !== 'cancelado' && o.podeEditar && !o.recebidoTotal) r.push('cancelar')
   return r
 }
 
@@ -73,7 +74,8 @@ export function precoDiverge(pedido: number, nota: number): boolean {
 export function conferirPedidoNota(pedido: ItemPedidoConf[], nota: ItemNotaConf[]): LinhaConf[] {
   const r: LinhaConf[] = []
   for (const p of pedido) {
-    const ns = nota.filter((n) => n.pedidoItemId === p.id)
+    // só conta a linha da nota ligada a este item E com o mesmo produto (item religado a outro produto depois do vínculo fica fora)
+    const ns = nota.filter((n) => n.pedidoItemId === p.id && n.codigoProduto === p.codigoProduto)
     if (!ns.length) {
       r.push({ pedidoItemId: p.id, notaItemId: null, descricao: p.descricao, pedidoQtd: p.quantidadeBase, pedidoPreco: p.precoBase,
         notaQtd: null, notaPreco: null, recebido: 0, situacao: 'nao_veio', precoDiferente: false, difPrecoPct: null })
@@ -88,9 +90,9 @@ export function conferirPedidoNota(pedido: ItemPedidoConf[], nota: ItemNotaConf[
       notaQtd: Math.round(qtd * 1e6) / 1e6, notaPreco: Math.round(preco * 1e6) / 1e6, recebido: Math.round(recebido * 1e6) / 1e6, situacao,
       precoDiferente: precoDiverge(p.precoBase, preco), difPrecoPct: p.precoBase > 0 ? ((preco - p.precoBase) / p.precoBase) * 100 : null })
   }
-  const ids = new Set(pedido.map((p) => p.id))
+  const prodDoItem = new Map(pedido.map((p) => [p.id, p.codigoProduto]))
   for (const n of nota) {
-    if (n.pedidoItemId != null && ids.has(n.pedidoItemId)) continue
+    if (n.pedidoItemId != null && prodDoItem.get(n.pedidoItemId) === n.codigoProduto) continue
     r.push({ pedidoItemId: null, notaItemId: n.id, descricao: n.descricao, pedidoQtd: null, pedidoPreco: null, notaQtd: n.quantidadeBase,
       notaPreco: n.precoBase, recebido: n.lancado ? n.recebido : 0, situacao: 'fora_do_pedido', precoDiferente: false, difPrecoPct: null })
   }

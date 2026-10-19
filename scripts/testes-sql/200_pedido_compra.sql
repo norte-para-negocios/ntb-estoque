@@ -99,6 +99,36 @@ begin
   if has_function_privilege('authenticated', 'pc_salvar(bigint, jsonb, text, text)', 'execute') then raise exception 'authenticated executa pc_salvar'; end if;
   if has_table_privilege('authenticated', 'pedidos_compra', 'insert') then raise exception 'authenticated insere'; end if;
   if not has_table_privilege('authenticated', 'pedidos_compra_itens_situacao', 'select') then raise exception 'view sem select'; end if;
+  -- 9. revisão I1: item da nota religado a outro produto depois do vínculo (vincular_item_compra) deixa de contar no pedido
+  r := pc_salvar(v_loja, '{"fornecedor_nome":"HORTI2","itens":[{"codigo_produto":501,"quantidade":5}]}'::jsonb);
+  v_ped2 := (r->>'id')::bigint;
+  perform pc_acao(v_loja, v_ped2, 'aprovar');
+  insert into compras_proprio (loja_id, origem, numero, fornecedor_nome, status) values (v_loja, 'manual', '900', 'HORTI2', 'pendente') returning id into v_comp;
+  insert into compras_proprio_itens (compra_id, loja_id, linha, descricao, quantidade, valor_unitario, valor_total, fator, codigo_produto)
+    values (v_comp, v_loja, 1, 'TOMATE', 5, 4, 20, 1, 501) returning id into v_ci1;
+  perform pc_vincular_nota(v_loja, v_ped2, v_comp);
+  select * into s from pedidos_compra_itens_situacao where pedido_id = v_ped2;
+  if s.vinculado <> 5 then raise exception 'I1 antes: %', s; end if;
+  perform vincular_item_compra(v_loja, v_ci1, 502, 1);
+  select * into s from pedidos_compra_itens_situacao where pedido_id = v_ped2;
+  if s.vinculado <> 0 or s.recebido <> 0 then raise exception 'I1: item religado a outro produto ainda conta: %', s; end if;
+
+  -- 10. revisão M7: pedido 100% recebido não pode ser cancelado
+  perform vincular_item_compra(v_loja, v_ci1, 501, 1);
+  update compras_proprio_itens set lancado = true where id = v_ci1;
+  update compras_proprio set status = 'lancada' where id = v_comp;
+  begin perform pc_acao(v_loja, v_ped2, 'cancelar', null, null, 'x'); raise exception 'M7: cancelou pedido recebido'; exception when sqlstate '22023' then null; end;
+
+  -- 11. revisão M2: local de estoque que não é da loja
+  begin
+    perform pc_salvar(v_loja, '{"fornecedor_nome":"X","itens":[{"codigo_produto":501,"quantidade":1,"codigo_local_estoque":999}]}'::jsonb);
+    raise exception 'M2: aceitou local inexistente';
+  exception when sqlstate '22023' then null; end;
+  perform pc_salvar(v_loja, '{"fornecedor_nome":"X","itens":[{"codigo_produto":501,"quantidade":1,"codigo_local_estoque":1}]}'::jsonb);
+
+  -- 12. revisão M8: eventos não podem ser apagados
+  begin delete from pedidos_compra_eventos where pedido_id = v_ped2; raise exception 'M8: evento apagado'; exception when sqlstate '55000' then null; end;
+
   raise notice 'pedido de compra (200) OK';
 end $$;
 rollback;

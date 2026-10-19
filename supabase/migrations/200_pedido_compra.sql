@@ -99,7 +99,7 @@ begin
   raise exception 'pedidos_compra_eventos é append-only' using errcode = '55000';
 end $$;
 drop trigger if exists pedidos_compra_eventos_imutavel on public.pedidos_compra_eventos;
-create trigger pedidos_compra_eventos_imutavel before update on public.pedidos_compra_eventos
+create trigger pedidos_compra_eventos_imutavel before update or delete on public.pedidos_compra_eventos
   for each row execute function public.trg_pedidos_compra_eventos_imutavel();
 
 -- RLS (padrão initplan da 156) e grants mínimos: leitura pela sessão, escrita só service role / funções.
@@ -125,7 +125,8 @@ select i.id, i.pedido_id, i.loja_id, i.linha, i.codigo_produto, i.descricao, i.u
        coalesce(sum(coalesce(ci.quantidade_recebida, ci.quantidade * ci.fator)) filter (where c.status <> 'cancelada' and ci.lancado), 0) as recebido
   from public.pedidos_compra_itens i
   left join public.pedidos_compra_vinculos v on v.pedido_item_id = i.id
-  left join public.compras_proprio_itens ci on ci.id = v.compra_item_id
+  -- o item da nota só conta se ainda é do mesmo produto (nota corrigida depois do vínculo, vincular_item_compra, sai da conta)
+  left join public.compras_proprio_itens ci on ci.id = v.compra_item_id and ci.codigo_produto = i.codigo_produto
   left join public.compras_proprio c on c.id = ci.compra_id
  group by i.id;
 revoke all on public.pedidos_compra_itens_situacao from anon, authenticated;
@@ -172,6 +173,8 @@ begin
   if coalesce(v_nome, '') = '' then raise exception 'Informe o fornecedor' using errcode = '22023'; end if;
   if length(v_cnpj) not in (11, 14) then v_cnpj := null; end if;   -- documento torto no cadastro não trava o pedido
 
+  -- criação: a trava vem ANTES de conferir a chave (dois envios simultâneos com a mesma chave = o 2º vê o 1º e devolve duplicado)
+  if v_id is null then perform pg_advisory_xact_lock(hashtext('pedido_compra_numero'), p_loja::int); end if;
   if v_id is null and v_chave is not null then
     select * into v_ped from pedidos_compra where loja_id = p_loja and chave_idempotencia = v_chave;
     if found then return jsonb_build_object('ok', true, 'id', v_ped.id, 'numero', v_ped.numero, 'duplicado', true); end if;
@@ -190,7 +193,6 @@ begin
       where id = v_id;
     delete from pedidos_compra_itens where pedido_id = v_id;   -- rascunho nunca tem vínculo (só aprovado vincula; reabrir exige sem vínculo)
   else
-    perform pg_advisory_xact_lock(hashtext('pedido_compra_numero'), p_loja::int);
     insert into pedidos_compra (loja_id, numero, fornecedor_id, fornecedor_nome, fornecedor_cnpj, previsao_entrega, frete, outras_despesas, parcelas,
         numero_fornecedor, contato, obs, obs_interna, origem, chave_idempotencia, criado_por, criado_por_nome)
     values (p_loja, coalesce((select max(numero) from pedidos_compra where loja_id = p_loja), 0) + 1, v_forn, v_nome, v_cnpj,
@@ -205,6 +207,10 @@ begin
 
   for x in select * from jsonb_array_elements(p_dados->'itens') loop
     v_linha := v_linha + 1;
+    if nullif(x->>'codigo_local_estoque', '') is not null and not exists (
+         select 1 from local_estoques where loja_id = p_loja and codigo_local_estoque = (x->>'codigo_local_estoque')::bigint and deleted_at is null) then
+      raise exception 'Local de estoque % não é desta loja', x->>'codigo_local_estoque' using errcode = '22023';
+    end if;
     insert into pedidos_compra_itens (pedido_id, loja_id, linha, codigo_produto, descricao, unidade, fator, quantidade, preco_unitario, codigo_local_estoque, obs)
     select v_id, p_loja, v_linha, p.codigo_produto, coalesce(nullif(btrim(coalesce(x->>'descricao', '')), ''), p.descricao),
            coalesce(nullif(btrim(coalesce(x->>'unidade', '')), ''), p.unidade), coalesce(nullif(x->>'fator', '')::numeric, 1),
@@ -243,6 +249,10 @@ begin
   if p_acao = 'reabrir' and exists (select 1 from pedidos_compra_vinculos where pedido_id = p_id) then
     raise exception 'O pedido já tem nota vinculada: desvincule a nota antes de reabrir' using errcode = '22023';
   end if;
+  if p_acao = 'cancelar' and exists (select 1 from pedidos_compra_itens_situacao where pedido_id = p_id)
+     and not exists (select 1 from pedidos_compra_itens_situacao where pedido_id = p_id and recebido + 0.000001 < quantidade_base) then
+    raise exception 'O pedido já foi recebido por completo: não há o que cancelar' using errcode = '22023';
+  end if;
   if p_acao in ('cancelar', 'reprovar') and v_motivo is null then
     raise exception 'Informe o motivo' using errcode = '22023';
   end if;
@@ -270,7 +280,8 @@ begin
   select * into v_ped from pedidos_compra where id = p_pedido and loja_id = p_loja for update;
   if not found then raise exception 'Pedido inexistente' using errcode = '22023'; end if;
   if v_ped.etapa <> 'aprovado' then raise exception 'Só pedido aprovado recebe nota (etapa atual: %)', v_ped.etapa using errcode = '22023'; end if;
-  select * into v_comp from compras_proprio where id = p_compra and loja_id = p_loja;
+  -- trava a nota: ligar a mesma nota a dois pedidos ao mesmo tempo fica em fila (o 2º vê os itens já ligados)
+  select * into v_comp from compras_proprio where id = p_compra and loja_id = p_loja for update;
   if not found then raise exception 'Nota inexistente' using errcode = '22023'; end if;
   if v_comp.status = 'cancelada' then raise exception 'Nota cancelada não entra no pedido' using errcode = '22023'; end if;
   if v_ped.fornecedor_cnpj is not null and v_comp.fornecedor_cnpj is not null
@@ -303,6 +314,7 @@ begin
   perform _pc_loja_propria(p_loja);
   select * into v_ped from pedidos_compra where id = p_pedido and loja_id = p_loja for update;
   if not found then raise exception 'Pedido inexistente' using errcode = '22023'; end if;
+  perform 1 from compras_proprio where id = p_compra and loja_id = p_loja for update;
   delete from pedidos_compra_vinculos where pedido_id = p_pedido and compra_id = p_compra;
   get diagnostics v_n = row_count;
   insert into pedidos_compra_eventos (loja_id, pedido_id, tipo, de_etapa, para_etapa, detalhe, user_id, user_nome)

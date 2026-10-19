@@ -40,7 +40,7 @@ const RELATORIOS: { grupo: string; itens: Rel[] }[] = [
     grupo: 'Compras e custo',
     itens: [
       { href: '/relatorio-compras', titulo: 'Compras', icon: ShoppingCart, descricao: 'Quanto e de quem você compra; evolução do preço dos insumos.', pergunta: 'Estou pagando mais caro?' },
-      { href: '/sugestao-compra', titulo: 'Sugestão de compra', icon: ShoppingCart, descricao: 'O que comprar ou produzir: consumo médio, ponto de pedido e entradas previstas (conta do Omie).', pergunta: 'O que preciso comprar?' },
+      { href: '/sugestao-compra', titulo: 'Sugestão de compra', icon: ShoppingCart, descricao: 'O que comprar ou produzir: consumo médio, ponto de pedido e entradas previstas (mesma fórmula do Omie).', pergunta: 'O que preciso comprar?' },
       { href: '/relatorio-estoque-valorizado', titulo: 'Estoque valorizado', icon: Boxes, descricao: 'Valor do estoque por produto: saldo x CMC da última foto do Omie.', pergunta: 'Quanto vale o meu estoque?' },
       { href: '/relatorio-posicao-estoque', titulo: 'Posição de estoque', icon: Warehouse, descricao: 'Quantidade, custo médio e valor por produto e por local, com zerados, inativos, um total só e o inventário tipo SPED (Bloco H) para o contador.', pergunta: 'O que tenho em cada local e quanto vale?' },
       { href: '/relatorio-cmv', titulo: 'CMV / CPV', icon: Calculator, descricao: 'Custo do que foi vendido e do que foi consumido na produção no período, com a margem bruta real por produto, família e tipo.', pergunta: 'Quanto custou o que eu vendi?' },
