@@ -22,7 +22,7 @@ begin
   insert into outbox (table_name, operation, row_data, created_at)
   select 'produtos', 'UPDATE', jsonb_build_object('id', 5000 + g, 'loja_id', 5), now() - (g || ' seconds')::interval
   from generate_series(1, 350) g;
-  delete from offline_meta where chave = 'ultimo_outbox';
+  delete from offline_meta where chave in ('ultimo_outbox', 'ultima_compactacao');
   insert into offline_meta values ('ultimo_outbox', '0'::jsonb);
   analyze outbox;
 end $$;
@@ -65,6 +65,29 @@ do $$ begin
   assert (select count(*) from (
     select o.table_name, jsonb_build_object('id', o.row_data -> 'id') pk, max(o.id) mx from outbox o where o.table_name = 'produtos' group by 1, 2
   ) k left join offline_versoes v on v.tabela = k.table_name and v.pk = k.pk where v.outbox_id is distinct from k.mx) = 0, 'versão desatualizada';
+end $$;
+
+\echo == cron parado 20 min (revisão I1): a execução anterior foi há 20 min e uma transação que começou 3 min antes dela
+\echo == confirmou depois dela; a janela conta a partir da execução anterior, então a linha entra
+update offline_meta set valor = to_jsonb(now() - interval '20 minutes') where chave = 'ultima_compactacao';
+delete from outbox where id = (select (valor #>> '{}')::bigint - 30 from offline_meta where chave = 'ultimo_outbox');
+insert into outbox (id, table_name, operation, row_data, created_at)
+values ((select (valor #>> '{}')::bigint - 30 from offline_meta where chave = 'ultimo_outbox'), 'produtos', 'DELETE', '{"id": 777777, "loja_id": 5}', now() - interval '23 minutes');
+select offline_compactar() as passada_depois_da_parada;
+do $$ begin
+  assert exists (select 1 from offline_versoes where tabela = 'produtos' and pk = '{"id": 777777}' and apagado), 'perdeu a transação atrasada depois da parada do cron';
+  assert (select (valor #>> '{}')::timestamptz from offline_meta where chave = 'ultima_compactacao') > now() - interval '1 minute', 'não gravou o horário da execução';
+end $$;
+
+\echo == sem registro da execução anterior: folga antiga de 5.000 ids
+delete from offline_meta where chave = 'ultima_compactacao';
+delete from outbox where id = (select (valor #>> '{}')::bigint - 40 from offline_meta where chave = 'ultimo_outbox');
+insert into outbox (id, table_name, operation, row_data, created_at)
+values ((select (valor #>> '{}')::bigint - 40 from offline_meta where chave = 'ultimo_outbox'), 'produtos', 'DELETE', '{"id": 666666, "loja_id": 5}', now() - interval '2 hours');
+select offline_compactar() as passada_sem_registro;
+do $$ begin
+  assert exists (select 1 from offline_versoes where tabela = 'produtos' and pk = '{"id": 666666}' and apagado), 'sem registro devia usar a folga de 5.000 ids';
+  assert exists (select 1 from offline_meta where chave = 'ultima_compactacao'), 'não criou o registro';
 end $$;
 drop procedure fi_preparar_outbox();
 truncate outbox restart identity;
