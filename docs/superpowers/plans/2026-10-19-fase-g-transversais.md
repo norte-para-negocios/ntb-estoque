@@ -42,7 +42,7 @@
 
 ### Task 2: Histórico na tela
 
-**Files:** Create `lib/historico/historico-puro.ts` (+ `.test.ts`), `lib/historico/ficha-versoes-puro.ts` (+ `.test.ts`), `lib/historico/carregar.ts`, `components/historico/HistoricoAlteracoes.tsx`, `app/(app)/fornecedor/[id]/page.tsx`; Modify páginas de OP, nota, pedido, produto (próprio e `/estoque/produto/[codigo]`), `components/fornecedor/FornecedorAcoes.tsx`.
+**Files:** Create `lib/historico/historico-puro.ts` (+ `.test.ts`), `lib/historico/ficha-versoes-puro.test.ts` (o código fica em `historico-puro.ts`: módulo puro não importa outro com `.ts`), `lib/historico/carregar.ts`, `components/historico/HistoricoAlteracoes.tsx`, `app/(app)/fornecedor/[id]/page.tsx`; Modify páginas de OP, nota, pedido, produto (próprio e `/estoque/produto/[codigo]`), `components/fornecedor/FornecedorAcoes.tsx`.
 
 **Interfaces:** `consolidarHistorico(linhas: LinhaHistorico[], rotulos: RotulosEntidade): MomentoHistorico[]` (agrupa por txid/autor; pares delete+insert da mesma linha viram alteração ou somem); `formatarValor(campo, valor)`; `diffVersoesFicha(versoes: VersaoFicha[]): MomentoHistorico[]`; `carregarHistorico(lojaId, entidade, ids: string[]): Promise<{ linhas: LinhaHistorico[]; erro: string|null }>`.
 

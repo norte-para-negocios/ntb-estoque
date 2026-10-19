@@ -42,12 +42,12 @@ export function Sininho({ tela, className = '' }: { tela: 'desktop' | 'celular';
   React.useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
     const minha = () => (tela === 'desktop') === mq.matches
-    if (minha()) void carregar()
+    const inicio = window.setTimeout(() => { if (minha()) void carregar() }, 0) // 1ª consulta fora do corpo do efeito
     const t = window.setInterval(() => { if (minha() && document.visibilityState === 'visible') void carregar() }, INTERVALO_MS)
     const aoVoltar = () => { if (minha() && document.visibilityState === 'visible') void carregar() }
     document.addEventListener('visibilitychange', aoVoltar)
     mq.addEventListener('change', aoVoltar)
-    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', aoVoltar); mq.removeEventListener('change', aoVoltar) }
+    return () => { window.clearTimeout(inicio); window.clearInterval(t); document.removeEventListener('visibilitychange', aoVoltar); mq.removeEventListener('change', aoVoltar) }
   }, [carregar, tela])
 
   async function abrir(n: NotificacaoTela) {
