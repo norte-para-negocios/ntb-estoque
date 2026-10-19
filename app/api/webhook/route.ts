@@ -4,6 +4,7 @@ import { fetchNotaFiscal } from '@/lib/omie/nota-fiscal'
 import { fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
+import { webhookTokenOk } from '@/lib/seguranca/regras'
 
 // Topicos de movimentacao de estoque: ignorados (igual ao Laravel, evita loop de ajuste)
 const IGNORED_TOPICS = ['Produto.AjusteEstoque', 'Produto.MovimentacaoEstoque']
@@ -15,8 +16,27 @@ interface OmieWebhookBody {
   event?: { nIdReceb?: number; nCodOP?: number }
 }
 
+// Fase H: aviso do Omie é pequeno (p99 = 1,5 KB; o maior já gravado, 175 KB, em 19/10/2026). Corpo gigante é
+// recusado antes de ir para o banco (o JSON inteiro é gravado em `webhooks.message` e no Contabo).
+const MAX_BYTES = 1_000_000
+
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as OmieWebhookBody | null
+  // Fase H: o Omie não assina o aviso. Com OMIE_WEBHOOK_TOKEN configurado, só aceita `?t=<token>` (o endereço
+  // cadastrado nos apps do Omie precisa ser trocado ANTES de ligar a env). Sem a env: comportamento de sempre.
+  if (!webhookTokenOk(new URL(request.url).searchParams.get('t'), process.env.OMIE_WEBHOOK_TOKEN)) {
+    return NextResponse.json({ ok: true })
+  }
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BYTES) {
+    return NextResponse.json({ ok: false }, { status: 413 })
+  }
+  const texto = await request.text().catch(() => '')
+  if (texto.length > MAX_BYTES) return NextResponse.json({ ok: false }, { status: 413 })
+  let body: OmieWebhookBody | null = null
+  try {
+    body = JSON.parse(texto) as OmieWebhookBody
+  } catch {
+    body = null
+  }
 
   const supabase = createServiceClient()
 
