@@ -20,13 +20,15 @@ app.use(express.json({ limit: '2mb' }));
 
 function checkAuth(req, res, next) {
   const key = req.headers['x-api-key'];
-  if (key !== process.env.API_KEY) return res.status(401).json({ error: 'unauthorized' });
+  // Fase H: sem a env configurada, undefined !== undefined dava acesso sem chave.
+  if (!process.env.API_KEY || key !== process.env.API_KEY) return res.status(401).json({ error: 'unauthorized' });
   next();
 }
 
 function checkAuthVendas(req, res, next) {
   const key = req.headers['x-api-key'];
-  if (key !== process.env.VENDAS_API_KEY) return res.status(401).json({ error: 'unauthorized' });
+  // Fase H: sem a env configurada, undefined !== undefined dava acesso sem chave.
+  if (!process.env.VENDAS_API_KEY || key !== process.env.VENDAS_API_KEY) return res.status(401).json({ error: 'unauthorized' });
   next();
 }
 
