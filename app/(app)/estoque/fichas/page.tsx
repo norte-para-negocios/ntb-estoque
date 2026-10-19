@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { AlertTriangle, BookOpen } from 'lucide-react'
+import { AlertTriangle, BookOpen, Download } from 'lucide-react'
+import { btnClass } from '@/components/ui-kit/Button'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
-import { carregarFichasAtivas } from '@/lib/estoque/receita-db'
-import { agruparFichas, ondeEUsado, type LinhaFichaTela } from '@/lib/estoque/fichas-tela-puro'
+import { agruparFichas, ondeEUsado } from '@/lib/estoque/fichas-tela-puro'
+import { carregarFichasDaLoja } from './dados'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { ListaHeader } from '@/components/ui-kit/ListaHeader'
 import { Filtros } from '@/components/ui-kit/Filtros'
@@ -23,49 +24,6 @@ const fmtQ = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 4
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 type SP = { q?: string; insumo?: string; page?: string; trocar?: string; troca_de?: string; troca_para?: string; troca_qtd?: string }
-type CacheRow = {
-  codigo_produto: number; codigo_produto_insumo: number; descricao_insumo: string | null; quantidade: number; percentual_perda: number | null
-  unidade: string | null; codigo_local_estoque?: number | null; local_fonte?: string | null; incluido_por?: string | null
-  incluido_em?: string | null; alterado_por?: string | null; alterado_em?: string | null
-}
-
-async function fichasOmie(lojaId: number): Promise<{ linhas: LinhaFichaTela[]; avisos: string[]; lidas: number | null }> {
-  const supabase = await createClient()
-  const avisos: string[] = []
-  let erro = false
-  const base = 'id, codigo_produto, codigo_produto_insumo, descricao_insumo, quantidade, percentual_perda, unidade'
-  let rows = await buscarTodasLinhas<CacheRow>((from, to) =>
-    supabase.from('estrutura_produto_cache').select(`${base}, codigo_local_estoque, local_fonte, incluido_por, incluido_em, alterado_por, alterado_em`)
-      .eq('loja_id', lojaId).order('id').range(from, to) as unknown as PromiseLike<{ data: CacheRow[] | null; error: { message: string } | null }>, undefined, () => { erro = true })
-  if (erro) {
-    avisos.push('Local de consumo e autor ainda não disponíveis (migration 160 pendente).')
-    rows = await buscarTodasLinhas<CacheRow>((from, to) =>
-      supabase.from('estrutura_produto_cache').select(base).eq('loja_id', lojaId).order('id').range(from, to) as unknown as PromiseLike<{ data: CacheRow[] | null; error: { message: string } | null }>)
-  }
-  const { count, error } = await supabase.from('estrutura_produto_sync').select('codigo_produto', { count: 'exact', head: true }).eq('loja_id', lojaId)
-  return {
-    avisos, lidas: error ? null : count ?? 0,
-    linhas: rows.map((r) => ({
-      produto: Number(r.codigo_produto), insumo: Number(r.codigo_produto_insumo), quantidade: Number(r.quantidade), perda: Number(r.percentual_perda ?? 0),
-      unidade: r.unidade, local: r.codigo_local_estoque == null ? null : Number(r.codigo_local_estoque), localFonte: r.local_fonte ?? null,
-      alteradoPor: r.alterado_por ?? null, alteradoEm: r.alterado_em ?? null, incluidoPor: r.incluido_por ?? null, incluidoEm: r.incluido_em ?? null,
-    })),
-  }
-}
-
-async function fichasProprio(lojaId: number): Promise<{ linhas: LinhaFichaTela[]; avisos: string[]; lidas: null }> {
-  const supabase = await createClient()
-  const fichas = await carregarFichasAtivas(supabase, lojaId)
-  const { data } = await supabase.from('fichas_tecnicas').select('id, criada_por, created_at').eq('loja_id', lojaId).eq('ativa', true).order('id').limit(5000)
-  const autor = new Map((data ?? []).map((f) => [Number(f.id), { por: f.criada_por as string | null, em: (f.created_at as string).slice(0, 10) }]))
-  const linhas = [...fichas.values()].flatMap((f) => f.itens.map((i: { codigoInsumo: number; quantidadeLiquida: number; fatorCorrecao: number; perdaPct: number }) => ({
-    produto: f.codigoProduto, insumo: i.codigoInsumo, quantidade: (i.quantidadeLiquida * i.fatorCorrecao) / (f.rendimento || 1), perda: i.perdaPct,
-    unidade: null, local: null, localFonte: null, alteradoPor: null, alteradoEm: null,
-    incluidoPor: autor.get(f.fichaId)?.por ?? null, incluidoEm: autor.get(f.fichaId)?.em ?? null,
-  })))
-  return { linhas, avisos: ['No estoque próprio o local de consumo é escolhido na produção, não na ficha. Quantidades por 1 unidade do prato (já com o fator de correção).'], lidas: null }
-}
-
 /**
  * Dados da troca de insumo em massa ("nosso Omie" Fase 4). Loja de teste lê as fichas da loja real de origem (só
  * leitura; a loja de teste não tem fichas lidas e a escrita lá é simulada), por isso o service client.
@@ -116,7 +74,7 @@ export default async function FichasPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams
 
   const [{ linhas, avisos, lidas }, produtos, locais] = await Promise.all([
-    modo === 'omie' ? fichasOmie(lojaId) : fichasProprio(lojaId),
+    carregarFichasDaLoja(lojaId, modo),
     carregarProdutosMin(lojaId),
     carregarLocais(lojaId),
   ])
@@ -182,7 +140,8 @@ export default async function FichasPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-4">
       <ListaHeader>
-        <PageHeader title="Fichas técnicas" description={modo === 'omie' ? 'Insumos de cada prato no Omie, de onde saem e quem mexeu por último' : 'Insumos de cada prato e quem criou a ficha'} />
+        <PageHeader title="Fichas técnicas" description={modo === 'omie' ? 'Insumos de cada prato no Omie, de onde saem e quem mexeu por último' : 'Insumos de cada prato e quem criou a ficha'}
+          actions={linhas.length ? <a href="/estoque/fichas/excel" className={btnClass('outline')}><Download className="size-4" /> Estrutura completa (Excel)</a> : undefined} />
       </ListaHeader>
       <EstoqueAtalhos atual="fichas" />
 
