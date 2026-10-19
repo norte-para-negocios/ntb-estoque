@@ -26,6 +26,14 @@
 2. **`pgrst_ddl_watch`** só manda `NOTIFY` quando o DDL cria algo de fato: `CREATE TABLE IF NOT EXISTS` de partição que já existe não notifica. As ~40 chamadas por partição do realtime custam ~1 recarga por dia por banco. A migration 190 continua no escopo (pedido explícito), com o ganho medido real.
 3. **Outbox:** o índice por `created_at` já existe (`outbox_created_at_idx_n`); a versão em lotes (`/root/outbox-poda-lotes.sh`) foi uma faxina avulsa de 02/10, não roda no cron. O `delete` de hora em hora da tabela atual (recriada em 02/10, `queryid` -8888295578778746708) faz **4,0 s em média, pico 20,6 s** (o 43 s/3,5 min do spec é da tabela antiga). **93 % das linhas da outbox (15,2 mil de 16,4 mil por hora) vêm de `faturamento_importado`**: `syncFaturamento` apaga e reinsere o mês atual e o anterior de todas as lojas a cada hora, e a tabela está no canal offline em modo `log` (cada linha vira versão nova para os desktops).
 
+## Revisão independente (19/10) — corrigido
+
+- C1: regra do esquema dentro dos gatilhos da 190 (sem `extensions.pgrst_deve_recarregar`); teste com papel sem USAGE em `extensions`.
+- I1: folga da 193 a partir da execução anterior (`offline_meta.ultima_compactacao`).
+- I2: 191 com `lock_timeout` 3 s + nova tentativa no ALTER/CREATE TRIGGER de `webhooks`.
+- M1: carga da 191 por `->> is not null`; `indisvalid` conferido no fim da 191 e da 194.
+- M2: `filtroInPostgrest` no apagar por rótulo do faturamento.
+
 ## Review Focus
 
 - Sync de faturamento por diferença: mês que deixou de ter um rótulo precisa ter a linha APAGADA (senão o total fica maior que o real).
