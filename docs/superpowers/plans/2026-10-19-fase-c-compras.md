@@ -35,7 +35,7 @@ Hipóteses (não provadas pela captura, documentadas na tela e no AGENTS.md):
 ## Global Constraints
 
 - Nunca: deploy, migration ou escrita em produção, chamada ao Omie a partir daqui. Leitura em produção só `begin read only; … rollback;`.
-- Migrations 200+ (200 sugestão, 201 pedido de compra). Teste em `ntb-teste-sql`, banco `fc` criado de `fb_base`. RLS padrão initplan (156). Grants mínimos: `select` para authenticated, escrita só service role / funções.
+- Migrations 200+ (na execução: 200 = pedido de compra, 201 = sugestão, porque a função do modo próprio lê os pedidos). Teste em `ntb-teste-sql`, banco `fc` criado de `fb_base`. RLS padrão initplan (156). Grants mínimos: `select` para authenticated, escrita só service role / funções.
 - Modo Omie não muda nada; pedido de compra só em `modo_estoque='proprio'`; nada escreve no Omie.
 - Puro sem `@/`, `node --test`. `npx tsc --noEmit -p .` limpo antes de cada commit. Ações novas: `node scripts/inserir-via-desktop.mjs` + decisão em `lib/offline/politica.ts`.
 - Não mexer em `/estoque/correcoes`, `lib/correcoes/*`.

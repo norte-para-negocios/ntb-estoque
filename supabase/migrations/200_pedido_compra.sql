@@ -170,6 +170,7 @@ begin
     if not found then raise exception 'Fornecedor % não é desta loja', v_forn using errcode = '22023'; end if;
   end if;
   if coalesce(v_nome, '') = '' then raise exception 'Informe o fornecedor' using errcode = '22023'; end if;
+  if length(v_cnpj) not in (11, 14) then v_cnpj := null; end if;   -- documento torto no cadastro não trava o pedido
 
   if v_id is null and v_chave is not null then
     select * into v_ped from pedidos_compra where loja_id = p_loja and chave_idempotencia = v_chave;
