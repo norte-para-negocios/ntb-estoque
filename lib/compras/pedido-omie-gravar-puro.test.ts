@@ -5,7 +5,7 @@ import {
   bloqueioEtapaPorOmie, codigoIntegracaoItem, codigoIntegracaoPedido, codigoOmieDoFornecedor, dataParaOmie, decidirFalhaPedido,
   ehPedidoJaExiste, ehPedidoNaoEncontrado, gravacaoPedidosOmieLigada, montarIncluirPedCompra, motivoSemGravacaoPedidoOmie,
   pedidoCompraNaLoja, pedidoIncluido, pedidoNtbDoCodigo, TETO_PERMANENTE, TETO_TRANSITORIO,
-  inclusaoIncerta, payloadParaGuardar, payloadsDivergem, msBloqueioPersistido, JANELA_BLOQUEIO_PERSISTIDO_MS,
+  inclusaoIncerta, incertoAposFalhaDaInclusao, payloadParaGuardar, payloadsDivergem, msBloqueioPersistido, JANELA_BLOQUEIO_PERSISTIDO_MS,
   type ConfigPedidoOmie, type PedidoParaOmie,
 } from './pedido-omie-gravar-puro.ts'
 
@@ -209,6 +209,12 @@ test('inclusão incerta: só falta de negócio do Omie garante que nada foi cria
   assert.equal(inclusaoIncerta('Já existe um pedido de compra com o Código de Integração [NTB-PC-1]', 'SOAP-ENV:Client-102', true), false)
   assert.equal(inclusaoIncerta('A API foi bloqueada por consumo indevido. Aguarde 1800 segundos.', 'MISUSE_API_PROCESS', true), false)
   assert.equal(inclusaoIncerta('API do Omie bloqueada para esta loja por consumo indevido (libera em ~3 min).', 'MISUSE_API_PROCESS', true), false)
+})
+
+test('"já existe" sem a consulta achar o pedido continua incerto (cancelar/reabrir seguem travados)', () => {
+  assert.equal(incertoAposFalhaDaInclusao('Já existe um pedido de compra cadastrado com o Código de Integração [NTB-PC-1]!', 'SOAP-ENV:Client-102', true), true)
+  assert.equal(incertoAposFalhaDaInclusao('Produto [1] não cadastrado!', 'SOAP-ENV:Client-103', true), false)
+  assert.equal(incertoAposFalhaDaInclusao('fetch failed', undefined, false), true)
 })
 
 test('payload guardado sem o e-mail do aprovador; divergência na adoção', () => {

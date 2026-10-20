@@ -44,7 +44,8 @@ Data: 20/10/2026 · Branch de origem: `paridade-omie` · Migration: **270** (nã
   adota o `nCodPed`. **Adoção** não troca o payload guardado (é o da tentativa que criou o pedido) e marca `divergente` se o
   pedido atual do NTB for diferente (a tela avisa para conferir no Omie). Com `incerto` o pedido não reabre/cancela; se ele
   sair da fila (`precisa_corrigir`), o botão vira **"Conferir no Omie"** (só consulta, no máximo 1× a cada 10 min): achou =
-  adota; não achou = tira o `incerto` e o pedido pode ser reaberto.
+  adota; não achou = tira o `incerto` e o pedido pode ser reaberto. "Já existe" sem a consulta achar continua `incerto`.
+  Conferência que morre no meio (`modo_tentativa = 'conferir'`) nunca é retomada como inclusão: volta a `precisa_corrigir`.
   **Ambiente (revisão)**: o código só é único no banco de produção; um banco de dev/cópia com as chaves do Omie geraria
   `NTB-PC-<id>` iguais a pedidos reais. Por isso a gravação também exige `NTB_AMBIENTE=producao` no servidor.
 - **R5. Limite do Omie** (10ª requisição com erro no mesmo método = 30 min de bloqueio da chave; incidente do Sertão):

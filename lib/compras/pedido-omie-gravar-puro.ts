@@ -305,6 +305,14 @@ export function inclusaoIncerta(msg: string, faultCode: string | undefined, ehRe
   return classificarErroOmie(msg) === 'transitorio'
 }
 
+/**
+ * `incerto` depois de uma inclusão que falhou. "Já existe" sem a consulta achar o pedido (atraso do Omie, código em outro
+ * pedido) continua incerto: o pedido pode estar no Omie, então segue sem reabrir/cancelar até uma conferência.
+ */
+export function incertoAposFalhaDaInclusao(msg: string, faultCode: string | undefined, ehRespostaDoOmie: boolean): boolean {
+  return ehPedidoJaExiste(msg) || inclusaoIncerta(msg, faultCode, ehRespostaDoOmie)
+}
+
 /** Payload como fica guardado (pedidos_compra_omie.payload, integration_attempts): sem o e-mail do aprovador. */
 export function payloadParaGuardar(p: IncluirPedCompra): IncluirPedCompra {
   const c = JSON.parse(JSON.stringify(p)) as IncluirPedCompra

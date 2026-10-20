@@ -4,7 +4,7 @@ import { pegarTravaSync, soltarTravaSync } from './trava-sync'
 import { createServiceClient } from '@/lib/supabase/server'
 import {
   decidirFalhaPedido, ehPedidoJaExiste, ehPedidoNaoEncontrado, ENVIANDO_TRAVADO_MS, filtroFilaCron, gravacaoPedidosOmieLigada,
-  inclusaoIncerta, JANELA_BLOQUEIO_PERSISTIDO_MS, montarIncluirPedCompra, motivoSemGravacaoPedidoOmie, msBloqueioPersistido,
+  incertoAposFalhaDaInclusao, JANELA_BLOQUEIO_PERSISTIDO_MS, montarIncluirPedCompra, motivoSemGravacaoPedidoOmie, msBloqueioPersistido,
   payloadParaGuardar, payloadsDivergem, pedidoIncluido, PREFIXO_LOG_BLOQUEIO,
   type IncluirPedCompra, type ItemPedidoOmie, type PedidoParaOmie, type RespostaIncluirPed,
 } from '@/lib/compras/pedido-omie-gravar-puro'
@@ -268,7 +268,7 @@ export async function enviarPedidoCompraOmie(lojaId: number, pedidoId: number, o
         if (existente) return await sucesso(lojaId, fila, etapa, existente, { payloadAtual })
       }
       const faultCode = e instanceof OmieError ? e.faultCode : undefined
-      return await falha(lojaId, fila, etapa, e, inclusaoIncerta(msg, faultCode, e instanceof OmieError))
+      return await falha(lojaId, fila, etapa, e, incertoAposFalhaDaInclusao(msg, faultCode, e instanceof OmieError))
     }
   } catch (e) {
     if (!fila) {

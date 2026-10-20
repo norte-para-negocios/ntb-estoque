@@ -47,6 +47,8 @@ create table if not exists public.pedidos_compra_omie (
   incerto               boolean not null default false,
   -- Pedido adotado de uma tentativa anterior (já estava no Omie) com conteúdo diferente do pedido atual do NTB: conferir no Omie.
   divergente            boolean not null default false,
+  -- Modo da tentativa em andamento ('enviando'): uma conferência que morreu no meio nunca é retomada como inclusão.
+  modo_tentativa        text not null default 'enviar' check (modo_tentativa in ('enviar', 'conferir')),
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   unique (loja_id, cod_int)
@@ -131,23 +133,30 @@ end $$;
 -- {ok:false} = nada a fazer agora (o chamador não chama o Omie).
 create or replace function public.pc_omie_reivindicar(p_loja bigint, p_pedido bigint, p_modo text default 'enviar', p_travado_seg int default 3600)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_ped pedidos_compra%rowtype; v pedidos_compra_omie%rowtype; v_pode boolean;
+declare v_ped pedidos_compra%rowtype; v pedidos_compra_omie%rowtype; v_pode boolean; v_status text;
 begin
   if p_modo not in ('enviar', 'conferir') then raise exception 'modo inválido: %', p_modo using errcode = '22023'; end if;
   select * into v_ped from pedidos_compra where id = p_pedido and loja_id = p_loja for update;
   if not found or v_ped.etapa <> 'aprovado' then return jsonb_build_object('ok', false, 'motivo', 'pedido não está aprovado'); end if;
   select * into v from pedidos_compra_omie where pedido_id = p_pedido and loja_id = p_loja for update;
   if not found then return jsonb_build_object('ok', false, 'motivo', 'pedido fora da fila do Omie'); end if;
+  -- Conferência que morreu no meio ('enviando' esquecido com modo 'conferir'): volta a ser o 'precisa_corrigir' de antes
+  -- (o incerto continua). Nunca é retomada como inclusão; só uma nova conferência a pega.
+  v_status := v.status;
+  if v.status = 'enviando' and v.modo_tentativa = 'conferir' and v.ultima_tentativa_em < now() - make_interval(secs => p_travado_seg) then
+    v_status := 'precisa_corrigir';
+    update pedidos_compra_omie set status = 'precisa_corrigir', updated_at = now() where pedido_id = p_pedido;
+  end if;
   v_pode := case p_modo
-    when 'enviar' then (v.status = 'pendente' and (v.proxima_tentativa_em is null or v.proxima_tentativa_em <= now()))
-                    or (v.status = 'enviando' and v.ultima_tentativa_em < now() - make_interval(secs => p_travado_seg))
-    else v.status = 'precisa_corrigir' and v.incerto and (v.ultima_tentativa_em is null or v.ultima_tentativa_em < now() - interval '10 minutes')
+    when 'enviar' then (v_status = 'pendente' and (v.proxima_tentativa_em is null or v.proxima_tentativa_em <= now()))
+                    or (v_status = 'enviando' and v.ultima_tentativa_em < now() - make_interval(secs => p_travado_seg))
+    else v_status = 'precisa_corrigir' and v.incerto and (v.ultima_tentativa_em is null or v.ultima_tentativa_em < now() - interval '10 minutes')
   end;
   if not v_pode then
     return jsonb_build_object('ok', false, 'motivo', 'fora da hora', 'status', v.status, 'proxima_tentativa_em', v.proxima_tentativa_em);
   end if;
-  update pedidos_compra_omie set status = 'enviando', ultima_tentativa_em = now(), updated_at = now() where pedido_id = p_pedido;
-  return jsonb_build_object('ok', true, 'status_antes', v.status, 'tentativas', v.tentativas, 'cod_int', v.cod_int,
+  update pedidos_compra_omie set status = 'enviando', modo_tentativa = p_modo, ultima_tentativa_em = now(), updated_at = now() where pedido_id = p_pedido;
+  return jsonb_build_object('ok', true, 'status_antes', v_status, 'tentativas', v.tentativas, 'cod_int', v.cod_int,
                             'incerto', v.incerto, 'payload_antes', v.payload);
 end $$;
 

@@ -82,6 +82,16 @@ begin
   update pedidos_compra_omie set status = 'precisa_corrigir' where pedido_id = v_ped;   -- (o TS devolve assim depois de consultar)
   if (pc_omie_reivindicar(v_omie, v_ped, 'conferir')->>'ok')::boolean then raise exception 'conferir antes de 10 min'; end if;
   begin perform pc_omie_reivindicar(v_omie, v_ped, 'qualquer'); raise exception 'modo inválido aceito'; exception when sqlstate '22023' then null; end;
+  -- conferência que morreu no meio (enviando há 2 h, modo conferir): 'enviar' NÃO retoma como inclusão e devolve para
+  -- precisa_corrigir incerto; só 'conferir' pega de novo (revisão 2)
+  if (select modo_tentativa from pedidos_compra_omie where pedido_id = v_ped) <> 'conferir' then raise exception 'modo da tentativa não gravado'; end if;
+  update pedidos_compra_omie set status = 'enviando', ultima_tentativa_em = now() - interval '2 hours' where pedido_id = v_ped;
+  if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'conferência retomada como inclusão'; end if;
+  if (select status || '/' || incerto from pedidos_compra_omie where pedido_id = v_ped) <> 'precisa_corrigir/true' then raise exception 'conferência morta não voltou a precisa_corrigir'; end if;
+  update pedidos_compra_omie set status = 'enviando', ultima_tentativa_em = now() - interval '2 hours' where pedido_id = v_ped;
+  r := pc_omie_reivindicar(v_omie, v_ped, 'conferir');
+  if not (r->>'ok')::boolean or r->>'status_antes' <> 'precisa_corrigir' then raise exception 'conferir de novo: %', r; end if;
+  update pedidos_compra_omie set status = 'precisa_corrigir', ultima_tentativa_em = now() where pedido_id = v_ped;
   -- conferido: não está no Omie → incerto some → reabrir volta a funcionar e a nova aprovação zera
   update pedidos_compra_omie set incerto = false, ultima_tentativa_em = now() - interval '1 minute' where pedido_id = v_ped;
   perform pc_acao(v_omie, v_ped, 'reabrir');
@@ -97,6 +107,7 @@ begin
   update pedidos_compra_omie set status = 'pendente', proxima_tentativa_em = now() + interval '20 minutes' where pedido_id = v_ped;
   if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'pulou a espera'; end if;
   update pedidos_compra_omie set status = 'enviando', ultima_tentativa_em = now() - interval '2 hours' where pedido_id = v_ped;
+  update pedidos_compra_omie set modo_tentativa = 'enviar' where pedido_id = v_ped;
   r := pc_omie_reivindicar(v_omie, v_ped, 'enviar');
   if not (r->>'ok')::boolean or r->>'status_antes' <> 'enviando' then raise exception 'retomar enviando esquecido: %', r; end if;
   update pedidos_compra_omie set status = 'pendente', proxima_tentativa_em = null where pedido_id = v_ped;
