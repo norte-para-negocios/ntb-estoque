@@ -32,6 +32,7 @@ export const ROTULO_TIPO: Record<string, string> = { ENT: 'Entrada', SAI: 'Saíd
 export const ROTULO_ORIGEM: Record<string, string> = {
   VENDA: 'Venda', COMPRA: 'Compra', PRODUCAO: 'Produção', TRANSFERENCIA: 'Transferência', AJUSTE: 'Ajuste manual',
   MANUAL: 'Ajuste manual', SALDO_INICIAL: 'Saldo inicial', INVENTARIO: 'Inventário', ESTORNO: 'Estorno',
+  DEVOLUCAO_FORNECEDOR: 'Devolução ao fornecedor', TRANSFERENCIA_LOJA: 'Transferência entre lojas',
 }
 export const OPCOES_ORIGEM = ['VENDA', 'COMPRA', 'PRODUCAO', 'TRANSFERENCIA', 'AJUSTE', 'INVENTARIO', 'ESTORNO']
 
