@@ -35,12 +35,18 @@ create table if not exists public.nfe_config (
   serie_producao       int check (serie_producao between 0 and 999),   -- sem série de produção = não emite em produção
   serie_homologacao    int not null default 920 check (serie_homologacao between 0 and 999),
   autxml_cnpj          text check (autxml_cnpj is null or autxml_cnpj ~ '^[0-9]{14}$'),
-  cst_pis_cofins       text not null default '49' check (cst_pis_cofins ~ '^(49|50|51|52|53|54|55|56|60|61|62|63|64|65|66|67|70|71|72|73|74|75|98|99)$'),
+  -- o XML sai no grupo PISOutr/COFINSOutr com valor zero: só os CSTs de SAÍDA desse grupo (49 e 99)
+  cst_pis_cofins       text not null default '49' check (cst_pis_cofins in ('49', '99')),
   csosn_transferencia  text not null default '400' check (csosn_transferencia in ('102', '103', '300', '400', '900')),
   cst_transferencia    text not null default '41' check (cst_transferencia in ('40', '41', '50', '90')),
   csosn_remessa        text not null default '900' check (csosn_remessa in ('102', '103', '300', '400', '900')),
   cst_remessa          text not null default '90' check (cst_remessa in ('40', '41', '50', '90')),
   info_complementar    text check (info_complementar is null or length(info_complementar) <= 2000),
+  -- responsável técnico (grupo infRespTec): obrigatório em algumas UFs; só sai no XML com os 4 campos preenchidos
+  resp_tec_cnpj        text check (resp_tec_cnpj is null or resp_tec_cnpj ~ '^[0-9]{14}$'),
+  resp_tec_contato     text check (resp_tec_contato is null or length(btrim(resp_tec_contato)) between 2 and 60),
+  resp_tec_email       text check (resp_tec_email is null or length(btrim(resp_tec_email)) between 6 and 60),
+  resp_tec_fone        text check (resp_tec_fone is null or resp_tec_fone ~ '^[0-9]{6,14}$'),
   updated_at           timestamptz not null default now(),
   updated_by           text
 );
@@ -50,6 +56,8 @@ create table if not exists public.nfe_numeracao (
   tp_amb         smallint not null check (tp_amb in (1, 2)),
   serie          int not null check (serie between 0 and 999),
   ultimo_numero  int not null default 0 check (ultimo_numero between 0 and 999999999),
+  -- 1º número da sequência atual (nfe_definir_proximo_numero): número descartado abaixo dele nunca é reaproveitado
+  inicio_numero  int not null default 1 check (inicio_numero between 1 and 999999999),
   updated_at     timestamptz not null default now(),
   primary key (loja_id, tp_amb, serie)
 );
@@ -80,6 +88,13 @@ create table if not exists public.nfe_saida (
   xml_autorizado       text,              -- procNFe (NFe assinada + protNFe)
   enviando_desde       timestamptz,
   tentativas           int not null default 0,
+  ultimo_envio_em      timestamptz,
+  -- true = a SEFAZ certamente NÃO tem a chave atual (nunca enviada, ou rejeição definitiva): pode montar XML novo (nova
+  -- chave) ou descartar. false = pode ter (sem resposta, 204/539, consulta 217 recente): só reenvia o MESMO XML assinado
+  -- (mesma chave), para a SEFAZ responder "duplicidade" e a consulta achar a nota. Nunca duas chaves para o mesmo número.
+  pode_regerar         boolean not null default true,
+  status_anterior      text,
+  pode_regerar_anterior boolean,
   cancel_protocolo     text,
   cancel_dh            timestamptz,
   cancel_justificativa text,
@@ -96,7 +111,8 @@ create table if not exists public.nfe_saida (
 -- número: só um vivo por (loja, ambiente, modelo, série); a descartada guarda o número só para histórico
 create unique index if not exists nfe_saida_numero_uq on public.nfe_saida (loja_id, tp_amb, modelo, serie, numero) where status <> 'descartada';
 -- idempotência por documento de origem: uma NF-e ativa por origem e ambiente
-create unique index if not exists nfe_saida_origem_ativa_uq on public.nfe_saida (loja_id, origem_tipo, origem_id, tp_amb) where status not in ('descartada', 'cancelada');
+-- denegada consome o número mas não prende o documento (corrige o cadastro e emite outra)
+create unique index if not exists nfe_saida_origem_ativa_uq on public.nfe_saida (loja_id, origem_tipo, origem_id, tp_amb) where status not in ('descartada', 'cancelada', 'denegada');
 create unique index if not exists nfe_saida_chave_uq on public.nfe_saida (chave) where chave is not null and status <> 'descartada';
 create index if not exists nfe_saida_loja on public.nfe_saida (loja_id, id desc);
 create index if not exists nfe_saida_origem on public.nfe_saida (loja_id, origem_tipo, origem_id);
@@ -134,6 +150,13 @@ end $$;
 drop trigger if exists nfe_saida_sem_delete on public.nfe_saida;
 create trigger nfe_saida_sem_delete before delete on public.nfe_saida
   for each row execute function public.trg_nfe_saida_sem_delete();
+-- TRUNCATE passa por cima de gatilho de linha: trava também o comando inteiro (NF-e e o histórico dela)
+drop trigger if exists nfe_saida_sem_truncate on public.nfe_saida;
+create trigger nfe_saida_sem_truncate before truncate on public.nfe_saida
+  for each statement execute function public.trg_nfe_saida_sem_delete();
+drop trigger if exists nfe_saida_eventos_sem_truncate on public.nfe_saida_eventos;
+create trigger nfe_saida_eventos_sem_truncate before truncate on public.nfe_saida_eventos
+  for each statement execute function public.trg_nfe_saida_eventos_imutavel();
 
 do $$ declare t text; begin
   foreach t in array array['nfe_config', 'nfe_numeracao', 'nfe_saida', 'nfe_saida_eventos'] loop
@@ -208,21 +231,24 @@ begin
 
   select * into n from nfe_saida
    where loja_id = p_loja and origem_tipo = p_origem_tipo and origem_id = p_origem_id and tp_amb = p_tp_amb
-     and status not in ('descartada', 'cancelada')
+     and status not in ('descartada', 'cancelada', 'denegada')
    for update;
   if found then
     return jsonb_build_object('ok', true, 'duplicado', true, 'id', n.id, 'numero', n.numero, 'serie', n.serie, 'status', n.status);
   end if;
 
   perform pg_advisory_xact_lock(7260, hashtext(p_loja || ':' || p_tp_amb || ':' || v_serie));
+  insert into nfe_numeracao (loja_id, tp_amb, serie) values (p_loja, p_tp_amb, v_serie) on conflict do nothing;
+  -- reaproveita só número descartado que a SEFAZ certamente não tem (pode_regerar) e da sequência atual (>= início)
   select min(d.numero) into v_num from nfe_saida d
    where d.loja_id = p_loja and d.tp_amb = p_tp_amb and d.modelo = '55' and d.serie = v_serie and d.status = 'descartada'
+     and d.pode_regerar
+     and d.numero >= (select inicio_numero from nfe_numeracao where loja_id = p_loja and tp_amb = p_tp_amb and serie = v_serie)
      and not exists (select 1 from nfe_saida a where a.loja_id = d.loja_id and a.tp_amb = d.tp_amb and a.modelo = d.modelo
                        and a.serie = d.serie and a.numero = d.numero and a.status <> 'descartada');
   if v_num is not null then
     v_reap := true;
   else
-    insert into nfe_numeracao (loja_id, tp_amb, serie) values (p_loja, p_tp_amb, v_serie) on conflict do nothing;
     update nfe_numeracao set ultimo_numero = ultimo_numero + 1, updated_at = now()
      where loja_id = p_loja and tp_amb = p_tp_amb and serie = v_serie
     returning ultimo_numero into v_num;
@@ -249,7 +275,8 @@ begin
   if p_proximo - 1 < greatest(v_ult, v_max) then
     raise exception 'O próximo número não pode voltar: já se usou até o %', greatest(v_ult, v_max) using errcode = '22023';
   end if;
-  update nfe_numeracao set ultimo_numero = p_proximo - 1, updated_at = now() where loja_id = p_loja and tp_amb = p_tp_amb and serie = p_serie;
+  update nfe_numeracao set ultimo_numero = p_proximo - 1, inicio_numero = p_proximo, updated_at = now()
+   where loja_id = p_loja and tp_amb = p_tp_amb and serie = p_serie;
   return jsonb_build_object('ok', true, 'ultimo', p_proximo - 1);
 end $$;
 
@@ -273,12 +300,17 @@ begin
   if n.status not in ('rascunho', 'rejeitada') then
     raise exception 'Esta NF-e está % e não pode ser enviada', n.status using errcode = '22023';
   end if;
+  -- a SEFAZ pode ter a chave atual: só o MESMO XML pode sair de novo (senão o mesmo número ganharia duas chaves)
+  if not n.pode_regerar and n.chave is not null and (p_chave <> n.chave or p_xml_assinado is distinct from n.xml_assinado) then
+    raise exception 'A SEFAZ pode já ter esta NF-e (chave %): só dá para reenviar o mesmo XML ou consultar', n.chave using errcode = '22023';
+  end if;
   v_motivo := _nfe_origem_emitivel(n.loja_id, n.origem_tipo, n.origem_id);
   if v_motivo is not null then raise exception '%', v_motivo using errcode = '22023'; end if;
   if p_chave !~ '^[0-9]{44}$' or substr(p_chave, 26, 9)::int <> n.numero or substr(p_chave, 23, 3)::int <> n.serie then
     raise exception 'A chave não confere com o número/série reservados' using errcode = '22023';
   end if;
-  update nfe_saida set status = 'enviando', enviando_desde = now(), tentativas = tentativas + 1, chave = p_chave,
+  update nfe_saida set status_anterior = n.status, pode_regerar_anterior = n.pode_regerar, pode_regerar = false, ultimo_envio_em = now(),
+         status = 'enviando', enviando_desde = now(), tentativas = tentativas + 1, chave = p_chave,
          xml_assinado = p_xml_assinado, dh_emissao = p_dh_emissao, data_emissao = (p_dh_emissao at time zone 'America/Bahia')::date,
          valor_total = p_valor, dest_nome = p_dest_nome, dest_doc = p_dest_doc, dados = p_dados, c_stat = null, x_motivo = null,
          updated_at = now()
@@ -289,10 +321,13 @@ end $$;
 
 -- Grava o que a SEFAZ respondeu (autorização, rejeição, recibo, consulta). Nunca recusa um fato da SEFAZ.
 -- p_status: autorizada | rejeitada | denegada | incerta
+-- (versão anterior desta mesma migration tinha 13 parâmetros: some para não sobrar sobrecarga)
+drop function if exists public.nfe_registrar_retorno(bigint,bigint,text,text,text,text,timestamptz,text,text,text,text,text,text);
 create or replace function public.nfe_registrar_retorno(
   p_id bigint, p_loja bigint, p_status text, p_c_stat text, p_x_motivo text, p_protocolo text default null,
   p_dh_recbto timestamptz default null, p_n_recibo text default null, p_xml_autorizado text default null,
-  p_xml_retorno text default null, p_tipo_evento text default 'retorno', p_user text default null, p_user_nome text default null
+  p_xml_retorno text default null, p_tipo_evento text default 'retorno', p_user text default null, p_user_nome text default null,
+  p_pode_regerar boolean default false
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare n nfe_saida%rowtype; v_dev devolucoes_fornecedor%rowtype;
@@ -309,7 +344,10 @@ begin
   update nfe_saida set status = p_status, c_stat = p_c_stat, x_motivo = p_x_motivo,
          protocolo = coalesce(p_protocolo, protocolo), dh_recbto = coalesce(p_dh_recbto, dh_recbto),
          n_recibo = coalesce(p_n_recibo, n_recibo), xml_autorizado = coalesce(p_xml_autorizado, xml_autorizado),
-         enviando_desde = case when p_status = 'incerta' then enviando_desde else null end, updated_at = now()
+         enviando_desde = case when p_status = 'incerta' then enviando_desde else null end,
+         -- só rejeição DEFINITIVA (decidida no servidor: recusa de regra/esquema na autorização, ou consulta 217 bem
+         -- depois do envio) libera XML novo ou descarte; o resto prende a chave atual
+         pode_regerar = (p_status = 'rejeitada' and coalesce(p_pode_regerar, false)), updated_at = now()
    where id = n.id returning * into n;
   perform _nfe_evento(n, p_tipo_evento, p_c_stat, p_x_motivo, p_protocolo, null, p_xml_retorno, '{}'::jsonb, p_user, p_user_nome);
 
@@ -336,6 +374,9 @@ begin
   if n.status = 'descartada' then return jsonb_build_object('ok', true, 'duplicado', true); end if;
   if n.status not in ('rascunho', 'rejeitada') then
     raise exception 'Só se descarta NF-e que a SEFAZ não autorizou (rascunho ou rejeitada); esta está %', n.status using errcode = '22023';
+  end if;
+  if not n.pode_regerar then
+    raise exception 'A SEFAZ pode já ter esta NF-e (chave %): reenvie o mesmo XML ou consulte antes de descartar', n.chave using errcode = '22023';
   end if;
   update nfe_saida set status = 'descartada', updated_at = now() where id = n.id returning * into n;
   perform _nfe_evento(n, 'descartada', null, null, null, null, null, jsonb_build_object('motivo', p_motivo), p_user, p_user_nome);
@@ -390,7 +431,7 @@ declare n nfe_saida%rowtype;
 begin
   select * into n from nfe_saida where id = p_id and loja_id = p_loja for update;
   if not found then raise exception 'NF-e não encontrada nesta loja' using errcode = '22023'; end if;
-  update nfe_saida set cce_seq = greatest(cce_seq, p_seq), cce_ultima = p_texto, cce_xml = p_xml, updated_at = now()
+  update nfe_saida set cce_seq = greatest(cce_seq, p_seq), cce_ultima = p_texto, cce_xml = coalesce(p_xml, cce_xml), updated_at = now()
    where id = n.id returning * into n;
   perform _nfe_evento(n, 'cce', '135', 'Carta de correção registrada', p_protocolo, null, p_xml_retorno,
                       jsonb_build_object('seq', p_seq, 'texto', p_texto), p_user, p_user_nome);
@@ -407,12 +448,38 @@ begin
   if not found then raise exception 'NF-e não encontrada nesta loja' using errcode = '22023'; end if;
   -- só volta para rascunho quando é CERTO que nada saiu para a SEFAZ (erro antes da conexão)
   if p_voltar_rascunho and n.status = 'enviando' then
-    update nfe_saida set status = case when n.c_stat is null and n.tentativas <= 1 then 'rascunho' else 'rejeitada' end,
+    -- nada saiu: volta ao estado de antes deste envio (inclusive a trava da chave)
+    update nfe_saida set status = coalesce(n.status_anterior, 'rascunho'), pode_regerar = coalesce(n.pode_regerar_anterior, true),
            enviando_desde = null, x_motivo = left(p_mensagem, 500), updated_at = now()
      where id = n.id returning * into n;
   end if;
   perform _nfe_evento(n, 'erro', null, left(p_mensagem, 500), null, null, null, '{}'::jsonb, p_user, p_user_nome);
   return jsonb_build_object('ok', true, 'status', n.status);
+end $$;
+
+-- 539 "duplicidade com diferença na chave": a SEFAZ já tem este número com OUTRA chave de uma tentativa nossa. Volta a NF-e
+-- para aquela chave e XML (guardados no evento 'envio' daquela tentativa), sem resposta final: o servidor consulta em seguida.
+-- Chave que não é de nenhum envio desta NF-e: fica 'incerta' presa (descartar recusado) para alguém olhar.
+create or replace function public.nfe_restaurar_chave(p_id bigint, p_loja bigint, p_chave text, p_user text default null, p_user_nome text default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare n nfe_saida%rowtype; v_xml text;
+begin
+  select * into n from nfe_saida where id = p_id and loja_id = p_loja for update;
+  if not found then raise exception 'NF-e não encontrada nesta loja' using errcode = '22023'; end if;
+  if coalesce(p_chave, '') !~ '^[0-9]{44}$' then raise exception 'Chave inválida' using errcode = '22023'; end if;
+  select xml_enviado into v_xml from nfe_saida_eventos
+   where nfe_id = n.id and tipo = 'envio' and position('Id="NFe' || p_chave || '"' in xml_enviado) > 0 order by id desc limit 1;
+  if v_xml is null then
+    update nfe_saida set status = 'incerta', pode_regerar = false, enviando_desde = null, updated_at = now() where id = n.id returning * into n;
+    perform _nfe_evento(n, 'erro', '539', 'A chave da duplicidade não é de nenhum envio desta NF-e', null, null, null,
+                        jsonb_build_object('chave_sefaz', p_chave), p_user, p_user_nome);
+    return jsonb_build_object('ok', true, 'achou', false);
+  end if;
+  update nfe_saida set chave = p_chave, xml_assinado = v_xml, status = 'incerta', pode_regerar = false, enviando_desde = null, updated_at = now()
+   where id = n.id returning * into n;
+  perform _nfe_evento(n, 'consulta', '539', 'Voltou para a chave que a SEFAZ já tem', null, null, null, jsonb_build_object('chave', p_chave), p_user, p_user_nome);
+  return jsonb_build_object('ok', true, 'achou', true);
 end $$;
 
 -- ------------------------------------------------------------------------------------------------ trava na origem
@@ -425,12 +492,14 @@ begin
   if new.situacao = 'cancelada' and old.situacao is distinct from 'cancelada' then
     select numero, status into v_num, v_st from nfe_saida
      where loja_id = new.loja_id and origem_tipo = 'devolucao' and origem_id = new.id and tp_amb = 1
-       and status in ('enviando', 'incerta', 'autorizada') limit 1;
+       and (status in ('enviando', 'incerta', 'autorizada') or (status in ('rascunho', 'rejeitada') and not pode_regerar)) limit 1;
     if found then
-      raise exception 'A devolução tem NF-e nº % (%): cancele a NF-e na SEFAZ antes de cancelar a devolução', v_num, v_st using errcode = '22023';
+      raise exception 'A devolução tem NF-e nº % (%) que a SEFAZ pode ter: consulte/cancele a NF-e antes de cancelar a devolução', v_num, v_st using errcode = '22023';
     end if;
+    -- descarta as que nunca foram autorizadas; homologação sem resposta também sai, mas o número não volta (pode_regerar)
     update nfe_saida set status = 'descartada', updated_at = now()
-     where loja_id = new.loja_id and origem_tipo = 'devolucao' and origem_id = new.id and status in ('rascunho', 'rejeitada');
+     where loja_id = new.loja_id and origem_tipo = 'devolucao' and origem_id = new.id and status in ('rascunho', 'rejeitada')
+       and (pode_regerar or tp_amb = 2);
   end if;
   return new;
 end $$;
@@ -445,7 +514,8 @@ do $$ declare f text; begin
     'nfe_reservar(bigint,int,text,bigint,text,text)',
     'nfe_definir_proximo_numero(bigint,int,int,int)',
     'nfe_iniciar_envio(bigint,bigint,text,text,timestamptz,numeric,text,text,jsonb,text,text)',
-    'nfe_registrar_retorno(bigint,bigint,text,text,text,text,timestamptz,text,text,text,text,text,text)',
+    'nfe_registrar_retorno(bigint,bigint,text,text,text,text,timestamptz,text,text,text,text,text,text,boolean)',
+    'nfe_restaurar_chave(bigint,bigint,text,text,text)',
     'nfe_descartar(bigint,bigint,text,text,text)',
     'nfe_checar_evento(bigint,bigint,text)',
     'nfe_registrar_cancelamento(bigint,bigint,text,timestamptz,text,text,text,text,text)',

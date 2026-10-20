@@ -24,12 +24,19 @@ export function cfopPorUf(cfop: string, ufEmit: string, ufDest: string): string 
   return (dentro ? '5' : '6') + d.slice(1)
 }
 
-/** CFOP de devolução a partir do CFOP de ENTRADA da nota (1.102 → x.202 etc.). Sem entrada conhecida: x.202. */
-const DEVOLUCAO: Record<string, string> = { '101': '201', '102': '202', '401': '410', '403': '411', '407': '413', '556': '556', '910': '949', '949': '949' }
-export function cfopDevolucaoBase(cfopEntrada: string | null | undefined): string {
+/** CFOP de devolução a partir do CFOP de ENTRADA da nota (1.102 → x.202 etc.). Só pares com CFOP de devolução válido
+ *  (indDevol=1); entrada sem par (bonificação 1.910, outras 1.949, industrialização por encomenda...) = null: a NF-e de
+ *  devolução não sai por aqui (5.910/5.949 com finalidade 4 é rejeição 327). Sem CFOP de entrada: 5.202. */
+export const DEVOLUCAO_DA_ENTRADA: Record<string, string> = {
+  '101': '201', '102': '202', '126': '210', '151': '208', '152': '209', '401': '410', '403': '411', '406': '412', '407': '413',
+  '501': '503', '551': '553', '555': '555', '556': '556', '651': '660', '652': '661', '653': '662', '917': '918', '920': '921',
+}
+export function cfopDevolucaoBase(cfopEntrada: string | null | undefined): string | null {
   const d = (cfopEntrada ?? '').replace(/\D/g, '')
-  if (!/^[123]\d{3}$/.test(d)) return '5202'
-  return '5' + (DEVOLUCAO[d.slice(1)] ?? '949')
+  if (!d) return '5202'
+  if (!/^[123]\d{3}$/.test(d)) return null
+  const s = DEVOLUCAO_DA_ENTRADA[d.slice(1)]
+  return s ? '5' + s : null
 }
 
 export type ConfigFiscal = {
@@ -52,11 +59,13 @@ export type ItemOrigem = {
   vIPI: number
 }
 
-/** Proporção devolvida: quantidade devolvida ÷ recebida, as duas na unidade de ESTOQUE (o fator de conversão some). */
-export function proporcaoDevolvida(qDevolvida: number, qRecebida: number): number {
-  if (!(qRecebida > 0) || !(qDevolvida > 0)) throw new Error('Quantidade devolvida/recebida inválida')
-  if (qDevolvida > qRecebida + 1e-9) throw new Error('Devolução maior que a entrada')
-  return Math.min(1, qDevolvida / qRecebida)
+/** Proporção da NOTA que volta: quantidade devolvida (digitada, unidade de estoque) ÷ quantidade FATURADA na nota
+ *  (qCom × fator, unidade de estoque), com teto no faturado. Recebido a menos que o faturado não aumenta a proporção:
+ *  a NF-e devolve o que foi digitado, nunca mais do que a nota faturou. */
+export function proporcaoDevolvida(qDevolvida: number, qFaturada: number): number {
+  if (!(qFaturada > 0) || !(qDevolvida > 0)) throw new Error('Quantidade devolvida/faturada inválida')
+  if (qDevolvida > qFaturada + 1e-9) throw new Error('Devolução maior que a quantidade faturada na nota')
+  return Math.min(1, qDevolvida / qFaturada)
 }
 
 export function itemDevolucao(o: ItemOrigem, p: { proporcao: number; cfop: string; crt: Crt; cstPisCofins: string }): ItemNfeSaida {
@@ -163,13 +172,15 @@ export function rotuloStatusNfe(s: StatusNfe | string, enviandoDesde?: string | 
   } as Record<string, string>)[s] ?? s
 }
 
-/** O que a tela pode oferecer em cada situação. */
-export function acoesNfe(s: StatusNfe | string, enviandoDesde?: string | null, agora = Date.now()): { enviar: boolean; consultar: boolean; descartar: boolean; cancelar: boolean; cce: boolean; baixar: boolean } {
+/** O que a tela pode oferecer em cada situação. `podeRegerar` = false: a SEFAZ pode ter a chave atual, então reenviar é
+ *  o MESMO XML e descartar não aparece (nfe_saida.pode_regerar). */
+export function acoesNfe(s: StatusNfe | string, enviandoDesde?: string | null, agora = Date.now(), podeRegerar = true): { enviar: boolean; mesmoXml: boolean; consultar: boolean; descartar: boolean; cancelar: boolean; cce: boolean; baixar: boolean } {
   const parado = s === 'enviando' && !!enviandoDesde && agora - new Date(enviandoDesde).getTime() > 2 * 60 * 1000
   return {
     enviar: s === 'rascunho' || s === 'rejeitada',
+    mesmoXml: (s === 'rascunho' || s === 'rejeitada') && !podeRegerar,
     consultar: s === 'incerta' || parado || s === 'rejeitada',
-    descartar: s === 'rascunho' || s === 'rejeitada',
+    descartar: (s === 'rascunho' || s === 'rejeitada') && podeRegerar,
     cancelar: s === 'autorizada',
     cce: s === 'autorizada',
     baixar: s === 'autorizada' || s === 'cancelada' || s === 'denegada',

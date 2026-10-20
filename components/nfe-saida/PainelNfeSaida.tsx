@@ -88,7 +88,7 @@ export function PainelNfeSaida({ origem, origemId, nfes, tpAmb, pode, emitivel }
 
 function LinhaNfe({ n, pode, pend, rodar, tpAmb }: { n: NfeResumo; pode: boolean; pend: boolean; tpAmb: 1 | 2; rodar: (f: () => Promise<Resp>) => void }) {
   const [agora] = useState(() => Date.now())
-  const a = acoesNfe(n.status, n.enviandoDesde, agora)
+  const a = acoesNfe(n.status, n.enviandoDesde, agora, n.podeRegerar)
   const [modo, setModo] = useState<'cancelar' | 'cce' | null>(null)
   const [texto, setTexto] = useState('')
   const prazo = dentroDoPrazoCancelamento(n.dhRecbto, agora)
@@ -106,13 +106,14 @@ function LinhaNfe({ n, pode, pend, rodar, tpAmb }: { n: NfeResumo; pode: boolean
         {a.baixar && <a className={btnClass('outline')} href={`/api/nfe-saida/${n.id}/xml`}>Baixar XML</a>}
         {a.baixar && <a className={btnClass('outline')} href={`/api/nfe-saida/${n.id}/danfe`} target="_blank">DANFE</a>}
         {pode && a.enviar && <DialogoEmitir origem={n.origemTipo as 'devolucao' | 'transferencia_loja'} origemId={n.origemId} tpAmb={tpAmb}
-          rotulo={n.status === 'rejeitada' ? 'Corrigir e reenviar (mesmo número)' : 'Enviar à SEFAZ'} />}
+          rotulo={a.mesmoXml ? 'Reenviar o mesmo XML' : n.status === 'rejeitada' ? 'Corrigir e reenviar (mesmo número)' : 'Enviar à SEFAZ'} />}
         {pode && a.consultar && <button type="button" className={btnClass('outline')} disabled={pend} onClick={() => rodar(() => consultarNfeSaida(n.id))}>{pend && <Spinner />}Consultar na SEFAZ</button>}
         {pode && a.descartar && <button type="button" className={btnClass('outline')} disabled={pend} onClick={() => { if (confirm('Descartar esta NF-e? O número volta para a próxima emissão.')) rodar(() => descartarNfeSaida(n.id, 'descartada pela tela')) }}>Descartar</button>}
         {pode && a.cancelar && prazo && <button type="button" className={btnClass('outline')} disabled={pend} onClick={() => { setModo('cancelar'); setTexto('') }}>Cancelar NF-e</button>}
         {pode && a.cce && <button type="button" className={btnClass('outline')} disabled={pend} onClick={() => { setModo('cce'); setTexto('') }}>Carta de correção</button>}
       </div>
       {a.cancelar && !prazo && <p className="text-[12px] text-text-muted">Prazo de cancelamento (24 h) encerrado.</p>}
+      {a.mesmoXml && <p className="text-[12px] text-text-muted">A SEFAZ pode já ter recebido esta chave: o reenvio usa exatamente o mesmo XML (sem nova chave) e descartar fica bloqueado até uma resposta definitiva.</p>}
       {modo && (
         <div className="space-y-2 pt-2">
           <textarea className={`${input} min-h-[70px]`} value={texto} onChange={(e) => setTexto(e.target.value)}
@@ -135,6 +136,7 @@ function DialogoEmitir({ origem, origemId, rotulo, tpAmb }: { origem: 'devolucao
   const [aberto, setAberto] = useState(false)
   const [pend, start] = useTransition()
   const [faltas, setFaltas] = useState<string[] | null>(null)
+  const [avisos, setAvisos] = useState<string[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [modFrete, setModFrete] = useState('9')
   const [qVol, setQVol] = useState('')
@@ -148,7 +150,7 @@ function DialogoEmitir({ origem, origemId, rotulo, tpAmb }: { origem: 'devolucao
     start(async () => {
       const r = await conferirNfeSaida(origem, origemId)
       if ('error' in r) setErro(r.error)
-      else setFaltas(r.faltas)
+      else { setFaltas(r.faltas); setAvisos(r.avisos) }
     })
   }
   function emitir() {
@@ -181,6 +183,7 @@ function DialogoEmitir({ origem, origemId, rotulo, tpAmb }: { origem: 'devolucao
                 <ul className="list-disc pl-5">{faltas.map((f) => <li key={f}>{f}</li>)}</ul>
               </div>
             )}
+            {avisos.length > 0 && <ul className="list-disc rounded-[var(--r-md)] bg-warn/10 p-2 pl-6 text-warn">{avisos.map((a) => <li key={a}>{a}</li>)}</ul>}
             <label className="block space-y-1"><span>Frete</span>
               <select className={input} value={modFrete} onChange={(e) => setModFrete(e.target.value)}>
                 <option value="9">Sem frete</option><option value="0">Por conta do emitente (nós)</option>

@@ -8,9 +8,11 @@ export type NfeResumo = {
   cStat: string | null; xMotivo: string | null; protocolo: string | null; dhRecbto: string | null; dhEmissao: string | null
   valorTotal: number | null; destNome: string | null; enviandoDesde: string | null; cancelProtocolo: string | null; cceSeq: number
   cceUltima: string | null; criadoPor: string | null; createdAt: string
+  /** false = a SEFAZ pode ter a chave atual: reenviar só o mesmo XML, sem descarte */
+  podeRegerar: boolean
 }
 
-const COLUNAS = 'id, origem_tipo, origem_id, tp_amb, serie, numero, status, chave, c_stat, x_motivo, protocolo, dh_recbto, dh_emissao, valor_total, dest_nome, enviando_desde, cancel_protocolo, cce_seq, cce_ultima, criado_por_nome, created_at'
+const COLUNAS = 'id, origem_tipo, origem_id, tp_amb, serie, numero, status, chave, c_stat, x_motivo, protocolo, dh_recbto, dh_emissao, valor_total, dest_nome, enviando_desde, cancel_protocolo, cce_seq, cce_ultima, criado_por_nome, created_at, pode_regerar'
 
 type Linha = Record<string, unknown>
 function mapear(r: Linha): NfeResumo {
@@ -22,7 +24,7 @@ function mapear(r: Linha): NfeResumo {
     valorTotal: r.valor_total == null ? null : Number(r.valor_total), destNome: (r.dest_nome as string) ?? null,
     enviandoDesde: (r.enviando_desde as string) ?? null, cancelProtocolo: (r.cancel_protocolo as string) ?? null,
     cceSeq: Number(r.cce_seq ?? 0), cceUltima: (r.cce_ultima as string) ?? null, criadoPor: (r.criado_por_nome as string) ?? null,
-    createdAt: String(r.created_at),
+    createdAt: String(r.created_at), podeRegerar: r.pode_regerar !== false,
   }
 }
 

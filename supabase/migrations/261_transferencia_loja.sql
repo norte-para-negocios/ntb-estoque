@@ -121,16 +121,16 @@ begin
   end if;
   if jsonb_array_length(p_itens) > 990 then raise exception 'No máximo 990 itens por nota' using errcode = '22023'; end if;
 
-  if nullif(btrim(coalesce(p_chave, '')), '') is not null then
-    select * into t from transferencias_loja where loja_id = p_loja and chave_idempotencia = btrim(p_chave);
-    if found then return jsonb_build_object('ok', true, 'duplicado', true, 'id', t.id, 'numero', t.numero); end if;
-  end if;
-
   -- mesma raiz de CNPJ (8 dígitos) = mesmo contribuinte = transferência; senão é remessa para outra empresa
   v_nat := case when left(regexp_replace(o.cnpj, '\D', '', 'g'), 8) = left(regexp_replace(d.cnpj, '\D', '', 'g'), 8)
                 then 'transferencia' else 'remessa' end;
 
+  -- duplo clique: a 2ª chamada espera a trava e, com a mesma chave, devolve o registro da 1ª
   perform pg_advisory_xact_lock(7261, p_loja::int);
+  if nullif(btrim(coalesce(p_chave, '')), '') is not null then
+    select * into t from transferencias_loja where loja_id = p_loja and chave_idempotencia = btrim(p_chave);
+    if found then return jsonb_build_object('ok', true, 'duplicado', true, 'id', t.id, 'numero', t.numero); end if;
+  end if;
   select coalesce(max(numero), 0) + 1 into v_numero from transferencias_loja where loja_id = p_loja;
   insert into transferencias_loja (loja_id, numero, loja_destino_id, destino_nome, destino_cnpj, natureza, obs, chave_idempotencia,
       criado_por, criado_por_nome)

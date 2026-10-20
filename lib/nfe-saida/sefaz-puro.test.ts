@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error: import com .ts exigido pelo node --test
-import { classificar, envelope, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, montarConsReci, montarConsSit, montarEnvEvento, montarEventoCancelamento, montarEventoCce, montarProcEvento, trecho, validarCorrecao, validarJustificativa } from './sefaz-puro.ts'
+import { chaveDaDuplicidade, consulta217Final, eventosDaConsulta, rejeicaoDefinitiva, classificar, envelope, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, montarConsReci, montarConsSit, montarEnvEvento, montarEventoCancelamento, montarEventoCce, montarProcEvento, trecho, validarCorrecao, validarJustificativa } from './sefaz-puro.ts'
 // @ts-expect-error: idem
 import { assinarEventoNfe } from './assinatura.ts'
 // @ts-expect-error: idem
@@ -124,4 +124,40 @@ test('evento: 128 do lote não vale; 135 registrado; 573 duplicidade não é reg
   assert.equal(dup.cStat, '573')
   assert.equal(lerRetornoEvento(`<retEnvEvento><cStat>215</cStat><xMotivo>Falha no schema</xMotivo></retEnvEvento>`).cStat, '215')
   assert.equal(trecho('<a><x:retEvento xmlns:x="u"><x:b>1</x:b></x:retEvento></a>', 'retEvento'), '<retEvento><b>1</b></retEvento>')
+})
+
+test('C1: só rejeição definitiva da autorização libera nova chave/descarte', () => {
+  assert.equal(rejeicaoDefinitiva('225'), true)
+  assert.equal(rejeicaoDefinitiva('327'), true)
+  for (const c of ['204', '539', '217', '105', '103', '108', '109', '656', '999', null]) assert.equal(rejeicaoDefinitiva(c), false, String(c))
+  assert.equal(rejeicaoDefinitiva('100'), false)
+})
+
+test('C1: 217 só vale como "não existe" 30 min depois do último envio', () => {
+  const agora = Date.parse('2026-10-20T13:00:00Z')
+  assert.equal(consulta217Final('2026-10-20T12:45:00Z', agora), false)
+  assert.equal(consulta217Final('2026-10-20T12:29:59Z', agora), true)
+  assert.equal(consulta217Final(null, agora), true)
+})
+
+test('C1: chave da duplicidade 539 no xMotivo', () => {
+  const ch = '29261011222333000181559200000000071481516232'
+  assert.equal(chaveDaDuplicidade(`Rejeicao: Duplicidade de NF-e com diferenca na Chave de Acesso [chNFe: ${ch}][nRec:291000012345678]`), ch)
+  assert.equal(chaveDaDuplicidade(`Rejeicao: Duplicidade de NF-e com diferenca na Chave de Acesso [chNFe:${ch}]`), ch)
+  assert.equal(chaveDaDuplicidade('Rejeicao: Duplicidade de NF-e'), null)
+})
+
+test('I2 e consulta: eventos da consulta (CC-e por sequência, cancelamento 110111 e não o 1º evento)', () => {
+  const ev = (tp: string, seq: number, prot: string, extra = '') =>
+    `<procEventoNFe versao="1.00"><evento versao="1.00"><infEvento Id="ID${tp}${CHAVE}0${seq}"><tpEvento>${tp}</tpEvento><nSeqEvento>${seq}</nSeqEvento><detEvento versao="1.00">${extra}</detEvento></infEvento></evento>` +
+    `<retEvento versao="1.00"><infEvento><cStat>135</cStat><nProt>${prot}</nProt><dhRegEvento>2026-10-20T10:20:00-03:00</dhRegEvento></infEvento></retEvento></procEventoNFe>`
+  const xml = `<retConsSitNFe><cStat>101</cStat>${ev('110110', 1, '1', '<xCorrecao>Peso correto 13 kg</xCorrecao>')}${ev('110110', 2, '2', '<xCorrecao>Volume correto 3 caixas</xCorrecao>')}${ev('110111', 1, '3')}</retConsSitNFe>`
+  const l = eventosDaConsulta(xml)
+  assert.equal(l.length, 3)
+  const cce = l.filter((e: { tpEvento: string }) => e.tpEvento === '110110').sort((a: { nSeq: number }, b: { nSeq: number }) => a.nSeq - b.nSeq).pop()
+  assert.equal(cce.nSeq, 2)
+  assert.equal(cce.xCorrecao, 'Volume correto 3 caixas')
+  const canc = l.filter((e: { tpEvento: string }) => e.tpEvento === '110111').pop()
+  assert.equal(canc.protocolo, '3')
+  assert.match(canc.xml, /^<procEventoNFe/)
 })

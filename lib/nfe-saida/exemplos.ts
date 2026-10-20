@@ -26,7 +26,7 @@ export const CONFIG_SIMPLES: ConfigFiscal = { crt: 1, cstPisCofins: '49', csosnT
 const CHAVE_ORIGEM = '29261011444777000161550010000123451000012340'
 
 export function dadosDevolucao(tpAmb: 1 | 2 = 2, crt: 1 | 3 = 1): DadosNfeSaida {
-  const cfop = cfopPorUf(cfopDevolucaoBase('1403'), 'BA', 'BA')
+  const cfop = cfopPorUf(cfopDevolucaoBase('1403')!, 'BA', 'BA')
   return {
     tpAmb, cUF: '29', serie: 920, numero: 7, cNF: '48151623', dhEmi: '2026-10-20T10:15:00-03:00', natOp: NAT_OP.devolucao, finNFe: 4,
     emit: { cnpj: '11222333000181', xNome: 'ODARA RESTAURANTE LTDA', xFant: 'ODARA', ender: ENDERECO_EMIT, ie: '123456789', crt },
@@ -35,7 +35,7 @@ export function dadosDevolucao(tpAmb: 1 | 2 = 2, crt: 1 | 3 = 1): DadosNfeSaida 
     refNFe: [CHAVE_ORIGEM],
     itens: [
       itemDevolucao(ORIGEM_AZEITE, { proporcao: 0.5, cfop, crt, cstPisCofins: '49' }),
-      itemDevolucao(ORIGEM_TOMATE, { proporcao: 1, cfop: cfopPorUf(cfopDevolucaoBase('1102'), 'BA', 'BA'), crt, cstPisCofins: '49' }),
+      itemDevolucao(ORIGEM_TOMATE, { proporcao: 1, cfop: cfopPorUf(cfopDevolucaoBase('1102')!, 'BA', 'BA'), crt, cstPisCofins: '49' }),
     ],
     transp: { modFrete: 9 },
     infCpl: textoDevolucao({ numeroOrigem: '12345', serieOrigem: '1', emissaoOrigem: '2026-10-10', chaveOrigem: CHAVE_ORIGEM, total: false, motivo: 'Produto com embalagem avariada “amassada”', crt, numeroInterno: 3 }),

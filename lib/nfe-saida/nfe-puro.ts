@@ -60,12 +60,21 @@ export type DadosNfeSaida = {
   }
   infAdFisco?: string | null
   infCpl?: string | null
+  /** Responsável técnico (infRespTec): obrigatório em algumas UFs; só sai com os quatro campos. */
+  respTec?: { cnpj: string; contato: string; email: string; fone: string } | null
 }
 
 export type TotaisNfe = {
   vBC: number; vICMS: number; vBCST: number; vST: number; vProd: number; vFrete: number; vSeg: number; vDesc: number
   vIPIDevol: number; vOutro: number; vNF: number
 }
+
+// CFOPs de SAÍDA com indDevol=1 na tabela de CFOP da NF-e (conferido um a um em 20/10/2026 na tabela publicada com os
+// indicadores, ex.: buscadorncm.com.br/cfop/5553). finNFe=4 só aceita estes (rejeição 327); finNFe=1 não pode usá-los
+// (rejeição 328). 5.910 e 5.949 NÃO são de devolução.
+const SUFIXOS_DEVOLUCAO = ['201', '202', '208', '209', '210', '410', '411', '412', '413', '503', '553', '555', '556', '660', '661', '662', '918', '919', '921']
+export const CFOP_DEVOLUCAO_SAIDA: ReadonlySet<string> = new Set(SUFIXOS_DEVOLUCAO.flatMap((s) => [`5${s}`, `6${s}`]))
+export const ehCfopDevolucao = (cfop: string) => CFOP_DEVOLUCAO_SAIDA.has((cfop ?? '').replace(/\D/g, ''))
 
 export const AVISO_HOMOLOGACAO_XNOME = 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL'
 export const VER_PROC = 'norte-estoque-1.0'
@@ -192,11 +201,26 @@ export function validarDadosNfe(d: DadosNfeSaida): string[] {
     if (!/^\d{8}$/.test(dig(it.ncm))) e.push(`${n} (${textoNfe(it.xProd, 40)}): NCM com 8 dígitos`)
     if (it.cest && !/^\d{7}$/.test(dig(it.cest))) e.push(`${n}: CEST com 7 dígitos`)
     if (!/^[1235-7]\d{3}$/.test(it.cfop)) e.push(`${n}: CFOP`)
+    else if (d.finNFe === 4 && !ehCfopDevolucao(it.cfop)) e.push(`${n} (${textoNfe(it.xProd, 40)}): CFOP ${it.cfop} não é de devolução (a SEFAZ recusa com 327)`)
+    else if (d.finNFe !== 4 && ehCfopDevolucao(it.cfop)) e.push(`${n}: CFOP ${it.cfop} é de devolução e a nota não é de devolução (328)`)
     if (!textoNfe(it.uCom, 6)) e.push(`${n}: unidade`)
     if (!(it.qCom > 0)) e.push(`${n}: quantidade`)
     if (!(it.vUnCom >= 0)) e.push(`${n}: valor unitário`)
   }
+  const rt = d.respTec
+  if (rt && (rt.cnpj || rt.contato || rt.email || rt.fone)) {
+    if (dig(rt.cnpj).length !== 14 || textoNfe(rt.contato).length < 2 || textoNfe(rt.email).length < 6 || !/^\d{6,14}$/.test(dig(rt.fone))) {
+      e.push('Responsável técnico: preencha CNPJ, contato, e-mail e telefone (ou deixe os quatro vazios)')
+    }
+  }
   return e
+}
+
+/** Destinatário sem IE válida e sem "ISENTO" = não contribuinte (indIEDest 9): a SEFAZ exige operação com consumidor
+ *  final (indFinal 1; senão rejeição 696). */
+export function indicadorIEDest(ie: string | null | undefined): 1 | 2 | 9 {
+  const x = (ie ?? '').toUpperCase().replace(/[.\-/\s]/g, '')
+  return /^\d{2,14}$/.test(x) ? 1 : x === 'ISENTO' ? 2 : 9
 }
 
 // ------------------------------------------------------------------------------------------------ totais
@@ -302,11 +326,16 @@ export function montarNfe(d: DadosNfeSaida): { xml: string; chave: string; id: s
   const idDest = d.emit.ender.uf.toUpperCase() === d.dest.ender.uf.toUpperCase() ? 1 : 2
   const refs = [...new Set((d.refNFe ?? []).filter((c) => /^\d{44}$/.test(c)))]
 
+  const docDest = dig(d.dest.doc)
+  const ieDest = (d.dest.ie ?? '').toUpperCase().replace(/[.\-/\s]/g, '')
+  const indIEDest = indicadorIEDest(ieDest)
+  const indFinal = indIEDest === 9 ? 1 : 0
+
   const ide =
     `<ide><cUF>${d.cUF}</cUF><cNF>${d.cNF}</cNF><natOp>${tx(d.natOp)}</natOp><mod>55</mod><serie>${d.serie}</serie>` +
     `<nNF>${d.numero}</nNF><dhEmi>${d.dhEmi}</dhEmi><tpNF>1</tpNF><idDest>${idDest}</idDest><cMunFG>${d.emit.ender.cMun}</cMunFG>` +
     `<tpImp>1</tpImp><tpEmis>1</tpEmis><cDV>${chave.slice(-1)}</cDV><tpAmb>${d.tpAmb}</tpAmb><finNFe>${d.finNFe}</finNFe>` +
-    `<indFinal>0</indFinal><indPres>9</indPres><indIntermed>0</indIntermed><procEmi>0</procEmi><verProc>${VER_PROC}</verProc>` +
+    `<indFinal>${indFinal}</indFinal><indPres>9</indPres><indIntermed>0</indIntermed><procEmi>0</procEmi><verProc>${VER_PROC}</verProc>` +
     refs.map((c) => `<NFref><refNFe>${c}</refNFe></NFref>`).join('') +
     `</ide>`
 
@@ -315,9 +344,6 @@ export function montarNfe(d: DadosNfeSaida): { xml: string; chave: string; id: s
     `<emit><CNPJ>${dig(d.emit.cnpj)}</CNPJ><xNome>${tx(d.emit.xNome)}</xNome>${textoNfe(d.emit.xFant) ? `<xFant>${tx(d.emit.xFant)}</xFant>` : ''}` +
     `${enderecoXml('enderEmit', d.emit.ender)}<IE>${ieEmit}</IE><CRT>${d.emit.crt}</CRT></emit>`
 
-  const docDest = dig(d.dest.doc)
-  const ieDest = (d.dest.ie ?? '').toUpperCase().replace(/[.\-/\s]/g, '')
-  const indIEDest = /^\d{2,14}$/.test(ieDest) ? 1 : ieDest === 'ISENTO' ? 2 : 9
   const xNomeDest = d.tpAmb === 2 ? AVISO_HOMOLOGACAO_XNOME : textoNfe(d.dest.xNome)
   const dest =
     `<dest>${docDest.length === 14 ? `<CNPJ>${docDest}</CNPJ>` : `<CPF>${docDest}</CPF>`}<xNome>${escapeXml(xNomeDest)}</xNome>` +
@@ -340,9 +366,15 @@ export function montarNfe(d: DadosNfeSaida): { xml: string; chave: string; id: s
   const cpl = textoNfe(d.infCpl, 5000)
   const infAdic = fisco || cpl ? `<infAdic>${fisco ? `<infAdFisco>${tx(fisco, 2000)}</infAdFisco>` : ''}${cpl ? `<infCpl>${tx(cpl, 5000)}</infCpl>` : ''}</infAdic>` : ''
 
+  const rt = d.respTec
+  const respTec = rt && dig(rt.cnpj).length === 14 && textoNfe(rt.contato).length >= 2 && textoNfe(rt.email).length >= 6 && /^\d{6,14}$/.test(dig(rt.fone))
+    ? `<infRespTec><CNPJ>${dig(rt.cnpj)}</CNPJ><xContato>${tx(rt.contato)}</xContato><email>${tx(rt.email)}</email><fone>${dig(rt.fone)}</fone></infRespTec>`
+    : ''
+
+  // ordem do infNFe no XSD: ... pag, infIntermed, infAdic, exporta, compra, cana, infRespTec
   const xml =
     `<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe versao="4.00" Id="${id}">` +
-    ide + emit + dest + autXml + d.itens.map((it, i) => itemXml(it, i + 1)).join('') + total + transpXml(d.transp) + pag + infAdic +
+    ide + emit + dest + autXml + d.itens.map((it, i) => itemXml(it, i + 1)).join('') + total + transpXml(d.transp) + pag + infAdic + respTec +
     `</infNFe></NFe>`
   return { xml, chave, id, totais }
 }

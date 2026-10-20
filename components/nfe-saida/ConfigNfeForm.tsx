@@ -45,7 +45,9 @@ export function ConfigNfeForm({ inicial, numeracao, podeEditar }: { inicial: Con
           <input className={input} inputMode="numeric" value={c.autxmlCnpj ?? ''} onChange={(e) => set('autxmlCnpj', e.target.value)} />
         </label>
         <label className="space-y-1"><span>CST PIS/COFINS das saídas</span>
-          <input className={input} maxLength={2} value={c.cstPisCofins} onChange={(e) => set('cstPisCofins', e.target.value)} />
+          <select className={input} value={c.cstPisCofins} onChange={(e) => set('cstPisCofins', e.target.value)}>
+            <option value="49">49 - Outras operações de saída</option><option value="99">99 - Outras operações</option>
+          </select>
         </label>
         {simples ? (
           <>
@@ -74,6 +76,19 @@ export function ConfigNfeForm({ inicial, numeracao, podeEditar }: { inicial: Con
             </label>
           </>
         )}
+        <p className="text-text-muted md:col-span-3">Responsável técnico (grupo infRespTec): algumas UFs exigem. Preencha os quatro campos ou deixe todos vazios.</p>
+        <label className="space-y-1"><span>CNPJ do responsável técnico</span>
+          <input className={input} inputMode="numeric" value={c.respTecCnpj ?? ''} onChange={(e) => set('respTecCnpj', e.target.value)} />
+        </label>
+        <label className="space-y-1"><span>Contato</span>
+          <input className={input} maxLength={60} value={c.respTecContato ?? ''} onChange={(e) => set('respTecContato', e.target.value)} />
+        </label>
+        <label className="space-y-1"><span>E-mail</span>
+          <input className={input} maxLength={60} value={c.respTecEmail ?? ''} onChange={(e) => set('respTecEmail', e.target.value)} />
+        </label>
+        <label className="space-y-1"><span>Telefone</span>
+          <input className={input} inputMode="numeric" value={c.respTecFone ?? ''} onChange={(e) => set('respTecFone', e.target.value)} />
+        </label>
         <label className="space-y-1 md:col-span-3"><span>Texto fixo nas informações complementares (opcional)</span>
           <textarea className={`${input} min-h-[60px]`} maxLength={2000} value={c.infoComplementar ?? ''} onChange={(e) => set('infoComplementar', e.target.value)} />
         </label>

@@ -50,7 +50,7 @@ function opcoesLimpas(o: OpcoesEmissao | undefined): OpcoesEmissao {
 const valida = (origem: string): origem is OrigemNfe => origem === 'devolucao' || origem === 'transferencia_loja'
 
 /** O que falta no cadastro para emitir (sem reservar número nem falar com a SEFAZ). */
-export async function conferirNfeSaida(origem: OrigemNfe, origemId: number): Promise<{ ok: true; tpAmb: 1 | 2; faltas: string[] } | Erro> {
+export async function conferirNfeSaida(origem: OrigemNfe, origemId: number): Promise<{ ok: true; tpAmb: 1 | 2; faltas: string[]; avisos: string[] } | Erro> {
   const __d = viaDesktop('nfe-saida#conferirNfeSaida', conferirNfeSaida, [origem, origemId]); if (__d) return __d as never
   const ctx = await contexto()
   if ('error' in ctx) return ctx
@@ -113,6 +113,7 @@ export type ConfigNfeEntrada = {
   crt: number | null; serieProducao: number | null; serieHomologacao: number; autxmlCnpj: string | null; cstPisCofins: string
   csosnTransferencia: string; cstTransferencia: string; csosnRemessa: string; cstRemessa: string; infoComplementar: string | null
   codigoMunicipio: string | null
+  respTecCnpj?: string | null; respTecContato?: string | null; respTecEmail?: string | null; respTecFone?: string | null
 }
 
 /** Configuração fiscal (só quem administra a loja). Grava em nfe_config e o código IBGE do município em lojas. */
@@ -130,11 +131,21 @@ export async function salvarConfigNfe(c: ConfigNfeEntrada): Promise<{ ok: true }
   if (aut && aut.length !== 14) return { error: 'CNPJ do escritório de contabilidade (autXML) precisa ter 14 dígitos' }
   const mun = String(c.codigoMunicipio ?? '').replace(/\D/g, '')
   if (mun && mun.length !== 7) return { error: 'O código IBGE do município tem 7 dígitos' }
+  if (!['49', '99'].includes(c.cstPisCofins || '49')) return { error: 'CST de PIS/COFINS das saídas: 49 ou 99' }
+  const rt = {
+    cnpj: String(c.respTecCnpj ?? '').replace(/\D/g, ''), contato: String(c.respTecContato ?? '').trim(), email: String(c.respTecEmail ?? '').trim(),
+    fone: String(c.respTecFone ?? '').replace(/\D/g, ''),
+  }
+  const algumRt = !!(rt.cnpj || rt.contato || rt.email || rt.fone)
+  if (algumRt && (rt.cnpj.length !== 14 || rt.contato.length < 2 || rt.contato.length > 60 || rt.email.length < 6 || rt.email.length > 60 || !/^\d{6,14}$/.test(rt.fone))) {
+    return { error: 'Responsável técnico: preencha CNPJ (14 dígitos), contato, e-mail e telefone (6 a 14 dígitos), ou deixe os quatro vazios' }
+  }
   const sb = createServiceClient()
   const { error } = await sb.from('nfe_config').upsert({
     loja_id: lojaId, crt, serie_producao: c.serieProducao, serie_homologacao: c.serieHomologacao ?? 920, autxml_cnpj: aut || null,
     cst_pis_cofins: c.cstPisCofins || '49', csosn_transferencia: c.csosnTransferencia || '400', cst_transferencia: c.cstTransferencia || '41',
     csosn_remessa: c.csosnRemessa || '900', cst_remessa: c.cstRemessa || '90', info_complementar: (c.infoComplementar ?? '').trim() || null,
+    resp_tec_cnpj: algumRt ? rt.cnpj : null, resp_tec_contato: algumRt ? rt.contato : null, resp_tec_email: algumRt ? rt.email : null, resp_tec_fone: algumRt ? rt.fone : null,
     updated_at: new Date().toISOString(), updated_by: p.name,
   }, { onConflict: 'loja_id' })
   if (error) return { error: /nfe_config/.test(error.message) ? 'A NF-e de saída ainda não foi ativada nesta instalação (migration 260).' : 'Não foi possível salvar (confira os códigos).' }

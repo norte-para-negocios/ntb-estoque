@@ -177,6 +177,48 @@ export function montarProcEvento(eventoAssinado: string, retEvento: string): str
   return `<?xml version="1.0" encoding="UTF-8"?><procEventoNFe xmlns="${NS}" versao="1.00">${semDeclaracao(eventoAssinado)}${retEvento.replace(/\sxmlns="[^"]*"/, '')}</procEventoNFe>`
 }
 
+// ------------------------------------------------------------------------------------------------ chave presa x nova chave
+// Códigos que NÃO provam que a SEFAZ deixou de guardar a chave enviada: lote em processamento, recibo, fora do ar,
+// duplicidade, "não consta" (217, pode estar processando), consumo indevido. Com eles a NF-e só reenvia o MESMO XML.
+const NAO_DEFINITIVOS = new Set(['103', '104', '105', '106', '108', '109', '204', '217', '539', '656', '999'])
+
+/** Rejeição definitiva da AUTORIZAÇÃO (a SEFAZ analisou esta chave e recusou): libera montar XML novo / descartar. */
+export function rejeicaoDefinitiva(cStat: string | null): boolean {
+  return !!cStat && classificar(cStat) === 'rejeitada' && !NAO_DEFINITIVOS.has(cStat)
+}
+
+/** Espera antes de aceitar o 217 ("NF-e não consta na base") como prova de que a nota não existe: a SEFAZ pode ainda
+ *  estar processando o lote. Antes disso a NF-e continua sem resposta (incerta). */
+export const ESPERA_217_MS = 30 * 60 * 1000
+export function consulta217Final(ultimoEnvio: string | null | undefined, agora = Date.now()): boolean {
+  if (!ultimoEnvio) return true
+  return agora - new Date(ultimoEnvio).getTime() >= ESPERA_217_MS
+}
+
+/** 539 "Duplicidade de NF-e com diferença na Chave de Acesso [chNFe: ...]": a chave que a SEFAZ já tem para o número. */
+export function chaveDaDuplicidade(xMotivo: string | null | undefined): string | null {
+  const m = (xMotivo ?? '').match(/chNFe\s*:?\s*(\d{44})/i) ?? (xMotivo ?? '').match(/(\d{44})/)
+  return m ? m[1] : null
+}
+
+export type EventoConsulta = { tpEvento: string; nSeq: number; protocolo: string | null; dhRegEvento: string | null; xCorrecao: string | null; xml: string }
+
+/** Eventos que vêm junto da consulta por chave (retConsSitNFe/procEventoNFe): cancelamento, CC-e etc. */
+export function eventosDaConsulta(xml: string): EventoConsulta[] {
+  const out: EventoConsulta[] = []
+  const re = /<(?:[\w-]+:)?procEventoNFe\b[\s\S]*?<\/(?:[\w-]+:)?procEventoNFe>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(xml))) {
+    const bruto = m[0].replace(/<(\/?)[\w-]+:/g, '<$1').replace(/\sxmlns:[\w-]+="[^"]*"/g, '')
+    const ret = trecho(bruto, 'retEvento')
+    out.push({
+      tpEvento: campo(bruto, 'tpEvento') ?? '', nSeq: Number(campo(bruto, 'nSeqEvento') ?? 0), protocolo: campo(ret, 'nProt'),
+      dhRegEvento: campo(ret, 'dhRegEvento'), xCorrecao: campo(bruto, 'xCorrecao'), xml: bruto,
+    })
+  }
+  return out
+}
+
 /** Mensagem curta para a tela a partir do cStat (mantém o texto da SEFAZ). */
 export function mensagemSefaz(cStat: string | null, xMotivo: string | null): string {
   if (!cStat) return xMotivo ?? 'Sem resposta da SEFAZ'

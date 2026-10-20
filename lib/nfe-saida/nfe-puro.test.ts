@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error: import com .ts exigido pelo node --test
-import { AVISO_HOMOLOGACAO_XNOME, calcularTotais, dataHoraSaoPaulo, dvModulo11, gerarCnf, gtinValido, montarChave, montarNfe, textoNfe, validarDadosNfe } from './nfe-puro.ts'
+import { AVISO_HOMOLOGACAO_XNOME, indicadorIEDest, calcularTotais, dataHoraSaoPaulo, dvModulo11, gerarCnf, gtinValido, montarChave, montarNfe, textoNfe, validarDadosNfe } from './nfe-puro.ts'
 // @ts-expect-error: idem
 import { assinarNfe } from './assinatura.ts'
 // @ts-expect-error: idem
@@ -116,6 +116,38 @@ test('transferência interestadual: CFOP 6.152 / 6.151 (produção), CSOSN 400, 
   assert.match(xml, /<vUnCom>30.1234560000<\/vUnCom>/)
 })
 
+test('I1: CFOP precisa ser de devolução na finalidade 4 (327) e não pode ser na finalidade 1 (328)', () => {
+  const d = dadosDevolucao(2)
+  d.itens[0].cfop = '5949'
+  assert.ok(validarDadosNfe(d).some((x: string) => x.includes('5949 não é de devolução')))
+  const t = dadosTransferencia()
+  t.itens[0].cfop = '5202'
+  assert.ok(validarDadosNfe(t).some((x: string) => x.includes('(328)')))
+  assert.deepEqual(validarDadosNfe(dadosDevolucao(2)), [])
+  assert.deepEqual(validarDadosNfe(dadosTransferencia()), [])
+})
+
+test('I3: destinatário sem IE = indIEDest 9 e indFinal 1 (senão rejeição 696); com IE ou ISENTO, indFinal 0', () => {
+  assert.equal(indicadorIEDest(''), 9)
+  assert.equal(indicadorIEDest('ISENTO'), 2)
+  assert.equal(indicadorIEDest('12.345.678'), 1)
+  const d = dadosDevolucao(2)
+  d.dest.ie = null
+  const { xml } = montarNfe(d)
+  assert.match(xml, /<indFinal>1<\/indFinal>/)
+  assert.match(xml, /<indIEDest>9<\/indIEDest><\/dest>/)
+  assert.match(montarNfe(dadosDevolucao(2)).xml, /<indFinal>0<\/indFinal>/)
+})
+
+test('I4: infRespTec só com os quatro campos; incompleto acusa na validação', () => {
+  const d = dadosDevolucao(2)
+  d.respTec = { cnpj: '11444777000161', contato: 'Suporte Norte', email: 'suporte@example.com', fone: '7133334444' }
+  assert.match(montarNfe(d).xml, /<\/infAdic><infRespTec><CNPJ>11444777000161<\/CNPJ><xContato>Suporte Norte<\/xContato><email>suporte@example.com<\/email><fone>7133334444<\/fone><\/infRespTec><\/infNFe>/)
+  d.respTec = { cnpj: '11444777000161', contato: '', email: '', fone: '' }
+  assert.ok(validarDadosNfe(d).some((x: string) => x.includes('Responsável técnico')))
+  assert.doesNotMatch(montarNfe({ ...d, respTec: null }).xml, /infRespTec/)
+})
+
 const xsd = temXmllint()
 
 test('XSD oficial (PL_009_V4): NF-e assinada de devolução, de transferência, o lote enviNFe e o procNFe', { skip: !xsd && 'xmllint ausente' }, () => {
@@ -126,7 +158,12 @@ test('XSD oficial (PL_009_V4): NF-e assinada de devolução, de transferência, 
   const { xml: x0, id: i0 } = montarNfe(dadosDevolucao(2))
   const foraDeOrdem = assinarNfe(x0.replace(/<tpNF>1<\/tpNF>(<idDest>\d<\/idDest>)/, '$1<tpNF>1</tpNF>'), i0, certPem, keyPem)
   assert.notEqual(validarXsd(foraDeOrdem, 'nfe_v4.00.xsd'), null)
-  for (const [nome, dados] of [['devolução homologação', dadosDevolucao(2)], ['devolução produção normal', dadosDevolucao(1, 3)], ['transferência', dadosTransferencia()]] as const) {
+  const semIe = dadosDevolucao(2)
+  semIe.dest.ie = null
+  const comRespTec = dadosTransferencia()
+  comRespTec.respTec = { cnpj: '11444777000161', contato: 'Suporte Norte', email: 'suporte@example.com', fone: '7133334444' }
+  for (const [nome, dados] of [['devolução homologação', dadosDevolucao(2)], ['devolução produção normal', dadosDevolucao(1, 3)], ['transferência', dadosTransferencia()],
+    ['devolução sem IE (indFinal 1)', semIe], ['transferência com infRespTec', comRespTec]] as const) {
     const { xml, id } = montarNfe(dados)
     const assinado = assinarNfe(xml, id, certPem, keyPem)
     assert.equal(validarXsd(assinado, 'nfe_v4.00.xsd'), null, nome)

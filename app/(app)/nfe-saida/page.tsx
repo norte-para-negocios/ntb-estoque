@@ -54,6 +54,8 @@ export default async function NfeSaidaPage() {
                 cstPisCofins: cfg?.cst_pis_cofins ?? '49', csosnTransferencia: cfg?.csosn_transferencia ?? '400', cstTransferencia: cfg?.cst_transferencia ?? '41',
                 csosnRemessa: cfg?.csosn_remessa ?? '900', cstRemessa: cfg?.cst_remessa ?? '90', infoComplementar: cfg?.info_complementar ?? null,
                 codigoMunicipio: loja?.codigo_municipio ?? null,
+                respTecCnpj: cfg?.resp_tec_cnpj ?? null, respTecContato: cfg?.resp_tec_contato ?? null, respTecEmail: cfg?.resp_tec_email ?? null,
+                respTecFone: cfg?.resp_tec_fone ?? null,
               }} />
           </section>
           {nfes.length === 0 ? (

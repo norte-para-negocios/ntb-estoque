@@ -3,7 +3,7 @@ import { carregarCredencialLoja, type CredencialLoja } from '@/lib/estoque/sefaz
 import { tpAmbDaNfe, type TpAmb } from './ambiente'
 import { assinarEventoNfe, assinarNfe } from './assinatura'
 import {
-  codigoUfIbge, dataHoraSaoPaulo, gerarCnf, montarNfe, r2, validarDadosNfe, type DadosNfeSaida, type Endereco,
+  codigoUfIbge, dataHoraSaoPaulo, ehCfopDevolucao, gerarCnf, indicadorIEDest, montarNfe, r2, validarDadosNfe, type DadosNfeSaida, type Endereco,
 } from './nfe-puro'
 import { lerNotaOrigem } from './origem-puro'
 import {
@@ -11,8 +11,9 @@ import {
   textoTransferencia, type ConfigFiscal, type Crt, type NaturezaSaida,
 } from './regras-puro'
 import {
-  lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, mensagemSefaz, montarConsReci, montarConsSit, montarEnvEvento, montarEnviNFe,
-  montarEventoCancelamento, montarEventoCce, montarProcEvento, montarProcNFe, trecho, validarCorrecao, validarJustificativa, type ResultadoSefaz,
+  chaveDaDuplicidade, consulta217Final, eventosDaConsulta, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, mensagemSefaz,
+  montarConsReci, montarConsSit, montarEnvEvento, montarEnviNFe, montarEventoCancelamento, montarEventoCce, montarProcEvento, montarProcNFe,
+  rejeicaoDefinitiva, validarCorrecao, validarJustificativa, type ResultadoSefaz,
 } from './sefaz-puro'
 import { ErroAntesDoEnvio, postSefaz } from './rede'
 import { urlServico } from './webservices'
@@ -52,7 +53,7 @@ function msgBanco(e: { message?: string; code?: string } | null): string {
 }
 
 // ------------------------------------------------------------------------------------------------ emitente
-type Emitente = { dados: DadosNfeSaida['emit']; uf: string; cUF: string; cfg: ConfigFiscal; autXml: string[]; infExtra: string | null }
+type Emitente = { dados: DadosNfeSaida['emit']; uf: string; cUF: string; cfg: ConfigFiscal; autXml: string[]; infExtra: string | null; respTec: DadosNfeSaida['respTec'] }
 
 export async function carregarEmitente(lojaId: number): Promise<Emitente | { error: string }> {
   const [{ data: l }, { data: c, error: ec }] = await Promise.all([
@@ -80,6 +81,9 @@ export async function carregarEmitente(lojaId: number): Promise<Emitente | { err
     },
     autXml: aut.length === 14 ? [aut] : uf === 'BA' ? [AUTXML_SEFAZ_BA] : [],
     infExtra: c.info_complementar ?? null,
+    respTec: c.resp_tec_cnpj || c.resp_tec_contato || c.resp_tec_email || c.resp_tec_fone
+      ? { cnpj: c.resp_tec_cnpj ?? '', contato: c.resp_tec_contato ?? '', email: c.resp_tec_email ?? '', fone: c.resp_tec_fone ?? '' }
+      : null,
   }
 }
 
@@ -108,32 +112,35 @@ export async function montarDevolucao(lojaId: number, devolucaoId: number, tpAmb
   type ItemDev = { compra_item_id: number; quantidade: number; cfop: string | null; linha: number }
   const itensDev = ((dev.itens ?? []) as ItemDev[]).sort((a, b) => a.linha - b.linha)
   const idsItem = itensDev.map((i) => i.compra_item_id)
-  const { data: itensCompra } = await sb().from('compras_proprio_itens').select('id, linha, movimento_id, cfop_entrada').eq('loja_id', lojaId).in('id', idsItem)
-  const movIds = (itensCompra ?? []).map((i) => num(i.movimento_id)).filter(Boolean)
-  const { data: movs } = await sb().from('estoque_movimentos').select('id, quantidade').eq('loja_id', lojaId).in('id', movIds.length ? movIds : [0])
-  const qMov = new Map((movs ?? []).map((m) => [num(m.id), num(m.quantidade)]))
+  const { data: itensCompra } = await sb().from('compras_proprio_itens').select('id, linha, c_prod, fator, cfop_entrada').eq('loja_id', lojaId).in('id', idsItem)
   const porId = new Map((itensCompra ?? []).map((i) => [num(i.id), i]))
+  const ufForn = origem.emitente.ender.uf || origem.ufEmit
 
   let total = true
   const itens = []
   for (const d of itensDev) {
     const ic = porId.get(num(d.compra_item_id))
     if (!ic) return { error: `Item ${d.linha} da devolução sem item da nota de entrada.` }
-    const o = origem.itens.find((x: { nItem: number }) => x.nItem === num(ic.linha))
-    if (!o) return { error: `O item ${ic.linha} não está no XML da nota de entrada.` }
-    const recebido = qMov.get(num(ic.movimento_id)) ?? 0
+    // o item do XML precisa ser o mesmo: número do item E código do fornecedor
+    const o = origem.itens.find((x: { nItem: number; cProd: string }) => x.nItem === num(ic.linha) && (!ic.c_prod || x.cProd === String(ic.c_prod)))
+    if (!o) return { error: `O item ${ic.linha} (código ${ic.c_prod ?? '?'}) não bate com o XML da nota de entrada.` }
+    // proporção sobre o FATURADO (qCom da nota × fator, unidade de estoque), com teto nele: a NF-e devolve o que foi digitado
+    const faturado = o.qCom * (num(ic.fator) || 1)
     let f: number
-    try { f = proporcaoDevolvida(num(d.quantidade), recebido) } catch (e) { return { error: `Item ${ic.linha}: ${e instanceof Error ? e.message : e}` } }
+    try { f = proporcaoDevolvida(num(d.quantidade), faturado) } catch (e) { return { error: `Item ${ic.linha}: ${e instanceof Error ? e.message : e}` } }
     if (f < 1) total = false
-    const base = d.cfop || `5.${cfopDevolucaoBase(ic.cfop_entrada).slice(1)}`
-    itens.push(itemDevolucao(o, { proporcao: f, cfop: cfopPorUf(base, emit.uf, origem.emitente.ender.uf || origem.ufEmit), crt: emit.cfg.crt, cstPisCofins: emit.cfg.cstPisCofins }))
+    const sugerido = d.cfop && ehCfopDevolucao(cfopPorUf(d.cfop, emit.uf, ufForn)) ? d.cfop : cfopDevolucaoBase(ic.cfop_entrada)
+    if (!sugerido) {
+      return { error: `Item ${ic.linha}: a entrada foi com CFOP ${ic.cfop_entrada ?? '?'} (ex.: bonificação/outras), que não tem CFOP de devolução válido na NF-e. Emita esta devolução pelo contador.` }
+    }
+    itens.push(itemDevolucao(o, { proporcao: f, cfop: cfopPorUf(sugerido, emit.uf, ufForn), crt: emit.cfg.crt, cstPisCofins: emit.cfg.cstPisCofins }))
   }
   if (origem.itens.length !== itensDev.length) total = false
   const dest = { doc: origem.emitente.doc, xNome: origem.emitente.xNome, ender: origem.emitente.ender, ie: origem.emitente.ie }
   return {
     destNome: dest.xNome, destDoc: dest.doc,
     dados: {
-      tpAmb, cUF: emit.cUF, natOp: NAT_OP.devolucao, finNFe: 4, emit: emit.dados, dest, autXml: emit.autXml, refNFe: [chave], itens,
+      tpAmb, cUF: emit.cUF, natOp: NAT_OP.devolucao, finNFe: 4, emit: emit.dados, dest, autXml: emit.autXml, refNFe: [chave], itens, respTec: emit.respTec,
       transp: transporte(opcoes),
       infCpl: textoDevolucao({
         numeroOrigem: origem.numero, serieOrigem: origem.serie, emissaoOrigem: origem.emissao, chaveOrigem: chave, total, motivo: dev.motivo,
@@ -177,30 +184,35 @@ export async function montarTransferencia(lojaId: number, transfId: number, tpAm
   return {
     destNome: dest.xNome, destDoc: dest.doc,
     dados: {
-      tpAmb, cUF: emit.cUF, natOp: NAT_OP[natureza], finNFe: 1, emit: emit.dados, dest, autXml: emit.autXml, itens, transp: transporte(opcoes),
+      tpAmb, cUF: emit.cUF, natOp: NAT_OP[natureza], finNFe: 1, emit: emit.dados, dest, autXml: emit.autXml, itens, transp: transporte(opcoes), respTec: emit.respTec,
       infCpl: textoTransferencia({ natureza, numeroInterno: t.numero, obs: [t.obs, opcoes.observacao].filter(Boolean).join(' '), crt: emit.cfg.crt, extra: emit.infExtra }),
     },
   }
 }
 
 /** Confere tudo o que dá para conferir sem reservar número (para a tela avisar o que falta antes do clique). */
-export async function conferirAntesDeEmitir(lojaId: number, origem: OrigemNfe, origemId: number, opcoes: OpcoesEmissao = {}): Promise<{ ok: true; tpAmb: TpAmb; faltas: string[] } | { error: string }> {
+export async function conferirAntesDeEmitir(lojaId: number, origem: OrigemNfe, origemId: number, opcoes: OpcoesEmissao = {}): Promise<{ ok: true; tpAmb: TpAmb; faltas: string[]; avisos: string[] } | { error: string }> {
   const tpAmb = tpAmbDaNfe()
   const emit = await carregarEmitente(lojaId)
   if ('error' in emit) return emit
   const m = origem === 'devolucao' ? await montarDevolucao(lojaId, origemId, tpAmb, opcoes, emit) : await montarTransferencia(lojaId, origemId, tpAmb, opcoes, emit)
   if ('error' in m) return m
-  return { ok: true, tpAmb, faltas: validarDadosNfe({ ...m.dados, numero: 1, serie: 1, cNF: '12345678', dhEmi: dataHoraSaoPaulo() }) }
+  const avisos: string[] = []
+  if (indicadorIEDest(m.dados.dest.ie) === 9) {
+    avisos.push('O destinatário está sem inscrição estadual: a nota sai como operação com NÃO contribuinte (consumidor final). Se ele tem IE, corrija o cadastro antes.')
+  }
+  return { ok: true, tpAmb, faltas: validarDadosNfe({ ...m.dados, numero: 1, serie: 1, cNF: '12345678', dhEmi: dataHoraSaoPaulo() }), avisos }
 }
 
 // ------------------------------------------------------------------------------------------------ emitir
 type LinhaNfe = {
   id: number; loja_id: number; tp_amb: number; serie: number; numero: number; status: string; chave: string | null; xml_assinado: string | null
   protocolo: string | null; dh_recbto: string | null; n_recibo: string | null; cce_seq: number; enviando_desde: string | null
+  pode_regerar: boolean; ultimo_envio_em: string | null; origem_tipo: OrigemNfe; origem_id: number
 }
 
 async function linha(lojaId: number, id: number): Promise<LinhaNfe | null> {
-  const { data } = await sb().from('nfe_saida').select('id, loja_id, tp_amb, serie, numero, status, chave, xml_assinado, protocolo, dh_recbto, n_recibo, cce_seq, enviando_desde')
+  const { data } = await sb().from('nfe_saida').select('id, loja_id, tp_amb, serie, numero, status, chave, xml_assinado, protocolo, dh_recbto, n_recibo, cce_seq, enviando_desde, pode_regerar, ultimo_envio_em, origem_tipo, origem_id')
     .eq('id', id).eq('loja_id', lojaId).maybeSingle()
   return (data as LinhaNfe | null) ?? null
 }
@@ -213,19 +225,19 @@ async function credencial(lojaId: number, cnpjLoja: string): Promise<CredencialL
   } catch (e) { return { error: e instanceof Error ? e.message : 'Certificado indisponível' } }
 }
 
-async function gravarResultado(n: LinhaNfe, r: ResultadoSefaz, xmlRetorno: string, tipo: 'retorno' | 'consulta', u: Usuario): Promise<ResultadoNfe> {
+async function gravarResultado(n: LinhaNfe, r: ResultadoSefaz, xmlRetorno: string, tipo: 'retorno' | 'consulta', u: Usuario, podeRegerar = false): Promise<ResultadoNfe> {
   const status = r.status === 'processando' ? 'incerta' : r.status
   const proc = r.status === 'autorizada' && r.protNFe && n.xml_assinado ? montarProcNFe(n.xml_assinado, r.protNFe) : null
   const { error } = await sb().rpc('nfe_registrar_retorno', {
     p_id: n.id, p_loja: n.loja_id, p_status: status, p_c_stat: r.cStat, p_x_motivo: r.xMotivo, p_protocolo: r.protocolo,
     p_dh_recbto: r.dhRecbto, p_n_recibo: r.nRec, p_xml_autorizado: proc, p_xml_retorno: xmlRetorno.slice(0, 200000), p_tipo_evento: tipo,
-    p_user: u.id, p_user_nome: u.nome,
+    p_user: u.id, p_user_nome: u.nome, p_pode_regerar: podeRegerar,
   })
   if (error) return { error: `A SEFAZ respondeu (${r.cStat ?? 'sem código'}), mas não foi possível gravar: ${msgBanco(error)}. Use "Consultar na SEFAZ".`, id: n.id }
   const texto = status === 'autorizada' ? `NF-e nº ${n.numero} autorizada (protocolo ${r.protocolo}).`
     : status === 'incerta' ? `A SEFAZ ainda não deu a resposta final (${mensagemSefaz(r.cStat, r.xMotivo)}). Use "Consultar na SEFAZ" em instantes.`
     : status === 'denegada' ? `NF-e denegada: ${mensagemSefaz(r.cStat, r.xMotivo)}`
-    : `NF-e rejeitada: ${mensagemSefaz(r.cStat, r.xMotivo)}`
+    : `NF-e rejeitada: ${mensagemSefaz(r.cStat, r.xMotivo)}${podeRegerar ? '' : ' A SEFAZ pode ter recebido esta chave: o reenvio usa o MESMO XML.'}`
   return { ok: true, id: n.id, status, mensagem: texto }
 }
 
@@ -252,18 +264,36 @@ export async function emitirNfe(lojaId: number, origem: OrigemNfe, origemId: num
       : { error: 'Já há um envio desta NF-e sem resposta final: use "Consultar na SEFAZ".', id: reserva.id }
   }
 
-  const dhEmi = dataHoraSaoPaulo()
-  const dados: DadosNfeSaida = { ...m.dados, numero: reserva.numero, serie: reserva.serie, cNF: gerarCnf(reserva.numero), dhEmi }
-  let montada: ReturnType<typeof montarNfe>
+  const atual = await linha(lojaId, reserva.id)
+  if (!atual) return { error: 'NF-e não encontrada.' }
+  let chave: string
   let assinado: string
-  try {
-    montada = montarNfe(dados)
-    assinado = assinarNfe(montada.xml, montada.id, cred.certPem, cred.keyPem)
-  } catch (e) { return { error: `Não foi possível montar/assinar a NF-e: ${e instanceof Error ? e.message : e}`, id: reserva.id } }
+  let dhEmi: string
+  let valor: number
+  let dadosGravar: Record<string, unknown>
+  if (!atual.pode_regerar && atual.chave && atual.xml_assinado) {
+    // C1: a SEFAZ pode ter esta chave (envio sem resposta final): reenvia o MESMO XML. Se ela já tiver autorizado,
+    // responde 204 (duplicidade) e a consulta pela mesma chave acha a nota; nunca nasce uma 2ª chave para o número.
+    chave = atual.chave
+    assinado = atual.xml_assinado
+    dhEmi = assinado.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1] ?? dataHoraSaoPaulo()
+    valor = Number(assinado.match(/<vNF>([^<]+)<\/vNF>/)?.[1] ?? 0)
+    dadosGravar = { reenvio_mesmo_xml: true }
+  } else {
+    dhEmi = dataHoraSaoPaulo()
+    const dados: DadosNfeSaida = { ...m.dados, numero: reserva.numero, serie: reserva.serie, cNF: gerarCnf(reserva.numero), dhEmi }
+    try {
+      const montada = montarNfe(dados)
+      assinado = assinarNfe(montada.xml, montada.id, cred.certPem, cred.keyPem)
+      chave = montada.chave
+      valor = r2(montada.totais.vNF)
+      dadosGravar = { ...dados, emit: { ...dados.emit }, totais: montada.totais }
+    } catch (e) { return { error: `Não foi possível montar/assinar a NF-e: ${e instanceof Error ? e.message : e}`, id: reserva.id } }
+  }
 
   const { error: ei } = await sb().rpc('nfe_iniciar_envio', {
-    p_id: reserva.id, p_loja: lojaId, p_chave: montada.chave, p_xml_assinado: assinado, p_dh_emissao: dhEmi, p_valor: r2(montada.totais.vNF),
-    p_dest_nome: m.destNome, p_dest_doc: m.destDoc, p_dados: { ...dados, emit: { ...dados.emit }, totais: montada.totais }, p_user: u.id, p_user_nome: u.nome,
+    p_id: reserva.id, p_loja: lojaId, p_chave: chave, p_xml_assinado: assinado, p_dh_emissao: dhEmi, p_valor: valor,
+    p_dest_nome: m.destNome, p_dest_doc: m.destDoc, p_dados: dadosGravar, p_user: u.id, p_user_nome: u.nome,
   })
   if (ei) return { error: msgBanco(ei), id: reserva.id }
   const n = (await linha(lojaId, reserva.id))!
@@ -297,7 +327,21 @@ export async function emitirNfe(lojaId: number, origem: OrigemNfe, origemId: num
       } catch { break }
     }
   }
-  return gravarResultado(n, r, body, 'retorno', u)
+  const gravado = await gravarResultado(n, r, body, 'retorno', u, r.status === 'rejeitada' && rejeicaoDefinitiva(r.cStat))
+  if ('error' in gravado) return gravado
+  // C1: duplicidade = a SEFAZ já tem este número. 539 traz a chave que ela tem: volta para ela (é de um envio nosso) e consulta.
+  if (r.cStat === '539') {
+    const ch = chaveDaDuplicidade(r.xMotivo)
+    if (ch && ch !== n.chave) {
+      const { data: rest } = await sb().rpc('nfe_restaurar_chave', { p_id: n.id, p_loja: lojaId, p_chave: ch, p_user: u.id, p_user_nome: u.nome })
+      if (!(rest as { achou?: boolean } | null)?.achou) {
+        return { error: `A SEFAZ já tem o número ${n.numero} com a chave ${ch}, que não é de nenhum envio desta NF-e. A NF-e ficou travada (sem descarte): fale com o suporte.`, id: n.id }
+      }
+    }
+    return consultarNfe(lojaId, n.id, u)
+  }
+  if (r.cStat === '204') return consultarNfe(lojaId, n.id, u)
+  return gravado
 }
 
 // ------------------------------------------------------------------------------------------------ consultar
@@ -314,11 +358,27 @@ export async function consultarNfe(lojaId: number, nfeId: number, u: Usuario): P
   try {
     const r = await postSefaz({ url: urlServico(emit.uf, tp, 'NfeConsultaProtocolo'), servico: 'NfeConsultaProtocolo', corpo: montarConsSit(tp, n.chave), cred })
     const c = lerRetornoConsulta(r.body)
-    if (c.cancelada && n.status === 'autorizada') {
-      const proc = trecho(r.body, 'procEventoNFe')
-      const { error } = await sb().rpc('nfe_registrar_cancelamento', { p_id: n.id, p_loja: lojaId, p_protocolo: c.protocolo, p_dh: null, p_justificativa: 'Cancelamento confirmado na consulta', p_xml: proc, p_xml_retorno: r.body.slice(0, 200000), p_user: u.id, p_user_nome: u.nome })
+    if (c.cancelada && n.status !== 'cancelada') {
+      // cancelada na SEFAZ: grava antes a autorização (se aqui ainda estava sem resposta) e depois o cancelamento, com o
+      // procEventoNFe DO CANCELAMENTO (110111), não o primeiro evento da lista
+      if (n.status !== 'autorizada' && c.protNFe) {
+        const g = await gravarResultado(n, { ...c, status: 'autorizada' }, r.body, 'consulta', u)
+        if ('error' in g) return g
+      }
+      const canc = eventosDaConsulta(r.body).filter((e) => e.tpEvento === '110111').pop()
+      const { error } = await sb().rpc('nfe_registrar_cancelamento', {
+        p_id: n.id, p_loja: lojaId, p_protocolo: canc?.protocolo ?? null, p_dh: canc?.dhRegEvento ?? null, p_justificativa: 'Cancelamento confirmado na consulta',
+        p_xml: canc?.xml ? `<?xml version="1.0" encoding="UTF-8"?>${canc.xml}` : null, p_xml_retorno: r.body.slice(0, 200000), p_user: u.id, p_user_nome: u.nome,
+      })
       if (error) return { error: msgBanco(error), id: n.id }
       return { ok: true, id: n.id, status: 'cancelada', mensagem: 'A SEFAZ informa que esta NF-e está cancelada.' }
+    }
+    if (c.cStat === '217') {
+      // C1: "não consta" logo depois do envio pode ser lote ainda em processamento: só vale como inexistente depois da espera
+      if (!consulta217Final(n.ultimo_envio_em)) {
+        return gravarResultado(n, { ...c, status: 'incerta' }, r.body, 'consulta', u)
+      }
+      return gravarResultado(n, c, r.body, 'consulta', u, true)
     }
     return gravarResultado(n, c, r.body, 'consulta', u)
   } catch (e) {
@@ -384,6 +444,7 @@ export async function corrigirNfe(lojaId: number, nfeId: number, correcao: strin
     body = (await postSefaz({ url: urlServico(emit.uf, tp, 'RecepcaoEvento'), servico: 'RecepcaoEvento', corpo: montarEnvEvento(assinado, `${nfeId}${seq}`), cred })).body
   } catch (e) { return { error: `Não foi possível falar com a SEFAZ: ${e instanceof Error ? e.message : e}`, id: nfeId } }
   const r = lerRetornoEvento(body)
+  if (r.cStat === '573') return recuperarCce(lojaId, nfeId, seq, emit.uf, tp, c.chave, cred, u)
   if (!r.registrado || !r.retEvento) {
     await sb().rpc('nfe_registrar_erro', { p_id: nfeId, p_loja: lojaId, p_mensagem: `CC-e recusada: ${mensagemSefaz(r.cStat, r.xMotivo)}`, p_user: u.id, p_user_nome: u.nome })
     return { error: `A SEFAZ recusou a carta de correção: ${mensagemSefaz(r.cStat, r.xMotivo)}`, id: nfeId }
@@ -394,6 +455,24 @@ export async function corrigirNfe(lojaId: number, nfeId: number, correcao: strin
   })
   if (error) return { error: `CC-e registrada na SEFAZ, mas não foi possível gravar: ${msgBanco(error)}`, id: nfeId }
   return { ok: true, id: nfeId, status: 'autorizada', mensagem: `Carta de correção nº ${seq} registrada (protocolo ${r.protocolo}).` }
+}
+
+/** I2: 573 na CC-e = a SEFAZ já tem a sequência (um envio anterior registrou e a resposta se perdeu). Busca na consulta
+ *  a última CC-e registrada e grava; sem consulta, avança a sequência mesmo assim (senão toda CC-e nova cairia no 573). */
+async function recuperarCce(lojaId: number, nfeId: number, seq: number, uf: string, tp: TpAmb, chave: string, cred: CredencialLoja, u: Usuario): Promise<ResultadoNfe> {
+  let ultima: ReturnType<typeof eventosDaConsulta>[number] | undefined
+  try {
+    const r = await postSefaz({ url: urlServico(uf, tp, 'NfeConsultaProtocolo'), servico: 'NfeConsultaProtocolo', corpo: montarConsSit(tp, chave), cred })
+    ultima = eventosDaConsulta(r.body).filter((e) => e.tpEvento === '110110').sort((a, b) => a.nSeq - b.nSeq).pop()
+  } catch { /* segue com o avanço da sequência */ }
+  const seqReg = Math.max(seq, ultima?.nSeq ?? 0)
+  const texto = ultima?.xCorrecao ?? `(carta nº ${seqReg} já estava registrada na SEFAZ; texto não recuperado)`
+  const { error } = await sb().rpc('nfe_registrar_cce', {
+    p_id: nfeId, p_loja: lojaId, p_seq: seqReg, p_texto: texto, p_protocolo: ultima?.protocolo ?? null,
+    p_xml: ultima?.xml ? `<?xml version="1.0" encoding="UTF-8"?>${ultima.xml}` : null, p_xml_retorno: null, p_user: u.id, p_user_nome: u.nome,
+  })
+  if (error) return { error: msgBanco(error), id: nfeId }
+  return { ok: true, id: nfeId, status: 'autorizada', mensagem: `A SEFAZ já tinha a carta de correção nº ${seqReg}${ultima?.xCorrecao ? ` ("${ultima.xCorrecao}")` : ''}. Se não é o texto que você queria, envie de novo (vai como nº ${seqReg + 1}).` }
 }
 
 export async function descartarNfe(lojaId: number, nfeId: number, motivo: string | null, u: Usuario): Promise<ResultadoNfe> {
