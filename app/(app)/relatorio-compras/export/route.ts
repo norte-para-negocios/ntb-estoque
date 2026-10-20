@@ -97,6 +97,8 @@ export async function GET(request: Request) {
     p_produto: produto,
     p_local: localCod,
     p_status: status,
+    // paridade com o Omie (B2, migration 281): bonificação entra só no valor de estoque, como na tela
+    ...(tipoValor === 'estoque' ? { p_bonificacao: true } : {}),
   }
 
   const supabase = await createClient()
@@ -155,7 +157,7 @@ export async function GET(request: Request) {
     const dataFinalFria = fim < corteExcl ? fim : corteExcl
     const itensFrios: ItemNFFrio[] = await buscarItensNFFrio({ lojaId, dataInicio: ini, dataFinal: dataFinalFria })
     const filtrados = filtrarItensCompras(itensFrios, {
-      status, familias, tipos, fornecedor, cfops, produto, local: localCod,
+      bonificacao: tipoValor === 'estoque', status, familias, tipos, fornecedor, cfops, produto, local: localCod,
     }, meta)
     detalheRaw.push(...mapearComprasDetalhe(filtrados, meta))
     matrizRaw.push(...agregarComprasMatriz(filtrados, dim, meta))
@@ -231,7 +233,7 @@ export async function GET(request: Request) {
   ]
 
   const STATUS_LABEL: Record<string, string> = { CONCLUIDA: 'Concluída', MANIFESTADA: 'Manifestada', PENDENTE: 'Pendente', CANCELADA: 'Cancelada', TODAS: 'Todas' }
-  const sub = `${ini} a ${fim} · ${tipoValor === 'estoque' ? 'Valor de estoque (como no Omie)' : 'Valor da nota'} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
+  const sub = `${ini} a ${fim} · ${tipoValor === 'estoque' ? 'Valor de estoque (como no Omie, com bonificação)' : 'Valor da nota (sem bonificação)'} · Status: ${STATUS_LABEL[status] ?? status}${familias.length ? ` · Família: ${familias.join(', ')}` : ''}${tipos.length ? ` · Tipo: ${tipos.map((t) => TIPO_LABEL.get(t) ?? t).join(', ')}` : ''}${fornecedor ? ` · Fornecedor: ${fornecedor}` : ''}${cfops.length ? ` · CFOP: ${cfops.join(', ')}` : ''}${produto ? ` · Produto: ${produto}` : ''}${localCod !== null ? ` · Local: ${localCod}` : ''}`
 
   const buffer = await gerarPlanilhaMulti([
     {

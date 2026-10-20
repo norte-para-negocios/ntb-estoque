@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { custoEstoqueItemOmie, type FlagsCustoOmie } from '@/lib/compras/custo-estoque-item'
+import { custoEstoqueItemOmie, icmsDoCusto, type FlagsCustoOmie } from '@/lib/compras/custo-estoque-item'
 import { buscarTudoPaginado, buscarTodosPorIds, escapeIlike, escapeIlikeOr } from '@/lib/utils-busca'
 import { resolverCategoriaOrClause } from '@/lib/nota-fiscal-categoria'
 import { formatarNomeProduto } from '@/lib/formatar-nome'
@@ -151,6 +151,8 @@ type LinhaItemNF = {
   ipi: string | null
   st: string | null
   icms: string | null
+  csosn: string | null
+  credsn: string | null
   custo: unknown
   naomov: string | null
   ignorar: string | null
@@ -169,7 +171,7 @@ export async function carregarItensCompra(lojaId: number, notas: NotaLeve[], f: 
   const brutos = await buscarTodosPorIds<LinhaItemNF>(notas.map((n) => n.id), (lote, from, to) =>
     anotando(erros, 'itens das notas', supabase
       .from('nota_fiscal_items')
-      .select('nota_fiscal_id, n_id_produto, c_codigo_produto, c_descricao_produto, n_qtde_nfe, n_preco_unit, c_unidade_nfe, local:full_object->itensAjustes->>codigo_local_estoque, vtot:full_object->itensCabec->>vTotalItem, vdesc:full_object->itensCabec->>vDesconto, ipi:full_object->itensIPI->>nValIPI, st:full_object->itensICMSST->>nValorST, icms:full_object->itensICMS->>nValor, custo:full_object->itensCustoEstoque, naomov:full_object->itensAjustes->>cNaoGerarMovEstoque, ignorar:full_object->itensCabec->>cIgnorarItem')
+      .select('nota_fiscal_id, n_id_produto, c_codigo_produto, c_descricao_produto, n_qtde_nfe, n_preco_unit, c_unidade_nfe, local:full_object->itensAjustes->>codigo_local_estoque, vtot:full_object->itensCabec->>vTotalItem, vdesc:full_object->itensCabec->>vDesconto, ipi:full_object->itensIPI->>nValIPI, st:full_object->itensICMSST->>nValorST, icms:full_object->itensICMS->>nValor, csosn:full_object->itensICMSSN->>cSitTribSN, credsn:full_object->itensICMSSN->>nCredSN, custo:full_object->itensCustoEstoque, naomov:full_object->itensAjustes->>cNaoGerarMovEstoque, ignorar:full_object->itensCabec->>cIgnorarItem')
       .eq('loja_id', lojaId)
       .in('nota_fiscal_id', lote)
       .order('id', { ascending: true })
@@ -202,7 +204,7 @@ export async function carregarItensCompra(lojaId: number, notas: NotaLeve[], f: 
       valorEstoque: custoEstoqueItemOmie({
         qtde: quant, precoUnit: Number(i.n_preco_unit) || 0,
         vTotalItem: i.vtot == null || i.vtot === '' ? null : Number(i.vtot),
-        vDesconto: Number(i.vdesc) || 0, vIPI: Number(i.ipi) || 0, vST: Number(i.st) || 0, vICMS: Number(i.icms) || 0,
+        vDesconto: Number(i.vdesc) || 0, vIPI: Number(i.ipi) || 0, vST: Number(i.st) || 0, vICMS: icmsDoCusto(Number(i.icms) || 0, i.csosn, Number(i.credsn) || 0),
         flags: i.custo && typeof i.custo === 'object' ? (i.custo as FlagsCustoOmie) : null,
       }).valorEstoque,
     }

@@ -62,3 +62,28 @@ export function matrizCompras(linhas: LinhaMesCompra[], ini: string, fim: string
     total,
   }
 }
+
+// ---- Bonificação (paridade numérica com o Omie, 20/10/2026, bug B2) ----
+// O Omie põe a bonificação (CFOP de entrada x.910) no estoque COM valor (loja 5, out/2026: 2 itens, 5.743,24 de valor de
+// estoque). No NTB ela entra só em "Valor de estoque" (como o Omie, com a linha "Bonificação" à vista); em "Valor da
+// nota" fica fora, como sempre (compra paga). Comodato (x.908) anda junto, como nas RPCs desde a 065.
+
+/** CFOP de entrada de bonificação/doação/brinde (x.910) ou comodato (x.908): mesma regra das RPCs relatorio_compras_*. */
+export function ehBonificacaoCfop(cfopEntrada: string | null | undefined): boolean {
+  const d = (cfopEntrada ?? '').replace(/\D/g, '').slice(-3)
+  return d === '910' || d === '908'
+}
+
+/** A tela de Compras pede as RPCs com p_bonificacao = true só em "Valor de estoque". */
+export const incluiBonificacao = (tipo: TipoValorCompra): boolean => tipo === 'estoque'
+
+export type TotaisCompra = { valor: number; valorEstoque: number; valorBonificacao: number; valorEstoqueBonificacao: number }
+
+/** Linha "Bonificação" do resumo: quanto do total escolhido é bonificação (null quando não entra ou é zero). */
+export function linhaBonificacao(tipo: TipoValorCompra, t: TotaisCompra): { valor: number; pct: number; semBonificacao: number } | null {
+  if (!incluiBonificacao(tipo)) return null
+  const v = Number(t.valorEstoqueBonificacao) || 0
+  if (Math.abs(v) < 0.005) return null
+  const total = Number(t.valorEstoque) || 0
+  return { valor: v, pct: total ? (v / total) * 100 : 0, semBonificacao: total - v }
+}

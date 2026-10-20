@@ -5,6 +5,7 @@ import { fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { webhookTokenOk } from '@/lib/seguranca/regras'
+import { deveRelerNota, lojasForaDaReleitura, nIdRecebDoAviso } from '@/lib/omie/nf-releitura'
 
 // Topicos de movimentacao de estoque: ignorados (igual ao Laravel, evita loop de ajuste)
 const IGNORED_TOPICS = ['Produto.AjusteEstoque', 'Produto.MovimentacaoEstoque']
@@ -13,7 +14,8 @@ interface OmieWebhookBody {
   messageId?: string
   appKey?: string
   topic?: string
-  event?: { nIdReceb?: number; nCodOP?: number }
+  // RecebimentoProduto.*: o id vem em event.cabecalho.nIdReceb (nIdRecebDoAviso, paridade 20/10/2026 B7)
+  event?: { nIdReceb?: number; nCodOP?: number; cabecalho?: { nIdReceb?: number } }
 }
 
 // Fase H: aviso do Omie é pequeno (p99 = 1,5 KB; o maior já gravado, 175 KB, em 19/10/2026). Corpo gigante é
@@ -95,8 +97,14 @@ export async function POST(request: Request) {
 
   // Processa por topico. Erros nao quebram a resposta 200 (Omie reenvia se 5xx).
   try {
-    if (topic.startsWith('RecebimentoProduto.') && body.event?.nIdReceb) {
-      await fetchNotaFiscal(loja, body.event.nIdReceb)
+    if (topic.startsWith('RecebimentoProduto.')) {
+      // Antes lia event.nIdReceb (que o Omie não manda) e nunca relia a nota. Agora só em conclusão/reversão (o que
+      // muda associação do item e etapa), nunca na loja 4 nem na 7 (OMIE_NF_RELEITURA_LOJAS_FORA); aviso perdido é
+      // retomado pelo cron sync-nfs (relerNotasComAvisoPendente).
+      const nIdReceb = nIdRecebDoAviso(body)
+      if (nIdReceb && deveRelerNota(topic) && !lojasForaDaReleitura(process.env.OMIE_NF_RELEITURA_LOJAS_FORA).has(loja.id)) {
+        await fetchNotaFiscal(loja, nIdReceb, { semRepetir: true })
+      }
     } else if (topic.startsWith('OrdemProducao.') && topic !== 'OrdemProducao.Excluida' && body.event?.nCodOP) {
       // Faxina em andamento (espelho_completo=false): não consulta a OP a cada aviso. Uma escrita gera 3-4 avisos
       // (Incluida/Alterada/Concluida) e as consultas repetidas da mesma OP bloqueiam a API da loja (MISUSE, 16/10).

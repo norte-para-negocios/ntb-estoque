@@ -1,5 +1,10 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { msRestantesBloqueio } from './erros-omie'
+import {
+  DIAS_RELEITURA, LIMITE_RELEITURA_POR_CICLO, TOPICOS_RELEITURA, escolherNotasParaReler, falhasReleitura, lojasForaDaReleitura, registrarFalhaReleitura,
+  type AvisoNota, type NotaGravada,
+} from './nf-releitura'
 
 interface OmieNFCabec {
   nIdReceb: number
@@ -289,7 +294,7 @@ export async function syncNotasFiscais(loja: LojaOmie, dataIni?: string, dataFim
   }
 }
 
-export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number) {
+export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number, opcoes: { semRepetir?: boolean } = {}): Promise<boolean> {
   const res = await omieRequest<OmieNF>({
     loja_id: loja.id,
     omie_app_key: loja.omie_app_key,
@@ -298,8 +303,61 @@ export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number) {
     endpoint: 'v1/produtos/recebimentonfe',
     call: 'ConsultarRecebimento',
     data: { nIdReceb },
+    semRepetir: opcoes.semRepetir,
   })
-  if (res?.cabec) await saveNotaFiscal(loja, res)
+  if (!res?.cabec) return false
+  await saveNotaFiscal(loja, res)
+  return true
+}
+
+/**
+ * Paridade 20/10/2026 (B7, lib/omie/nf-releitura.ts): relê as notas já gravadas cujo aviso de conclusão/reversão do Omie
+ * é mais novo que a última gravação (o Omie não muda dAlt ao re-concluir, então o sync por dtAltDe não as pega). No
+ * máximo LIMITE_RELEITURA_POR_CICLO por loja e ciclo, avisos dos últimos DIAS_RELEITURA dias, nunca nas lojas de
+ * OMIE_NF_RELEITURA_LOJAS_FORA (padrão 4 e 7); não chama com o disjuntor do método ligado; para no primeiro erro.
+ * Só leitura no Omie (ConsultarRecebimento). Devolve quantas releu e o erro, se houve.
+ */
+export async function relerNotasComAvisoPendente(loja: LojaOmie): Promise<{ relidas: number; erro: string | null }> {
+  if (loja.is_test || lojasForaDaReleitura(process.env.OMIE_NF_RELEITURA_LOJAS_FORA).has(loja.id)) return { relidas: 0, erro: null }
+  const supabase = createServiceClient({ semAutor: true })
+  const desde = new Date(Date.now() - DIAS_RELEITURA * 86400000).toISOString()
+  // índice parcial (loja_id, n_id_receb) where n_id_receb is not null (migration 191): só os avisos de recebimento
+  const { data: avisos, error: e1 } = await supabase
+    .from('webhooks')
+    .select('n_id_receb, created_at')
+    .eq('loja_id', loja.id)
+    .not('n_id_receb', 'is', null)
+    .gte('created_at', desde)
+    .in('message->>topic', [...TOPICOS_RELEITURA])
+    .order('id', { ascending: true })
+    .limit(5000)
+  if (e1) return { relidas: 0, erro: `avisos: ${e1.message}` }
+  const ids = [...new Set(((avisos ?? []) as AvisoNota[]).map((a) => String(a.n_id_receb)))]
+  if (!ids.length) return { relidas: 0, erro: null }
+  const notas: NotaGravada[] = []
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase
+      .from('notas_fiscais')
+      .select('n_id_receb, updated_at, deleted_at')
+      .eq('loja_id', loja.id)
+      .in('n_id_receb', ids.slice(i, i + 200))
+    if (error) return { relidas: 0, erro: `notas: ${error.message}` }
+    notas.push(...((data ?? []) as NotaGravada[]))
+  }
+  const fila = escolherNotasParaReler((avisos ?? []) as AvisoNota[], notas, { limite: LIMITE_RELEITURA_POR_CICLO, falhas: falhasReleitura() })
+  let relidas = 0
+  for (const nIdReceb of fila) {
+    if (msRestantesBloqueio(loja.omie_app_key, Date.now(), 'ConsultarRecebimento') > 0) break
+    try {
+      // resposta sem a nota: não grava nada, então espera 6 h para não reconsultar a cada ciclo
+      if (await fetchNotaFiscal(loja, Number(nIdReceb), { semRepetir: true })) relidas++
+      else registrarFalhaReleitura(nIdReceb)
+    } catch (e) {
+      registrarFalhaReleitura(nIdReceb)
+      return { relidas, erro: e instanceof Error ? e.message : String(e) }
+    }
+  }
+  return { relidas, erro: null }
 }
 
 // Marca o recebimento como CONCLUÍDO no Omie (ConcluirRecebimento) --

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rankear, ordenarRanking, filtrarPorNome, resumir, serieDiaria, posicaoNoRanking } from './faturamento-itens.ts'
+import { rankear, ordenarRanking, filtrarPorNome, resumir, serieDiaria, posicaoNoRanking, valorItemCupom, valorItemProprio } from './faturamento-itens.ts'
 
 const L = (o: Partial<Parameters<typeof rankear>[0][number]>) => ({
   dia: '2026-10-01', cupom: 1, idProduto: 1, produto: 'Moqueca', tipoCod: '04', tipo: 'Produto acabado',
@@ -112,4 +112,18 @@ test('agruparPagamentos soma por forma, conta cupons e calcula %', () => {
     { cupom: 2, forma: 'Dinheiro', valor: 100 },
   ])
   assert.deepEqual(r.map((x) => [x.rotulo, x.valor, x.cupons, x.pct]), [['Dinheiro', 100, 1, 50], ['Pix', 100, 2, 50]]) // empate desempata pelo nome
+})
+
+// Paridade 20/10/2026 (B5): a Curva ABC do Omie usa o valor bruto. Loja 5, 01–17/10: 90627 com 1 unidade, Omie 319,90,
+// NTB líquido 290,83 (desconto 29,07). Pelo bruto os 385 produtos do Omie caem entre os cortes de 16/10 e 17/10.
+test('valor do item: líquido (Faturamento) e bruto (Curva ABC como o Omie)', () => {
+  const it = { v_item: 290.83, v_unit: 319.9, quant: 1, v_desc: 29.07 }
+  assert.equal(valorItemCupom(it), 290.83)
+  assert.equal(valorItemCupom(it, 'liquido'), 290.83)
+  assert.equal(valorItemCupom(it, 'bruto'), 319.9)
+  // v_item zerado: líquido = v_unit × quant − v_desc; bruto sem v_unit = v_item + v_desc
+  assert.equal(valorItemCupom({ v_item: 0, v_unit: 10, quant: 3, v_desc: 2 }), 28)
+  assert.equal(valorItemCupom({ v_item: 28, v_unit: 0, quant: 3, v_desc: 2 }, 'bruto'), 30)
+  assert.equal(valorItemProprio({ valor: '18', quantidade: '2', valor_unitario: '10', desconto: '2' }), 18)
+  assert.equal(valorItemProprio({ valor: '18', quantidade: '2', valor_unitario: '10', desconto: '2' }, 'bruto'), 20)
 })

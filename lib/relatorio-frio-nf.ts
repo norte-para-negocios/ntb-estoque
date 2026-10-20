@@ -8,6 +8,7 @@
 // replicar aqui também — mesmo contrato do precedente agregarMovimentacaoJS.
 import { buscarFrio } from '@/lib/historico-contabo'
 import { custoEstoqueItemOmie, entradaCustoDoItem, itemMovimentaEstoque } from '@/lib/compras/custo-estoque-item'
+import { ehBonificacaoCfop } from '@/lib/relatorio-compras-visoes'
 
 type Json = Record<string, unknown>
 
@@ -176,7 +177,9 @@ const valorDe = (it: ItemNFFrio): number => (Number(it.n_qtde_nfe) || 0) * (Numb
 const valorEstoqueDe = (it: ItemNFFrio): number =>
   custoEstoqueItemOmie(entradaCustoDoItem(it.full_object, it.n_qtde_nfe, it.n_preco_unit)).valorEstoque
 
-const right3 = (s: string | null): string => (s ?? '').replace(/\D/g, '').slice(-3)
+
+/** Bonificação/doação/brinde (x.910) ou comodato (x.908) pelo CFOP de entrada (mesma regra das RPCs relatorio_compras_*). */
+const ehBonificacao = ehBonificacaoCfop
 
 const ilike = (campo: string | null | undefined, termo: string): boolean =>
   (campo ?? '').toLowerCase().includes(termo.toLowerCase())
@@ -197,6 +200,8 @@ function itemBateStatus(it: ItemNFFrio, status: string | undefined): boolean {
 }
 
 export type FiltrosComprasFrio = {
+  /** migration 281 (p_bonificacao): true inclui bonificação/comodato (CFOP x.910/x.908), como o Omie no valor de estoque */
+  bonificacao?: boolean
   status: string
   familias: string[]
   tipos: string[]
@@ -242,21 +247,26 @@ export function filtrarItensCompras(
     }
     if (f.produto && !ilike(it.c_descricao_produto, f.produto) && !ilike(it.c_codigo_produto, f.produto)) return false
     if (f.local !== null && localDe(it) !== f.local) return false
-    if (['910', '908'].includes(right3(cfopEnt))) return false
+    if (!f.bonificacao && ehBonificacao(cfopEnt)) return false
     return true
   })
 }
 
-export function agregarComprasTotal(itens: ItemNFFrio[]): { valor: number; valorEstoque: number; nNotas: number } {
+export function agregarComprasTotal(itens: ItemNFFrio[]): { valor: number; valorEstoque: number; nNotas: number; valorBonificacao: number; valorEstoqueBonificacao: number } {
   const notas = new Set<number>()
   let valor = 0
   let valorEstoque = 0
+  let valorBonificacao = 0
+  let valorEstoqueBonificacao = 0
   for (const it of itens) {
-    valor += valorDe(it)
-    valorEstoque += valorEstoqueDe(it)
+    const v = valorDe(it)
+    const e = valorEstoqueDe(it)
+    valor += v
+    valorEstoque += e
+    if (ehBonificacao(cfopEntradaDe(it))) { valorBonificacao += v; valorEstoqueBonificacao += e }
     notas.add(it.nota_fiscal_id)
   }
-  return { valor, valorEstoque, nNotas: notas.size }
+  return { valor, valorEstoque, nNotas: notas.size, valorBonificacao, valorEstoqueBonificacao }
 }
 
 export function agregarComprasMatriz(

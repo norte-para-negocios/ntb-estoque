@@ -30,7 +30,8 @@ export async function carregarBaseAbc(
   lojaId: number, ini: string, fim: string, base: BaseAbc, filtros: { tipos: string[]; familias: string[] },
 ): Promise<BaseAbcCarregada> {
   if (base === 'vendas') {
-    const r = await carregarItens(lojaId, ini, fim, { tipos: filtros.tipos, familias: filtros.familias, situacao: 'validas' })
+    // valor bruto (quantidade × preço), como a Curva ABC do Omie (paridade 20/10/2026, B5); o Faturamento segue líquido
+    const r = await carregarItens(lojaId, ini, fim, { tipos: filtros.tipos, familias: filtros.familias, situacao: 'validas', valor: 'bruto' })
     return { itens: agrupar(r.linhas), aviso: r.aviso, opcoes: r.opcoes }
   }
   const [{ notas, erros }, opcoes] = await Promise.all([

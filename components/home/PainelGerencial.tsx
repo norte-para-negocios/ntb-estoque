@@ -72,7 +72,7 @@ export async function PainelGerencial({ lojaId }: { lojaId: number }) {
 
       {/* Relação compras/faturamento */}
       <div>
-        <h3 className="mb-2.5 text-[17px] font-semibold text-text">Relação compras/faturamento</h3>
+        <h3 className="mb-2.5 text-[17px] font-semibold text-text">Relação compras/faturamento <span className="text-[13px] font-normal text-text-muted">(compras sem bonificação)</span></h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {d.ratioCompraFaturamento.map((r) => (
             <MeterRatio key={r.categoria} label={r.categoria} pct={r.pct} limite={30} />

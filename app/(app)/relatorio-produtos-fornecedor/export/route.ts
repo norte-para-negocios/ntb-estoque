@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const rows = linhas.map((l) => ({
     codigo: l.codigo, produto: l.descricao, familia: l.familia, tipo: rotuloTipo(l.tipo), inativo: l.inativo ? 'Sim' : 'Não',
     fornecedor: l.fornecedor, fantasia: l.fornecedor_fantasia ?? '', codForn: l.codigo_fornecedor ?? '',
-    data: dataBR(l.ultima_data), nota: l.ultima_nota ?? '', qtde: Number(l.qtde) || 0, unidade: l.unidade ?? '',
+    data: dataBR(l.ultima_data), nota: l.ultima_nota ?? '', itensNota: Number(l.itens_ultima_nota) || 1, qtde: Number(l.qtde) || 0, unidade: l.unidade ?? '',
     preco: Number(l.preco_unit) || 0, total: Number(l.total) || 0, custo: Number(l.custo_unit) || 0,
     custoMedio: l.custoMedio ?? '', estoque: l.estoque, compras: l.compras, totalComprado: Number(l.total_comprado) || 0, primeira: dataBR(l.primeira_data),
   }))
@@ -36,6 +36,7 @@ export async function GET(request: Request) {
       { key: 'codForn', label: 'Código do fornecedor para o produto', tipo: 'texto', largura: 16 },
       { key: 'data', label: 'Data da última compra', tipo: 'texto', largura: 12 },
       { key: 'nota', label: 'Nota da última compra', tipo: 'texto', largura: 12 },
+      { key: 'itensNota', label: 'Itens do produto na nota', tipo: 'numero', largura: 10 },
       { key: 'qtde', label: 'Quantidade da última compra', tipo: 'numero', largura: 12 },
       { key: 'unidade', label: 'Unidade', tipo: 'texto', largura: 8 },
       { key: 'preco', label: 'Preço unitário da última compra', tipo: 'moeda', largura: 14 },

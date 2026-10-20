@@ -194,7 +194,7 @@ export default async function RelatorioEstoqueValorizadoPage({
         <PageHeader
           title="Estoque Valorizado"
           icon={Boxes}
-          description={proprio ? 'Valor do estoque atual: saldo x custo médio de hoje.' : 'Valor do estoque atual: saldo x CMC da última foto do Omie.'}
+          description={(proprio ? 'Valor do estoque atual: saldo x custo médio de hoje.' : 'Valor do estoque atual: saldo x CMC da última foto do Omie.') + ' Saldos negativos entram no total, como no Omie e na Posição de estoque.'}
           voltarHref="/relatorios"
           actions={
             <FiltrosGaveta
@@ -242,7 +242,7 @@ export default async function RelatorioEstoqueValorizadoPage({
               <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{fmtMoeda(totalValor)}</p>
             </div>
             <div className="rounded-[var(--r-lg)] shadow-[var(--shadow-sm)] bg-surface p-4">
-              <p className="text-[13px] text-text-muted">Produtos no estoque</p>
+              <p className="text-[13px] text-text-muted">Produtos com saldo</p>
               <p className="num mt-1.5 text-[28px] font-semibold leading-none tracking-[-0.02em] text-text">{totalProdutos}</p>
             </div>
             {dataFoto && (

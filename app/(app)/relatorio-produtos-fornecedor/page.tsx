@@ -10,6 +10,7 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { FiltrosFaturamento } from '@/components/faturamento/FiltrosFaturamento'
 import { CartaoResumo } from '@/components/faturamento/CartaoResumo'
 import { carregarProdutosFornecedor, lerOpcoesPF, paramsBasePF, type SpPF } from '@/lib/relatorios/produtos-fornecedor-loader'
+import { avisoItensNota } from '@/lib/relatorios/produtos-fornecedor-puro'
 
 const LIMITE = 500
 const fmtQtd = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR', { maximumFractionDigits: 3 }))
@@ -108,6 +109,7 @@ export default async function ProdutosFornecedorPage({ searchParams }: { searchP
                         <div className="num text-[12px] text-text-muted">
                           {!proprio && l.ultima_nota_id ? <Link href={`/nota-fiscal/${l.ultima_nota_id}`} className="hover:underline">NF {l.ultima_nota}</Link> : l.ultima_nota ? `Nº ${l.ultima_nota}` : ''}
                         </div>
+                        {avisoItensNota(l.itens_ultima_nota) && <div className="text-[12px] text-warn" title="O Omie mostra uma linha por código do fornecedor; aqui fica o último item, com o custo do primeiro">{avisoItensNota(l.itens_ultima_nota)}</div>}
                       </td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtQtd(l.qtde)} <span className="text-text-muted">{l.unidade ?? ''}</span></td>
                       <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{l.preco_unit == null ? '—' : <Money value={l.preco_unit} />}</td>

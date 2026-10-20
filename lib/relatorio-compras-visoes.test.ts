@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rankingCompras, matrizCompras, comTipoValor } from './relatorio-compras-visoes.ts'
+import { rankingCompras, matrizCompras, comTipoValor, ehBonificacaoCfop, incluiBonificacao, linhaBonificacao } from './relatorio-compras-visoes.ts'
 
 const L = [
   { rotulo: 'PEIXES', mes: '2026-09', valor: 100 },
@@ -39,4 +39,23 @@ test('comTipoValor troca o valor pelo de estoque', () => {
   assert.equal(comTipoValor(L, 'estoque')[0].valor, 3197.93)
   assert.equal(comTipoValor(L, 'fiscal')[0].valor, 3210.9)
   assert.equal(rankingCompras(comTipoValor(L, 'estoque'))[0].valor, 3197.93)
+})
+
+// Paridade 20/10/2026 (bug B2): loja 5, out/2026, notas concluídas. Sem bonificação o NTB dava 158.109,62 de valor de
+// estoque; o Omie põe os 2 itens de bonificação (CFOP 1.910) no estoque com 5.743,24.
+test('bonificação: CFOP x.910/x.908 e linha "Bonificação" só no valor de estoque', () => {
+  assert.equal(ehBonificacaoCfop('1.910'), true)
+  assert.equal(ehBonificacaoCfop('2910'), true)
+  assert.equal(ehBonificacaoCfop('1.908'), true)
+  assert.equal(ehBonificacaoCfop('1.102'), false)
+  assert.equal(ehBonificacaoCfop(null), false)
+  assert.equal(incluiBonificacao('estoque'), true)
+  assert.equal(incluiBonificacao('fiscal'), false)
+  const out = { valor: 162523.05 + 6446.28, valorEstoque: 158109.62 + 5743.24, valorBonificacao: 6446.28, valorEstoqueBonificacao: 5743.24 }
+  const l = linhaBonificacao('estoque', out)!
+  assert.equal(Math.round(l.valor * 100) / 100, 5743.24)
+  assert.equal(Math.round(l.semBonificacao * 100) / 100, 158109.62)
+  assert.equal(Math.round(l.pct * 100) / 100, 3.51)
+  assert.equal(linhaBonificacao('fiscal', out), null)
+  assert.equal(linhaBonificacao('estoque', { ...out, valorEstoqueBonificacao: 0 }), null)
 })

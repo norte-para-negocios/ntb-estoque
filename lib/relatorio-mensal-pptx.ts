@@ -220,7 +220,7 @@ export async function gerarRelatorioMensalPptx(dados: RelatorioMensal): Promise<
       ] },
       { x: 6.8, y: 1.15, w: 6.1, h: 3.1, titulo: '% Perda sobre Faturamento', formatoPct: true }
     )
-    kpiBox(slide, 0.4, 4.55, 2.9, fmtMoeda(cp.valorNotasMes), `Notas em ${mesLabel.split(' de ')[0]}`)
+    kpiBox(slide, 0.4, 4.55, 2.9, fmtMoeda(cp.valorNotasMes), `Notas em ${mesLabel.split(' de ')[0]} (sem bonificação)`)
     kpiBox(slide, 3.5, 4.55, 2.9, fmtMoeda(cp.valorNotasAno), `Total Geral (${periodoLabel})`)
     const excedeuMP = cp.perdaMateriaPrimaPctMes != null && cp.perdaMateriaPrimaPctMes > 6
     const textoLimite =

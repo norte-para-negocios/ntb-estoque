@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { montarProdutosFornecedor, type BrutoPF, type MetaPF, type OpcoesPF } from './produtos-fornecedor-puro.ts'
+import { montarProdutosFornecedor, avisoItensNota, type BrutoPF, type MetaPF, type OpcoesPF } from './produtos-fornecedor-puro.ts'
 
 const b = (o: Partial<BrutoPF>): BrutoPF => ({
   n_cod_prod: 1, fornecedor_chave: 'id:1', fornecedor: 'ALFA LTDA', fornecedor_fantasia: null, codigo_fornecedor: 'A1',
@@ -64,4 +64,12 @@ test('visão por fornecedor ordena pelo nome do fornecedor e depois pelo produto
 
 test('lista vazia', () => {
   assert.deepEqual(montarProdutosFornecedor([], meta, op()).resumo, { produtos: 0, fornecedores: 0, pares: 0, multiFornecedor: 0 })
+})
+
+// Paridade 20/10/2026 (B8): 60145 SUPRINOX NF 33198 tem 2 itens do produto (Omie: 2 linhas, uma por código do fornecedor).
+test('aviso de vários itens do produto na última nota', () => {
+  assert.equal(avisoItensNota(2), '2 itens deste produto na nota')
+  assert.equal(avisoItensNota(1), null)
+  assert.equal(avisoItensNota(null), null)
+  assert.equal(avisoItensNota(undefined), null)
 })

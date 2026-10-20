@@ -13,6 +13,25 @@ export type LinhaItem = {
   codigo?: string // código do cadastro (Curva ABC); ausente quando o produto não está cadastrado
 }
 export type Dimensao = 'produto' | 'familia' | 'tipo'
+
+/** Base de valor do item vendido. 'liquido' (padrão do Faturamento) = valor do item já sem o desconto; 'bruto' =
+ *  quantidade × preço unitário, que é o que o Omie usa na Curva ABC (paridade 20/10/2026, B5: loja 5, mês até 17/10,
+ *  385 de 385 produtos batem só pelo bruto; pelo líquido 88 ficam abaixo, ex. 90627: 319,90 × 290,83). */
+export type BaseValorItem = 'liquido' | 'bruto'
+
+/** Valor de um item de cupom do Omie (fat_cupom_itens). `v_item` pode vir 0 (aí v_unit × quant − v_desc). */
+export function valorItemCupom(it: { v_item?: number | null; v_unit?: number | null; quant?: number | null; v_desc?: number | null }, base: BaseValorItem = 'liquido'): number {
+  const vi = Number(it.v_item) || 0, vu = Number(it.v_unit) || 0, q = Number(it.quant) || 0, vd = Number(it.v_desc) || 0
+  if (base === 'bruto') return vu * q || vi + vd || 0
+  return vi || vu * q - vd || 0
+}
+
+/** Valor de um item de venda própria (vendas_proprio_itens: `valor` já sem o desconto). */
+export function valorItemProprio(it: { valor?: number | string | null; quantidade?: number | string | null; valor_unitario?: number | string | null; desconto?: number | string | null }, base: BaseValorItem = 'liquido'): number {
+  const v = Number(it.valor) || 0
+  if (base === 'bruto') return (Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0) || v + (Number(it.desconto) || 0)
+  return v
+}
 export type LinhaRanking = { chave: string; rotulo: string; valor: number; quant: number; cupons: number; pct: number }
 
 const round2 = (n: number) => Math.round(n * 100) / 100

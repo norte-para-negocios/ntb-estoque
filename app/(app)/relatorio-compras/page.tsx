@@ -26,7 +26,7 @@ import { limiteJanelaQuenteNF } from '@/lib/historico-contabo'
 import { hojeBahiaISO } from '@/lib/data-bahia'
 import { lerPeriodo } from '@/lib/faturamento-periodo'
 import { filtrarPorNome, ordenarRanking, type LinhaRanking } from '@/lib/faturamento-itens'
-import { rankingCompras, matrizCompras, comTipoValor, type LinhaMesCompraDupla } from '@/lib/relatorio-compras-visoes'
+import { rankingCompras, matrizCompras, comTipoValor, incluiBonificacao, linhaBonificacao, type LinhaMesCompraDupla } from '@/lib/relatorio-compras-visoes'
 import { lerTipoValor } from '@/lib/compras/custo-estoque-item'
 import {
   buscarItensNFFrio,
@@ -90,6 +90,9 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const sentido = sp.sentido === 'menos' ? 'menos' : 'mais'
   // Valor que entrou no estoque (regra do Omie, padrão) ou valor da nota (quantidade × preço)
   const tipoValor = lerTipoValor(sp.valor)
+  // Paridade com o Omie (20/10/2026, B2): em "Valor de estoque" a bonificação (CFOP x.910/x.908) entra, como no Omie
+  // (migration 281, p_bonificacao); em "Valor da nota" fica fora, como sempre.
+  const comBonificacao = incluiBonificacao(tipoValor)
 
   // Drill: qualquer dimensão -> produto -> itens. Cada par da trilha vira
   // filtro; a dimensão exibida desce a cadeia.
@@ -122,6 +125,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
     p_produto: produto,
     p_local: localCod,
     p_status: statusSel,
+    // só manda o parâmetro quando liga (sem ele a RPC antiga também responde: "Valor da nota" não depende da 281)
+    ...(comBonificacao ? { p_bonificacao: true } : {}),
   }
   // Pares da trilha sobrescrevem o filtro correspondente (drill restringe).
   const drillFiltros: Record<string, unknown> = {}
@@ -179,11 +184,11 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
     supabase.rpc('relatorio_compras_total', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, ...filtrosComDrill }),
     rpcTodos<LinhaMatriz>('relatorio_compras_matriz', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: dimExibida ?? 'produto', ...filtrosComDrill }),
     // Universo de CFOPs do período (sem os filtros de família/tipo/cfop), pra opções do filtro.
-    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop', p_status: statusSel }),
+    supabase.rpc('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'cfop', p_status: statusSel, ...(comBonificacao ? { p_bonificacao: true } : {}) }),
     // Fornecedores do recorte (cartões "fornecedores" e "Maior fornecedor").
     rpcTodos<LinhaDim>('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'fornecedor', ...filtrosComDrill }),
     // Opções do filtro de fornecedor: todos do período na situação escolhida.
-    rpcTodos<LinhaDim>('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'fornecedor', p_status: statusSel }),
+    rpcTodos<LinhaDim>('relatorio_compras_dim', { p_loja_id: lojaId, p_ini: iniRpc, p_fim: fim, p_dim: 'fornecedor', p_status: statusSel, ...(comBonificacao ? { p_bonificacao: true } : {}) }),
   ])
   logErroRpc('relatorio_compras_total', erroTotal)
   logErroRpc('relatorio_compras_dim', erroDim)
@@ -192,6 +197,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   let total = Number((totalRows as { valor: number }[] | null)?.[0]?.valor ?? 0)
   let totalEstoque = Number((totalRows as { valor_estoque: number }[] | null)?.[0]?.valor_estoque ?? 0)
   let nNotas = Number((totalRows as { n_notas: number }[] | null)?.[0]?.n_notas ?? 0)
+  let totalBonif = Number((totalRows as { valor_bonificacao?: number }[] | null)?.[0]?.valor_bonificacao ?? 0)
+  let totalEstoqueBonif = Number((totalRows as { valor_estoque_bonificacao?: number }[] | null)?.[0]?.valor_estoque_bonificacao ?? 0)
 
   // Complemento frio (Contabo) para o pedaço [ini, corte). Reaproveita a
   // reagregação em JS que espelha a RPC (lib/relatorio-frio-nf.ts).
@@ -232,7 +239,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
     for (const p of prodMetaRaw) {
       meta.set(Number(p.codigo_produto), { tipo: p.tipo_item, familia: p.descricao_familia })
     }
-    const fDrill = { status: statusSel, familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
+    const fDrill = { bonificacao: comBonificacao, status: statusSel, familias: [...familiasSel], tipos: [...tiposSel], fornecedor, cfops: [...cfopsSel], produto, local: localCod }
     for (const p of pares) {
       const rot = p.rotulo === 'Sem classificação' ? SEM : p.rotulo
       if (p.dim === 'familia') fDrill.familias = [rot]
@@ -246,9 +253,11 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
     total += totFrio.valor
     totalEstoque += totFrio.valorEstoque
     nNotas += totFrio.nNotas
+    totalBonif += totFrio.valorBonificacao
+    totalEstoqueBonif += totFrio.valorEstoqueBonificacao
     for (const l of agregarComprasMatriz(filtrados, dimExibida ?? 'produto', meta)) matrizRaw.push(l)
     for (const l of agregarComprasMatriz(filtrados, 'fornecedor', meta)) fornLinhas.push(l)
-    const soSituacao = filtrarItensCompras(itensFrios, { status: statusSel, familias: [], tipos: [], fornecedor: null, cfops: [], produto: null, local: null }, meta)
+    const soSituacao = filtrarItensCompras(itensFrios, { bonificacao: comBonificacao, status: statusSel, familias: [], tipos: [], fornecedor: null, cfops: [], produto: null, local: null }, meta)
     for (const l of agregarComprasMatriz(soSituacao, 'fornecedor', meta)) fornNomes.add(l.rotulo)
   }
 
@@ -286,8 +295,8 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
       .eq('loja_id', lojaId)
       .order('descricao'),
   ])
-  // Opções de CFOP: só os que apareceram no período (bonificação/comodato já não
-  // aparecem aqui, pois a RPC os exclui sempre; não contam como compra).
+  // Opções de CFOP: só os que apareceram no período (bonificação/comodato só aparecem em "Valor de estoque",
+  // onde entram como no Omie; em "Valor da nota" a RPC os exclui).
   const opcoesCfop = ((cfopDimRaw ?? []) as { rotulo: string }[]).map((r) => ({
     value: r.rotulo,
     label: `${r.rotulo} · ${descreverCFOP(r.rotulo).desc}`,
@@ -347,6 +356,7 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
   const matriz = mensal && !nivelItens ? matrizCompras(linhasValor, ini, fim, rotuloDe, LIMITE_LINHAS) : null
   const rankForn = rankingCompras(comTipoValor(fornLinhas, tipoValor))
   const totalEscolhido = tipoValor === 'estoque' ? totalEstoque : total
+  const bonif = linhaBonificacao(tipoValor, { valor: total, valorEstoque: totalEstoque, valorBonificacao: totalBonif, valorEstoqueBonificacao: totalEstoqueBonif })
   const maiorForn = rankForn[0] ?? null
   const ticket = nNotas > 0 ? totalEscolhido / nNotas : null
   const legenda = (l: LinhaRanking) => `${fmtPct(l.pct)} do total`
@@ -446,12 +456,20 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
         <Card
           titulo="Total comprado"
           valor={<Money value={totalEscolhido} />}
-          sub={tipoValor === 'estoque' ? `Valor das notas: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : `Entrou no estoque: ${totalEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+          sub={tipoValor === 'estoque' ? `Valor das notas: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : `Entrou no estoque: ${totalEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (sem bonificação)`}
         />
         <Card titulo="Notas" valor={nNotas.toLocaleString('pt-BR')} sub={plural(rankForn.length, 'fornecedor', 'fornecedores')} />
         <Card titulo="Ticket médio por nota" valor={ticket == null ? '—' : <Money value={ticket} />} />
         <Card titulo="Maior fornecedor" valor={maiorForn ? <Money value={maiorForn.valor} /> : '—'} sub={maiorForn ? `${maiorForn.rotulo} · ${fmtPct(maiorForn.pct)}` : undefined} />
       </div>
+
+      {bonif && (
+        <p className="flex flex-wrap items-baseline gap-x-2 rounded-[var(--r-lg)] bg-surface px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
+          <span>Compras <strong className="num text-text"><Money value={bonif.semBonificacao} /></strong></span>
+          <span>+ Bonificação (CFOP x.910/x.908) <strong className="num text-text"><Money value={bonif.valor} /></strong> ({fmtPct(bonif.pct)})</span>
+          <span>= entrou no estoque, como no Omie. Em &quot;Valor da nota&quot; a bonificação fica fora.</span>
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         {DIMS.map((d) => (
@@ -507,7 +525,9 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
       )}
 
       <p className="px-1 text-[12px] text-text-muted">
-        Valor dos itens (quantidade × preço unitário), sem frete e impostos da nota. Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra e não entram nestes números.
+        {tipoValor === 'estoque'
+          ? 'Valor que entrou no estoque, pela regra do Omie (sem os impostos que viram crédito). Bonificação (CFOP 910) e comodato (CFOP 908) entram, como no Omie, e aparecem na linha "Bonificação" acima.'
+          : 'Valor dos itens (quantidade × preço unitário), sem frete e impostos da nota. Bonificação (CFOP 910) e comodato (CFOP 908) não contam como compra e não entram nestes números.'}
       </p>
     </div>
   )

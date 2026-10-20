@@ -22,6 +22,16 @@ const round2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
 
+/** ICMS que sai do custo quando "ICMS é custo" = N. No Simples Nacional (CSOSN 101/201) a nota não tem ICMS próprio
+ *  (`itensICMS.nValor` = 0) e o crédito é o do Simples (`itensICMSSN.nCredSN`, no XML `vCredICMSSN`): o Omie tira esse
+ *  crédito do custo. PROVADO 20/10/2026 com o kardex da loja 5 (omie-rea/gaps/paridade-numerica-2026-10-20.md, bug 3):
+ *  6 de 6 pares NF × produto (34972 / 60781: 318,00 → 305,66 = kardex; 4922, 4958, 4988, 5008, 5037 / 80074: custo
+ *  unitário igual ao do kardex nas 6 casas). Mesma regra na projeção SQL da nota própria (185) e em
+ *  custo_estoque_item_omie (280). */
+export function icmsDoCusto(icms: number, csosn: string | null | undefined, credIcmsSn: number | null | undefined): number {
+  return (Number(icms) || 0) === 0 && (csosn === '101' || csosn === '201') ? Number(credIcmsSn) || 0 : Number(icms) || 0
+}
+
 export function entradaCustoDoItem(fullObject: unknown, qtde: unknown, precoUnit: unknown): EntradaCustoItem {
   const fo = obj(fullObject)
   const cab = obj(fo.itensCabec)
@@ -35,7 +45,8 @@ export function entradaCustoDoItem(fullObject: unknown, qtde: unknown, precoUnit
     ...extras,
     qtde: num(qtde), precoUnit: num(precoUnit),
     vTotalItem: total === undefined || total === null || total === '' ? null : num(total),
-    vDesconto: num(cab.vDesconto), vIPI: num(obj(fo.itensIPI).nValIPI), vST: num(obj(fo.itensICMSST).nValorST), vICMS: num(obj(fo.itensICMS).nValor),
+    vDesconto: num(cab.vDesconto), vIPI: num(obj(fo.itensIPI).nValIPI), vST: num(obj(fo.itensICMSST).nValorST),
+    vICMS: icmsDoCusto(num(obj(fo.itensICMS).nValor), obj(fo.itensICMSSN).cSitTribSN as string | undefined, num(obj(fo.itensICMSSN).nCredSN)),
     flags,
   }
 }

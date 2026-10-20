@@ -240,7 +240,7 @@ export default async function RelatorioIndicadoresPage({
     destaque?: boolean
   }[] = [
     { nome: 'Faturamento (vendas)', tipo: 'money', porMes: (m) => fatPorMes[m] ?? 0, total: totFat },
-    { nome: 'Compras (NF de entrada)', tipo: 'money', porMes: (m) => comprasPorMes[m] ?? 0, total: totComp },
+    { nome: 'Compras (NF de entrada, sem bonificação)', tipo: 'money', porMes: (m) => comprasPorMes[m] ?? 0, total: totComp },
     { nome: 'Faturamento − Compras', tipo: 'res', porMes: (m) => (fatPorMes[m] ?? 0) - (comprasPorMes[m] ?? 0), total: totRes },
     {
       nome: 'Compras ÷ Faturamento',

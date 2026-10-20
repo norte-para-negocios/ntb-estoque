@@ -51,7 +51,7 @@ export default async function CurvaAbcPage({ searchParams }: { searchParams: Pro
         title="Curva ABC"
         icon={ChartColumnDecreasing}
         voltarHref="/relatorios"
-        description="Quais produtos fazem a maior parte das vendas ou das compras. A = até 20% do acumulado, B = até 80%, C = o resto (mesma regra do Omie)."
+        description="Quais produtos fazem a maior parte das vendas ou das compras. A = até 20% do acumulado, B = até 80%, C = o resto (mesma regra do Omie). Vendas pelo valor bruto (quantidade × preço, antes do desconto), como o Omie."
         actions={curva.length > 0 ? <a href={`/relatorio-curva-abc/export?${exportQs}`} target="_blank" rel="noopener noreferrer" className={btnClass('outline')}><Download className="size-4" /> Baixar</a> : undefined}
       />
 

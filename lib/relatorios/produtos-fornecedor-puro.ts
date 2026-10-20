@@ -6,6 +6,8 @@ export type BrutoPF = {
   n_cod_prod: number; fornecedor_chave: string; fornecedor: string; fornecedor_fantasia: string | null; codigo_fornecedor: string | null
   ultima_data: string | null; ultima_nota: string | null; ultima_nota_id: number | null; qtde: number | null; unidade: string | null
   preco_unit: number | null; total: number | null; custo_unit: number | null; compras: number; total_comprado: number | null; primeira_data: string | null
+  /** migration 284: itens do mesmo produto na última nota (o Omie mostra uma linha por código do fornecedor) */
+  itens_ultima_nota?: number | null
 }
 export type MetaPF = {
   codigo: string | null; descricao: string | null; familia: string | null; tipo: string | null; unidade: string | null
@@ -73,4 +75,12 @@ export function montarProdutosFornecedor(brutas: BrutoPF[], meta: Map<number, Me
       multiFornecedor: [...prods].filter((p) => (porProduto.get(p)?.length ?? 0) > 1).length,
     },
   }
+}
+
+/** Paridade com o Omie (20/10/2026, B8): com 2+ itens do mesmo produto na última nota, o Omie mostra uma linha por código
+ *  do fornecedor (que o NTB não recebe do Omie). A linha do NTB é a do último item (quantidade, preço, total = valor do
+ *  item na nota) com o custo do primeiro item do produto na nota, como o Omie; o aviso diz que a nota tem mais itens. */
+export function avisoItensNota(n: number | null | undefined): string | null {
+  const k = Number(n) || 0
+  return k > 1 ? `${k} itens deste produto na nota` : null
 }

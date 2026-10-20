@@ -3,10 +3,11 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import { buscarFatCupons, buscarFatCupomItens } from '@/lib/faturamento-frio'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { TIPO_NOME } from '@/lib/omie/faturamento'
-import type { LinhaItem } from '@/lib/faturamento-itens'
+import { valorItemCupom, valorItemProprio, type BaseValorItem, type LinhaItem } from '@/lib/faturamento-itens'
 import type { Situacao } from '@/lib/faturamento-params'
 
-export type FiltrosItens = { tipos: string[]; familias: string[]; situacao: Situacao }
+/** `valor`: 'liquido' (padrão, telas de Faturamento) ou 'bruto' (quantidade × preço, Curva ABC como o Omie). */
+export type FiltrosItens = { tipos: string[]; familias: string[]; situacao: Situacao; valor?: BaseValorItem }
 export type Opcao = { value: string; label: string }
 export type ItensCarregados = { linhas: LinhaItem[]; aviso: string | null; opcoes: { tipos: Opcao[]; familias: Opcao[] } }
 
@@ -71,13 +72,13 @@ export async function carregarItens(lojaId: number, ini: string, fim: string, fi
     const ids = [...porVenda.keys()]
     for (let i = 0; i < ids.length; i += 150) {
       const lote = ids.slice(i, i + 150)
-      const itens = await buscarTodasLinhas<{ venda_id: number; codigo_produto: number | null; nome: string | null; quantidade: number | string; valor: number | string }>(
-        (from, to) => supabase.from('vendas_proprio_itens').select('venda_id, codigo_produto, nome, quantidade, valor').in('venda_id', lote).order('id').range(from, to),
+      const itens = await buscarTodasLinhas<{ venda_id: number; codigo_produto: number | null; nome: string | null; quantidade: number | string; valor: number | string; valor_unitario: number | string; desconto: number | string }>(
+        (from, to) => supabase.from('vendas_proprio_itens').select('venda_id, codigo_produto, nome, quantidade, valor, valor_unitario, desconto').in('venda_id', lote).order('id').range(from, to),
         undefined,
         (e) => sinalizar(`Falha ao ler os itens (${e.message}). Os valores podem estar incompletos.`),
       )
       for (const it of itens) {
-        const l = montar(it.codigo_produto != null ? Number(it.codigo_produto) : null, it.nome, porVenda.get(it.venda_id)!, it.venda_id, Number(it.quantidade) || 0, Number(it.valor) || 0)
+        const l = montar(it.codigo_produto != null ? Number(it.codigo_produto) : null, it.nome, porVenda.get(it.venda_id)!, it.venda_id, Number(it.quantidade) || 0, valorItemProprio(it, filtros.valor))
         if (l) linhas.push(l)
       }
     }
@@ -94,7 +95,7 @@ export async function carregarItens(lojaId: number, ini: string, fim: string, fi
     for (const it of itens) {
       const dia = porCupom.get(it.n_id_cupom)
       if (dia === undefined) continue
-      const valor = it.v_item || it.v_unit * it.quant - it.v_desc || 0
+      const valor = valorItemCupom(it, filtros.valor)
       const l = montar(it.id_produto, it.x_prod, dia, it.n_id_cupom, it.quant, valor)
       if (l) linhas.push(l)
     }

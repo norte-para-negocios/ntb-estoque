@@ -3,7 +3,9 @@
 // Puro e testável com `node --test lib/estoque/nf-item-regras.test.ts`. Números de D1 = itens concluídos da loja 5
 // (~/Projects/omie-rea/bruto/nf_itens_loja5.csv.gz, 2.987 itens, medido em 18/10/2026).
 // @ts-ignore: o import com extensão .ts é exigido pelo node --test (type stripping); o tsc do Next não o aceita
-import { custoEstoqueItemOmie, custoUnitarioEntrada } from '../compras/custo-estoque-item.ts'
+import { custoEstoqueItemOmie, custoUnitarioEntrada, icmsDoCusto } from '../compras/custo-estoque-item.ts'
+// ICMS do custo (inclui o crédito do Simples, CSOSN 101/201): regra única em custo-estoque-item.ts (PROVADA em 20/10/2026).
+export { icmsDoCusto }
 // @ts-ignore: idem
 import { unidadeCanonica } from './nf-conferencia.ts'
 import type { FlagsCustoOmie } from '../compras/custo-estoque-item'
@@ -211,12 +213,6 @@ export function validarConfigItem(c: ConfigItemNF): string | null {
     if (v !== undefined && !(Number.isFinite(v) && v >= 0 && v <= 100)) return `A alíquota de crédito do ${nome} precisa estar entre 0 e 100 %.`
   }
   return null
-}
-
-/** ICMS que entra na conta do custo, igual à projeção SQL (185, item_compra_full_object): HIPÓTESE (sem caso real em D1)
- *  — no Simples (CSOSN 101/201) sem ICMS próprio, o "ICMS" do custo é o crédito do Simples (vCredICMSSN). */
-export function icmsDoCusto(icms: number, csosn: string | null | undefined, credIcmsSn: number | null | undefined): number {
-  return (Number(icms) || 0) === 0 && (csosn === '101' || csosn === '201') ? Number(credIcmsSn) || 0 : Number(icms) || 0
 }
 
 /** Prévia do custo na tela, pela MESMA função do lançamento/relatórios (R15). `st` = ST + FCP-ST do item. Ponto de entrada

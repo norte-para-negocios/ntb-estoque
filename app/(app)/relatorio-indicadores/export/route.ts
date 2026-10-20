@@ -155,7 +155,7 @@ export async function GET(request: Request) {
   }
   const rows = [
     { indicador: 'Faturamento (vendas)', ...cel((m) => fmtMoeda(fatPorMes[m] ?? 0), fmtMoeda(totFat)) },
-    { indicador: 'Compras (NF de entrada)', ...cel((m) => fmtMoeda(comprasPorMes[m] ?? 0), fmtMoeda(totComp)) },
+    { indicador: 'Compras (NF de entrada, sem bonificação)', ...cel((m) => fmtMoeda(comprasPorMes[m] ?? 0), fmtMoeda(totComp)) },
     { indicador: 'Faturamento − Compras', ...cel((m) => fmtMoeda((fatPorMes[m] ?? 0) - (comprasPorMes[m] ?? 0)), fmtMoeda(totFat - totComp)) },
     { indicador: 'Compras ÷ Faturamento', ...cel((m) => fmtPct(fatPorMes[m] ? ((comprasPorMes[m] ?? 0) / fatPorMes[m]) * 100 : NaN), fmtPct(totFat > 0 ? (totComp / totFat) * 100 : NaN)) },
   ]

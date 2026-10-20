@@ -94,3 +94,35 @@ test('custo unitário = valor de estoque ÷ quantidade recebida (NF 131055 e ent
   assert.equal(custoUnitarioEntrada(3063.41, 37.888369), 80.853573)
   assert.equal(custoUnitarioEntrada(10, 0), null)
 })
+
+// Paridade numérica 20/10/2026 (omie-rea/gaps/paridade-numerica-2026-10-20.md, bug 3): crédito do Simples (CSOSN 101)
+// sai do custo quando ICMS não é custo. JSON real dos itens da loja 5; valores do kardex do Omie.
+const FLAGS_N = { cIPICusto: 'N', cPISCusto: 'N', cICMSCusto: 'N', cFreteCusto: 'N', cCOFINSCusto: 'N', cICMSSTCusto: 'N', cSeguroCusto: 'N', cOutrosDespCusto: 'N', nAliqCredPISCusto: 0, nValorICMSSTCusto: 0, nAliqCredCOFINSCusto: 0 }
+test('Simples 101: NF 34972 / 60781 tira o crédito (318,00 → 305,66 = kardex do Omie)', () => {
+  const fo = {
+    itensIPI: { nValIPI: 0 }, itensICMS: null, itensICMSST: { cCEST: '18.002.00' },
+    itensCabec: { nQtdeNFe: 12, vDesconto: 0, nPrecoUnit: 26.5, vTotalItem: 318 },
+    itensICMSSN: { cOrigem: '0', nCredSN: 12.34, cSitTribSN: '101', nAliqCredSN: 3.88 },
+    itensCustoEstoque: FLAGS_N,
+  }
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem(fo, 12, 26.5)).valorEstoque, 305.66)
+  // ICMS é custo = S: o crédito fica no custo
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem({ ...fo, itensCustoEstoque: { ...FLAGS_N, cICMSCusto: 'S' } }, 12, 26.5)).valorEstoque, 318)
+})
+test('Simples 101: NF 5008 / 80074 (738,00 − 10,04) dá o custo unitário do kardex (0,010111 × 72.000)', () => {
+  const fo = {
+    itensIPI: { nValIPIDev: 0 }, itensICMS: null, itensICMSST: { cCEST: '17.010.00' },
+    itensCabec: { nQtdeNFe: 72, vDesconto: 0, nPrecoUnit: 10.25, vTotalItem: 738 },
+    itensICMSSN: { cOrigem: '0', nCredSN: 10.04, cSitTribSN: '101', nAliqCredSN: 1.36 },
+    itensCustoEstoque: { ...FLAGS_N, cIPICusto: 'S', cICMSSTCusto: 'S' },
+  }
+  const v = custoEstoqueItemOmie(entradaCustoDoItem(fo, 72, 10.25)).valorEstoque
+  assert.equal(v, 727.96)
+  assert.equal(custoUnitarioEntrada(v, 72000), 0.010111)
+})
+test('ICMS próprio presente ou CSOSN sem crédito: regra antiga', () => {
+  // nValor > 0 vence o crédito do Simples (a projeção da nota própria já põe o crédito em nValor)
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem({ itensCabec: { vTotalItem: 100 }, itensICMS: { nValor: 7 }, itensICMSSN: { cSitTribSN: '101', nCredSN: 3 }, itensCustoEstoque: FLAGS_N }, 1, 100)).valorEstoque, 93)
+  // CSOSN 102 (sem crédito) não tira nada
+  assert.equal(custoEstoqueItemOmie(entradaCustoDoItem({ itensCabec: { vTotalItem: 100 }, itensICMSSN: { cSitTribSN: '102', nCredSN: 3 }, itensCustoEstoque: FLAGS_N }, 1, 100)).valorEstoque, 100)
+})
