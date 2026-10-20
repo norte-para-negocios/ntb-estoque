@@ -97,6 +97,22 @@ begin
   end if;
   if (select count(*) from transferencias_loja where loja_id = v_loja) <> 1 then raise exception 'duplicou transferência'; end if;
 
+  -- R1: transferência com NF-e de PRODUÇÃO de chave presa (rejeitada não definitiva): cancelar recusado, não descarta
+  declare v_t bigint; v_nt bigint; begin
+    v_t := (transferencia_loja_registrar(v_loja, v_dest, '[{"codigo_produto":701,"codigo_local_estoque":1,"quantidade":1}]'::jsonb, null, 'u1', 'Ana', 'r1')->>'id')::bigint;
+    v_nt := (nfe_reservar(v_loja, 1, 'transferencia_loja', v_t, 'u1', 'Ana')->>'id')::bigint;
+    perform nfe_iniciar_envio(v_nt, v_loja, (select '2926101122233300018155001' || lpad(numero::text, 9, '0') || '1000000441' from nfe_saida where id = v_nt),
+      '<NFe/>', now(), 10, 'F', '0', '{}');
+    perform nfe_registrar_retorno(v_nt, v_loja, 'rejeitada', '217', 'nao consta', null, null, null, null, null, 'consulta', null, null, false);
+    begin perform transferencia_loja_cancelar(v_loja, v_t, 'u1', 'Ana', 'x'); raise exception 'cancelou transferência com chave presa';
+    exception when sqlstate '22023' then null; end;
+    if (select status from nfe_saida where id = v_nt) <> 'rejeitada' then raise exception 'descartou chave presa da transferência'; end if;
+    -- R4/206: número inutilizado consome o número e libera o documento (reserva nova = outro número)
+    perform nfe_registrar_retorno(v_nt, v_loja, 'inutilizada', '206', 'NF-e ja esta inutilizada');
+    if ((nfe_reservar(v_loja, 1, 'transferencia_loja', v_t, 'u1', 'Ana')->>'numero')::int) = (select numero from nfe_saida where id = v_nt) then
+      raise exception 'reaproveitou número inutilizado';
+    end if;
+  end;
   begin truncate nfe_saida_eventos, nfe_saida; raise exception 'truncate passou'; exception when sqlstate '55000' then null; end;
   raise notice 'OK: revisão 260/261 — todos os cenários passaram';
 end $$;

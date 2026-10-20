@@ -188,3 +188,12 @@ test('assinatura confere (xml-crypto) e quebra se o conteúdo mudar; o leitor de
   assert.equal(lida.itens.length, 2)
   assert.equal(lida.fornecedor.cnpj, '11222333000181')
 })
+
+test('R3: interestadual para destinatário sem IE é bloqueado (DIFAL/694 não suportado); mesmo estado sem IE passa', () => {
+  const t = dadosTransferencia() // BA → SP
+  t.dest.ie = null
+  assert.ok(validarDadosNfe(t).some((x: string) => x.includes('DIFAL')))
+  const d = dadosDevolucao(2) // BA → BA
+  d.dest.ie = null
+  assert.deepEqual(validarDadosNfe(d), [])
+})

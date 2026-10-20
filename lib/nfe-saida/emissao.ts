@@ -13,7 +13,7 @@ import {
 import {
   chaveDaDuplicidade, consulta217Final, eventosDaConsulta, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, mensagemSefaz,
   montarConsReci, montarConsSit, montarEnvEvento, montarEnviNFe, montarEventoCancelamento, montarEventoCce, montarProcEvento, montarProcNFe,
-  rejeicaoDefinitiva, validarCorrecao, validarJustificativa, type ResultadoSefaz,
+  erroDaConsulta, rejeicaoDefinitiva, validarCorrecao, validarJustificativa, type ResultadoSefaz,
 } from './sefaz-puro'
 import { ErroAntesDoEnvio, postSefaz } from './rede'
 import { urlServico } from './webservices'
@@ -235,6 +235,7 @@ async function gravarResultado(n: LinhaNfe, r: ResultadoSefaz, xmlRetorno: strin
   })
   if (error) return { error: `A SEFAZ respondeu (${r.cStat ?? 'sem código'}), mas não foi possível gravar: ${msgBanco(error)}. Use "Consultar na SEFAZ".`, id: n.id }
   const texto = status === 'autorizada' ? `NF-e nº ${n.numero} autorizada (protocolo ${r.protocolo}).`
+    : status === 'inutilizada' ? `O número ${n.numero} está inutilizado na SEFAZ (${mensagemSefaz(r.cStat, r.xMotivo)}): ele não volta para a fila; emita de novo (vai com outro número).`
     : status === 'incerta' ? `A SEFAZ ainda não deu a resposta final (${mensagemSefaz(r.cStat, r.xMotivo)}). Use "Consultar na SEFAZ" em instantes.`
     : status === 'denegada' ? `NF-e denegada: ${mensagemSefaz(r.cStat, r.xMotivo)}`
     : `NF-e rejeitada: ${mensagemSefaz(r.cStat, r.xMotivo)}${podeRegerar ? '' : ' A SEFAZ pode ter recebido esta chave: o reenvio usa o MESMO XML.'}`
@@ -271,11 +272,12 @@ export async function emitirNfe(lojaId: number, origem: OrigemNfe, origemId: num
   let dhEmi: string
   let valor: number
   let dadosGravar: Record<string, unknown>
-  if (!atual.pode_regerar && atual.chave && atual.xml_assinado) {
+  const mesmoXml = !atual.pode_regerar && !!atual.chave && !!atual.xml_assinado
+  if (mesmoXml) {
     // C1: a SEFAZ pode ter esta chave (envio sem resposta final): reenvia o MESMO XML. Se ela já tiver autorizado,
     // responde 204 (duplicidade) e a consulta pela mesma chave acha a nota; nunca nasce uma 2ª chave para o número.
-    chave = atual.chave
-    assinado = atual.xml_assinado
+    chave = atual.chave!
+    assinado = atual.xml_assinado!
     dhEmi = assinado.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1] ?? dataHoraSaoPaulo()
     valor = Number(assinado.match(/<vNF>([^<]+)<\/vNF>/)?.[1] ?? 0)
     dadosGravar = { reenvio_mesmo_xml: true }
@@ -327,7 +329,8 @@ export async function emitirNfe(lojaId: number, origem: OrigemNfe, origemId: num
       } catch { break }
     }
   }
-  const gravado = await gravarResultado(n, r, body, 'retorno', u, r.status === 'rejeitada' && rejeicaoDefinitiva(r.cStat))
+  // R2: reenvio do MESMO XML nunca solta a chave (a SEFAZ pode ter a 1ª tentativa); só o 217 tardio na consulta solta
+  const gravado = await gravarResultado(n, r, body, 'retorno', u, !mesmoXml && r.status === 'rejeitada' && rejeicaoDefinitiva(r.cStat))
   if ('error' in gravado) return gravado
   // C1: duplicidade = a SEFAZ já tem este número. 539 traz a chave que ela tem: volta para ela (é de um envio nosso) e consulta.
   if (r.cStat === '539') {
@@ -372,6 +375,11 @@ export async function consultarNfe(lojaId: number, nfeId: number, u: Usuario): P
       })
       if (error) return { error: msgBanco(error), id: n.id }
       return { ok: true, id: n.id, status: 'cancelada', mensagem: 'A SEFAZ informa que esta NF-e está cancelada.' }
+    }
+    if (erroDaConsulta(c.cStat, !!c.protNFe, c.cancelada)) {
+      // R4: erro da consulta, não situação da nota: registra e não mexe no status
+      await sb().rpc('nfe_registrar_erro', { p_id: n.id, p_loja: lojaId, p_mensagem: `Consulta recusada: ${mensagemSefaz(c.cStat, c.xMotivo)}`, p_user: u.id, p_user_nome: u.nome })
+      return { error: `A consulta não trouxe a situação da nota (${mensagemSefaz(c.cStat, c.xMotivo)}). A NF-e continua como estava; tente de novo.`, id: n.id }
     }
     if (c.cStat === '217') {
       // C1: "não consta" logo depois do envio pode ser lote ainda em processamento: só vale como inexistente depois da espera

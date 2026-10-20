@@ -101,7 +101,7 @@ const campo = (xml: string | null, tag: string): string | null => {
 
 export type ResultadoSefaz = {
   /** O que gravar: autorizada / rejeitada / denegada / incerta (consultar antes de reenviar) / processando (tem recibo). */
-  status: 'autorizada' | 'rejeitada' | 'denegada' | 'incerta' | 'processando'
+  status: 'autorizada' | 'rejeitada' | 'denegada' | 'inutilizada' | 'incerta' | 'processando'
   cStat: string | null
   xMotivo: string | null
   protocolo: string | null
@@ -121,6 +121,8 @@ export function classificar(cStat: string | null): ResultadoSefaz['status'] {
   if (!cStat) return 'incerta'
   if (AUTORIZADA.has(cStat)) return 'autorizada'
   if (DENEGADA.has(cStat)) return 'denegada'
+  // 206: número inutilizado na SEFAZ — consumido (nunca volta para a fila), não é rejeição que se reenvia
+  if (cStat === '206') return 'inutilizada'
   if (cStat === '103' || cStat === '105') return 'processando'
   if (DUPLICIDADE.has(cStat)) return 'incerta'
   if (NAO_PROCESSADO.has(cStat)) return 'rejeitada'
@@ -180,7 +182,14 @@ export function montarProcEvento(eventoAssinado: string, retEvento: string): str
 // ------------------------------------------------------------------------------------------------ chave presa x nova chave
 // Códigos que NÃO provam que a SEFAZ deixou de guardar a chave enviada: lote em processamento, recibo, fora do ar,
 // duplicidade, "não consta" (217, pode estar processando), consumo indevido. Com eles a NF-e só reenvia o MESMO XML.
-const NAO_DEFINITIVOS = new Set(['103', '104', '105', '106', '108', '109', '204', '217', '539', '656', '999'])
+const NAO_DEFINITIVOS = new Set(['103', '104', '105', '106', '108', '109', '204', '206', '217', '539', '656', '999'])
+
+/** Consulta por chave sem protNFe e com cStat que NÃO é situação da nota (ex.: 215 esquema, 226 UF, 236/562 chave):
+ *  erro da própria consulta. Não muda a situação da NF-e (nem vira "rejeitada"). */
+export function erroDaConsulta(cStat: string | null, temProt: boolean, cancelada: boolean): boolean {
+  if (temProt || cancelada || !cStat) return false
+  return !['217', '656', '108', '109', '100', '150', '110', '205', '206', '301', '302', '303'].includes(cStat)
+}
 
 /** Rejeição definitiva da AUTORIZAÇÃO (a SEFAZ analisou esta chave e recusou): libera montar XML novo / descartar. */
 export function rejeicaoDefinitiva(cStat: string | null): boolean {

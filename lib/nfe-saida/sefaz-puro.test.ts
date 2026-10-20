@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error: import com .ts exigido pelo node --test
-import { chaveDaDuplicidade, consulta217Final, eventosDaConsulta, rejeicaoDefinitiva, classificar, envelope, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, montarConsReci, montarConsSit, montarEnvEvento, montarEventoCancelamento, montarEventoCce, montarProcEvento, trecho, validarCorrecao, validarJustificativa } from './sefaz-puro.ts'
+import { erroDaConsulta, chaveDaDuplicidade, consulta217Final, eventosDaConsulta, rejeicaoDefinitiva, classificar, envelope, lerRetornoAutorizacao, lerRetornoConsulta, lerRetornoEvento, montarConsReci, montarConsSit, montarEnvEvento, montarEventoCancelamento, montarEventoCce, montarProcEvento, trecho, validarCorrecao, validarJustificativa } from './sefaz-puro.ts'
 // @ts-expect-error: idem
 import { assinarEventoNfe } from './assinatura.ts'
 // @ts-expect-error: idem
@@ -160,4 +160,14 @@ test('I2 e consulta: eventos da consulta (CC-e por sequência, cancelamento 1101
   const canc = l.filter((e: { tpEvento: string }) => e.tpEvento === '110111').pop()
   assert.equal(canc.protocolo, '3')
   assert.match(canc.xml, /^<procEventoNFe/)
+})
+
+test('R4: 206 = número inutilizado (consumido); erro da consulta não vira situação da nota', () => {
+  assert.equal(classificar('206'), 'inutilizada')
+  assert.equal(rejeicaoDefinitiva('206'), false)
+  assert.equal(erroDaConsulta('215', false, false), true)
+  assert.equal(erroDaConsulta('562', false, false), true)
+  for (const c of ['217', '656', '108', '109']) assert.equal(erroDaConsulta(c, false, false), false, c)
+  assert.equal(erroDaConsulta('100', true, false), false)
+  assert.equal(erroDaConsulta('101', false, true), false)
 })

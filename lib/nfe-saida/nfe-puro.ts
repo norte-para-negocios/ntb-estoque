@@ -207,6 +207,11 @@ export function validarDadosNfe(d: DadosNfeSaida): string[] {
     if (!(it.qCom > 0)) e.push(`${n}: quantidade`)
     if (!(it.vUnCom >= 0)) e.push(`${n}: valor unitário`)
   }
+  // operação interestadual com não contribuinte exige partilha do ICMS (ICMSUFDest/DIFAL, rejeição 694): não suportado
+  if (codigoUfIbge(d.emit.ender.uf) && codigoUfIbge(d.dest.ender.uf) && d.emit.ender.uf.toUpperCase() !== d.dest.ender.uf.toUpperCase()
+    && indicadorIEDest(d.dest.ie) === 9) {
+    e.push('Destinatário de outro estado sem inscrição estadual: a nota exigiria a partilha do ICMS (DIFAL, rejeição 694), que o Norte Estoque não emite. Cadastre a IE do destinatário ou emita pelo contador')
+  }
   const rt = d.respTec
   if (rt && (rt.cnpj || rt.contato || rt.email || rt.fone)) {
     if (dig(rt.cnpj).length !== 14 || textoNfe(rt.contato).length < 2 || textoNfe(rt.email).length < 6 || !/^\d{6,14}$/.test(dig(rt.fone))) {

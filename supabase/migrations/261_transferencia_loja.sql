@@ -174,9 +174,9 @@ begin
   if t.situacao = 'cancelada' then return jsonb_build_object('ok', true, 'duplicado', true); end if;
   select numero, status into v_num, v_st from nfe_saida
    where loja_id = p_loja and origem_tipo = 'transferencia_loja' and origem_id = t.id and tp_amb = 1
-     and status in ('enviando', 'incerta', 'autorizada') limit 1;
+     and (status in ('enviando', 'incerta', 'autorizada') or (status in ('rascunho', 'rejeitada') and not pode_regerar)) limit 1;
   if found then
-    raise exception 'A transferência tem NF-e nº % (%): cancele a NF-e na SEFAZ antes', v_num, v_st using errcode = '22023';
+    raise exception 'A transferência tem NF-e nº % (%) que a SEFAZ pode ter: consulte/cancele a NF-e antes', v_num, v_st using errcode = '22023';
   end if;
   perform _exigir_periodo_aberto(p_loja, t.data, 'transferência entre lojas');
   for i in select * from transferencias_loja_itens where transferencia_id = t.id and movimento_id is not null and estorno_movimento_id is null order by linha loop
@@ -185,7 +185,8 @@ begin
     n := n + 1;
   end loop;
   update nfe_saida set status = 'descartada', updated_at = now()
-   where loja_id = p_loja and origem_tipo = 'transferencia_loja' and origem_id = t.id and status in ('rascunho', 'rejeitada');
+   where loja_id = p_loja and origem_tipo = 'transferencia_loja' and origem_id = t.id and status in ('rascunho', 'rejeitada')
+     and (pode_regerar or tp_amb = 2);  -- mesma regra do gatilho da devolução (chave presa nunca é descartada em produção)
   update transferencias_loja set situacao = 'cancelada', cancelado_por = p_user, cancelado_por_nome = p_user_nome, cancelado_em = now(),
          motivo_cancelamento = nullif(btrim(coalesce(p_motivo, '')), ''), updated_at = now()
    where id = t.id;

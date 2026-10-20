@@ -72,7 +72,7 @@ create table if not exists public.nfe_saida (
   origem_tipo          text not null check (origem_tipo in ('devolucao', 'transferencia_loja')),
   origem_id            bigint not null,
   status               text not null default 'rascunho'
-                       check (status in ('rascunho', 'enviando', 'incerta', 'autorizada', 'rejeitada', 'denegada', 'cancelada', 'descartada')),
+                       check (status in ('rascunho', 'enviando', 'incerta', 'autorizada', 'rejeitada', 'denegada', 'inutilizada', 'cancelada', 'descartada')),
   chave                text check (chave is null or chave ~ '^[0-9]{44}$'),
   dh_emissao           timestamptz,
   data_emissao         date,
@@ -111,8 +111,8 @@ create table if not exists public.nfe_saida (
 -- número: só um vivo por (loja, ambiente, modelo, série); a descartada guarda o número só para histórico
 create unique index if not exists nfe_saida_numero_uq on public.nfe_saida (loja_id, tp_amb, modelo, serie, numero) where status <> 'descartada';
 -- idempotência por documento de origem: uma NF-e ativa por origem e ambiente
--- denegada consome o número mas não prende o documento (corrige o cadastro e emite outra)
-create unique index if not exists nfe_saida_origem_ativa_uq on public.nfe_saida (loja_id, origem_tipo, origem_id, tp_amb) where status not in ('descartada', 'cancelada', 'denegada');
+-- denegada/inutilizada (206) consomem o número (nunca volta para a fila) mas não prendem o documento
+create unique index if not exists nfe_saida_origem_ativa_uq on public.nfe_saida (loja_id, origem_tipo, origem_id, tp_amb) where status not in ('descartada', 'cancelada', 'denegada', 'inutilizada');
 create unique index if not exists nfe_saida_chave_uq on public.nfe_saida (chave) where chave is not null and status <> 'descartada';
 create index if not exists nfe_saida_loja on public.nfe_saida (loja_id, id desc);
 create index if not exists nfe_saida_origem on public.nfe_saida (loja_id, origem_tipo, origem_id);
@@ -231,7 +231,7 @@ begin
 
   select * into n from nfe_saida
    where loja_id = p_loja and origem_tipo = p_origem_tipo and origem_id = p_origem_id and tp_amb = p_tp_amb
-     and status not in ('descartada', 'cancelada', 'denegada')
+     and status not in ('descartada', 'cancelada', 'denegada', 'inutilizada')
    for update;
   if found then
     return jsonb_build_object('ok', true, 'duplicado', true, 'id', n.id, 'numero', n.numero, 'serie', n.serie, 'status', n.status);
@@ -332,11 +332,11 @@ create or replace function public.nfe_registrar_retorno(
 language plpgsql security definer set search_path = public as $$
 declare n nfe_saida%rowtype; v_dev devolucoes_fornecedor%rowtype;
 begin
-  if p_status not in ('autorizada', 'rejeitada', 'denegada', 'incerta') then raise exception 'Status inválido' using errcode = '22023'; end if;
+  if p_status not in ('autorizada', 'rejeitada', 'denegada', 'inutilizada', 'incerta') then raise exception 'Status inválido' using errcode = '22023'; end if;
   if p_tipo_evento not in ('retorno', 'consulta', 'erro') then raise exception 'Tipo de evento inválido' using errcode = '22023'; end if;
   select * into n from nfe_saida where id = p_id and loja_id = p_loja for update;
   if not found then raise exception 'NF-e não encontrada nesta loja' using errcode = '22023'; end if;
-  if n.status in ('autorizada', 'cancelada', 'denegada') and p_status <> n.status then
+  if n.status in ('autorizada', 'cancelada', 'denegada', 'inutilizada') and p_status <> n.status then
     -- já é definitiva: só registra o evento (ex.: consulta repetida)
     perform _nfe_evento(n, p_tipo_evento, p_c_stat, p_x_motivo, p_protocolo, null, p_xml_retorno, jsonb_build_object('ignorado', p_status), p_user, p_user_nome);
     return jsonb_build_object('ok', true, 'status', n.status, 'ignorado', true);

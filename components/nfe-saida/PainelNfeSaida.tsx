@@ -42,7 +42,8 @@ function avisar(r: Resp) {
 export function PainelNfeSaida({ origem, origemId, nfes, tpAmb, pode, emitivel }: Props) {
   const router = useRouter()
   const [pend, start] = useTransition()
-  const ativa = nfes.find((n) => n.tpAmb === tpAmb && n.status !== 'descartada' && n.status !== 'cancelada') ?? null
+  // denegada/inutilizada consomem o número mas não prendem o documento (vão para o histórico; pode emitir outra)
+  const ativa = nfes.find((n) => n.tpAmb === tpAmb && !['descartada', 'cancelada', 'denegada', 'inutilizada'].includes(n.status)) ?? null
   const historico = nfes.filter((n) => n !== ativa)
   const rotuloEmitir = origem === 'devolucao' ? 'Emitir NF-e de devolução' : 'Emitir NF-e de transferência'
 

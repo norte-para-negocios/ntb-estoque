@@ -162,13 +162,13 @@ export function textoTransferencia(p: { natureza: NaturezaSaida; numeroInterno: 
 }
 
 // ------------------------------------------------------------------------------------------------ situação da NF-e
-export type StatusNfe = 'rascunho' | 'enviando' | 'incerta' | 'autorizada' | 'rejeitada' | 'denegada' | 'cancelada' | 'descartada'
+export type StatusNfe = 'rascunho' | 'enviando' | 'incerta' | 'autorizada' | 'rejeitada' | 'denegada' | 'inutilizada' | 'cancelada' | 'descartada'
 
 export function rotuloStatusNfe(s: StatusNfe | string, enviandoDesde?: string | null, agora = Date.now()): string {
   if (s === 'enviando' && enviandoDesde && agora - new Date(enviandoDesde).getTime() > 2 * 60 * 1000) return 'Sem resposta da SEFAZ'
   return ({
     rascunho: 'Pronta para enviar', enviando: 'Enviando à SEFAZ', incerta: 'Sem resposta da SEFAZ', autorizada: 'Autorizada',
-    rejeitada: 'Rejeitada', denegada: 'Denegada', cancelada: 'Cancelada', descartada: 'Descartada',
+    rejeitada: 'Rejeitada', denegada: 'Denegada', inutilizada: 'Número inutilizado', cancelada: 'Cancelada', descartada: 'Descartada',
   } as Record<string, string>)[s] ?? s
 }
 
