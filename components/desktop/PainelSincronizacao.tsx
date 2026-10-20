@@ -115,6 +115,9 @@ export function PainelSincronizacao() {
               className={btnClass('danger')}
               onClick={async () => {
                 await post('/__ntb/apagar-dados')
+                // Recarga completa de propósito: a sessão e a cópia local acabaram de ser apagadas, então
+                // nenhum estado do cliente (React Query, cache do router) pode sobreviver.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 window.location.href = '/login'
               }}
             >
