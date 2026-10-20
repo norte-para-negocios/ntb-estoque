@@ -18,7 +18,7 @@
 --   passam o parâmetro — continuam sem bonificação (compra paga; a razão Compras ÷ Faturamento não muda de sentido) e
 --   a tela/slide diz "sem bonificação".
 --
--- Assinatura muda (parâmetro novo) → DROP + CREATE (CREATE OR REPLACE não muda a lista de parâmetros e deixaria duas
+-- Assinatura muda (parâmetro novo) → DROP (assinatura antiga e nova, para ser rerodável) + CREATE OR REPLACE (CREATE OR REPLACE não muda a lista de parâmetros e deixaria duas
 -- versões, o que o PostgREST não consegue escolher). Chamadas antigas (sem o parâmetro) continuam valendo pelo padrão,
 -- então a migration pode ir ANTES do código. O código novo chama com `p_bonificacao` e precisa da migration (sem ela a
 -- tela de Compras em "Valor de estoque" mostra o aviso de falha da RPC).
@@ -36,8 +36,13 @@ drop function if exists public.relatorio_compras_total(bigint, date, date, text[
 drop function if exists public.relatorio_compras_matriz(bigint, date, date, text, text[], text[], text, text[], text, bigint, text);
 drop function if exists public.relatorio_compras_dim(bigint, date, date, text, text[], text[], text, text[], text, bigint, text);
 drop function if exists public.relatorio_compras_detalhe(bigint, date, date, text[], text[], text, text[], text, bigint, text);
+-- rerodável: também a assinatura nova (sem isto a 2ª aplicação falharia no CREATE de quem mudou o retorno)
+drop function if exists public.relatorio_compras_total(bigint, date, date, text[], text[], text, text[], text, bigint, text, boolean);
+drop function if exists public.relatorio_compras_matriz(bigint, date, date, text, text[], text[], text, text[], text, bigint, text, boolean);
+drop function if exists public.relatorio_compras_dim(bigint, date, date, text, text[], text[], text, text[], text, bigint, text, boolean);
+drop function if exists public.relatorio_compras_detalhe(bigint, date, date, text[], text[], text, text[], text, bigint, text, boolean);
 
-create function public.relatorio_compras_total(p_loja_id bigint, p_ini date, p_fim date, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
+create or replace function public.relatorio_compras_total(p_loja_id bigint, p_ini date, p_fim date, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
  returns table(valor numeric, n_notas bigint, valor_estoque numeric, valor_bonificacao numeric, valor_estoque_bonificacao numeric)
  language sql
  stable
@@ -80,7 +85,7 @@ as $function$
   ) x;
 $function$;
 
-create function public.relatorio_compras_matriz(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
+create or replace function public.relatorio_compras_matriz(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
  returns table(rotulo text, mes text, valor numeric, valor_estoque numeric)
  language sql
  stable
@@ -130,7 +135,7 @@ as $function$
   order by 1, 2;
 $function$;
 
-create function public.relatorio_compras_dim(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
+create or replace function public.relatorio_compras_dim(p_loja_id bigint, p_ini date, p_fim date, p_dim text, p_familias text[] default null::text[], p_tipos text[] default null::text[], p_fornecedor text default null::text, p_cfops text[] default null::text[], p_produto text default null::text, p_local bigint default null::bigint, p_status text default 'CONCLUIDA'::text, p_bonificacao boolean default false)
  returns table(rotulo text, valor numeric, itens bigint, valor_estoque numeric)
  language sql
  stable
@@ -180,7 +185,7 @@ as $function$
   order by valor desc;
 $function$;
 
-create function public.relatorio_compras_detalhe(p_loja_id bigint, p_ini date, p_fim date, p_familias text[] DEFAULT NULL::text[], p_tipos text[] DEFAULT NULL::text[], p_fornecedor text DEFAULT NULL::text, p_cfops text[] DEFAULT NULL::text[], p_produto text DEFAULT NULL::text, p_local bigint DEFAULT NULL::bigint, p_status text DEFAULT 'CONCLUIDA'::text, p_bonificacao boolean DEFAULT false)
+create or replace function public.relatorio_compras_detalhe(p_loja_id bigint, p_ini date, p_fim date, p_familias text[] DEFAULT NULL::text[], p_tipos text[] DEFAULT NULL::text[], p_fornecedor text DEFAULT NULL::text, p_cfops text[] DEFAULT NULL::text[], p_produto text DEFAULT NULL::text, p_local bigint DEFAULT NULL::bigint, p_status text DEFAULT 'CONCLUIDA'::text, p_bonificacao boolean DEFAULT false)
  RETURNS TABLE(data date, mes text, nota text, fornecedor text, tipo text, familia text, produto text, codigo text, ncm text, cfop text, unidade text, qtde numeric, preco_unit numeric, total numeric, valor_estoque numeric)
  LANGUAGE sql
  STABLE

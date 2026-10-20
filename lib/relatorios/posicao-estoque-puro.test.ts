@@ -125,3 +125,18 @@ test('linhas valorizadas pelo banco: custo suspeito usa a referência e entra no
   assert.equal(textoAvisoSuspeito(2, -105834312.01)?.startsWith('2 linhas com custo médio suspeito no Omie ('), true)
   assert.equal(textoAvisoSuspeito(0, 0), null)
 })
+
+// Revisão 20/10: na visão SPED o aviso só traz produtos que estão no Bloco H (o prato negativo não entra no bloco).
+test('SPED: aviso de custo suspeito só com os produtos do Bloco H', () => {
+  const fotoBanco: LinhaFoto[] = [
+    { n_cod_prod: 90151, codigo_local_estoque: 10, n_saldo: -29, n_cmc: 3649182.185099, reservado: 0, cmc_usado: 0, valor: 0, suspeito: true, referencia: null, valor_omie: -105826283.37 },
+    { n_cod_prod: 80292, codigo_local_estoque: 10, n_saldo: 1, n_cmc: 26.9, reservado: 0, cmc_usado: 0.026525, valor: 0.03, suspeito: true, referencia: 0.026525, valor_omie: 26.9 },
+    { n_cod_prod: 80292, codigo_local_estoque: 20, n_saldo: 1000, n_cmc: 0.026525, reservado: 0, cmc_usado: 0.026525, valor: 26.53, suspeito: false, referencia: 0.026525, valor_omie: 26.53 },
+  ]
+  const prods = [P({ codigo_produto: 90151, codigo: '90151' }), P({ codigo_produto: 80292, codigo: '80292' })]
+  const sped = montarPosicao(fotoBanco, prods, locais, op({ ver: 'sped' }))
+  assert.deepEqual(sped.linhas.map((l) => l.codProduto), [80292])
+  assert.deepEqual(sped.total.suspeitas.map((l) => l.codigo), ['80292'])
+  assert.equal(sped.total.ajusteOmie, 26.87)
+  assert.equal(montarPosicao(fotoBanco, prods, locais, op({ ver: 'local' })).total.suspeitas.length, 2)
+})

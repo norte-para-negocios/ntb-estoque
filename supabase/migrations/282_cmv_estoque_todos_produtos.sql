@@ -23,7 +23,7 @@
 --   CMC ≥ 1e7 (trava antiga); ou CMC > 10 × a referência de custo do produto, que é (1) o CMC ponderado dos locais do
 --   produto com saldo positivo ou, sem eles, (2) o custo unitário da última entrada por nota (valor de estoque N3 ÷
 --   quantidade recebida) — regra decidida pelo dono em 20/10; ou, sem referência de custo, (3) CMC > 10 × o preço de
---   venda do cadastro (ACRÉSCIMO: prato produzido não tem local positivo nem nota de entrada — sem isso a loja 3 ficava em
+--   venda do cadastro (ACRÉSCIMO aprovado pelo dono em 20/10: prato produzido não tem local positivo nem nota de entrada — sem isso a loja 3 ficava em
 --   −R$ 7,4 milhões com Moqueca −164 × 41.040, preço 184,90); ou, sem nada disso, linha negativa com CMC > 100 mil.
 -- Linha suspeita vale saldo × referência de custo (0 sem referência de custo); `valor_omie` guarda o valor cru, e a
 -- tela mostra "N linhas com custo médio suspeito no Omie (R$ X ajustados)" com a lista (total + ajuste = Omie).

@@ -25,10 +25,18 @@ test('ConsultarRecebimento e ListarRecebimentos dão as mesmas colunas', () => {
   assert.equal(it.length, 2); assert.equal(it[1].n_id_produto, 2459425966); assert.equal(it[1].n_sequencia, 4); assert.equal(it[1].produto_codigo, '2459425966')
 })
 
-test('resposta sem campo obrigatório não grava (a cópia do banco fica)', () => {
+test('resposta sem campo obrigatório do cabeçalho não grava (a cópia do banco fica)', () => {
   assert.deepEqual(faltasDoRecebimento({}), ['cabec'])
   assert.deepEqual(faltasDoRecebimento({ cabec: { ...cabec, cEtapa: '' }, itensRecebimento: itens }), ['cabec.cEtapa'])
-  assert.deepEqual(faltasDoRecebimento({ cabec }), ['itensRecebimento'])
-  assert.deepEqual(faltasDoRecebimento({ cabec, itensRecebimento: [{ itensCabec: {} }] }), ['itensRecebimento[0].itensCabec.nSequencia'])
   assert.deepEqual(faltasDoRecebimento({ cabec: { ...cabec, nIdReceb: undefined }, itensRecebimento: [] }), ['cabec.nIdReceb'])
+  assert.deepEqual(faltasDoRecebimento({ cabec: { ...cabec, cNumeroNFe: '' } }), ['cabec.cNumeroNFe'])
+})
+
+// Revisão 20/10: recebimentos reais da loja 5 sem `itensRecebimento` (3778323376, 3632438213) continuam atualizando.
+test('sem itensRecebimento: grava o cabeçalho, itens = lista vazia; item sem sequência fica de fora', () => {
+  assert.deepEqual(faltasDoRecebimento({ cabec }), [])
+  assert.deepEqual(colunasDosItens({ cabec }), [])
+  assert.equal(colunasDaNota({ cabec }).c_etapa, '60')
+  const r = colunasDosItens({ cabec, itensRecebimento: [{ itensCabec: {} }, ...itens] })
+  assert.deepEqual(r.map((x) => x.n_sequencia), [3, 4])
 })

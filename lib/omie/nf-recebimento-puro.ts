@@ -5,8 +5,9 @@
 // itensRecebimento, infoAdicionais, transporte, totais, parcelas, departamentos, categorias, infoCadastro,
 // observacoes) + `cteCfopEntrada`. A doc escreve a chave como `cChaveNfe`; o dado real do Listar vem `cChaveNFe` — o
 // mapeamento aceita as duas.
-// Defensivo: se faltar um campo obrigatório (id, etapa, número, itens com sequência), não grava nada (a cópia que já
-// está no banco fica) e quem chama registra no log. Puro: node --test lib/omie/nf-recebimento-puro.test.ts
+// Defensivo: se faltar id, etapa ou número no cabeçalho, não grava nada (a cópia que já está no banco fica) e quem chama
+// registra no log. Sem `itensRecebimento` (2 recebimentos reais da loja 5: 3778323376 e 3632438213) a lista vale vazia:
+// o cabeçalho é gravado e os itens já gravados ficam; item sem sequência é deixado de fora (é a chave do upsert). Puro: node --test lib/omie/nf-recebimento-puro.test.ts
 
 type Obj = Record<string, unknown>
 const obj = (v: unknown): Obj | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : null)
@@ -20,9 +21,6 @@ export function faltasDoRecebimento(nf: unknown): string[] {
   if (!(Number(cab.nIdReceb) > 0)) faltas.push('cabec.nIdReceb')
   if (typeof cab.cEtapa !== 'string' || !cab.cEtapa) faltas.push('cabec.cEtapa')
   if (cab.cNumeroNFe == null || cab.cNumeroNFe === '') faltas.push('cabec.cNumeroNFe')
-  const itens = r?.itensRecebimento
-  if (!Array.isArray(itens)) faltas.push('itensRecebimento')
-  else itens.forEach((it, i) => { if (!(Number(obj(obj(it)?.itensCabec)?.nSequencia) > 0)) faltas.push(`itensRecebimento[${i}].itensCabec.nSequencia`) })
   return faltas
 }
 
@@ -58,7 +56,7 @@ export function colunasDaNota(nf: unknown) {
 export function colunasDosItens(nf: unknown) {
   const r = obj(nf) ?? {}
   const idReceb = String(obj(r.cabec)?.nIdReceb)
-  return (Array.isArray(r.itensRecebimento) ? r.itensRecebimento : []).map((it) => {
+  return (Array.isArray(r.itensRecebimento) ? r.itensRecebimento : []).filter((it) => Number(obj(obj(it)?.itensCabec)?.nSequencia) > 0).map((it) => {
     const c = obj(obj(it)?.itensCabec) ?? {}
     return {
       n_id_receb: idReceb,

@@ -139,8 +139,10 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
   }
   total.quant = r6(total.quant); total.valor = r2(total.valor); total.positivo = r2(total.positivo); total.negativo = r2(total.negativo)
   // linhas de custo suspeito (dado do Omie a corrigir): sempre por local, maior ajuste primeiro
+  // na visão SPED (Bloco H) só os produtos que estão nas linhas do bloco (ativo, saldo > 0)
+  const noBlocoH = op.ver === 'sped' ? new Set(linhas.map((l) => l.codProduto)) : null
   for (const l of visiveis) {
-    if (!l.suspeito) continue
+    if (!l.suspeito || (noBlocoH && !noBlocoH.has(l.prod))) continue
     const m = meta.get(l.prod)
     total.ajusteOmie += l.valorOmie - l.valor
     total.suspeitas.push({ codProduto: l.prod, codigo: m?.codigo ?? String(l.prod), descricao: m?.descricao ?? `Produto ${l.prod}`, local: nomeLocal(l.local), quant: r6(l.quant), cmcOmie: l.cmcOmie, referencia: l.referencia, valorOmie: l.valorOmie, valor: l.valor })
