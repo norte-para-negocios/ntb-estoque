@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { bloqueioDaResposta, msRestantesBloqueio, podeRepetirLimite, registrarBloqueio } from './erros-omie'
+import { bloqueioDaResposta, ehChamadaDeEscrita, msRestantesBloqueio, podeRepetirLimite, registrarBloqueio } from './erros-omie'
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/'
 
@@ -33,11 +33,6 @@ export class OmieError extends Error {
   }
 }
 
-// Convenção Omie 100% consistente (confirmada em toda a base hoje, sem
-// exceção): calls de escrita sempre começam com um destes verbos.
-function ehChamadaDeEscrita(call: string): boolean {
-  return /^(Incluir|Alterar|Excluir|Concluir|Reverter|Importar)/.test(call)
-}
 
 // omieRequest<T> já faz um cast (json as T), não valida shape em
 // runtime -- um objeto "shotgun" só com os nomes de campo de ID usados
@@ -66,6 +61,9 @@ function respostaSimulada(): Record<string, unknown> {
     codigo: idFicticio,
     codigo_cliente_omie: idFicticio,
     codigo_produto: idFicticio,
+    // pedido de compra (C1, IncluirPedCompra): nCodPed + cNumero
+    nCodPed: idFicticio,
+    cNumero: String(idFicticio),
     codigo_status: '0',
     descricao_status: 'Simulado (loja de teste, nenhuma chamada real feita)',
     id_ajuste: idFicticio,

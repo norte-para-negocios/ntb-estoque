@@ -5,6 +5,9 @@ import { LojaSelector } from '@/components/loja/LojaSelector'
 import { UserMenu } from '@/components/shell/UserMenu'
 import { rotasPermitidas } from '@/lib/permissoes-menu'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
+import { gravacaoPedidosOmieLigada } from '@/lib/compras/pedido-omie-gravar-puro'
+import { leituraPedidosOmieLigada } from '@/lib/compras/pedidos-omie-puro'
 import { ModoEstoqueProvider } from '@/components/estoque-proprio/ModoEstoque'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -45,6 +48,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const estoqueProprio = modoEstoque === 'proprio'
   // Tela de Estoque vale para loja propria e para loja Omie (espelho); some so em 'nenhum'.
   const temEstoque = modoEstoque === 'proprio' || modoEstoque === 'omie'
+  // C1: "Pedidos de compra" também na loja Omie liberada (ou com a leitura dos pedidos do Omie ligada). Variáveis
+  // desligadas = nenhuma consulta a mais e o menu de antes.
+  const pedidosOmie = modoEstoque === 'omie' && profile.current_loja_id != null
+    && (gravacaoPedidosOmieLigada(process.env) || leituraPedidosOmieLigada(process.env))
+    && await estadoPedidoCompraLoja(profile.current_loja_id).then((e) => e.onde === 'omie' || e.lerOmie)
 
   return (
     <AppShell
@@ -54,6 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       rotasVisiveis={rotasVisiveis}
       estoqueProprio={estoqueProprio}
       temEstoque={temEstoque}
+      pedidosOmie={pedidosOmie}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >

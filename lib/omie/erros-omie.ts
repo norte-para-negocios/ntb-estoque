@@ -1,6 +1,15 @@
 // Classificacao das faultstrings do Omie + disjuntor por app_key e método (2026-09-24; por método desde 2026-10-19).
 // Modulo puro (sem imports @/) pra rodar direto em `node --test`.
 
+/**
+ * Chamada de escrita no Omie (loja de teste: nunca sai de verdade, ver omieRequest). Até 20/10/2026 a lista não tinha
+ * `Altera` (o pedido de compra usa AlteraPedCompra, sem o "r") nem `Upsert`: numa loja de teste esses métodos iriam ao
+ * Omie real. Nenhum método de leitura começa com estes verbos.
+ */
+export function ehChamadaDeEscrita(call: string): boolean {
+  return /^(Incluir|Altera|Excluir|Concluir|Reverter|Importar|Upsert)/.test(call)
+}
+
 export function segundosBloqueio(msg: string): number | null {
   const m = msg.match(/bloqueada por consumo indevido.*?(\d+)\s*segundos/i)
   return m ? Number(m[1]) : null

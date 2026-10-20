@@ -217,6 +217,7 @@ export const ACOES: Readonly<Record<string, Acao>> = Object.freeze({
   'pedido-compra#desvincularNotaDoPedido': m41.desvincularNotaDoPedido as Acao,
   'pedido-compra#criarPedidosDaSugestao': m41.criarPedidosDaSugestao as Acao,
   'pedido-compra#salvarLeadTime': m41.salvarLeadTime as Acao,
+  'pedido-compra#enviarPedidoAoOmieAgora': m41.enviarPedidoAoOmieAgora as Acao,
   'periodo-fechado#fecharMes': m42.fecharMes as Acao,
   'periodo-fechado#reabrirMes': m42.reabrirMes as Acao,
   'periodo-fechado#pendenciasDoMes': m42.pendenciasDoMes as Acao,

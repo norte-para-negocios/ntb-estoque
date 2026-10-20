@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ClipboardCheck, Plus } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { modoDaLoja } from '@/lib/estoque/ledger'
+import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
+import { listarPedidosCompraOmie } from '@/lib/omie/pedidos-compra'
+import { PedidosNoOmie } from '@/components/compras/PedidosNoOmie'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
@@ -10,22 +12,30 @@ import { btnClass } from '@/components/ui-kit/Button'
 import { CartaoResumo as Card } from '@/components/faturamento/CartaoResumo'
 import { ETAPAS_FILTRO } from '@/lib/compras/pedido-puro'
 import { FUNDO_CLASSE } from '@/lib/status-cor'
-import { listarPedidos } from './dados'
+import { envioOmieDosPedidos, listarPedidos, type EnvioOmie } from './dados'
 import { TOM_COR } from './tom'
 
 type Sp = Record<string, string | undefined>
 const campo = 'w-full rounded-[var(--r-md)] border-0 bg-surface-2 px-2.5 py-1.5 text-sm text-text outline-none focus:ring-2 focus:ring-brand/40'
 const rotulo = 'mb-1 block text-[11px] font-medium text-text-muted'
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const ROTULO_ENVIO: Record<EnvioOmie['status'], string> = { pendente: 'na fila do Omie', enviando: 'gravando no Omie', enviado: 'no Omie', precisa_corrigir: 'Omie: precisa corrigir' }
 const dataBR = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
 
 export default async function PedidosCompraPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  // Sem as variáveis do C1 (OMIE_GRAVAR/LER_PEDIDOS_COMPRA): só a loja de estoque próprio, como antes.
+  const est = await estadoPedidoCompraLoja(lojaId)
+  if (!est.onde && !est.lerOmie) notFound()
   if (!(await requirePermissao(lojaId, 'Compras - Pedidos')) && !(await requirePermissao(lojaId, 'Compras - Aprovar pedidos'))) notFound()
-  const podeCriar = await requirePermissao(lojaId, 'Compras - Pedidos')
+  const podeCriar = est.onde !== null && await requirePermissao(lojaId, 'Compras - Pedidos')
+  const proprio = est.onde === 'proprio'
   const sp = await searchParams
-  const { pedidos, erro } = await listarPedidos(lojaId)
+  const [{ pedidos, erro }, omie] = await Promise.all([
+    est.onde ? listarPedidos(lojaId) : Promise.resolve({ pedidos: [], erro: null }),
+    est.lerOmie ? listarPedidosCompraOmie(lojaId) : Promise.resolve(null),
+  ])
+  const envios: Map<number, EnvioOmie> = est.onde === 'omie' ? await envioOmieDosPedidos(lojaId, pedidos.map((p) => p.id)) : new Map()
   const q = semAcento((sp.q ?? '').trim())
   const vis = pedidos.filter((p) => (!sp.etapa || (sp.etapa === 'abertos' ? ['aguardando_aprovacao', 'aprovado', 'recebido_parcial'].includes(p.etapaExibida.chave) : p.etapaExibida.chave === sp.etapa))
     && (!q || semAcento(p.fornecedorNome).includes(q) || String(p.numero) === q))
@@ -39,8 +49,8 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
       <PageHeader title="Pedidos de compra" icon={ClipboardCheck} description="Pedido ao fornecedor com preço combinado, aprovação e conferência com a nota que chegar."
         actions={<>
           <Link href="/sugestao-compra" className={btnClass('outline')}>Sugestão de compra</Link>
-          <Link href="/requisicao-compra" className={btnClass('outline')}>Requisições</Link>
-          {podeCriar && <Link href="/pedido-compra/importar" className={btnClass('outline')}>Importar planilha</Link>}
+          {proprio && <Link href="/requisicao-compra" className={btnClass('outline')}>Requisições</Link>}
+          {podeCriar && proprio && <Link href="/pedido-compra/importar" className={btnClass('outline')}>Importar planilha</Link>}
           {podeCriar && <Link href="/pedido-compra/novo" className={btnClass('primary')}><Plus className="size-4" /> Novo pedido</Link>}
         </>} />
 
@@ -50,6 +60,13 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
         </p>
       )}
       {erro && <p className="rounded-[var(--r-lg)] bg-err/10 px-4 py-3 text-[13px] text-err">{erro}</p>}
+      {est.onde === 'omie' && (
+        <p className="rounded-[var(--r-lg)] bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+          Loja Omie: o pedido aprovado aqui é gravado no Omie (o número do Omie aparece no pedido e no PDF). A nota do fornecedor se liga ao pedido no próprio Omie.
+        </p>
+      )}
+      {omie && <PedidosNoOmie pedidos={omie.pedidos} aviso={omie.aviso} truncado={omie.truncado} />}
+      {est.onde && (<>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card titulo="Aguardando aprovação" valor={aguardando.length.toLocaleString('pt-BR')} sub={aguardando.length ? `${aguardando.reduce((a, p) => a + p.total, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : undefined} />
@@ -80,8 +97,9 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
                   <span className="block truncate text-[14px] font-medium text-text">Nº {p.numero} · {p.fornecedorNome}</span>
                   <span className="text-[12px] text-text-muted">{p.itens} item(ns) · criado {dataBR(p.createdAt)}{p.criadoPorNome ? ` por ${p.criadoPorNome}` : ''}</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text">
+                <span className="inline-flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-text">
                   <span className={`size-2 shrink-0 rounded-full ${FUNDO_CLASSE[TOM_COR[p.etapaExibida.tom]]}`} aria-hidden />{p.etapaExibida.rotulo}
+                  {envios.has(p.id) && <span className="text-[12px] font-normal text-text-muted">· {ROTULO_ENVIO[envios.get(p.id)!.status]}{envios.get(p.id)!.numeroOmie ? ` nº ${envios.get(p.id)!.numeroOmie}` : ''}</span>}
                 </span>
                 <span className="text-[13px] text-text-muted">Entrega: <span className="num text-text">{dataBR(p.previsaoEntrega)}</span></span>
                 <span className="md:text-right"><Money value={p.total} className="text-[14px] font-semibold" /></span>
@@ -90,6 +108,7 @@ export default async function PedidosCompraPage({ searchParams }: { searchParams
           ))}
         </ul>
       )}
+      </>)}
     </div>
   )
 }

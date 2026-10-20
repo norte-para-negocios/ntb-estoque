@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor, ehChamadaDeEscrita } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -120,4 +120,13 @@ test('erro que se repete além do teto sai da repetição; bloqueio não conta p
   assert.equal(statusFalhaConclusaoOP('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.', 99), 'Erro')
   assert.equal(statusFalhaConclusaoOP('Omie não respondeu em 30s (ConcluirOrdemProducao). Tente novamente.', 99), 'Erro')
   assert.equal(statusFalhaConclusaoOP('ERROR: O seguinte produto da estrutura possui o CMC unitário zerado', 99), 'Sem CMC')
+})
+
+test('ehChamadaDeEscrita: todos os verbos de escrita, inclusive AlteraPedCompra e UpsertPedCompra (C1)', () => {
+  for (const c of ['IncluirPedCompra', 'AlteraPedCompra', 'UpsertPedCompra', 'ExcluirPedCompra', 'AlterarProduto', 'IncluirAjusteEstoque', 'ConcluirOrdemProducao', 'ReverterRecebimento', 'ImportarNFCe']) {
+    assert.equal(ehChamadaDeEscrita(c), true, c)
+  }
+  for (const c of ['PesquisarPedCompra', 'ConsultarPedCompra', 'ListarProdutos', 'ListarRecebimentos', 'ObterNfe', 'CuponsFiscais', 'ConsultarEstrutura']) {
+    assert.equal(ehChamadaDeEscrita(c), false, c)
+  }
 })

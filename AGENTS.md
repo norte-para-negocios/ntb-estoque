@@ -1949,3 +1949,14 @@ Plano: `docs/superpowers/plans/2026-10-19-fase-g-transversais.md`. **Migrations 
 - **Desktop offline**: `anexos#excluirAnexo`, `notificacoes#*` e `importacao#*` fora de `politica.ts` (só com internet; tabelas novas fora de `offline_tabelas`).
 - **Testes**: `node --test lib/supabase/autor-puro.test.ts lib/supabase/tabela-ausente.test.ts lib/historico/historico-puro.test.ts lib/historico/ficha-versoes-puro.test.ts lib/anexos/anexos-puro.test.ts lib/notificacoes/regras-puro.test.ts lib/importacao/planilha-puro.test.ts lib/produto/duplicar-puro.test.ts`.
 - **Fora desta fase**: resumo diário por WhatsApp, departamentos/centros de custo, webhooks do Omie ignorados, anexos/importação no modo Omie, histórico de `notas_fiscais` do Omie e de `estrutura_produto_cache`.
+
+## C1 — pedido de compra do NTB gravado no Omie (20/10/2026, DESLIGADO)
+
+Plano, mapeamento campo a campo, ativação e rollback: `docs/superpowers/plans/2026-10-20-c1-pedido-compra-omie.md`. **Migration 270 não aplicada; nada escreve no Omie** até `OMIE_GRAVAR_PEDIDOS_COMPRA=1` no servidor **e** `lojas.omie_gravar_pedidos_compra = true` na loja (loja 4 nunca). Com as variáveis desligadas tudo fica como antes (pedido de compra só no estoque próprio; provas em `lib/compras/pedido-omie-desligado.test.ts`).
+
+- Aprovar o pedido numa loja Omie liberada → fila `pedidos_compra_omie` (`pc_omie_enfileirar`) → `IncluirPedCompra` (`lib/omie/pedido-compra-gravar.ts`). `cCodIntPed = NTB-PC-<id>`; retentativa consulta (`ConsultarPedCompra`) antes de incluir. Erro: espera crescente + teto (3 permanente / 8 transitório), bloqueio não conta, cron para a loja no 1º erro. Pedido já no Omie não reabre/cancela no NTB (gatilho da 270).
+- Quantidade/preço vão em unidade de estoque; o nº do Omie (`cNumero`) aparece no pedido e no PDF para o fornecedor pôr no `xPed` da NF-e (vínculo automático no Omie).
+- Leitura (`OMIE_LER_PEDIDOS_COMPRA`): seção "Pedidos no Omie" em `/pedido-compra` (inclui os criados direto no Omie).
+- `ehChamadaDeEscrita` mudou para `lib/omie/erros-omie.ts` e agora cobre `Altera*` (AlteraPedCompra) e `Upsert*`: antes esses métodos iriam ao Omie real numa loja de teste.
+- Cron `/api/cron/enviar-pedidos-compra-omie` **não** está no `sync-cron.sh` (entra na ativação).
+- Testes: `node --test lib/compras/pedido-omie-*.test.ts lib/compras/pedidos-omie-puro.test.ts lib/omie/erros-omie.test.ts`; SQL `scripts/testes-sql/270_pedido_compra_omie.sql` e `bash scripts/testes-sql/270_fila_postgrest.sh c1` (banco local `c1` = `c2` + 270).

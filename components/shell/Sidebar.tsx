@@ -42,6 +42,7 @@ export function Sidebar({
   rotasVisiveis,
   estoqueProprio = false,
   temEstoque = false,
+  pedidosOmie = false,
   lojaSelector,
   userMenu,
 }: {
@@ -52,6 +53,7 @@ export function Sidebar({
   /** Loja atual usa o estoque próprio: mostra o item Estoque. */
   estoqueProprio?: boolean
   temEstoque?: boolean
+  pedidosOmie?: boolean
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
 }) {
@@ -67,11 +69,11 @@ export function Sidebar({
           (!i.admin || isAdmin) &&
           (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
           (!i.superAdmin || isSuperAdmin) &&
-          (!i.soEstoqueProprio || estoqueProprio) &&
+          (!i.soEstoqueProprio || estoqueProprio || (i.ouPedidosOmie && pedidosOmie)) &&
           (!i.comEstoque || temEstoque) &&
           (permitidas === null || permitidas.has(i.href))
       ),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Só os grupos que sobraram itens depois do filtro.

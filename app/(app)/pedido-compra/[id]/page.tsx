@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { FileText } from 'lucide-react'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { modoDaLoja } from '@/lib/estoque/ledger'
+import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
+import { EnvioOmiePedido } from '@/components/compras/EnvioOmiePedido'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { Money } from '@/components/ui-kit/Money'
 import { btnClass } from '@/components/ui-kit/Button'
@@ -10,7 +11,7 @@ import { CartaoResumo as Card } from '@/components/faturamento/CartaoResumo'
 import { AcoesPedido } from '@/components/compras/AcoesPedido'
 import { acoesDisponiveis, parcelasDoPedido } from '@/lib/compras/pedido-puro'
 import { FUNDO_CLASSE } from '@/lib/status-cor'
-import { carregarPedido } from '../dados'
+import { carregarPedido, envioOmieDosPedidos } from '../dados'
 import { nomesCompradores } from '../cadastros'
 import { TOM_COR } from '../tom'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
@@ -23,11 +24,13 @@ const th = 'whitespace-nowrap px-3 py-2 text-[12px] font-semibold text-text-mute
 const EVENTO: Record<string, string> = {
   criado: 'Criado', editado: 'Editado', enviar: 'Enviado para aprovação', aprovar: 'Aprovado', reprovar: 'Devolvido ao comprador', reabrir: 'Reaberto',
   cancelar: 'Cancelado', nota_vinculada: 'Nota vinculada', nota_desvinculada: 'Nota desvinculada',
+  omie_enviado: 'Gravado no Omie', omie_erro: 'Não foi para o Omie',
 }
 
 export default async function PedidoCompraPage({ params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  const onde = (await estadoPedidoCompraLoja(lojaId)).onde
+  if (!onde) notFound()
   const podeEditar = await requirePermissao(lojaId, 'Compras - Pedidos')
   const podeAprovar = await requirePermissao(lojaId, 'Compras - Aprovar pedidos')
   if (!podeEditar && !podeAprovar) notFound()
@@ -36,9 +39,12 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
   const p = await carregarPedido(lojaId, Number(id))
   if (!p) notFound()
   const { cab, resumo, itens } = p
+  const envio = onde === 'omie' ? (await envioOmieDosPedidos(lojaId, [cab.id])).get(cab.id) ?? null : null
   const compradorNome = resumo.compradorId ? (await nomesCompradores(lojaId)).get(resumo.compradorId) ?? null : null
   const recebidoTotal = itens.length > 0 && itens.every((i) => i.recebido + 1e-6 >= i.quantidadeBase)
+  const noOmie = envio?.status === 'enviado' || envio?.status === 'enviando'
   const acoes = acoesDisponiveis(cab.etapa, { temVinculo: p.notas.length > 0, podeAprovar, podeEditar, recebidoTotal })
+    .filter((a) => !(noOmie && (a === 'reabrir' || a === 'cancelar')))  // C1: no Omie, altera/cancela lá
   const parcelas = parcelasDoPedido(Array.isArray(cab.parcelas) ? cab.parcelas : [], resumo.total, cab.previsao_entrega)
   const pct = resumo.qtdBase > 0 ? Math.min(100, (resumo.recebido / resumo.qtdBase) * 100) : 0
 
@@ -104,7 +110,9 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
         </table>
       </div>
 
-      <section className="space-y-2 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
+      {onde === 'omie' && <EnvioOmiePedido id={cab.id} etapa={cab.etapa} envio={envio} podeEnviar={podeEditar} />}
+
+      {onde === 'proprio' && <section className="space-y-2 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
         <h2 className="text-[15px] font-semibold text-text">Notas do fornecedor</h2>
         {p.notas.length === 0 ? (
           <p className="text-[13px] text-text-muted">{cab.etapa === 'aprovado' ? 'Nenhuma nota ainda. Ao abrir a nota do fornecedor em Notas Fiscais, ela sugere este pedido para conferir.' : 'Só pedido aprovado recebe nota.'}</p>
@@ -118,7 +126,7 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
             ))}
           </ul>
         )}
-      </section>
+      </section>}
 
       {(cab.obs || cab.obs_interna || parcelas.length > 0) && (
         <section className="grid gap-3 rounded-[var(--r-lg)] bg-surface p-4 text-[13px] shadow-[var(--shadow-sm)] sm:grid-cols-3">
@@ -135,6 +143,8 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
             <li key={e.id} className="text-text-muted">
               <span className="num">{dataHora(e.em)}</span> · <span className="text-text">{EVENTO[e.tipo] ?? e.tipo}</span>{e.userNome ? ` · ${e.userNome}` : ''}
               {typeof e.detalhe.motivo === 'string' ? ` · "${e.detalhe.motivo}"` : ''}
+              {e.tipo === 'omie_enviado' && e.detalhe.numero_omie ? ` · nº ${String(e.detalhe.numero_omie)}` : ''}
+              {e.tipo === 'omie_erro' && typeof e.detalhe.erro === 'string' ? ` · ${e.detalhe.erro}` : ''}
               {e.tipo === 'nota_vinculada' ? ` · NF ${String(e.detalhe.numero ?? '')}: ${String(e.detalhe.itens ?? 0)} item(ns)${Number(e.detalhe.fora_do_pedido) ? `, ${String(e.detalhe.fora_do_pedido)} fora do pedido` : ''}` : ''}
             </li>
           ))}

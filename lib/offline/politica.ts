@@ -9,6 +9,7 @@
 // desvio por modoDaLoja/ehLojaProprio).
 // Fase C (19/10/2026): as ações de pedido-compra (salvar, mudar etapa, vincular/desvincular nota, criar da sugestão,
 // lead time) ficam FORA de propósito: as tabelas novas (migrations 200/201) não estão em offline_tabelas, então só com internet.
+// C1 (20/10/2026): idem para pedido-compra#enviarPedidoAoOmieAgora (grava no Omie; tabela da 270 fora de offline_tabelas).
 // Fase C2 (19/10/2026): idem para requisicao-compra (salvar, ação, gerar pedidos, criar da sugestão), compras-cadastros
 // (comprador, prazo do fornecedor) e importar-pedidos (prévia e confirmação): tabelas das migrations 240–242, só com internet.
 // Fase G (19/10/2026): anexos#excluirAnexo, notificacoes#* e importacao#* ficam FORA de propósito: as tabelas novas
