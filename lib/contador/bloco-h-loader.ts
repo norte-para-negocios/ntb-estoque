@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { lerFotoValorizada } from '@/lib/relatorios/posicao-estoque-loader'
 import { montarPosicao, type InfoLocal, type LinhaFoto, type MetaProduto } from '@/lib/relatorios/posicao-estoque-puro'
 
 // Fase F: inventário tipo Bloco H numa data (plano R8), com a montagem da Fase D (montarPosicao, visão 'sped': produto
@@ -29,9 +30,8 @@ export async function carregarBlocoH(lojaId: number, dataISO: string) {
     if (error) anotar('data da foto')(error)
     dataFoto = ult?.data_posicao ? String(ult.data_posicao) : null
     if (dataFoto) {
-      foto = await buscarTodasLinhas<LinhaFoto>(
-        (from, to) => sb.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
-        undefined, anotar('posição de estoque'))
+      // mesma regra de valor da Posição (custo suspeito trocado pela referência, posicao_valorizada / migration 282)
+      foto = await lerFotoValorizada(sb, lojaId, dataFoto, anotar)
     }
   }
 

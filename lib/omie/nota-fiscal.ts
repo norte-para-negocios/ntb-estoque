@@ -1,8 +1,10 @@
 import { omieRequest, logIntegrationAttempt, type LojaOmie } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
-import { msRestantesBloqueio } from './erros-omie'
+import { paradaPorDisjuntor } from './erros-omie'
+import { colunasDaNota, colunasDosItens, faltasDoRecebimento } from './nf-recebimento-puro'
 import {
-  DIAS_RELEITURA, LIMITE_RELEITURA_POR_CICLO, TOPICOS_RELEITURA, escolherNotasParaReler, falhasReleitura, lojasForaDaReleitura, registrarFalhaReleitura,
+  DIAS_RELEITURA, LIMITE_RELEITURA_POR_CICLO, TOPICOS_RELEITURA, consultasNota, escolherNotasParaReler, falhasReleitura, lojasForaDaReleitura,
+  registrarConsultaNota, registrarFalhaReleitura,
   type AvisoNota, type NotaGravada,
 } from './nf-releitura'
 
@@ -123,34 +125,22 @@ async function gravarNotaFiscalNoFrio(lojaId: number, nota: NotaFiscalBulkRow): 
   }
 }
 
-async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
+// Grava a nota (cabeçalho + itens) e espelha no Contabo. Mesmo mapeamento para ListarRecebimentos e
+// ConsultarRecebimento (lib/omie/nf-recebimento-puro.ts). Resposta sem um campo obrigatório não sobrescreve a cópia
+// que já está no banco: loga e devolve false.
+async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF): Promise<boolean> {
+  const faltas = faltasDoRecebimento(nf)
+  if (faltas.length) {
+    console.error(`nota-fiscal: recebimento ${String((nf as { cabec?: { nIdReceb?: unknown } })?.cabec?.nIdReceb ?? '?')} da loja ${loja.id} sem ${faltas.slice(0, 5).join(', ')} — não gravado`)
+    return false
+  }
   const supabase = createServiceClient({ semAutor: true })
-  if (!nf.cabec) return
+  const cab = colunasDaNota(nf)
 
   const { data: saved, error: errCabec } = await supabase
     .from('notas_fiscais')
     .upsert(
-      {
-        loja_id: loja.id,
-        n_id_receb: String(nf.cabec.nIdReceb),
-        n_id_fornecedor: nf.cabec.nIdFornecedor,
-        c_pessoa_fisica: nf.cabec.cPessoaFisica,
-        c_nome: nf.cabec.cNome,
-        c_razao_social: nf.cabec.cRazaoSocial,
-        c_inscricao: nf.cabec.cInscricao,
-        c_cnpj_cpf: nf.cabec.cCNPJ_CPF,
-        c_chave_nfe: nf.cabec.cChaveNFe,
-        c_etapa: nf.cabec.cEtapa,
-        c_numero_nfe: nf.cabec.cNumeroNFe,
-        c_serie_nfe: nf.cabec.cSerieNFe,
-        c_modelo_nfe: nf.cabec.cModeloNFe,
-        d_emissao_nfe: parseDate(nf.cabec.dEmissaoNFe),
-        n_valor_nfe: nf.cabec.nValorNFe,
-        c_ambiente_nfe: nf.cabec.cAmbienteNFe,
-        c_natureza_operacao: nf.cabec.cNaturezaOperacao,
-        full_object: nf,
-        updated_at: new Date().toISOString(),
-      },
+      { loja_id: loja.id, ...cab, full_object: nf, updated_at: new Date().toISOString() },
       { onConflict: 'loja_id,n_id_receb' }
     )
     .select('id')
@@ -159,83 +149,28 @@ async function saveNotaFiscal(loja: LojaOmie, nf: OmieNF) {
   // Sem checar o erro, uma falha (ex.: valor fora da faixa) descartava a NF + itens
   // em silêncio enquanto o status da loja virava "Concluido". Agora propaga.
   if (errCabec || !saved) {
-    throw new Error(`Falha ao salvar NF ${nf.cabec.cNumeroNFe}: ${errCabec?.message ?? 'sem retorno'}`)
+    throw new Error(`Falha ao salvar NF ${cab.c_numero_nfe}: ${errCabec?.message ?? 'sem retorno'}`)
   }
 
-  const itens = nf.itensRecebimento ?? []
-  if (saved && itens.length) {
-    const rows = itens.map((it) => ({
-      loja_id: loja.id,
-      nota_fiscal_id: saved.id,
-      n_id_receb: String(nf.cabec.nIdReceb),
-      n_sequencia: it.itensCabec.nSequencia,
-      produto_codigo: it.itensCabec.nIdProduto ? String(it.itensCabec.nIdProduto) : null,
-      n_id_item: it.itensCabec.nIdItem,
-      n_id_pedido: it.itensCabec.nIdPedido,
-      n_id_it_pedido: it.itensCabec.nIdItPedido,
-      n_id_produto: it.itensCabec.nIdProduto,
-      c_codigo_produto: it.itensCabec.cCodigoProduto,
-      c_descricao_produto: it.itensCabec.cDescricaoProduto,
-      c_ignorar_item: it.itensCabec.cIgnorarItem,
-      c_adicionar_novo: it.itensCabec.cAdicionarNovo,
-      c_associar_existente: it.itensCabec.cAssociarExistente,
-      c_item_devolvido: it.itensCabec.cItemDevolvido,
-      c_ncm: it.itensCabec.cNCM,
-      c_ean: it.itensCabec.cEAN,
-      c_cfop: it.itensCabec.cCFOP,
-      n_qtde_nfe: it.itensCabec.nQtdeNFe,
-      c_unidade_nfe: it.itensCabec.cUnidadeNfe,
-      n_preco_unit: it.itensCabec.nPrecoUnit,
-      full_object: it,
-      updated_at: new Date().toISOString(),
-    }))
+  const itens = colunasDosItens(nf)
+  if (itens.length) {
+    const agora = new Date().toISOString()
+    const rows = itens.map((it) => ({ loja_id: loja.id, nota_fiscal_id: saved.id, ...it, updated_at: agora }))
     const { error: errItens } = await supabase
       .from('nota_fiscal_items')
       .upsert(rows, { onConflict: 'loja_id,n_id_receb,n_sequencia' })
     if (errItens) {
-      throw new Error(`Falha ao salvar itens da NF ${nf.cabec.cNumeroNFe}: ${errItens.message}`)
+      throw new Error(`Falha ao salvar itens da NF ${cab.c_numero_nfe}: ${errItens.message}`)
     }
   }
 
   await gravarNotaFiscalNoFrio(loja.id, {
-    n_id_receb: String(nf.cabec.nIdReceb),
-    n_id_fornecedor: nf.cabec.nIdFornecedor,
-    c_pessoa_fisica: nf.cabec.cPessoaFisica,
-    c_nome: nf.cabec.cNome,
-    c_razao_social: nf.cabec.cRazaoSocial,
-    c_inscricao: nf.cabec.cInscricao,
-    c_cnpj_cpf: nf.cabec.cCNPJ_CPF,
-    c_chave_nfe: nf.cabec.cChaveNFe,
-    c_etapa: nf.cabec.cEtapa,
-    c_numero_nfe: nf.cabec.cNumeroNFe,
-    c_serie_nfe: nf.cabec.cSerieNFe,
-    c_modelo_nfe: nf.cabec.cModeloNFe,
-    d_emissao_nfe: parseDate(nf.cabec.dEmissaoNFe),
-    n_valor_nfe: nf.cabec.nValorNFe,
-    c_ambiente_nfe: nf.cabec.cAmbienteNFe,
-    c_natureza_operacao: nf.cabec.cNaturezaOperacao,
+    ...cab,
     full_object: nf,
-    itens: itens.map((it) => ({
-      n_sequencia: it.itensCabec.nSequencia,
-      n_id_item: it.itensCabec.nIdItem,
-      n_id_pedido: it.itensCabec.nIdPedido,
-      n_id_it_pedido: it.itensCabec.nIdItPedido,
-      n_id_produto: it.itensCabec.nIdProduto,
-      c_codigo_produto: it.itensCabec.cCodigoProduto,
-      c_descricao_produto: it.itensCabec.cDescricaoProduto,
-      c_ignorar_item: it.itensCabec.cIgnorarItem,
-      c_adicionar_novo: it.itensCabec.cAdicionarNovo,
-      c_associar_existente: it.itensCabec.cAssociarExistente,
-      c_item_devolvido: it.itensCabec.cItemDevolvido,
-      c_ncm: it.itensCabec.cNCM,
-      c_ean: it.itensCabec.cEAN,
-      c_cfop: it.itensCabec.cCFOP,
-      n_qtde_nfe: it.itensCabec.nQtdeNFe,
-      c_unidade_nfe: it.itensCabec.cUnidadeNfe,
-      n_preco_unit: it.itensCabec.nPrecoUnit,
-      full_object: it,
-    })),
-  })
+    // o espelho do Contabo não tem produto_codigo
+    itens: itens.map((it) => { const { produto_codigo, ...resto } = it; void produto_codigo; return resto }),
+  } as NotaFiscalBulkRow)
+  return true
 }
 
 export async function syncNotasFiscais(loja: LojaOmie, dataIni?: string, dataFim?: string) {
@@ -306,15 +241,15 @@ export async function fetchNotaFiscal(loja: LojaOmie, nIdReceb: number, opcoes: 
     semRepetir: opcoes.semRepetir,
   })
   if (!res?.cabec) return false
-  await saveNotaFiscal(loja, res)
-  return true
+  return saveNotaFiscal(loja, res)
 }
 
 /**
  * Paridade 20/10/2026 (B7, lib/omie/nf-releitura.ts): relê as notas já gravadas cujo aviso de conclusão/reversão do Omie
  * é mais novo que a última gravação (o Omie não muda dAlt ao re-concluir, então o sync por dtAltDe não as pega). No
  * máximo LIMITE_RELEITURA_POR_CICLO por loja e ciclo, avisos dos últimos DIAS_RELEITURA dias, nunca nas lojas de
- * OMIE_NF_RELEITURA_LOJAS_FORA (padrão 4 e 7); não chama com o disjuntor do método ligado; para no primeiro erro.
+ * LOJAS_SEM_RELEITURA (4 e 7, + OMIE_NF_RELEITURA_LOJAS_FORA); não chama com qualquer método da chave bloqueado; pula nota
+ * consultada há < 90 s (webhook); para no primeiro erro.
  * Só leitura no Omie (ConsultarRecebimento). Devolve quantas releu e o erro, se houve.
  */
 export async function relerNotasComAvisoPendente(loja: LojaOmie): Promise<{ relidas: number; erro: string | null }> {
@@ -329,7 +264,7 @@ export async function relerNotasComAvisoPendente(loja: LojaOmie): Promise<{ reli
     .not('n_id_receb', 'is', null)
     .gte('created_at', desde)
     .in('message->>topic', [...TOPICOS_RELEITURA])
-    .order('id', { ascending: true })
+    .order('id', { ascending: false })  // mais novos primeiro (o limite corta os antigos)
     .limit(5000)
   if (e1) return { relidas: 0, erro: `avisos: ${e1.message}` }
   const ids = [...new Set(((avisos ?? []) as AvisoNota[]).map((a) => String(a.n_id_receb)))]
@@ -344,10 +279,11 @@ export async function relerNotasComAvisoPendente(loja: LojaOmie): Promise<{ reli
     if (error) return { relidas: 0, erro: `notas: ${error.message}` }
     notas.push(...((data ?? []) as NotaGravada[]))
   }
-  const fila = escolherNotasParaReler((avisos ?? []) as AvisoNota[], notas, { limite: LIMITE_RELEITURA_POR_CICLO, falhas: falhasReleitura() })
+  const fila = escolherNotasParaReler((avisos ?? []) as AvisoNota[], notas, { limite: LIMITE_RELEITURA_POR_CICLO, falhas: falhasReleitura(), consultas: consultasNota() })
   let relidas = 0
   for (const nIdReceb of fila) {
-    if (msRestantesBloqueio(loja.omie_app_key, Date.now(), 'ConsultarRecebimento') > 0) break
+    if (paradaPorDisjuntor(loja)) break  // qualquer método da chave bloqueado: não chama (um 2º bloqueio trava a chave toda)
+    registrarConsultaNota(nIdReceb)
     try {
       // resposta sem a nota: não grava nada, então espera 6 h para não reconsultar a cada ciclo
       if (await fetchNotaFiscal(loja, Number(nIdReceb), { semRepetir: true })) relidas++
@@ -414,13 +350,6 @@ export async function excluirRecebimento(loja: LojaOmie, nIdReceb: number) {
 // existindo na Omie.
 export function pareceRecebimentoNaoExiste(msg: string): boolean {
   return /nao cadastrada|não cadastrada/i.test(msg)
-}
-
-function parseDate(d: string | null | undefined): string | null {
-  if (!d) return null
-  const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (!m) return null
-  return `${m[3]}-${m[2]}-${m[1]}`
 }
 
 /**

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { locaisSumidos, custoValido, escolherFoto, montarPosicao, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
+import { locaisSumidos, custoValido, escolherFoto, montarPosicao, textoAvisoSuspeito, type LinhaFoto, type MetaProduto, type OpcoesPosicao } from './posicao-estoque-puro.ts'
 
 const P = (o: Partial<MetaProduto> & { codigo_produto: number }): MetaProduto => ({
   codigo: String(o.codigo_produto), descricao: `Produto ${o.codigo_produto}`, familia: 'Insumos', tipo: '01', unidade: 'KG', ncm: '0000.00.00', inativo: false, ...o,
@@ -79,7 +79,7 @@ test('ordem: maior valor primeiro; sem foto = vazio', () => {
   const r = montarPosicao(foto, produtos, locais, op())
   assert.deepEqual(r.linhas.map((l) => l.codProduto), [1, 3, 2])
   const v = montarPosicao([], produtos, locais, op())
-  assert.deepEqual(v.total, { linhas: 0, quant: 0, valor: 0, positivo: 0, negativo: 0, suspeitos: 0 })
+  assert.deepEqual(v.total, { linhas: 0, quant: 0, valor: 0, positivo: 0, negativo: 0, suspeitos: 0, ajusteOmie: 0, suspeitas: [] })
 })
 
 test('escolherFoto: a mais recente com local real', () => {
@@ -101,4 +101,27 @@ test('locaisSumidos: local ativo que estava na foto anterior e não está na atu
   assert.deepEqual(locaisSumidos([10], [10, 20, 30], new Set([10, 20])), [20])
   assert.deepEqual(locaisSumidos([10, 20], [10, 20], new Set([10, 20])), [])
   assert.deepEqual(locaisSumidos([10], [], new Set([10, 20])), [])
+})
+
+// Paridade 20/10/2026 (revisão do B6): a regra do custo suspeito é do banco (posicao_valorizada, migration 282); a tela
+// usa o `valor`/`cmc_usado`/`suspeito` que vêm de lá. Caso real da loja 3 (20/10): Moqueca de Camarão 600 g −29 × CMC
+// 3.649.182 (sem referência de custo, preço 184,90) vale 0; Pepsi Zero −259 × 34,25 com referência 3,253298 (locais
+// positivos) vale −842,60. Sem isso o total da loja 3 ia a −R$ 140 milhões.
+test('linhas valorizadas pelo banco: custo suspeito usa a referência e entra no aviso', () => {
+  const fotoBanco: LinhaFoto[] = [
+    { n_cod_prod: 90151, codigo_local_estoque: 10, n_saldo: -29, n_cmc: 3649182.185099, reservado: 0, cmc_usado: 0, valor: 0, suspeito: true, referencia: null, valor_omie: -105826283.37 },
+    { n_cod_prod: 90834, codigo_local_estoque: 10, n_saldo: -259, n_cmc: 34.25188, reservado: 0, cmc_usado: 3.253298, valor: -842.6, suspeito: true, referencia: 3.253298, valor_omie: -8871.24 },
+    { n_cod_prod: 90834, codigo_local_estoque: 20, n_saldo: 100, n_cmc: 3.253298, reservado: 0, cmc_usado: 3.253298, valor: 325.33, suspeito: false, referencia: 3.253298, valor_omie: 325.33 },
+  ]
+  const prods = [P({ codigo_produto: 90151, codigo: '90151', descricao: 'Moqueca de Camarão 600 g' }), P({ codigo_produto: 90834, codigo: '90834', descricao: 'Pepsi Zero 350 ml' })]
+  const r = montarPosicao(fotoBanco, prods, locais, op({ ver: 'local' }))
+  assert.equal(r.total.valor, -517.27)
+  assert.equal(r.total.suspeitos, 2)
+  assert.equal(r.total.ajusteOmie, Math.round((-105826283.37 - 8871.24 + 842.6) * 100) / 100)
+  assert.equal(r.total.suspeitas[0].codigo, '90151') // maior ajuste primeiro
+  assert.equal(r.total.suspeitas[1].referencia, 3.253298)
+  assert.equal(Math.round((r.total.valor + r.total.ajusteOmie) * 100) / 100, Math.round((-105826283.37 - 8871.24 + 325.33) * 100) / 100) // total + ajuste = Omie
+  assert.equal(montarPosicao(fotoBanco, prods, locais, op()).total.valor, -517.27) // mesmo total por produto
+  assert.equal(textoAvisoSuspeito(2, -105834312.01)?.startsWith('2 linhas com custo médio suspeito no Omie ('), true)
+  assert.equal(textoAvisoSuspeito(0, 0), null)
 })

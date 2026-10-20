@@ -15,11 +15,11 @@ declare d int; n int; r jsonb;
 begin
   create temp table t284_depois on commit drop as select x from jsonb_array_elements(relatorio_produtos_fornecedor(5)) x;
   select count(*) into n from t284_depois;
-  -- mesmos pares, mesma última compra (nota, data, quantidade, preço, compras, total comprado)
+  -- mesmos pares, mesma última compra (nota, data, quantidade, preço, compras)
   select count(*) into d from (
-    (select a.x - 'total' - 'custo_unit' from t284_antes a except select b.x - 'total' - 'custo_unit' - 'itens_ultima_nota' from t284_depois b)
+    (select a.x - 'total' - 'custo_unit' - 'total_comprado' from t284_antes a except select b.x - 'total' - 'custo_unit' - 'total_comprado' - 'itens_ultima_nota' from t284_depois b)
     union all
-    (select b.x - 'total' - 'custo_unit' - 'itens_ultima_nota' from t284_depois b except select a.x - 'total' - 'custo_unit' from t284_antes a)) z;
+    (select b.x - 'total' - 'custo_unit' - 'total_comprado' - 'itens_ultima_nota' from t284_depois b except select a.x - 'total' - 'custo_unit' - 'total_comprado' from t284_antes a)) z;
   if d <> 0 then raise exception '284: % pares mudaram fora de total/custo', d; end if;
   -- total = vTotalItem do item da última compra (quando há)
   select count(*) into d from t284_depois b

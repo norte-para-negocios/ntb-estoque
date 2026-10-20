@@ -47,16 +47,14 @@ begin
   for r in select caso, sum(ei) ei, sum(ef) ef from t282_depois group by 1 order by 1 loop
     raise notice '282: % EI % EF %', r.caso, r.ei, r.ef;
   end loop;
-  -- o EI de 17/10 dos produtos sem kardex = foto mais recente (locais reais, CMC válido)
+  -- o EI de 17/10 dos produtos sem kardex = foto mais recente valorizada pela mesma regra da Posição (posicao_valorizada)
   select count(*) into d from (
-    select pe.n_cod_prod, round(sum(pe.n_saldo * case when pe.n_cmc > 0 and pe.n_cmc < 1e7 then pe.n_cmc else 0 end), 2) as v
-    from posicao_estoques pe
-    where pe.loja_id = 5 and pe.codigo_local_estoque <> 0
-      and pe.data_posicao = (select max(data_posicao) from posicao_estoques where loja_id = 5 and codigo_local_estoque <> 0)
-      and not exists (select 1 from kardex_omie k where k.loja_id = 5 and k.n_cod_prod = pe.n_cod_prod)
-    group by 1 having round(sum(pe.n_saldo * case when pe.n_cmc > 0 and pe.n_cmc < 1e7 then pe.n_cmc else 0 end), 2) <> 0
+    select v.n_cod_prod, sum(v.valor) as v
+    from posicao_valorizada(5) v
+    where not exists (select 1 from kardex_omie k where k.loja_id = 5 and k.n_cod_prod = v.n_cod_prod)
+    group by 1 having round(sum(v.valor), 2) <> 0
   ) f left join t282_depois n on n.caso = '17/10' and n.n_cod_prod = f.n_cod_prod
-  where n.ei is distinct from f.v;
+  where n.ei is null or abs(n.ei - f.v) > 0.05;  -- a foto arredonda por local, o CMV por produto
   if d <> 0 then raise exception '282: % produtos sem kardex com EI diferente da foto', d; end if;
 end $$;
 

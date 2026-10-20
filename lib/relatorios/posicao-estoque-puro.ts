@@ -2,11 +2,20 @@
 // Regras do Omie (omie-rea/regras/estoque-saldo-e-custo.md): saldo e CMC por produto × local (E1), valor = quantidade
 // × CMC (E2), negativos entram no total (E4), disponível = quantidade − reservada (E3), o local padrão lista todos
 // os produtos inclusive com saldo 0 (E7). Local 0 é a sentinela do sync (mínimo + CMC do produto), nunca uma linha.
-// CMC fora de (0, 1e7) = custo suspeito (achado de 08/2026: CMC de bilhões em saldo negativo), vale 0 no valor.
+// Custo suspeito: regra única no banco, posicao_valorizada (migration 282; paridade 20/10/2026): CMC > 10× a referência de
+// custo do produto (CMC ponderado dos locais com saldo positivo, senão o custo da última entrada por nota), sem referência
+// > 10× o preço de venda, sem nada > 100 mil em linha negativa, e sempre ≥ 1e7. A linha suspeita vale saldo × referência
+// (0 sem referência) e entra na lista do aviso com o valor cru do Omie. Sem a 282 aplicada (linhas sem `valor`), volta à
+// regra antiga: CMC fora de (0, 1e7) vale 0.
 // Um só total: as visões por produto e por local somam as mesmas linhas de local.
 // Puro, sem imports: node --test lib/relatorios/posicao-estoque-puro.test.ts
 
-export type LinhaFoto = { n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number; reservado: number | null }
+export type LinhaFoto = {
+  n_cod_prod: number; codigo_local_estoque: number; n_saldo: number; n_cmc: number; reservado: number | null
+  /** de posicao_valorizada (282): CMC usado no valor, valor da linha, se o CMC do Omie é suspeito, referência e valor cru */
+  cmc_usado?: number | null; valor?: number | null; suspeito?: boolean | null; referencia?: number | null; valor_omie?: number | null
+}
+export type LinhaSuspeita = { codProduto: number; codigo: string; descricao: string; local: string; quant: number; cmcOmie: number; referencia: number | null; valorOmie: number; valor: number }
 export type MetaProduto = {
   codigo_produto: number; codigo: string | null; descricao: string | null; familia: string | null; tipo: string | null
   unidade: string | null; ncm: string | null; inativo: boolean
@@ -18,7 +27,11 @@ export type LinhaPosicao = {
   chave: string; codProduto: number; codigo: string; descricao: string; familia: string; tipo: string; unidade: string; ncm: string
   inativo: boolean; local: string | null; quant: number; reservado: number; disponivel: number; cmc: number; valor: number; custoSuspeito: boolean
 }
-export type TotalPosicao = { linhas: number; quant: number; valor: number; positivo: number; negativo: number; suspeitos: number }
+export type TotalPosicao = {
+  linhas: number; quant: number; valor: number; positivo: number; negativo: number; suspeitos: number
+  /** valor cru do Omie − valor ajustado nas linhas de custo suspeito (total + ajuste = total do Omie) */
+  ajusteOmie: number; suspeitas: LinhaSuspeita[]
+}
 
 export const SEM_FAMILIA = 'Sem família'
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -38,7 +51,7 @@ export function locaisSumidos(atual: number[], anterior: number[], ativos: Set<n
   return [...new Set(anterior)].filter((l) => l !== 0 && ativos.has(l) && !agora.has(l)).sort((a, b) => a - b)
 }
 
-type LinhaLocal = { prod: number; local: number; quant: number; reservado: number; cmc: number; valor: number; suspeito: boolean }
+type LinhaLocal = { prod: number; local: number; quant: number; reservado: number; cmc: number; valor: number; suspeito: boolean; cmcOmie: number; referencia: number | null; valorOmie: number }
 
 export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais: Map<number, InfoLocal>, op: OpcoesPosicao): { linhas: LinhaPosicao[]; total: TotalPosicao } {
   const meta = new Map(produtos.map((p) => [Number(p.codigo_produto), p]))
@@ -51,8 +64,14 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
       continue
     }
     const quant = Number(f.n_saldo) || 0
-    const suspeito = quant !== 0 && !custoValido(cmc)
-    porLocal.push({ prod: Number(f.n_cod_prod), local: Number(f.codigo_local_estoque), quant, reservado: Number(f.reservado) || 0, cmc: custoValido(cmc) ? cmc : 0, valor: suspeito ? 0 : r2(quant * cmc), suspeito })
+    const base = { prod: Number(f.n_cod_prod), local: Number(f.codigo_local_estoque), quant, reservado: Number(f.reservado) || 0, cmcOmie: cmc, valorOmie: r2(quant * cmc) }
+    if (f.valor !== undefined && f.valor !== null) {
+      // regra do banco (posicao_valorizada)
+      porLocal.push({ ...base, cmc: Number(f.cmc_usado) || 0, valor: Number(f.valor) || 0, suspeito: f.suspeito === true, referencia: f.referencia == null ? null : Number(f.referencia), valorOmie: f.valor_omie == null ? base.valorOmie : Number(f.valor_omie) })
+    } else {
+      const suspeito = quant !== 0 && !custoValido(cmc)
+      porLocal.push({ ...base, cmc: custoValido(cmc) ? cmc : 0, valor: suspeito ? 0 : r2(quant * cmc), suspeito, referencia: null })
+    }
   }
 
   const termo = semAcento(op.q.trim())
@@ -110,7 +129,7 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
   const base = op.ver === 'sped'
     ? linhas.map((l) => ({ quant: l.quant, valor: l.valor, suspeito: l.custoSuspeito }))
     : visiveis
-  const total: TotalPosicao = { linhas: linhas.length, quant: 0, valor: 0, positivo: 0, negativo: 0, suspeitos: 0 }
+  const total: TotalPosicao = { linhas: linhas.length, quant: 0, valor: 0, positivo: 0, negativo: 0, suspeitos: 0, ajusteOmie: 0, suspeitas: [] }
   for (const l of base) {
     total.quant += l.quant
     total.valor += l.valor
@@ -119,5 +138,21 @@ export function montarPosicao(foto: LinhaFoto[], produtos: MetaProduto[], locais
     if (l.suspeito) total.suspeitos++
   }
   total.quant = r6(total.quant); total.valor = r2(total.valor); total.positivo = r2(total.positivo); total.negativo = r2(total.negativo)
+  // linhas de custo suspeito (dado do Omie a corrigir): sempre por local, maior ajuste primeiro
+  for (const l of visiveis) {
+    if (!l.suspeito) continue
+    const m = meta.get(l.prod)
+    total.ajusteOmie += l.valorOmie - l.valor
+    total.suspeitas.push({ codProduto: l.prod, codigo: m?.codigo ?? String(l.prod), descricao: m?.descricao ?? `Produto ${l.prod}`, local: nomeLocal(l.local), quant: r6(l.quant), cmcOmie: l.cmcOmie, referencia: l.referencia, valorOmie: l.valorOmie, valor: l.valor })
+  }
+  total.ajusteOmie = r2(total.ajusteOmie)
+  total.suspeitas.sort((a, b) => Math.abs(b.valorOmie - b.valor) - Math.abs(a.valorOmie - a.valor) || a.descricao.localeCompare(b.descricao, 'pt-BR'))
   return { linhas, total }
+}
+
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+/** Aviso único das telas/planilhas (Posição, Estoque Valorizado): "N linhas com custo médio suspeito no Omie (R$ X ajustados)". */
+export function textoAvisoSuspeito(n: number, ajusteOmie: number): string | null {
+  if (!(n > 0)) return null
+  return `${n} ${n === 1 ? 'linha' : 'linhas'} com custo médio suspeito no Omie (${brl(ajusteOmie)} ajustados)`
 }

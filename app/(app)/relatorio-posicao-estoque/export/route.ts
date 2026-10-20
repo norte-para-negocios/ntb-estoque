@@ -1,5 +1,6 @@
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/excel'
+import { textoAvisoSuspeito } from '@/lib/relatorios/posicao-estoque-puro'
 import { carregarPosicao, lerOpcoesPosicao, rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   const rows = r.linhas.map((l) => ({
     codigo: l.codigo, descricao: l.descricao, local: l.local ?? '', familia: l.familia, tipo: rotuloTipo(l.tipo), ncm: l.ncm, unidade: l.unidade,
     inativo: l.inativo ? 'Sim' : 'Não', quant: l.quant, reservado: l.reservado, disponivel: l.disponivel, cmc: l.cmc, valor: l.valor,
-    situacao: l.custoSuspeito ? 'Custo fora do normal (vale 0)' : '', posse: '0', posseDesc: 'Item de propriedade do informante e em seu poder',
+    situacao: l.custoSuspeito ? 'Custo suspeito no Omie (custo de referência)' : '', posse: '0', posseDesc: 'Item de propriedade do informante e em seu poder',
   }))
   const colunas: ColunaExcel[] = sped
     ? [
@@ -46,7 +47,8 @@ export async function GET(request: Request) {
         { key: 'valor', label: 'Valor', tipo: 'moeda', largura: 16, somar: true },
         { key: 'situacao', label: 'Observação', tipo: 'texto', largura: 28 },
       ]
-  const aviso = `${r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''}${r.locaisSumidos.length ? ` · ATENÇÃO: local(is) fora da última leitura do Omie: ${r.locaisSumidos.join(', ')}` : ''}`
+  const suspeito = textoAvisoSuspeito(r.total.suspeitas.length, r.total.ajusteOmie)
+  const aviso = `${suspeito ? ` · ATENÇÃO: ${suspeito} (lista na aba Custo suspeito)` : ''}${r.erros.length ? ` · ATENÇÃO: falha ao ler ${r.erros.join(', ')}` : ''}${r.locaisSumidos.length ? ` · ATENÇÃO: local(is) fora da última leitura do Omie: ${r.locaisSumidos.join(', ')}` : ''}`
   const buffer = await gerarPlanilhaMulti([{
     rows, colunas,
     opts: {
@@ -55,6 +57,20 @@ export async function GET(request: Request) {
       autoFiltro: true,
     },
     nome: sped ? 'Bloco H' : 'Posição',
-  }])
+  }, ...(r.total.suspeitas.length ? [{
+    rows: r.total.suspeitas.map((l) => ({ codigo: l.codigo, descricao: l.descricao, local: l.local, quant: l.quant, cmcOmie: l.cmcOmie, referencia: l.referencia ?? '', valorOmie: l.valorOmie, valor: l.valor })),
+    colunas: [
+      { key: 'codigo', label: 'Código', tipo: 'texto', largura: 14 },
+      { key: 'descricao', label: 'Produto', tipo: 'texto', largura: 44 },
+      { key: 'local', label: 'Local', tipo: 'texto', largura: 20 },
+      { key: 'quant', label: 'Saldo', tipo: 'numero', largura: 12 },
+      { key: 'cmcOmie', label: 'CMC no Omie', tipo: 'numero', largura: 16 },
+      { key: 'referencia', label: 'Custo de referência', tipo: 'numero', largura: 16 },
+      { key: 'valorOmie', label: 'Valor no Omie', tipo: 'moeda', largura: 18, somar: true },
+      { key: 'valor', label: 'Valor usado', tipo: 'moeda', largura: 16, somar: true },
+    ] as ColunaExcel[],
+    opts: { titulo: 'Linhas com custo médio suspeito no Omie', subtitulo: 'O total da posição usa o custo de referência do produto nestas linhas. Corrija o custo no Omie.', autoFiltro: true },
+    nome: 'Custo suspeito',
+  }] : [])])
   return planilhaResponse(sped ? 'inventario-bloco-h' : 'posicao-estoque', buffer)
 }

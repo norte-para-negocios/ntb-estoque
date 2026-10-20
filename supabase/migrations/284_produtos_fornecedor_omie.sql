@@ -4,7 +4,7 @@
 -- Investigado contra a captura do Omie de 17/10/2026 (loja 5, 5.817 linhas; 1.450 pares produto × fornecedor com última
 -- compra ≥ 07/2025; 1.415 achados pelo NTB), só leitura:
 --   * "Preço Total da Última Compra" = vTotalItem do item (2.367 de 2.368 linhas de 1 item), não quantidade × preço:
---     antes 1.225 pares iguais, agora 1.398.
+--     antes 1.225 pares iguais, agora 1.398. O "total comprado" (soma de todas as compras do par) usa o mesmo valor.
 --   * "Custo do Item na Última Compra" é um valor só por produto na nota = o item de MENOR sequência daquele produto
 --     (o Omie repete esse custo nas linhas de cada código do fornecedor): antes 1.341, agora 1.362.
 --   * Item escolhido para quantidade/preço: o de maior id (= maior sequência) continua o melhor (1.398 pares iguais; menor
@@ -40,7 +40,9 @@ language sql stable security invoker set search_path = public as $$
   ),
   omie as (
     select i.n_id_produto as prod, nt.chave, nt.nome, nt.fantasia, nullif(btrim(i.c_codigo_produto), '') as cod_forn, nt.dia,
-           nt.nota, nt.nota_id, i.id as item_id, round(coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0), 2) as tot
+           nt.nota, nt.nota_id, i.id as item_id,
+           -- valor do item na nota (vTotalItem, como o "Preço Total" do Omie); sem ele, quantidade × preço
+           coalesce(nullif(i.full_object->'itensCabec'->>'vTotalItem', '')::numeric, round(coalesce(i.n_qtde_nfe, 0) * coalesce(i.n_preco_unit, 0), 2)) as tot
     from notas nt
     join nota_fiscal_items i on i.loja_id = p_loja_id and i.nota_fiscal_id = nt.nota_id
     where i.n_id_produto is not null and coalesce(i.c_ignorar_item, 'N') <> 'S'
@@ -104,7 +106,7 @@ language sql stable security invoker set search_path = public as $$
            'codigo_fornecedor', det.cod_forn, 'ultima_data', det.dia, 'ultima_nota', det.nota, 'ultima_nota_id', det.nota_id,
            'qtde', round(det.q, 6), 'unidade', det.un,
            'preco_unit', case when det.q > 0 then round(det.bruto / det.q, 6) end,
-           'total', coalesce(det.vtot, det.tot),
+           'total', det.tot,
            'custo_unit', case when det.q_c > 0 then round(det.vest_c / det.q_c, 6) end,
            'itens_ultima_nota', det.n_itens,
            'compras', det.compras, 'total_comprado', det.total_comprado, 'primeira_data', det.primeira

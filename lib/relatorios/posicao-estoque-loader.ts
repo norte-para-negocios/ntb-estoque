@@ -16,6 +16,35 @@ export function paramsBasePosicao(o: OpcoesPosicao): Record<string, string> {
   return { ver: o.ver === 'produto' ? '' : o.ver, zerados: o.zerados ? '1' : '', inativos: o.inativos ? '' : '0', tipo: o.tipos.join(','), familia: o.familias.join(','), q: o.q }
 }
 
+type Cliente = Awaited<ReturnType<typeof createClient>>
+
+// Foto valorizada pela regra única do banco (posicao_valorizada, migration 282): a foto crua (com a sentinela 0) e, numa
+// chamada só, as linhas que o banco marca como custo suspeito (CMC trocado pela referência). As demais valem saldo × CMC,
+// a mesma conta da função. Sem a 282 aplicada, as linhas ficam sem `valor` e o TS usa a regra antiga.
+export async function lerFotoValorizada(supabase: Cliente, lojaId: number, dataFoto: string, anotar: (onde: string) => (e: { message: string }) => void): Promise<LinhaFoto[]> {
+  const [crua, susp] = await Promise.all([
+    buscarTodasLinhas<LinhaFoto>(
+      (from, to) => supabase.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
+      undefined, anotar('posição de estoque')),
+    supabase.rpc('posicao_valorizada', { p_loja_id: lojaId, p_data: dataFoto })
+      .select('n_cod_prod, codigo_local_estoque, cmc_usado, valor, suspeito, referencia, valor_omie').eq('suspeito', true).limit(5000),
+  ])
+  if (susp.error) {
+    const semFuncao = (susp.error as { code?: string }).code === 'PGRST202' || /posicao_valorizada/.test(susp.error.message)
+    if (!semFuncao) anotar('custo suspeito')(susp.error)
+    return crua
+  }
+  const chave = (p: number | string, l: number | string) => `${p}:${l}`
+  const suspeitas = new Map(((susp.data ?? []) as LinhaFoto[]).map((x) => [chave(x.n_cod_prod, x.codigo_local_estoque), x]))
+  return crua.map((f) => {
+    if (Number(f.codigo_local_estoque) === 0) return f
+    const x = suspeitas.get(chave(f.n_cod_prod, f.codigo_local_estoque))
+    if (x) return { ...f, cmc_usado: x.cmc_usado, valor: x.valor, suspeito: true, referencia: x.referencia, valor_omie: x.valor_omie }
+    const cmc = Number(f.n_cmc) > 0 ? Number(f.n_cmc) : 0
+    return { ...f, cmc_usado: cmc, valor: Math.round((Number(f.n_saldo) || 0) * cmc * 100) / 100, suspeito: false }
+  })
+}
+
 // Lê a foto mais recente com local real (posicao_estoques: lojas Omie = sync do Omie; estoque próprio = projeção
 // do ledger, migrations 132/144), o cadastro e os locais, e monta a posição. Vale para os dois modos.
 export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
@@ -43,11 +72,7 @@ export async function carregarPosicao(lojaId: number, op: OpcoesPosicao) {
   const dataAnterior = anteriorQ?.data?.data_posicao ? String(anteriorQ.data.data_posicao) : null
 
   const [foto, prods, locs, locaisAnteriores] = await Promise.all([
-    dataFoto
-      ? buscarTodasLinhas<LinhaFoto>(
-          (from, to) => supabase.from('posicao_estoques').select('n_cod_prod, codigo_local_estoque, n_saldo, n_cmc, reservado').eq('loja_id', lojaId).eq('data_posicao', dataFoto).order('id').range(from, to),
-          undefined, anotar('posição de estoque'))
-      : Promise.resolve<LinhaFoto[]>([]),
+    dataFoto ? lerFotoValorizada(supabase, lojaId, dataFoto, anotar) : Promise.resolve<LinhaFoto[]>([]),
     buscarTodasLinhas<{ codigo_produto: number; codigo: string | null; descricao: string | null; descricao_familia: string | null; tipo_item: string | null; unidade: string | null; ncm: string | null; inativo: boolean | null }>(
       (from, to) => supabase.from('produtos').select('codigo_produto, codigo, descricao, descricao_familia, tipo_item, unidade, ncm, inativo').eq('loja_id', lojaId).order('id').range(from, to),
       undefined, anotar('cadastro de produtos')),

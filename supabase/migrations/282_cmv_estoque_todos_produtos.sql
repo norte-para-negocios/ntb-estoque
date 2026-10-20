@@ -11,10 +11,22 @@
 --   antes_do_kardex — produto × local cujo 1º movimento no espelho é DEPOIS da data: o saldo antes desse movimento
 --                     (começo da cadeia do 1º dia, E13) e o CMC de antes (saída não muda o CMC, E12; entrada desfaz a
 --                     média móvel E9: C0 = (S1·C1 − q·vu) ÷ S0, só com S0 > 0, senão o CMC depois);
---   foto            — produto × local SEM nenhuma linha no kardex: a foto mais recente de posicao_estoques (locais
---                     reais, sem a sentinela 0; CMC fora de (0, 1e7) vale 0, igual à tela de Posição). Sem movimento
+--   foto            — produto × local SEM nenhuma linha no kardex: a foto mais recente de posicao_estoques pela
+--                     posicao_valorizada (abaixo; custo suspeito trocado pela referência, igual à Posição). Sem movimento
 --                     no espelho o saldo não mudou; a mesma foto vale para EI e EF (EI = EF). Limite: se o produto mexeu
 --                     depois do fim do espelho, a foto já tem esse movimento (o espelho da loja 5 parou em 16/10, bug 1).
+--
+-- posicao_valorizada(loja, data = foto mais recente) — UMA regra de valor da foto do Omie para Posição de estoque
+-- (tela e Excel), Estoque Valorizado (283) e a fonte "foto" acima. Valor por produto × local = saldo × CMC, negativos
+-- entram, sentinela 0 fora. CMC "suspeito" (dado errado no Omie: loja 3 em 20/10 tinha Moqueca de Camarão 600 g
+-- −29 × CMC 3.649.182 e o total ia a −R$ 140 milhões) quando:
+--   CMC ≥ 1e7 (trava antiga); ou CMC > 10 × a referência de custo do produto, que é (1) o CMC ponderado dos locais do
+--   produto com saldo positivo ou, sem eles, (2) o custo unitário da última entrada por nota (valor de estoque N3 ÷
+--   quantidade recebida) — regra decidida pelo dono em 20/10; ou, sem referência de custo, (3) CMC > 10 × o preço de
+--   venda do cadastro (ACRÉSCIMO: prato produzido não tem local positivo nem nota de entrada — sem isso a loja 3 ficava em
+--   −R$ 7,4 milhões com Moqueca −164 × 41.040, preço 184,90); ou, sem nada disso, linha negativa com CMC > 100 mil.
+-- Linha suspeita vale saldo × referência de custo (0 sem referência de custo); `valor_omie` guarda o valor cru, e a
+-- tela mostra "N linhas com custo médio suspeito no Omie (R$ X ajustados)" com a lista (total + ajuste = Omie).
 --
 -- relatorio_cmv_kardex (mesma assinatura e colunas, CREATE OR REPLACE): EI/EF pela função nova. O CMV por produto NÃO
 -- muda: para produto × local COM movimento no período o EI continua o da 187 (kardex até a véspera ou, sem ele,
@@ -23,10 +35,73 @@
 --
 -- Prova (produção, só leitura, 20/10/2026, corpo novo rodado como consulta): ver AGENTS.md "Paridade numérica 20/10".
 -- Aplicar: docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 282_cmv_estoque_todos_produtos.sql
--- Reverter: reaplicar 187_relatorio_cmv_kardex.sql (relatorio_cmv_kardex) e drop function saldo_em_data_completo.
+-- Reverter: reaplicar 187_relatorio_cmv_kardex.sql (relatorio_cmv_kardex) e drop function saldo_em_data_completo e
+-- posicao_valorizada (depois de reverter a 283, que a usa).
 -- Teste: scripts/testes-sql/282_cmv_estoque_todos_produtos.sql (banco local com o kardex real da loja 5).
 
 begin;
+
+create or replace function public.posicao_valorizada(p_loja_id bigint, p_data date default null)
+returns table (
+  n_cod_prod bigint, codigo_local_estoque bigint, data_posicao date, n_saldo numeric, n_cmc numeric, reservado numeric,
+  cmc_usado numeric, valor numeric, suspeito boolean, referencia numeric, fonte_referencia text, valor_omie numeric
+)
+language sql stable security invoker set search_path = public as $$
+  with foto as (
+    select coalesce(p_data, (select max(pe.data_posicao) from posicao_estoques pe where pe.loja_id = p_loja_id and pe.codigo_local_estoque <> 0)) as d
+  ), l as (
+    select pe.n_cod_prod, pe.codigo_local_estoque, pe.data_posicao, coalesce(pe.n_saldo, 0) as n_saldo, coalesce(pe.n_cmc, 0) as n_cmc, pe.reservado
+    from posicao_estoques pe
+    join foto f on pe.data_posicao = f.d
+    where pe.loja_id = p_loja_id and pe.codigo_local_estoque <> 0
+  ), ref_locais as (  -- referência 1: CMC ponderado dos locais do produto com saldo positivo
+    select l.n_cod_prod, sum(l.n_saldo * l.n_cmc) / sum(l.n_saldo) as ref
+    from l
+    where l.n_saldo > 0 and l.n_cmc > 0 and l.n_cmc < 10000000
+    group by l.n_cod_prod
+  ), sem_ref as (
+    select distinct l.n_cod_prod from l
+    where l.n_saldo <> 0 and l.n_cmc > 0 and not exists (select 1 from ref_locais r where r.n_cod_prod = l.n_cod_prod)
+  ), ref_entrada as (  -- referência 2: custo unitário da última entrada (valor de estoque N3 ÷ quantidade recebida)
+    select s.n_cod_prod, e.c as ref
+    from sem_ref s
+    cross join lateral (
+      select custo_estoque_item_omie(i.full_object, i.n_qtde_nfe, i.n_preco_unit)
+             / nullif(coalesce(nullif(nullif(i.full_object->'itensAjustes'->>'nQtdeRecebida', '')::numeric, 0), i.n_qtde_nfe), 0) as c
+      from nota_fiscal_items i
+      join notas_fiscais nf on nf.id = i.nota_fiscal_id and nf.loja_id = i.loja_id
+      where i.loja_id = p_loja_id and i.n_id_produto = s.n_cod_prod
+        and nf.deleted_at is null and nf.c_etapa = '60' and item_movimenta_estoque(i.full_object)
+      order by nf.d_emissao_nfe desc, i.id desc
+      limit 1
+    ) e
+    where e.c > 0
+  ), ref as (
+    select r.n_cod_prod, r.ref, 'locais'::text as f from ref_locais r
+    union all
+    select r.n_cod_prod, r.ref, 'entrada'::text from ref_entrada r
+  ), av as (
+    select l.*, r.ref, r.f, pr.valor_unitario as preco,
+           case when l.n_cmc <= 0 or l.n_saldo = 0 then false
+                when l.n_cmc >= 10000000 then true                          -- trava antiga: nunca vale como custo
+                when r.ref is not null then l.n_cmc > 10 * r.ref            -- regra do dono: mais de 10× a referência de custo
+                when pr.valor_unitario > 0 then l.n_cmc > 10 * pr.valor_unitario  -- sem custo de referência: 10× o preço de venda
+                else l.n_saldo < 0 and l.n_cmc > 100000                     -- sem nada: linha negativa com CMC > 100 mil
+           end as susp
+    from l
+    left join ref r on r.n_cod_prod = l.n_cod_prod
+    left join produtos pr on pr.loja_id = p_loja_id and pr.codigo_produto = l.n_cod_prod
+  )
+  select av.n_cod_prod, av.codigo_local_estoque, av.data_posicao, av.n_saldo, av.n_cmc, av.reservado,
+         case when av.susp then coalesce(round(av.ref, 6), 0) when av.n_cmc > 0 then av.n_cmc else 0 end as cmc_usado,
+         round(av.n_saldo * case when av.susp then coalesce(round(av.ref, 6), 0) when av.n_cmc > 0 then av.n_cmc else 0 end, 2) as valor,
+         av.susp as suspeito, round(av.ref, 6) as referencia, av.f as fonte_referencia,
+         round(av.n_saldo * av.n_cmc, 2) as valor_omie
+  from av
+$$;
+
+revoke all on function public.posicao_valorizada(bigint, date) from public, anon;
+grant execute on function public.posicao_valorizada(bigint, date) to authenticated, service_role;
 
 create or replace function public.saldo_em_data_completo(p_loja_id bigint, p_data date)
 returns table (n_cod_prod bigint, codigo_local_estoque bigint, saldo numeric, cmc numeric, fonte text)
@@ -58,15 +133,10 @@ language sql stable security invoker set search_path = public as $$
                 else coalesce(nullif(greatest(0, round((a.saldo_apos * coalesce(a.cmc_apos, 0) - a.quantidade * coalesce(a.valor_unit, 0)) / a.antes, 6)), 0), a.cmc_apos)
            end as cmc
     from abre a
-  ), ult_foto as (
-    select max(pe.data_posicao) as d from posicao_estoques pe where pe.loja_id = p_loja_id and pe.codigo_local_estoque <> 0
-  ), foto as (
-    select pe.n_cod_prod, pe.codigo_local_estoque, pe.n_saldo as saldo,
-           case when pe.n_cmc > 0 and pe.n_cmc < 1e7 then pe.n_cmc else 0 end as cmc
-    from posicao_estoques pe
-    join ult_foto u on pe.data_posicao = u.d
-    where pe.loja_id = p_loja_id and pe.codigo_local_estoque <> 0
-      and not exists (select 1 from pares p where p.n_cod_prod = pe.n_cod_prod and p.codigo_local_estoque = pe.codigo_local_estoque)
+  ), foto as (  -- mesma regra de valor da Posição/Estoque Valorizado (custo suspeito trocado pela referência)
+    select v.n_cod_prod, v.codigo_local_estoque, v.n_saldo as saldo, v.cmc_usado as cmc
+    from posicao_valorizada(p_loja_id) v
+    where not exists (select 1 from pares p where p.n_cod_prod = v.n_cod_prod and p.codigo_local_estoque = v.codigo_local_estoque)
   )
   select k.n_cod_prod, k.codigo_local_estoque, k.saldo, k.cmc, 'kardex'::text as fonte from k
   union all

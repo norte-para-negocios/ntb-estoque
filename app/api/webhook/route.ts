@@ -6,7 +6,8 @@ import { syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
 import { lojaOpTempoReal } from '@/lib/omie/sync-all'
 import { webhookTokenOk } from '@/lib/seguranca/regras'
-import { deveRelerNota, lojasForaDaReleitura, nIdRecebDoAviso } from '@/lib/omie/nf-releitura'
+import { consultasNota, deveRelerNota, lojasForaDaReleitura, motivoParaNaoConsultar, nIdRecebDoAviso, registrarConsultaNota } from '@/lib/omie/nf-releitura'
+import { paradaPorDisjuntor } from '@/lib/omie/erros-omie'
 
 // Topicos de movimentacao de estoque: ignorados (igual ao Laravel, evita loop de ajuste)
 const IGNORED_TOPICS = ['Produto.AjusteEstoque', 'Produto.MovimentacaoEstoque']
@@ -24,6 +25,7 @@ interface OmieWebhookBody {
 const MAX_BYTES = 1_000_000
 
 export async function POST(request: Request) {
+  const recebidoEm = Date.now()
   // Fase H: o Omie não assina o aviso. Com OMIE_WEBHOOK_TOKEN configurado, só aceita `?t=<token>` (o endereço
   // cadastrado nos apps do Omie precisa ser trocado ANTES de ligar a env). Sem a env: comportamento de sempre.
   if (!webhookTokenOk(new URL(request.url).searchParams.get('t'), process.env.OMIE_WEBHOOK_TOKEN)) {
@@ -100,11 +102,23 @@ export async function POST(request: Request) {
   try {
     if (topic.startsWith('RecebimentoProduto.')) {
       // Antes lia event.nIdReceb (que o Omie não manda) e nunca relia a nota. Agora só em conclusão/reversão (o que
-      // muda associação do item e etapa), nunca na loja 4 nem na 7 (OMIE_NF_RELEITURA_LOJAS_FORA); aviso perdido é
+      // muda associação do item e etapa), nunca na loja 4 nem na 7 (LOJAS_SEM_RELEITURA, fixo); aviso perdido é
       // retomado pelo cron sync-nfs (relerNotasComAvisoPendente).
+      // Antes de consultar (revisão 20/10): nunca com algum método da chave bloqueado (paradaPorDisjuntor); nunca a
+      // mesma nota 2 vezes em 90 s nem nota já gravada depois do aviso (consulta redundante que erra conta para o
+      // bloqueio do método). O que for pulado o cron relê se ficar atrás do aviso.
       const nIdReceb = nIdRecebDoAviso(body)
-      if (nIdReceb && deveRelerNota(topic) && !lojasForaDaReleitura(process.env.OMIE_NF_RELEITURA_LOJAS_FORA).has(loja.id)) {
-        await fetchNotaFiscal(loja, nIdReceb, { semRepetir: true })
+      if (nIdReceb && deveRelerNota(topic) && !lojasForaDaReleitura(process.env.OMIE_NF_RELEITURA_LOJAS_FORA).has(loja.id) && !paradaPorDisjuntor(loja)) {
+        const k = String(nIdReceb)
+        const { data: nota } = await supabase.from('notas_fiscais').select('updated_at').eq('loja_id', loja.id).eq('n_id_receb', k).maybeSingle()
+        const motivo = motivoParaNaoConsultar({
+          agoraMs: Date.now(), avisoMs: recebidoEm, ultimaConsultaMs: consultasNota().get(k) ?? null,
+          notaAtualizadaMs: nota?.updated_at ? Date.parse(nota.updated_at) : null,
+        })
+        if (!motivo) {
+          registrarConsultaNota(k)
+          await fetchNotaFiscal(loja, nIdReceb, { semRepetir: true })
+        }
       }
     } else if (topic.startsWith('OrdemProducao.') && topic !== 'OrdemProducao.Excluida' && body.event?.nCodOP) {
       // Só loja com `omie_op_tempo_real` (migration 250; até 20/10 era `espelho_completo !== false`, o que tirava

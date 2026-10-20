@@ -454,13 +454,13 @@ export default async function RelatorioComprasPage({ searchParams }: { searchPar
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card
-          titulo="Total comprado"
+          titulo={bonif ? 'Total comprado (com bonificação)' : 'Total comprado'}
           valor={<Money value={totalEscolhido} />}
-          sub={tipoValor === 'estoque' ? `Valor das notas: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : `Entrou no estoque: ${totalEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (sem bonificação)`}
+          sub={tipoValor === 'estoque' ? `Valor das notas: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${bonif ? ' (com bonificação)' : ''}` : `Entrou no estoque: ${totalEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (sem bonificação)`}
         />
-        <Card titulo="Notas" valor={nNotas.toLocaleString('pt-BR')} sub={plural(rankForn.length, 'fornecedor', 'fornecedores')} />
-        <Card titulo="Ticket médio por nota" valor={ticket == null ? '—' : <Money value={ticket} />} />
-        <Card titulo="Maior fornecedor" valor={maiorForn ? <Money value={maiorForn.valor} /> : '—'} sub={maiorForn ? `${maiorForn.rotulo} · ${fmtPct(maiorForn.pct)}` : undefined} />
+        <Card titulo="Notas" valor={nNotas.toLocaleString('pt-BR')} sub={`${plural(rankForn.length, 'fornecedor', 'fornecedores')}${bonif ? ' · inclui notas com bonificação' : ''}`} />
+        <Card titulo={bonif ? 'Ticket médio por nota (com bonificação)' : 'Ticket médio por nota'} valor={ticket == null ? '—' : <Money value={ticket} />} />
+        <Card titulo="Maior fornecedor" valor={maiorForn ? <Money value={maiorForn.valor} /> : '—'} sub={maiorForn ? `${maiorForn.rotulo} · ${fmtPct(maiorForn.pct)}${bonif ? ' · com bonificação' : ''}` : undefined} />
       </div>
 
       {bonif && (

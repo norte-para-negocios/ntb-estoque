@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { AvisoCustoSuspeito } from '@/components/relatorios/AvisoCustoSuspeito'
 import { notFound } from 'next/navigation'
 import { Download, Warehouse } from 'lucide-react'
 import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
@@ -61,7 +62,13 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
       {r.locaisSumidos.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">O Omie não devolveu na última leitura o(s) local(is) {r.locaisSumidos.join(', ')}, que tinham saldo na foto anterior: o saldo deles não está nesta posição.</p>}
       {r.fotoEmLeitura && <p className="text-[13px] text-text-muted">A foto de hoje ainda está sendo lida do Omie: mostrando a de {fmtData(r.dataFoto!)}.</p>}
       {sped && <p className="text-[13px] text-text-muted">Inventário no formato do Bloco H (registro H010): só produtos ativos com saldo positivo, somados em todos os locais, valor unitário = valor ÷ quantidade. Posição da foto de {r.dataFoto ? fmtData(r.dataFoto) : '—'}.</p>}
-      {r.total.suspeitos > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{r.total.suspeitos} linha(s) com custo médio fora do normal no Omie (zero, negativo ou acima de R$ 10 milhões): entram com valor zero e aparecem marcadas.</p>}
+      {r.total.suspeitas.length > 0 && (
+        <AvisoCustoSuspeito
+          suspeitas={r.total.suspeitas.map((l) => ({ ...l, chave: `${l.codProduto}:${l.local}` }))}
+          ajusteOmie={r.total.ajusteOmie}
+          totalAjustado={r.total.valor}
+        />
+      )}
 
       {!r.dataFoto ? (
         <EmptyState icon={Warehouse} title="Sem foto do estoque" hint="Aguarde a sincronização da posição de estoque." />
@@ -110,7 +117,7 @@ export default async function PosicaoEstoquePage({ searchParams }: { searchParam
                     <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.quant < 0 ? 'text-err' : 'text-text'}`}>{fmtQtd(l.quant)} {l.unidade}</td>
                     {temReservado && !sped && <td className="num whitespace-nowrap px-3 py-2 text-right text-text-muted">{fmtQtd(l.reservado)}</td>}
                     {temReservado && !sped && <td className="num whitespace-nowrap px-3 py-2 text-right text-text">{fmtQtd(l.disponivel)}</td>}
-                    <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.custoSuspeito ? 'text-warn' : 'text-text'}`} title={l.custoSuspeito ? 'Custo fora do normal no Omie: vale zero' : undefined}>{l.custoSuspeito ? 'suspeito' : formatCustoUnit(l.cmc)}</td>
+                    <td className={`num whitespace-nowrap px-3 py-2 text-right ${l.custoSuspeito ? 'text-warn' : 'text-text'}`} title={l.custoSuspeito ? 'Custo médio suspeito no Omie: usado o custo de referência do produto (veja o aviso acima)' : undefined}>{formatCustoUnit(l.cmc)}{l.custoSuspeito ? ' *' : ''}</td>
                     <td className={`num whitespace-nowrap px-3 py-2 text-right font-medium ${l.valor < 0 ? 'text-err' : 'text-text'}`}><Money value={l.valor} /></td>
                   </tr>
                 ))}

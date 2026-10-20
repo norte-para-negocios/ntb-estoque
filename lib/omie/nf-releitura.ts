@@ -11,8 +11,11 @@
 // Correção barata: (1) a rota lê o id certo e só reconsulta em Concluido/Revertido (1 ConsultarRecebimento por aviso, não
 // nos Incluido/Alterado); (2) o cron de notas (sync-nfs, a cada 10 min) relê no máximo 3 notas por loja e ciclo cujo
 // aviso é mais novo que a última gravação (pega aviso que falhou e o atraso de antes da correção). Nunca na loja 4
-// (produção protegida, não pode ficar mais pesada que hoje) nem na 7; para no primeiro erro e não repete a mesma nota por
-// 6 h (o Omie bloqueia o método na 10ª requisição com erro, lib/omie/erros-omie.ts).
+// (produção protegida, não pode ficar mais pesada que hoje) nem na 7 (fixo; a env só acrescenta); não chama com qualquer
+// método da chave bloqueado (paradaPorDisjuntor); a mesma nota não é consultada duas vezes em 90 s (webhook × webhook e
+// webhook × cron); para no primeiro erro e não repete a mesma nota por 6 h (o Omie bloqueia o método na 10ª requisição
+// com erro, lib/omie/erros-omie.ts). Revertido seguido de Concluido em < 90 s: o 2º aviso é pulado e o cron relê no
+// ciclo seguinte (o aviso fica mais novo que a gravação).
 // Puro (sem imports): node --test lib/omie/nf-releitura.test.ts
 
 export const TOPICOS_RELEITURA = ['RecebimentoProduto.Concluido', 'RecebimentoProduto.Revertido'] as const
@@ -29,10 +32,24 @@ export function nIdRecebDoAviso(body: unknown): number | null {
   return Number.isFinite(v) && v > 0 ? v : null
 }
 
-/** Lojas fora da releitura: OMIE_NF_RELEITURA_LOJAS_FORA (ids separados por vírgula); padrão "4,7". */
+/** Lojas que NUNCA releem: 4 (produção protegida, não pode ficar mais pesada que hoje) e 7 (ignorada). Fixo no código. */
+export const LOJAS_SEM_RELEITURA = [4, 7] as const
+/** Lojas fora da releitura: as fixas + OMIE_NF_RELEITURA_LOJAS_FORA (ids separados por vírgula). A env só ACRESCENTA. */
 export function lojasForaDaReleitura(env: string | undefined): Set<number> {
-  const s = env === undefined ? '4,7' : env
-  return new Set(s.split(',').map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0))
+  const extra = (env ?? '').split(',').map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0)
+  return new Set<number>([...LOJAS_SEM_RELEITURA, ...extra])
+}
+
+/** Mesma nota consultada há menos disto: não consulta de novo (Revertido/Alterado/Concluido chegam juntos; erro repetido
+ *  conta para o bloqueio do método no Omie). */
+export const JANELA_CONSULTA_MS = 90_000
+
+/** Por que NÃO consultar a nota agora (null = pode). `avisoMs` = quando o aviso chegou; `notaAtualizadaMs` = última
+ *  gravação da nota no banco (null = o NTB não tem). */
+export function motivoParaNaoConsultar(e: { agoraMs: number; avisoMs: number; ultimaConsultaMs?: number | null; notaAtualizadaMs?: number | null }): string | null {
+  if (e.ultimaConsultaMs != null && e.agoraMs - e.ultimaConsultaMs < JANELA_CONSULTA_MS) return 'consultada há menos de 90 s'
+  if (e.notaAtualizadaMs != null && e.notaAtualizadaMs >= e.avisoMs) return 'nota já gravada depois do aviso'
+  return null
 }
 
 export const LIMITE_RELEITURA_POR_CICLO = 3
@@ -45,7 +62,7 @@ export type NotaGravada = { n_id_receb: string; updated_at: string; deleted_at: 
 /** Notas a reler: aviso de conclusão/reversão mais novo que a última gravação, sem falha nas últimas 6 h, mais recentes
  *  primeiro, no máximo `limite`. Nota que o NTB não tem ou apagou fica de fora (o sync normal cuida da nova). */
 export function escolherNotasParaReler(
-  avisos: AvisoNota[], notas: NotaGravada[], opts: { limite?: number; agoraMs?: number; falhas?: Map<string, number> } = {},
+  avisos: AvisoNota[], notas: NotaGravada[], opts: { limite?: number; agoraMs?: number; falhas?: Map<string, number>; consultas?: Map<string, number> } = {},
 ): string[] {
   const limite = opts.limite ?? LIMITE_RELEITURA_POR_CICLO
   const agora = opts.agoraMs ?? Date.now()
@@ -64,12 +81,20 @@ export function escolherNotasParaReler(
     if (!(t > Date.parse(n.updated_at))) continue
     const falhou = opts.falhas?.get(k)
     if (falhou !== undefined && agora - falhou < ESPERA_APOS_FALHA_MS) continue
+    const consultou = opts.consultas?.get(k)  // o webhook acabou de consultar: o cron não repete
+    if (consultou !== undefined && agora - consultou < JANELA_CONSULTA_MS) continue
     fila.push({ k, t })
   }
   return fila.sort((a, b) => b.t - a.t || a.k.localeCompare(b.k)).slice(0, limite).map((x) => x.k)
 }
 
-// Falhas por nota, no processo (um `next start` só no servidor, mesmo padrão do disjuntor de erros-omie.ts).
+// Falhas e consultas por nota, no processo (um `next start` só no servidor, mesmo padrão do disjuntor de erros-omie.ts).
 const falhas = new Map<string, number>()
+const consultas = new Map<string, number>()
 export function registrarFalhaReleitura(nIdReceb: string, agoraMs: number = Date.now()): void { falhas.set(nIdReceb, agoraMs) }
 export function falhasReleitura(): Map<string, number> { return falhas }
+export function registrarConsultaNota(nIdReceb: string, agoraMs: number = Date.now()): void {
+  consultas.set(nIdReceb, agoraMs)
+  if (consultas.size > 5000) for (const [k, t] of consultas) if (agoraMs - t > JANELA_CONSULTA_MS) consultas.delete(k)
+}
+export function consultasNota(): Map<string, number> { return consultas }

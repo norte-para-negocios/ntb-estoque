@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deveRelerNota, escolherNotasParaReler, lojasForaDaReleitura, nIdRecebDoAviso, ESPERA_APOS_FALHA_MS } from './nf-releitura.ts'
+import { deveRelerNota, escolherNotasParaReler, lojasForaDaReleitura, motivoParaNaoConsultar, nIdRecebDoAviso, ESPERA_APOS_FALHA_MS, JANELA_CONSULTA_MS } from './nf-releitura.ts'
 
 // Aviso real da NF 3999 (loja 5, 07/10/2026 12:05:41), só os campos que importam.
 const AVISO_3999 = {
@@ -24,10 +24,28 @@ test('só conclusão e reversão relêem a nota', () => {
   assert.equal(deveRelerNota(undefined), false)
 })
 
-test('lojas fora: padrão 4 e 7; env manda', () => {
+test('lojas fora: 4 e 7 fixas; a env só acrescenta', () => {
   assert.deepEqual([...lojasForaDaReleitura(undefined)], [4, 7])
-  assert.deepEqual([...lojasForaDaReleitura('4, 7, 9')], [4, 7, 9])
-  assert.deepEqual([...lojasForaDaReleitura('')], [])
+  assert.deepEqual([...lojasForaDaReleitura('')], [4, 7])
+  assert.deepEqual([...lojasForaDaReleitura('9, x')], [4, 7, 9])
+  assert.equal(lojasForaDaReleitura('5').has(4), true) // env sem a 4 não a libera
+})
+
+test('webhook: não consulta a mesma nota 2× em 90 s nem nota gravada depois do aviso', () => {
+  const agora = Date.parse('2026-10-07T12:05:41Z')
+  assert.equal(motivoParaNaoConsultar({ agoraMs: agora, avisoMs: agora }), null)
+  assert.equal(motivoParaNaoConsultar({ agoraMs: agora, avisoMs: agora, ultimaConsultaMs: agora - 34_000 }), 'consultada há menos de 90 s')
+  assert.equal(motivoParaNaoConsultar({ agoraMs: agora, avisoMs: agora, ultimaConsultaMs: agora - JANELA_CONSULTA_MS }), null)
+  assert.equal(motivoParaNaoConsultar({ agoraMs: agora, avisoMs: agora - 1000, notaAtualizadaMs: agora - 500 }), 'nota já gravada depois do aviso')
+  assert.equal(motivoParaNaoConsultar({ agoraMs: agora, avisoMs: agora, notaAtualizadaMs: Date.parse('2026-09-24T21:50:10Z') }), null) // NF 3999
+})
+
+test('cron não consulta a nota que o webhook acabou de consultar', () => {
+  const agora = Date.parse('2026-10-07T12:06:00Z')
+  const avisos = [{ n_id_receb: '3817713557', created_at: '2026-10-07T12:05:41Z' }]
+  const notas = [{ n_id_receb: '3817713557', updated_at: '2026-09-24T21:50:10Z', deleted_at: null }]
+  assert.deepEqual(escolherNotasParaReler(avisos, notas, { agoraMs: agora, consultas: new Map([['3817713557', agora - 10_000]]) }), [])
+  assert.deepEqual(escolherNotasParaReler(avisos, notas, { agoraMs: agora, consultas: new Map([['3817713557', agora - 100_000]]) }), ['3817713557'])
 })
 
 test('NF 3999: aviso de 07/10 mais novo que a gravação de 24/09 → relê', () => {
