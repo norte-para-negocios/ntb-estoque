@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor, paradaPorDisjuntor } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -120,4 +120,15 @@ test('erro que se repete além do teto sai da repetição; bloqueio não conta p
   assert.equal(statusFalhaConclusaoOP('ERROR: API bloqueada por consumo indevido. Tente novamente em 7 segundos.', 99), 'Erro')
   assert.equal(statusFalhaConclusaoOP('Omie não respondeu em 30s (ConcluirOrdemProducao). Tente novamente.', 99), 'Erro')
   assert.equal(statusFalhaConclusaoOP('ERROR: O seguinte produto da estrutura possui o CMC unitário zerado', 99), 'Sem CMC')
+})
+
+test('D5 I2: paradaPorDisjuntor para a frente se QUALQUER método da chave está bloqueado (ex.: venda bloqueada no meio do ciclo)', () => {
+  const t = Date.parse('2026-10-20T15:00:00Z')
+  const loja = { omie_app_key: 'chave-d5-i2' }
+  assert.equal(paradaPorDisjuntor(loja, t), null)
+  registrarBloqueio('chave-d5-i2', 1800, t, 'ConcluirOrdemProducao') // bloqueio da integração de vendas
+  const m = paradaPorDisjuntor(loja, t + 60_000)
+  assert.match(m ?? '', /^limite do Omie: disjuntor/) // "limite" → a guarda pausa a loja inteira
+  assert.equal(paradaPorDisjuntor(loja, t + 1801_000), null)
+  assert.equal(paradaPorDisjuntor({ omie_app_key: 'outra-chave' }, t + 60_000), null)
 })

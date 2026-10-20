@@ -25,7 +25,7 @@ language sql stable security invoker set search_path = public as $$
    where o.loja_id = p_loja
      and case when coalesce(l.espelho_completo, false)
                    and exists (select 1 from espelho_sync_estado s
-                                where s.loja_id = l.id and s.frente = 'ops-abertas' and s.estado ? 'lido_em')
+                                where s.loja_id = l.id and s.frente = 'ops-abertas' and jsonb_typeof(s.estado->'lido_em') = 'string')
               then coalesce(o.aberta_omie, false)
               else not coalesce(o.concluida, false) end
      and (o.identificacao_d_dt_previsao is null or o.identificacao_d_dt_previsao <= p_proj_fim)

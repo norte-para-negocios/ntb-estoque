@@ -7,7 +7,7 @@ import { buscarKardexLoja, origensKardex, type LinhaKardexLoja } from '@/app/(ap
 import { emLotes, historicoKardexDesde, lojaEspelho } from '@/app/(app)/estoque/dados-comum'
 import { paginaKardex } from '@/lib/estoque/kardex-loja-puro'
 import {
-  OPCOES_ORIGEM_MOV, ROTULO_ORIGEM_MOV, casarKardexComOP, escolherFonte, lerFiltrosMovimentacoes, movimentosPrevistosDaOP, numerosCandidatos,
+  OPCOES_ORIGEM_MOV, ROTULO_ORIGEM_MOV, casarKardexComOP, escolherFonte, faltaHojeNoKardex, lerFiltrosMovimentacoes, movimentosPrevistosDaOP, numerosCandidatos,
   origemDoKardex, type DocMov, type FiltrosMov, type ItemFichaOP, type OPMin, type OrigemMov,
 } from './movimentacoes-puro'
 
@@ -254,8 +254,11 @@ export async function carregarMovimentacoes(lojaId: number, sp: Record<string, s
   const comoKardex = lerFiltrosMovimentacoes(sp, hoje, !espelhoCompleto)
   // Loja com espelho, mas o kardex ainda não cobre o período (backfill de dias depois de ligar a flag): a lista
   // reconstruída é completa; o kardex nesse período mostraria só os produtos já abertos na tela do produto.
-  if (escolherFonte({ espelho: espelhoCompleto, desde: cobertura.desde, ini: comoKardex.ini, ate: cobertura.ate, fim: comoKardex.fim }) === 'kardex') {
+  if (escolherFonte({ espelho: espelhoCompleto, desde: cobertura.desde, ini: comoKardex.ini, ate: cobertura.ate, fim: comoKardex.fim, hoje }) === 'kardex') {
     const [res, origens] = await Promise.all([doKardex(lojaId, comoKardex, porPagina, cobertura.desde), origensKardex(lojaId, hoje)])
+    if (faltaHojeNoKardex({ ate: cobertura.ate, fim: comoKardex.fim, hoje })) {
+      res.avisos.push('Os movimentos de hoje ainda não foram lidos do Omie (a leitura do dia começa às 07:00): a lista abaixo vai até ontem.')
+    }
     return { filtros: comoKardex, res, origens }
   }
   const filtros = espelhoCompleto ? lerFiltrosMovimentacoes(sp, hoje, true) : comoKardex

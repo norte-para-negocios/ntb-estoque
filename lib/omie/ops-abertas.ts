@@ -7,7 +7,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { omieRequest, OmieError, type LojaOmie } from './client'
 import { pareceOPNaoExiste } from './ordem-producao'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, lerEstadoSync, sleep } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, paradaPorDisjuntor, sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
 import {
   confirmarSaidas, FILTRO_CANDIDATAS_SAIDA, linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens,
@@ -53,7 +53,11 @@ export async function sincronizarOpsAbertas(loja: LojaOmie, opcoes: { prazoMs?: 
       let pagina = 1, total = 1
       do {
         if (pagina > MAX_PAGINAS) { listaCompleta = false; break }
+        // M3: a lista também respeita o prazo do ciclo; cortada = incompleta (não marca saída de OP nenhuma).
+        if (pagina > 1 && Date.now() > prazo) { listaCompleta = false; break }
         if (pagina > 1) await sleep(PAUSA_MS)
+        const disj = paradaPorDisjuntor(loja)
+        if (disj) throw new OmieError(disj.replace(/^limite do Omie: /, ''), 'MISUSE_API_PROCESS')
         const resp = await omieRequest<{ total_de_paginas?: number; cadastros?: OPOmieLista[] }>({
           ...base, call: 'ListarOrdemProducao', data: { pagina, registros_por_pagina: 100, cConcluida: 'N' },
         })
@@ -122,6 +126,8 @@ export async function sincronizarOpsAbertas(loja: LojaOmie, opcoes: { prazoMs?: 
     for (const nCodOP of pendentes) {
       if (Date.now() > prazo) break
       await sleep(PAUSA_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { r.parouPor = disj; break }
       const agoraISO = new Date().toISOString()
       try {
         const resp = await omieRequest<{ itensDetalhes?: unknown[] }>({ ...base, call: 'ConsultarOrdemProducao', data: { nCodOP } })
@@ -145,7 +151,9 @@ export async function sincronizarOpsAbertas(loja: LojaOmie, opcoes: { prazoMs?: 
       }
     }
     await gravarEstadoSync(loja.id, 'ops-abertas', {
-      ...r, pendentes_saida: pendentesSaida, lista_completa: listaCompleta, lido_em: new Date().toISOString(), erros_consulta: errosConsulta,
+      // lido_em só com a lista inteira: as telas e a sugestão de compra só passam a usar aberta_omie depois disso.
+      ...r, pendentes_saida: pendentesSaida, lista_completa: listaCompleta, erros_consulta: errosConsulta,
+      lido_em: listaCompleta ? new Date().toISOString() : ((anterior as { lido_em?: string }).lido_em ?? null),
     }, r.parouPor)
     cicloBom = true
     return r

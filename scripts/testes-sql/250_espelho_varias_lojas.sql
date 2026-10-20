@@ -29,6 +29,11 @@ begin
   select count(*) into n from _sugestao_ops_abertas(v, '2026-10-31');
   assert n = 2, format('estado sem lido_em: esperado 2, veio %s', n);
 
+  -- lista cortada pelo prazo do ciclo grava lido_em = null: ainda não vale
+  update espelho_sync_estado set estado = '{"lido_em":null,"lista_completa":false}' where loja_id = v and frente = 'ops-abertas';
+  select count(*) into n from _sugestao_ops_abertas(v, '2026-10-31') where produto = 501;
+  assert n = 1, 'lido_em null: deveria seguir concluida = false (OP 1 dentro)';
+
   -- depois da 1ª lista completa: aberta_omie (OPs 2 e 3)
   update espelho_sync_estado set estado = '{"lido_em":"2026-10-20T10:00:00Z","lista_completa":true}' where loja_id = v and frente = 'ops-abertas';
   select count(*) into n from _sugestao_ops_abertas(v, '2026-10-31');

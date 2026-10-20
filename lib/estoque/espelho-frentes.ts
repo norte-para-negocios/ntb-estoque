@@ -20,12 +20,25 @@
 //  - `conferido_ate`: último dia relido pelo menos 2 dias depois (revisão ou retomada), contíguo desde o início do
 //    histórico; os relatórios avisam (ou não usam o kardex, com o espelho desligado) depois dele;
 //  - retomada: recente parada há mais de `retomadaHoras` (pausa da guarda, flag desligada) recomeça de
-//    `conferido_ate + 1` (no máximo `diasRevisao` para trás), então religar a loja relê o buraco;
+//    `conferido_ate + 1` em TODOS os locais, numa janela só até hoje (no máximo `janelaMaxDias` para trás), então
+//    religar a loja relê o buraco;
+//  - a lista de locais da janela fica fixa no cursor desde a abertura (`cursor.locais`, revisão C1);
+//  - página que erra MAX_FALHAS_PAGINA vezes seguidas é pulada (`aposFalha`, `estado.puladas`): a janela não conta
+//    como conferida e a revisão não apaga nada nela;
 //  - cursor parado: janela sem avançar há mais de `cursorMaxHoras` recomeça da página 1 (as páginas do Omie são por
 //    posição; continuar da página 40 dias depois pula linhas, e a revisão apagaria o que "não viu").
 // Puro, sem imports: node --test lib/estoque/espelho-frentes.test.ts.
 
-export type Cursor = { ini: string; fim: string; local: number | null; pagina: number; iniciado_em?: string; avancado_em?: string }
+export type Cursor = {
+  ini: string; fim: string; local: number | null; pagina: number; iniciado_em?: string; avancado_em?: string
+  /** Locais da janela, fixados na abertura (revisão I/C1: a lista "ativos" muda enquanto a janela é lida). */
+  locais?: number[]
+  /** Erros seguidos nesta página (M1); no `MAX_FALHAS_PAGINA`-ésimo a página é pulada e a janela não conta como conferida. */
+  falhas?: number
+  /** Alguma página desta janela foi pulada: não confere a janela e a revisão não apaga "não vistos". */
+  pulou?: boolean
+}
+export type PaginaPulada = { frente: Frente; ini: string; fim: string; local: number | null; pagina: number; em: string; erro: string }
 export type EstadoFrentes = {
   recente: { cursor: Cursor | null; coberto_ate: string | null; concluido_em: string | null; desde: string | null }
   backfill: { cursor: Cursor | null; proximo_fim: string | null; coberto_desde: string | null; concluido: boolean }
@@ -34,6 +47,8 @@ export type EstadoFrentes = {
   ativos?: Record<string, string>
   /** Último dia relido ≥ 2 dias depois, contíguo desde o início do histórico (ver `conferidoAte`). */
   conferido_ate?: string | null
+  /** Páginas que erraram MAX_FALHAS_PAGINA vezes e foram puladas (últimas 20), para aviso nos relatórios. */
+  puladas?: PaginaPulada[]
 }
 export type ConfigFrentes = {
   diasRecentes: number; janelaMaxDias: number; limite: string; intervaloRecenteMin: number
@@ -74,6 +89,12 @@ function lerCursor(c: unknown): Cursor | null {
   const out: Cursor = { ini: x.ini, fim: x.fim, local: x.local == null ? null : Number(x.local), pagina: Math.max(1, Number(x.pagina) || 1) }
   if (typeof x.iniciado_em === 'string') out.iniciado_em = x.iniciado_em
   if (typeof x.avancado_em === 'string') out.avancado_em = x.avancado_em
+  if (Array.isArray(x.locais)) {
+    const l = x.locais.map(Number).filter((n) => Number.isFinite(n))
+    if (l.length) out.locais = l
+  }
+  if (Number(x.falhas) > 0) out.falhas = Math.floor(Number(x.falhas))
+  if (x.pulou === true) out.pulou = true
   return out
 }
 const texto = (v: unknown) => (typeof v === 'string' ? v : null)
@@ -89,6 +110,7 @@ export function lerEstado(bruto: unknown): EstadoFrentes {
   }
   const bb = b as Record<string, unknown>
   if (typeof bb.conferido_ate === 'string') out.conferido_ate = bb.conferido_ate
+  if (Array.isArray(bb.puladas)) out.puladas = (bb.puladas as PaginaPulada[]).filter((x) => x && typeof x.ini === 'string' && typeof x.fim === 'string')
   if (b.ativos && typeof b.ativos === 'object') {
     const ativos: Record<string, string> = {}
     for (const [l, d] of Object.entries(b.ativos)) if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ativos[l] = d
@@ -154,7 +176,12 @@ export function proximaLeitura(
     const ultimo = c.avancado_em ?? c.iniciado_em
     return !!ultimo && agoraMs - Date.parse(ultimo) > (cfg.cursorMaxHoras ?? 12) * 3_600_000
   }
-  const reabrir = (c: Cursor, f: Frente): Cursor => ({ ini: c.ini, fim: c.fim, local: (f === 'recente' ? ordRecente : ord)[0], pagina: 1, iniciado_em })
+  const abrir = (ini: string, fim: string, lista: (number | null)[]): Cursor => {
+    const c: Cursor = { ini, fim, local: lista[0] ?? null, pagina: 1, iniciado_em }
+    if (lista.length && lista.every((l) => l != null)) c.locais = lista as number[]
+    return c
+  }
+  const reabrir = (c: Cursor, f: Frente): Cursor => abrir(c.ini, c.fim, c.locais ?? (f === 'recente' ? ordRecente : ord))
   const r = e.recente
   if (r.cursor) {
     if (!velho(r.cursor)) return { frente: 'recente', cursor: r.cursor, estado: e }
@@ -166,14 +193,16 @@ export function proximaLeitura(
   if (atrasado || venceu) {
     const padrao = addDias(hoje, -(cfg.diasRecentes - 1))
     let ini = r.coberto_ate ? menor(padrao, r.coberto_ate) : padrao
-    // Retomada depois de parada longa: relê desde o último dia conferido (o que foi lido "no dia" pode ter mudado).
+    // Retomada depois de parada longa: relê desde o último dia conferido (o que foi lido "no dia" pode ter mudado),
+    // em TODOS os locais e numa janela só até hoje (no máximo janelaMaxDias; o que for mais antigo fica com a revisão).
     const parada = !!r.concluido_em && agoraMs - Date.parse(r.concluido_em) > (cfg.retomadaHoras ?? 12) * 3_600_000
     const conf = conferidoAte(e, cfg.diasRecentes)
+    let retomada = false
     if (parada && conf && cfg.diasRevisao) {
-      const desdeConf = maior(maior(addDias(conf, 1), addDias(hoje, -cfg.diasRevisao)), cfg.limite)
-      ini = menor(ini, desdeConf)
+      const desdeConf = maior(maior(maior(addDias(conf, 1), addDias(hoje, -cfg.diasRevisao)), addDias(hoje, -(cfg.janelaMaxDias - 1))), cfg.limite)
+      if (desdeConf < ini) { ini = desdeConf; retomada = true }
     }
-    const cursor: Cursor = { ini, fim: menor(hoje, addDias(ini, cfg.janelaMaxDias - 1)), local: ordRecente[0], pagina: 1, iniciado_em }
+    const cursor = abrir(ini, menor(hoje, addDias(ini, cfg.janelaMaxDias - 1)), retomada || !r.coberto_ate || r.coberto_ate < padrao ? ord : ordRecente)
     return { frente: 'recente', cursor, estado: { ...e, recente: { ...r, cursor } } }
   }
   const v = e.revisao
@@ -188,7 +217,7 @@ export function proximaLeitura(
     const ini = maior(maior(addDias(hoje, -cfg.diasRevisao), cfg.limite), desde)
     const ate = addDias(hoje, -cfg.diasRecentes)
     if (ini <= ate) {
-      const cursor: Cursor = { ini, fim: menor(ate, addDias(ini, cfg.janelaMaxDias - 1)), local: ord[0], pagina: 1, iniciado_em }
+      const cursor = abrir(ini, menor(ate, addDias(ini, cfg.janelaMaxDias - 1)), ord)
       return { frente: 'revisao', cursor, estado: { ...e, revisao: { ...v, cursor, ate } } }
     }
   }
@@ -200,9 +229,7 @@ export function proximaLeitura(
     return { frente: 'backfill', cursor, estado: { ...e, backfill: { ...k, cursor } } }
   }
   if (k.proximo_fim == null || k.proximo_fim < cfg.limite) return null
-  const cursor: Cursor = {
-    ini: maior(addDias(k.proximo_fim, -(cfg.janelaMaxDias - 1)), cfg.limite), fim: k.proximo_fim, local: ord[0], pagina: 1, iniciado_em,
-  }
+  const cursor = abrir(maior(addDias(k.proximo_fim, -(cfg.janelaMaxDias - 1)), cfg.limite), k.proximo_fim, ord)
   return { frente: 'backfill', cursor, estado: { ...e, backfill: { ...k, cursor } } }
 }
 
@@ -215,10 +242,19 @@ export function aposLeitura(
   let prox: Cursor | null = null
   if (cursor.pagina < totalPaginas) prox = { ...cursor, pagina: cursor.pagina + 1, avancado_em: agoraISO }
   else if (cursor.local != null) {
-    const seguinte = ordenar(locaisDaFrente(e, cfg, frente, locais, cursor.fim)).find((l) => l != null && l > (cursor.local as number))
+    // Lista fixada na abertura (só os que continuam ativos); cursor antigo sem lista: a regra da frente.
+    const atuais = new Set(locais)
+    const lista = cursor.locais
+      ? (locais.some((l) => l == null) ? cursor.locais : cursor.locais.filter((l) => atuais.has(l)))
+      : locaisDaFrente(e, cfg, frente, locais, cursor.fim)
+    const seguinte = ordenar(lista).find((l) => l != null && l > (cursor.local as number))
     if (seguinte != null) prox = { ...cursor, local: seguinte, pagina: 1, avancado_em: agoraISO }
   }
-  if (prox) return { ...e, [frente]: { ...e[frente], cursor: prox } }
+  if (prox) {
+    delete prox.falhas
+    return { ...e, [frente]: { ...e[frente], cursor: prox } }
+  }
+  const confere = (ee: EstadoFrentes) => (cursor.pulou ? conferidoAte(ee, cfg.diasRecentes) : conferir(ee, cfg, cursor.ini, cursor.fim, cursor.iniciado_em ?? agoraISO))
 
   if (frente === 'revisao') {
     const ate = e.revisao.ate ?? cursor.fim
@@ -226,9 +262,10 @@ export function aposLeitura(
       const ini = addDias(cursor.fim, 1)
       const ord = ordenar(locais)
       const seguinte: Cursor = { ini, fim: menor(ate, addDias(ini, cfg.janelaMaxDias - 1)), local: ord[0] ?? null, pagina: 1, iniciado_em: agoraISO }
-      return { ...e, revisao: { ...e.revisao, cursor: seguinte }, conferido_ate: conferir(e, cfg, cursor.ini, cursor.fim, cursor.iniciado_em ?? agoraISO) }
+      if (ord.length && ord.every((l) => l != null)) seguinte.locais = ord as number[]
+      return { ...e, revisao: { ...e.revisao, cursor: seguinte }, conferido_ate: confere(e) }
     }
-    return { ...e, revisao: { cursor: null, ate: null, concluido_em: agoraISO }, conferido_ate: conferir(e, cfg, cursor.ini, cursor.fim, cursor.iniciado_em ?? agoraISO) }
+    return { ...e, revisao: { cursor: null, ate: null, concluido_em: agoraISO }, conferido_ate: confere(e) }
   }
 
   if (frente === 'recente') {
@@ -240,15 +277,35 @@ export function aposLeitura(
     const comDesde = { ...e, recente: { ...e.recente, desde: e.recente.desde ?? cursor.ini } }
     return {
       ...e,
-      recente: { cursor: null, coberto_ate: cursor.fim, concluido_em: agoraISO, desde: e.recente.desde ?? cursor.ini },
+      // M2: coberto_ate nunca volta (a retomada relê dias já cobertos).
+      recente: { cursor: null, coberto_ate: e.recente.coberto_ate ? maior(e.recente.coberto_ate, cursor.fim) : cursor.fim, concluido_em: agoraISO, desde: e.recente.desde ?? cursor.ini },
       backfill: k,
-      conferido_ate: conferir(comDesde, cfg, cursor.ini, cursor.fim, cursor.iniciado_em ?? agoraISO),
+      conferido_ate: confere(comDesde),
     }
   }
   return {
     ...e,
     backfill: { cursor: null, proximo_fim: addDias(cursor.ini, -1), coberto_desde: cursor.ini, concluido: cursor.ini <= cfg.limite },
   }
+}
+
+/** Erros seguidos na mesma página antes de pulá-la (M1). */
+export const MAX_FALHAS_PAGINA = 3
+
+/**
+ * Erro do Omie (que não é de limite) ao ler a página do cursor: conta a falha; na MAX_FALHAS_PAGINA-ésima pula a
+ * página (registra em `puladas`, marca a janela `pulou`: ela não conta como conferida e a revisão não apaga nada).
+ * Sem isso, uma página que sempre erra travava a frente e, com o cursor parado 12 h, a janela inteira era relida.
+ */
+export function aposFalha(e: EstadoFrentes, frente: Frente, erro: string, agoraISO: string, max = MAX_FALHAS_PAGINA): EstadoFrentes {
+  const cursor = e[frente].cursor
+  if (!cursor) return e
+  const falhas = (cursor.falhas ?? 0) + 1
+  if (falhas < max) return { ...e, [frente]: { ...e[frente], cursor: { ...cursor, falhas } } }
+  const pulada: PaginaPulada = { frente, ini: cursor.ini, fim: cursor.fim, local: cursor.local, pagina: cursor.pagina, em: agoraISO, erro: erro.slice(0, 200) }
+  const prox: Cursor = { ...cursor, pagina: cursor.pagina + 1, pulou: true, avancado_em: agoraISO }
+  delete prox.falhas
+  return { ...e, [frente]: { ...e[frente], cursor: prox }, puladas: [...(e.puladas ?? []), pulada].slice(-20) }
 }
 
 /** Desde quando o histórico está completo (a tela mostra "histórico disponível desde dd/mm"). */
@@ -271,6 +328,8 @@ export type CoberturaKardex = {
   lidoAte: string
   conferidoAte: string | null
   ligado: boolean
+  /** Páginas puladas por erro repetido (M1): o kardex dessas janelas pode estar incompleto. */
+  puladas: PaginaPulada[]
 }
 
 export function coberturaDoEstado(e: EstadoFrentes, ligado: boolean, diasRecentes = 2): CoberturaKardex | null {
@@ -280,7 +339,7 @@ export function coberturaDoEstado(e: EstadoFrentes, ligado: boolean, diasRecente
   const conf = conferidoAte(e, diasRecentes)
   const ate = ligado ? lidoAte : conf
   if (!ate || desde > ate) return null
-  return { desde, ate, lidoAte, conferidoAte: conf, ligado }
+  return { desde, ate, lidoAte, conferidoAte: conf, ligado, puladas: e.puladas ?? [] }
 }
 
 const br = (iso: string) => iso.split('-').reverse().join('/')
@@ -290,8 +349,18 @@ const br = (iso: string) => iso.split('-').reverse().join('/')
  * (espelho desligado, leitura parada) ou que o trecho final ainda não foi relido (pode faltar lançamento com data
  * retroativa: reprocessamento do PDV, OP concluída depois).
  */
-export function avisoCoberturaKardex(c: CoberturaKardex | null, fim: string): string | null {
+export function avisoCoberturaKardex(c: CoberturaKardex | null, fim: string, ini?: string): string | null {
   if (!c) return null
+  const avisos = [avisoFim(c, fim)]
+  const pul = (c.puladas ?? []).filter((p) => p.ini <= fim && p.fim >= (ini ?? c.desde))
+  if (pul.length) {
+    const j = pul.map((p) => `${br(p.ini)}–${br(p.fim)}${p.local != null ? ` (local ${p.local})` : ''}`)
+    avisos.push(`Uma parte do kardex do Omie não pôde ser lida (erro repetido do Omie) em ${[...new Set(j)].join(', ')}: os números desse trecho podem estar incompletos.`)
+  }
+  return avisos.filter(Boolean).join(' ') || null
+}
+
+function avisoFim(c: CoberturaKardex, fim: string): string | null {
   if (fim > c.ate) {
     if (!c.ligado) {
       return `O espelho do kardex do Omie está desligado nesta loja: o kardex conferido vai só até ${br(c.ate)}`

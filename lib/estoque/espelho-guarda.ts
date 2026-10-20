@@ -51,7 +51,8 @@ export function minutosDePausa(falhas: number): number {
   return 10 * 2 ** Math.max(0, falhas - 1)
 }
 
-export type ParadaFrente = 'limite' | 'erro' | null
+/** ok = ciclo terminou sem erro (zera a contagem); neutro = não chegou a ler (trava, intervalo, orçamento): não zera. */
+export type ParadaFrente = 'ok' | 'neutro' | 'limite' | 'erro'
 
 /**
  * Como a frente terminou, pelo `parouPor` que os crons já devolvem: "limite do Omie: ..." / "erro do Omie: ..." vêm
@@ -59,17 +60,20 @@ export type ParadaFrente = 'limite' | 'erro' | null
  * ignorado" não contam.
  */
 export function classificarParada(parouPor: string | null | undefined): ParadaFrente {
-  if (!parouPor) return null
+  if (!parouPor) return 'ok'
   if (/^limite do Omie/i.test(parouPor)) return 'limite'
   if (/^(erro do Omie|erro interno)/i.test(parouPor)) return 'erro'
-  return null
+  // Revisão I1 (20/10): "intervalo de 30 min"/"trava" NÃO são sucesso. Antes zeravam a contagem e, nas OPs abertas
+  // (trava de 30 min depois de cada passada), o erro de ConsultarOrdemProducao nunca passava de 1 falha: ~34 erros/dia.
+  return 'neutro'
 }
 
 /** Estado novo da frente e, se for o caso, até quando a loja inteira fica fora do espelho. */
 export function aposFrente(
   g: GuardaFrente, parada: ParadaFrente, motivo: string | null, agoraMs: number
 ): { guarda: GuardaFrente; mudou: boolean; pausaLojaAte: string | null } {
-  if (parada === null) {
+  if (parada === 'neutro') return { guarda: g, mudou: false, pausaLojaAte: null }
+  if (parada === 'ok') {
     const mudou = g.falhas > 0 || g.pausado_ate != null
     return { guarda: mudou ? guardaVazia() : g, mudou, pausaLojaAte: null }
   }

@@ -18,7 +18,7 @@ export async function gerarMovimentacaoValorMovimento(lojaId: number, ini: strin
   const [modo, cobertura] = await Promise.all([modoDaLoja(lojaId), coberturaKardex(lojaId)])
   const periodo = periodoValorMovimento({ modo, kardexDesde: cobertura?.desde ?? null, kardexAte: cobertura?.ate ?? null, ini, fim })
   // D5: por que o kardex não chega ao fim pedido (espelho desligado, leitura parada) ou trecho ainda não relido.
-  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim) : null
+  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim, ini) : null
   if (!periodo) return { linhas: [], periodo: null, semCusto: 0, erro: null, aviso }
   const supabase = createServiceClient()
   let erro: string | null = null

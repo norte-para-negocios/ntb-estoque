@@ -39,7 +39,7 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
   const avisos: string[] = []
   const [modo, cobertura] = await Promise.all([modoDaLoja(lojaId), coberturaKardex(lojaId)])
   const fonte = escolherFonteCmv({ modo, kardexDesde: cobertura?.desde ?? null, kardexAte: cobertura?.ate ?? null, ini, fim })
-  const avisoKardex = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim) : null
+  const avisoKardex = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim, ini) : null
   if (avisoKardex) avisos.push(fonte === 'kardex' ? avisoKardex : `${avisoKardex} Por isso o CMV abaixo é estimado.`)
 
   if (fonte === 'proprio') {

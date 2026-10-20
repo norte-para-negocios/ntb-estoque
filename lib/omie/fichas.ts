@@ -6,7 +6,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { OmieError, type LojaOmie } from './client'
 import { consultarEstrutura, type EstruturaItem } from './malha'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, lerEstadoSync, sleep } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, paradaPorDisjuntor, sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
 import { escolherProdutosFicha, fichaMudou, insumosQueSairam, itensDaEstrutura, localPorInsumoDaOP } from '@/lib/estoque/fichas-puro'
 
@@ -52,6 +52,8 @@ export async function sincronizarFichasLoja(loja: LojaOmie, opcoes: { prazoMs?: 
     for (const [i, codigoProduto] of escolhidos.entries()) {
       if (Date.now() > prazo) break
       if (i > 0) await sleep(PAUSA_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { r.parouPor = disj; break }
       let est
       try {
         est = await consultarEstrutura(loja, codigoProduto, { semRepetir: true })

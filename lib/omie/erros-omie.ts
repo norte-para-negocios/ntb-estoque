@@ -47,6 +47,17 @@ export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now()
   return maior
 }
 
+/**
+ * Revisão I2 do D5 (20/10/2026): conferido antes de CADA chamada dos laços do espelho. Se qualquer método da chave
+ * está bloqueado (ex.: a integração de vendas tomou um bloqueio no meio do ciclo), a frente para neste ciclo com
+ * "limite do Omie" (a guarda pausa a loja): um 2º método bloqueado faria o disjuntor travar a chave inteira e parar as
+ * vendas da loja.
+ */
+export function paradaPorDisjuntor(loja: { omie_app_key: string }, agoraMs: number = Date.now()): string | null {
+  const ms = msRestantesBloqueio(loja.omie_app_key, agoraMs)
+  return ms > 0 ? `limite do Omie: disjuntor com método bloqueado nesta chave (~${Math.ceil(ms / 60000)} min); frente parada no ciclo` : null
+}
+
 /** Mensagem do nosso disjuntor (a chamada nem chegou no Omie). */
 export function ehRecusaDoDisjuntor(msg: string): boolean {
   return /API do Omie bloqueada para esta loja/i.test(msg)

@@ -34,9 +34,23 @@ Na volta, continuar daquela página 40 ainda pularia linhas: a paginação do Om
 **Correção (`lib/estoque/espelho-frentes.ts`):**
 
 - **`conferido_ate`:** último dia relido pelo menos 2 dias depois, de forma contígua (revisão ou retomada). Um estado antigo deriva esse dia da última revisão concluída: na loja 5, 13/10.
-- **Retomada:** frente recente parada há mais de 12 h (pausa da guarda ou flag desligada) recomeça de `conferido_ate + 1`, no máximo 35 dias para trás. Religar a loja 5 relê 14/10 → hoje antes de qualquer outra coisa.
+- **Retomada:** frente recente parada há mais de 12 h (pausa da guarda ou flag desligada) recomeça de `conferido_ate + 1` em todos os locais, numa janela só até hoje (no máximo 30 dias para trás; o resto fica com a revisão). Religar a loja 5 relê 14/10 → hoje antes de qualquer outra coisa.
 - **Cursor parado:** janela sem avançar há mais de 12 h recomeça da página 1. A madrugada proibida tem 7 h, então isso não dispara à toa.
 - **Relatórios:** `coberturaKardex` passa a trazer `lidoAte`, `conferidoAte` e `ligado`. Com o espelho **desligado**, o kardex vale só até o conferido (loja 5: até 13/10; para 14–16/10 o CMV volta a ser estimado). Com ele ligado, vale até o lido, com aviso para o trecho ainda não relido. `avisoCoberturaKardex` mostra o aviso no CMV (tela e Excel), na Produção por produto, na Movimentação "valor do movimento" (tela e Excel) e no saldo em data (`/estoque?data=`, que também avisa quando o kardex parou). Em `/movimentacoes`, a lista reconstruída é usada quando o kardex não chega ao fim do período (`escolherFonte` com `ate`/`fim`).
+
+### Ajustes da revisão independente (2º commit)
+
+- **C1 (crítico):** a janela recente fechava antes da hora enquanto a lista "ativos" nascia. O laço marcava o local depois da leitura, e a escolha do próximo local saía da lista parcial. Reproduzido com o estado real da loja 5 e 4 locais: só 2 eram lidos em 14–21/10 e, mesmo assim, o motor gravava `coberto_ate` 21/10 e `conferido` 19/10. Correção:
+  - a lista de locais é **fixada no cursor na abertura da janela** (`cursor.locais`);
+  - a 1ª janela de uma loja, a recuperação de atraso e a **retomada leem todos os locais**;
+  - a retomada é uma janela só, até hoje, de no máximo 30 dias (o que for mais antigo fica com a revisão).
+- **I1:** "intervalo de 30 min" e "trava" passaram a ser **neutros** e não zeram mais a contagem de erros da guarda. Antes, nas OPs abertas, o erro de `ConsultarOrdemProducao` nunca passava de 1 falha (~34 erros/dia no método do MISUSE). Agora a espera cresce até o teto.
+- **I2:** o disjuntor (qualquer método da chave) é conferido **antes de cada chamada ao Omie** dentro dos laços de kardex, ajustes, OPs e fichas. Se algum método da chave estiver bloqueado, a frente para com "limite do Omie" e a guarda pausa a loja por 60 min.
+- **M1:** página que erra 3 vezes seguidas é **pulada**. Ela fica registrada em `estado.puladas`, a janela não conta como conferida, a revisão não apaga nada nessa janela e os relatórios avisam "uma parte do kardex não pôde ser lida".
+- **M2:** `coberto_ate` nunca volta para trás.
+- **M3:** a lista de OPs abertas respeita o prazo do ciclo. Lista cortada = incompleta: não marca saída de OP e não grava `lido_em`.
+- **M4:** em `/movimentacoes`, de madrugada (kardex até ontem, período até hoje), a tela continua no kardex com o aviso "hoje ainda não lido", em vez de trocar o período inteiro pela lista reconstruída. Juntar kardex até ontem com a reconstrução só de hoje exigiria unir duas fontes paginadas no servidor, e isso não é barato.
+- **M5:** aviso duplicado no saldo em data removido.
 
 ## 2. Estimativa de chamadas ao Omie por loja
 
@@ -113,6 +127,14 @@ Só há leitura entre 07:00 e 24:00 (Bahia). As 3 lojas juntas dividem o orçame
    Depois de 10 min, conferir `/opt/ntb-estoque/sync-espelho.log`: 3 linhas `-> 200` por ciclo, com `"total":0`.
 4. `desktop/scripts/gerar-schema.sh` + versão nova do desktop (coluna nova em `lojas`).
 5. Conferir que a loja 5 continua desligada: `select id, espelho_completo, omie_op_tempo_real from lojas where id in (2,3,4,5,6,7) order by id;`. Deve dar tudo `f`.
+
+> **Mudança esperada na loja 5 logo depois do deploy (intencional, não é bug):** com o espelho desligado, o kardex da loja 5 passa a valer só até o último dia conferido, **13/10/2026** (antes: até 16/10).
+>
+> - **CMV** (`/relatorio-cmv`) e **Produção por produto** (`/relatorio-ops`): com data final entre 14/10 e 16/10, deixam de usar o kardex e passam para **"estimado"** (CMV) ou **OPs sincronizadas** (Produção). Aparece um aviso explicando que 14–16/10 foram lidos incompletos.
+> - **Movimentação "pelo valor do movimento"**: fica **cortada em 13/10**, com aviso.
+> - **Saldo em data** depois de 13/10: aparece com aviso.
+>
+> Antes, esses relatórios mostravam números muito baixos para 14–16/10 sem avisar (o espelho tinha ~1% dos movimentos desses dias). Volta ao normal quando a loja 5 for religada e a releitura passar (seção 8).
 
 ## 5. Ligar uma loja (exemplo: loja 6)
 

@@ -212,10 +212,20 @@ export function casarKardexComOP<T extends KardexMin>(linhas: T[], op: OPMin, es
  * (D5, 20/10: com a guarda do espelho, o kardex de uma loja pode ficar parado horas; aí a lista reconstruída é a
  * completa).
  */
-export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string; ate?: string | null; fim?: string }): 'kardex' | 'reconstruido' {
+export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string; ate?: string | null; fim?: string; hoje?: string }): 'kardex' | 'reconstruido' {
   if (!o.espelho || !o.desde || o.desde > o.ini) return 'reconstruido'
-  if (o.fim && o.ate !== undefined && (!o.ate || o.ate < o.fim)) return 'reconstruido'
+  if (o.fim && o.ate !== undefined && (!o.ate || o.ate < o.fim)) {
+    // Revisão M4: de madrugada (00–07 h, leitura proibida) o kardex vai até ontem; período terminando hoje segue no
+    // kardex com aviso de "hoje ainda não lido" (`faltaHoje`), em vez de trocar o período inteiro pela reconstrução.
+    if (o.hoje && o.fim === o.hoje && o.ate === addDias(o.hoje, -1)) return 'kardex'
+    return 'reconstruido'
+  }
   return 'kardex'
+}
+
+/** O kardex escolhido termina ontem e o período vai até hoje (madrugada, antes da 1ª leitura do dia). */
+export function faltaHojeNoKardex(o: { ate?: string | null; fim: string; hoje: string }): boolean {
+  return o.fim === o.hoje && o.ate === addDias(o.hoje, -1)
 }
 
 /** Entradas e saídas (quantidade) de um conjunto de linhas: contagem de inventário e movimento cancelado não somam. */

@@ -83,7 +83,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
         // D5 (20/10/2026): kardex parado/desligado ou data ainda não relida pela revisão → aviso (nunca em silêncio).
         const cob = await coberturaKardex(lojaId)
         const partes = [avisoCoberturaKardex(cob, sp.data)]
-        if (cob && cob.ate < addDiasISO(hoje, -1)) partes.push(`O kardex desta loja parou em ${fmtDataBR(cob.ate)}: produto que mudou depois disso pode aparecer com o saldo errado.`)
+        // M5: data depois do fim do kardex já tem o aviso acima (o mesmo fato); este só para data anterior a ele.
+        if (cob && cob.ate < addDiasISO(hoje, -1) && sp.data <= cob.ate) partes.push(`O kardex desta loja parou em ${fmtDataBR(cob.ate)}: produto que mudou depois disso pode aparecer com o saldo errado.`)
         avisoData = partes.filter(Boolean).join(' ') || null
         const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
         linhasBase = aplicarSaldoEmData(visao.linhas, ate.rows, nomeLocal, depois.rows)

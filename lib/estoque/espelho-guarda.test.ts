@@ -8,13 +8,13 @@ import {
 const T = Date.parse('2026-10-20T15:00:00Z')
 
 test('classificarParada pelo parouPor dos crons', () => {
-  assert.equal(classificarParada(null), null)
+  assert.equal(classificarParada(null), 'ok')
   assert.equal(classificarParada('limite do Omie: MISUSE_API_PROCESS'), 'limite')
   assert.equal(classificarParada('erro do Omie: SOAP-ERROR'), 'erro')
   assert.equal(classificarParada('erro interno: kardex_omie: timeout'), 'erro')
-  assert.equal(classificarParada('trava (outro ciclo em andamento)'), null)
-  assert.equal(classificarParada('intervalo de 30 min'), null)
-  assert.equal(classificarParada('filtro de data ignorado pelo Omie: 3 ajuste(s) fora'), null)
+  assert.equal(classificarParada('trava (outro ciclo em andamento)'), 'neutro')
+  assert.equal(classificarParada('intervalo de 30 min'), 'neutro')
+  assert.equal(classificarParada('filtro de data ignorado pelo Omie: 3 ajuste(s) fora'), 'neutro')
 })
 
 test('espera cresce 10, 20, 40, 80 e no teto vira 24 h', () => {
@@ -44,9 +44,9 @@ test('erro de limite pausa a loja inteira por 60 min; erro comum só a frente', 
 })
 
 test('sucesso zera a contagem e só grava quando havia algo a zerar', () => {
-  const ok = aposFrente(guardaVazia(), null, null, T)
+  const ok = aposFrente(guardaVazia(), 'ok', null, T)
   assert.equal(ok.mudou, false)
-  const zerou = aposFrente({ falhas: 3, pausado_ate: '2026-10-20T14:00:00Z', ultimo_erro: 'x' }, null, null, T)
+  const zerou = aposFrente({ falhas: 3, pausado_ate: '2026-10-20T14:00:00Z', ultimo_erro: 'x' }, 'ok', null, T)
   assert.equal(zerou.mudou, true)
   assert.deepEqual(zerou.guarda, guardaVazia())
 })
@@ -72,4 +72,27 @@ test('rodízio gira uma posição por ciclo de 10 min e cobre todas as lojas', (
   for (const o of ordens) assert.deepEqual([...o].sort(), lojas)
   assert.deepEqual(ordemRodizio([5], T), [5])
   assert.deepEqual(ordemRodizio([], T), [])
+})
+
+test('I1: OPs abertas (trava de 30 min) com ConsultarOrdemProducao errando: a espera cresce e para no teto', () => {
+  // cada passada com erro segura a trava de 30 min; nos ciclos de 10 min no meio a rota devolve "intervalo de 30 min"
+  let g = guardaVazia()
+  let erros = 0
+  let travaAte = 0
+  for (let t = T; t < T + 24 * 3_600_000; t += 10 * 60_000) {
+    if (pausadoAgora(g.pausado_ate, t)) continue
+    if (t < travaAte) { g = aposFrente(g, classificarParada('intervalo de 30 min'), 'intervalo de 30 min', t).guarda; continue }
+    g = aposFrente(g, classificarParada('erro do Omie: x'), 'erro do Omie: x', t).guarda
+    erros++
+    travaAte = t + 30 * 60_000
+  }
+  assert.ok(erros <= TETO_FALHAS, `erros em 24 h: ${erros}`)
+  assert.equal(g.falhas, TETO_FALHAS)
+})
+
+test('neutro não zera nem grava', () => {
+  const g = { falhas: 2, pausado_ate: '2026-10-20T14:00:00Z', ultimo_erro: 'x' }
+  const r = aposFrente(g, 'neutro', 'trava (outro ciclo em andamento)', T)
+  assert.equal(r.mudou, false)
+  assert.equal(r.guarda, g)
 })

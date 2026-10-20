@@ -9,9 +9,9 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { OmieError, type LojaOmie } from './client'
 import { buscarPaginaKardexLocal, normalizarMovOmie, deduplicarMovs } from './kardex'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, lerEstadoSync, locaisAtivos, sleep, type ResumoCiclo } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, locaisAtivos, paradaPorDisjuntor, sleep, type ResumoCiclo } from './espelho-estado'
 import {
-  aposLeitura, historicoDesde, janelaFechada, lerEstado, marcarLocalComMovimento, proximaLeitura, type ConfigFrentes,
+  aposFalha, aposLeitura, historicoDesde, janelaFechada, lerEstado, marcarLocalComMovimento, proximaLeitura, type ConfigFrentes,
 } from '@/lib/estoque/espelho-frentes'
 import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
 
@@ -42,13 +42,17 @@ export async function sincronizarKardexLoja(
       const p = proximaLeitura(estado, CFG_KARDEX, hoje, Date.now(), locais)
       if (!p) break
       if (resumo.paginas > 0) await sleep(PAUSA_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { resumo.parouPor = disj; break }
       let pagina
       try {
         pagina = await buscarPaginaKardexLocal(loja, Number(p.cursor.local), isoParaBr(p.cursor.ini), isoParaBr(p.cursor.fim), p.cursor.pagina)
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        resumo.parouPor = `${ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined) ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
-        await gravarEstadoSync(loja.id, FRENTE, p.estado, resumo.parouPor)
+        const limite = ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)
+        resumo.parouPor = `${limite ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
+        // M1: erro que não é de limite conta na página; na 3ª seguida ela é pulada (registrada em estado.puladas).
+        await gravarEstadoSync(loja.id, FRENTE, limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString()), resumo.parouPor)
         break
       }
       resumo.paginas++
@@ -67,7 +71,8 @@ export async function sincronizarKardexLoja(
       }
       estado = aposLeitura(p.estado, p.frente, pagina.totalPaginas, locais, CFG_KARDEX, agoraISO)
       if (linhas.length) estado = marcarLocalComMovimento(estado, Number(p.cursor.local), linhas.reduce((m, l) => (l.data_mov > m ? l.data_mov : m), ''))
-      if (p.frente === 'revisao' && p.cursor.iniciado_em && janelaFechada('revisao', p.cursor, estado)) {
+      // Janela com página pulada (M1): não apaga nada, porque as linhas daquela página não foram vistas.
+      if (p.frente === 'revisao' && p.cursor.iniciado_em && !p.cursor.pulou && janelaFechada('revisao', p.cursor, estado)) {
         // Janela relida inteira (todos os locais): o que não foi visto nela foi excluído/estornado no Omie.
         const { error } = await supabase.from('kardex_omie').delete().eq('loja_id', loja.id)
           .gte('data_mov', p.cursor.ini).lte('data_mov', p.cursor.fim).in('codigo_local_estoque', locais)

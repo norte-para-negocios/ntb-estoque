@@ -57,6 +57,6 @@ export async function carregarOps(lojaId: number, ini: string, fim: string, filt
     familias: [...new Set(doPeriodo.map((m) => m.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((f) => ({ value: f, label: f })),
   }
   // D5: o kardex não chega ao fim do período (espelho desligado/parado) ou o fim ainda não foi relido.
-  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim) : null
+  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim, ini) : null
   return { fonte, cobertura, produtos, dias, meta, erros: [...new Set(erros)], opcoes, aviso }
 }
