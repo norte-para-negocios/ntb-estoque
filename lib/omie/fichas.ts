@@ -6,7 +6,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { OmieError, type LojaOmie } from './client'
 import { consultarEstrutura, type EstruturaItem } from './malha'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { sleep } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, paradaPorDisjuntor, sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
 import { escolherProdutosFicha, fichaMudou, insumosQueSairam, itensDaEstrutura, localPorInsumoDaOP } from '@/lib/estoque/fichas-puro'
 
@@ -17,12 +17,20 @@ const TETO_MS = 150_000
 
 export type ResumoFichas = { loja: number; lidas: number; semFicha: number; gravadas: number; removidas: number; parouPor: string | null }
 
-export async function sincronizarFichasLoja(loja: LojaOmie): Promise<ResumoFichas> {
+/** Produto cuja ConsultarEstrutura deu erro do Omie sai da fila por 7 dias (senão erra no começo de todo ciclo). */
+const ESPERA_ERRO_MS = DIAS_REFAZER * 86_400_000
+
+export async function sincronizarFichasLoja(loja: LojaOmie, opcoes: { prazoMs?: number } = {}): Promise<ResumoFichas> {
   const r: ResumoFichas = { loja: loja.id, lidas: 0, semFicha: 0, gravadas: 0, removidas: 0, parouPor: null }
   if (!(await pegarTravaSync(loja.id, 'fichas', 600))) return { ...r, parouPor: 'trava (outro ciclo em andamento)' }
   const supabase = createServiceClient({ semAutor: true })
   const t0 = Date.now()
+  const prazo = Math.min(t0 + TETO_MS, opcoes.prazoMs ?? Infinity)
   try {
+    const estado = ((await lerEstadoSync(loja.id, 'fichas')) ?? {}) as { erros_produto?: Record<string, string> }
+    const errosProduto: Record<string, string> = Object.fromEntries(
+      Object.entries(estado.erros_produto ?? {}).filter(([, em]) => t0 - Date.parse(em) < ESPERA_ERRO_MS),
+    )
     const erros: string[] = []
     const produtos = await buscarTodasLinhas<{ codigo_produto: number; tipo_item: string | null; inativo: boolean | null }>(
       (from, to) => supabase.from('produtos').select('codigo_produto, tipo_item, inativo').eq('loja_id', loja.id).order('id').range(from, to),
@@ -37,18 +45,26 @@ export async function sincronizarFichasLoja(loja: LojaOmie): Promise<ResumoFicha
     const candidatos = produtos
       .filter((p) => (p.tipo_item === '03' || p.tipo_item === '04') && p.inativo !== true)
       .map((p) => Number(p.codigo_produto))
+      .filter((c) => !errosProduto[String(c)])
     const ultima = new Map(syncs.map((s) => [Number(s.codigo_produto), s.sincronizado_em]))
     const escolhidos = escolherProdutosFicha(candidatos, ultima, Date.now(), PRODUTOS_POR_CICLO, DIAS_REFAZER)
 
     for (const [i, codigoProduto] of escolhidos.entries()) {
-      if (Date.now() - t0 > TETO_MS) break
+      if (Date.now() > prazo) break
       if (i > 0) await sleep(PAUSA_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { r.parouPor = disj; break }
       let est
       try {
         est = await consultarEstrutura(loja, codigoProduto, { semRepetir: true })
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        r.parouPor = `${ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined) ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
+        const limite = ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)
+        r.parouPor = `${limite ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
+        if (!limite) {
+          errosProduto[String(codigoProduto)] = new Date().toISOString()
+          await gravarEstadoSync(loja.id, 'fichas', { erros_produto: errosProduto }, `produto ${codigoProduto}: ${r.parouPor}`.slice(0, 500))
+        }
         break
       }
       r.lidas++

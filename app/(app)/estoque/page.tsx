@@ -15,6 +15,14 @@ import { ModalEntrada } from '@/components/estoque-proprio/Acoes'
 import { carregarEstoque, TIPOS_ITEM, type LinhaEstoque, type Situacao } from './dados'
 import { carregarEstoqueOmie, carregarPrimeiroMovApos, carregarSaldoEmData } from './dados-omie'
 import { historicoKardexDesde, fmtDataBR } from './dados-comum'
+import { coberturaKardex } from '@/lib/relatorios/cmv-loader'
+import { avisoCoberturaKardex } from '@/lib/estoque/espelho-frentes'
+
+function addDiasISO(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 import { aplicarSaldoEmData, avaliarDataSaldo, type MotivoDataInvalida } from '@/lib/estoque/saldo-data-puro'
 import { SeletorData } from '@/components/estoque-proprio/SeletorData'
 import { hojeBahiaISO } from '@/lib/data-bahia'
@@ -72,6 +80,12 @@ export default async function EstoquePage({ searchParams }: { searchParams: Prom
       if (ate.erro || depois.erro) avisoData = 'Saldo em data ainda não ativado nesta loja. Mostrando o saldo de hoje.'
       else {
         dataSaldo = sp.data
+        // D5 (20/10/2026): kardex parado/desligado ou data ainda não relida pela revisão → aviso (nunca em silêncio).
+        const cob = await coberturaKardex(lojaId)
+        const partes = [avisoCoberturaKardex(cob, sp.data)]
+        // M5: data depois do fim do kardex já tem o aviso acima (o mesmo fato); este só para data anterior a ele.
+        if (cob && cob.ate < addDiasISO(hoje, -1) && sp.data <= cob.ate) partes.push(`O kardex desta loja parou em ${fmtDataBR(cob.ate)}: produto que mudou depois disso pode aparecer com o saldo errado.`)
+        avisoData = partes.filter(Boolean).join(' ') || null
         const nomeLocal = new Map(visao.locais.map((l) => [l.codigoLocal, l.descricao]))
         linhasBase = aplicarSaldoEmData(visao.linhas, ate.rows, nomeLocal, depois.rows)
       }

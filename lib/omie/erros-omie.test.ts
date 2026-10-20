@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor, ehChamadaDeEscrita } from './erros-omie.ts'
+import { bloqueioDaResposta, segundosBloqueio, idAjusteExistente, ehCmcPendente, registrarBloqueio, msRestantesBloqueio, decidirErroItemInventario, classificarErroOmie, proximaTentativa, podeRepetirLimite, statusFalhaConclusaoOP, ehRecusaDoDisjuntor, ehChamadaDeEscrita, paradaPorDisjuntor } from './erros-omie.ts'
 
 test('segundosBloqueio extrai N de consumo indevido', () => {
   assert.equal(segundosBloqueio('ERROR: API bloqueada por consumo indevido. Tente novamente em 1678 segundos.'), 1678)
@@ -129,4 +129,15 @@ test('ehChamadaDeEscrita: todos os verbos de escrita, inclusive AlteraPedCompra 
   for (const c of ['PesquisarPedCompra', 'ConsultarPedCompra', 'ListarProdutos', 'ListarRecebimentos', 'ObterNfe', 'CuponsFiscais', 'ConsultarEstrutura']) {
     assert.equal(ehChamadaDeEscrita(c), false, c)
   }
+})
+
+test('D5 I2: paradaPorDisjuntor para a frente se QUALQUER método da chave está bloqueado (ex.: venda bloqueada no meio do ciclo)', () => {
+  const t = Date.parse('2026-10-20T15:00:00Z')
+  const loja = { omie_app_key: 'chave-d5-i2' }
+  assert.equal(paradaPorDisjuntor(loja, t), null)
+  registrarBloqueio('chave-d5-i2', 1800, t, 'ConcluirOrdemProducao') // bloqueio da integração de vendas
+  const m = paradaPorDisjuntor(loja, t + 60_000)
+  assert.match(m ?? '', /^limite do Omie: disjuntor/) // "limite" → a guarda pausa a loja inteira
+  assert.equal(paradaPorDisjuntor(loja, t + 1801_000), null)
+  assert.equal(paradaPorDisjuntor({ omie_app_key: 'outra-chave' }, t + 60_000), null)
 })
