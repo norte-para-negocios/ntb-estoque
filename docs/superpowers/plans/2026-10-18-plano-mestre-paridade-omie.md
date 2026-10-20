@@ -74,7 +74,7 @@ Meta: a entrada de NF do Norte Estoque faz tudo o que o cartão de recebimento d
 2. **Movimentação valorizada pelo valor do movimento** [N13], não pelo último preço de compra.
 3. **Posição de estoque** [N6]: exportação, um total só, linhas zeradas, reservado; **posição tipo SPED (Bloco H)** para o contador [N7].
 4. **Curva ABC por valor e por quantidade** [N10/N11].
-5. **Saldo em data para todas as lojas** [L7]: estender o espelho completo do kardex às lojas 2, 3, 6 e 7 (a loja 4 fica fora, por regra). Isso também resolve as movimentações reconstruídas [L24].
+5. **Saldo em data para todas as lojas** [L7]: estender o espelho completo do kardex às lojas 2, 3, 6 e 7 (a loja 4 fica fora, por regra). Isso também resolve as movimentações reconstruídas [L24]. Proteção, estimativa e roteiro de ativação (lojas 2, 3, 6; a 7 está com chave inválida): `2026-10-20-d5-espelho-lojas.md`.
 6. Os demais relatórios do Omie marcados como faltando na matriz (produtos por fornecedor, compras por categoria/departamento, devoluções etc.), na ordem de impacto.
 
 ## Fase E — Financeiro (6–10 semanas; obrigatória se D1 = sair do Omie)

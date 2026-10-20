@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server'
 import { assertCronAuth, getLojasEspelhoCompleto } from '@/lib/omie/sync-all'
 import { sincronizarKardexLoja } from '@/lib/omie/kardex-loja'
+import { rodarLojasEspelho } from '@/lib/omie/espelho-ciclo'
 import { janelaProibida } from '@/lib/estoque/espelho-lojas'
-import type { ResumoCiclo } from '@/lib/omie/espelho-estado'
 
 export const maxDuration = 300
 
-// Kardex da loja inteira (espelho completo, migration 160): só lojas com espelho_completo, uma de cada vez.
+/** Tempo do ciclo para todas as lojas juntas (scripts/sync-espelho.sh espera até 280 s). */
+const ORCAMENTO_MS = 200_000
+
+// Kardex da loja inteira (espelho completo, migration 160): só lojas com espelho_completo, uma de cada vez, em rodízio,
+// com guarda por loja (bloqueio, disjuntor, erros seguidos: lib/omie/espelho-ciclo.ts) e orçamento de tempo do ciclo.
 // Nunca entre 00:00 e 07:00 da Bahia (a faxina do Mac usa a mesma chave do Omie de madrugada).
 export async function GET(request: Request) {
   if (!assertCronAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (janelaProibida(new Date())) return NextResponse.json({ ok: true, pulado: 'janela 00:00-07:00' })
   const lojas = await getLojasEspelhoCompleto()
-  const resumos: ResumoCiclo[] = []
-  const falhas: { loja: number; erro: string }[] = []
-  for (const loja of lojas) {
-    try { resumos.push(await sincronizarKardexLoja(loja)) }
-    catch (e) { falhas.push({ loja: loja.id, erro: e instanceof Error ? e.message : String(e) }) }
-  }
+  const r = await rodarLojasEspelho(lojas, 'kardex', ORCAMENTO_MS, (loja, prazoMs) => sincronizarKardexLoja(loja, { prazoMs }))
+  const falhas = r.filter((x) => x.erro)
   const status = lojas.length && falhas.length === lojas.length ? 502 : 200
-  return NextResponse.json({ ok: falhas.length === 0, total: lojas.length, resumos, falhas }, { status })
+  return NextResponse.json({ ok: falhas.length === 0, total: lojas.length, lojas: r }, { status })
 }

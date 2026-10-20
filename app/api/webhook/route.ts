@@ -4,6 +4,7 @@ import { fetchNotaFiscal } from '@/lib/omie/nota-fiscal'
 import { fetchOrdemProducao } from '@/lib/omie/ordem-producao'
 import { syncLocaisEstoque } from '@/lib/omie/local-estoque'
 import type { LojaOmie } from '@/lib/omie/client'
+import { lojaOpTempoReal } from '@/lib/omie/sync-all'
 import { webhookTokenOk } from '@/lib/seguranca/regras'
 
 // Topicos de movimentacao de estoque: ignorados (igual ao Laravel, evita loop de ajuste)
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   // falha, descartando o webhook em silêncio.
   const { data: loja, error } = await supabase
     .from('lojas')
-    .select('id, omie_app_key, omie_app_secret, is_test, espelho_completo')
+    .select('id, omie_app_key, omie_app_secret, is_test')
     .eq('omie_app_key', body.appKey)
     .eq('ativo', true)
     .eq('is_test', false)
@@ -98,10 +99,11 @@ export async function POST(request: Request) {
     if (topic.startsWith('RecebimentoProduto.') && body.event?.nIdReceb) {
       await fetchNotaFiscal(loja, body.event.nIdReceb)
     } else if (topic.startsWith('OrdemProducao.') && topic !== 'OrdemProducao.Excluida' && body.event?.nCodOP) {
-      // Faxina em andamento (espelho_completo=false): não consulta a OP a cada aviso. Uma escrita gera 3-4 avisos
-      // (Incluida/Alterada/Concluida) e as consultas repetidas da mesma OP bloqueiam a API da loja (MISUSE, 16/10).
-      // O sync de OPs (cron) continua atualizando o espelho.
-      if ((loja as { espelho_completo?: boolean | null }).espelho_completo !== false) await fetchOrdemProducao(loja, body.event.nCodOP)
+      // Só loja com `omie_op_tempo_real` (migration 250; até 20/10 era `espelho_completo !== false`, o que tirava
+      // TODAS as lojas sem a flag): uma escrita gera 3-4 avisos (Incluida/Alterada/Concluida) e as consultas repetidas
+      // da mesma OP bloqueiam a API da loja (MISUSE, 16/10, faxina da loja 5). O sync de OPs (cron) continua
+      // atualizando o espelho. Ligar o espelho completo (D5) não liga esta consulta.
+      if (await lojaOpTempoReal(loja.id)) await fetchOrdemProducao(loja, body.event.nCodOP)
     } else if (topic.startsWith('LocalEstoque.')) {
       await syncLocaisEstoque(loja)
     }

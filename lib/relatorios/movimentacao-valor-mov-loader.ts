@@ -4,19 +4,22 @@ import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { labelTipoItem } from '@/lib/constants-omie'
 import { coberturaKardex } from '@/lib/relatorios/cmv-loader'
+import { avisoCoberturaKardex } from '@/lib/estoque/espelho-frentes'
 import { periodoValorMovimento } from '@/lib/relatorios/cmv-puro'
 import type { LinhaOperAuto } from '@/lib/movimentacao-operacao-auto'
 
 type LinhaRpc = { origem: string; sentido: 'E' | 'S'; codigo_local_estoque: number; n_cod_prod: number; mes: string; inventario: boolean; qtde: number; valor: number; sem_custo: number }
 
-export type ValorMovimento = { linhas: LinhaOperAuto[]; periodo: { ini: string; fim: string; cortado: boolean } | null; semCusto: number; erro: string | null }
+export type ValorMovimento = { linhas: LinhaOperAuto[]; periodo: { ini: string; fim: string; cortado: boolean } | null; semCusto: number; erro: string | null; aviso: string | null }
 
 // Opção "valor do movimento" do modo Por operação (matriz N13): mesma forma de linha do modo automático
 // (lib/movimentacao-operacao-auto.ts, que não muda), mas cada movimento pelo seu próprio valor (RPC 188).
 export async function gerarMovimentacaoValorMovimento(lojaId: number, ini: string, fim: string, produtoBusca?: string): Promise<ValorMovimento> {
   const [modo, cobertura] = await Promise.all([modoDaLoja(lojaId), coberturaKardex(lojaId)])
   const periodo = periodoValorMovimento({ modo, kardexDesde: cobertura?.desde ?? null, kardexAte: cobertura?.ate ?? null, ini, fim })
-  if (!periodo) return { linhas: [], periodo: null, semCusto: 0, erro: null }
+  // D5: por que o kardex não chega ao fim pedido (espelho desligado, leitura parada) ou trecho ainda não relido.
+  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim) : null
+  if (!periodo) return { linhas: [], periodo: null, semCusto: 0, erro: null, aviso }
   const supabase = createServiceClient()
   let erro: string | null = null
   const [rows, prods, locs] = await Promise.all([
@@ -42,5 +45,5 @@ export async function gerarMovimentacaoValorMovimento(lojaId: number, ini: strin
       mes: r.mes, inventario: r.inventario, qtde: Number(r.qtde) || 0, valor: Number(r.valor) || 0,
     })
   }
-  return { linhas, periodo, semCusto, erro }
+  return { linhas, periodo, semCusto, erro, aviso }
 }

@@ -14,11 +14,24 @@ export async function lojaEspelho(lojaId: number): Promise<{ isTest: boolean; es
 }
 
 /** Desde quando o kardex do Omie da loja está completo (cursor do cron sync-kardex). null = ainda sem histórico. */
-export async function historicoKardexDesde(lojaId: number): Promise<{ desde: string | null; ativo: boolean }> {
+export async function historicoKardexDesde(lojaId: number): Promise<{ desde: string | null; ativo: boolean; ate: string | null }> {
   const supabase = await createClient()
   const { data, error } = await supabase.from('espelho_sync_estado').select('estado').eq('loja_id', lojaId).eq('frente', 'kardex').maybeSingle()
-  if (error) return { desde: null, ativo: false }
-  return { desde: data ? historicoDesde(lerEstado(data.estado)) : null, ativo: !!data }
+  if (error) return { desde: null, ativo: false, ate: null }
+  const e = data ? lerEstado(data.estado) : null
+  return { desde: e ? historicoDesde(e) : null, ativo: !!data, ate: e?.recente.coberto_ate ?? null }
+}
+
+/**
+ * A lista de OPs abertas do espelho (`aberta_omie`) já foi lida inteira pelo menos uma vez nesta loja (D5, 20/10):
+ * logo depois de ligar a flag numa loja nova, `aberta_omie` ainda está vazio e a tela usa `concluida = false`.
+ */
+export async function opsAbertasLidas(lojaId: number): Promise<boolean> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('espelho_sync_estado').select('estado').eq('loja_id', lojaId).eq('frente', 'ops-abertas').maybeSingle()
+  if (error || !data) return false
+  const e = data.estado as { lido_em?: unknown } | null
+  return typeof e?.lido_em === 'string'
 }
 
 /** Roda `fn` em lotes (URL curta: ver "414 URI Too Long" no AGENTS.md) e junta os resultados. */

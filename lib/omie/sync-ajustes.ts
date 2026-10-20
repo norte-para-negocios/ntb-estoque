@@ -204,9 +204,11 @@ export const FILTRO_IGNORADO = 'filtro de data ignorado pelo Omie'
 export const CFG_AJUSTES: ConfigFrentes = {
   diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30, diasRevisao: 35, intervaloRevisaoHoras: 24,
 }
-const PAGINAS_AJUSTES_POR_CICLO = 8
+// D5 (20/10/2026): 12 páginas (era 8) para caber recente + revisão + backfill de lojas com 400 ajustes/dia (loja 3);
+// teto de 90 s (era 150) porque esta rota roda no sync-cron.sh principal, que já leva ~7 dos 10 min do ciclo.
+const PAGINAS_AJUSTES_POR_CICLO = 12
 const PAUSA_AJUSTES_MS = 700
-const TETO_AJUSTES_MS = 150_000
+const TETO_AJUSTES_MS = 90_000
 
 export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Promise<ResumoCiclo> {
   const resumo: ResumoCiclo = { loja: loja.id, paginas: 0, linhas: 0, parouPor: null, historicoDesde: null }

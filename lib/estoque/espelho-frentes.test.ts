@@ -27,9 +27,9 @@ test('primeira leitura abre a frente recente em [ontem, hoje] no menor local', (
 test('avança página, depois troca de local, depois fecha a janela', () => {
   let p = proximaLeitura(estadoInicial(), CFG, '2026-10-13', T0, LOCAIS)!
   let e = aposLeitura(p.estado, 'recente', 2, LOCAIS, CFG, '2026-10-13T15:00:00Z')
-  assert.deepEqual(e.recente.cursor, { ini: '2026-10-12', fim: '2026-10-13', local: 100, pagina: 2, iniciado_em: '2026-10-13T15:00:00.000Z' })
+  assert.deepEqual(e.recente.cursor, { ini: '2026-10-12', fim: '2026-10-13', local: 100, pagina: 2, iniciado_em: '2026-10-13T15:00:00.000Z', avancado_em: '2026-10-13T15:00:00Z' })
   e = aposLeitura(e, 'recente', 2, LOCAIS, CFG, '2026-10-13T15:00:00Z')
-  assert.deepEqual(e.recente.cursor, { ini: '2026-10-12', fim: '2026-10-13', local: 200, pagina: 1, iniciado_em: '2026-10-13T15:00:00.000Z' })
+  assert.deepEqual(e.recente.cursor, { ini: '2026-10-12', fim: '2026-10-13', local: 200, pagina: 1, iniciado_em: '2026-10-13T15:00:00.000Z', avancado_em: '2026-10-13T15:00:00Z' })
   e = aposLeitura(e, 'recente', 0, LOCAIS, CFG, '2026-10-13T15:00:00Z') // local vazio ("não existem registros")
   assert.equal(e.recente.cursor?.local, 300)
   e = aposLeitura(e, 'recente', 1, LOCAIS, CFG, '2026-10-13T15:00:00Z')
@@ -98,7 +98,7 @@ test('frente sem local (ajustes): uma passada por janela', () => {
   const p = proximaLeitura(estadoInicial(), { ...CFG, diasRecentes: 3 }, '2026-10-13', T0, [null])!
   assert.deepEqual(p.cursor, { ini: '2026-10-11', fim: '2026-10-13', local: null, pagina: 1, iniciado_em: '2026-10-13T15:00:00.000Z' })
   const e = aposLeitura(p.estado, 'recente', 3, [null], CFG, '2026-10-13T15:00:00Z')
-  assert.deepEqual(e.recente.cursor, { ini: '2026-10-11', fim: '2026-10-13', local: null, pagina: 2, iniciado_em: '2026-10-13T15:00:00.000Z' })
+  assert.deepEqual(e.recente.cursor, { ini: '2026-10-11', fim: '2026-10-13', local: null, pagina: 2, iniciado_em: '2026-10-13T15:00:00.000Z', avancado_em: '2026-10-13T15:00:00Z' })
 })
 
 test('local atual saiu da lista: segue para o próximo código maior', () => {

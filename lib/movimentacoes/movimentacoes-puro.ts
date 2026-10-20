@@ -207,8 +207,15 @@ export function casarKardexComOP<T extends KardexMin>(linhas: T[], op: OPMin, es
 }
 
 /** Kardex do Omie só quando a loja tem o espelho completo E o histórico completo já cobre o início do período. */
-export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string }): 'kardex' | 'reconstruido' {
-  return o.espelho && !!o.desde && o.desde <= o.ini ? 'kardex' : 'reconstruido'
+/**
+ * Kardex só quando o histórico cobre o começo do período e, se informado, a leitura recente chegou ao fim dele
+ * (D5, 20/10: com a guarda do espelho, o kardex de uma loja pode ficar parado horas; aí a lista reconstruída é a
+ * completa).
+ */
+export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string; ate?: string | null; fim?: string }): 'kardex' | 'reconstruido' {
+  if (!o.espelho || !o.desde || o.desde > o.ini) return 'reconstruido'
+  if (o.fim && o.ate !== undefined && (!o.ate || o.ate < o.fim)) return 'reconstruido'
+  return 'kardex'
 }
 
 /** Entradas e saídas (quantidade) de um conjunto de linhas: contagem de inventário e movimento cancelado não somam. */

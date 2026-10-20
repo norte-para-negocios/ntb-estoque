@@ -229,6 +229,7 @@ export default async function RelatorioMovimentacaoPage({
         />
         {vm && !vm.periodo && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">O kardex do Omie não cobre este período nesta loja (o espelho só existe onde está ligado). Mostrando o valor de sempre.</p>}
         {vm?.periodo?.cortado && <p className="text-[13px] text-text-muted">Valor do movimento só existe no período coberto pelo kardex: mostrando de {fmtData(vm.periodo.ini)} a {fmtData(vm.periodo.fim)}.</p>}
+        {vm?.aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{vm.aviso}</p>}
         {vm?.erro && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler o kardex ({vm.erro}). Os valores podem estar incompletos.</p>}
         {usarValorMov && vm!.semCusto > 0 && <p className="text-[13px] text-text-muted">{vm!.semCusto.toLocaleString('pt-BR')} movimento(s) sem custo no kardex entram com valor zero.</p>}
       </div>

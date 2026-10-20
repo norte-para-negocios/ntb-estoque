@@ -254,13 +254,15 @@ export async function carregarMovimentacoes(lojaId: number, sp: Record<string, s
   const comoKardex = lerFiltrosMovimentacoes(sp, hoje, !espelhoCompleto)
   // Loja com espelho, mas o kardex ainda não cobre o período (backfill de dias depois de ligar a flag): a lista
   // reconstruída é completa; o kardex nesse período mostraria só os produtos já abertos na tela do produto.
-  if (escolherFonte({ espelho: espelhoCompleto, desde: cobertura.desde, ini: comoKardex.ini }) === 'kardex') {
+  if (escolherFonte({ espelho: espelhoCompleto, desde: cobertura.desde, ini: comoKardex.ini, ate: cobertura.ate, fim: comoKardex.fim }) === 'kardex') {
     const [res, origens] = await Promise.all([doKardex(lojaId, comoKardex, porPagina, cobertura.desde), origensKardex(lojaId, hoje)])
     return { filtros: comoKardex, res, origens }
   }
   const filtros = espelhoCompleto ? lerFiltrosMovimentacoes(sp, hoje, true) : comoKardex
   const avisos = espelhoCompleto
-    ? [cobertura.desde
+    ? [cobertura.desde && cobertura.desde <= comoKardex.ini
+        ? `O kardex do Omie desta loja está lido até ${(cobertura.ate ?? '').split('-').reverse().join('/') || 'uma data anterior'}: para um período que passa disso, a lista abaixo é montada a partir de ajustes, vendas, OPs e notas.`
+        : cobertura.desde
         ? `O kardex completo do Omie começa em ${cobertura.desde.split('-').reverse().join('/')}: para um período que começa antes disso, a lista abaixo é montada a partir de ajustes, vendas, OPs e notas.`
         : 'O kardex da loja inteira ainda está sendo lido do Omie: enquanto isso, a lista abaixo é montada a partir de ajustes, vendas, OPs e notas.']
     : []

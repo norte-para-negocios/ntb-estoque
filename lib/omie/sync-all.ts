@@ -41,3 +41,26 @@ export async function getLojasEspelhoCompleto(): Promise<LojaOmie[]> {
     .filter(lojaPodeEspelhar)
     .map(({ id, omie_app_key, omie_app_secret, is_test }) => ({ id, omie_app_key, omie_app_secret, is_test }))
 }
+
+/**
+ * Lojas que consultam a OP a cada aviso do webhook e entram no cron de OPs fantasmas (`lojas.omie_op_tempo_real`,
+ * migration 250, padrão false = o comportamento de 16/10 a 20/10 em todas as lojas). Sem a coluna ou com erro: nenhuma
+ * (na dúvida, não consulta o Omie).
+ */
+export async function lojasOpTempoReal(): Promise<Set<number>> {
+  const { data, error } = await createServiceClient({ semAutor: true }).from('lojas').select('id').eq('omie_op_tempo_real', true)
+  if (error) {
+    console.error(`[omie_op_tempo_real] ${error.message}`)
+    return new Set()
+  }
+  return new Set((data ?? []).map((l) => Number(l.id)))
+}
+
+export async function lojaOpTempoReal(lojaId: number): Promise<boolean> {
+  const { data, error } = await createServiceClient({ semAutor: true }).from('lojas').select('omie_op_tempo_real').eq('id', lojaId).maybeSingle()
+  if (error) {
+    console.error(`[omie_op_tempo_real] loja ${lojaId}: ${error.message}`)
+    return false
+  }
+  return (data as { omie_op_tempo_real?: boolean | null } | null)?.omie_op_tempo_real === true
+}

@@ -42,5 +42,5 @@ export function lojaPodeEspelhar(l: LojaCandidata): boolean {
 /** Bloqueio/consumo redundante/requisição em andamento: parar a loja no ciclo, sem repetir. */
 export function ehErroDeLimiteOmie(msg: string, faultCode: string | undefined): boolean {
   return faultCode === 'MISUSE_API_PROCESS'
-    || /MISUSE|consumo indevido|bloquead|REDUNDANT|consumo redundante|j. existe uma requisi|too many requests/i.test(msg)
+    || /MISUSE|consumo indevido|bloquead|REDUNDANT|consumo redundante|j. existe uma requisi|too many requests|rate limit|HTTP 42[59]\b/i.test(msg)
 }

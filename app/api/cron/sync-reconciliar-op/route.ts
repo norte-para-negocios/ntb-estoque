@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { reconciliarOPsFantasmas } from '@/lib/omie/ordem-producao'
-import { getLojasAtivas, assertCronAuth } from '@/lib/omie/sync-all'
-import { createServiceClient } from '@/lib/supabase/server'
+import { getLojasAtivas, assertCronAuth, lojasOpTempoReal } from '@/lib/omie/sync-all'
 
 export const maxDuration = 300
 
@@ -14,11 +13,11 @@ export async function GET(request: Request) {
   if (!assertCronAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  // 16/10: loja em faxina (espelho_completo=false) fica fora -- a faxina deixa dezenas de OPs abertas
-  // de proposito e consultar 40 delas a cada 10 min bloqueia o Omie (MISUSE em ConsultarOrdemProducao)
-  const { data: pausadas } = await createServiceClient().from('lojas').select('id').eq('espelho_completo', false)
-  const fora = new Set((pausadas ?? []).map((l) => l.id))
-  const lojas = (await getLojasAtivas()).filter((l) => !fora.has(l.id))
+  // 16/10: loja em faxina fica fora -- a faxina deixa dezenas de OPs abertas de proposito e consultar 40 delas a
+  // cada 10 min bloqueia o Omie (MISUSE em ConsultarOrdemProducao). Desde 20/10 (D5) o critério é a coluna
+  // `lojas.omie_op_tempo_real` (migration 250), não mais `espelho_completo` (que valia false em todas as lojas).
+  const ligadas = await lojasOpTempoReal()
+  const lojas = (await getLojasAtivas()).filter((l) => ligadas.has(l.id))
   const results = await Promise.allSettled(lojas.map((loja) => reconciliarOPsFantasmas(loja, 3, 40)))
   const resumo = results.map((r, i) => ({
     loja_id: lojas[i].id,

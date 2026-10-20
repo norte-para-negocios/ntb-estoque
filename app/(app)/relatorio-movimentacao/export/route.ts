@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     const rowsOper = [...porOper.values()]
       .sort((a, b) => (b.conf ? b.valor : 0) - (a.conf ? a.valor : 0))
       .map((o) => ({ origem: o.origem, sentido: o.sentido, qtde: o.qtde, valor: o.conf ? o.valor : 0 }))
-    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: locsSel.length ? `Local: ${locsSel.join(', ')}` : 'Todos os locais', autoFiltro: true }, nome: 'Por operação' })
+    abas.push({ rows: rowsOper, colunas: colsOper, opts: { titulo: 'Movimentação por operação', subtitulo: [locsSel.length ? `Local: ${locsSel.join(', ')}` : 'Todos os locais', vm?.aviso ? `AVISO: ${vm.aviso}` : ''].filter(Boolean).join(' · '), autoFiltro: true }, nome: 'Por operação' })
 
     // Aba 2: Perdas reais (manual saída, fora inventário) por família e mês.
     const perdas = rows.filter((r) => r.origem === 'Movimento Manual de Estoque' && r.sentido === 'S' && !r.inventario)

@@ -152,6 +152,10 @@ test('fonte: kardex só quando o histórico completo cobre o início do período
   assert.equal(escolherFonte({ espelho: true, desde: null, ini: '2026-10-01' }), 'reconstruido')
   assert.equal(escolherFonte({ espelho: true, desde: '2026-10-05', ini: '2026-10-01' }), 'reconstruido')
   assert.equal(escolherFonte({ espelho: true, desde: '2026-10-01', ini: '2026-10-01' }), 'kardex')
+  // D5: kardex parado (guarda) antes do fim do período → reconstruído
+  assert.equal(escolherFonte({ espelho: true, desde: '2026-09-01', ini: '2026-10-01', ate: '2026-10-18', fim: '2026-10-20' }), 'reconstruido')
+  assert.equal(escolherFonte({ espelho: true, desde: '2026-09-01', ini: '2026-10-01', ate: null, fim: '2026-10-20' }), 'reconstruido')
+  assert.equal(escolherFonte({ espelho: true, desde: '2026-09-01', ini: '2026-10-01', ate: '2026-10-20', fim: '2026-10-20' }), 'kardex')
 })
 
 test('kardex × OP por data: um movimento por esperado (quantidade igual, dia da conclusão primeiro), sem outras OPs', () => {
