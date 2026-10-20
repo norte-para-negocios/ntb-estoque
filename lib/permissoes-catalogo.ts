@@ -58,6 +58,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Transferencias - Criar', label: 'Criar' },
       { nome: 'Transferencias - Editar', label: 'Editar' },
       { nome: 'Transferencias - Excluir', label: 'Excluir' },
+      // Fase F (migration 261): transferência/remessa ENTRE LOJAS com nota (só estoque próprio).
+      { nome: 'Transferencias - Entre lojas', label: 'Registrar e cancelar transferência entre lojas (com nota)' },
     ],
   },
   {
@@ -108,6 +110,8 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
       { nome: 'Compras - Requisicoes', label: 'Criar e editar requisições de compra' },
       // Fase F (migration 231): devolução ao fornecedor no estoque próprio (sem emitir NF-e).
       { nome: 'Compras - Devolucao ao fornecedor', label: 'Registrar e cancelar devolução ao fornecedor' },
+      // Fase F (migration 260): emitir, consultar, cancelar e corrigir (CC-e) a NF-e de devolução e de transferência.
+      { nome: 'Compras - Emitir NF-e', label: 'Emitir, cancelar e corrigir NF-e de saída (devolução e transferência)' },
     ],
   },
   {
@@ -231,6 +235,8 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/tarefas-compras': 'Compras - Pedidos',
   '/compras-cadastros': 'Compras - Pedidos',
   '/devolucao-fornecedor': 'Compras - Devolucao ao fornecedor',
+  '/transferencia-loja': 'Transferencias - Entre lojas',
+  '/nfe-saida': 'Compras - Emitir NF-e',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

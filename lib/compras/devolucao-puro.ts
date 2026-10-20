@@ -7,15 +7,22 @@ export type SituacaoDevolucao = 'a_emitir' | 'emitida' | 'cancelada'
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-// CFOP de entrada → CFOP de devolução (o da devolução vem com 5 dentro do estado e 6 fora). Editável na emissão.
-const DEVOLUCAO: Record<string, string> = { '101': '201', '102': '202', '401': '410', '403': '411', '407': '413', '556': '556' }
+// CFOP de entrada → CFOP de devolução (5 dentro do estado, 6 fora; a NF-e acerta pela UF do fornecedor). Só pares com
+// CFOP de devolução válido na NF-e (indDevol=1; mesma tabela de lib/nfe-saida/regras-puro.ts). Entrada sem par
+// (bonificação 1.910, outras 1.949...) = '' (sem sugestão): a NF-e de devolução não sai pelo app (5.949 com finalidade 4
+// é rejeição 327). Sem CFOP de entrada: 5.202.
+const DEVOLUCAO: Record<string, string> = {
+  '101': '201', '102': '202', '126': '210', '151': '208', '152': '209', '401': '410', '403': '411', '406': '412', '407': '413',
+  '501': '503', '551': '553', '555': '555', '556': '556', '651': '660', '652': '661', '653': '662', '917': '918', '920': '921',
+}
 
 export function cfopDevolucao(cfopEntrada: string | null | undefined): string {
   const d = (cfopEntrada ?? '').replace(/\D/g, '')
-  if (!/^[123]\d{3}$/.test(d)) return '5.202'
-  const saida = d[0] === '1' ? '5' : '6'
-  const resto = DEVOLUCAO[d.slice(1)] ?? '949'
-  return `${saida}.${resto}`
+  if (!d) return '5.202'
+  if (!/^[123]\d{3}$/.test(d)) return ''
+  const resto = DEVOLUCAO[d.slice(1)]
+  if (!resto) return ''
+  return `${d[0] === '1' ? '5' : '6'}.${resto}`
 }
 
 export function devolvivel(recebido: number, jaDevolvido: number): number {

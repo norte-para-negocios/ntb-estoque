@@ -14,6 +14,8 @@
 // (comprador, prazo do fornecedor) e importar-pedidos (prévia e confirmação): tabelas das migrations 240–242, só com internet.
 // Fase G (19/10/2026): anexos#excluirAnexo, notificacoes#* e importacao#* ficam FORA de propósito: as tabelas novas
 // (migrations 221–223) não estão em offline_tabelas e o envio de anexo/planilha precisa do servidor (Storage). Só com internet.
+// Fase F NF-e de saída (20/10/2026): nfe-saida#* e transferencia-loja#* ficam FORA de propósito: assinam com o certificado
+// e falam com a SEFAZ (ou gravam nas tabelas das migrations 260/261, fora de offline_tabelas). Só com internet.
 export type ModoOffline = 'leitura' | 'local' | 'fila' | 'depende'
 
 const leitura = [

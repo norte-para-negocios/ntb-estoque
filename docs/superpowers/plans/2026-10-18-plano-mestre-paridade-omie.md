@@ -92,8 +92,8 @@ Atalho para as lojas que ficam no Omie: assinar os webhooks `Financas.ContaPagar
 
 ## Fase F — Fiscal de saída e contador (sob demanda; tamanho XL)
 
-1. **Devolução ao fornecedor** [H1] (NF-e de devolução; hoje "Desfazer entrada" apaga a compra).
-2. **Remessa / transferência entre lojas com nota** [H4].
+1. **Devolução ao fornecedor** [H1] (NF-e de devolução; hoje "Desfazer entrada" apaga a compra). Registro sem NF-e: migration 231 (19/10). NF-e: migration 260 + `lib/nfe-saida` (20/10, plano `2026-10-20-fase-f-nfe-saida.md`; só homologação até o OK do dono).
+2. **Remessa / transferência entre lojas com nota** [H4]. Migration 261 + `/transferencia-loja` (20/10, mesmo plano).
 3. **Pacote do contador**: XMLs do período, SPED/Bloco H, livro de entradas.
 4. **Fechamento de período** (trava edição de meses fechados; hoje só há aviso).
 5. Painel NFC-e do estoque próprio: importação de XML e apuração.

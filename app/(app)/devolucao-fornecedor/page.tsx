@@ -9,9 +9,12 @@ import { EmptyState } from '@/components/ui-kit/EmptyState'
 import { Money } from '@/components/ui-kit/Money'
 import { CartaoResumo as Card } from '@/components/faturamento/CartaoResumo'
 import { rotuloSituacaoDevolucao } from '@/lib/compras/devolucao-puro'
+import { nfesDasOrigens } from '@/lib/nfe-saida/loader'
+import { tpAmbDaNfe } from '@/lib/nfe-saida/ambiente'
+import { rotuloStatusNfe } from '@/lib/nfe-saida/regras-puro'
 
-// Fase F [H1]: devoluções ao fornecedor do estoque próprio (registradas na página da nota). Sem NF-e: as "a emitir"
-// esperam a emissão da NF-e de devolução, que o Norte Estoque ainda não faz.
+// Fase F [H1/F1]: devoluções ao fornecedor do estoque próprio (registradas na página da nota). A NF-e de devolução é
+// emitida no painel de cada devolução, na página da nota (migration 260); aqui só a situação.
 
 type Linha = {
   id: number; numero: number; situacao: string; data: string; motivo: string; valor_custo: number; valor_fiscal: number
@@ -30,11 +33,14 @@ export default async function DevolucoesFornecedorPage({ searchParams }: { searc
   const todas = (data ?? []) as Linha[]
   const vis = sp.situacao ? todas.filter((d) => d.situacao === sp.situacao) : todas
   const aEmitir = todas.filter((d) => d.situacao === 'a_emitir')
+  const tpAmb = tpAmbDaNfe()
+  const nfes = await nfesDasOrigens(lojaId, 'devolucao', vis.map((d) => d.id))
+  const nfeDe = (id: number) => (nfes?.get(id) ?? []).find((n) => n.tpAmb === tpAmb && n.status !== 'descartada') ?? null
 
   return (
     <div className="space-y-4">
       <PageHeader title="Devoluções ao fornecedor" icon={Undo2}
-        description="Itens devolvidos ao fornecedor: saem do estoque pelo custo da entrada. A NF-e de devolução ainda não é emitida pelo Norte Estoque." />
+        description="Itens devolvidos ao fornecedor: saem do estoque pelo custo da entrada. A NF-e de devolução é emitida na página da nota de entrada." />
       {error && <p className="rounded-[var(--r-lg)] bg-err/10 px-4 py-3 text-[13px] text-err">A devolução ao fornecedor ainda não foi ativada nesta instalação.</p>}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Card titulo="A emitir" valor={aEmitir.length.toLocaleString('pt-BR')} sub="esperando a NF-e de devolução" />
@@ -58,7 +64,10 @@ export default async function DevolucoesFornecedorPage({ searchParams }: { searc
                   <span className="block truncate text-[14px] font-medium text-text">Nº {d.numero} · {d.fornecedor_nome ?? 'Fornecedor'}</span>
                   <span className="text-[12px] text-text-muted">{dataBR(d.data)} · nota {d.numero_nota_origem ?? '—'} · {d.motivo}{d.criado_por_nome ? ` · ${d.criado_por_nome}` : ''}</span>
                 </span>
-                <span className={`text-[13px] ${d.situacao === 'a_emitir' ? 'text-warn' : 'text-text-muted'}`}>{rotuloSituacaoDevolucao(d.situacao)}</span>
+                <span className={`text-[13px] ${d.situacao === 'a_emitir' ? 'text-warn' : 'text-text-muted'}`}>
+                  {rotuloSituacaoDevolucao(d.situacao)}
+                  {nfeDe(d.id) && <span className="block text-[12px] text-text-muted">NF-e {nfeDe(d.id)!.numero}{tpAmb === 2 ? ' (homologação)' : ''}: {rotuloStatusNfe(nfeDe(d.id)!.status)}</span>}
+                </span>
                 <span className="num text-right text-[13px] text-text">custo <Money value={Number(d.valor_custo)} /> · nota <Money value={Number(d.valor_fiscal)} /></span>
               </Link>
             </li>

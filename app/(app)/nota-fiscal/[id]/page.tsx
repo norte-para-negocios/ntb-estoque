@@ -27,6 +27,8 @@ import { carregarPedidoDaNota } from './dados-pedido'
 import { PedidoDaNotaNF } from '@/components/nota-fiscal/PedidoDaNotaNF'
 import { DevolucaoFornecedorNF } from '@/components/nota-fiscal/DevolucaoFornecedorNF'
 import { carregarDevolucoesDaNota } from '@/lib/compras/devolucao-loader'
+import { nfesDasOrigens } from '@/lib/nfe-saida/loader'
+import { tpAmbDaNfe } from '@/lib/nfe-saida/ambiente'
 import { refsDaEntrada } from '@/lib/estoque/nf-entrada'
 import { HistoricoAlteracoes } from '@/components/historico/HistoricoAlteracoes'
 import { AnexosRegistro } from '@/components/anexos/AnexosRegistro'
@@ -122,6 +124,9 @@ export default async function NotaFiscalItensPage({
   // Fase F [H1] (só estoque próprio): devolução ao fornecedor dos itens que entraram no estoque, sem NF-e
   const devolucoes = conferencia?.compra && ['lancada', 'parcial'].includes(conferencia.compra.status) ? await carregarDevolucoesDaNota(lojaId, conferencia.compra.id) : null
   const podeDevolver = !!devolucoes && (await requirePermissao(lojaId, 'Compras - Devolucao ao fornecedor'))
+  // Fase F [F1]: NF-e de devolução de cada devolução registrada (sem a migration 260 o painel some)
+  const nfesDev = devolucoes?.devolucoes.length ? await nfesDasOrigens(lojaId, 'devolucao', devolucoes.devolucoes.map((d) => d.id)) : null
+  const podeNfe = !!nfesDev && (await requirePermissao(lojaId, 'Compras - Emitir NF-e'))
 
   function fmtData(d: string | null) {
     if (!d) return null
@@ -217,7 +222,8 @@ export default async function NotaFiscalItensPage({
           podeConferir={podeManifestar} alertas={conferencia.sefaz.alertas} conferidaEm={conferencia.compra?.conferidaEm ?? null} />
       )}
       {pedidoDaNota && conferencia?.compra && <PedidoDaNotaNF compraId={conferencia.compra.id} dados={pedidoDaNota} podeVincular={podeVincularPedido} />}
-      {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver} />}
+      {devolucoes && conferencia?.compra && <DevolucaoFornecedorNF compraId={conferencia.compra.id} dados={devolucoes} pode={podeDevolver}
+        nfesPorDevolucao={nfesDev ? Object.fromEntries(nfesDev) : null} tpAmb={tpAmbDaNfe()} podeNfe={podeNfe} />}
       <ItensNotaFiscal notaId={id} itens={(itens ?? []) as ItemNF[]} categorias={categorias ?? []} ligacoes={proprio ? null : { emissao: nf.d_emissao_nfe ?? null, hoje: hojeBahiaISO() }}
         nomesLocais={conferencia ? Object.fromEntries(conferencia.locais.map((l) => [l.codigo, l.descricao])) : undefined} />
 

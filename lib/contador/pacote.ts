@@ -116,13 +116,29 @@ export async function xmlsDasNotas(lojaId: number, chaves: string[]): Promise<{ 
   }
 }
 
+/** NF-e de SAÍDA emitidas pelo Norte Estoque no período (só PRODUÇÃO; Fase F, migration 260): procNFe das autorizadas
+ *  e canceladas, e o procEventoNFe do cancelamento e da última CC-e. Sem a 260 devolve vazio. */
+export async function xmlsNfeSaida(lojaId: number, ini: string, fim: string): Promise<{ arquivos: ArquivoZip[]; notas: number; canceladas: number }> {
+  const { data, error } = await createServiceClient().from('nfe_saida').select('chave, status, xml_autorizado, cancel_xml, cce_xml, cce_seq')
+    .eq('loja_id', lojaId).eq('tp_amb', 1).in('status', ['autorizada', 'cancelada']).gte('data_emissao', ini).lte('data_emissao', fim).order('numero')
+  if (error) return { arquivos: [], notas: 0, canceladas: 0 }
+  const arquivos: ArquivoZip[] = []
+  for (const n of data ?? []) {
+    if (n.xml_autorizado) arquivos.push({ nome: `xml-nfe-saida/NFe${n.chave}.xml`, dados: n.xml_autorizado as string })
+    if (n.cancel_xml) arquivos.push({ nome: `xml-nfe-saida/NFe${n.chave}-cancelamento.xml`, dados: n.cancel_xml as string })
+    if (n.cce_xml) arquivos.push({ nome: `xml-nfe-saida/NFe${n.chave}-cce${n.cce_seq}.xml`, dados: n.cce_xml as string })
+  }
+  return { arquivos, notas: (data ?? []).length, canceladas: (data ?? []).filter((n) => n.status === 'cancelada').length }
+}
+
 /** Pacote do mês: XMLs + livro (Excel e PDF) + Bloco H (Excel) + LEIA-ME. */
 export async function montarPacote(lojaId: number, mes: string, dataBlocoH: string): Promise<{ zip: Buffer; nome: string }> {
   const loja = await nomeDaLoja(lojaId)
   const [livro, bloco] = await Promise.all([carregarLivroEntradas(lojaId, mes), carregarBlocoH(lojaId, dataBlocoH)])
   const chaves = [...new Set(livro.notas.map((n) => n.chave).filter((c): c is string => !!c && /^\d{44}$/.test(c)))]
-  const [xlsLivro, pdf, xlsBloco, xmls] = await Promise.all([
+  const [xlsLivro, pdf, xlsBloco, xmls, saida] = await Promise.all([
     planilhaLivro(livro, loja, mes), pdfLivro(livro, loja, mes), planilhaBlocoH(bloco, loja), xmlsDasNotas(lojaId, chaves),
+    xmlsNfeSaida(lojaId, livro.ini, livro.fim),
   ])
   const semChave = livro.notas.filter((n) => !n.chave || !/^\d{44}$/.test(n.chave)).map((n) => n.numero ?? String(n.id))
   const leiaMe = [
@@ -136,7 +152,7 @@ export async function montarPacote(lojaId: number, mes: string, dataBlocoH: stri
     ...(semChave.length ? ['', `Notas sem chave de acesso (lançadas sem XML): ${semChave.join(', ')}`] : []),
     ...(livro.erros.length || bloco.erros.length ? ['', `ATENÇÃO: falha ao ler ${[...livro.erros, ...bloco.erros].join(', ')}. Gere o pacote de novo.`] : []),
     '',
-    'Devoluções ao fornecedor registradas no Norte Estoque ainda não têm NF-e emitida por ele e não entram neste pacote.',
+    `xml-nfe-saida/: ${saida.notas} NF-e de saída emitida(s) pelo Norte Estoque em produção (devolução ao fornecedor e transferência entre lojas)${saida.canceladas ? `, ${saida.canceladas} cancelada(s) (com o XML do cancelamento)` : ''}. Devolução ainda "a emitir" não tem NF-e e não entra.`,
   ].join('\r\n')
   const arquivos: ArquivoZip[] = [
     { nome: 'LEIA-ME.txt', dados: leiaMe },
@@ -144,6 +160,7 @@ export async function montarPacote(lojaId: number, mes: string, dataBlocoH: stri
     { nome: 'livro-de-entradas.pdf', dados: pdf },
     { nome: `inventario-bloco-h-${bloco.dataPedida}.xlsx`, dados: xlsBloco },
     ...xmls.arquivos,
+    ...saida.arquivos,
   ]
   return { zip: criarZip(arquivos), nome: `pacote-contador-${mes}.zip` }
 }

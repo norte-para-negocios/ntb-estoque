@@ -9,6 +9,8 @@ import { Spinner } from '@/components/ui-kit/Spinner'
 import { cancelarDevolucao, registrarDevolucao } from '@/lib/actions/devolucao-fornecedor'
 import { rotuloSituacaoDevolucao, validarDevolucao } from '@/lib/compras/devolucao-puro'
 import type { DevolucoesDaNota } from '@/lib/compras/devolucao-loader'
+import type { NfeResumo } from '@/lib/nfe-saida/loader'
+import { PainelNfeSaida } from '@/components/nfe-saida/PainelNfeSaida'
 
 const q = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -20,8 +22,9 @@ const lerNum = (t: string) => {
 const th = 'whitespace-nowrap px-2.5 py-2 text-left text-[12px] font-semibold text-text-muted'
 
 // Seção da nota (estoque próprio): devolver itens ao fornecedor. Sai do estoque na hora (ao custo da entrada) e fica
-// "Devolução a emitir": a NF-e de devolução ainda não é emitida pelo Norte Estoque.
-export function DevolucaoFornecedorNF({ compraId, dados, pode }: { compraId: number; dados: DevolucoesDaNota; pode: boolean }) {
+// "Devolução a emitir"; a NF-e de devolução sai pelo painel de cada devolução (Fase F, F1; migration 260).
+type NfeProps = { nfesPorDevolucao?: Record<number, NfeResumo[]> | null; tpAmb?: 1 | 2; podeNfe?: boolean }
+export function DevolucaoFornecedorNF({ compraId, dados, pode, nfesPorDevolucao, tpAmb = 2, podeNfe = false }: { compraId: number; dados: DevolucoesDaNota; pode: boolean } & NfeProps) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [qtd, setQtd] = useState<Record<number, string>>({})
@@ -41,7 +44,7 @@ export function DevolucaoFornecedorNF({ compraId, dados, pode }: { compraId: num
     start(async () => {
       const r = await registrarDevolucao({ compraId, itens: escolhidos, motivo, chave })
       if ('error' in r) { setErro(r.error); return }
-      toast.success(`Devolução nº ${r.numero} registrada`, { description: 'Os itens saíram do estoque. A NF-e de devolução ainda precisa ser emitida.' })
+      toast.success(`Devolução nº ${r.numero} registrada`, { description: 'Os itens saíram do estoque. Agora emita a NF-e de devolução.' })
       setAberto(false); setQtd({}); setMotivo('')
       router.refresh()
     })
@@ -58,7 +61,7 @@ export function DevolucaoFornecedorNF({ compraId, dados, pode }: { compraId: num
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Devolver itens ao fornecedor</DialogTitle>
-                <p className="text-[13px] text-text-muted">Os itens saem do estoque agora, pelo custo da entrada. A NF-e de devolução não é emitida por aqui: a devolução fica &quot;a emitir&quot;.</p>
+                <p className="text-[13px] text-text-muted">Os itens saem do estoque agora, pelo custo da entrada. A devolução fica &quot;a emitir&quot; até a NF-e de devolução ser autorizada (botão &quot;Emitir NF-e de devolução&quot; na devolução registrada).</p>
               </DialogHeader>
               <div className="max-h-[50vh] space-y-3 overflow-auto text-[13px]">
                 <table className="w-full">
@@ -94,13 +97,13 @@ export function DevolucaoFornecedorNF({ compraId, dados, pode }: { compraId: num
       </div>
       {dados.devolucoes.length === 0 && <p className="text-[13px] text-text-muted">Nenhuma devolução desta nota.</p>}
       <ul className="divide-y divide-[var(--border)]">
-        {dados.devolucoes.map((d) => <LinhaDevolucao key={d.id} d={d} pode={pode} />)}
+        {dados.devolucoes.map((d) => <LinhaDevolucao key={d.id} d={d} pode={pode} nfes={nfesPorDevolucao?.[d.id] ?? []} tpAmb={tpAmb} podeNfe={podeNfe} nfeAtivada={!!nfesPorDevolucao} />)}
       </ul>
     </section>
   )
 }
 
-function LinhaDevolucao({ d, pode }: { d: DevolucoesDaNota['devolucoes'][number]; pode: boolean }) {
+function LinhaDevolucao({ d, pode, nfes, tpAmb, podeNfe, nfeAtivada }: { d: DevolucoesDaNota['devolucoes'][number]; pode: boolean; nfes: NfeResumo[]; tpAmb: 1 | 2; podeNfe: boolean; nfeAtivada: boolean }) {
   const router = useRouter()
   const [pend, start] = useTransition()
   const [motivo, setMotivo] = useState('')
@@ -117,6 +120,9 @@ function LinhaDevolucao({ d, pode }: { d: DevolucoesDaNota['devolucoes'][number]
         {d.itens.map((i) => <li key={i.linha}>{i.linha}. {i.descricao}: {q(i.quantidade)} a {brl(i.custoUnitario)}{i.cfop ? ` · CFOP ${i.cfop}` : ''}</li>)}
       </ul>
       {d.situacao === 'cancelada' && d.motivoCancelamento && <p className="text-text-muted">Cancelada{d.canceladoPor ? ` por ${d.canceladoPor}` : ''}: {d.motivoCancelamento}</p>}
+      {nfeAtivada && (d.situacao !== 'cancelada' || nfes.length > 0) && (
+        <PainelNfeSaida origem="devolucao" origemId={d.id} nfes={nfes} tpAmb={tpAmb} pode={podeNfe} emitivel={d.situacao === 'a_emitir'} />
+      )}
       {pode && d.situacao === 'a_emitir' && (
         abrir ? (
           <div className="flex flex-wrap items-center gap-2">
