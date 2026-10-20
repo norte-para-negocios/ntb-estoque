@@ -61,3 +61,16 @@ test('omieRequest usa o detector de escrita do módulo puro (AlteraPedCompra/Ups
   assert.ok(s.includes("ehChamadaDeEscrita, msRestantesBloqueio"))
   assert.equal(s.includes('function ehChamadaDeEscrita'), false)
 })
+
+test('revisão I1: a tentativa só vira "enviando" pela RPC que trava o pedido (nunca por update direto na fila)', () => {
+  const s = ler('lib/omie/pedido-compra-gravar.ts')
+  assert.ok(s.includes("rpc('pc_omie_reivindicar'"))
+  assert.equal(/status:\s*'enviando'/.test(s), false)
+})
+
+test('revisão I3: "Enviar/Conferir no Omie" exige quem aprova, não pula a espera e olha o bloqueio gravado antes', () => {
+  const s = corpo(ler('lib/actions/pedido-compra.ts'), 'enviarPedidoAoOmieAgora')
+  assert.ok(s.includes("contexto('Compras - Aprovar pedidos')"))
+  assert.equal(s.includes('manual'), false)
+  antes(ler('lib/omie/pedido-compra-gravar.ts'), 'await msBloqueioGravado(loja.omie_app_key)', 'const r = await reivindicar(')
+})

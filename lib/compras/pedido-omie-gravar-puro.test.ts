@@ -5,6 +5,7 @@ import {
   bloqueioEtapaPorOmie, codigoIntegracaoItem, codigoIntegracaoPedido, codigoOmieDoFornecedor, dataParaOmie, decidirFalhaPedido,
   ehPedidoJaExiste, ehPedidoNaoEncontrado, gravacaoPedidosOmieLigada, montarIncluirPedCompra, motivoSemGravacaoPedidoOmie,
   pedidoCompraNaLoja, pedidoIncluido, pedidoNtbDoCodigo, TETO_PERMANENTE, TETO_TRANSITORIO,
+  inclusaoIncerta, payloadParaGuardar, payloadsDivergem, msBloqueioPersistido, JANELA_BLOQUEIO_PERSISTIDO_MS,
   type ConfigPedidoOmie, type PedidoParaOmie,
 } from './pedido-omie-gravar-puro.ts'
 
@@ -35,8 +36,16 @@ test('flag desligada: pedido de compra só na loja de estoque próprio (regra de
   }
 })
 
+test('flag ligada fora da produção (NTB_AMBIENTE) não grava: o código NTB-PC-<id> colidiria com o banco de produção', () => {
+  for (const amb of [undefined, '', 'dev', 'teste', 'PRODUCAO']) {
+    const env = { OMIE_GRAVAR_PEDIDOS_COMPRA: '1', NTB_AMBIENTE: amb }
+    assert.match(motivoSemGravacaoPedidoOmie(env, { id: 2, modo: 'omie', optIn: true })!, /NTB_AMBIENTE/)
+    assert.equal(pedidoCompraNaLoja(env, { id: 2, modo: 'omie', optIn: true }), null)
+  }
+})
+
 test('flag ligada: precisa do opt-in da loja, modo Omie, e loja 4 nunca', () => {
-  const env = { OMIE_GRAVAR_PEDIDOS_COMPRA: '1' }
+  const env = { OMIE_GRAVAR_PEDIDOS_COMPRA: '1', NTB_AMBIENTE: 'producao' }
   assert.equal(motivoSemGravacaoPedidoOmie(env, { id: 2, modo: 'omie', optIn: true }), null)
   assert.match(motivoSemGravacaoPedidoOmie(env, { id: 6, modo: 'omie', optIn: false })!, /liberada/)
   assert.match(motivoSemGravacaoPedidoOmie(env, { id: 4, modo: 'omie', optIn: true })!, /loja 4/)
@@ -79,6 +88,17 @@ test('unidade de estoque: quantidade × fator e preço ÷ fator preservam o valo
   assert.ok('payload' in r)
   const [cx] = r.payload.produtos_incluir
   assert.equal(Math.round(cx.nQtde * cx.nValUnit * 100) / 100, 1078.2)
+})
+
+test('parcelas fecham com o total que o Omie calcula das linhas enviadas (nQtde × nValUnit arredondados)', () => {
+  // 100.000 un. de 3 por R$ 10: nValUnit 3,333333 → o Omie soma 999.999,90, não 1.000.000,00
+  const r = montar((p) => { p.itens = [{ ...p.itens[0], fator: 3, quantidade: 100_000, precoUnitario: 10, codigoLocal: null }]; p.frete = 0 })
+  assert.ok('payload' in r)
+  const [it] = r.payload.produtos_incluir
+  const totalOmie = Math.round(it.nQtde * it.nValUnit * 100) / 100
+  assert.equal(totalOmie, 999999.9)
+  const soma = r.payload.parcelas_incluir!.reduce((a, x) => a + x.nValor, 0)
+  assert.equal(Math.round(soma * 100) / 100, totalOmie)
 })
 
 test('sem parcelas, frete, categoria, contato: campos omitidos (Omie usa o padrão)', () => {
@@ -180,7 +200,42 @@ test('falha: nunca repete em laço — sempre espaça e tem teto', () => {
   assert.equal(d.tentativas, TETO_TRANSITORIO); assert.equal(n, TETO_TRANSITORIO)
 })
 
+test('inclusão incerta: só falta de negócio do Omie garante que nada foi criado', () => {
+  assert.equal(inclusaoIncerta('Omie não respondeu em 30s (IncluirPedCompra). Tente novamente.', 'TIMEOUT', true), true)
+  assert.equal(inclusaoIncerta('fetch failed', undefined, false), true)
+  assert.equal(inclusaoIncerta('Resposta do Omie sem nCodPed: {}', undefined, false), true)
+  assert.equal(inclusaoIncerta('SOAP-ERROR: Internal Error', 'SOAP-ENV:Server', true), true)
+  assert.equal(inclusaoIncerta('Produto [3155667788] não cadastrado!', 'SOAP-ENV:Client-103', true), false)
+  assert.equal(inclusaoIncerta('Já existe um pedido de compra com o Código de Integração [NTB-PC-1]', 'SOAP-ENV:Client-102', true), false)
+  assert.equal(inclusaoIncerta('A API foi bloqueada por consumo indevido. Aguarde 1800 segundos.', 'MISUSE_API_PROCESS', true), false)
+  assert.equal(inclusaoIncerta('API do Omie bloqueada para esta loja por consumo indevido (libera em ~3 min).', 'MISUSE_API_PROCESS', true), false)
+})
+
+test('payload guardado sem o e-mail do aprovador; divergência na adoção', () => {
+  const r = montar((_p, c) => { c.emailAprovador = 'aprovador@loja.com.br' })
+  assert.ok('payload' in r)
+  const g = payloadParaGuardar(r.payload)
+  assert.equal(JSON.stringify(g).includes('aprovador@loja.com.br'), false)
+  assert.equal(r.payload.cabecalho_incluir.cEmailAprovador, 'aprovador@loja.com.br')  // o original não muda
+  assert.equal(payloadsDivergem(g, r.payload), false)
+  const r2 = montar((p, c) => { c.emailAprovador = 'aprovador@loja.com.br'; p.itens[1].quantidade = 41 })
+  assert.ok('payload' in r2)
+  assert.equal(payloadsDivergem(g, r2.payload), true)
+  assert.equal(payloadsDivergem(null, r.payload), true)
+})
+
+test('bloqueio do Omie gravado no banco vale por 35 min a partir do registro', () => {
+  const agora = Date.parse('2026-10-20T12:00:00Z')
+  assert.equal(msBloqueioPersistido('2026-10-20T11:30:00Z', agora), 5 * 60_000)
+  assert.equal(msBloqueioPersistido(new Date(agora - JANELA_BLOQUEIO_PERSISTIDO_MS - 1).toISOString(), agora), 0)
+  assert.equal(msBloqueioPersistido(null, agora), 0)
+  assert.equal(msBloqueioPersistido('lixo', agora), 0)
+})
+
 test('etapa: pedido já no Omie não reabre nem cancela no NTB', () => {
+  assert.match(bloqueioEtapaPorOmie('cancelar', 'pendente', null, true)!, /Conferir no Omie/)
+  assert.match(bloqueioEtapaPorOmie('reabrir', 'precisa_corrigir', null, true)!, /Conferir no Omie/)
+  assert.equal(bloqueioEtapaPorOmie('reabrir', 'precisa_corrigir', null, false), null)
   assert.match(bloqueioEtapaPorOmie('cancelar', 'enviado', '000123')!, /nº 000123/)
   assert.match(bloqueioEtapaPorOmie('reabrir', 'enviando')!, /agora/)
   assert.equal(bloqueioEtapaPorOmie('reabrir', 'pendente'), null)

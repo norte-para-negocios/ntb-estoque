@@ -8,8 +8,9 @@ import { parcelasDoPedido, type Parcela } from './pedido-puro.ts'
 import { bloqueioDaResposta, classificarErroOmie, ehRecusaDoDisjuntor, proximaTentativa } from '../omie/erros-omie.ts'
 
 // ---------------------------------------------------------------------------------------------------------------
-// Portões. Nada escreve no Omie sem os DOIS: variável OMIE_GRAVAR_PEDIDOS_COMPRA=1 no servidor E a loja com
-// lojas.omie_gravar_pedidos_compra = true (migration 270, padrão false).
+// Portões. Nada escreve no Omie sem: variável OMIE_GRAVAR_PEDIDOS_COMPRA=1 no servidor, NTB_AMBIENTE=producao (o
+// cCodIntPed NTB-PC-<id> só é único no banco de produção: um banco de dev/cópia com as chaves do Omie geraria códigos
+// iguais a pedidos reais) E a loja com lojas.omie_gravar_pedidos_compra = true (migration 270, padrão false).
 
 export function gravacaoPedidosOmieLigada(env: Record<string, string | undefined>): boolean {
   return env.OMIE_GRAVAR_PEDIDOS_COMPRA === '1'
@@ -23,6 +24,7 @@ export type LojaPedidoOmie = { id: number; modo: string | null; optIn: boolean }
 /** null = esta loja pode criar pedido no NTB e gravar no Omie. Senão, o motivo (a ordem importa: env primeiro). */
 export function motivoSemGravacaoPedidoOmie(env: Record<string, string | undefined>, loja: LojaPedidoOmie): string | null {
   if (!gravacaoPedidosOmieLigada(env)) return 'Gravação de pedidos de compra no Omie desligada (OMIE_GRAVAR_PEDIDOS_COMPRA).'
+  if (env.NTB_AMBIENTE !== 'producao') return 'Gravação de pedidos de compra no Omie só no servidor de produção (NTB_AMBIENTE=producao).'
   if (loja.modo !== 'omie') return 'Só loja de estoque Omie grava pedido de compra no Omie.'
   if (loja.id === LOJA_BLOQUEADA_PEDIDO_OMIE) return 'A loja 4 (Sertão) está bloqueada para escrita no Omie pela tela.'
   if (!loja.optIn) return 'Esta loja ainda não foi liberada para gravar pedidos de compra no Omie.'
@@ -201,7 +203,8 @@ export function montarIncluirPedCompra(p: PedidoParaOmie, cfg: ConfigPedidoOmie)
   if ((Number(p.frete) || 0) < 0 || (Number(p.outrasDespesas) || 0) < 0) erros.push('Frete e outras despesas não podem ser negativos.')
   if (erros.length) return { erros }
 
-  const mercadorias = arred(p.itens.reduce((a, i) => a + i.quantidade * i.precoUnitario, 0), 2)
+  // Total como o Omie vai calcular: das linhas enviadas (nQtde × nValUnit já arredondados), para as parcelas fecharem.
+  const mercadorias = arred(produtos.reduce((a, i) => a + arred(i.nQtde * i.nValUnit, 2), 0), 2)
   const total = arred(mercadorias + (Number(p.frete) || 0) + (Number(p.outrasDespesas) || 0), 2)
   const parcelas = parcelasDoPedido(p.parcelas ?? [], total, p.previsaoEntrega)
 
@@ -282,11 +285,40 @@ export function decidirFalhaPedido(msg: string, faultCode: string | undefined, t
 // Etapas do NTB × gravação no Omie.
 
 /** Mudança de etapa recusada porque o pedido já está (ou pode estar) no Omie. A migration 270 tem o mesmo gatilho. */
-export function bloqueioEtapaPorOmie(acao: string, statusOmie: StatusEnvio | null | undefined, numeroOmie?: string | null): string | null {
+export function bloqueioEtapaPorOmie(acao: string, statusOmie: StatusEnvio | null | undefined, numeroOmie?: string | null, incerto?: boolean | null): string | null {
   if (!['reabrir', 'cancelar'].includes(acao)) return null
   if (statusOmie === 'enviando') return 'Este pedido está sendo gravado no Omie agora. Tente de novo em instantes.'
   if (statusOmie === 'enviado') return `Este pedido já está no Omie${numeroOmie ? ` (nº ${numeroOmie})` : ''}: altere ou cancele lá. O NTB ainda não altera nem exclui pedido no Omie.`
+  if (incerto) return 'Este pedido pode já ter sido gravado no Omie (a última tentativa ficou sem resposta). Use "Conferir no Omie" antes de reabrir ou cancelar.'
   return null
+}
+
+/**
+ * A inclusão pode ter sido gravada no Omie mesmo com erro? Só um "não" do próprio Omie (falta de negócio: produto não
+ * cadastrado, campo inválido, já existe) garante que nada foi criado. Tempo esgotado, rede, HTTP 5xx, "Internal Error" e
+ * afins = incerto (a próxima tentativa consulta antes, e o pedido não reabre/cancela até a consulta). Bloqueio do Omie e
+ * recusa do nosso disjuntor = a chamada foi recusada antes de processar = não incerto.
+ */
+export function inclusaoIncerta(msg: string, faultCode: string | undefined, ehRespostaDoOmie: boolean): boolean {
+  if (ehRecusaDoDisjuntor(msg) || bloqueioDaResposta(msg, faultCode) != null) return false
+  if (!ehRespostaDoOmie || faultCode === 'TIMEOUT') return true
+  return classificarErroOmie(msg) === 'transitorio'
+}
+
+/** Payload como fica guardado (pedidos_compra_omie.payload, integration_attempts): sem o e-mail do aprovador. */
+export function payloadParaGuardar(p: IncluirPedCompra): IncluirPedCompra {
+  const c = JSON.parse(JSON.stringify(p)) as IncluirPedCompra
+  if (c.cabecalho_incluir.cEmailAprovador) c.cabecalho_incluir.cEmailAprovador = '(configurado na loja)'
+  return c
+}
+
+/**
+ * Pedido adotado (já estava no Omie, de uma tentativa anterior): o que o Omie tem é o payload DAQUELA tentativa. Diverge
+ * do pedido atual do NTB? Sem payload anterior guardado = não dá para saber = conta como divergente (conferir no Omie).
+ */
+export function payloadsDivergem(anterior: unknown, atual: IncluirPedCompra): boolean {
+  if (anterior == null || typeof anterior !== 'object') return true
+  return JSON.stringify(anterior) !== JSON.stringify(payloadParaGuardar(atual))
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -295,19 +327,27 @@ export function bloqueioEtapaPorOmie(acao: string, statusOmie: StatusEnvio | nul
 
 /** 'enviando' parado há mais que isso = tentativa morta no meio: reivindica e CONSULTA antes de incluir. */
 export const ENVIANDO_TRAVADO_MS = 60 * 60_000
-/** Botão "Enviar agora": no máximo 1 tentativa a cada 2 min por pedido. */
-export const INTERVALO_MANUAL_MS = 2 * 60_000
-
-/** Condição extra para reivindicar um pedido 'pendente' (além de status = pendente). */
-export function filtroReivindicarPendente(agoraMs: number, manual: boolean): string {
-  return manual
-    ? `ultima_tentativa_em.is.null,ultima_tentativa_em.lte."${new Date(agoraMs - INTERVALO_MANUAL_MS).toISOString()}"`
-    : `proxima_tentativa_em.is.null,proxima_tentativa_em.lte."${new Date(agoraMs).toISOString()}"`
-}
-
-/** Fila do cron: pendente na hora, ou 'enviando' esquecido. */
+/**
+ * Fila do cron (candidatos): pendente na hora, ou 'enviando' esquecido. A decisão final é do pc_omie_reivindicar (270),
+ * que trava o pedido e reconfere etapa e horário na mesma transação.
+ */
 export function filtroFilaCron(agoraMs: number): string {
   const agora = new Date(agoraMs).toISOString()
   const travado = new Date(agoraMs - ENVIANDO_TRAVADO_MS).toISOString()
   return `and(status.eq.pendente,or(proxima_tentativa_em.is.null,proxima_tentativa_em.lte."${agora}")),and(status.eq.enviando,ultima_tentativa_em.lt."${travado}")`
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Bloqueio do Omie gravado no banco. O disjuntor do omieRequest é memória do processo: some num restart do servidor.
+// O bloqueio real fica em integration_attempts (model '[BLOQUEIO OMIE] <método>', logBloqueioReal); antes de chamar o
+// Omie, o envio de pedido olha os últimos 35 min (o bloqueio do Omie é de 30 min) de qualquer loja com a mesma chave.
+
+export const PREFIXO_LOG_BLOQUEIO = '[BLOQUEIO OMIE]'
+export const JANELA_BLOQUEIO_PERSISTIDO_MS = 35 * 60_000
+
+/** ms até o fim da janela contada a partir do último bloqueio registrado (0 = livre). */
+export function msBloqueioPersistido(ultimoBloqueioIso: string | null | undefined, agoraMs: number = Date.now()): number {
+  const t = Date.parse(ultimoBloqueioIso ?? '')
+  if (!Number.isFinite(t)) return 0
+  return Math.max(0, t + JANELA_BLOQUEIO_PERSISTIDO_MS - agoraMs)
 }

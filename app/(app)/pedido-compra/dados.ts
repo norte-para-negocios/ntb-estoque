@@ -6,6 +6,12 @@ import { etapaExibida, type EtapaPedido, type Parcela } from '@/lib/compras/pedi
 export type EnvioOmie = {
   status: 'pendente' | 'enviando' | 'enviado' | 'precisa_corrigir'; numeroOmie: string | null; nCodPed: number | null; tentativas: number
   ultimoErro: string | null; proximaTentativaEm: string | null; enviadoEm: string | null; ultimaTentativaEm: string | null
+  /** pode já estar no Omie (inclusão sem resposta): não reabre/cancela até conferir */
+  incerto: boolean
+  /** adotado de tentativa anterior com conteúdo diferente do pedido atual */
+  divergente: boolean
+  /** a espera da próxima tentativa já passou (calculado no servidor, na leitura) */
+  naHora: boolean
 }
 
 /** C1: estado da gravação no Omie de cada pedido (migration 270). Sem a migration: mapa vazio. */
@@ -13,14 +19,17 @@ export async function envioOmieDosPedidos(lojaId: number, ids: number[]): Promis
   const m = new Map<number, EnvioOmie>()
   if (!ids.length) return m
   const sb = await createClient()
+  const agora = Date.now()
   for (let i = 0; i < ids.length; i += 200) {
     const { data, error } = await sb.from('pedidos_compra_omie')
-      .select('pedido_id, status, numero_omie, n_cod_ped, tentativas, ultimo_erro, proxima_tentativa_em, enviado_em, ultima_tentativa_em')
+      .select('pedido_id, status, numero_omie, n_cod_ped, tentativas, ultimo_erro, proxima_tentativa_em, enviado_em, ultima_tentativa_em, incerto, divergente')
       .eq('loja_id', lojaId).in('pedido_id', ids.slice(i, i + 200))
     if (error) return new Map()
     for (const r of data ?? []) m.set(Number(r.pedido_id), {
       status: r.status, numeroOmie: r.numero_omie, nCodPed: r.n_cod_ped == null ? null : Number(r.n_cod_ped), tentativas: Number(r.tentativas) || 0,
       ultimoErro: r.ultimo_erro, proximaTentativaEm: r.proxima_tentativa_em, enviadoEm: r.enviado_em, ultimaTentativaEm: r.ultima_tentativa_em,
+      incerto: r.incerto === true, divergente: r.divergente === true,
+      naHora: !r.proxima_tentativa_em || Date.parse(r.proxima_tentativa_em) <= agora,
     })
   }
   return m

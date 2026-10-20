@@ -27,18 +27,35 @@ Data: 20/10/2026 · Branch de origem: `paridade-omie` · Migration: **270** (nã
 
 - **R1. Só o pedido aprovado vai ao Omie.** Rascunho/aguardando ficam só no NTB. Ao aprovar (`mudarEtapaPedido`), o pedido
   entra na fila (`pc_omie_enfileirar`) e a gravação é tentada na hora; se falhar, a aprovação continua valendo e o cron repete.
-- **R2. Pedido já gravado no Omie não reabre nem cancela no NTB** (gatilho `pedidos_compra_omie_etapa` na 270 + mesma regra
-  no TS, `bloqueioEtapaPorOmie`): alterar/cancelar é no Omie. `AlteraPedCompra`/`ExcluirPedCompra` ficam para depois (com OK).
+- **R2. Pedido gravado, em gravação ou que PODE estar no Omie não reabre nem cancela no NTB** (gatilho
+  `pedidos_compra_omie_etapa` na 270 + mesma regra no TS, `bloqueioEtapaPorOmie`): alterar/cancelar é no Omie.
+  "Pode estar" = `incerto` (ver R4). `AlteraPedCompra`/`ExcluirPedCompra` ficam para depois (com OK).
+  **Corrida com o envio (revisão I1)**: a tentativa só vira `enviando` pela RPC `pc_omie_reivindicar`, que trava a linha do
+  PEDIDO (`for update`) e confere `etapa = 'aprovado'` na mesma transação; `pc_acao` trava a mesma linha antes do gatilho, e o
+  gatilho lê a fila com `for update`. Quem chega depois espera e vê o que o outro gravou (`scripts/testes-sql/270_concorrencia.sh`).
 - **R3. Quantidade e preço vão em unidade de estoque** (quantidade × fator, preço ÷ fator): é a unidade do cadastro do
   produto no Omie e a que o recebimento confere. A unidade do pedido do NTB (CX, fardo) vai na observação do item.
 - **R4. Idempotência pelo código de integração**: `cCodIntPed = NTB-PC-<id do pedido>` (≤ 20 caracteres),
-  `cCodIntItem = <id>-<linha>`. Toda tentativa depois da 1ª, e todo `enviando` esquecido há mais de 1 h, faz
-  `ConsultarPedCompra {cCodIntPed}` antes de incluir; se o Omie responder "já existe" na inclusão, consulta e adota o `nCodPed`.
+  `cCodIntItem = <id>-<linha>`. **Estado `incerto` (revisão I2)**: antes de chamar o `IncluirPedCompra`, a linha da fila
+  grava `incerto = true` e o payload (sem o e-mail do aprovador). Só sucesso ou uma recusa de negócio do Omie (produto não
+  cadastrado, campo inválido, já existe) tira o `incerto`; tempo esgotado, rede, HTTP 5xx/"Internal Error", 200 sem `nCodPed`
+  ou processo morto no meio deixam `incerto` (`inclusaoIncerta`). Tentativa com `incerto` (ou que retoma um `enviando`
+  esquecido há mais de 1 h) faz `ConsultarPedCompra {cCodIntPed}` antes de incluir; "já existe" na inclusão também consulta e
+  adota o `nCodPed`. **Adoção** não troca o payload guardado (é o da tentativa que criou o pedido) e marca `divergente` se o
+  pedido atual do NTB for diferente (a tela avisa para conferir no Omie). Com `incerto` o pedido não reabre/cancela; se ele
+  sair da fila (`precisa_corrigir`), o botão vira **"Conferir no Omie"** (só consulta, no máximo 1× a cada 10 min): achou =
+  adota; não achou = tira o `incerto` e o pedido pode ser reaberto.
+  **Ambiente (revisão)**: o código só é único no banco de produção; um banco de dev/cópia com as chaves do Omie geraria
+  `NTB-PC-<id>` iguais a pedidos reais. Por isso a gravação também exige `NTB_AMBIENTE=producao` no servidor.
 - **R5. Limite do Omie** (10ª requisição com erro no mesmo método = 30 min de bloqueio da chave; incidente do Sertão):
   uma tentativa por pedido por vez (status `enviando` reivindicado no banco), espera crescente (10, 20, 40, 80, 120 min…),
   teto (erro permanente/desconhecido: 3 tentativas; transitório: 8), recusa do disjuntor/bloqueio **não conta tentativa** e
-  espera o bloqueio, o cron processa até 5 pedidos por loja e **para a loja no 1º erro do ciclo**, botão manual no máximo
-  1× a cada 2 min por pedido. Falta de dado no NTB não chega ao Omie (vira `precisa_corrigir` antes).
+  espera o bloqueio, o cron processa até 5 pedidos por loja e **para a loja no 1º erro do ciclo**. Falta de dado no NTB não
+  chega ao Omie (vira `precisa_corrigir` antes). **Revisão I3**: o botão "Enviar ao Omie agora" exige `Compras - Aprovar
+  pedidos`, respeita a espera da próxima tentativa e NÃO zera o teto; `pc_omie_enfileirar` só zera as tentativas quando o
+  pedido foi aprovado de novo depois da última tentativa (reabrir → editar → aprovar) e nunca com `incerto`. Antes de chamar o
+  Omie, além do disjuntor em memória (que some num restart), o envio olha o `[BLOQUEIO OMIE]` gravado em
+  `integration_attempts` nos últimos 35 min de qualquer loja com a mesma chave (consulta que falha = trata como bloqueado).
 - **R6. Loja de teste** (`is_test`): a inclusão é simulada pelo `omieRequest` (resposta sintética ganhou `nCodPed`/`cNumero`)
   e a consulta é pulada. **Achado corrigido junto**: o detector de escrita do `omieRequest` não reconhecia `AlteraPedCompra`
   (sem o "r") nem `UpsertPedCompra` — numa loja de teste esses métodos iriam ao Omie real. Agora `ehChamadaDeEscrita` está em
@@ -105,8 +122,9 @@ trava `pedidos-compra`. Completado no C1:
 | Portão | Onde | Padrão |
 |---|---|---|
 | `OMIE_GRAVAR_PEDIDOS_COMPRA=1` | `.env` do servidor | ausente = desligado |
+| `NTB_AMBIENTE=producao` | `.env` do servidor de produção | ausente = não grava (dev/cópia nunca grava) |
 | `lojas.omie_gravar_pedidos_compra` | migration 270 | `false` em todas |
-| loja 4 | código (`LOJA_BLOQUEADA_PEDIDO_OMIE`) e banco (`id <> 4`) | sempre bloqueada |
+| loja 4 | código (`LOJA_BLOQUEADA_PEDIDO_OMIE`), funções (`id <> 4`) e CHECK `lojas_omie_pedido_compra_nunca_loja4` | sempre bloqueada |
 | `OMIE_LER_PEDIDOS_COMPRA=1` | `.env` do servidor | ausente = desligado |
 
 Com as duas variáveis desligadas: `estadoPedidoCompraLoja` faz só a consulta de modo de antes e devolve `proprio`/null
@@ -121,8 +139,9 @@ a rota do cron responde `{desligado:true}` sem ler o banco, e ela **não** está
 
 - `supabase/migrations/270_pedido_compra_omie.sql` — colunas em `lojas` (opt-in, categoria, e-mail do aprovador),
   `pedidos_compra_omie` (fila/estado: `pendente → enviando → enviado | precisa_corrigir`, `n_cod_ped`, `numero_omie`,
-  tentativas, próxima tentativa, último erro, último payload), RLS de leitura por loja, gatilho de etapa,
-  `_pc_loja_propria` aceitando a loja liberada, `pc_omie_enfileirar`.
+  tentativas, próxima tentativa, último erro, último payload, `incerto`, `divergente`), RLS de leitura por loja (sem a coluna
+  `payload` para a sessão), gatilho de etapa (trava a fila), `_pc_loja_propria` aceitando a loja liberada, `pc_omie_enfileirar`
+  (só zera o teto com nova aprovação), `pc_omie_reivindicar` (trava o pedido e confere etapa/horário), CHECK da loja 4.
 - `lib/compras/pedido-omie-gravar-puro.ts` (+ teste, fixture `lib/compras/fixtures/pedido-omie-c1.fixture.json`) — portões,
   códigos de integração, montagem do payload, decisão de falha, filtros da fila.
 - `lib/omie/pedido-compra-gravar.ts` — envio (reivindica, monta, consulta na retentativa, inclui, registra em
@@ -143,7 +162,8 @@ node --test lib/compras/pedido-omie-gravar-puro.test.ts lib/compras/pedido-omie-
 docker exec ntb-teste-sql psql -U postgres -c "create database c1 template c2"
 docker exec -i ntb-teste-sql psql -v ON_ERROR_STOP=1 -U postgres -d c1 < supabase/migrations/270_pedido_compra_omie.sql
 docker exec -i ntb-teste-sql psql -v ON_ERROR_STOP=1 -U postgres -d c1 < scripts/testes-sql/270_pedido_compra_omie.sql
-bash scripts/testes-sql/270_fila_postgrest.sh c1      # filtros da fila pelo PostgREST local
+bash scripts/testes-sql/270_fila_postgrest.sh c1      # fila, RPC de reivindicação e bloqueio gravado pelo PostgREST local
+bash scripts/testes-sql/270_concorrencia.sh c1        # corrida cancelar × reivindicar (duas sessões)
 # regressão com a 270 aplicada: 200_pedido_compra.sql, 201_sugestao_compra.sql, 240_*, 241_*, 242_* no c1
 npx tsc --noEmit && npm run build
 ```
@@ -156,6 +176,8 @@ npx tsc --noEmit && npm run build
 3. `nQtde`/`nValUnit` com 6 casas são aceitos (ou o Omie arredonda para 4).
 4. Sem `cEmailAprovador` o pedido entra na etapa de aprovação do Omie (2003) — confirmar se a NF-e liga a pedido não aprovado.
 5. Com `xPed`/`nItemPed` na NF-e, o vínculo automático acontece com o pedido gravado pela API.
+6. `ConsultarPedCompra` por `cCodIntPed` de um pedido recém-incluído já o encontra (sem atraso), para a adoção depois de uma
+   inclusão incerta funcionar.
 
 ## Ativação (cada passo pede o OK explícito do dono)
 
@@ -164,10 +186,11 @@ confunde a conferência) e nunca a 4 (Sertão, bloqueada no código e no banco).
 
 0. Backup do Postgres (`ntb-backup-postgres` manual) e aplicar a **270**:
    `docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 270_pedido_compra_omie.sql`;
-   conferir `\df _pc_loja_propria` (1 overload), `select count(*) from lojas where omie_gravar_pedidos_compra` = 0;
+   conferir `\df _pc_loja_propria` e `\df pc_omie_reivindicar` (1 overload cada), `select count(*) from lojas where omie_gravar_pedidos_compra` = 0;
    `desktop/scripts/gerar-schema.sh` + versão do desktop (colunas novas em `lojas`). Deploy do código. Até aqui nada muda.
 1. **Ensaio sem escrita** na loja de teste gêmea da escolhida (`lojas.is_test`, `loja_origem_id` = 2 ou 6; inclusão simulada,
-   consulta pulada): `OMIE_GRAVAR_PEDIDOS_COMPRA=1` no `.env` do servidor + restart; `update lojas set omie_gravar_pedidos_compra = true where id = <gêmea>`.
+   consulta pulada): `OMIE_GRAVAR_PEDIDOS_COMPRA=1` e `NTB_AMBIENTE=producao` no `.env` do servidor de produção + restart
+   (nunca no `.env` de dev/cópia); `update lojas set omie_gravar_pedidos_compra = true where id = <gêmea>`.
    A gêmea não tem cadastro sincronizado pelos crons: antes, rodar as rotas `/api/sync/*` de produtos, fornecedores e locais
    dentro dela (são leituras do Omie real com a chave da loja de origem: pedem o mesmo OK de leitura). A leitura
    `PesquisarPedCompra` na gêmea também vai ao Omie real (só leitura).
@@ -187,17 +210,20 @@ confunde a conferência) e nunca a 4 (Sertão, bloqueada no código e no banco).
 
 1. **Parar na hora** (sem deploy): `update lojas set omie_gravar_pedidos_compra = false where id = <loja>;` — a tela da loja volta
    a 404, ações recusadas, o cron ignora a loja. Ou, para todas: tirar `OMIE_GRAVAR_PEDIDOS_COMPRA` do `.env` + restart.
-   Pedidos `pendente` ficam parados na fila (não vão ao Omie).
+   Pedidos `pendente` ficam parados na fila (não vão ao Omie). Pedido com `incerto = true` pode estar no Omie: conferir lá
+   pelo `cCodIntPed NTB-PC-<id>` antes de qualquer outra coisa.
 2. Pedido que já foi para o Omie e não deveria: excluir **no Omie** (tela de Pedidos de Compra, pelo nº em `numero_omie` /
    `cCodIntPed NTB-PC-<id>`). O NTB não exclui no Omie (R2). No NTB, para liberar o pedido:
    `delete from pedidos_compra_omie where pedido_id = <id>;` e então cancelar pela tela.
 3. Tirar o cron do `sync-cron.sh` (se já agendado).
-4. Desfazer a migration (só se for abandonar o C1), numa transação:
+4. Desfazer a migration (só se for abandonar o C1, depois dos passos 1–3), numa transação (`-v ON_ERROR_STOP=1`):
    ```sql
    begin;
+   set local lock_timeout = '5s';   -- lojas/pedidos_compra pegam lock exclusivo por instantes: se o sync segurar, desiste e roda de novo
    drop trigger if exists pedidos_compra_omie_etapa on public.pedidos_compra;
    drop function if exists public.trg_pedidos_compra_omie_etapa();
    drop function if exists public.pc_omie_enfileirar(bigint, bigint);
+   drop function if exists public.pc_omie_reivindicar(bigint, bigint, text, int);
    drop table if exists public.pedidos_compra_omie;
    create or replace function public._pc_loja_propria(p_loja bigint) returns void
    language plpgsql stable set search_path = public as $$
@@ -207,12 +233,16 @@ confunde a conferência) e nunca a 4 (Sertão, bloqueada no código e no banco).
      end if;
    end $$;
    alter table public.lojas drop constraint if exists lojas_omie_pedido_categoria_formato;
+   alter table public.lojas drop constraint if exists lojas_omie_pedido_compra_nunca_loja4;
    alter table public.lojas drop column if exists omie_pedido_email_aprovador, drop column if exists omie_pedido_categoria,
      drop column if exists omie_gravar_pedidos_compra;
    commit;
    notify pgrst, 'reload schema';
    ```
-   Pedidos de loja Omie criados no NTB continuam em `pedidos_compra` (só leitura depois disso).
+   Depois disso, os pedidos de loja Omie criados no NTB continuam no banco (`pedidos_compra`, itens e eventos), mas somem das
+   telas (a loja Omie volta a 404 em `/pedido-compra`) e as funções `pc_*` recusam mexer neles. Os pedidos já gravados no Omie
+   continuam no Omie (o estado do envio some junto com `pedidos_compra_omie`: anote os `numero_omie` antes, se precisar).
+   Rodar `desktop/scripts/gerar-schema.sh` + versão do desktop de novo (colunas removidas de `lojas`).
 
 ## Fora (depois, com OK)
 

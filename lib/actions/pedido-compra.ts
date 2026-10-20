@@ -34,7 +34,10 @@ const soProprio = (ctx: Ctx): Erro | null => (ctx.onde === 'proprio' ? null : { 
 export type EnvioOmieTela = { status: ResultadoEnvioPedido['status']; mensagem: string | null; numero: string | null }
 
 function envioParaTela(r: ResultadoEnvioPedido): EnvioOmieTela {
-  if (r.status === 'enviado') return { status: r.status, numero: r.numero, mensagem: r.jaExistia ? 'O pedido já estava no Omie (tentativa anterior).' : null }
+  if (r.status === 'enviado') {
+    return { status: r.status, numero: r.numero, mensagem: r.divergente ? 'O pedido já estava no Omie (tentativa anterior) e pode estar diferente deste: confira no Omie.'
+      : r.jaExistia ? 'O pedido já estava no Omie (tentativa anterior).' : null }
+  }
   if ('erro' in r) return { status: r.status, numero: null, mensagem: r.erro }
   return { status: r.status, numero: null, mensagem: r.motivo }
 }
@@ -138,8 +141,8 @@ export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: str
   if ('error' in ctx) return ctx
   if (ctx.onde === 'omie') {
     // pedido já gravado no Omie não reabre nem cancela aqui (o gatilho da 270 recusa também)
-    const { data: f } = await createServiceClient().from('pedidos_compra_omie').select('status, numero_omie').eq('pedido_id', id).eq('loja_id', ctx.lojaId).maybeSingle()
-    const b = bloqueioEtapaPorOmie(acao, (f?.status ?? null) as StatusEnvio | null, f?.numero_omie ?? null)
+    const { data: f } = await createServiceClient().from('pedidos_compra_omie').select('status, numero_omie, incerto').eq('pedido_id', id).eq('loja_id', ctx.lojaId).maybeSingle()
+    const b = bloqueioEtapaPorOmie(acao, (f?.status ?? null) as StatusEnvio | null, f?.numero_omie ?? null, f?.incerto === true)
     if (b) return { error: b }
   }
   const { data, error } = await createServiceClient().rpc('pc_acao', { p_loja: ctx.lojaId, p_id: id, p_acao: acao, p_user: ctx.userId, p_nome: ctx.nome, p_motivo: motivo ?? null })
@@ -155,15 +158,21 @@ export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: str
   return { ok: true, etapa: (data as { para: string }).para, ...(omie ? { omie } : {}) }
 }
 
-/** Loja Omie (C1): "Enviar ao Omie agora" (pedido aprovado na fila ou que precisou de correção). Respeita o bloqueio do Omie. */
+/**
+ * Loja Omie (C1): "Enviar ao Omie agora" / "Conferir no Omie". Grava no Omie, então exige quem aprova pedido. Não zera o
+ * teto nem pula a espera da próxima tentativa (só uma nova aprovação depois de editar zera); respeita o bloqueio do Omie
+ * (em memória e o gravado). Pedido que pode já estar no Omie (incerto) e saiu da fila: só CONSULTA (no máximo 1 vez a cada 10 min).
+ */
 export async function enviarPedidoAoOmieAgora(id: number): Promise<{ ok: true; omie: EnvioOmieTela } | Erro> {
   const __d = viaDesktop('pedido-compra#enviarPedidoAoOmieAgora', enviarPedidoAoOmieAgora, [id]); if (__d) return __d as never
-  const ctx = await contexto('Compras - Pedidos')
+  const ctx = await contexto('Compras - Aprovar pedidos')
   if ('error' in ctx) return ctx
   if (ctx.onde !== 'omie') return { error: 'Só a loja de estoque Omie grava pedido no Omie.' }
   const fila = await enfileirarPedidoCompraOmie(ctx.lojaId, id)
   if ('error' in fila) return { error: fila.error }
-  const omie = envioParaTela(await enviarPedidoCompraOmie(ctx.lojaId, id, { manual: true }))
+  const { data: f } = await createServiceClient().from('pedidos_compra_omie').select('status, incerto').eq('pedido_id', id).eq('loja_id', ctx.lojaId).maybeSingle()
+  const modo = f?.status === 'precisa_corrigir' && f.incerto === true ? 'conferir' : 'enviar'
+  const omie = envioParaTela(await enviarPedidoCompraOmie(ctx.lojaId, id, { modo }))
   atualizar(id)
   return { ok: true, omie }
 }

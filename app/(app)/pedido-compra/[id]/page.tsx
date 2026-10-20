@@ -42,7 +42,7 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
   const envio = onde === 'omie' ? (await envioOmieDosPedidos(lojaId, [cab.id])).get(cab.id) ?? null : null
   const compradorNome = resumo.compradorId ? (await nomesCompradores(lojaId)).get(resumo.compradorId) ?? null : null
   const recebidoTotal = itens.length > 0 && itens.every((i) => i.recebido + 1e-6 >= i.quantidadeBase)
-  const noOmie = envio?.status === 'enviado' || envio?.status === 'enviando'
+  const noOmie = envio?.status === 'enviado' || envio?.status === 'enviando' || envio?.incerto === true
   const acoes = acoesDisponiveis(cab.etapa, { temVinculo: p.notas.length > 0, podeAprovar, podeEditar, recebidoTotal })
     .filter((a) => !(noOmie && (a === 'reabrir' || a === 'cancelar')))  // C1: no Omie, altera/cancela lá
   const parcelas = parcelasDoPedido(Array.isArray(cab.parcelas) ? cab.parcelas : [], resumo.total, cab.previsao_entrega)
@@ -110,7 +110,7 @@ export default async function PedidoCompraPage({ params }: { params: Promise<{ i
         </table>
       </div>
 
-      {onde === 'omie' && <EnvioOmiePedido id={cab.id} etapa={cab.etapa} envio={envio} podeEnviar={podeEditar} />}
+      {onde === 'omie' && <EnvioOmiePedido id={cab.id} etapa={cab.etapa} envio={envio} podeEnviar={podeAprovar} />}
 
       {onde === 'proprio' && <section className="space-y-2 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)]">
         <h2 className="text-[15px] font-semibold text-text">Notas do fornecedor</h2>

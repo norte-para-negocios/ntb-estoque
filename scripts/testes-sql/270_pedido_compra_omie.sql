@@ -35,14 +35,7 @@ begin
   end;
   begin perform comp_salvar(v_omie_off, '{"nome":"X"}'::jsonb); raise exception 'loja omie sem opt-in criou comprador'; exception when sqlstate '22023' then null; end;
 
-  -- 3. loja 4 nunca, mesmo com opt-in (se existir na cópia)
-  -- (na cópia local fb a loja 4 está como 'proprio' e o gatilho trg_lojas_modo_estoque não deixa trocar: aí só avisa)
-  if not exists (select 1 from lojas where id = 4 and modo_estoque = 'omie') then raise notice '270: loja 4 não é Omie nesta cópia, teste da loja 4 pulado (a regra também está no TS)'; end if;
-  if exists (select 1 from lojas where id = 4 and modo_estoque = 'omie') then
-    update lojas set omie_gravar_pedidos_compra = true where id = 4;
-    begin perform _pc_loja_propria(4); raise exception 'loja 4 liberada'; exception when sqlstate '22023' then null; end;
-    begin perform pc_omie_enfileirar(4, 1); raise exception 'loja 4 enfileirou'; exception when sqlstate '22023' then null; end;
-  end if;
+  -- 3. loja 4 nunca, mesmo com opt-in: o CHECK lojas_omie_pedido_compra_nunca_loja4 nem deixa ligar (teste no passo 8c)
 
   -- 4. loja Omie COM opt-in: cria, enfileira só aprovado, fila idempotente
   update lojas set omie_gravar_pedidos_compra = true where id = v_omie;
@@ -57,12 +50,56 @@ begin
   if n <> 1 then raise exception 'linha duplicada na fila'; end if;
   begin perform pc_omie_enfileirar(v_omie_off, v_ped); raise exception 'enfileirou em loja sem opt-in'; exception when sqlstate '22023' then null; end;
 
-  -- 5. pendente/precisa_corrigir: reabrir funciona; re-aprovar devolve precisa_corrigir para pendente zerado
-  update pedidos_compra_omie set status = 'precisa_corrigir', tentativas = 3, ultimo_erro = 'Produto não cadastrado' where pedido_id = v_ped;
+  -- 5. precisa_corrigir: enfileirar de novo SEM nova aprovação não zera o teto (revisão I3)
+  update pedidos_compra_omie set status = 'precisa_corrigir', tentativas = 3, ultimo_erro = 'Produto não cadastrado',
+         ultima_tentativa_em = now() + interval '1 second' where pedido_id = v_ped;
+  r := pc_omie_enfileirar(v_omie, v_ped);
+  if r->>'status' <> 'precisa_corrigir' or (select tentativas from pedidos_compra_omie where pedido_id = v_ped) <> 3 then raise exception 'zerou sem aprovar de novo: %', r; end if;
+  -- reabrir (pendente/precisa_corrigir certo) funciona; aprovar de novo depois da última tentativa zera e volta para pendente
+  update pedidos_compra_omie set ultima_tentativa_em = now() - interval '1 minute' where pedido_id = v_ped;
   perform pc_acao(v_omie, v_ped, 'reabrir');
   perform pc_acao(v_omie, v_ped, 'aprovar');
   r := pc_omie_enfileirar(v_omie, v_ped);
   if r->>'status' <> 'pendente' or (select tentativas from pedidos_compra_omie where pedido_id = v_ped) <> 0 then raise exception 'reenfileirar: %', r; end if;
+
+  -- 5b. incerto (inclusão sem resposta): não reabre nem cancela, e nem nova aprovação zera (revisão I2)
+  update pedidos_compra_omie set incerto = true, tentativas = 1 where pedido_id = v_ped;
+  begin
+    perform pc_acao(v_omie, v_ped, 'cancelar', null, null, 'x'); raise exception 'cancelou pedido incerto';
+  exception when sqlstate '22023' then
+    get stacked diagnostics s = message_text;
+    if s not like '%Conferir no Omie%' then raise exception 'mensagem do incerto: %', s; end if;
+  end;
+  begin perform pc_acao(v_omie, v_ped, 'reabrir'); raise exception 'reabriu pedido incerto'; exception when sqlstate '22023' then null; end;
+  update pedidos_compra_omie set status = 'precisa_corrigir', ultima_tentativa_em = now() - interval '1 hour' where pedido_id = v_ped;
+  r := pc_omie_enfileirar(v_omie, v_ped);
+  if r->>'status' <> 'precisa_corrigir' then raise exception 'incerto voltou para a fila: %', r; end if;
+
+  -- 5c. pc_omie_reivindicar: 'conferir' só no precisa_corrigir incerto, 1 vez a cada 10 min; 'enviar' não pega
+  if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'enviar pegou precisa_corrigir'; end if;
+  r := pc_omie_reivindicar(v_omie, v_ped, 'conferir');
+  if not (r->>'ok')::boolean or r->>'status_antes' <> 'precisa_corrigir' or not (r->>'incerto')::boolean then raise exception 'conferir: %', r; end if;
+  update pedidos_compra_omie set status = 'precisa_corrigir' where pedido_id = v_ped;   -- (o TS devolve assim depois de consultar)
+  if (pc_omie_reivindicar(v_omie, v_ped, 'conferir')->>'ok')::boolean then raise exception 'conferir antes de 10 min'; end if;
+  begin perform pc_omie_reivindicar(v_omie, v_ped, 'qualquer'); raise exception 'modo inválido aceito'; exception when sqlstate '22023' then null; end;
+  -- conferido: não está no Omie → incerto some → reabrir volta a funcionar e a nova aprovação zera
+  update pedidos_compra_omie set incerto = false, ultima_tentativa_em = now() - interval '1 minute' where pedido_id = v_ped;
+  perform pc_acao(v_omie, v_ped, 'reabrir');
+  if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'reivindicou pedido em rascunho'; end if;
+  perform pc_acao(v_omie, v_ped, 'aprovar');
+  r := pc_omie_enfileirar(v_omie, v_ped);
+  if r->>'status' <> 'pendente' then raise exception 'reaprovar depois de conferir: %', r; end if;
+
+  -- 5d. 'enviar': pendente na hora = ok uma vez (vira enviando); de novo = não; próxima tentativa no futuro = não
+  r := pc_omie_reivindicar(v_omie, v_ped, 'enviar');
+  if not (r->>'ok')::boolean or r->>'cod_int' <> 'NTB-PC-' || v_ped then raise exception 'reivindicar: %', r; end if;
+  if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'reivindicou duas vezes'; end if;
+  update pedidos_compra_omie set status = 'pendente', proxima_tentativa_em = now() + interval '20 minutes' where pedido_id = v_ped;
+  if (pc_omie_reivindicar(v_omie, v_ped, 'enviar')->>'ok')::boolean then raise exception 'pulou a espera'; end if;
+  update pedidos_compra_omie set status = 'enviando', ultima_tentativa_em = now() - interval '2 hours' where pedido_id = v_ped;
+  r := pc_omie_reivindicar(v_omie, v_ped, 'enviar');
+  if not (r->>'ok')::boolean or r->>'status_antes' <> 'enviando' then raise exception 'retomar enviando esquecido: %', r; end if;
+  update pedidos_compra_omie set status = 'pendente', proxima_tentativa_em = null where pedido_id = v_ped;
 
   -- 6. enviando/enviado: não reabre nem cancela pelo NTB (gatilho); enfileirar de novo não mexe no enviado
   update pedidos_compra_omie set status = 'enviando' where pedido_id = v_ped;
@@ -90,6 +127,15 @@ begin
   r := pc_salvar(v_prop, '{"fornecedor_nome":"HORTI","itens":[{"codigo_produto":7001,"quantidade":1}]}'::jsonb);
   perform pc_acao(v_prop, (r->>'id')::bigint, 'aprovar');
   perform pc_acao(v_prop, (r->>'id')::bigint, 'reabrir');
+
+  -- 8b. sessão não lê o payload (pode ter o e-mail do aprovador); lê o resto
+  if has_column_privilege('authenticated', 'public.pedidos_compra_omie', 'payload', 'select') then raise exception 'authenticated lê payload'; end if;
+  if not has_column_privilege('authenticated', 'public.pedidos_compra_omie', 'incerto', 'select') then raise exception 'authenticated não lê incerto'; end if;
+
+  -- 8c. loja 4 nunca liga a gravação (CHECK)
+  if exists (select 1 from lojas where id = 4) then
+    begin update lojas set omie_gravar_pedidos_compra = true where id = 4; raise exception 'loja 4 ligou'; exception when check_violation then null; end;
+  end if;
 
   -- 9. categoria com formato do Omie
   begin update lojas set omie_pedido_categoria = 'Compras' where id = v_omie; raise exception 'categoria inválida aceita'; exception when check_violation then null; end;
