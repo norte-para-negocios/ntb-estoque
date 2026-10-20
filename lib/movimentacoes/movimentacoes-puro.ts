@@ -223,6 +223,13 @@ export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: 
   return 'kardex'
 }
 
+/** Aviso quando o kardex vai só até ontem: antes das 07:00 (Bahia) é a madrugada proibida; depois, leitura atrasada. */
+export function avisoFaltaHoje(horaBahia: number): string {
+  return horaBahia < 7
+    ? 'Os movimentos de hoje ainda não foram lidos do Omie (a leitura do dia começa às 07:00): a lista abaixo vai até ontem.'
+    : 'O kardex do Omie desta loja está lido só até ontem (leitura atrasada ou pausada pela proteção contra bloqueio do Omie): a lista abaixo vai até ontem.'
+}
+
 /** O kardex escolhido termina ontem e o período vai até hoje (madrugada, antes da 1ª leitura do dia). */
 export function faltaHojeNoKardex(o: { ate?: string | null; fim: string; hoje: string }): boolean {
   return o.fim === o.hoje && o.ate === addDias(o.hoje, -1)

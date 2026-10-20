@@ -6,6 +6,7 @@
 // D5 (20/10/2026, lojas 2/3/6): frente recente a cada 60 min (era 30) e só nos locais com movimento nos últimos 35 dias
 // (revisão/backfill leem todos e descobrem local novo); páginas e prazo por loja vêm da rota (orçamento do ciclo).
 import { createServiceClient } from '@/lib/supabase/server'
+import { classificarErroOmie } from './erros-omie'
 import { OmieError, type LojaOmie } from './client'
 import { buscarPaginaKardexLocal, normalizarMovOmie, deduplicarMovs } from './kardex'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
@@ -52,7 +53,7 @@ export async function sincronizarKardexLoja(
         const limite = ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)
         resumo.parouPor = `${limite ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
         // M1: erro que não é de limite conta na página; na 3ª seguida ela é pulada (registrada em estado.puladas).
-        await gravarEstadoSync(loja.id, FRENTE, limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString()), resumo.parouPor)
+        await gravarEstadoSync(loja.id, FRENTE, limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString(), { transitorio: classificarErroOmie(msg) === 'transitorio' }), resumo.parouPor)
         break
       }
       resumo.paginas++

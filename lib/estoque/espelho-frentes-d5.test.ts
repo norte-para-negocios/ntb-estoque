@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   estadoInicial, lerEstado, proximaLeitura, aposLeitura, locaisDaFrente, marcarLocalComMovimento, conferidoAte, diaBahia,
-  coberturaDoEstado, avisoCoberturaKardex, aposFalha, type ConfigFrentes, type EstadoFrentes,
+  coberturaDoEstado, avisoCoberturaKardex, aposFalha, tirarRelido, type ConfigFrentes, type EstadoFrentes,
 } from './espelho-frentes.ts'
 
 const CFG: ConfigFrentes = {
@@ -223,4 +223,60 @@ test('M2: coberto_ate nunca volta para trás', () => {
   }
   const d = aposLeitura(e, 'recente', 1, [null], CFG, '2026-10-20T14:01:00Z')
   assert.equal(d.recente.coberto_ate, '2026-10-20')
+})
+
+test('erro transitório (timeout/5xx) não conta para pular a página; erro diferente recomeça a contagem', () => {
+  const base: EstadoFrentes = { ...estadoInicial(), recente: { cursor: { ini: '2026-10-19', fim: '2026-10-20', local: 100, pagina: 2, iniciado_em: '2026-10-20T14:00:00Z' }, coberto_ate: '2026-10-19', concluido_em: null, desde: '2026-09-01' } }
+  let e = base
+  for (let i = 0; i < 5; i++) e = aposFalha(e, 'recente', 'erro do Omie: Omie HTTP 500', '2026-10-20T14:00:00Z', { transitorio: true })
+  assert.equal(e.recente.cursor?.falhas, undefined)
+  assert.equal(e.recente.cursor?.pagina, 2)
+  e = aposFalha(e, 'recente', 'erro do Omie: A', '2026-10-20T14:01:00Z')
+  e = aposFalha(e, 'recente', 'erro do Omie: A', '2026-10-20T14:02:00Z')
+  e = aposFalha(e, 'recente', 'erro do Omie: B', '2026-10-20T14:03:00Z') // outro erro: recomeça
+  assert.equal(e.recente.cursor?.falhas, 1)
+  assert.equal(e.recente.cursor?.pagina, 2)
+  e = aposFalha(e, 'recente', 'erro do Omie: B', '2026-10-20T14:04:00Z')
+  e = aposFalha(e, 'recente', 'erro do Omie: B', '2026-10-20T14:05:00Z')
+  assert.equal(e.recente.cursor?.pagina, 3)
+  assert.equal(e.recente.cursor?.pulou, true)
+  assert.equal(e.puladas?.[0].ja_conferido, false) // dado nunca lido: avisa
+})
+
+test('pulada em revisão de trecho já conferido não avisa (o dado antigo fica)', () => {
+  const e0: EstadoFrentes = {
+    ...estadoInicial(), conferido_ate: '2026-10-18',
+    recente: { cursor: null, coberto_ate: '2026-10-20', concluido_em: '2026-10-20T13:30:00Z', desde: '2026-09-01' },
+    revisao: { cursor: { ini: '2026-09-15', fim: '2026-10-14', local: 100, pagina: 4, iniciado_em: '2026-10-20T14:00:00Z' }, ate: '2026-10-18', concluido_em: null },
+  }
+  let e = e0
+  for (let i = 0; i < 3; i++) e = aposFalha(e, 'revisao', 'erro do Omie: X', '2026-10-20T14:0' + i + ':00Z')
+  assert.equal(e.puladas?.[0].ja_conferido, true)
+  const c = coberturaDoEstado(e, true)!
+  assert.doesNotMatch(avisoCoberturaKardex(c, '2026-10-01', '2026-09-20') ?? '', /não pôde ser lida/)
+})
+
+test('pulada sai da lista quando janelas posteriores releem o trecho (inteiro ou em duas partes)', () => {
+  const p = { frente: 'revisao' as const, ini: '2026-09-15', fim: '2026-10-14', local: 100, pagina: 2, em: 'x', erro: 'y' }
+  // janela que cobre tudo nos locais dela
+  assert.deepEqual(tirarRelido([p], { ini: '2026-09-10', fim: '2026-10-15', local: null, pagina: 1, locais: [100, 200] }), [])
+  // outro local: fica
+  assert.equal(tirarRelido([p], { ini: '2026-09-10', fim: '2026-10-15', local: null, pagina: 1, locais: [200] }).length, 1)
+  // duas janelas consecutivas da revisão: a 1ª corta o começo, a 2ª o resto
+  const r1 = tirarRelido([p], { ini: '2026-09-16', fim: '2026-10-01', local: null, pagina: 1, locais: [100] })
+  assert.deepEqual(r1, [p]) // no meio: conservador, fica inteiro
+  const r2 = tirarRelido([p], { ini: '2026-09-10', fim: '2026-10-01', local: null, pagina: 1, locais: [100] })
+  assert.deepEqual({ ini: r2[0].ini, fim: r2[0].fim }, { ini: '2026-10-02', fim: '2026-10-14' })
+  assert.deepEqual(tirarRelido(r2, { ini: '2026-10-02', fim: '2026-10-20', local: null, pagina: 1, locais: [100] }), [])
+})
+
+test('aposLeitura: janela fechada sem página pulada limpa as puladas do trecho; com página pulada, não', () => {
+  const pul = { frente: 'revisao' as const, ini: '2026-09-15', fim: '2026-10-14', local: 100, pagina: 2, em: 'x', erro: 'y' }
+  const e: EstadoFrentes = {
+    ...estadoInicial(), puladas: [pul],
+    revisao: { cursor: { ini: '2026-09-15', fim: '2026-10-14', local: 100, pagina: 1, iniciado_em: '2026-10-21T14:00:00Z', locais: [100] }, ate: '2026-10-14', concluido_em: null },
+  }
+  assert.deepEqual(aposLeitura(e, 'revisao', 1, [100], CFG, '2026-10-21T14:01:00Z').puladas, [])
+  const comPulo: EstadoFrentes = { ...e, revisao: { ...e.revisao, cursor: { ...e.revisao.cursor!, pulou: true } } }
+  assert.equal(aposLeitura(comPulo, 'revisao', 1, [100], CFG, '2026-10-21T14:01:00Z').puladas?.length, 1)
 })

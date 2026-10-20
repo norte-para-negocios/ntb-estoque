@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest, OmieError, type LojaOmie } from './client'
+import { classificarErroOmie } from './erros-omie'
 import { ajustesForaDaJanela, autorDoAjuste, origemDoAjuste } from '@/lib/estoque/ajuste-autor'
 import { aposFalha, aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
 import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
@@ -236,7 +237,7 @@ export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Pro
         const msg = e instanceof Error ? e.message : String(e)
         const limite = ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)
         resumo.parouPor = `${limite ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
-        await gravarEstadoSync(loja.id, 'ajustes', limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString()), resumo.parouPor)
+        await gravarEstadoSync(loja.id, 'ajustes', limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString(), { transitorio: classificarErroOmie(msg) === 'transitorio' }), resumo.parouPor)
         break
       }
       resumo.paginas++

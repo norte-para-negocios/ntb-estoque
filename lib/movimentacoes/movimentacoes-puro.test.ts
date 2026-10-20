@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   lerFiltrosMovimentacoes, origemDoKardex, hrefDocumento, numerosCandidatos, interpretarBuscaOP,
-  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, clausulasBuscaOP, escolherFonte, faltaHojeNoKardex, type OPMin, type KardexMin,
+  movimentosPrevistosDaOP, casarKardexComOP, totaisDe, clausulasBuscaOP, escolherFonte, faltaHojeNoKardex, avisoFaltaHoje, type OPMin, type KardexMin,
 } from './movimentacoes-puro.ts'
 
 const HOJE = '2026-10-13'
@@ -161,6 +161,9 @@ test('fonte: kardex só quando o histórico completo cobre o início do período
   assert.equal(escolherFonte({ espelho: true, desde: '2026-09-01', ini: '2026-10-01', ate: '2026-10-18', fim: '2026-10-20', hoje: '2026-10-20' }), 'reconstruido')
   assert.equal(faltaHojeNoKardex({ ate: '2026-10-19', fim: '2026-10-20', hoje: '2026-10-20' }), true)
   assert.equal(faltaHojeNoKardex({ ate: '2026-10-20', fim: '2026-10-20', hoje: '2026-10-20' }), false)
+  assert.match(avisoFaltaHoje(6), /começa às 07:00/)
+  assert.doesNotMatch(avisoFaltaHoje(7), /07:00/)
+  assert.match(avisoFaltaHoje(15), /atrasada ou pausada/)
 })
 
 test('kardex × OP por data: um movimento por esperado (quantidade igual, dia da conclusão primeiro), sem outras OPs', () => {

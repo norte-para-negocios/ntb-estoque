@@ -37,8 +37,16 @@ export type Cursor = {
   falhas?: number
   /** Alguma página desta janela foi pulada: não confere a janela e a revisão não apaga "não vistos". */
   pulou?: boolean
+  /** Último erro desta página: só erro IGUAL e não transitório conta para pular (`aposFalha`). */
+  ultimo_erro?: string
 }
-export type PaginaPulada = { frente: Frente; ini: string; fim: string; local: number | null; pagina: number; em: string; erro: string }
+/**
+ * Página pulada. `ja_conferido` = pulada numa revisão de trecho já conferido: o dado antigo continua lá (a revisão não
+ * apaga nada na janela com página pulada), então não gera aviso. Sai da lista quando uma janela posterior relê o trecho.
+ */
+export type PaginaPulada = {
+  frente: Frente; ini: string; fim: string; local: number | null; pagina: number; em: string; erro: string; ja_conferido?: boolean
+}
 export type EstadoFrentes = {
   recente: { cursor: Cursor | null; coberto_ate: string | null; concluido_em: string | null; desde: string | null }
   backfill: { cursor: Cursor | null; proximo_fim: string | null; coberto_desde: string | null; concluido: boolean }
@@ -95,6 +103,7 @@ function lerCursor(c: unknown): Cursor | null {
   }
   if (Number(x.falhas) > 0) out.falhas = Math.floor(Number(x.falhas))
   if (x.pulou === true) out.pulou = true
+  if (typeof x.ultimo_erro === 'string') out.ultimo_erro = x.ultimo_erro
   return out
 }
 const texto = (v: unknown) => (typeof v === 'string' ? v : null)
@@ -252,8 +261,11 @@ export function aposLeitura(
   }
   if (prox) {
     delete prox.falhas
+    delete prox.ultimo_erro
     return { ...e, [frente]: { ...e[frente], cursor: prox } }
   }
+  // Janela lida inteira sem página pulada: tira das `puladas` o trecho que ela releu (nos locais dela).
+  if (!cursor.pulou && e.puladas?.length) e = { ...e, puladas: tirarRelido(e.puladas, cursor) }
   const confere = (ee: EstadoFrentes) => (cursor.pulou ? conferidoAte(ee, cfg.diasRecentes) : conferir(ee, cfg, cursor.ini, cursor.fim, cursor.iniciado_em ?? agoraISO))
 
   if (frente === 'revisao') {
@@ -289,6 +301,21 @@ export function aposLeitura(
   }
 }
 
+/** `puladas` menos o trecho [ini, fim] relido por `c` (nos locais dele); trecho no meio fica inteiro (conservador). */
+export function tirarRelido(puladas: PaginaPulada[], c: Cursor): PaginaPulada[] {
+  const out: PaginaPulada[] = []
+  for (const p of puladas) {
+    const doLocal = p.local == null || !c.locais || c.locais.includes(p.local)
+    if (!doLocal || c.fim < p.ini || c.ini > p.fim) { out.push(p); continue }
+    let { ini, fim } = p
+    if (c.ini <= ini) ini = addDias(c.fim, 1)
+    if (c.fim >= fim) fim = addDias(c.ini, -1)
+    if (ini > fim) continue // relido inteiro
+    out.push(c.ini > p.ini && c.fim < p.fim ? p : { ...p, ini, fim })
+  }
+  return out
+}
+
 /** Erros seguidos na mesma página antes de pulá-la (M1). */
 export const MAX_FALHAS_PAGINA = 3
 
@@ -297,14 +324,24 @@ export const MAX_FALHAS_PAGINA = 3
  * página (registra em `puladas`, marca a janela `pulou`: ela não conta como conferida e a revisão não apaga nada).
  * Sem isso, uma página que sempre erra travava a frente e, com o cursor parado 12 h, a janela inteira era relida.
  */
-export function aposFalha(e: EstadoFrentes, frente: Frente, erro: string, agoraISO: string, max = MAX_FALHAS_PAGINA): EstadoFrentes {
+export function aposFalha(
+  e: EstadoFrentes, frente: Frente, erro: string, agoraISO: string, opcoes: { transitorio?: boolean; max?: number } = {},
+): EstadoFrentes {
   const cursor = e[frente].cursor
   if (!cursor) return e
-  const falhas = (cursor.falhas ?? 0) + 1
-  if (falhas < max) return { ...e, [frente]: { ...e[frente], cursor: { ...cursor, falhas } } }
-  const pulada: PaginaPulada = { frente, ini: cursor.ini, fim: cursor.fim, local: cursor.local, pagina: cursor.pagina, em: agoraISO, erro: erro.slice(0, 200) }
+  // Timeout/5xx/rede não contam (passam sozinhos; a guarda já espera). Só o MESMO erro não transitório repetido pula.
+  if (opcoes.transitorio) return e
+  const msg = erro.slice(0, 200)
+  const falhas = cursor.ultimo_erro === msg ? (cursor.falhas ?? 0) + 1 : 1
+  if (falhas < (opcoes.max ?? MAX_FALHAS_PAGINA)) return { ...e, [frente]: { ...e[frente], cursor: { ...cursor, falhas, ultimo_erro: msg } } }
+  const conf = conferidoAte(e)
+  const pulada: PaginaPulada = {
+    frente, ini: cursor.ini, fim: cursor.fim, local: cursor.local, pagina: cursor.pagina, em: agoraISO, erro: msg,
+    ja_conferido: frente === 'revisao' && !!conf && cursor.fim <= conf,
+  }
   const prox: Cursor = { ...cursor, pagina: cursor.pagina + 1, pulou: true, avancado_em: agoraISO }
   delete prox.falhas
+  delete prox.ultimo_erro
   return { ...e, [frente]: { ...e[frente], cursor: prox }, puladas: [...(e.puladas ?? []), pulada].slice(-20) }
 }
 
@@ -352,7 +389,7 @@ const br = (iso: string) => iso.split('-').reverse().join('/')
 export function avisoCoberturaKardex(c: CoberturaKardex | null, fim: string, ini?: string): string | null {
   if (!c) return null
   const avisos = [avisoFim(c, fim)]
-  const pul = (c.puladas ?? []).filter((p) => p.ini <= fim && p.fim >= (ini ?? c.desde))
+  const pul = (c.puladas ?? []).filter((p) => !p.ja_conferido && p.ini <= fim && p.fim >= (ini ?? c.desde))
   if (pul.length) {
     const j = pul.map((p) => `${br(p.ini)}–${br(p.fim)}${p.local != null ? ` (local ${p.local})` : ''}`)
     avisos.push(`Uma parte do kardex do Omie não pôde ser lida (erro repetido do Omie) em ${[...new Set(j)].join(', ')}: os números desse trecho podem estar incompletos.`)
