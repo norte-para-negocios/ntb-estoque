@@ -46,4 +46,15 @@ test('ehErroDeLimiteOmie: bloqueio, consumo redundante e requisição em andamen
   assert.equal(ehErroDeLimiteOmie('ERROR: REDUNDANT', undefined), true)
   assert.equal(ehErroDeLimiteOmie('Já existe uma requisição desse método em execução', undefined), true)
   assert.equal(ehErroDeLimiteOmie('Produto não encontrado', 'SOAP-ENV:Client-103'), false)
+  // D5: 425/429 sem faultstring, e a recusa do nosso disjuntor
+  assert.equal(ehErroDeLimiteOmie('Omie rate limit HTTP 425', undefined), true)
+  assert.equal(ehErroDeLimiteOmie('Omie rate limit HTTP 429', undefined), true)
+  assert.equal(ehErroDeLimiteOmie('API do Omie bloqueada para esta loja por consumo indevido (libera em ~12 min).', 'MISUSE_API_PROCESS'), true)
+  assert.equal(ehErroDeLimiteOmie('Omie HTTP 500', undefined), false)
+})
+
+test('loja 4 nunca espelha, nem com a flag ligada; loja de teste também não', () => {
+  assert.equal(lojaPodeEspelhar({ ...base, id: 4 }), false)
+  assert.equal(lojaPodeEspelhar({ ...base, id: 12, is_test: true }), false)
+  for (const id of [2, 3, 6]) assert.equal(lojaPodeEspelhar({ ...base, id }), true)
 })

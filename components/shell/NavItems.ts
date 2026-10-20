@@ -33,6 +33,7 @@ import {
   ClipboardPen,
   UserCog,
   Undo2,
+  FileOutput,
   BookOpenCheck,
   type LucideIcon,
 } from 'lucide-react'
@@ -54,6 +55,8 @@ export type NavItem = {
   soEstoqueProprio?: boolean
   // comEstoque: aparece em loja de estoque proprio OU Omie (espelho); some so em modo 'nenhum'.
   comEstoque?: boolean
+  // ouPedidosOmie: item soEstoqueProprio que também aparece na loja Omie com pedido de compra liberado (C1).
+  ouPedidosOmie?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -64,8 +67,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/sugestao-compra', label: 'Sugestão de compra', icon: ShoppingCart, group: 'Operação', comEstoque: true },
   { href: '/tarefas-compras', label: 'Tarefas de compras', icon: ListTodo, group: 'Operação', soEstoqueProprio: true },
   { href: '/requisicao-compra', label: 'Requisições de compra', icon: ClipboardPen, group: 'Operação', soEstoqueProprio: true },
-  { href: '/pedido-compra', label: 'Pedidos de compra', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true },
+  { href: '/pedido-compra', label: 'Pedidos de compra', icon: ClipboardCheck, group: 'Operação', soEstoqueProprio: true, ouPedidosOmie: true },
   { href: '/devolucao-fornecedor', label: 'Devoluções ao fornecedor', icon: Undo2, group: 'Operação', soEstoqueProprio: true },
+  { href: '/nfe-saida', label: 'NF-e de saída', icon: FileOutput, group: 'Operação', soEstoqueProprio: true },
+  { href: '/transferencia-loja', label: 'Transferências entre lojas', icon: Truck, group: 'Operação', soEstoqueProprio: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

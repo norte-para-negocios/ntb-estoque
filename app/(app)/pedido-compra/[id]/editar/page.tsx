@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
-import { modoDaLoja } from '@/lib/estoque/ledger'
+import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { FormPedidoCompra } from '@/components/compras/FormPedidoCompra'
 import { carregarPedido } from '../../dados'
@@ -8,7 +8,7 @@ import { cadastrosDoPedido } from '../../cadastros'
 
 export default async function EditarPedidoCompraPage({ params }: { params: Promise<{ id: string }> }) {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') notFound()
+  if (!(await estadoPedidoCompraLoja(lojaId)).onde) notFound()
   if (!(await requirePermissao(lojaId, 'Compras - Pedidos'))) notFound()
   const { id } = await params
   if (!/^\d+$/.test(id)) notFound()

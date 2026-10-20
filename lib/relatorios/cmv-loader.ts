@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { rpcTodos } from '@/lib/supabase/rpc-todos'
 import { modoDaLoja } from '@/lib/estoque/ledger'
-import { historicoDesde, lerEstado } from '@/lib/estoque/espelho-frentes'
+import { avisoCoberturaKardex, coberturaDoEstado, lerEstado, type CoberturaKardex } from '@/lib/estoque/espelho-frentes'
 import { carregarItens, type Opcao } from '@/lib/faturamento-itens-loader'
 import { TIPO_NOME } from '@/lib/omie/faturamento'
 import {
@@ -11,19 +11,23 @@ import {
 } from '@/lib/relatorios/cmv-puro'
 
 export type CmvCarregado = {
-  fonte: FonteCmv; linhas: LinhaCmv[]; avisos: string[]; cobertura: { desde: string; ate: string } | null
+  fonte: FonteCmv; linhas: LinhaCmv[]; avisos: string[]; cobertura: CoberturaKardex | null
   dataFoto: string | null; opcoes: { tipos: Opcao[]; familias: Opcao[] }; filtrosIgnorados: boolean
 }
 
-/** Período coberto pelo histórico completo do kardex (frente `kardex` em espelho_sync_estado), ou null. */
-export async function coberturaKardex(lojaId: number): Promise<{ desde: string; ate: string } | null> {
+/**
+ * Período que os relatórios podem ler do kardex (frente `kardex` em espelho_sync_estado), ou null. D5 (20/10/2026):
+ * com o espelho desligado vale só até o último dia CONFERIDO (relido pela revisão); o resto pode estar incompleto e
+ * nada vai reler (loja 5: lido até 16/10, conferido até 13/10). Use `avisoCoberturaKardex(c, fim)` para avisar.
+ */
+export async function coberturaKardex(lojaId: number): Promise<CoberturaKardex | null> {
   const supabase = await createClient()
-  const { data, error } = await supabase.from('espelho_sync_estado').select('estado').eq('loja_id', lojaId).eq('frente', 'kardex').maybeSingle()
-  if (error || !data) return null
-  const e = lerEstado(data.estado)
-  const desde = historicoDesde(e)
-  const ate = e.recente.coberto_ate
-  return desde && ate && desde <= ate ? { desde, ate } : null
+  const [est, loja] = await Promise.all([
+    supabase.from('espelho_sync_estado').select('estado').eq('loja_id', lojaId).eq('frente', 'kardex').maybeSingle(),
+    supabase.from('lojas').select('id, is_test, espelho_completo').eq('id', lojaId).maybeSingle(),
+  ])
+  if (est.error || !est.data) return null
+  return coberturaDoEstado(lerEstado(est.data.estado), (loja.data as { espelho_completo?: boolean } | null)?.espelho_completo === true)
 }
 
 const rotuloTipo = (c: string) => (c ? (TIPO_NOME[c] ?? `Tipo ${c}`) : 'Não classificado')
@@ -35,6 +39,8 @@ export async function carregarCmv(lojaId: number, ini: string, fim: string, filt
   const avisos: string[] = []
   const [modo, cobertura] = await Promise.all([modoDaLoja(lojaId), coberturaKardex(lojaId)])
   const fonte = escolherFonteCmv({ modo, kardexDesde: cobertura?.desde ?? null, kardexAte: cobertura?.ate ?? null, ini, fim })
+  const avisoKardex = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim, ini) : null
+  if (avisoKardex) avisos.push(fonte === 'kardex' ? avisoKardex : `${avisoKardex} Por isso o CMV abaixo é estimado.`)
 
   if (fonte === 'proprio') {
     const rows = await rpcTodos<{ rotulo: string; quantidade: number; faturamento: number; cmv: number; itens_sem_baixa: number; itens_sem_custo: number }>(

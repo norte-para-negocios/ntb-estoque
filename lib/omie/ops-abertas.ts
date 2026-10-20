@@ -7,7 +7,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { omieRequest, OmieError, type LojaOmie } from './client'
 import { pareceOPNaoExiste } from './ordem-producao'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, lerEstadoSync, sleep } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, paradaPorDisjuntor, sleep } from './espelho-estado'
 import { ehErroDeLimiteOmie } from '@/lib/estoque/espelho-lojas'
 import {
   confirmarSaidas, FILTRO_CANDIDATAS_SAIDA, linhaOPAberta, opMudou, opsQueSairamDaLista, precisaConsultarItens,
@@ -30,15 +30,22 @@ const motivo = (e: unknown) => {
   return `${ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined) ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
 }
 
-export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> {
+/** OP cuja consulta deu erro do Omie fica fora das consultas por 24 h (senão a mesma OP, a mais nova, erra todo ciclo). */
+const ESPERA_ERRO_CONSULTA_MS = 24 * 3_600_000
+
+export async function sincronizarOpsAbertas(loja: LojaOmie, opcoes: { prazoMs?: number } = {}): Promise<ResumoOps> {
   const r: ResumoOps = { loja: loja.id, abertas: 0, novas: 0, atualizadas: 0, sairam: 0, consultadas: 0, parouPor: null }
   if (!(await pegarTravaSync(loja.id, 'ops-abertas', INTERVALO_S))) return { ...r, parouPor: 'intervalo de 30 min' }
   const supabase = createServiceClient({ semAutor: true })
   const base = { loja_id: loja.id, omie_app_key: loja.omie_app_key, omie_app_secret: loja.omie_app_secret, is_test: loja.is_test, endpoint: 'v1/produtos/op', semRepetir: true }
   let cicloBom = false
   const t0 = Date.now()
+  const prazo = Math.min(t0 + TETO_MS, opcoes.prazoMs ?? Infinity)
   try {
-    const anterior = ((await lerEstadoSync(loja.id, 'ops-abertas')) ?? {}) as { pendentes_saida?: number[] }
+    const anterior = ((await lerEstadoSync(loja.id, 'ops-abertas')) ?? {}) as { pendentes_saida?: number[]; erros_consulta?: Record<string, string> }
+    const errosConsulta: Record<string, string> = Object.fromEntries(
+      Object.entries(anterior.erros_consulta ?? {}).filter(([, em]) => t0 - Date.parse(em) < ESPERA_ERRO_CONSULTA_MS),
+    )
     // 1. Lista completa das abertas (para no 1º erro sem marcar nada).
     const lista: OPOmieLista[] = []
     let listaCompleta = true
@@ -46,7 +53,11 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
       let pagina = 1, total = 1
       do {
         if (pagina > MAX_PAGINAS) { listaCompleta = false; break }
+        // M3: a lista também respeita o prazo do ciclo; cortada = incompleta (não marca saída de OP nenhuma).
+        if (pagina > 1 && Date.now() > prazo) { listaCompleta = false; break }
         if (pagina > 1) await sleep(PAUSA_MS)
+        const disj = paradaPorDisjuntor(loja)
+        if (disj) throw new OmieError(disj.replace(/^limite do Omie: /, ''), 'MISUSE_API_PROCESS')
         const resp = await omieRequest<{ total_de_paginas?: number; cadastros?: OPOmieLista[] }>({
           ...base, call: 'ListarOrdemProducao', data: { pagina, registros_por_pagina: 100, cConcluida: 'N' },
         })
@@ -109,11 +120,14 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
     // 4. Ficha gravada na OP (itensDetalhes), no máximo 30 consultas, mais novas primeiro.
     const pendentes = ids
       .filter((id) => { const ex = existentes.get(id); return !ex || precisaConsultarItens(ex as { full_object: unknown; itens_consultados_em: string | null }) })
+      .filter((id) => !errosConsulta[String(id)])
       .sort((a, b) => b - a)
       .slice(0, CONSULTAS_POR_CICLO)
     for (const nCodOP of pendentes) {
-      if (Date.now() - t0 > TETO_MS) break
+      if (Date.now() > prazo) break
       await sleep(PAUSA_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { r.parouPor = disj; break }
       const agoraISO = new Date().toISOString()
       try {
         const resp = await omieRequest<{ itensDetalhes?: unknown[] }>({ ...base, call: 'ConsultarOrdemProducao', data: { nCodOP } })
@@ -132,11 +146,14 @@ export async function sincronizarOpsAbertas(loja: LojaOmie): Promise<ResumoOps> 
         }
         if (!(e instanceof OmieError) && !/fetch|timeout|abort/i.test(msg)) throw e
         r.parouPor = motivo(e)
+        if (!ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)) errosConsulta[String(nCodOP)] = agoraISO
         break
       }
     }
     await gravarEstadoSync(loja.id, 'ops-abertas', {
-      ...r, pendentes_saida: pendentesSaida, lista_completa: listaCompleta, lido_em: new Date().toISOString(),
+      // lido_em só com a lista inteira: as telas e a sugestão de compra só passam a usar aberta_omie depois disso.
+      ...r, pendentes_saida: pendentesSaida, lista_completa: listaCompleta, erros_consulta: errosConsulta,
+      lido_em: listaCompleta ? new Date().toISOString() : ((anterior as { lido_em?: string }).lido_em ?? null),
     }, r.parouPor)
     cicloBom = true
     return r

@@ -1,7 +1,7 @@
 // OPs abertas da loja (Saúde do estoque e tela /ordem-producao/abertas).
 import { createClient } from '@/lib/supabase/server'
 import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
-import { lojaEspelho } from './dados-comum'
+import { lojaEspelho, opsAbertasLidas } from './dados-comum'
 
 export type OPAbertaRow = {
   id: number
@@ -36,7 +36,8 @@ const COLS_136 = 'criada_por, venda_ref'
  */
 export async function carregarOPsAbertas(lojaId: number, modo: 'omie' | 'proprio'): Promise<{ ops: OPAbertaRow[]; completa: boolean; erro: string | null }> {
   const supabase = await createClient()
-  const espelho = modo === 'omie' ? (await lojaEspelho(lojaId)).espelhoCompleto : false
+  // Espelho ligado E a lista de abertas do Omie já lida ao menos uma vez (loja recém-ligada ainda não tem aberta_omie).
+  const espelho = modo === 'omie' ? (await lojaEspelho(lojaId)).espelhoCompleto && (await opsAbertasLidas(lojaId)) : false
   let erro: string | null = null
   const ler = (cols: string, soEspelho: boolean) => buscarTodasLinhas<OPAbertaRow>((from, to) => {
     let q = supabase.from('ordens_producao').select(cols).eq('loja_id', lojaId)

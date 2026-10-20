@@ -1,6 +1,15 @@
 // Classificacao das faultstrings do Omie + disjuntor por app_key e método (2026-09-24; por método desde 2026-10-19).
 // Modulo puro (sem imports @/) pra rodar direto em `node --test`.
 
+/**
+ * Chamada de escrita no Omie (loja de teste: nunca sai de verdade, ver omieRequest). Até 20/10/2026 a lista não tinha
+ * `Altera` (o pedido de compra usa AlteraPedCompra, sem o "r") nem `Upsert`: numa loja de teste esses métodos iriam ao
+ * Omie real. Nenhum método de leitura começa com estes verbos.
+ */
+export function ehChamadaDeEscrita(call: string): boolean {
+  return /^(Incluir|Altera|Excluir|Concluir|Reverter|Importar|Upsert)/.test(call)
+}
+
 export function segundosBloqueio(msg: string): number | null {
   const m = msg.match(/bloqueada por consumo indevido.*?(\d+)\s*segundos/i)
   return m ? Number(m[1]) : null
@@ -45,6 +54,17 @@ export function msRestantesBloqueio(appKey: string, agoraMs: number = Date.now()
     if (metodo === undefined || m === '' || m === metodo) maior = Math.max(maior, ate - agoraMs)
   }
   return maior
+}
+
+/**
+ * Revisão I2 do D5 (20/10/2026): conferido antes de CADA chamada dos laços do espelho. Se qualquer método da chave
+ * está bloqueado (ex.: a integração de vendas tomou um bloqueio no meio do ciclo), a frente para neste ciclo com
+ * "limite do Omie" (a guarda pausa a loja): um 2º método bloqueado faria o disjuntor travar a chave inteira e parar as
+ * vendas da loja.
+ */
+export function paradaPorDisjuntor(loja: { omie_app_key: string }, agoraMs: number = Date.now()): string | null {
+  const ms = msRestantesBloqueio(loja.omie_app_key, agoraMs)
+  return ms > 0 ? `limite do Omie: disjuntor com método bloqueado nesta chave (~${Math.ceil(ms / 60000)} min); frente parada no ciclo` : null
 }
 
 /** Mensagem do nosso disjuntor (a chamada nem chegou no Omie). */

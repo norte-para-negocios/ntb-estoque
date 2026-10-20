@@ -3,6 +3,7 @@ import { buscarTodasLinhas } from '@/lib/supabase/buscar-todas-linhas'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { lerPeriodo } from '@/lib/faturamento-periodo'
 import { coberturaKardex } from '@/lib/relatorios/cmv-loader'
+import { avisoCoberturaKardex } from '@/lib/estoque/espelho-frentes'
 import { escolherFonteCmv } from '@/lib/relatorios/cmv-puro'
 import { rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
 import { codigosDoFiltro, type DiaOp, type FiltrosOp, type LinhaOpProduto, type MetaOp } from '@/lib/relatorios/ops-periodo-puro'
@@ -55,5 +56,7 @@ export async function carregarOps(lojaId: number, ini: string, fim: string, filt
     tipos: [...new Set(doPeriodo.map((m) => m.tipo))].sort().map((c) => ({ value: c || '_', label: rotuloTipo(c) })),
     familias: [...new Set(doPeriodo.map((m) => m.familia))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((f) => ({ value: f, label: f })),
   }
-  return { fonte, cobertura, produtos, dias, meta, erros: [...new Set(erros)], opcoes }
+  // D5: o kardex não chega ao fim do período (espelho desligado/parado) ou o fim ainda não foi relido.
+  const aviso = modo === 'omie' ? avisoCoberturaKardex(cobertura, fim, ini) : null
+  return { fonte, cobertura, produtos, dias, meta, erros: [...new Set(erros)], opcoes, aviso }
 }

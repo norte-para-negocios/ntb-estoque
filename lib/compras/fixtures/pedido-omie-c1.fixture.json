@@ -1,0 +1,45 @@
+{
+  "_sobre": "C1 (20/10/2026): pedido aprovado do NTB numa loja Omie e o IncluirPedCompra esperado. Dados de exemplo (códigos no formato do Omie: nCodProd/nCodFor de 10 dígitos, local 4-dígitos), NÃO capturados de produção. Nenhuma chamada ao Omie foi feita para montar isto.",
+  "config": { "categoria": "2.01.01", "emailAprovador": null, "locais": [4294967295, 6612345678] },
+  "pedido": {
+    "id": 1532,
+    "numero": 17,
+    "etapa": "aprovado",
+    "previsaoEntrega": "2026-10-27",
+    "frete": 35.5,
+    "outrasDespesas": 0,
+    "parcelas": [{ "dias": 28, "percentual": 50 }, { "dias": 56, "percentual": 50 }],
+    "numeroFornecedor": "PV-88821",
+    "contato": "Marta (vendas)",
+    "obs": "Entregar até 10h, doca 2.",
+    "obsInterna": "Cotação da semana 43",
+    "fornecedor": { "id": 991, "nome": "DISTRIBUIDORA ATLANTICO LTDA", "cnpj": "12345678000190", "codigoOmie": 3011223344, "origem": "omie" },
+    "itens": [
+      { "linha": 1, "codigoProduto": 3155667788, "descricao": "AZEITE EXTRA VIRGEM 500ML", "unidade": "CX", "fator": 12, "quantidade": 3, "precoUnitario": 359.4, "codigoLocal": 4294967295, "obs": null, "produto": { "existe": true, "inativo": false } },
+      { "linha": 2, "codigoProduto": 3155667799, "descricao": "FARINHA DE MANDIOCA 1KG", "unidade": "UN", "fator": 1, "quantidade": 40, "precoUnitario": 6.875, "codigoLocal": null, "obs": "marca Kiarroz", "produto": { "existe": true, "inativo": false } }
+    ]
+  },
+  "esperado": {
+    "cabecalho_incluir": {
+      "cCodIntPed": "NTB-PC-1532",
+      "dDtPrevisao": "27/10/2026",
+      "nCodFor": 3011223344,
+      "cCodCateg": "2.01.01",
+      "cContato": "Marta (vendas)",
+      "cNumPedido": "PV-88821",
+      "cObs": "Entregar até 10h, doca 2.",
+      "cObsInt": "Pedido de compra nº 17 do Norte Estoque (NTB-PC-1532). Cotação da semana 43",
+      "cCodParc": "999",
+      "nQtdeParc": 2
+    },
+    "frete_incluir": { "nValFrete": 35.5, "nValOutras": 0 },
+    "produtos_incluir": [
+      { "cCodIntItem": "1532-1", "nCodProd": 3155667788, "nQtde": 36, "nValUnit": 29.95, "codigo_local_estoque": 4294967295, "cObs": "3 CX (1 CX = 12)" },
+      { "cCodIntItem": "1532-2", "nCodProd": 3155667799, "nQtde": 40, "nValUnit": 6.875, "cObs": "marca Kiarroz" }
+    ],
+    "parcelas_incluir": [
+      { "nParcela": 1, "dVencto": "24/11/2026", "nValor": 694.35, "nDias": 28, "nPercent": 50 },
+      { "nParcela": 2, "dVencto": "22/12/2026", "nValor": 694.35, "nDias": 56, "nPercent": 50 }
+    ]
+  }
+}

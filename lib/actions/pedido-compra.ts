@@ -6,22 +6,40 @@ import { revalidatePath } from 'next/cache'
 import { getCurrentLojaId, getProfile, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { modoDaLoja } from '@/lib/estoque/ledger'
+import { estadoPedidoCompraLoja } from '@/lib/compras/pedido-compra-loja'
+import { bloqueioEtapaPorOmie, type StatusEnvio } from '@/lib/compras/pedido-omie-gravar-puro'
+import { enfileirarPedidoCompraOmie, enviarPedidoCompraOmie, type ResultadoEnvioPedido } from '@/lib/omie/pedido-compra-gravar'
 import { exigirPeriodoAberto } from '@/lib/estoque/periodo-fechado'
 import { agruparPorFornecedor, validarParcelas, type LinhaParaPedido, type Parcela } from '@/lib/compras/pedido-puro'
 
-// Pedido de compra do estoque próprio (Fase C, I2/I3). Só loja modo 'proprio'; nada aqui fala com o Omie.
+// Pedido de compra do estoque próprio (Fase C, I2/I3) e, com o C1 ligado, da loja Omie liberada (o pedido aprovado é
+// gravado no Omie: lib/omie/pedido-compra-gravar.ts). Sem OMIE_GRAVAR_PEDIDOS_COMPRA: só loja modo 'proprio', como antes.
 // Escrita só pelas funções pc_* da migration 200 (security definer), com o service role, depois da permissão.
 
-type Ctx = { lojaId: number; userId: string; nome: string }
+type Ctx = { lojaId: number; userId: string; nome: string; onde: 'proprio' | 'omie' }
 type Erro = { error: string }
 
 async function contexto(...permissoes: string[]): Promise<Ctx | Erro> {
   const lojaId = await getCurrentLojaId()
-  if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Pedido de compra pelo app só existe na loja de estoque próprio.' }
+  const { onde } = await estadoPedidoCompraLoja(lojaId)
+  if (!onde) return { error: 'Pedido de compra pelo app só existe na loja de estoque próprio.' }
   for (const p of permissoes) if (!(await requirePermissao(lojaId, p))) return { error: 'Sem permissão' }
   const perfil = await getProfile()
-  return { lojaId, userId: perfil.id, nome: perfil.name }
+  return { lojaId, userId: perfil.id, nome: perfil.name, onde }
+}
+
+/** Notas, sugestão e lead time do pedido são do estoque próprio (na loja Omie a nota liga ao pedido no próprio Omie). */
+const soProprio = (ctx: Ctx): Erro | null => (ctx.onde === 'proprio' ? null : { error: 'Disponível só na loja de estoque próprio.' })
+
+export type EnvioOmieTela = { status: ResultadoEnvioPedido['status']; mensagem: string | null; numero: string | null }
+
+function envioParaTela(r: ResultadoEnvioPedido): EnvioOmieTela {
+  if (r.status === 'enviado') {
+    return { status: r.status, numero: r.numero, mensagem: r.divergente ? 'O pedido já estava no Omie (tentativa anterior) e pode estar diferente deste: confira no Omie.'
+      : r.jaExistia ? 'O pedido já estava no Omie (tentativa anterior).' : null }
+  }
+  if ('erro' in r) return { status: r.status, numero: null, mensagem: r.erro }
+  return { status: r.status, numero: null, mensagem: r.motivo }
 }
 
 // As funções pc_* levantam as regras de negócio com errcode 22023 e mensagem em português; erro técnico não vaza.
@@ -116,16 +134,47 @@ export async function salvarPedidoCompra(form: PedidoForm): Promise<{ id: number
 export type AcaoEtapa = 'enviar' | 'aprovar' | 'reprovar' | 'reabrir' | 'cancelar'
 
 /** Muda a etapa. Aprovar e reprovar exigem "Compras - Aprovar pedidos"; o resto, "Compras - Pedidos". */
-export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: string | null): Promise<{ ok: true; etapa: string } | Erro> {
+export async function mudarEtapaPedido(id: number, acao: AcaoEtapa, motivo?: string | null): Promise<{ ok: true; etapa: string; omie?: EnvioOmieTela } | Erro> {
   const __d = viaDesktop('pedido-compra#mudarEtapaPedido', mudarEtapaPedido, [id, acao, motivo]); if (__d) return __d as never
   if (!['enviar', 'aprovar', 'reprovar', 'reabrir', 'cancelar'].includes(acao)) return { error: 'Ação inválida' }
   const ctx = await contexto(acao === 'aprovar' || acao === 'reprovar' ? 'Compras - Aprovar pedidos' : 'Compras - Pedidos')
   if ('error' in ctx) return ctx
+  if (ctx.onde === 'omie') {
+    // pedido já gravado no Omie não reabre nem cancela aqui (o gatilho da 270 recusa também)
+    const { data: f } = await createServiceClient().from('pedidos_compra_omie').select('status, numero_omie, incerto').eq('pedido_id', id).eq('loja_id', ctx.lojaId).maybeSingle()
+    const b = bloqueioEtapaPorOmie(acao, (f?.status ?? null) as StatusEnvio | null, f?.numero_omie ?? null, f?.incerto === true)
+    if (b) return { error: b }
+  }
   const { data, error } = await createServiceClient().rpc('pc_acao', { p_loja: ctx.lojaId, p_id: id, p_acao: acao, p_user: ctx.userId, p_nome: ctx.nome, p_motivo: motivo ?? null })
   if (error) return { error: msgErro(error) }
   await registrarAuditoria(acao === 'aprovar' ? 'concluir' : acao === 'cancelar' ? 'excluir' : 'editar', 'pedido_compra', id, `Pedido de compra: ${acao}`)
+  let omie: EnvioOmieTela | undefined
+  if (ctx.onde === 'omie' && (data as { para: string }).para === 'aprovado') {
+    // Loja Omie liberada (C1): aprovado = vai para a fila e tenta gravar agora; falha não desfaz a aprovação (o cron repete).
+    const fila = await enfileirarPedidoCompraOmie(ctx.lojaId, id)
+    omie = 'error' in fila ? { status: 'pendente', numero: null, mensagem: fila.error } : envioParaTela(await enviarPedidoCompraOmie(ctx.lojaId, id))
+  }
   atualizar(id)
-  return { ok: true, etapa: (data as { para: string }).para }
+  return { ok: true, etapa: (data as { para: string }).para, ...(omie ? { omie } : {}) }
+}
+
+/**
+ * Loja Omie (C1): "Enviar ao Omie agora" / "Conferir no Omie". Grava no Omie, então exige quem aprova pedido. Não zera o
+ * teto nem pula a espera da próxima tentativa (só uma nova aprovação depois de editar zera); respeita o bloqueio do Omie
+ * (em memória e o gravado). Pedido que pode já estar no Omie (incerto) e saiu da fila: só CONSULTA (no máximo 1 vez a cada 10 min).
+ */
+export async function enviarPedidoAoOmieAgora(id: number): Promise<{ ok: true; omie: EnvioOmieTela } | Erro> {
+  const __d = viaDesktop('pedido-compra#enviarPedidoAoOmieAgora', enviarPedidoAoOmieAgora, [id]); if (__d) return __d as never
+  const ctx = await contexto('Compras - Aprovar pedidos')
+  if ('error' in ctx) return ctx
+  if (ctx.onde !== 'omie') return { error: 'Só a loja de estoque Omie grava pedido no Omie.' }
+  const fila = await enfileirarPedidoCompraOmie(ctx.lojaId, id)
+  if ('error' in fila) return { error: fila.error }
+  const { data: f } = await createServiceClient().from('pedidos_compra_omie').select('status, incerto').eq('pedido_id', id).eq('loja_id', ctx.lojaId).maybeSingle()
+  const modo = f?.status === 'precisa_corrigir' && f.incerto === true ? 'conferir' : 'enviar'
+  const omie = envioParaTela(await enviarPedidoCompraOmie(ctx.lojaId, id, { modo }))
+  atualizar(id)
+  return { ok: true, omie }
 }
 
 /** Liga a nota (compra do estoque próprio) a um pedido aprovado; refazer é seguro (refaz os vínculos desta nota). */
@@ -133,6 +182,8 @@ export async function vincularNotaAoPedido(pedidoId: number, compraId: number): 
   const __d = viaDesktop('pedido-compra#vincularNotaAoPedido', vincularNotaAoPedido, [pedidoId, compraId]); if (__d) return __d as never
   const ctx = await contexto('Compras - Pedidos', 'Notas Fiscais')
   if ('error' in ctx) return ctx
+  const sp = soProprio(ctx)
+  if (sp) return sp
   const { data, error } = await createServiceClient().rpc('pc_vincular_nota', { p_loja: ctx.lojaId, p_pedido: pedidoId, p_compra: compraId, p_user: ctx.userId, p_nome: ctx.nome })
   if (error) return { error: msgErro(error) }
   const r = data as { vinculados: number; fora_do_pedido: number; em_outro_pedido: number }
@@ -145,6 +196,8 @@ export async function desvincularNotaDoPedido(pedidoId: number, compraId: number
   const __d = viaDesktop('pedido-compra#desvincularNotaDoPedido', desvincularNotaDoPedido, [pedidoId, compraId]); if (__d) return __d as never
   const ctx = await contexto('Compras - Pedidos', 'Notas Fiscais')
   if ('error' in ctx) return ctx
+  const sp = soProprio(ctx)
+  if (sp) return sp
   const { error } = await createServiceClient().rpc('pc_desvincular_nota', { p_loja: ctx.lojaId, p_pedido: pedidoId, p_compra: compraId, p_user: ctx.userId, p_nome: ctx.nome })
   if (error) return { error: msgErro(error) }
   atualizar(pedidoId)
@@ -157,6 +210,8 @@ export async function criarPedidosDaSugestao(linhas: LinhaParaPedido[], chave: s
   const __d = viaDesktop('pedido-compra#criarPedidosDaSugestao', criarPedidosDaSugestao, [linhas, chave]); if (__d) return __d as never
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx
+  const sp = soProprio(ctx)
+  if (sp) return sp
   if (!/^[0-9a-f-]{16,64}$/i.test(chave)) return { error: 'Chave inválida' }
   const validas = linhas.filter((l) => Number.isFinite(l.codigoProduto) && l.quantidade > 0).slice(0, 300)
   if (!validas.length) return { error: 'Escolha pelo menos um produto com quantidade.' }
@@ -187,6 +242,8 @@ export async function salvarLeadTime(codigoProduto: number, dias: number): Promi
   const __d = viaDesktop('pedido-compra#salvarLeadTime', salvarLeadTime, [codigoProduto, dias]); if (__d) return __d as never
   const ctx = await contexto('Compras - Pedidos')
   if ('error' in ctx) return ctx
+  const sp = soProprio(ctx)
+  if (sp) return sp
   if (!Number.isInteger(dias) || dias < 1 || dias > 365) return { error: 'Lead time entre 1 e 365 dias.' }
   const { error } = await createServiceClient().from('produto_compra_param')
     .upsert({ loja_id: ctx.lojaId, codigo_produto: codigoProduto, lead_time_dias: dias, updated_by: ctx.userId, updated_at: new Date().toISOString() }, { onConflict: 'loja_id,codigo_produto' })

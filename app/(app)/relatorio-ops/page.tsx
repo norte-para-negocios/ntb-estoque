@@ -31,7 +31,7 @@ export default async function RelatorioOpsPage({ searchParams }: { searchParams:
   const hoje = hojeBahiaISO()
   const p = lerParamsOps(await searchParams, hoje)
   const filtros = { tipos: p.tipos, familias: p.familias, q: p.q }
-  const { fonte, cobertura, produtos, dias, meta, erros, opcoes } = await carregarOps(lojaId, p.ini, p.fim, filtros)
+  const { fonte, cobertura, produtos, dias, meta, erros, opcoes, aviso } = await carregarOps(lojaId, p.ini, p.fim, filtros)
   const res = resumoOps(produtos)
   const linhas = p.visao === 'dias' ? [] : agregarOps(produtos, meta, p.visao === 'consumidos' ? 'consumido' : 'produzido', filtros)
   const serie = p.visao === 'dias' ? serieOps(dias, p.ini, p.fim) : []
@@ -72,6 +72,7 @@ export default async function RelatorioOpsPage({ searchParams }: { searchParams:
         <span>{FONTE[fonte]}{fonte === 'kardex' && cobertura ? ` Histórico completo de ${dataBR(cobertura.desde)} a ${dataBR(cobertura.ate)}.` : ''}</span>
       </p>
       {p.cortado && <p className="text-[13px] text-text-muted">Período limitado a 366 dias: mostrando os dias mais recentes.</p>}
+      {aviso && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">{aviso}</p>}
       {erros.length > 0 && <p className="rounded-[var(--r-md)] bg-surface px-3 py-2 text-[13px] text-warn shadow-[var(--shadow-sm)]">Falha ao ler: {erros.join(', ')}. Os números podem estar incompletos; recarregue a página.</p>}
 
       {produtos.length === 0 ? (

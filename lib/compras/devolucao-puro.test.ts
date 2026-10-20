@@ -12,8 +12,13 @@ test('cfopDevolucao: entrada → devolução (dentro e fora do estado)', () => {
   assert.equal(cfopDevolucao('2403'), '6.411')
   assert.equal(cfopDevolucao('1407'), '5.413')
   assert.equal(cfopDevolucao('1556'), '5.556')
-  assert.equal(cfopDevolucao('1910'), '5.949')
-  assert.equal(cfopDevolucao('2910'), '6.949')
+  // bonificação/outras não têm CFOP de devolução válido na NF-e (5.910/5.949 + finalidade 4 = rejeição 327): sem sugestão
+  assert.equal(cfopDevolucao('1910'), '')
+  assert.equal(cfopDevolucao('2910'), '')
+  assert.equal(cfopDevolucao('1949'), '')
+  assert.equal(cfopDevolucao('1551'), '5.553')
+  assert.equal(cfopDevolucao('2653'), '6.662')
+  assert.equal(cfopDevolucao('1920'), '5.921')
   assert.equal(cfopDevolucao(null), '5.202')
 })
 

@@ -1,10 +1,11 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { omieRequest, OmieError, type LojaOmie } from './client'
+import { classificarErroOmie } from './erros-omie'
 import { ajustesForaDaJanela, autorDoAjuste, origemDoAjuste } from '@/lib/estoque/ajuste-autor'
-import { aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
+import { aposFalha, aposLeitura, historicoDesde, lerEstado, proximaLeitura, type ConfigFrentes } from '@/lib/estoque/espelho-frentes'
 import { ehErroDeLimiteOmie, isoParaBr, relogioBahia } from '@/lib/estoque/espelho-lojas'
 import { pegarTravaSync, soltarTravaSync } from './trava-sync'
-import { gravarEstadoSync, lerEstadoSync, type ResumoCiclo } from './espelho-estado'
+import { gravarEstadoSync, lerEstadoSync, paradaPorDisjuntor, type ResumoCiclo } from './espelho-estado'
 
 interface OmieAjuste {
   id_ajuste: number
@@ -204,9 +205,11 @@ export const FILTRO_IGNORADO = 'filtro de data ignorado pelo Omie'
 export const CFG_AJUSTES: ConfigFrentes = {
   diasRecentes: 3, janelaMaxDias: 30, limite: '2026-07-01', intervaloRecenteMin: 30, diasRevisao: 35, intervaloRevisaoHoras: 24,
 }
-const PAGINAS_AJUSTES_POR_CICLO = 8
+// D5 (20/10/2026): 12 páginas (era 8) para caber recente + revisão + backfill de lojas com 400 ajustes/dia (loja 3);
+// teto de 90 s (era 150) porque esta rota roda no sync-cron.sh principal, que já leva ~7 dos 10 min do ciclo.
+const PAGINAS_AJUSTES_POR_CICLO = 12
 const PAUSA_AJUSTES_MS = 700
-const TETO_AJUSTES_MS = 150_000
+const TETO_AJUSTES_MS = 90_000
 
 export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Promise<ResumoCiclo> {
   const resumo: ResumoCiclo = { loja: loja.id, paginas: 0, linhas: 0, parouPor: null, historicoDesde: null }
@@ -220,6 +223,8 @@ export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Pro
       const p = proximaLeitura(estado, CFG_AJUSTES, hoje, Date.now(), [null])
       if (!p) break
       if (resumo.paginas > 0) await sleep(PAUSA_AJUSTES_MS)
+      const disj = paradaPorDisjuntor(loja)
+      if (disj) { resumo.parouPor = disj; break }
       let resp: OmieAjusteResponse
       try {
         resp = await omieRequest<OmieAjusteResponse>({
@@ -230,8 +235,9 @@ export async function syncAjustesJanela(loja: LojaOmie, agora = new Date()): Pro
         })
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        resumo.parouPor = `${ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined) ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
-        await gravarEstadoSync(loja.id, 'ajustes', p.estado, resumo.parouPor)
+        const limite = ehErroDeLimiteOmie(msg, e instanceof OmieError ? e.faultCode : undefined)
+        resumo.parouPor = `${limite ? 'limite do Omie' : 'erro do Omie'}: ${msg}`.slice(0, 500)
+        await gravarEstadoSync(loja.id, 'ajustes', limite ? p.estado : aposFalha(p.estado, p.frente, resumo.parouPor, new Date().toISOString(), { transitorio: classificarErroOmie(msg) === 'transitorio' }), resumo.parouPor)
         break
       }
       resumo.paginas++

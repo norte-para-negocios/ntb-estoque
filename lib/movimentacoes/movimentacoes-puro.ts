@@ -207,8 +207,32 @@ export function casarKardexComOP<T extends KardexMin>(linhas: T[], op: OPMin, es
 }
 
 /** Kardex do Omie só quando a loja tem o espelho completo E o histórico completo já cobre o início do período. */
-export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string }): 'kardex' | 'reconstruido' {
-  return o.espelho && !!o.desde && o.desde <= o.ini ? 'kardex' : 'reconstruido'
+/**
+ * Kardex só quando o histórico cobre o começo do período e, se informado, a leitura recente chegou ao fim dele
+ * (D5, 20/10: com a guarda do espelho, o kardex de uma loja pode ficar parado horas; aí a lista reconstruída é a
+ * completa).
+ */
+export function escolherFonte(o: { espelho: boolean; desde: string | null; ini: string; ate?: string | null; fim?: string; hoje?: string }): 'kardex' | 'reconstruido' {
+  if (!o.espelho || !o.desde || o.desde > o.ini) return 'reconstruido'
+  if (o.fim && o.ate !== undefined && (!o.ate || o.ate < o.fim)) {
+    // Revisão M4: de madrugada (00–07 h, leitura proibida) o kardex vai até ontem; período terminando hoje segue no
+    // kardex com aviso de "hoje ainda não lido" (`faltaHoje`), em vez de trocar o período inteiro pela reconstrução.
+    if (o.hoje && o.fim === o.hoje && o.ate === addDias(o.hoje, -1)) return 'kardex'
+    return 'reconstruido'
+  }
+  return 'kardex'
+}
+
+/** Aviso quando o kardex vai só até ontem: antes das 07:00 (Bahia) é a madrugada proibida; depois, leitura atrasada. */
+export function avisoFaltaHoje(horaBahia: number): string {
+  return horaBahia < 7
+    ? 'Os movimentos de hoje ainda não foram lidos do Omie (a leitura do dia começa às 07:00): a lista abaixo vai até ontem.'
+    : 'O kardex do Omie desta loja está lido só até ontem (leitura atrasada ou pausada pela proteção contra bloqueio do Omie): a lista abaixo vai até ontem.'
+}
+
+/** O kardex escolhido termina ontem e o período vai até hoje (madrugada, antes da 1ª leitura do dia). */
+export function faltaHojeNoKardex(o: { ate?: string | null; fim: string; hoje: string }): boolean {
+  return o.fim === o.hoje && o.ate === addDias(o.hoje, -1)
 }
 
 /** Entradas e saídas (quantidade) de um conjunto de linhas: contagem de inventário e movimento cancelado não somam. */

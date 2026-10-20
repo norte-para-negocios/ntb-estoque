@@ -27,6 +27,8 @@ export type PedidoPDFDados = {
   mercadorias: number; frete: number; outras: number; total: number
   parcelas: { numero: number; vencimento: string | null; dias: number; valor: number }[]
   obs: string | null; aprovadoPor: string | null
+  /** C1: número do pedido no Omie (loja Omie); o fornecedor informa na NF-e (xPed) e o item pela ordem (nItemPed) */
+  numeroOmie?: string | null
 }
 
 export function PedidoCompraPDF({ d }: { d: PedidoPDFDados }) {
@@ -35,6 +37,7 @@ export function PedidoCompraPDF({ d }: { d: PedidoPDFDados }) {
     { rotulo: 'Fornecedor', valor: d.fornecedorCnpj ? `${d.fornecedor} · CNPJ ${d.fornecedorCnpj}` : d.fornecedor },
     ...(d.contato ? [{ rotulo: 'Contato', valor: d.contato }] : []),
     ...(d.numeroFornecedor ? [{ rotulo: 'Seu nº de pedido', valor: d.numeroFornecedor }] : []),
+    ...(d.numeroOmie ? [{ rotulo: 'Nº para a NF-e', valor: `${d.numeroOmie} (informe na tag xPed e o nº do item em nItemPed)` }] : []),
     ...(d.aprovadoPor ? [{ rotulo: 'Aprovado por', valor: d.aprovadoPor }] : []),
   ]
   return (

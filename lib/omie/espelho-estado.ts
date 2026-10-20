@@ -1,5 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 
+export { paradaPorDisjuntor } from './erros-omie'
+
 /**
  * Cursor dos crons do espelho completo (espelho_sync_estado, migration 160), por loja + frente.
  * Falha de leitura LANÇA: seguir com estado vazio reiniciaria o backfill do zero em silêncio.

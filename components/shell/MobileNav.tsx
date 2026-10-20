@@ -38,6 +38,7 @@ export function MobileNav({
   rotasVisiveis,
   estoqueProprio = false,
   temEstoque = false,
+  pedidosOmie = false,
   lojaSelector,
   userMenu,
   onBuscar,
@@ -49,6 +50,7 @@ export function MobileNav({
   /** Loja atual usa o estoque próprio: mostra o item Estoque. */
   estoqueProprio?: boolean
   temEstoque?: boolean
+  pedidosOmie?: boolean
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
   /** Abre a busca global (o ícone fica na barra superior, não numa linha própria). */
@@ -80,11 +82,11 @@ export function MobileNav({
           (!i.admin || isAdmin) &&
           (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
           (!i.superAdmin || isSuperAdmin) &&
-          (!i.soEstoqueProprio || estoqueProprio) &&
+          (!i.soEstoqueProprio || estoqueProprio || (i.ouPedidosOmie && pedidosOmie)) &&
           (!i.comEstoque || temEstoque) &&
           (permitidas === null || permitidas.has(i.href))
       ),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque] // eslint-disable-line react-hooks/exhaustive-deps
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const gruposVisiveis = useMemo(
