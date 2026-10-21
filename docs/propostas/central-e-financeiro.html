@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central Norte e Financeiro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Conceito: página de proposta com protótipo clicável. Menu lateral curto (módulos) + "Central" por módulo no estilo Omie (atalhos, seções com Incluir / Importar / Exibir todos) + busca que acha qualquer tela. Teal da marca Norte Estoque. */
+:root{
+  --bg:#f3f6f6; --surface:#ffffff; --surface2:#e9f0f0; --fg:#10201f; --muted:#52676a; --line:#d3dedf;
+  --brand:#1d7580; --brand-fg:#ffffff; --brand-soft:#d8eced; --side:#17636d; --side-fg:#e8f6f6;
+  --ok:#1b7f4f; --ok-soft:#dcf1e6; --warn:#97600a; --warn-soft:#f8ecd2; --bad:#b3342b; --bad-soft:#f8dedb; --new:#5b3fb8; --new-soft:#e8e2f8;
+  --display:'Schibsted Grotesk',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1819; --surface:#142123; --surface2:#1b2d2f; --fg:#e3eeee; --muted:#94adb0; --line:#27393b;
+  --brand:#4fb7c2; --brand-fg:#06191b; --brand-soft:#17383c; --side:#0f2b2f; --side-fg:#d6ecee;
+  --ok:#5dc891; --ok-soft:#14352a; --warn:#e2b25a; --warn-soft:#3a2d12; --bad:#ef8a80; --bad-soft:#40201d; --new:#b4a0f2; --new-soft:#2a2347; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1819; --surface:#142123; --surface2:#1b2d2f; --fg:#e3eeee; --muted:#94adb0; --line:#27393b;
+  --brand:#4fb7c2; --brand-fg:#06191b; --brand-soft:#17383c; --side:#0f2b2f; --side-fg:#d6ecee;
+  --ok:#5dc891; --ok-soft:#14352a; --warn:#e2b25a; --warn-soft:#3a2d12; --bad:#ef8a80; --bad-soft:#40201d; --new:#b4a0f2; --new-soft:#2a2347; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--display);font-size:15px;line-height:1.5;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 64px;display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,4.6vw,42px);font-weight:700;letter-spacing:-.02em}
+h2{font-size:clamp(22px,3vw,28px);font-weight:700;letter-spacing:-.01em}
+h3{font-size:16px;font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);max-width:62ch;font-size:16px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--brand)}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+.mono{font-family:var(--mono)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.p-new{background:var(--new-soft);color:var(--new)} .p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)} .p-bad{background:var(--bad-soft);color:var(--bad)} .p-mut{background:var(--surface2);color:var(--muted)}
+
+/* protótipo */
+.proto{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);display:grid;grid-template-columns:200px minmax(0,1fr);min-height:620px}
+.side{background:var(--side);color:var(--side-fg);padding:14px 10px;display:flex;flex-direction:column;gap:4px}
+.side .logo{font-weight:700;padding:6px 10px 14px;font-size:15px;letter-spacing:-.01em}
+.side button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;font-size:14px;color:var(--side-fg);opacity:.86}
+.side button:hover{background:rgba(255,255,255,.1);opacity:1}
+.side button[aria-current="true"]{background:rgba(255,255,255,.18);opacity:1;font-weight:600}
+.side button:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.side .sep{height:1px;background:rgba(255,255,255,.16);margin:8px 6px}
+.side .n{margin-left:auto;font-family:var(--mono);font-size:11px;opacity:.7}
+.main{padding:16px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;font:inherit;padding:10px 12px 10px 36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.search input:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{all:unset;cursor:pointer;font-size:13px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--brand);color:var(--brand-fg);border-color:var(--brand)}
+.chip:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.titulo{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.titulo h3{font-size:20px}
+.atalhos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.atalho{all:unset;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;min-height:78px}
+.atalho:hover{border-color:var(--brand)}
+.atalho:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.atalho b{font-weight:600;font-size:14px}
+.atalho span.d{font-size:12.5px;color:var(--muted)}
+.secoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card h4{margin:0;font-size:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.card li a{all:unset;cursor:pointer;display:flex;gap:8px;align-items:center;padding:5px 6px;margin-inline:-6px;border-radius:6px;font-size:14px;color:var(--brand)}
+.card li a:hover{background:var(--brand-soft)}
+.card li a:focus-visible{outline:2px solid var(--brand)}
+.star{all:unset;cursor:pointer;color:var(--muted);margin-left:auto;font-size:15px;line-height:1}
+.star[aria-pressed="true"]{color:var(--warn)}
+.res{display:flex;flex-direction:column;gap:6px}
+.res .lin{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;flex-wrap:wrap}
+.res .lin .mod{margin-left:auto;font-size:12px;color:var(--muted)}
+.vazio{color:var(--muted);padding:18px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+.fav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.fav a{all:unset;cursor:pointer;color:var(--brand);padding:3px 9px;border-radius:99px;background:var(--brand-soft);font-size:13px}
+
+/* tabela financeira */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th{font-size:12px;text-align:left;color:var(--muted);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.sel td{background:var(--brand-soft)}
+.btn{font:inherit;font-weight:600;cursor:pointer;border-radius:9px;padding:9px 14px;border:1px solid var(--brand);background:var(--brand);color:var(--brand-fg)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.sec{background:transparent;color:var(--brand)}
+.btn:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.acao{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.nota{font-size:13px;color:var(--muted)}
+
+/* fluxo e etapas */
+.fluxo{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:stretch}
+.fluxo .passo{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;position:relative}
+.fluxo .passo b{font-size:14px}
+.fluxo .passo span{font-size:12.5px;color:var(--muted)}
+.fluxo .passo.novo{border-color:var(--new)}
+.etapas{display:flex;flex-direction:column;gap:8px}
+.etapa{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.etapa .o{font-family:var(--mono);font-size:13px;color:var(--brand);font-weight:500;padding-top:1px}
+.etapa p{font-size:13.5px;color:var(--muted)}
+.etapa h3{margin-bottom:2px}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.regra{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.regra p{font-size:14px;color:var(--muted)}
+.decisoes{display:flex;flex-direction:column;gap:8px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:start}
+.dec p{font-size:13.5px;color:var(--muted)}
+.dec .rec{grid-column:1/-1;font-size:13.5px}
+.dec .rec b{color:var(--ok)}
+@media (max-width:760px){
+  .proto{grid-template-columns:1fr}
+  .side{flex-direction:row;overflow-x:auto;padding:8px;gap:4px}
+  .side .logo,.side .sep,.side .n{display:none}
+  .side button{white-space:nowrap}
+  .etapa{grid-template-columns:24px minmax(0,1fr)}
+  .etapa .pill{grid-column:2}
+  .dec{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){.atalho,.card li a{transition:background .12s,border-color .12s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Proposta para aprovar · Norte Estoque</span>
+  <h1>Uma tela inicial para tudo que o Omie tem, e o financeiro por cima</h1>
+  <p class="lede">O menu lateral hoje lista cerca de 40 telas numa fila só. No Omie, o menu tem seis módulos e cada módulo abre uma central com atalhos, seções e botões Incluir, Importar e Exibir todos. A proposta copia essa lógica, acrescenta uma busca que acha qualquer tela e começa o financeiro pela conta a pagar.</p>
+</header>
+
+<section id="central">
+  <span class="eyebrow">Parte 1</span>
+  <h2>A central de cada módulo</h2>
+  <p class="lede">Protótipo clicável. Troque de módulo no menu, filtre pelos botões, digite na busca (tecla / ) ou marque estrelas para montar seus favoritos. O conteúdo vem das telas que já existem e das que vamos construir.</p>
+
+  <div class="proto" id="proto" aria-label="Protótipo da tela inicial">
+    <nav class="side" id="side" aria-label="Módulos"></nav>
+    <div class="main">
+      <div class="bar">
+        <div class="search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Ir para qualquer tela ou ação: “pagar”, “XML”, “DRE”…" aria-label="Buscar telas">
+        </div>
+        <span class="kbd">/</span>
+      </div>
+      <div class="fav" id="fav" aria-live="polite"></div>
+      <div id="corpo" style="display:flex;flex-direction:column;gap:16px"></div>
+    </div>
+  </div>
+  <p class="nota">Itens com a etiqueta “só dev” seguem escondidos de quem não é desenvolvedor, como já está no ar. A etiqueta “novo” marca o que ainda não existe.</p>
+</section>
+
+<section id="como">
+  <span class="eyebrow">Regras da central</span>
+  <h2>Como a tela decide o que mostrar</h2>
+  <div class="duo">
+    <div class="regra"><h3>Menu lateral com 7 entradas</h3><p>Início, Estoque, Compras, Produção, Fiscal, Finanças e Administração. Hoje são cerca de 40 linhas. As telas continuam as mesmas, só mudam de lugar.</p></div>
+    <div class="regra"><h3>Cada módulo tem a mesma forma</h3><p>Atalhos no topo (o que se usa todo dia), depois seções com Incluir, Importar planilha e Exibir todos, e por último os relatórios do módulo. Quem conhece o Omie acha tudo no mesmo lugar.</p></div>
+    <div class="regra"><h3>Busca e favoritos</h3><p>A busca vale para todos os módulos e aceita o nome da ação. Cada pessoa marca estrelas e vê seus favoritos no topo. É isso que resolve “milhões de coisas” sem esconder nenhuma.</p></div>
+    <div class="regra"><h3>Permissão e loja continuam mandando</h3><p>A central só mostra o que a pessoa pode usar naquela loja. Loja do Omie não vê telas de estoque próprio, e telas novas só aparecem para desenvolvedores até lançarmos.</p></div>
+  </div>
+</section>
+
+<section id="fin">
+  <span class="eyebrow">Parte 2</span>
+  <h2>Financeiro: começa pela conta a pagar</h2>
+  <p class="lede">O mapa de lacunas do Omie mostra que o Norte não tem nenhum financeiro no app. As tabelas de contas a pagar, a receber e contas correntes existem desde a migration 052, mas ficam sem uso. O caminho mais curto é aproveitar o que a nota de entrada já traz: o fornecedor, o valor e as parcelas lidas do XML.</p>
+
+  <div class="fluxo" aria-label="Fluxo">
+    <div class="passo"><b>Nota de entrada</b><span>XML com parcelas. Já existe.</span></div>
+    <div class="passo novo"><b>Conta a pagar</b><span>Nasce da nota, uma por parcela.</span></div>
+    <div class="passo novo"><b>Aprovação</b><span>Gerente lança, dono aprova.</span></div>
+    <div class="passo novo"><b>Pagamento</b><span>Baixa na conta corrente escolhida.</span></div>
+    <div class="passo novo"><b>Extrato e conciliação</b><span>Importa OFX e casa com o que foi pago.</span></div>
+    <div class="passo novo"><b>Fluxo de caixa e DRE</b><span>Por categoria e departamento.</span></div>
+  </div>
+
+  <h3 style="margin-top:8px">Como seria a tela de Contas a pagar</h3>
+  <p class="nota">Dados de exemplo, só para mostrar a tela. Marque as linhas para ver a barra de pagamento.</p>
+  <div class="tw"><table id="tab">
+    <thead><tr><th style="width:36px"></th><th>Vence</th><th>Fornecedor</th><th>Origem</th><th>Categoria</th><th class="num">Valor (R$)</th><th>Situação</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table></div>
+  <div class="acao" id="acao">
+    <div><b id="selT">Nenhuma conta marcada</b><div class="nota" id="selD">Marque as contas que quer pagar juntas.</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select id="cc" aria-label="Conta corrente" style="font:inherit;padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--fg)">
+        <option>Conta corrente: Caixa da loja</option><option>Conta corrente: Banco principal</option></select>
+      <button class="btn sec" id="bAprov" disabled>Enviar para aprovação</button>
+      <button class="btn" id="bPagar" disabled>Registrar pagamento</button>
+    </div>
+  </div>
+  <p class="nota" id="msg" aria-live="polite"></p>
+
+  <h3 style="margin-top:8px">Ordem de construção</h3>
+  <div class="etapas">
+    <div class="etapa"><span class="o">1</span><div><h3>Contas correntes e categorias com conta de DRE</h3><p>Base de tudo: onde o dinheiro está e como cada gasto se classifica. Reaproveita as categorias contábeis que já existem.</p></div><span class="pill p-mut">pequena</span></div>
+    <div class="etapa"><span class="o">2</span><div><h3>Contas a pagar, manual e importando planilha</h3><p>Incluir, editar, exibir todas, filtros por vencimento, fornecedor e categoria. Anexo do boleto.</p></div><span class="pill p-mut">grande</span></div>
+    <div class="etapa"><span class="o">3</span><div><h3>Conta a pagar gerada pela nota de entrada</h3><p>Ao lançar a nota, cada parcela do XML vira um título, ligado à nota e ao pedido de compra. Cancelar a nota cancela os títulos em aberto.</p></div><span class="pill p-mut">média</span></div>
+    <div class="etapa"><span class="o">4</span><div><h3>Registrar pagamentos e aprovação</h3><p>Baixa total ou parcial, juros e desconto, lançamento no extrato da conta corrente. Aprovação pelo dono acima de um valor.</p></div><span class="pill p-mut">média</span></div>
+    <div class="etapa"><span class="o">5</span><div><h3>Contas a receber vindas das vendas</h3><p>Cartão, aplicativos e convênios a partir das vendas do Norte Vendas, com taxa da operadora e data de repasse.</p></div><span class="pill p-mut">grande</span></div>
+    <div class="etapa"><span class="o">6</span><div><h3>Extrato OFX, conciliação, fluxo de caixa e DRE</h3><p>Importar extrato, casar com pagamentos e recebimentos, e fechar os relatórios que o Ramon pede todo mês.</p></div><span class="pill p-mut">grande</span></div>
+  </div>
+
+  <h3 style="margin-top:8px">Cuidados que valem desde o primeiro dia</h3>
+  <div class="duo">
+    <div class="regra"><h3>Começa só no estoque próprio</h3><p>As lojas do Omie continuam com o financeiro no Omie. Para elas o Norte não cria título nenhum, só pode ler o que o Omie avisa. Assim nunca existem dois financeiros para a mesma loja.</p></div>
+    <div class="regra"><h3>Pagar no Norte é só registrar</h3><p>O sistema não manda dinheiro nem fala com banco. “Registrar pagamento” anota que foi pago e baixa o título. Remessa e retorno de banco ficam para depois.</p></div>
+    <div class="regra"><h3>Só desenvolvedores veem</h3><p>Todo o módulo Finanças nasce atrás do mesmo bloqueio das telas novas, até você mandar lançar.</p></div>
+    <div class="regra"><h3>Nada se apaga</h3><p>Título pago só se desfaz por estorno, que fica no histórico. Fechamento de período trava edição retroativa, como o Omie faz.</p></div>
+  </div>
+</section>
+
+<section id="aprovar">
+  <span class="eyebrow">Para decidir</span>
+  <h2>O que preciso que você aprove</h2>
+  <div class="decisoes">
+    <div class="dec"><div><h3>1. Trocar o menu lateral pelas sete entradas e as centrais</h3><p>É a mudança mais visível: todo mundo que usa o sistema passa a ver o menu novo.</p></div><span class="pill p-warn">visível a todos</span>
+      <div class="rec"><b>Recomendo:</b> construir já, mas ligar só para desenvolvedores e comparar lado a lado com o menu atual por uma semana antes de lançar.</div></div>
+    <div class="dec"><div><h3>2. Começar o financeiro pela conta a pagar nascendo da nota</h3><p>Etapas 1 a 4 primeiro, recebimento e conciliação depois.</p></div><span class="pill p-ok">ordem sugerida</span>
+      <div class="rec"><b>Recomendo:</b> sim. É onde o Norte já tem o dado e onde a ODARA sente a falta primeiro.</div></div>
+    <div class="dec"><div><h3>3. Financeiro só no estoque próprio no começo</h3><p>Lojas do Omie seguem lá. Mais tarde dá para espelhar o financeiro delas em leitura.</p></div><span class="pill p-ok">seguro</span>
+      <div class="rec"><b>Recomendo:</b> sim, sem exceção. Nenhuma escrita no Omie.</div></div>
+    <div class="dec"><div><h3>4. Aprovação de pagamento pelo dono</h3><p>Gerente lança e o dono aprova. Defino o valor mínimo com você.</p></div><span class="pill p-mut">regra de negócio</span>
+      <div class="rec"><b>Recomendo:</b> ligar por loja, desligada por padrão.</div></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+/* ---------- dados da central ---------- */
+var A=function(t,flag){return {t:t,f:flag||''}};
+var INC=['Incluir','Importar planilha','Exibir todos'];
+function sec(nome,itens,flag){return {nome:nome,itens:itens,flag:flag||''}}
+var MODS=[
+ {id:'ini',nome:'Início',icone:'◧',desc:'Resumo da loja e pendências do dia.',atalhos:[
+   ['Central de correções','O que o sistema achou de errado'],['Estoque','Saldo e custo de hoje'],['Notas Fiscais','Entradas para conferir'],['Sugestão de compra','O que comprar hoje','dev']],secoes:[]},
+ {id:'est',nome:'Estoque',icone:'▣',desc:'Saldo, movimentos, inventário e transferências.',
+  atalhos:[['Consultar estoque','Saldo por produto e local'],['Movimentações','Entradas e saídas'],['Inventários','Contagens'],['Validade','Lotes a vencer'],['Central de correções','Diferenças a corrigir']],
+  secoes:[sec('Produtos',INC),sec('Locais de estoque',['Incluir','Exibir todos']),sec('Famílias',['Incluir','Exibir todas']),sec('Inventário',['Incluir contagem','Exibir todos']),sec('Transferências',['Incluir','Exibir todas']),sec('Relatórios',['Posição de estoque','Estoque valorizado','Kardex do produto','Estoque mínimo','Curva ABC','CMV / CPV'])]},
+ {id:'com',nome:'Compras',icone:'◫',desc:'Do pedido à nota de entrada.',
+  atalhos:[['Sugestão de compra','O que comprar','dev'],['Tarefas de compras','Pendências do comprador','dev'],['Importar XML de NF-e','Lançar entrada'],['Painel de NF-e','Notas recebidas']],
+  secoes:[sec('Fornecedores',INC),sec('Pedidos de compra',['Incluir','Importar planilha','Exibir todos','Etapas das compras'],'dev'),sec('Requisições',['Incluir','Exibir todas'],'dev'),sec('Notas de entrada',['Importar XML','Lançar sem XML','Exibir todas']),sec('Devolução ao fornecedor',['Exibir todas'],'dev'),sec('Relatórios',['Compras por fornecedor','Produtos por fornecedor','Auditoria fiscal das compras'])]},
+ {id:'pro',nome:'Produção',icone:'⚙',desc:'Fichas técnicas e ordens de produção.',
+  atalhos:[['Ordens de Produção','Abertas e concluídas'],['Estrutura dos produtos','Fichas técnicas']],
+  secoes:[sec('Ordem de produção',['Incluir','Exibir todas','Etapas da produção']),sec('Fichas técnicas',['Incluir','Importar planilha','Exibir todas']),sec('Relatórios',['Produção por produto','Dashboard de produção'])]},
+ {id:'fis',nome:'Fiscal',icone:'§',desc:'Notas, SEFAZ e pacote do contador.',
+  atalhos:[['Painel de NF-e','Entrada e saída','dev'],['Manifestar na SEFAZ','Ciência da operação'],['Contador e fechamento','Pacote do mês','dev']],
+  secoes:[sec('NF-e de saída',['Exibir todas','Configuração fiscal'],'dev'),sec('Transferências entre lojas',['Incluir','Exibir todas'],'dev'),sec('Contador',['Pacote do contador','Livro de entradas','Bloco H do inventário'],'dev'),sec('Relatórios',['Auditoria fiscal','Pendências de classificação'])]},
+ {id:'fin',nome:'Finanças',icone:'$',desc:'Contas a pagar, a receber e caixa.',novo:true,
+  atalhos:[['Resumo','Caixa de hoje e vencimentos','novo'],['Contas a pagar','Em aberto e atrasadas','novo'],['Contas a receber','Cartões e convênios','novo'],['Aprovação de pagamentos','Aguardando o dono','novo']],
+  secoes:[sec('Contas a pagar',['Incluir','Importar planilha','Exibir todas','Registrar pagamentos'],'novo'),sec('Contas a receber',['Incluir','Exibir todas','Registrar recebimentos'],'novo'),sec('Contas correntes',['Incluir','Exibir todas'],'novo'),sec('Movimentação',['Incluir lançamento','Incluir transferência','Importar extrato OFX','Exibir extrato'],'novo'),sec('Relatórios',['Contas a pagar em aberto','Pagamentos realizados','Fluxo de caixa','DRE'],'novo')]},
+ {id:'adm',nome:'Administração',icone:'⚑',desc:'Lojas, pessoas e saúde do sistema.',
+  atalhos:[['Usuários e cargos','Quem acessa o quê'],['Saúde da integração','Omie e SEFAZ'],['Logs de integração','Erros e envios']],
+  secoes:[sec('Lojas',['Exibir todas','Configurar loja']),sec('Usuários',['Incluir','Exibir todos']),sec('Sistema',['Saúde da integração','Logs de integração','Saúde do banco'])]}
+];
+var FILTROS=[['todos','Tudo'],['novo','Novos'],['dev','Só dev']];
+var modAtual='est',filtro='todos',busca='',favs=[];
+try{favs=JSON.parse(localStorage.getItem('central-favs')||'[]')}catch(e){favs=[]}
+function salvarFavs(){try{localStorage.setItem('central-favs',JSON.stringify(favs))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function etiqueta(f){return f==='dev'?'<span class="pill p-new">só dev</span>':f==='novo'?'<span class="pill p-warn">novo</span>':''}
+function passa(f){return filtro==='todos'||f===filtro}
+function achatado(){var o=[];MODS.forEach(function(m){m.atalhos.forEach(function(a){o.push({m:m,t:a[0],d:a[1],f:a[2]||''})});m.secoes.forEach(function(s){s.itens.forEach(function(i){o.push({m:m,t:s.nome+' › '+i,d:'',f:s.flag})})})});return o}
+function id(m,t){return m.id+'|'+t}
+
+/* ---------- menu lateral ---------- */
+var side=document.getElementById('side');
+function pintaSide(){
+  var h='<div class="logo">Norte Estoque</div>';
+  MODS.forEach(function(m,i){
+    if(m.id==='adm')h+='<div class="sep"></div>';
+    h+='<button data-m="'+m.id+'" aria-current="'+(m.id===modAtual&&!busca)+'"><span aria-hidden="true" style="width:16px;text-align:center">'+m.icone+'</span>'+esc(m.nome)+(m.novo?'<span class="n">novo</span>':'')+'</button>';
+  });
+  side.innerHTML=h;
+}
+side.addEventListener('click',function(e){var b=e.target.closest('button[data-m]');if(!b)return;modAtual=b.dataset.m;busca='';document.getElementById('q').value='';desenha()});
+
+/* ---------- corpo ---------- */
+var corpo=document.getElementById('corpo'),favEl=document.getElementById('fav');
+function pintaFav(){
+  if(!favs.length){favEl.innerHTML='<span>Favoritos: marque a estrela em qualquer item para fixar aqui.</span>';return}
+  favEl.innerHTML='<span>Favoritos:</span>'+favs.map(function(f){return '<a role="button" tabindex="0" data-go="'+esc(f.split('|')[0])+'">'+esc(f.split('|')[1])+'</a>'}).join('');
+}
+favEl.addEventListener('click',function(e){var a=e.target.closest('[data-go]');if(a){modAtual=a.dataset.go;busca='';document.getElementById('q').value='';desenha()}});
+favEl.addEventListener('keydown',function(e){if(e.key==='Enter'){var a=e.target.closest('[data-go]');if(a)a.click()}});
+
+function estrela(m,t){var k=id(m,t),on=favs.indexOf(k)>-1;return '<button class="star" data-fav="'+esc(k)+'" aria-pressed="'+on+'" aria-label="Favorito: '+esc(t)+'">'+(on?'★':'☆')+'</button>'}
+
+function desenha(){
+  pintaSide();pintaFav();
+  var m=MODS.filter(function(x){return x.id===modAtual})[0];
+  if(busca){
+    var q=busca.toLowerCase();
+    var r=achatado().filter(function(x){return (x.t+' '+x.m.nome).toLowerCase().indexOf(q)>-1&&passa(x.f)});
+    corpo.innerHTML='<div class="titulo"><h3>Resultados para “'+esc(busca)+'”</h3><span class="nota">'+r.length+' em todos os módulos</span></div>'+
+      (r.length?'<div class="res">'+r.map(function(x){return '<div class="lin"><span>'+esc(x.t)+'</span>'+etiqueta(x.f)+'<span class="mod">'+esc(x.m.nome)+'</span>'+estrela(x.m,x.t)+'</div>'}).join('')+'</div>':'<div class="vazio">Nada encontrado. Tente “pagar”, “nota” ou “estoque”.</div>');
+    return;
+  }
+  var at=m.atalhos.filter(function(a){return passa(a[2]||'')});
+  var se=m.secoes.map(function(s){return {nome:s.nome,flag:s.flag,itens:s.itens}}).filter(function(s){return passa(s.flag)});
+  var h='<div class="titulo"><h3>'+esc(m.nome)+'</h3><span class="nota">'+esc(m.desc)+'</span></div>';
+  h+='<div class="chips" role="group" aria-label="Filtro">'+FILTROS.map(function(f){return '<button class="chip" data-f="'+f[0]+'" aria-pressed="'+(filtro===f[0])+'">'+f[1]+'</button>'}).join('')+'</div>';
+  if(at.length){h+='<div><div class="nota" style="margin-bottom:8px;font-weight:600">Atalhos</div><div class="atalhos">'+at.map(function(a){return '<button class="atalho"><b>'+esc(a[0])+'</b><span class="d">'+esc(a[1])+'</span>'+(a[2]?etiqueta(a[2]):'')+'</button>'}).join('')+'</div></div>'}
+  if(se.length){h+='<div class="secoes">'+se.map(function(s){return '<div class="card"><h4>'+esc(s.nome)+etiqueta(s.flag)+'</h4><ul>'+s.itens.map(function(i){return '<li><a role="button" tabindex="0">'+esc(i)+'</a>'+estrela(m,s.nome+' › '+i)+'</li>'}).join('')+'</ul></div>'}).join('')+'</div>'}
+  if(!at.length&&!se.length)h+='<div class="vazio">Nada neste filtro.</div>';
+  corpo.innerHTML=h;
+}
+corpo.addEventListener('click',function(e){
+  var f=e.target.closest('[data-f]');if(f){filtro=f.dataset.f;desenha();return}
+  var s=e.target.closest('[data-fav]');if(s){var k=s.dataset.fav,i=favs.indexOf(k);if(i>-1)favs.splice(i,1);else favs.push(k);salvarFavs();desenha()}
+});
+var q=document.getElementById('q');
+q.addEventListener('input',function(){busca=q.value.trim();desenha()});
+document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='SELECT'){e.preventDefault();q.focus()}});
+/* os favoritos guardam "modulo|titulo": ao clicar, abrem o módulo */
+desenha();
+
+/* ---------- tabela de contas a pagar (exemplo) ---------- */
+var CONTAS=[
+ {v:'12/11',f:'Frigorífico Serra Azul',o:'NF 48213 · parcela 1/3',c:'Carnes e aves',valor:4820.50,s:'aberto'},
+ {v:'12/11',f:'Hortifruti Tavares',o:'NF 9021 · à vista',c:'Hortifruti',valor:932.10,s:'aberto'},
+ {v:'15/11',f:'Distribuidora Maré',o:'Lançamento manual',c:'Bebidas',valor:2150.00,s:'aprov'},
+ {v:'05/11',f:'Embalagens Litoral',o:'NF 3377 · parcela 2/2',c:'Embalagens',valor:615.40,s:'atras'},
+ {v:'20/11',f:'Frigorífico Serra Azul',o:'NF 48213 · parcela 2/3',c:'Carnes e aves',valor:4820.50,s:'aberto'}
+];
+var ST={aberto:['p-mut','Em aberto'],aprov:['p-warn','Aguardando aprovação'],atras:['p-bad','Atrasada'],pago:['p-ok','Paga']};
+var tb=document.getElementById('tb'),marc={};
+var brl=function(n){return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})};
+function pintaTab(){
+  tb.innerHTML=CONTAS.map(function(c,i){
+    var st=ST[c.s];
+    return '<tr class="'+(marc[i]?'sel':'')+'"><td><input type="checkbox" data-i="'+i+'" id="c'+i+'" aria-label="Marcar '+esc(c.f)+'" '+(marc[i]?'checked':'')+(c.s==='pago'?' disabled':'')+'></td><td class="mono">'+c.v+'</td><td>'+esc(c.f)+'</td><td class="nota">'+esc(c.o)+'</td><td>'+esc(c.c)+'</td><td class="num">'+brl(c.valor)+'</td><td><span class="pill '+st[0]+'">'+st[1]+'</span></td></tr>';
+  }).join('');
+  var idx=Object.keys(marc).filter(function(k){return marc[k]});
+  var tot=idx.reduce(function(a,k){return a+CONTAS[k].valor},0);
+  var aprovPend=idx.some(function(k){return CONTAS[k].s==='aprov'});
+  document.getElementById('selT').textContent=idx.length?idx.length+' conta'+(idx.length>1?'s':'')+' · R$ '+brl(tot):'Nenhuma conta marcada';
+  document.getElementById('selD').textContent=idx.length?(aprovPend?'Há conta aguardando aprovação do dono: não dá para pagar ainda.':'Pronto para registrar o pagamento.'):'Marque as contas que quer pagar juntas.';
+  document.getElementById('bPagar').disabled=!idx.length||aprovPend;
+  document.getElementById('bAprov').disabled=!idx.length||idx.every(function(k){return CONTAS[k].s!=='aberto'&&CONTAS[k].s!=='atras'});
+}
+tb.addEventListener('change',function(e){var i=e.target.dataset.i;if(i==null)return;marc[i]=e.target.checked;document.getElementById('msg').textContent='';pintaTab()});
+document.getElementById('bPagar').addEventListener('click',function(){
+  var n=0;Object.keys(marc).forEach(function(k){if(marc[k]){CONTAS[k].s='pago';n++;marc[k]=false}});
+  document.getElementById('msg').textContent='Exemplo: '+n+' conta(s) marcada(s) como paga(s) na '+document.getElementById('cc').value.replace('Conta corrente: ','conta ')+'. No sistema real isso também lança a saída no extrato.';pintaTab()});
+document.getElementById('bAprov').addEventListener('click',function(){
+  Object.keys(marc).forEach(function(k){if(marc[k]&&(CONTAS[k].s==='aberto'||CONTAS[k].s==='atras')){CONTAS[k].s='aprov';marc[k]=false}});
+  document.getElementById('msg').textContent='Exemplo: enviado ao dono. Ele recebe o aviso e aprova ou recusa com motivo.';pintaTab()});
+pintaTab();
+})();
+</script>
+
+</body>
+</html>
