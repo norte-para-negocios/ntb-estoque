@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useState, useEffect, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import {
@@ -20,8 +21,12 @@ import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from './NavItems'
 import { hrefAtivo } from '@/lib/nav-ativo'
-import { MenuModulos, AlternaMenu } from '@/components/central/MenuModulos'
 import { useMenuNovo } from '@/components/central/central-estado'
+import { navItemVisivel } from '@/lib/nav-visivel'
+
+// Menu por módulos: carregado sob demanda, só para desenvolvedores (lib/central/* e nomes de telas só-dev não vão no JS dos demais).
+const MenuModulos = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.MenuModulos), { ssr: false })
+const AlternaMenu = dynamic(() => import('@/components/central/MenuModulos').then((m) => m.AlternaMenu), { ssr: false })
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -61,9 +66,9 @@ export function MobileNav({
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   // Só desenvolvedores: menu por módulos (padrão) ou o menu antigo. Não-dev: sempre false, nada muda.
-  const [menuNovo, setMenuNovo] = useMenuNovo(isSuperAdmin)
+  const [menuNovo, setMenuNovo, menuPronto] = useMenuNovo(isSuperAdmin)
   const ctxCentral = useMemo(
-    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie }),
+    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }),
     [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie]
   )
 
@@ -85,16 +90,8 @@ export function MobileNav({
   const permitidas = rotasVisiveis ? new Set(rotasVisiveis) : null
   const itens = useMemo(
     () =>
-      NAV_ITEMS.filter(
-        (i) =>
-          (!i.admin || isAdmin) &&
-          (!i.gestaoUsuarios || isAdmin || podeGerirUsuarios) &&
-          (!i.superAdmin || isSuperAdmin) &&
-          (!i.soEstoqueProprio || estoqueProprio || (i.ouPedidosOmie && pedidosOmie)) &&
-          (!i.comEstoque || temEstoque) &&
-          (permitidas === null || permitidas.has(i.href))
-      ),
-    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie] // eslint-disable-line react-hooks/exhaustive-deps
+      NAV_ITEMS.filter((i) => navItemVisivel(i, ctxCentral, permitidas)),
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, ctxCentral] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const gruposVisiveis = useMemo(
@@ -204,7 +201,7 @@ export function MobileNav({
         <div className="px-3 pb-3 shrink-0">{lojaSelector}</div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          {menuNovo ? (
+          {!menuPronto ? null : menuNovo ? (
             <MenuModulos ctx={ctxCentral} compacto />
           ) : (
           gruposVisiveis.map((g) => {

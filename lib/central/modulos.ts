@@ -20,8 +20,12 @@ export type ItemCentral = {
   desc?: string
   /** href do NAV_ITEMS de onde herdar a visibilidade (padrão: o NAV de maior prefixo do href). */
   regra?: string
-  /** Ainda não existe: aparece desabilitado, com a etiqueta "novo", sem link. */
+  /** Ainda não existe: aparece desabilitado, com a etiqueta "em breve", sem link. */
   emBreve?: boolean
+  /** Só em loja de estoque próprio / com estoque (próprio ou Omie) / no app para computador: a página recusa nos outros casos. */
+  soEstoqueProprio?: boolean
+  comEstoque?: boolean
+  soDesktop?: boolean
   /** Repetição de um item que pertence a outro módulo (não conta para "módulo ativo"). */
   ref?: boolean
 }
@@ -38,7 +42,12 @@ export type ModuloCentral = {
 }
 
 /** Relatórios herdam a regra da tela /relatorios (gestão). */
-const rel = (label: string, href: string, desc?: string): ItemCentral => ({ label, href, desc, regra: '/relatorios' })
+const rel = (label: string, href: string, extra: Partial<ItemCentral> = {}): ItemCentral => ({
+  label,
+  href,
+  regra: '/relatorios',
+  ...extra,
+})
 const breve = (label: string, desc?: string): ItemCentral => ({ label, desc, emBreve: true })
 
 export const MODULOS: ModuloCentral[] = [
@@ -72,7 +81,6 @@ export const MODULOS: ModuloCentral[] = [
       {
         nome: 'Consultas do estoque',
         itens: [
-          { label: 'Saúde do estoque', href: '/estoque/saude' },
           { label: 'Kardex da loja', href: '/estoque/kardex' },
           { label: 'Ajustes de estoque', href: '/estoque/ajustes' },
           { label: 'Fichas que usam o insumo', href: '/estoque/fichas' },
@@ -86,14 +94,14 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Incluir', href: '/produto/novo' },
           { label: 'Importar planilha', href: '/produto/importar' },
           { label: 'Exibir todos', href: '/produto' },
-          { label: 'Produtos substitutos', href: '/produto-substituicao' },
+          // A página pede a permissão 'Produto Substituicoes'; a visibilidade herda de Produtos (dev vê tudo).
+          { label: 'Produtos substitutos', href: '/produto-substituicao', regra: '/produto' },
         ],
       },
       { nome: 'Locais de estoque', itens: [{ label: 'Exibir todos', href: '/local-estoque' }] },
       { nome: 'Famílias', itens: [{ label: 'Exibir todas', href: '/familia' }] },
       { nome: 'Grupos e subgrupos', itens: [{ label: 'Exibir todos', href: '/grupo-produto' }] },
       { nome: 'Sincronização do catálogo', itens: [{ label: 'Sincronização Vendas', href: '/sync-catalogo' }] },
-      { nome: 'Inventário', itens: [{ label: 'Inventário do estoque próprio', href: '/inventario-proprio' }] },
       { nome: 'Transferências', itens: [{ label: 'Exibir todas', href: '/transferencia' }] },
       { nome: 'Impressões', itens: [{ label: 'Etiquetas e listas', href: '/impressoes' }] },
       {
@@ -101,7 +109,7 @@ export const MODULOS: ModuloCentral[] = [
         itens: [
           rel('Posição de estoque', '/relatorio-posicao-estoque'),
           rel('Estoque valorizado', '/relatorio-estoque-valorizado'),
-          rel('Estoque mínimo', '/sugestao-compra?ver=abaixo'),
+          { label: 'Estoque mínimo', href: '/sugestao-compra?ver=abaixo', regra: '/sugestao-compra', ref: true },
           rel('Curva ABC', '/relatorio-curva-abc'),
           rel('CMV / CPV', '/relatorio-cmv'),
           rel('Movimentação', '/relatorio-movimentacao'),
@@ -157,7 +165,7 @@ export const MODULOS: ModuloCentral[] = [
         nome: 'Relatórios',
         itens: [
           rel('Compras por fornecedor', '/relatorio-compras'),
-          rel('Produtos por fornecedor', '/relatorio-produtos-fornecedor'),
+          rel('Produtos por fornecedor', '/relatorio-produtos-fornecedor', { comEstoque: true }),
         ],
       },
     ],
@@ -169,8 +177,13 @@ export const MODULOS: ModuloCentral[] = [
     icone: Factory,
     atalhos: [
       { label: 'Ordens de Produção', href: '/ordem-producao', desc: 'Abertas e concluídas' },
-      { label: 'Produção própria', href: '/producao-propria', desc: 'Produzir e baixar insumos' },
-      { label: 'Fichas técnicas', href: '/ficha-tecnica', desc: 'Estrutura dos produtos' },
+      {
+        label: 'Estrutura dos produtos',
+        href: '/produto',
+        desc: 'Ficha técnica: ícone de camadas na lista de Produtos',
+        soEstoqueProprio: true,
+        ref: true,
+      },
     ],
     secoes: [
       {
@@ -182,7 +195,7 @@ export const MODULOS: ModuloCentral[] = [
       },
       {
         nome: 'Relatórios',
-        itens: [rel('Produção por produto', '/relatorio-ops'), rel('Dashboard de produção', '/relatorio-producao')],
+        itens: [rel('Produção por produto', '/relatorio-ops', { comEstoque: true }), rel('Dashboard de produção', '/relatorio-producao')],
       },
     ],
   },
@@ -252,12 +265,12 @@ export const MODULOS: ModuloCentral[] = [
           { label: 'Minha loja', href: '/minha-loja' },
         ],
       },
-      { nome: 'Usuários', itens: [{ label: 'Cargos', href: '/cargo' }] },
+      { nome: 'Usuários', itens: [{ label: 'Cargos', href: '/cargo', regra: '/usuario' }] },
       {
         nome: 'Sistema',
         itens: [
           { label: 'Saúde do banco', href: '/saude-banco' },
-          { label: 'Sincronização', href: '/sincronizacao' },
+          { label: 'Sincronização', href: '/sincronizacao', soDesktop: true },
         ],
       },
       {
@@ -268,7 +281,7 @@ export const MODULOS: ModuloCentral[] = [
           rel('Faturamento (Excel)', '/relatorio-faturamento'),
           rel('Faturamento x Compras', '/relatorio-indicadores'),
           rel('Margem', '/relatorio-margem'),
-          rel('Lucro', '/relatorio-lucro'),
+          rel('Lucro', '/relatorio-lucro', { soEstoqueProprio: true }),
           rel('Meta do mês', '/meta-mensal'),
           rel('Meta de faturamento', '/relatorio-meta'),
         ],

@@ -45,7 +45,7 @@ export function AppShell({
   const centralCtx = React.useMemo(
     () =>
       isSuperAdmin
-        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie }, userId: centralUserId ?? '' }
+        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, desktop: process.env.NEXT_PUBLIC_DESKTOP === '1' }, userId: centralUserId ?? '' }
         : null,
     [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, centralUserId]
   )

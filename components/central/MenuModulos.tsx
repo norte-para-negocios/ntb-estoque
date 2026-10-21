@@ -8,7 +8,8 @@ import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
 import { MODULOS, moduloDoPath } from '@/lib/central/modulos'
-import { modulosVisiveis, type CtxVisibilidade } from '@/lib/central/visibilidade'
+import { modulosVisiveis } from '@/lib/central/visibilidade'
+import type { CtxVisibilidade } from '@/lib/nav-visivel'
 
 /** Menu novo (só desenvolvedores): 7 módulos, cada um abre a central em /central/<id>. */
 export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; compacto?: boolean }) {
@@ -26,7 +27,7 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
 
   return (
     <div className="space-y-0.5" data-menu-novo>
-      <Link href="/central" className={cls(geralAtivo)}>
+      <Link href="/central" className={cls(geralAtivo)} aria-current={geralAtivo ? 'page' : undefined}>
         {geralAtivo && <Pilula id={pilulaId} />}
         <LayoutGrid className="relative size-[17px] shrink-0" strokeWidth={1.9} />
         <span className="relative flex-1">Visão geral</span>
@@ -41,7 +42,7 @@ export function MenuModulos({ ctx, compacto = false }: { ctx: CtxVisibilidade; c
             <Icon className="relative size-[17px] shrink-0" strokeWidth={1.9} />
             <span className="relative flex-1">{m.nome}</span>
             {soBreve && (
-              <span className="relative rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">novo</span>
+              <span className="relative rounded-full bg-white/[0.18] px-1.5 py-px text-[10px] font-semibold text-text">em breve</span>
             )}
           </Link>
         )

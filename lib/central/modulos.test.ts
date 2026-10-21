@@ -11,6 +11,7 @@ import {
   type CtxVisibilidade,
 } from './visibilidade.ts'
 import { NAV_ITEMS } from '../../components/shell/NavItems.ts'
+import { menuNovoAtivo, navItemVisivel } from '../nav-visivel.ts'
 
 const raiz = join(import.meta.dirname, '..', '..')
 const todosItens = MODULOS.flatMap((m) => itensDoModulo(m))
@@ -21,11 +22,41 @@ test('todo href de NAV_ITEMS aparece em algum módulo (nada se perde)', () => {
   assert.deepEqual(faltando, [])
 })
 
-test('nenhum href duplicado dentro de um módulo', () => {
+test('nenhum href duplicado dentro de um módulo (comparando com a query)', () => {
   for (const m of MODULOS) {
     const hrefs = itensDoModulo(m).filter((i) => i.href).map((i) => i.href!)
     const repetidos = hrefs.filter((h, k) => hrefs.indexOf(h) !== k)
     assert.deepEqual(repetidos, [], `${m.id} repete href`)
+    const rotas = hrefs.map(semQuery)
+    assert.deepEqual(rotas.filter((h, k) => rotas.indexOf(h) !== k), [], `${m.id} repete a mesma rota com query diferente`)
+  }
+})
+
+test('entre módulos, repetir a rota só é permitido com ref:true (dono único)', () => {
+  const donos = new Map<string, string>()
+  for (const m of MODULOS) {
+    for (const i of itensDoModulo(m)) {
+      if (!i.href || i.ref) continue
+      const h = i.href
+      assert.equal(donos.has(h), false, `${h} aparece sem ref em ${donos.get(h)} e em ${m.id}`)
+      donos.set(h, m.id)
+    }
+  }
+  // todo ref aponta para uma rota que tem dono
+  for (const m of MODULOS) {
+    for (const i of itensDoModulo(m)) {
+      if (i.ref) assert.ok(donos.has(i.href!) || [...donos.keys()].some((d) => semQuery(d) === semQuery(i.href!)), `ref sem dono: ${i.href}`)
+    }
+  }
+})
+
+test('nenhum href é página que só redireciona', () => {
+  for (const i of todosItens) {
+    if (!i.href) continue
+    const arq = join(raiz, 'app', '(app)', semQuery(i.href).replace(/^\//, ''), 'page.tsx')
+    const codigo = readFileSync(arq, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+    const soRedireciona = /redirect\(/.test(codigo) && !/return\s*(\(|<)/.test(codigo)
+    assert.equal(soRedireciona, false, `${i.href} só redireciona`)
   }
 })
 
@@ -75,6 +106,7 @@ test('toda rota de ROTAS_SO_DEV que está na central ganha a etiqueta "só dev"'
 })
 
 const dev: CtxVisibilidade = {
+  desktop: false,
   isAdmin: false,
   isSuperAdmin: true,
   podeGerirUsuarios: false,
@@ -108,6 +140,79 @@ test('Finanças aparece sempre no menu; módulos sem nenhum item visível somem'
   const ids = modulosVisiveis(MODULOS, NAV_ITEMS, dev).map((m) => m.id)
   assert.ok(ids.includes('financas'))
   assert.ok(ids.includes('inicio'))
+  // sem nenhuma permissão e sem ser dev/admin: só sobra Finanças (itens "em breve" não dependem de permissão)
+  const nada: CtxVisibilidade = { ...dev, isSuperAdmin: false, rotasVisiveis: [] }
+  assert.deepEqual(modulosVisiveis(MODULOS, NAV_ITEMS, nada).map((m) => m.id), ['financas'])
+  // com só /home liberado volta o Início e nada mais
+  const soHome: CtxVisibilidade = { ...nada, rotasVisiveis: ['/home'] }
+  assert.deepEqual(modulosVisiveis(MODULOS, NAV_ITEMS, soHome).map((m) => m.id), ['inicio', 'financas'])
+})
+
+test('Estoque mínimo herda /sugestao-compra e pertence a Compras', () => {
+  const minimo = todosItens.find((i) => i.href === '/sugestao-compra?ver=abaixo')!
+  assert.equal(minimo.regra, '/sugestao-compra')
+  assert.equal(minimo.ref, true)
+  assert.equal(moduloDoPath('/sugestao-compra'), 'compras')
+  assert.equal(itemVisivel(minimo, NAV_ITEMS, { ...dev, temEstoque: false }), false)
+  assert.equal(itemVisivel(minimo, NAV_ITEMS, { ...dev, temEstoque: true }), true)
+})
+
+test('relatórios respeitam o modo da loja como a página /relatorios', () => {
+  const ops = todosItens.find((i) => i.href === '/relatorio-ops')!
+  const lucro = todosItens.find((i) => i.href === '/relatorio-lucro')!
+  const gestor = { ...dev, isAdmin: true }
+  assert.equal(itemVisivel(ops, NAV_ITEMS, gestor), false) // modo 'nenhum'
+  assert.equal(itemVisivel(ops, NAV_ITEMS, { ...gestor, temEstoque: true }), true)
+  assert.equal(itemVisivel(lucro, NAV_ITEMS, { ...gestor, temEstoque: true }), false) // só estoque próprio
+  assert.equal(itemVisivel(lucro, NAV_ITEMS, { ...gestor, temEstoque: true, estoqueProprio: true }), true)
+})
+
+test('Cargos herdam /usuario; Sincronização só no desktop; Produtos substitutos herdam /produto', () => {
+  const cargos = todosItens.find((i) => i.href === '/cargo')!
+  assert.equal(cargos.regra, '/usuario')
+  assert.equal(itemVisivel(cargos, NAV_ITEMS, dev), false)
+  assert.equal(itemVisivel(cargos, NAV_ITEMS, { ...dev, podeGerirUsuarios: true }), true)
+  const sinc = todosItens.find((i) => i.href === '/sincronizacao')!
+  assert.equal(itemVisivel(sinc, NAV_ITEMS, dev), false)
+  assert.equal(itemVisivel(sinc, NAV_ITEMS, { ...dev, desktop: true }), true)
+  const subst = todosItens.find((i) => i.href === '/produto-substituicao')!
+  assert.equal(itemVisivel(subst, NAV_ITEMS, { ...dev, rotasVisiveis: ['/home'] }), false)
+  assert.equal(itemVisivel(subst, NAV_ITEMS, { ...dev, rotasVisiveis: ['/produto'] }), true)
+})
+
+test('"Minha loja" mantém o cadeado para quem não é admin global', () => {
+  const m = modulosVisiveis(MODULOS, NAV_ITEMS, { ...dev, podeGerirUsuarios: true }).find((x) => x.id === 'administracao')!
+  const item = m.secoes.flatMap((s) => s.itens).find((i) => i.href === '/minha-loja')!
+  assert.equal(item.cadeado, true)
+})
+
+test('navItemVisivel equivale ao filtro original do menu para todo NAV_ITEMS', () => {
+  const original = (i: (typeof NAV_ITEMS)[number], c: CtxVisibilidade) => {
+    const permitidas = c.rotasVisiveis ? new Set(c.rotasVisiveis) : null
+    return (
+      (!i.admin || c.isAdmin) &&
+      (!i.gestaoUsuarios || c.isAdmin || c.podeGerirUsuarios) &&
+      (!i.superAdmin || c.isSuperAdmin) &&
+      (!i.soEstoqueProprio || c.estoqueProprio || (i.ouPedidosOmie && c.pedidosOmie)) &&
+      (!i.comEstoque || c.temEstoque) &&
+      (permitidas === null || permitidas.has(i.href))
+    )
+  }
+  const bool = [false, true]
+  for (const isAdmin of bool) for (const isSuperAdmin of bool) for (const podeGerirUsuarios of bool)
+    for (const estoqueProprio of bool) for (const temEstoque of bool) for (const pedidosOmie of bool)
+      for (const rotasVisiveis of [null, [], NAV_ITEMS.slice(0, 15).map((n) => n.href)]) {
+        const c: CtxVisibilidade = { isAdmin, isSuperAdmin, podeGerirUsuarios, estoqueProprio, temEstoque, pedidosOmie, rotasVisiveis, desktop: false }
+        for (const i of NAV_ITEMS) assert.equal(navItemVisivel(i, c), !!original(i, c), `${i.href} ${JSON.stringify(c)}`)
+      }
+})
+
+test('menu novo nunca vale para quem não é desenvolvedor', () => {
+  assert.equal(menuNovoAtivo(false, null), false)
+  assert.equal(menuNovoAtivo(false, 'novo'), false)
+  assert.equal(menuNovoAtivo(true, null), true)
+  assert.equal(menuNovoAtivo(true, 'novo'), true)
+  assert.equal(menuNovoAtivo(true, 'antigo'), false)
 })
 
 test('módulo ativo pelo pathname, inclusive rotas filhas', () => {
@@ -118,4 +223,5 @@ test('módulo ativo pelo pathname, inclusive rotas filhas', () => {
   assert.equal(moduloDoPath('/estoque/produto/ABC'), 'estoque')
   assert.equal(moduloDoPath('/ordem-producao/nova'), 'producao')
   assert.equal(moduloDoPath('/home'), 'inicio')
+  assert.equal(moduloDoPath('/sugestao-compra'), 'compras')
 })

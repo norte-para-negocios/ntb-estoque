@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import type { CtxVisibilidade } from '@/lib/central/visibilidade'
+import type { CtxVisibilidade } from '@/lib/nav-visivel'
+import { menuNovoAtivo } from '@/lib/nav-visivel'
 
 // Estado do menu novo (só desenvolvedores): contexto de visibilidade, "menu antigo/novo" e favoritos.
 // localStorage só dentro de useEffect (nada diferente do servidor na hidratação) e sempre com try/catch.
@@ -21,18 +22,23 @@ export function useCentral(): Valor | null {
 const LS_MODO = 'ntb.menu.modo'
 const EVT_MODO = 'ntb-menu-modo'
 
-/** Padrão: novo para quem é desenvolvedor. O valor salvo só é lido depois de montar. */
-export function useMenuNovo(isSuperAdmin: boolean): [boolean, (novo: boolean) => void] {
+/**
+ * Padrão: novo para quem é desenvolvedor. O valor salvo só é lido depois de montar; até lá `pronto` é false
+ * (o menu não desenha nenhuma das duas versões, para não piscar). Quem não é dev: sempre [false, _, true].
+ */
+export function useMenuNovo(isSuperAdmin: boolean): [boolean, (novo: boolean) => void, boolean] {
   const [novo, setNovo] = React.useState(isSuperAdmin)
+  const [pronto, setPronto] = React.useState(!isSuperAdmin)
 
   React.useEffect(() => {
     if (!isSuperAdmin) return
     const ler = () => {
       try {
-        setNovo(window.localStorage.getItem(LS_MODO) !== 'antigo')
+        setNovo(menuNovoAtivo(true, window.localStorage.getItem(LS_MODO)))
       } catch {
         setNovo(true)
       }
+      setPronto(true)
     }
     ler()
     window.addEventListener(EVT_MODO, ler)
@@ -53,7 +59,7 @@ export function useMenuNovo(isSuperAdmin: boolean): [boolean, (novo: boolean) =>
     window.dispatchEvent(new Event(EVT_MODO))
   }, [])
 
-  return [isSuperAdmin && novo, alterar]
+  return [isSuperAdmin && novo, alterar, pronto]
 }
 
 // ---- favoritos (por usuário) ----
@@ -83,19 +89,16 @@ export function useFavoritos(userId: string): [string[], (href: string) => void]
 
   const alternar = React.useCallback(
     (href: string) => {
-      setFavs((atual) => {
-        const prox = atual.includes(href) ? atual.filter((h) => h !== href) : [...atual, href]
-        try {
-          window.localStorage.setItem(chave, JSON.stringify(prox))
-        } catch {
-          /* sem localStorage: vale só nesta aba */
-        }
-        // avisa as outras instâncias depois do commit
-        setTimeout(() => window.dispatchEvent(new Event(EVT_FAV)), 0)
-        return prox
-      })
+      const prox = favs.includes(href) ? favs.filter((h) => h !== href) : [...favs, href]
+      setFavs(prox)
+      try {
+        window.localStorage.setItem(chave, JSON.stringify(prox))
+      } catch {
+        /* sem localStorage: vale só nesta aba */
+      }
+      window.dispatchEvent(new Event(EVT_FAV))
     },
-    [chave]
+    [chave, favs]
   )
 
   return [favs, alternar]

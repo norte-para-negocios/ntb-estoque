@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, Search, Star } from 'lucide-react'
+import { ArrowUpRight, Lock, Search, Star } from 'lucide-react'
 import { NAV_ITEMS } from '@/components/shell/NavItems'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { SegmentedControl } from '@/components/ui-kit/SegmentedControl'
@@ -16,21 +16,22 @@ import {
 } from '@/lib/central/visibilidade'
 import { useCentral, useFavoritos } from './central-estado'
 
-type Filtro = 'todos' | 'novo' | 'dev'
+type Filtro = 'todos' | 'breve' | 'dev'
 const FILTROS = [
   { value: 'todos', label: 'Tudo' },
-  { value: 'novo', label: 'Novos' },
+  { value: 'breve', label: 'Em breve' },
   { value: 'dev', label: 'Só dev' },
 ]
 
-const passa = (i: ItemPronto, f: Filtro) => f === 'todos' || (f === 'novo' ? !!i.emBreve : i.soDev)
+const passa = (i: ItemPronto, f: Filtro) => f === 'todos' || (f === 'breve' ? !!i.emBreve : i.soDev)
 
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 function Etiquetas({ item }: { item: ItemPronto }) {
   return (
     <>
-      {item.emBreve && <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">novo</span>}
+      {item.emBreve && <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">em breve</span>}
+      {item.cadeado && <Lock className="size-3.5 shrink-0 text-text-muted/60" strokeWidth={2} aria-label="Em breve para quem não é administrador" />}
       {item.soDev && <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10px] font-semibold text-brand">só dev</span>}
     </>
   )
@@ -58,8 +59,10 @@ function Estrela({ href, favs, alternar }: { href: string; favs: string[]; alter
 function LinhaItem({ item, favs, alternar }: { item: ItemPronto; favs: string[]; alternar: (h: string) => void }) {
   if (item.emBreve || !item.href) {
     return (
-      <li className="flex min-h-9 items-center gap-2 rounded-[10px] px-2.5 text-[14px] text-text-muted/70" aria-disabled="true">
-        <span className="flex-1">{item.label}</span>
+      <li className="flex min-h-9 items-center gap-2 rounded-[10px] px-2.5 text-[14px] text-text-muted/70">
+        <span className="flex-1" aria-disabled="true">
+          {item.label}
+        </span>
         <Etiquetas item={item} />
       </li>
     )
@@ -87,7 +90,7 @@ function CartaoAtalho({ item, favs, alternar }: { item: ItemPronto; favs: string
   )
   if (item.emBreve || !item.href) {
     return (
-      <div className="rounded-[var(--r-lg)] bg-surface p-4 opacity-70 shadow-[var(--shadow-sm)]" aria-disabled="true">
+      <div className="rounded-[var(--r-lg)] bg-surface p-4 opacity-70 shadow-[var(--shadow-sm)]">
         {corpo}
       </div>
     )
@@ -152,7 +155,7 @@ export function CentralModulo({ id }: { id: string }) {
         [
           ...m.atalhos.map((i) => ({ m, secao: 'Atalhos', i })),
           ...m.secoes.flatMap((s) => s.itens.map((i) => ({ m, secao: s.nome, i }))),
-        ].filter(({ i, secao }) => passa(i, filtro) && norm(`${m.nome} ${secao} ${i.label} ${i.desc ?? ''}`).includes(q))
+        ].filter(({ i, secao }) => !i.ref && passa(i, filtro) && norm(`${m.nome} ${secao} ${i.label} ${i.desc ?? ''}`).includes(q))
       )
     : []
 
@@ -245,7 +248,7 @@ export function CentralGeral() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {modulos.map((m) => {
           const Icon = m.icone
-          const total = m.atalhos.length + m.secoes.reduce((n, s) => n + s.itens.length, 0)
+          const total = [...m.atalhos, ...m.secoes.flatMap((s) => s.itens)].filter((i) => !i.ref).length
           return (
             <section key={m.id} className="group relative rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-sm)] u-motion hover:shadow-[var(--shadow-md)]">
               <Link href={`/central/${m.id}`} className="flex items-start gap-3">
@@ -256,7 +259,7 @@ export function CentralGeral() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-text group-hover:text-brand">{m.nome}</span>
                     {m.id === 'financas' && (
-                      <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">novo</span>
+                      <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold text-warn">em breve</span>
                     )}
                     <ArrowUpRight className="ml-auto size-4 text-text-muted/30 group-hover:text-brand" />
                   </div>
@@ -273,8 +276,8 @@ export function CentralGeral() {
                       </Link>
                     </li>
                   ) : (
-                    <li key={`${i.label}-${k}`} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] text-text-muted/60" aria-disabled="true">
-                      {i.label}
+                    <li key={`${i.label}-${k}`} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] text-text-muted/60">
+                      <span aria-disabled="true">{i.label}</span>
                     </li>
                   )
                 )}
@@ -284,7 +287,7 @@ export function CentralGeral() {
         })}
       </div>
       <p className="text-[12px] text-text-muted">
-        Itens com a etiqueta &quot;só dev&quot; ainda não foram lançados para os demais usuários. &quot;novo&quot; marca o que ainda não existe.
+        Itens com a etiqueta &quot;só dev&quot; ainda não foram lançados para os demais usuários. &quot;em breve&quot; marca o que ainda não existe.
       </p>
     </div>
   )
