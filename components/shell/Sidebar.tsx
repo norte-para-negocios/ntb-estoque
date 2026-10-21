@@ -9,6 +9,8 @@ import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS, type NavItem } from './NavItems'
 import { hrefAtivo } from '@/lib/nav-ativo'
+import { MenuModulos, AlternaMenu } from '@/components/central/MenuModulos'
+import { useMenuNovo } from '@/components/central/central-estado'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -58,6 +60,12 @@ export function Sidebar({
   userMenu: React.ReactNode
 }) {
   const pathname = usePathname()
+  // Só desenvolvedores: menu por módulos (padrão) ou o menu antigo. Não-dev: sempre false, nada muda.
+  const [menuNovo, setMenuNovo] = useMenuNovo(isSuperAdmin)
+  const ctxCentral = React.useMemo(
+    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie }),
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie]
+  )
 
   // Filtro de permissão (4.2) intacto: mesma regra de antes.
   // - admin: so admin global. - gestaoUsuarios: admin global OU AdminLoja.
@@ -181,7 +189,10 @@ export function Sidebar({
           <div className="px-3 pb-3">{lojaSelector}</div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-            {gruposVisiveis.map((g) => {
+            {menuNovo ? (
+              <MenuModulos ctx={ctxCentral} />
+            ) : (
+              gruposVisiveis.map((g) => {
               const list = itens.filter((i) => i.group === g)
               const aberto = montado ? grupoAberto === g : g === gruposVisiveis[0]
               const temAtivoFechado =
@@ -209,10 +220,18 @@ export function Sidebar({
                   ))}
                 </GrupoSanfona>
               )
-            })}
+            })
+            )}
           </nav>
 
-          <div className="border-t border-border p-3">{userMenu}</div>
+          <div className="border-t border-border p-3">
+            {isSuperAdmin && (
+              <div className="mb-2">
+                <AlternaMenu novo={menuNovo} onChange={setMenuNovo} />
+              </div>
+            )}
+            {userMenu}
+          </div>
         </div>
       </aside>
     </>

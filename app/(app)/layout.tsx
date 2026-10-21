@@ -63,6 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       estoqueProprio={estoqueProprio}
       temEstoque={temEstoque}
       pedidosOmie={pedidosOmie}
+      centralUserId={superAdmin ? profile.id : undefined}
       lojaSelector={<LojaSelector lojas={lojas ?? []} currentLojaId={profile.current_loja_id} />}
       userMenu={<UserMenu nome={profile.name} perfil={profile.perfil} />}
     >

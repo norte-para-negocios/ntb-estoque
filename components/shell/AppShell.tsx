@@ -9,6 +9,7 @@ import { MobileNav } from './MobileNav'
 import { BuscaGlobal } from './BuscaGlobal'
 import { Sininho } from './Sininho'
 import { BannerSync } from '@/components/desktop/BannerSync'
+import { CentralProvider } from '@/components/central/central-estado'
 
 export function AppShell({
   isAdmin,
@@ -18,6 +19,7 @@ export function AppShell({
   estoqueProprio = false,
   temEstoque = false,
   pedidosOmie = false,
+  centralUserId,
   lojaSelector,
   userMenu,
   children,
@@ -31,12 +33,22 @@ export function AppShell({
   estoqueProprio?: boolean
   temEstoque?: boolean
   pedidosOmie?: boolean
+  /** Só desenvolvedores: id do usuário (favoritos da central). */
+  centralUserId?: string
   lojaSelector: React.ReactNode
   userMenu: React.ReactNode
   children: React.ReactNode
 }) {
   const [buscaAberta, setBuscaAberta] = React.useState(false)
   const pathname = usePathname()
+  // Menu por módulos + Central (só desenvolvedores): mesmas regras de visibilidade que o menu atual.
+  const centralCtx = React.useMemo(
+    () =>
+      isSuperAdmin
+        ? { ctx: { isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie }, userId: centralUserId ?? '' }
+        : null,
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie, centralUserId]
+  )
 
   React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -114,7 +126,7 @@ export function AppShell({
               className="animate-in fade-in slide-in-from-bottom-[8px]"
               style={{ animationDuration: '220ms', animationTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
             >
-              {children}
+              {isSuperAdmin && centralCtx ? <CentralProvider value={centralCtx}>{children}</CentralProvider> : children}
             </div>
           </div>
         </main>

@@ -20,6 +20,8 @@ import { motion } from 'motion/react'
 import { SPRING_UI } from '@/lib/motion'
 import { NAV_ITEMS } from './NavItems'
 import { hrefAtivo } from '@/lib/nav-ativo'
+import { MenuModulos, AlternaMenu } from '@/components/central/MenuModulos'
+import { useMenuNovo } from '@/components/central/central-estado'
 
 const GRUPOS = ['Operação', 'Cadastros', 'Administração'] as const
 type Grupo = (typeof GRUPOS)[number]
@@ -58,6 +60,12 @@ export function MobileNav({
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  // Só desenvolvedores: menu por módulos (padrão) ou o menu antigo. Não-dev: sempre false, nada muda.
+  const [menuNovo, setMenuNovo] = useMenuNovo(isSuperAdmin)
+  const ctxCentral = useMemo(
+    () => ({ isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie }),
+    [isAdmin, isSuperAdmin, podeGerirUsuarios, rotasVisiveis, estoqueProprio, temEstoque, pedidosOmie]
+  )
 
   useEffect(() => {
     setOpen(false)
@@ -196,7 +204,10 @@ export function MobileNav({
         <div className="px-3 pb-3 shrink-0">{lojaSelector}</div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          {gruposVisiveis.map((g) => {
+          {menuNovo ? (
+            <MenuModulos ctx={ctxCentral} compacto />
+          ) : (
+          gruposVisiveis.map((g) => {
             const list = itens.filter((i) => i.group === g)
             const aberto = grupoAberto === g
             const temAtivoFechado =
@@ -266,13 +277,19 @@ export function MobileNav({
                 </div>
               </div>
             )
-          })}
+          })
+          )}
         </nav>
 
         <div
           className="border-t border-border p-3 shrink-0"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
+          {isSuperAdmin && (
+            <div className="mb-2">
+              <AlternaMenu novo={menuNovo} onChange={setMenuNovo} />
+            </div>
+          )}
           {userMenu}
         </div>
       </aside>
