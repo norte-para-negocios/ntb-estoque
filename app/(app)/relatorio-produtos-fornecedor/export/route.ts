@@ -3,6 +3,7 @@ import { gerarPlanilhaMulti, planilhaResponse } from '@/lib/excel'
 import { carregarProdutosFornecedor, lerOpcoesPF } from '@/lib/relatorios/produtos-fornecedor-loader'
 import { rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { exigirDev } from '@/lib/recursos-dev'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,7 @@ const dataBR = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').revers
 
 // Mesmas colunas do "Produtos por Fornecedor" do Omie (ERP_PRD_FOR_FORNECEDOR), todas as linhas do filtro.
 export async function GET(request: Request) {
+  await exigirDev()
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) === 'nenhum') return new Response('Esta loja não controla estoque', { status: 404 })

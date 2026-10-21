@@ -4,10 +4,12 @@ import { gerarPlanilhaMulti, planilhaResponse, type AbaPlanilha } from '@/lib/ex
 import { carregarCmv } from '@/lib/relatorios/cmv-loader'
 import { agruparCmv, cmvFormulaOmie } from '@/lib/relatorios/cmv-puro'
 import { DIM_DA_ABA, lerParamsCmv, textoFonte } from '@/lib/relatorios/cmv-params'
+import { exigirDev } from '@/lib/recursos-dev'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
+  await exigirDev()
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
   const lojaId = await getCurrentLojaId()
   const p = lerParamsCmv(Object.fromEntries(new URL(request.url).searchParams.entries()), hojeBahiaISO())

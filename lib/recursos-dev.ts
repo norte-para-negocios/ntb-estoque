@@ -12,6 +12,9 @@ export const ROTAS_SO_DEV = [
   '/nfe-saida',
   '/transferencia-loja',
   '/contador',
+  '/relatorio-posicao-estoque',
+  '/relatorio-cmv',
+  '/relatorio-produtos-fornecedor',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {

@@ -2,11 +2,13 @@ import { getAtorGestao, getCurrentLojaId } from '@/lib/auth'
 import { gerarPlanilhaMulti, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { textoAvisoSuspeito } from '@/lib/relatorios/posicao-estoque-puro'
 import { carregarPosicao, lerOpcoesPosicao, rotuloTipo } from '@/lib/relatorios/posicao-estoque-loader'
+import { exigirDev } from '@/lib/recursos-dev'
 
 export const dynamic = 'force-dynamic'
 
 // Todas as linhas da posição (a tela mostra até 500). Tipo SPED: colunas do registro H010 do Bloco H.
 export async function GET(request: Request) {
+  await exigirDev()
   if (!(await getAtorGestao()).podeGerir) return new Response('Sem permissão', { status: 403 })
   const lojaId = await getCurrentLojaId()
   const op = lerOpcoesPosicao(Object.fromEntries(new URL(request.url).searchParams.entries()))
