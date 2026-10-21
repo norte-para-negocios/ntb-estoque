@@ -67,6 +67,11 @@ export function FormConta({ conta, hoje, children }: { conta?: ContaCorrente; ho
             <label className={rotulo}><span>Saldo inicial (R$)</span><input inputMode="decimal" className={campo} value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0,00" disabled={travado} /><PreviaMoeda texto={saldo} /></label>
             <label className={rotulo}><span>Saldo válido desde</span><input type="date" className={campo} value={data} max={hoje} onChange={(e) => setData(e.target.value)} disabled={travado} /></label>
           </div>
+          <p className="rounded-[var(--r-md)] bg-surface-2 p-2 text-text-muted">
+            O saldo inicial vale a partir da data “Saldo válido desde”: <strong className="text-text">não dá para registrar pagamento com data anterior a ela</strong>.
+            Se você precisa lançar pagamentos mais antigos, informe aqui a data em que começa o controle da conta e o saldo que ela tinha nesse dia.
+            {travado && ' Esta conta já tem lançamentos: o saldo inicial e a data não mudam mais.'}
+          </p>
           <label className={rotulo}><span>Observação</span><input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} maxLength={300} /></label>
           {conta && (
             <label className="flex items-center gap-2"><input type="checkbox" checked={ativa} onChange={(e) => setAtiva(e.target.checked)} /> Conta ativa (inativa não recebe pagamentos)</label>

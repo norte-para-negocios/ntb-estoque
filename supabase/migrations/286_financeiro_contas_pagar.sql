@@ -180,7 +180,6 @@ begin
     -- INCLUIR
     select * into f from fornecedores where id = v_forn and loja_id = p_loja;
     if not found then raise exception 'Escolha um fornecedor do cadastro' using errcode = '22023'; end if;
-    if f.inativo then raise exception 'Fornecedor inativo' using errcode = '22023'; end if;
     v_origem := coalesce(nullif(p_dados->>'origem_tipo', ''), 'manual');
     v_origem_id := nullif(p_dados->>'origem_id', '')::bigint;
     v_parcela := coalesce(nullif(p_dados->>'parcela', '')::int, 1);
@@ -196,6 +195,8 @@ begin
         return jsonb_build_object('ok', true, 'duplicado', true, 'id', t.id, 'numero', t.numero);
       end if;
     end if;
+    -- só depois da conferência da chave: reenviar o MESMO título já criado continua valendo mesmo que o fornecedor tenha sido inativado
+    if f.inativo then raise exception 'Fornecedor inativo' using errcode = '22023'; end if;
     select coalesce(max(numero), 0) + 1 into v_numero from fin_titulos_pagar where loja_id = p_loja;
     insert into fin_titulos_pagar (loja_id, numero, fornecedor_id, fornecedor_nome, documento, parcela, total_parcelas, valor, data_emissao,
         data_vencimento, data_competencia, categoria_id, observacao, origem_tipo, origem_id, chave_idempotencia, assinatura, criado_por, criado_por_nome)

@@ -51,9 +51,14 @@ begin
   -- contas correntes e saldo inicial
   r := fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Caixa da loja', 'tipo', 'caixa', 'saldo_inicial', 1000, 'data_saldo_inicial', v_hoje - 30));
   v_conta := (r->>'id')::bigint;
-  r := fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Banco principal', 'tipo', 'banco', 'saldo_inicial', 5000.555, 'data_saldo_inicial', v_hoje - 30));
+  r := fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Banco principal', 'tipo', 'banco', 'saldo_inicial', 5000.56, 'data_saldo_inicial', v_hoje - 30));
   v_conta2 := (r->>'id')::bigint;
-  if (select saldo_inicial from fin_contas_correntes where id = v_conta2) <> 5000.56 then raise exception 'arredondamento do saldo inicial'; end if;
+  -- dinheiro só em decimal simples de até 2 casas: nada de arredondar calado nem de notação estranha
+  foreach e in array array['1e5', '0x10', '1_000', '.5', '5.', '5000.555', 'Infinity', '1000000000000', ' ', 'abc'] loop
+    begin perform fin_numero(e); if btrim(e) <> '' then raise exception 'aceitou %', e; end if;
+    exception when sqlstate '22023' then null; end;
+  end loop;
+  if fin_numero('-12.5') <> -12.5 or fin_numero('0.05') <> 0.05 or fin_numero('', 7) <> 7 then raise exception 'fin_numero válido'; end if;
   begin perform fin_conta_salvar(v_loja, null, '{"nome":"caixa da loja"}'::jsonb); raise exception 'conta duplicada';
   exception when sqlstate '22023' then null; end;
   begin perform fin_conta_salvar(v_loja, null, jsonb_build_object('nome', 'Futura', 'data_saldo_inicial', v_hoje + 1)); raise exception 'data futura aceita';
@@ -86,6 +91,15 @@ begin
   r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 300, 'data_vencimento', v_hoje + 5, 'categoria_id', v_cat,
         'documento', 'NF 10', 'data_competencia', to_char(v_hoje, 'YYYY-MM')), 'u1', 'Ana', 'k-t1');
   if (r->>'duplicado')::boolean is not true or (r->>'id')::bigint <> t then raise exception 'idempotência do título %', r; end if;
+  -- fornecedor inativado depois: o MESMO envio ainda devolve o título criado; um novo envio é recusado
+  insert into fornecedores (loja_id, razao_social) values (v_loja, 'LOGO INATIVO') returning id into x;
+  r := fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', x.id, 'valor', 5, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-ina');
+  update fornecedores set inativo = true where id = x.id;
+  if (fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', x.id, 'valor', 5, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-ina')->>'duplicado')::boolean is not true then
+    raise exception 'replay com fornecedor inativado'; end if;
+  begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', x.id, 'valor', 5, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-ina2'); raise exception 'fornecedor inativo aceito';
+  exception when sqlstate '22023' then null; end;
+  delete from fin_titulos_pagar where id = (r->>'id')::bigint; -- título de apoio (só neste teste, que faz rollback)
   -- mesma chave com dados diferentes: recusa (não devolve o sucesso antigo)
   begin perform fin_titulo_pagar_salvar(v_loja, null, jsonb_build_object('fornecedor_id', v_forn, 'valor', 999, 'data_vencimento', v_hoje), 'u1', 'Ana', 'k-t1');
     raise exception 'chave reutilizada com outros dados no título';

@@ -13,7 +13,7 @@ export default async function ContasCorrentesPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Contas correntes" icon={Landmark}
-        description="Onde o dinheiro está: caixa da loja e contas de banco. O saldo parte do saldo inicial e anda com cada pagamento e estorno."
+        description="Onde o dinheiro está: caixa da loja e contas de banco. O saldo parte do saldo inicial (na data informada) e anda com cada pagamento e estorno; não se registra pagamento anterior a essa data."
         actions={<FormConta hoje={hoje}>Nova conta</FormConta>} />
       {semMigration && <p className="rounded-[var(--r-lg)] bg-err/10 px-4 py-3 text-[13px] text-err">O financeiro ainda não foi ativado nesta instalação (migrations 285 e 286).</p>}
       {contas.length === 0 && !semMigration

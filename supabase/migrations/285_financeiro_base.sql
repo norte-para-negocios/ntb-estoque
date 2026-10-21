@@ -11,7 +11,7 @@
 -- Aplicar (manual, com backup e OK do dono), ANTES da 286:
 --   docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 285_financeiro_base.sql
 -- Depois: NOTIFY pgrst (já no fim). Reverter: scripts/testes-sql/285_286_reverter.sql (só se nada foi lançado).
--- Teste: scripts/testes-sql/285_financeiro.sql (banco local).
+-- Teste: scripts/testes-sql/286_financeiro_contas_pagar.sql (cobre 285 e 286) e 286_concorrencia.sh (banco local).
 
 begin;
 set lock_timeout = '5s';
@@ -133,15 +133,17 @@ create or replace function public.fin_hoje() returns date language sql stable as
   select (now() at time zone 'America/Bahia')::date
 $$;
 
--- Texto → dinheiro (2 casas). Vazio = padrão. Recusa lixo, NaN, infinito e valores absurdos (numeric aceita 'NaN').
+-- Texto → dinheiro (2 casas). Vazio = padrão. Só aceita decimal simples (regex estrita); recusa lixo, NaN, infinito, notação científica e valores de 1 trilhão para cima.
 create or replace function public.fin_numero(p text, p_padrao numeric default null) returns numeric
 language plpgsql immutable as $$
 declare n numeric;
 begin
   if p is null or btrim(p) = '' then return p_padrao; end if;
-  begin n := btrim(p)::numeric; exception when others then raise exception 'Valor numérico inválido' using errcode = '22023'; end;
-  if n = 'NaN'::numeric or n >= 1e12 or n <= -1e12 then raise exception 'Valor numérico inválido' using errcode = '22023'; end if;
-  return round(n, 2);
+  -- só número decimal simples, até 2 casas: recusa '1e5', '0x10', '1_000', '.5', '5.', 'NaN', 'Infinity' e 3+ casas (nada de arredondar calado)
+  if btrim(p) !~ '^-?[0-9]+(\.[0-9]{1,2})?$' then raise exception 'Valor numérico inválido' using errcode = '22023'; end if;
+  n := btrim(p)::numeric;
+  if n >= 1e12 or n <= -1e12 then raise exception 'Valor numérico inválido' using errcode = '22023'; end if;
+  return n;
 end $$;
 
 create or replace function public.fin_exigir_loja_propria(p_loja bigint) returns void

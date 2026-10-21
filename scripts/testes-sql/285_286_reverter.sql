@@ -1,5 +1,6 @@
 -- REVERTE as migrations 286 e 285 (financeiro, etapa 1). Use só se NADA foi feito à mão em produção.
--- A trava abaixo recusa se houver título, pagamento, lançamento, conta, evento ou categoria que não seja a semente padrão intacta.
+-- A trava abaixo recusa se houver título, pagamento, lançamento, conta ou evento, ou categoria que não seja da semente padrão
+-- (sem `padrao`, inativada, com código ou ligada a categoria contábil). Categoria padrão só RENOMEADA não trava: é só texto.
 -- Funciona também se só a 285 (ou nenhuma) foi aplicada. Não mexe nas tabelas antigas contas_pagar / contas_receber /
 -- contas_correntes (052–054), que nunca foram tocadas.
 -- Uso: docker exec -i supabase-db psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < 285_286_reverter.sql
@@ -15,7 +16,7 @@ begin
       end if;
     end if;
   end loop;
-  -- categorias: só as da semente, com o nome original e ainda ativas (qualquer criada/renomeada/inativada à mão trava)
+  -- categorias: só as da semente e ainda ativas, sem código nem ligação (qualquer criada, inativada ou configurada à mão trava)
   if to_regclass('public.fin_categorias') is not null then
     execute $q$select count(*) from public.fin_categorias where padrao is null or not ativa or codigo is not null or categoria_contabil_id is not null$q$ into n;
     if n > 0 then raise exception 'Há % categoria(s) financeira(s) criada(s) ou alterada(s) à mão: não reverta.', n; end if;

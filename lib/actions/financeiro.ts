@@ -172,8 +172,14 @@ export async function registrarPagamentoTitulo(input: PagamentoInput): Promise<{
   const juros = num(input.juros === undefined || input.juros === '' ? 0 : input.juros)
   const desconto = num(input.desconto === undefined || input.desconto === '' ? 0 : input.desconto)
   // Confere as contas antes de ir ao banco (o banco confere de novo, com a trava): mensagem rápida e igual.
-  const pre = calcularPagamento({ restanteCent: Number.MAX_SAFE_INTEGER, principalCent: principal === null ? 1 : Math.round(principal * 100), jurosCent: Math.round(juros * 100), descontoCent: Math.round(desconto * 100) })
-  if (!pre.ok && !/passa do que falta/.test(pre.erro)) return { error: pre.erro }
+  if (Number.isNaN(juros) || Number.isNaN(desconto) || (principal !== null && Number.isNaN(principal))) return { error: 'Valor inválido.' }
+  if (juros < 0 || desconto < 0) return { error: 'Juros e desconto não podem ser negativos.' }
+  // Com valor informado, confere as contas (o saldo do título só o banco sabe, com a trava). "Quitar tudo" (vazio) vai direto: o banco
+  // calcula o principal pelo saldo real e confere desconto, juros e saída.
+  if (principal !== null) {
+    const pre = calcularPagamento({ restanteCent: Number.MAX_SAFE_INTEGER, principalCent: Math.round(principal * 100), jurosCent: Math.round(juros * 100), descontoCent: Math.round(desconto * 100) })
+    if (!pre.ok && !/passa do que falta/.test(pre.erro)) return { error: pre.erro }
+  }
   const { data, error } = await createServiceClient().rpc('fin_pagamento_registrar', {
     p_loja: ctx.lojaId, p_titulo: Number(input.tituloId), p_user: ctx.userId, p_user_nome: ctx.nome, p_chave: input.chave,
     p_dados: {

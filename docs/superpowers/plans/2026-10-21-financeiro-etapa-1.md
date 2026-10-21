@@ -71,6 +71,15 @@ RLS: habilitada com a política por loja do padrão (`usuario_e_admin() or loja_
 - **Navegador**: quem só tem "Pagar" não recebe saldos das contas; diálogos reabrem limpos (e o de pagamento com o saldo atual).
 - **Reverter** (`285_286_reverter.sql`): recusa se houver qualquer dado/evento/categoria alterada à mão; funciona se só a 285 (ou nenhuma) foi aplicada.
 
+### 2ª revisão
+
+- Leituras movidas para `lib/financeiro/consultas.ts` (recebem o cliente por parâmetro; `dados.ts` só tem os atalhos) e cobertas por `consultas.test.ts` com cliente falso:
+  conta/categoria/fornecedor/detalhe/extrato devolvem os dados em sucesso e **lançam** em erro real (só falta de migration vira aviso). Isso fecha a regressão em que `listarContas` devolvia sempre lista vazia.
+- `fin_numero` usa regex estrita (`^-?[0-9]+(\.[0-9]{1,2})?$`): recusa `1e5`, `0x10`, `1_000`, `.5`, `5.`, 3+ casas e ≥ 1 trilhão; nada é arredondado em silêncio.
+- Incluir título confere a chave (replay idêntico = `duplicado`) **antes** de recusar fornecedor inativo.
+- "Quitar tudo" (principal vazio) não faz mais pré-checagem local com valor inventado; o banco calcula pelo saldo real sob a trava.
+- Conta corrente: texto de ajuda explica que a data do saldo inicial é o piso das datas de pagamento (e que ela pode ser informada na criação).
+
 ## Telas (`app/(app)/financeiro/`)
 
 `contas-pagar` (lista, filtros vencimento/fornecedor/categoria/situação/busca, 4 totais do filtro, novo, pagar), `contas-pagar/[id]` (ficha, pagamentos
