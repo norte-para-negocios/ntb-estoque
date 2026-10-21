@@ -16,6 +16,6 @@ export function dataOmieBR(iso: string | null): string {
 }
 
 // Hoje em America/Bahia no formato YYYY-MM-DD (para defaults e comparacoes).
-export function hojeBahiaISO(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
+export function hojeBahiaISO(agora: Date = new Date()): string {
+  return agora.toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })
 }

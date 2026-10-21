@@ -210,6 +210,17 @@ export const CATALOGO_PERMISSOES: ModuloCatalogo[] = [
     ],
   },
   {
+    modulo: 'Financeiro',
+    grupo: 'Operação',
+    // Etapa 1 (migrations 285/286): só estoque próprio e, por ora, só desenvolvedores. Pagar é só REGISTRAR (não fala com banco).
+    permissoes: [
+      { nome: 'Financeiro - Contas a pagar', label: 'Ver, lançar, editar e cancelar contas a pagar' },
+      { nome: 'Financeiro - Contas a pagar - Pagar', label: 'Registrar e estornar pagamentos' },
+      { nome: 'Financeiro - Contas correntes', label: 'Ver e cadastrar contas correntes e extrato' },
+      { nome: 'Financeiro - Categorias', label: 'Cadastrar categorias financeiras (DRE)' },
+    ],
+  },
+  {
     modulo: 'Clientes',
     grupo: 'Cadastros',
     permissoes: [{ nome: 'Clientes', label: 'Acessar' }],
@@ -237,6 +248,10 @@ export const MENU_PERMISSAO: Record<string, string> = {
   '/devolucao-fornecedor': 'Compras - Devolucao ao fornecedor',
   '/transferencia-loja': 'Transferencias - Entre lojas',
   '/nfe-saida': 'Compras - Emitir NF-e',
+  '/financeiro/contas-pagar': 'Financeiro - Contas a pagar',
+  '/financeiro/contas-correntes': 'Financeiro - Contas correntes',
+  '/financeiro/extrato': 'Financeiro - Contas correntes',
+  '/financeiro/categorias': 'Financeiro - Categorias',
   '/nota-fiscal': 'Notas Fiscais',
   '/ordem-producao': 'Ordens de Producao',
   '/transferencia': 'Transferencias - Ver',

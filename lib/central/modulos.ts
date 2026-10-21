@@ -227,20 +227,27 @@ export const MODULOS: ModuloCentral[] = [
     icone: Wallet,
     atalhos: [
       breve('Resumo', 'Caixa de hoje e vencimentos'),
-      breve('Contas a pagar', 'Em aberto e atrasadas'),
+      { label: 'Contas a pagar', href: '/financeiro/contas-pagar', desc: 'Em aberto e atrasadas', soEstoqueProprio: true },
       breve('Contas a receber', 'Cartões e convênios'),
       breve('Aprovação de pagamentos', 'Aguardando o dono'),
     ],
     secoes: [
       {
+        // Exibir todas = o atalho acima; registrar e estornar pagamento são ações da própria lista e da ficha do título.
         nome: 'Contas a pagar',
-        itens: [breve('Incluir'), breve('Importar planilha'), breve('Exibir todas'), breve('Registrar pagamentos')],
+        itens: [{ label: 'Incluir', href: '/financeiro/contas-pagar/nova', regra: '/financeiro/contas-pagar', soEstoqueProprio: true }, breve('Importar planilha')],
       },
       { nome: 'Contas a receber', itens: [breve('Incluir'), breve('Exibir todas'), breve('Registrar recebimentos')] },
-      { nome: 'Contas correntes', itens: [breve('Incluir'), breve('Exibir todas')] },
+      { nome: 'Contas correntes', itens: [{ label: 'Exibir todas', href: '/financeiro/contas-correntes', soEstoqueProprio: true }] },
+      { nome: 'Categorias financeiras', itens: [{ label: 'Exibir todas', href: '/financeiro/categorias', soEstoqueProprio: true }] },
       {
         nome: 'Movimentação',
-        itens: [breve('Incluir lançamento'), breve('Incluir transferência'), breve('Importar extrato OFX'), breve('Exibir extrato')],
+        itens: [
+          breve('Incluir lançamento'),
+          breve('Incluir transferência'),
+          breve('Importar extrato OFX'),
+          { label: 'Exibir extrato', href: '/financeiro/extrato', soEstoqueProprio: true },
+        ],
       },
       {
         nome: 'Relatórios',

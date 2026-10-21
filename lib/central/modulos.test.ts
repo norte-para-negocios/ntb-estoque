@@ -76,10 +76,23 @@ test('itens "em breve" não têm href; itens com href não são "em breve"', () 
   }
 })
 
-test('Finanças existe e só tem itens em breve', () => {
+test('Finanças: itens reais só de estoque próprio e só dev; o resto segue "em breve"', () => {
   const fin = MODULOS.find((m) => m.id === 'financas')
   assert.ok(fin)
-  assert.ok(itensDoModulo(fin).every((i) => i.emBreve))
+  const itens = itensDoModulo(fin)
+  const reais = itens.filter((i) => !i.emBreve)
+  assert.deepEqual(
+    reais.map((i) => i.href).sort(),
+    ['/financeiro/categorias', '/financeiro/contas-correntes', '/financeiro/contas-pagar', '/financeiro/contas-pagar/nova', '/financeiro/extrato']
+  )
+  for (const i of reais) {
+    assert.equal(i.soEstoqueProprio, true, `${i.href} precisa da flag de estoque próprio`)
+    assert.equal(itemSoDev(i, NAV_ITEMS), true, `${i.href} precisa da etiqueta "só dev"`)
+    assert.equal(itemVisivel(i, NAV_ITEMS, { ...dev, estoqueProprio: false }), false) // loja Omie não vê
+    assert.equal(itemVisivel(i, NAV_ITEMS, { ...dev, estoqueProprio: true }), true)
+    assert.equal(itemVisivel(i, NAV_ITEMS, { ...dev, estoqueProprio: true, isSuperAdmin: false }), false) // cliente não vê
+  }
+  assert.ok(itens.some((i) => i.emBreve)) // receber, OFX, relatórios etc. ainda não existem
 })
 
 test('ids dos 7 módulos únicos, na ordem do menu', () => {

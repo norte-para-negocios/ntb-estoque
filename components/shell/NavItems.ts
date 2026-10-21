@@ -35,6 +35,8 @@ import {
   Undo2,
   FileOutput,
   BookOpenCheck,
+  Receipt,
+  Landmark,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -71,6 +73,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/devolucao-fornecedor', label: 'Devoluções ao fornecedor', icon: Undo2, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nfe-saida', label: 'NF-e de saída', icon: FileOutput, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/transferencia-loja', label: 'Transferências entre lojas', icon: Truck, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  // Finanças, etapa 1 (só estoque próprio, só desenvolvedores). Todas herdam a rota-mãe /financeiro em ROTAS_SO_DEV.
+  { href: '/financeiro/contas-pagar', label: 'Contas a pagar', icon: Receipt, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/contas-correntes', label: 'Contas correntes', icon: Landmark, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/extrato', label: 'Extrato', icon: ScrollText, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
+  { href: '/financeiro/categorias', label: 'Categorias financeiras', icon: Tags, group: 'Operação', soEstoqueProprio: true, superAdmin: true },
   { href: '/nota-fiscal', label: 'Notas Fiscais', icon: FileText, group: 'Operação' },
   { href: '/ordem-producao', label: 'Ordens de Produção', icon: Factory, group: 'Operação' },
   { href: '/transferencia', label: 'Transferências', icon: ArrowLeftRight, group: 'Operação' },

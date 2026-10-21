@@ -26,6 +26,7 @@ export const ROTAS_SO_DEV_ESPELHO: readonly string[] = [
   '/relatorio-posicao-estoque',
   '/relatorio-cmv',
   '/relatorio-produtos-fornecedor',
+  '/financeiro',
 ]
 
 /** Item de menu que governa a visibilidade do item da central (regra explícita ou NAV de maior prefixo). */

@@ -15,6 +15,8 @@ export const ROTAS_SO_DEV = [
   '/relatorio-posicao-estoque',
   '/relatorio-cmv',
   '/relatorio-produtos-fornecedor',
+  // Finanças, etapa 1 (migrations 285/286): contas correntes, categorias, contas a pagar, pagamentos e extrato.
+  '/financeiro',
 ] as const
 
 export async function ehDesenvolvedor(): Promise<boolean> {
