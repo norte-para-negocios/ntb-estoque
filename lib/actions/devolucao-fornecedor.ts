@@ -9,6 +9,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { validarDevolucao, type ItemPedidoDevolucao } from '@/lib/compras/devolucao-puro'
 import { disponiveisDaCompra } from '@/lib/compras/devolucao-loader'
+import { exigirDevAcao } from '@/lib/recursos-dev'
 
 // Fase F [H1]: devolução ao fornecedor (só estoque próprio), SEM emitir NF-e. Escrita só pelas funções da migration 231
 // (security definer, só service role), depois da permissão. Precisa de internet (fora da política offline).
@@ -39,6 +40,7 @@ function atualizar(notaId?: number | null) {
 /** Registra a devolução: os itens saem do estoque na hora (ao custo da entrada) e ficam "Devolução a emitir". */
 export async function registrarDevolucao(input: { compraId: number; itens: ItemPedidoDevolucao[]; motivo: string; chave: string }): Promise<{ ok: true; id: number; numero: number } | Erro> {
   const __d = viaDesktop('devolucao-fornecedor#registrarDevolucao', registrarDevolucao, [input]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const disp = await disponiveisDaCompra(ctx.lojaId, input.compraId)
@@ -63,6 +65,7 @@ export async function registrarDevolucao(input: { compraId: number; itens: ItemP
 /** Cancela a devolução ainda não emitida: os itens voltam ao estoque. */
 export async function cancelarDevolucao(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('devolucao-fornecedor#cancelarDevolucao', cancelarDevolucao, [id, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if ((motivo ?? '').trim().length < 3) return { error: 'Informe o motivo do cancelamento.' }

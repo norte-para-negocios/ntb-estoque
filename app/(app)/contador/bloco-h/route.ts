@@ -4,11 +4,13 @@ import { planilhaResponse } from '@/lib/excel'
 import { lerParamsPacote } from '@/lib/contador/params-puro'
 import { carregarBlocoH } from '@/lib/contador/bloco-h-loader'
 import { nomeDaLoja, planilhaBlocoH } from '@/lib/contador/pacote'
+import { exigirDev } from '@/lib/recursos-dev'
 
 export const dynamic = 'force-dynamic'
 
 // Fase F: inventário tipo Bloco H numa data (?data=YYYY-MM-DD; padrão = último dia do mês passado).
 export async function GET(request: Request) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Contador - Pacote'))) return new Response('Sem permissão', { status: 403 })
   const sp = new URL(request.url).searchParams

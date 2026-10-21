@@ -11,6 +11,7 @@ import { contextoCompras, msgErroCompras, type ErroCompras } from '@/lib/compras
 import { lerPlanilha, TAMANHO_MAX_PLANILHA } from '@/lib/compras/ler-planilha'
 import { parcelasDoTexto } from '@/lib/compras/pedido-puro'
 import { pedidosParaSql, validarImportacao, type CadastroImportacao, type ResultadoImportacao } from '@/lib/compras/importar-pedidos-puro'
+import { exigirDevAcao } from '@/lib/recursos-dev'
 
 // Importar pedidos de compra por planilha (Fase C2, I5; só estoque próprio). A prévia e a confirmação leem e validam o
 // arquivo de novo no servidor (nunca confiam na prévia que voltou do navegador). A gravação é pc_importar (242): tudo ou
@@ -53,6 +54,7 @@ async function jaImportada(lojaId: number, chave: string): Promise<PedidoJaImpor
 /** Prévia: cada linha com seus erros e os pedidos que vão ser criados. Não grava nada. */
 export async function previaImportacaoPedidos(arq: ArquivoImportacao): Promise<{ resultado: ResultadoImportacao; jaImportada: PedidoJaImportado[] } | ErroCompras> {
   const __d = viaDesktop('importar-pedidos#previaImportacaoPedidos', previaImportacaoPedidos, [arq]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx
   const r = await lerEValidar(ctx.lojaId, arq)
@@ -63,6 +65,7 @@ export async function previaImportacaoPedidos(arq: ArquivoImportacao): Promise<{
 /** Grava os pedidos (rascunho) se a planilha não tiver nenhum erro. O mesmo arquivo de novo devolve os pedidos da 1ª vez. */
 export async function confirmarImportacaoPedidos(arq: ArquivoImportacao): Promise<{ pedidos: PedidoJaImportado[]; duplicado: boolean } | ErroCompras> {
   const __d = viaDesktop('importar-pedidos#confirmarImportacaoPedidos', confirmarImportacaoPedidos, [arq]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx
   const r = await lerEValidar(ctx.lojaId, arq)

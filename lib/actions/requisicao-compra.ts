@@ -7,6 +7,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { contextoCompras, msgErroCompras, type ErroCompras } from '@/lib/compras/servidor'
 import type { LinhaParaPedido } from '@/lib/compras/pedido-puro'
+import { exigirDevAcao } from '@/lib/recursos-dev'
 
 // Requisição de compra do estoque próprio (Fase C2, I1). Escrita só pelas funções rc_* da migration 240 (security
 // definer), com o service role, depois da permissão. Nada aqui fala com o Omie.
@@ -61,6 +62,7 @@ function atualizar(id?: number) {
 /** Cria ou edita (só aberta) uma requisição de compra. */
 export async function salvarRequisicao(form: RequisicaoForm): Promise<{ id: number; numero: number } | ErroCompras> {
   const __d = viaDesktop('requisicao-compra#salvarRequisicao', salvarRequisicao, [form]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Requisicoes'])
   if ('error' in ctx) return ctx
   const inval = validar(form)
@@ -78,6 +80,7 @@ export type AcaoRequisicaoServidor = 'aprovar' | 'recusar' | 'reabrir'
 /** Aprovar e recusar exigem "Compras - Aprovar pedidos"; reabrir, quem cria requisição ou quem aprova. */
 export async function acaoRequisicao(id: number, acao: AcaoRequisicaoServidor, motivo?: string | null): Promise<{ ok: true; etapa: string } | ErroCompras> {
   const __d = viaDesktop('requisicao-compra#acaoRequisicao', acaoRequisicao, [id, acao, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
   if (!['aprovar', 'recusar', 'reabrir'].includes(acao)) return { error: 'Ação inválida' }
   const ctx = acao === 'reabrir'
     ? await contextoCompras(['Compras - Requisicoes', 'Compras - Aprovar pedidos'], 'alguma')
@@ -93,6 +96,7 @@ export async function acaoRequisicao(id: number, acao: AcaoRequisicaoServidor, m
 /** Um pedido rascunho por fornecedor, a partir de requisições aprovadas. Tudo ou nada; repetir a chave devolve os mesmos pedidos. */
 export async function gerarPedidosDasRequisicoes(ids: number[], chave: string): Promise<{ pedidos: { id: number; numero: number; fornecedor: string }[]; duplicado: boolean } | ErroCompras> {
   const __d = viaDesktop('requisicao-compra#gerarPedidosDasRequisicoes', gerarPedidosDasRequisicoes, [ids, chave]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Pedidos'])
   if ('error' in ctx) return ctx
   if (!CHAVE.test(chave)) return { error: 'Chave inválida' }
@@ -111,6 +115,7 @@ export async function gerarPedidosDasRequisicoes(ids: number[], chave: string): 
 /** "Criar requisição" na sugestão: uma requisição com os itens marcados (fornecedor da última nota sugerido por item). */
 export async function criarRequisicaoDaSugestao(linhas: LinhaParaPedido[], chave: string): Promise<{ id: number; numero: number } | ErroCompras> {
   const __d = viaDesktop('requisicao-compra#criarRequisicaoDaSugestao', criarRequisicaoDaSugestao, [linhas, chave]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contextoCompras(['Compras - Requisicoes'])
   if ('error' in ctx) return ctx
   if (!CHAVE.test(chave)) return { error: 'Chave inválida' }

@@ -7,6 +7,7 @@ import { getCurrentLojaId, getProfile, requirePermissao } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { modoDaLoja } from '@/lib/estoque/ledger'
+import { exigirDevAcao } from '@/lib/recursos-dev'
 
 // Fase F [F2/H4]: transferência/remessa ENTRE LOJAS com nota (só estoque próprio). Escrita só pelas funções da migration
 // 261 (security definer, só service role), depois da permissão. As unidades saem do estoque na hora, ao custo médio;
@@ -34,6 +35,7 @@ export type ItemTransferenciaLoja = { codigoProduto: number; codigoLocal: number
 
 export async function registrarTransferenciaLoja(input: { destino: number; itens: ItemTransferenciaLoja[]; obs?: string; chave: string }): Promise<{ ok: true; id: number; numero: number } | Erro> {
   const __d = viaDesktop('transferencia-loja#registrarTransferenciaLoja', registrarTransferenciaLoja, [input]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const itens = (input.itens ?? []).filter((i) => Number(i.quantidade) > 0)
@@ -54,6 +56,7 @@ export async function registrarTransferenciaLoja(input: { destino: number; itens
 
 export async function cancelarTransferenciaLoja(id: number, motivo: string): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('transferencia-loja#cancelarTransferenciaLoja', cancelarTransferenciaLoja, [id, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if ((motivo ?? '').trim().length < 3) return { error: 'Informe o motivo do cancelamento.' }

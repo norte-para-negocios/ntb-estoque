@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { exigirDev } from '@/lib/recursos-dev'
 
 // XML da NF-e de saída (Fase F): ?tipo=nfe (padrão, procNFe autorizado), cancelamento ou cce (procEventoNFe).
 // Lido pela sessão (RLS por loja). Quem emite, devolve ou transfere pode baixar.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   const pode = (await requirePermissao(lojaId, 'Compras - Emitir NF-e')) || (await requirePermissao(lojaId, 'Compras - Devolucao ao fornecedor'))
     || (await requirePermissao(lojaId, 'Transferencias - Entre lojas'))

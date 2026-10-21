@@ -3,12 +3,14 @@ import { hojeBahiaISO } from '@/lib/data-bahia'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { lerParamsPacote } from '@/lib/contador/params-puro'
 import { montarPacote } from '@/lib/contador/pacote'
+import { exigirDev } from '@/lib/recursos-dev'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 // Fase F: pacote do contador do mês (ZIP): XMLs das notas de entrada, livro de entradas (Excel e PDF) e Bloco H.
 export async function GET(request: Request) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   if (!(await requirePermissao(lojaId, 'Contador - Pacote'))) return new Response('Sem permissão', { status: 403 })
   const sp = new URL(request.url).searchParams

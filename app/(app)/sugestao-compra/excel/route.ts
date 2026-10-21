@@ -5,6 +5,7 @@ import { gerarPlanilha, planilhaResponse, type ColunaExcel } from '@/lib/excel'
 import { valoresMulti } from '@/components/ui-kit/filtros-utils'
 import { carregarSugestao, lerParamsSugestao } from '@/lib/compras/sugestao-dados'
 import { diferencaMinimo, ehVisaoMinimo, filtrarSugestao } from '@/lib/compras/sugestao-puro'
+import { exigirDev } from '@/lib/recursos-dev'
 
 // Excel da Sugestão de compra: as colunas do grid do Omie, com os mesmos filtros da tela (sem o corte de linhas).
 const COLUNAS: ColunaExcel[] = [
@@ -39,6 +40,7 @@ const COLUNAS: ColunaExcel[] = [
 ]
 
 export async function GET(req: Request) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   const modo = await modoDaLoja(lojaId)
   if (modo === 'nenhum' || !(await requirePermissao(lojaId, 'Compras - Sugestao'))) return new Response('Sem permissão', { status: 403 })

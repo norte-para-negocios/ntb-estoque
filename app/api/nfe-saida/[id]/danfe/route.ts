@@ -5,9 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { DanfePDF } from '@/components/nfe-saida/DanfePDF'
 import { dadosDanfe } from '@/lib/nfe-saida/danfe-puro'
+import { exigirDev } from '@/lib/recursos-dev'
 
 // DANFE (PDF) da NF-e de saída autorizada, montado do procNFe guardado (Fase F). Homologação/cancelada com tarja.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   const pode = (await requirePermissao(lojaId, 'Compras - Emitir NF-e')) || (await requirePermissao(lojaId, 'Compras - Devolucao ao fornecedor'))
     || (await requirePermissao(lojaId, 'Transferencias - Entre lojas'))

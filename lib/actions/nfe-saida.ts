@@ -10,6 +10,7 @@ import { modoDaLoja } from '@/lib/estoque/ledger'
 import {
   cancelarNfe, conferirAntesDeEmitir, consultarNfe, corrigirNfe, descartarNfe, emitirNfe, type OpcoesEmissao, type OrigemNfe, type ResultadoNfe,
 } from '@/lib/nfe-saida/emissao'
+import { exigirDevAcao } from '@/lib/recursos-dev'
 
 // Fase F (F1/F2): NF-e de SAÍDA do estoque próprio (devolução ao fornecedor e transferência entre lojas). Precisa de
 // internet e do certificado da loja (fora da política offline do desktop). Permissão "Compras - Emitir NF-e".
@@ -52,6 +53,7 @@ const valida = (origem: string): origem is OrigemNfe => origem === 'devolucao' |
 /** O que falta no cadastro para emitir (sem reservar número nem falar com a SEFAZ). */
 export async function conferirNfeSaida(origem: OrigemNfe, origemId: number): Promise<{ ok: true; tpAmb: 1 | 2; faltas: string[]; avisos: string[] } | Erro> {
   const __d = viaDesktop('nfe-saida#conferirNfeSaida', conferirNfeSaida, [origem, origemId]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if (!valida(origem)) return { error: 'Documento inválido' }
@@ -60,6 +62,7 @@ export async function conferirNfeSaida(origem: OrigemNfe, origemId: number): Pro
 
 export async function emitirNfeSaida(origem: OrigemNfe, origemId: number, opcoes?: OpcoesEmissao): Promise<ResultadoNfe> {
   const __d = viaDesktop('nfe-saida#emitirNfeSaida', emitirNfeSaida, [origem, origemId, opcoes]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   if (!valida(origem)) return { error: 'Documento inválido' }
@@ -71,6 +74,7 @@ export async function emitirNfeSaida(origem: OrigemNfe, origemId: number, opcoes
 
 export async function consultarNfeSaida(nfeId: number): Promise<ResultadoNfe> {
   const __d = viaDesktop('nfe-saida#consultarNfeSaida', consultarNfeSaida, [nfeId]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const r = await consultarNfe(ctx.lojaId, Number(nfeId), ctx.u)
@@ -80,6 +84,7 @@ export async function consultarNfeSaida(nfeId: number): Promise<ResultadoNfe> {
 
 export async function cancelarNfeSaida(nfeId: number, justificativa: string): Promise<ResultadoNfe> {
   const __d = viaDesktop('nfe-saida#cancelarNfeSaida', cancelarNfeSaida, [nfeId, justificativa]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const r = await cancelarNfe(ctx.lojaId, Number(nfeId), String(justificativa ?? ''), ctx.u)
@@ -90,6 +95,7 @@ export async function cancelarNfeSaida(nfeId: number, justificativa: string): Pr
 
 export async function corrigirNfeSaida(nfeId: number, correcao: string): Promise<ResultadoNfe> {
   const __d = viaDesktop('nfe-saida#corrigirNfeSaida', corrigirNfeSaida, [nfeId, correcao]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const r = await corrigirNfe(ctx.lojaId, Number(nfeId), String(correcao ?? ''), ctx.u)
@@ -100,6 +106,7 @@ export async function corrigirNfeSaida(nfeId: number, correcao: string): Promise
 
 export async function descartarNfeSaida(nfeId: number, motivo?: string): Promise<ResultadoNfe> {
   const __d = viaDesktop('nfe-saida#descartarNfeSaida', descartarNfeSaida, [nfeId, motivo]); if (__d) return __d as never
+  await exigirDevAcao()
   const ctx = await contexto()
   if ('error' in ctx) return ctx
   const r = await descartarNfe(ctx.lojaId, Number(nfeId), motivo ?? null, ctx.u)
@@ -119,6 +126,7 @@ export type ConfigNfeEntrada = {
 /** Configuração fiscal (só quem administra a loja). Grava em nfe_config e o código IBGE do município em lojas. */
 export async function salvarConfigNfe(c: ConfigNfeEntrada): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('nfe-saida#salvarConfigNfe', salvarConfigNfe, [c]); if (__d) return __d as never
+  await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Só na loja de estoque próprio.' }
   if (!(await isAdminDaLoja(lojaId))) return { error: 'Só quem administra a loja muda a configuração fiscal.' }
@@ -159,6 +167,7 @@ export async function salvarConfigNfe(c: ConfigNfeEntrada): Promise<{ ok: true }
 /** Próximo número de uma série (para continuar a sequência de outro emissor). Nunca volta para trás. */
 export async function definirProximoNumeroNfe(tpAmb: 1 | 2, serie: number, proximo: number): Promise<{ ok: true } | Erro> {
   const __d = viaDesktop('nfe-saida#definirProximoNumeroNfe', definirProximoNumeroNfe, [tpAmb, serie, proximo]); if (__d) return __d as never
+  await exigirDevAcao()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio') return { error: 'Só na loja de estoque próprio.' }
   if (!(await isAdminDaLoja(lojaId))) return { error: 'Só quem administra a loja muda a numeração.' }

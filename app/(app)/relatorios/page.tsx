@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getAtorGestao } from '@/lib/auth'
+import { ehDesenvolvedor, ROTAS_SO_DEV } from '@/lib/recursos-dev'
 import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/ui-kit/PageHeader'
 import { getCurrentLojaId } from '@/lib/auth'
@@ -75,7 +76,9 @@ export default async function RelatoriosPage() {
   const proprio = (await modoDaLoja(await getCurrentLojaId())) === 'proprio'
   const semOmie = (sec: (typeof RELATORIOS)[number]) =>
     proprio ? { ...sec, itens: sec.itens.map((i) => (i.href === '/relatorio-estoque-valorizado' ? { ...i, descricao: 'Valor do estoque por produto: saldo x custo médio de hoje.' } : i)) } : sec
-  const secoes = RELATORIOS.map(semOmie).map((sec) =>
+  const dev = await ehDesenvolvedor()
+  const aindaEmTeste = (href: string) => ROTAS_SO_DEV.some((r) => href === r || href.startsWith(r + '?'))
+  const secoes = RELATORIOS.map(semOmie).map((sec) => (dev ? sec : { ...sec, itens: sec.itens.filter((i) => !aindaEmTeste(i.href)) })).map((sec) =>
     proprio && sec.grupo === 'Faturamento'
       ? { ...sec, itens: [{ href: '/relatorio-lucro', titulo: 'Lucro', icon: TrendingUp, descricao: 'Faturamento menos o custo das mercadorias vendidas, por produto, família, tipo, dia ou mês.', pergunta: 'Quanto sobrou de cada venda?' }, ...sec.itens] }
       : sec

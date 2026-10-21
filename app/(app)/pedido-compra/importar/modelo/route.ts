@@ -3,9 +3,11 @@ import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
 import { modoDaLoja } from '@/lib/estoque/ledger'
 import { createClient } from '@/lib/supabase/server'
 import { gerarModeloPedidos } from '@/lib/compras/modelo-planilha'
+import { exigirDev } from '@/lib/recursos-dev'
 
 // Modelo da planilha de importação de pedidos de compra (só estoque próprio). O exemplo usa um produto da própria loja.
 export async function GET() {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   if ((await modoDaLoja(lojaId)) !== 'proprio' || !(await requirePermissao(lojaId, 'Compras - Pedidos'))) return new NextResponse('Não encontrado', { status: 404 })
   const sb = await createClient()

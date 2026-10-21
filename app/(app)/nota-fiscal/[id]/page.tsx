@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentLojaId, requirePermissao } from '@/lib/auth'
+import { ehDesenvolvedor } from '@/lib/recursos-dev'
 import { notFound } from 'next/navigation'
 import { DetailHeader } from '@/components/ui-kit/DetailHeader'
 import { ItensNotaFiscal, type ItemNF } from '@/components/nota-fiscal/ItensNotaFiscal'
@@ -118,11 +119,13 @@ export default async function NotaFiscalItensPage({
   const cancelada = statusInfo?.label === 'Cancelada'
   const conferencia = proprio && nfSupabase ? await carregarConferencia(lojaId, Number(id), nf.full_object, nf.c_chave_nfe ?? null) : null
   // Fase C (só estoque próprio): pedido de compra da nota e conferência pedido × nota × recebido
-  const pedidoDaNota = conferencia?.compra && conferencia.compra.status !== 'cancelada' ? await carregarPedidoDaNota(lojaId, conferencia.compra.id) : null
+  // Pedido de compra e devolução ao fornecedor ainda são só de desenvolvedor (lib/recursos-dev.ts)
+  const dev = await ehDesenvolvedor()
+  const pedidoDaNota = dev && conferencia?.compra && conferencia.compra.status !== 'cancelada' ? await carregarPedidoDaNota(lojaId, conferencia.compra.id) : null
   // mesma regra da ação vincularNotaAoPedido: 'Compras - Pedidos' e 'Notas Fiscais'
   const podeVincularPedido = !!pedidoDaNota && (await requirePermissao(lojaId, 'Compras - Pedidos')) && (await requirePermissao(lojaId, 'Notas Fiscais'))
   // Fase F [H1] (só estoque próprio): devolução ao fornecedor dos itens que entraram no estoque, sem NF-e
-  const devolucoes = conferencia?.compra && ['lancada', 'parcial'].includes(conferencia.compra.status) ? await carregarDevolucoesDaNota(lojaId, conferencia.compra.id) : null
+  const devolucoes = dev && conferencia?.compra && ['lancada', 'parcial'].includes(conferencia.compra.status) ? await carregarDevolucoesDaNota(lojaId, conferencia.compra.id) : null
   const podeDevolver = !!devolucoes && (await requirePermissao(lojaId, 'Compras - Devolucao ao fornecedor'))
   // Fase F [F1]: NF-e de devolução de cada devolução registrada (sem a migration 260 o painel some)
   const nfesDev = devolucoes?.devolucoes.length ? await nfesDasOrigens(lojaId, 'devolucao', devolucoes.devolucoes.map((d) => d.id)) : null

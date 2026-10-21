@@ -8,6 +8,7 @@ import { PdfErro } from '@/components/relatorio/PdfChrome'
 import { PedidoCompraPDF, type PedidoPDFDados } from '@/components/relatorio/PedidoCompraPDF'
 import { parcelasDoPedido } from '@/lib/compras/pedido-puro'
 import { carregarPedido, envioOmieDosPedidos } from '../../dados'
+import { exigirDev } from '@/lib/recursos-dev'
 
 const pdf = (buf: Buffer, nome: string) =>
   new NextResponse(new Uint8Array(buf), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${nome}"` } })
@@ -18,6 +19,7 @@ const cnpj = (d: string | null | undefined) => {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  await exigirDev()
   const lojaId = await getCurrentLojaId()
   const onde = (await estadoPedidoCompraLoja(lojaId)).onde
   const pode = onde !== null && ((await requirePermissao(lojaId, 'Compras - Pedidos')) || (await requirePermissao(lojaId, 'Compras - Aprovar pedidos')))
